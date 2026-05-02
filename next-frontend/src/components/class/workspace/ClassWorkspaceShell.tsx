@@ -28,6 +28,7 @@ interface ClassWorkspaceShellProps {
   subtitle: string;
   metaItems: ClassWorkspaceMetaItem[];
   tabs: ClassWorkspaceTabItem[];
+  heroActions?: ReactNode;
   children: ReactNode;
 }
 
@@ -40,6 +41,7 @@ export function ClassWorkspaceShell({
   subtitle,
   metaItems,
   tabs,
+  heroActions,
   children,
 }: ClassWorkspaceShellProps) {
   return (
@@ -62,6 +64,9 @@ export function ClassWorkspaceShell({
               ))}
             </div>
           </div>
+          {heroActions ? (
+            <div className="teacher-class-workspace__hero-actions">{heroActions}</div>
+          ) : null}
         </div>
       </header>
 

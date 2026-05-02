@@ -99,6 +99,15 @@ function stripText(html: string) {
     .replace(/\s/g, '');
 }
 
+function applyInlineMarkdown(value: string) {
+  return value
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*\n][\s\S]*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__([^_\n][\s\S]*?)__/g, '<strong>$1</strong>')
+    .replace(/(?<!\*)\*([^*\n]+)\*(?!\*)/g, '<em>$1</em>')
+    .replace(/(?<!_)_([^_\n]+)_(?!_)/g, '<em>$1</em>');
+}
+
 export function normalizeRichText(value: string): RichTextHtml {
   const text = value.trim();
   if (!text) return '' as RichTextHtml;
@@ -138,7 +147,7 @@ export function plainTextToRichHtml(input: string): RichTextHtml {
     const orderedMatch = line.match(/^\s*(?:\d+[.)])\s+(.*)$/);
 
     if (headingMatch) {
-      const headingText = headingMatch[2].trim();
+      const headingText = applyInlineMarkdown(headingMatch[2].trim());
       const headingLevel = headingMatch[1].length;
       flushParagraph();
       if (headingText) {
@@ -158,7 +167,7 @@ export function plainTextToRichHtml(input: string): RichTextHtml {
         listItems.push(nextMatch[1]);
       }
       blocks.push(
-        `<ul>${listItems.map((item) => `<li>${item}</li>`).join('')}</ul>`,
+        `<ul>${listItems.map((item) => `<li>${applyInlineMarkdown(item)}</li>`).join('')}</ul>`,
       );
       listItems = [];
       continue;
@@ -175,7 +184,7 @@ export function plainTextToRichHtml(input: string): RichTextHtml {
         listItems.push(nextMatch[1]);
       }
       blocks.push(
-        `<ol>${listItems.map((item) => `<li>${item}</li>`).join('')}</ol>`,
+        `<ol>${listItems.map((item) => `<li>${applyInlineMarkdown(item)}</li>`).join('')}</ol>`,
       );
       listItems = [];
       continue;
@@ -186,7 +195,7 @@ export function plainTextToRichHtml(input: string): RichTextHtml {
       continue;
     }
 
-    paragraph.push(line);
+    paragraph.push(applyInlineMarkdown(line));
   }
 
   flushParagraph();

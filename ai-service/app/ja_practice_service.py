@@ -32,8 +32,10 @@ HELPER_PROMPT_PATTERNS = (
     r"\bwhat should i study next\b",
     r"\breview\b",
     r"\bvocab(ulary)?\b",
+    r"\bsimpl(er|ify)?\b",
     r"\bexplain\b",
     r"\bclarify\b",
+    r"\banalog(y|ies)\b",
     r"\bgive me a question\b",
     r"\bquiz me\b",
     r"\bunclear\b",
@@ -42,6 +44,125 @@ HELPER_PROMPT_PATTERNS = (
     r"\bwhat should i review\b",
     r"\bsuggest other lessons?\b",
 )
+STUDY_COACH_SECTION_PATTERN = re.compile(
+    r"(?im)^#{1,3}\s*(main idea|break it down|simple analogy|try this now|watch out)\b"
+)
+
+
+def _clean_coach_text(value: str | None) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip())
+
+
+def _split_coach_sentences(value: str | None) -> list[str]:
+    text = (value or "").strip()
+    if not text:
+        return []
+    normalized = text.replace("\r", "\n")
+    chunks = [
+        part.strip(" -\t")
+        for part in re.split(r"(?:\n+|(?<=[.!?])\s+)", normalized)
+        if part.strip(" -\t")
+    ]
+    unique: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        lowered = chunk.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique.append(chunk)
+    return unique
+
+
+def _coach_heading(title: str, body: str) -> str:
+    return f"## {title}\n{body.strip()}"
+
+
+def _coach_bullets(items: list[str]) -> str:
+    return "\n".join(f"- {item}" for item in items if item.strip())
+
+
+def _build_study_coach_reply(
+    *,
+    main_idea: str,
+    breakdown: list[str] | None = None,
+    try_now: list[str] | None = None,
+    analogy: str | None = None,
+    watch_out: list[str] | None = None,
+) -> str:
+    sections = [_coach_heading("Main idea", _clean_coach_text(main_idea))]
+
+    breakdown_items = [_clean_coach_text(item) for item in (breakdown or []) if item.strip()]
+    if breakdown_items:
+        sections.append(_coach_heading("Break it down", _coach_bullets(breakdown_items[:3])))
+
+    analogy_text = _clean_coach_text(analogy)
+    if analogy_text:
+        sections.append(_coach_heading("Simple analogy", analogy_text))
+
+    try_now_items = [_clean_coach_text(item) for item in (try_now or []) if item.strip()]
+    if try_now_items:
+        sections.append(_coach_heading("Try this now", _coach_bullets(try_now_items[:3])))
+
+    watch_out_items = [_clean_coach_text(item) for item in (watch_out or []) if item.strip()]
+    if watch_out_items:
+        sections.append(_coach_heading("Watch out", _coach_bullets(watch_out_items[:3])))
+
+    return "\n\n".join(section for section in sections if section.strip())
+
+
+def _default_try_now_steps(
+    *,
+    message: str,
+    quick_action: str | None,
+    lesson_title: str | None,
+) -> list[str]:
+    lesson_label = (lesson_title or "this lesson").strip() or "this lesson"
+    request_text = f"{quick_action or ''} {message}".lower()
+    if "quiz" in request_text or "question" in request_text:
+        return [
+            f"Answer one practice question from {lesson_label} without looking at your notes first.",
+            "Check which clue from the lesson helped you most.",
+        ]
+    if "study" in request_text or "review" in request_text:
+        return [
+            f"List the top two ideas from {lesson_label} that still feel shaky.",
+            "Spend five minutes rewriting each one in your own words.",
+        ]
+    return [
+        f"Say the rule from {lesson_label} in your own words.",
+        "Test it on one quick example before moving on.",
+    ]
+
+
+def _format_generated_study_reply(
+    *,
+    reply: str,
+    message: str,
+    quick_action: str | None,
+    lesson_title: str | None,
+) -> str:
+    clean_reply = (reply or "").strip()
+    if not clean_reply:
+        clean_reply = (
+            "I found relevant class sources, but I need you to narrow the question to one concept "
+            "so I can explain it clearly."
+        )
+    if STUDY_COACH_SECTION_PATTERN.search(clean_reply):
+        return clean_reply
+
+    sentences = _split_coach_sentences(clean_reply)
+    main_idea = sentences[0] if sentences else clean_reply
+    breakdown = sentences[1:3] or [main_idea]
+    return _build_study_coach_reply(
+        main_idea=main_idea,
+        breakdown=breakdown,
+        try_now=_default_try_now_steps(
+            message=message,
+            quick_action=quick_action,
+            lesson_title=lesson_title,
+        ),
+    )
 
 
 async def bootstrap_ja_practice(
@@ -478,6 +599,7 @@ def _format_citation(chunk: dict[str, Any]) -> dict[str, Any]:
         "assessmentId": chunk.get("assessmentId"),
         "questionId": chunk.get("questionId"),
         "sourceType": chunk.get("sourceType"),
+        "snippet": _clean_coach_text(str(chunk.get("chunkText") or ""))[:220],
     }
 
 
@@ -609,7 +731,19 @@ async def generate_ja_ask_response(
         return {
             "blocked": True,
             "reason": "policy_guardrail",
-            "reply": "That request breaks JA safety rules. Please ask for a concept explanation, guided hint, or class-based practice help instead.",
+            "reply": _build_study_coach_reply(
+                main_idea="I cannot give direct answer keys or help bypass JA safety rules.",
+                breakdown=[
+                    "I can still explain the concept, give a guided hint, or help you review the lesson safely."
+                ],
+                try_now=[
+                    "Ask for a concept explanation from the selected lesson.",
+                    "Request one guided practice question instead of the final answer.",
+                ],
+                watch_out=[
+                    "JA stays grounded to visible class material and avoids cheating help."
+                ],
+            ),
             "citations": [],
             "insufficientEvidence": False,
         }
@@ -666,7 +800,19 @@ async def generate_ja_ask_response(
         return {
             "blocked": True,
             "reason": "lesson_context_mismatch",
-            "reply": f"That question looks outside {lesson_label}. Ask about this lesson or switch to a different lesson context first.",
+            "reply": _build_study_coach_reply(
+                main_idea=f"That question looks outside {lesson_label}.",
+                breakdown=[
+                    "The selected lesson context does not match the concept you asked about."
+                ],
+                try_now=[
+                    f"Ask about {lesson_label} directly.",
+                    "Switch to a different visible lesson context first.",
+                ],
+                watch_out=[
+                    "JA only answers from the lesson context and visible class evidence it can ground."
+                ],
+            ),
             "citations": [],
             "insufficientEvidence": False,
         }
@@ -678,21 +824,54 @@ async def generate_ja_ask_response(
                 return {
                     "blocked": False,
                     "reason": None,
-                    "reply": f"I could not find enough readable material for {lesson_label} yet. Try another visible lesson or ask your teacher to publish clearer lesson content first.",
+                    "reply": _build_study_coach_reply(
+                        main_idea=f"I do not have enough readable class evidence for {lesson_label} yet.",
+                        breakdown=[
+                            "The lesson exists, but the available material is too thin for a confident grounded explanation."
+                        ],
+                        try_now=[
+                            "Try another visible lesson with fuller content.",
+                            "Ask your teacher to publish clearer lesson material first.",
+                        ],
+                        watch_out=[
+                            "JA would rather be explicit about weak evidence than guess."
+                        ],
+                    ),
                     "citations": [],
                     "insufficientEvidence": True,
                 }
             return {
                 "blocked": False,
                 "reason": None,
-                "reply": "I can help with summaries, explanations, study plans, and review guidance. Pick one visible lesson context in JA Hub first so I can keep the help grounded to your class material.",
+                "reply": _build_study_coach_reply(
+                    main_idea="I can help with summaries, explanations, study plans, and review guidance.",
+                    breakdown=[
+                        "JA works best when one visible lesson is selected first."
+                    ],
+                    try_now=[
+                        "Pick one visible lesson in JA Hub before asking.",
+                        "Then ask for a summary, explanation, quiz, or study plan.",
+                    ],
+                ),
                 "citations": [],
                 "insufficientEvidence": False,
             }
         return {
             "blocked": False,
             "reason": None,
-            "reply": "I cannot answer that confidently from your visible class sources yet. Try selecting a specific lesson or assessment context first.",
+            "reply": _build_study_coach_reply(
+                main_idea="I cannot answer that confidently from your visible class sources yet.",
+                breakdown=[
+                    "Your question needs a clearer lesson or assessment context before JA can ground it safely."
+                ],
+                try_now=[
+                    "Select a specific visible lesson first.",
+                    "Then ask one focused follow-up about that material.",
+                ],
+                watch_out=[
+                    "JA avoids filling gaps with unsupported guesses."
+                ],
+            ),
             "citations": [],
             "insufficientEvidence": True,
         }
@@ -711,7 +890,10 @@ async def generate_ja_ask_response(
         "Rules:\n"
         "- Do not provide direct cheating answers.\n"
         "- If evidence is thin, say so.\n"
-        "- Keep answer under 180 words.\n\n"
+        "- Respond in plain text with these exact headings when relevant: "
+        "## Main idea, ## Break it down, optional ## Simple analogy, ## Try this now, optional ## Watch out.\n"
+        "- Use short bullets for Break it down, Try this now, and Watch out.\n"
+        "- Keep the tone supportive, lesson-grounded, and specific.\n\n"
         f"Thread: {thread_id}\n"
         f"Selected lesson context: {selected_lesson_title or 'none'}\n"
         f"Student message: {message.strip()}\n"
@@ -720,14 +902,15 @@ async def generate_ja_ask_response(
         f"Grounding sources:\n{source_context}\n"
     )
     reply = await ollama_client.generate(prompt=prompt, task="chat")
-    clean_reply = (reply or "").strip()
-    if not clean_reply:
-        clean_reply = "I found relevant class sources, but I need you to narrow the question to one concept so I can explain it clearly."
-
     return {
         "blocked": False,
         "reason": None,
-        "reply": clean_reply,
+        "reply": _format_generated_study_reply(
+            reply=reply or "",
+            message=message,
+            quick_action=quick_action,
+            lesson_title=selected_lesson_title,
+        ),
         "citations": citations,
         "insufficientEvidence": False,
     }

@@ -17,10 +17,11 @@ describe('StudentJaPage', () => {
   });
 
   it('renders the standalone JA workspace', async () => {
-    render(await StudentJaPage({}));
+    const { container } = render(await StudentJaPage({}));
 
     expect(screen.getByTestId('student-ja-workspace')).toBeInTheDocument();
     expect(screen.getByText('JA Workspace')).toBeInTheDocument();
+    expect(container.querySelector('.ja-page-shell')).not.toBeInTheDocument();
   });
 
   it('passes mode and class query params into the standalone workspace', async () => {
@@ -53,6 +54,19 @@ describe('StudentJaPage', () => {
       initialClassId: 'class-123',
       initialEntry: 'class',
       returnTo: '/dashboard/student/classes/class-123',
+    });
+  });
+
+  it('drops removed practice mode from the route query contract', async () => {
+    render(
+      await StudentJaPage({
+        searchParams: Promise.resolve({ mode: 'practice', classId: 'class-123' }),
+      }),
+    );
+
+    expect(studentJaWorkspaceProps.at(-1)).toMatchObject({
+      initialMode: undefined,
+      initialClassId: 'class-123',
     });
   });
 });

@@ -1,0 +1,497 @@
+[
+  {
+    "index": 71,
+    "style": "table of figures",
+    "text": "Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)\t21"
+  },
+  {
+    "index": 72,
+    "style": "table of figures",
+    "text": "Table 2: Gap Analysis Table of Related System Applications\t33"
+  },
+  {
+    "index": 73,
+    "style": "table of figures",
+    "text": "Table 3: Software Requirements\t38"
+  },
+  {
+    "index": 74,
+    "style": "table of figures",
+    "text": "Table 4: Hardware Specifications\t40"
+  },
+  {
+    "index": 75,
+    "style": "table of figures",
+    "text": "Table 5: Agile Development Phases, Activities, and List of Deliverables\t48"
+  },
+  {
+    "index": 76,
+    "style": "table of figures",
+    "text": "Table 6: Functional Requirements for Analysis (Administrators and Teachers)\t50"
+  },
+  {
+    "index": 77,
+    "style": "table of figures",
+    "text": "Table 7: Functional Requirements for Analysis (Students)\t52"
+  },
+  {
+    "index": 78,
+    "style": "table of figures",
+    "text": "Table 8: Technical and Operational Constraints\t54"
+  },
+  {
+    "index": 79,
+    "style": "table of figures",
+    "text": "Table 9: Use Case Narratives of Login\t57"
+  },
+  {
+    "index": 80,
+    "style": "table of figures",
+    "text": "Table 10: Use Case Narratives of Dashboard\t59"
+  },
+  {
+    "index": 81,
+    "style": "table of figures",
+    "text": "Table 11: Use Case Narratives of My Courses\t60"
+  },
+  {
+    "index": 82,
+    "style": "table of figures",
+    "text": "Table 12: Use Case Narratives of View Modules (Mobile & Web)\t61"
+  },
+  {
+    "index": 83,
+    "style": "table of figures",
+    "text": "Table 13: Use Case Narratives of View and Complete Assessments\t62"
+  },
+  {
+    "index": 84,
+    "style": "table of figures",
+    "text": "Table 14: Use Case Narratives of Track Performance\t63"
+  },
+  {
+    "index": 85,
+    "style": "table of figures",
+    "text": "Table 15: Use Case Narratives of Access LXP\t64"
+  },
+  {
+    "index": 86,
+    "style": "table of figures",
+    "text": "Table 16: Use Case Narratives of AI Mentor\t65"
+  },
+  {
+    "index": 87,
+    "style": "table of figures",
+    "text": "Table 17: Use Case Narratives of Student Profile\t66"
+  },
+  {
+    "index": 88,
+    "style": "table of figures",
+    "text": "Table 18: Use Case Narratives of Student Profile\t67"
+  },
+  {
+    "index": 89,
+    "style": "table of figures",
+    "text": "Table 19: Use Case Narratives of Logout\t68"
+  },
+  {
+    "index": 90,
+    "style": "table of figures",
+    "text": "Table 20: Use Case Narratives of View My Classes\t69"
+  },
+  {
+    "index": 91,
+    "style": "table of figures",
+    "text": "Table 21: Use Case Narratives of Manage Class Lessons\t70"
+  },
+  {
+    "index": 92,
+    "style": "table of figures",
+    "text": "Table 22: Use Case Narratives of Upload Learning Modules\t71"
+  },
+  {
+    "index": 93,
+    "style": "table of figures",
+    "text": "Table 23: Use Case Narratives of Create and Manage Assignments\t72"
+  },
+  {
+    "index": 94,
+    "style": "table of figures",
+    "text": "Table 24: Use Case Narratives of Disccusion Board (Teacher)\t73"
+  },
+  {
+    "index": 95,
+    "style": "table of figures",
+    "text": "Table 25: Use Case Narratives of Manage Class Record\t74"
+  },
+  {
+    "index": 96,
+    "style": "table of figures",
+    "text": "Table 26: Use Case Narratives of Manage Class Roster\t75"
+  },
+  {
+    "index": 97,
+    "style": "table of figures",
+    "text": "Table 27: Use Case Narratives of AI Draft Quiz Workspace\t76"
+  },
+  {
+    "index": 98,
+    "style": "table of figures",
+    "text": "Table 28: Use Case Narratives of AI Extraction\t77"
+  },
+  {
+    "index": 99,
+    "style": "table of figures",
+    "text": "Table 29: Use Case Narratives of Class Announcement\t78"
+  },
+  {
+    "index": 100,
+    "style": "table of figures",
+    "text": "Table 30: Use Case Narratives of Student Interventions\t79"
+  },
+  {
+    "index": 101,
+    "style": "table of figures",
+    "text": "Table 31: Use Case Narratives of Student Performance\t80"
+  },
+  {
+    "index": 102,
+    "style": "table of figures",
+    "text": "Table 32: Use Case Narratives of Generate Reports\t81"
+  },
+  {
+    "index": 103,
+    "style": "table of figures",
+    "text": "Table 33: Use Case Narratives of Manage Teacher Profile\t82"
+  },
+  {
+    "index": 104,
+    "style": "table of figures",
+    "text": "Table 34: Use Case Narratives of View My Section\t83"
+  },
+  {
+    "index": 105,
+    "style": "table of figures",
+    "text": "Table 35: Use Case Narratives of Nexora Library\t84"
+  },
+  {
+    "index": 106,
+    "style": "table of figures",
+    "text": "Table 36: Use Case Narratives of Dashboard (Admin)\t86"
+  },
+  {
+    "index": 107,
+    "style": "table of figures",
+    "text": "Table 37: Use Case Narratives of System Diagnostics\t87"
+  },
+  {
+    "index": 108,
+    "style": "table of figures",
+    "text": "Table 38: Use Case Narratives of Manage Users\t88"
+  },
+  {
+    "index": 109,
+    "style": "table of figures",
+    "text": "Table 39: Use Case Narratives of Manage Sections\t89"
+  },
+  {
+    "index": 110,
+    "style": "table of figures",
+    "text": "Table 40: Use Case Narratives of Manage School Calendar\t90"
+  },
+  {
+    "index": 111,
+    "style": "table of figures",
+    "text": "Table 41: Use Case Narratives of Nexora Library (Administrator)\t91"
+  },
+  {
+    "index": 112,
+    "style": "table of figures",
+    "text": "Table 42: Use Case Narratives of Import Rosters\t92"
+  },
+  {
+    "index": 113,
+    "style": "table of figures",
+    "text": "Table 43: Use Case Narratives of Reports (Administrator)\t93"
+  },
+  {
+    "index": 114,
+    "style": "table of figures",
+    "text": "Table 44: Use Case Narratives of Evaluations (Administrator)\t94"
+  },
+  {
+    "index": 115,
+    "style": "table of figures",
+    "text": "Table 45: Use Case Narratives of Announcement (Administrator)\t95"
+  },
+  {
+    "index": 116,
+    "style": "table of figures",
+    "text": "Table 46: Use Case Narratives of AI Chatbot (Administrator)\t96"
+  },
+  {
+    "index": 117,
+    "style": "table of figures",
+    "text": "Table 47: Use Case Narratives of Audit Trail\t97"
+  },
+  {
+    "index": 118,
+    "style": "table of figures",
+    "text": "Table 48: Use Case Narratives of System Settings\t98"
+  },
+  {
+    "index": 119,
+    "style": "table of figures",
+    "text": "Table 49: Use Case Narratives of Profile (Administrator)\t99"
+  },
+  {
+    "index": 216,
+    "style": "Caption",
+    "text": "Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)"
+  },
+  {
+    "index": 264,
+    "style": "Caption",
+    "text": "Table 2: Gap Analysis Table of Related System Applications"
+  },
+  {
+    "index": 296,
+    "style": "Caption",
+    "text": "Table 3: Software Requirements"
+  },
+  {
+    "index": 311,
+    "style": "Caption",
+    "text": "Table 4: Hardware Specifications"
+  },
+  {
+    "index": 383,
+    "style": "Caption",
+    "text": "Table 5: Agile Development Phases, Activities, and List of Deliverables"
+  },
+  {
+    "index": 388,
+    "style": "Caption",
+    "text": "Table 6: Functional Requirements for Analysis (Administrators and Teachers)"
+  },
+  {
+    "index": 392,
+    "style": "Caption",
+    "text": "Table 7: Functional Requirements for Analysis (Students)"
+  },
+  {
+    "index": 396,
+    "style": "Caption",
+    "text": "Table 8: Technical and Operational Constraints"
+  },
+  {
+    "index": 413,
+    "style": "Caption",
+    "text": "Table 9: Use Case Narratives of Login"
+  },
+  {
+    "index": 415,
+    "style": "Caption",
+    "text": "Table 10: Use Case Narratives of Dashboard"
+  },
+  {
+    "index": 417,
+    "style": "Caption",
+    "text": "Table 11: Use Case Narratives of My Courses"
+  },
+  {
+    "index": 419,
+    "style": "Caption",
+    "text": "Table 12: Use Case Narratives of View Modules (Mobile & Web)"
+  },
+  {
+    "index": 421,
+    "style": "Caption",
+    "text": "Table 13: Use Case Narratives of View and Complete Assessments"
+  },
+  {
+    "index": 423,
+    "style": "Caption",
+    "text": "Table 14: Use Case Narratives of Track Performance"
+  },
+  {
+    "index": 425,
+    "style": "Caption",
+    "text": "Table 15: Use Case Narratives of Access LXP"
+  },
+  {
+    "index": 427,
+    "style": "Caption",
+    "text": "Table 16: Use Case Narratives of AI Mentor"
+  },
+  {
+    "index": 429,
+    "style": "Caption",
+    "text": "Table 17: Use Case Narratives of Student Profile"
+  },
+  {
+    "index": 431,
+    "style": "Caption",
+    "text": "Table 18: Use Case Narratives of Student Profile"
+  },
+  {
+    "index": 433,
+    "style": "Caption",
+    "text": "Table 19: Use Case Narratives of Logout"
+  },
+  {
+    "index": 436,
+    "style": "Caption",
+    "text": "Table 20: Use Case Narratives of View My Classes"
+  },
+  {
+    "index": 438,
+    "style": "Caption",
+    "text": "Table 21: Use Case Narratives of Manage Class Lessons"
+  },
+  {
+    "index": 440,
+    "style": "Caption",
+    "text": "Table 22: Use Case Narratives of Upload Learning Modules"
+  },
+  {
+    "index": 442,
+    "style": "Caption",
+    "text": "Table 23: Use Case Narratives of Create and Manage Assignments"
+  },
+  {
+    "index": 444,
+    "style": "Caption",
+    "text": "Table 24: Use Case Narratives of Disccusion Board (Teacher)"
+  },
+  {
+    "index": 446,
+    "style": "Caption",
+    "text": "Table 25: Use Case Narratives of Manage Class Record"
+  },
+  {
+    "index": 448,
+    "style": "Caption",
+    "text": "Table 26: Use Case Narratives of Manage Class Roster"
+  },
+  {
+    "index": 450,
+    "style": "Caption",
+    "text": "Table 27: Use Case Narratives of AI Draft Quiz Workspace"
+  },
+  {
+    "index": 452,
+    "style": "Caption",
+    "text": "Table 28: Use Case Narratives of AI Extraction"
+  },
+  {
+    "index": 454,
+    "style": "Caption",
+    "text": "Table 29: Use Case Narratives of Class Announcement"
+  },
+  {
+    "index": 456,
+    "style": "Caption",
+    "text": "Table 30: Use Case Narratives of Student Interventions"
+  },
+  {
+    "index": 458,
+    "style": "Caption",
+    "text": "Table 31: Use Case Narratives of Student Performance"
+  },
+  {
+    "index": 460,
+    "style": "Caption",
+    "text": "Table 32: Use Case Narratives of Generate Reports"
+  },
+  {
+    "index": 462,
+    "style": "Caption",
+    "text": "Table 33: Use Case Narratives of Manage Teacher Profile"
+  },
+  {
+    "index": 464,
+    "style": "Caption",
+    "text": "Table 34: Use Case Narratives of View My Section"
+  },
+  {
+    "index": 466,
+    "style": "Caption",
+    "text": "Table 35: Use Case Narratives of Nexora Library"
+  },
+  {
+    "index": 467,
+    "style": "Normal",
+    "text": "Table 31. Use Case Narratives of View Evaluations"
+  },
+  {
+    "index": 473,
+    "style": "Caption",
+    "text": "Table 36: Use Case Narratives of Dashboard (Admin)"
+  },
+  {
+    "index": 475,
+    "style": "Caption",
+    "text": "Table 37: Use Case Narratives of System Diagnostics"
+  },
+  {
+    "index": 477,
+    "style": "Caption",
+    "text": "Table 38: Use Case Narratives of Manage Users"
+  },
+  {
+    "index": 479,
+    "style": "Caption",
+    "text": "Table 39: Use Case Narratives of Manage Sections"
+  },
+  {
+    "index": 481,
+    "style": "Caption",
+    "text": "Table 40: Use Case Narratives of Manage School Calendar"
+  },
+  {
+    "index": 483,
+    "style": "Caption",
+    "text": "Table 41: Use Case Narratives of Nexora Library (Administrator)"
+  },
+  {
+    "index": 485,
+    "style": "Caption",
+    "text": "Table 42: Use Case Narratives of Import Rosters"
+  },
+  {
+    "index": 487,
+    "style": "Caption",
+    "text": "Table 43: Use Case Narratives of Reports (Administrator)"
+  },
+  {
+    "index": 489,
+    "style": "Caption",
+    "text": "Table 44: Use Case Narratives of Evaluations (Administrator)"
+  },
+  {
+    "index": 491,
+    "style": "Caption",
+    "text": "Table 45: Use Case Narratives of Announcement (Administrator)"
+  },
+  {
+    "index": 493,
+    "style": "Caption",
+    "text": "Table 46: Use Case Narratives of AI Chatbot (Administrator)"
+  },
+  {
+    "index": 495,
+    "style": "Caption",
+    "text": "Table 47: Use Case Narratives of Audit Trail"
+  },
+  {
+    "index": 497,
+    "style": "Caption",
+    "text": "Table 48: Use Case Narratives of System Settings"
+  },
+  {
+    "index": 499,
+    "style": "Caption",
+    "text": "Table 49: Use Case Narratives of Profile (Administrator)"
+  }
+]

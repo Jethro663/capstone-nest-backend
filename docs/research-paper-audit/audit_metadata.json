@@ -1,0 +1,13 @@
+{
+  "readiness_score": 42,
+  "panel_risk": "Critical",
+  "paper_safe": "Not safe",
+  "severity_counts": {
+    "Critical": 8,
+    "Major": 10,
+    "Moderate": 5,
+    "Minor": 2
+  },
+  "generated_at": "2026-05-02T10:31:17.878497",
+  "docx": "C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms\\RESEARCH_PAPER_FULL_SYSTEM_AUDIT_REPORT.docx"
+}

@@ -126,6 +126,7 @@ export interface JaAskMessage {
   role: "student" | "assistant" | "system";
   content: string;
   blocked: boolean;
+  insufficientEvidence?: boolean;
   quickAction?: string | null;
   citations?: Array<Record<string, unknown>> | null;
   createdAt?: string;

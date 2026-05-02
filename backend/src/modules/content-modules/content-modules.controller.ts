@@ -19,10 +19,9 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import * as fs from 'fs';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import * as path from 'path';
 import type { Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
 import { RoleName, Roles } from '../auth/decorators/roles.decorator';
@@ -44,21 +43,17 @@ import {
   UpdateModuleSectionDto,
 } from './DTO/module.dto';
 import { ContentModulesService } from './content-modules.service';
+import {
+  MODULE_COVER_ALLOWED_MIME_TYPES,
+  MODULE_COVER_MAX_FILE_SIZE_BYTES,
+  persistValidatedModuleCover,
+} from './module-cover-upload.util';
 
 const MODULE_COVER_UPLOAD_DEST = './uploads/module-covers';
 const moduleCoverMulterOptions = {
-  storage: diskStorage({
-    destination: (_req, _file, cb) => {
-      fs.mkdirSync(MODULE_COVER_UPLOAD_DEST, { recursive: true });
-      cb(null, MODULE_COVER_UPLOAD_DEST);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname) || '.png';
-      cb(null, `${uuidv4()}_${Date.now()}${ext}`);
-    },
-  }),
+  storage: memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: MODULE_COVER_MAX_FILE_SIZE_BYTES,
     files: 1,
   },
   fileFilter: (
@@ -66,7 +61,7 @@ const moduleCoverMulterOptions = {
     file: Express.Multer.File,
     cb: (error: Error | null, acceptFile: boolean) => void,
   ) => {
-    cb(null, file.mimetype.startsWith('image/'));
+    cb(null, MODULE_COVER_ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase()));
   },
 };
 
@@ -484,7 +479,11 @@ export class ContentModulesController {
       throw new BadRequestException('Image upload is required');
     }
 
-    const coverImageUrl = `/api/modules/covers/${file.filename}`;
+    const { filename } = await persistValidatedModuleCover(
+      file,
+      MODULE_COVER_UPLOAD_DEST,
+    );
+    const coverImageUrl = `/api/modules/covers/${filename}`;
     const data = await this.contentModulesService.updateModule(
       moduleId,
       { themeKind: ModuleThemeKind.Image, coverImageUrl },

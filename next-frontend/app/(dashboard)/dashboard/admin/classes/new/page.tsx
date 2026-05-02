@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, School2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,9 +21,23 @@ import type { ClassTemplate } from '@/types/class-template';
 import type { User } from '@/types/user';
 import { toast } from 'sonner';
 
+type TemplateSeed = {
+  templateId: string;
+  subjectName: string;
+  subjectCode: string;
+  subjectGradeLevel: string;
+};
+
 export default function CreateClassPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
+  const templateSeed = useMemo<TemplateSeed>(() => ({
+    templateId: searchParams.get('templateId')?.trim() ?? '',
+    subjectName: searchParams.get('subjectName')?.trim() ?? '',
+    subjectCode: searchParams.get('subjectCode')?.trim() ?? '',
+    subjectGradeLevel: searchParams.get('subjectGradeLevel')?.trim() ?? '',
+  }), [searchParams]);
 
   const schoolYears = useMemo(() => {
     const resolved = activeSchoolYear?.match(/^(\d{4})-(\d{4})$/);
@@ -38,8 +52,13 @@ export default function CreateClassPage() {
   }, [activeSchoolYear]);
 
   const initialValues = useMemo(
-    () => createEmptyClassForm(schoolYears[0] || ''),
-    [schoolYears],
+    () => ({
+      ...createEmptyClassForm(schoolYears[0] || ''),
+      subjectName: templateSeed.subjectName || '',
+      subjectCode: templateSeed.subjectCode || '',
+      subjectGradeLevel: templateSeed.subjectGradeLevel || '7',
+    }),
+    [schoolYears, templateSeed.subjectCode, templateSeed.subjectGradeLevel, templateSeed.subjectName],
   );
 
   const [sections, setSections] = useState<Section[]>([]);
@@ -140,11 +159,26 @@ export default function CreateClassPage() {
 
   useEffect(() => {
     if (!selectedTemplateId) return;
+    if (templatesLoading) return;
     const selectedStillCompatible = compatibleTemplates.some((template) => template.id === selectedTemplateId);
     if (!selectedStillCompatible) {
       setSelectedTemplateId('');
     }
-  }, [compatibleTemplates, selectedTemplateId]);
+  }, [compatibleTemplates, selectedTemplateId, templatesLoading]);
+
+  useEffect(() => {
+    if (!templateSeed.templateId || templatesLoading) {
+      return;
+    }
+
+    const importedTemplateStillCompatible = compatibleTemplates.some(
+      (template) => template.id === templateSeed.templateId,
+    );
+
+    if (importedTemplateStillCompatible) {
+      setSelectedTemplateId((current) => current || templateSeed.templateId);
+    }
+  }, [compatibleTemplates, templateSeed.templateId, templatesLoading]);
 
   const handleSubmit = async (values: ClassFormValues) => {
     try {

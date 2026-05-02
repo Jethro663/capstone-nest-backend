@@ -576,6 +576,7 @@ export const assessmentQuestions = pgTable(
     isRequired: boolean('is_required').default(true),
     explanation: text('explanation'),
     imageUrl: text('image_url'),
+    metadata: json('metadata'),
     conceptTags: json('concept_tags'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -596,8 +597,10 @@ export const assessmentQuestionOptions = pgTable(
       .notNull()
       .references(() => assessmentQuestions.id, { onDelete: 'cascade' }),
     text: text('text').notNull(),
+    imageUrl: text('image_url'),
     isCorrect: boolean('is_correct').default(false),
     order: integer('order').notNull().default(0),
+    metadata: json('metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({

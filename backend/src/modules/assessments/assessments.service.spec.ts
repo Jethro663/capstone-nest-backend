@@ -2442,6 +2442,72 @@ describe('AssessmentsService', () => {
         ),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('persists option image urls and image metadata when creating a question', async () => {
+      db.query.assessments.findFirst.mockResolvedValue({
+        ...MOCK_ASSESSMENT,
+        class: { teacherId: 'teacher-1' },
+      });
+
+      const insertQuestionValues = jest.fn().mockReturnValue({
+        returning: jest.fn().mockResolvedValue([{ ...MOCK_QUESTION }]),
+      });
+      const insertOptionValues = jest.fn().mockReturnValue(Promise.resolve());
+      db.insert
+        .mockImplementationOnce(() => ({ values: insertQuestionValues }))
+        .mockImplementationOnce(() => ({ values: insertOptionValues }));
+      mockSelect(db, [{ total: 5 }]);
+      mockUpdateReturning(db, [{ ...MOCK_ASSESSMENT, totalPoints: 5 }]);
+      db.query.assessmentQuestions.findFirst.mockResolvedValue(MOCK_QUESTION);
+
+      await service.createQuestion(
+        {
+          assessmentId: ASSESSMENT_ID,
+          type: 'multiple_choice',
+          content: 'What is 1+1?',
+          points: 5,
+          order: 1,
+          imageUrl: '/api/assessments/questions/images/question.png',
+          imageDisplayMode: 'expanded',
+          imageZoom: 120,
+          options: [
+            {
+              text: '2',
+              isCorrect: true,
+              order: 1,
+              imageUrl: '/api/assessments/questions/images/option.png',
+              imageDisplayMode: 'default',
+              imageZoom: 100,
+            },
+          ],
+        } as any,
+        {
+          userId: 'teacher-1',
+          roles: ['teacher'],
+        },
+      );
+
+      expect(insertQuestionValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          imageUrl: '/api/assessments/questions/images/question.png',
+          metadata: expect.objectContaining({
+            imageDisplayMode: 'expanded',
+            imageZoom: 120,
+          }),
+        }),
+      );
+      expect(insertOptionValues).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            imageUrl: '/api/assessments/questions/images/option.png',
+            metadata: expect.objectContaining({
+              imageDisplayMode: 'default',
+              imageZoom: 100,
+            }),
+          }),
+        ]),
+      );
+    });
   });
 
   describe('question mutation ownership and audit', () => {

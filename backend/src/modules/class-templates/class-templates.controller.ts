@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,10 +9,20 @@ import {
   Post,
   Put,
   Query,
+  Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { diskStorage } from 'multer';
+import * as fs from 'fs';
+import * as path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { RoleName, Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -24,6 +35,27 @@ import {
   UpdateClassTemplateContentDto,
   UpdateClassTemplateDto,
 } from './dto/class-template.dto';
+
+const IMAGE_UPLOAD_DEST = './uploads/question-images';
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
+const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+function isAllowedImageUpload(file: {
+  originalname: string;
+  mimetype: string;
+}) {
+  const extension = path.extname(file.originalname).toLowerCase();
+  return (
+    ALLOWED_IMAGE_MIMES.includes(file.mimetype) &&
+    ALLOWED_IMAGE_EXTENSIONS.includes(extension)
+  );
+}
 
 @ApiTags('Class Templates')
 @ApiBearerAuth('token')
@@ -141,6 +173,65 @@ export class ClassTemplatesController {
       user?.roles ?? [],
     );
     return { success: true, message: 'Template content saved', data };
+  }
+
+  @Post(':id/assessment-images')
+  @Roles(RoleName.Admin)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(IMAGE_UPLOAD_DEST, { recursive: true });
+          cb(null, IMAGE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (isAllowedImageUpload(file)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only JPG, PNG, GIF, and WEBP image files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async uploadAssessmentImage(
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    return {
+      success: true,
+      message: 'Template assessment image uploaded',
+      data: {
+        imageUrl: `/api/class-templates/images/${file.filename}`,
+      },
+    };
+  }
+
+  @Public()
+  @Get('images/:filename')
+  async serveAssessmentImage(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const sanitized = path.basename(filename);
+    const filePath = path.join(IMAGE_UPLOAD_DEST, sanitized);
+    if (!fs.existsSync(filePath)) {
+      throw new BadRequestException('Image not found');
+    }
+    return res.sendFile(path.resolve(filePath));
   }
 
   @Get(':id/engine-export')

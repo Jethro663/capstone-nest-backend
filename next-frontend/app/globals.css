@@ -4143,6 +4143,22 @@ body {
   background: #30425f;
 }
 
+.student-dashboard-help-button {
+  min-height: 2.45rem;
+  width: 2.45rem;
+  border-radius: 999px;
+  border-color: rgba(166, 183, 210, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 0;
+}
+
+.student-dashboard-help-button:hover {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
 .student-v2-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -4661,6 +4677,542 @@ body {
   font-weight: 600;
 }
 
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-copy h3,
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-copy p,
+.student-dashboard-guide-dialog .route-guide-step strong,
+.student-dashboard-guide-dialog .route-guide-step p,
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-reminder {
+  color: var(--student-text-strong);
+}
+
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-copy p,
+.student-dashboard-guide-dialog .route-guide-step p {
+  color: var(--student-text-muted);
+}
+
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-kicker,
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-progress span {
+  color: #d81b50;
+}
+
+.student-dashboard-guide-dialog .teacher-intervention-workspace__manual-progress button.is-active,
+.student-dashboard-guide-dialog .route-guide-step__index {
+  background: #d81b50;
+}
+
+.student-dashboard-guide-dialog .route-guide-step {
+  border-left-color: #d81b50;
+}
+
+.student-dashboard-guide-shot {
+  min-height: 25rem;
+  background: linear-gradient(180deg, #fffefe 0%, #f4f7fc 100%);
+}
+
+.student-dashboard-guide-shell {
+  display: grid;
+  gap: 0.82rem;
+}
+
+.student-dashboard-guide-shell small {
+  color: #7182a1;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.student-dashboard-guide-shell strong,
+.student-dashboard-guide-shell b,
+.student-dashboard-guide-shell p,
+.student-dashboard-guide-shell span {
+  margin: 0;
+}
+
+.student-dashboard-guide-shell strong,
+.student-dashboard-guide-shell__calendar-card header strong,
+.student-dashboard-guide-shell__events-card header strong,
+.student-dashboard-guide-shell__notice-card header strong {
+  color: #183153;
+}
+
+.student-dashboard-guide-shell p {
+  color: #687790;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.student-dashboard-guide-shell__hero,
+.student-dashboard-guide-shell__summary-row article,
+.student-dashboard-guide-shell__card,
+.student-dashboard-guide-shell__schedule-card,
+.student-dashboard-guide-shell__calendar-card,
+.student-dashboard-guide-shell__events-card,
+.student-dashboard-guide-shell__notice-card,
+.student-dashboard-guide-shell__ja-tip {
+  border: 1px solid #d8e2ee;
+  border-radius: 0.84rem;
+  background: #ffffff;
+}
+
+.student-dashboard-guide-shell__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: center;
+  background: linear-gradient(90deg, #122748 0%, #1d355d 100%);
+  border-color: #203d6a;
+  padding: 0.95rem;
+}
+
+.student-dashboard-guide-shell__hero-copy strong,
+.student-dashboard-guide-shell__hero-copy p,
+.student-dashboard-guide-shell__hero-copy small {
+  color: #ffffff;
+}
+
+.student-dashboard-guide-shell__hero-copy p {
+  color: #c6d3e6;
+  font-size: 0.78rem;
+  margin-top: 0.2rem;
+}
+
+.student-dashboard-guide-shell__hero-copy strong {
+  display: block;
+  margin-top: 0.14rem;
+  font-size: 1rem;
+}
+
+.student-dashboard-guide-shell__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.42rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.student-dashboard-guide-shell__hero-actions span,
+.student-dashboard-guide-shell__hero-actions b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0 0.78rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-shell__hero-actions span {
+  border: 1px solid rgba(198, 211, 230, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.student-dashboard-guide-shell__hero-actions span.is-solid {
+  border-color: #ff9eaa;
+  background: #ff3347;
+}
+
+.student-dashboard-guide-shell__hero-actions b {
+  width: 2rem;
+  padding: 0;
+  background: #ffffff;
+  color: #d81b50;
+}
+
+.student-dashboard-guide-shell__summary-row,
+.student-dashboard-guide-shell__card-grid,
+.student-dashboard-guide-shell__calendar-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.72rem;
+}
+
+.student-dashboard-guide-shell__summary-row article,
+.student-dashboard-guide-shell__card,
+.student-dashboard-guide-shell__schedule-card,
+.student-dashboard-guide-shell__calendar-card,
+.student-dashboard-guide-shell__events-card,
+.student-dashboard-guide-shell__notice-card {
+  padding: 0.82rem;
+}
+
+.student-dashboard-guide-shell__summary-row strong,
+.student-dashboard-guide-shell__task-meta b,
+.student-dashboard-guide-shell__lesson-list strong,
+.student-dashboard-guide-shell__schedule-list strong,
+.student-dashboard-guide-shell__events-card div strong,
+.student-dashboard-guide-shell__notice-list p,
+.student-dashboard-guide-shell__notice-footer strong {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-shell__summary-row p {
+  margin-top: 0.2rem;
+}
+
+.student-dashboard-guide-shell__card.is-soft {
+  background: #f8fbff;
+}
+
+.student-dashboard-guide-shell__card header,
+.student-dashboard-guide-shell__schedule-card header,
+.student-dashboard-guide-shell__events-card header,
+.student-dashboard-guide-shell__notice-card header {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.student-dashboard-guide-shell__task-meta,
+.student-dashboard-guide-shell__notice-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+
+.student-dashboard-guide-shell__task-meta span,
+.student-dashboard-guide-shell__schedule-list span,
+.student-dashboard-guide-shell__events-card div span,
+.student-dashboard-guide-shell__notice-footer span {
+  color: #7a8ea9;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.student-dashboard-guide-shell__task-meta b,
+.student-dashboard-guide-shell__lesson-list b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  padding: 0 0.82rem;
+  border-radius: 999px;
+  background: #ff3347;
+  color: #ffffff;
+  font-size: 0.71rem;
+}
+
+.student-dashboard-guide-shell__lesson-list,
+.student-dashboard-guide-shell__schedule-list,
+.student-dashboard-guide-shell__notice-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.student-dashboard-guide-shell__lesson-list article,
+.student-dashboard-guide-shell__schedule-list div,
+.student-dashboard-guide-shell__notice-list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.68rem;
+  border: 1px solid #e3ebf5;
+  border-radius: 0.75rem;
+  background: #f8fbff;
+  padding: 0.7rem;
+}
+
+.student-dashboard-guide-shell__lesson-list article > div {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.student-dashboard-guide-shell__lesson-list article > div > span,
+.student-dashboard-guide-shell__notice-list span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 999px;
+  background: #fff1f3;
+  color: #d81b50;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.student-dashboard-guide-shell__schedule-list div {
+  display: grid;
+  justify-content: start;
+}
+
+.student-dashboard-guide-shell__schedule-list p {
+  color: #d81b50;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-shell__calendar-card header,
+.student-dashboard-guide-shell__events-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.student-dashboard-guide-shell__calendar-card header span,
+.student-dashboard-guide-shell__events-card header b {
+  color: #516983;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-shell__weekdays,
+.student-dashboard-guide-shell__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.22rem;
+}
+
+.student-dashboard-guide-shell__weekdays {
+  margin-top: 0.72rem;
+}
+
+.student-dashboard-guide-shell__days {
+  margin-top: 0.28rem;
+}
+
+.student-dashboard-guide-shell__days span {
+  display: grid;
+  place-items: center;
+  gap: 0.18rem;
+  border-radius: 0.56rem;
+  border: 1px solid #e2eaf5;
+  padding: 0.3rem 0.1rem;
+  color: #415977;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-shell__days span[data-selected='true'] {
+  border-color: #f5afbf;
+  background: #fff1f3;
+}
+
+.student-dashboard-guide-shell__days span i {
+  width: 0.26rem;
+  height: 0.26rem;
+  border-radius: 999px;
+  background: #3e72cc;
+}
+
+.student-dashboard-guide-shell__days span[data-selected='true'] i {
+  background: #d81b50;
+}
+
+.student-dashboard-guide-shell__events-card > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.45rem;
+  align-items: start;
+  margin-top: 0.68rem;
+  border: 1px solid #e3ebf5;
+  border-radius: 0.72rem;
+  background: #f9fbff;
+  padding: 0.62rem;
+}
+
+.student-dashboard-guide-shell__notice-card header {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.student-dashboard-guide-shell__notice-card header b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.8rem;
+  padding: 0 0.72rem;
+  border-radius: 999px;
+  background: #ffe7ef;
+  color: #d81b50;
+  font-size: 0.7rem;
+}
+
+.student-dashboard-guide-shell__notice-list {
+  margin-top: 0.72rem;
+}
+
+.student-dashboard-guide-shell__notice-list div {
+  align-items: start;
+}
+
+.student-dashboard-guide-shell__notice-list p {
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.student-dashboard-guide-shell__ja-tip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.72rem;
+  align-items: center;
+  padding: 0.78rem;
+}
+
+.student-dashboard-guide-shell__ja-image {
+  position: relative;
+  width: 4.2rem;
+  height: 4.2rem;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #fff7f8 0%, #eef5ff 100%);
+}
+
+.student-dashboard-guide-shell__ja-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.student-dashboard-guide-shell__ja-copy strong {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.student-dashboard-guide-pin {
+  background: #d81b50;
+}
+
+.student-dashboard-guide-pin::before {
+  background: #d81b50;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-actions {
+  top: 5.25rem;
+  right: 2.3rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-actions::after {
+  width: 5.6rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-help {
+  top: 3.2rem;
+  right: 0.95rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-help::after {
+  width: 2rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-task-card {
+  top: 4.3rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-task-card::after {
+  width: 5rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-task-start {
+  top: 8.6rem;
+  right: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-task-start::after {
+  width: 3rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-lesson-list {
+  top: 5rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-lesson-list::after {
+  width: 4.3rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-lesson-open {
+  top: 8.7rem;
+  right: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-lesson-open::after {
+  width: 2.7rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-schedule-time {
+  top: 6rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-schedule-time::after {
+  width: 4rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-schedule-class {
+  top: 9.2rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-schedule-class::after {
+  width: 4rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-calendar {
+  top: 10.6rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-calendar::after {
+  width: 3.4rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-events {
+  top: 8.2rem;
+  right: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-events::after {
+  width: 4rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-reminder {
+  top: 5rem;
+  left: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-reminder::after {
+  width: 4rem;
+  top: 0.82rem;
+  left: calc(100% + 0.2rem);
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-notice {
+  bottom: 6rem;
+  right: 1rem;
+}
+
+.student-dashboard-guide-pin.is-student-dashboard-guide-notice::after {
+  width: 3rem;
+  top: 0.82rem;
+  right: calc(100% + 0.2rem);
+}
+
 @media (max-width: 1280px) {
   .student-v2-main {
     grid-template-columns: 1fr;
@@ -4705,6 +5257,23 @@ body {
 
   .student-v2-hero__actions a button {
     width: 100%;
+  }
+
+  .student-dashboard-help-button {
+    width: 100%;
+  }
+
+  .student-dashboard-guide-shell__summary-row,
+  .student-dashboard-guide-shell__card-grid,
+  .student-dashboard-guide-shell__calendar-layout,
+  .student-dashboard-guide-dialog .teacher-intervention-workspace__manual-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .student-dashboard-guide-pin {
+    position: static;
+    width: max-content;
+    margin-top: 0.35rem;
   }
 }
 
@@ -9405,6 +9974,621 @@ html[data-theme='dark'] {
   top: 50%;
 }
 
+.student-courses-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.9rem;
+  border: 1px solid #ded9e9;
+  background: #fbf9fd;
+  color: #43516f;
+  box-shadow: 0 10px 20px -20px rgba(17, 25, 47, 0.48);
+}
+
+.student-courses-help-button:hover {
+  border-color: #d7b7c4;
+  background: #fff3f7;
+  color: #be123c;
+}
+
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-copy h3,
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-copy p,
+.student-courses-guide-dialog .route-guide-step strong,
+.student-courses-guide-dialog .route-guide-step p,
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-reminder {
+  color: var(--student-text-strong);
+}
+
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-copy p,
+.student-courses-guide-dialog .route-guide-step p {
+  color: var(--student-text-muted);
+}
+
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-kicker,
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-progress span {
+  color: #d81b50;
+}
+
+.student-courses-guide-dialog .teacher-intervention-workspace__manual-progress button.is-active,
+.student-courses-guide-dialog .route-guide-step__index {
+  background: #d81b50;
+}
+
+.student-courses-guide-dialog .route-guide-step {
+  border-left-color: #d81b50;
+}
+
+.student-courses-guide-shot {
+  min-height: 25rem;
+  background: linear-gradient(180deg, #fffefe 0%, #f4f7fc 100%);
+}
+
+.student-courses-guide-shell {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.student-courses-guide-shell small {
+  color: #7182a1;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.student-courses-guide-shell strong,
+.student-courses-guide-shell b,
+.student-courses-guide-shell p {
+  margin: 0;
+}
+
+.student-courses-guide-shell strong,
+.student-courses-guide-shell__calendar-card header strong,
+.student-courses-guide-shell__events-card header strong {
+  color: #183153;
+  font-size: 0.94rem;
+}
+
+.student-courses-guide-shell p {
+  color: #687790;
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.student-courses-guide-shell__toolbar,
+.student-courses-guide-shell__ja-tip,
+.student-courses-guide-shell__calendar-card,
+.student-courses-guide-shell__events-card {
+  border: 1px solid #d8e2ee;
+  border-radius: 0.78rem;
+  background: #ffffff;
+  padding: 0.75rem;
+}
+
+.student-courses-guide-shell__toolbar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.42rem;
+}
+
+.student-courses-guide-shell__toolbar.is-short {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.student-courses-guide-shell__toolbar span,
+.student-courses-guide-shell__toolbar b,
+.student-courses-guide-shell__toolbar i,
+.student-courses-guide-shell__toolbar strong {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.58rem;
+  border: 1px solid #d8e2ee;
+  background: #f8fafe;
+  color: #657691;
+  padding-inline: 0.5rem;
+  font-size: 0.64rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.student-courses-guide-shell__toolbar .is-search {
+  grid-column: span 2;
+  justify-content: flex-start;
+  background: #ffffff;
+}
+
+.student-courses-guide-shell__toolbar b {
+  background: #ffffff;
+  color: #183153;
+  box-shadow: 0 8px 16px -18px rgba(17, 25, 47, 0.6);
+}
+
+.student-courses-guide-shell__toolbar i {
+  color: #be123c;
+  background: #fff1f6;
+  border-color: #efc3d0;
+}
+
+.student-courses-guide-shell__toolbar .is-strong {
+  grid-column: span 2;
+  background: #d81b50;
+  border-color: #efc3d0;
+  color: #ffffff;
+}
+
+.student-courses-guide-shell__toolbar strong {
+  background: #f7f9fd;
+  color: #d81b50;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__toolbar .is-icon.is-active {
+  background: #ffffff;
+  color: #183153;
+}
+
+.student-courses-guide-shell__course-grid,
+.student-courses-guide-shell__calendar-layout,
+.student-courses-guide-shell__organize-grid {
+  display: grid;
+  gap: 0.78rem;
+}
+
+.student-courses-guide-shell__course-grid,
+.student-courses-guide-shell__calendar-layout {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+}
+
+.student-courses-guide-shell__calendar-layout {
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+}
+
+.student-courses-guide-shell__organize-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.student-courses-guide-shell__course-grid article,
+.student-courses-guide-shell__card,
+.student-courses-guide-shell__menu-card,
+.student-courses-guide-shell__preview-card {
+  border: 1px solid #dde4ef;
+  border-radius: 0.95rem;
+  background: #ffffff;
+  box-shadow: 0 14px 26px -26px rgba(17, 25, 47, 0.58);
+}
+
+.student-courses-guide-shell__course-grid article header,
+.student-courses-guide-shell__card header {
+  display: grid;
+  gap: 0.34rem;
+  padding: 0.82rem;
+  background: linear-gradient(135deg, #4361ee 0%, #5e7bff 100%);
+}
+
+.student-courses-guide-shell__course-grid article header small,
+.student-courses-guide-shell__card header small {
+  width: max-content;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #be123c;
+  padding: 0.18rem 0.46rem;
+  font-size: 0.58rem;
+}
+
+.student-courses-guide-shell__course-grid article header strong,
+.student-courses-guide-shell__course-grid article header p,
+.student-courses-guide-shell__card header strong,
+.student-courses-guide-shell__card header p,
+.student-courses-guide-shell__card header b {
+  color: #ffffff;
+}
+
+.student-courses-guide-shell__card header b {
+  justify-self: end;
+  font-size: 0.86rem;
+  line-height: 1;
+}
+
+.student-courses-guide-shell__tiny-metrics,
+.student-courses-guide-shell__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.46rem;
+  padding: 0.78rem;
+}
+
+.student-courses-guide-shell__tiny-metrics span,
+.student-courses-guide-shell__pills span {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #406089;
+  padding: 0.34rem 0.6rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__ja-tip {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.student-courses-guide-shell__ja-image {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #fff8f6 0%, #f4f7fc 100%);
+}
+
+.student-courses-guide-shell__ja-copy {
+  display: grid;
+  gap: 0.24rem;
+  min-width: 0;
+  align-content: center;
+}
+
+.student-courses-guide-shell__ja-copy small,
+.student-courses-guide-shell__ja-copy strong {
+  display: block;
+}
+
+.student-courses-guide-shell__ja-copy strong {
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.student-courses-guide-shell__stats {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0.82rem;
+}
+
+.student-courses-guide-shell__stats span {
+  display: grid;
+  gap: 0.22rem;
+  justify-items: center;
+  border: 1px solid #dde4ef;
+  border-radius: 0.75rem;
+  background: #fbfcff;
+  padding: 0.58rem 0.28rem;
+}
+
+.student-courses-guide-shell__stats span strong {
+  font-size: 0.88rem;
+}
+
+.student-courses-guide-shell__stats span small {
+  color: #7585a2;
+}
+
+.student-courses-guide-shell__progress {
+  display: grid;
+  gap: 0.46rem;
+  padding: 0 0.82rem 0.82rem;
+}
+
+.student-courses-guide-shell__progress div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.student-courses-guide-shell__progress div strong {
+  color: #d81b50;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__progress p {
+  height: 0.72rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #d81b50 0%, #f5cddd 68%, #e6edf7 68%, #e6edf7 100%);
+}
+
+.student-courses-guide-shell__card.is-compact {
+  display: grid;
+  gap: 0.72rem;
+  padding: 0.82rem;
+}
+
+.student-courses-guide-shell__buttons {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.student-courses-guide-shell__buttons b,
+.student-courses-guide-shell__schedule,
+.student-courses-guide-shell__events-card header b {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.62rem;
+  border: 1px solid #d8e2ee;
+  background: #f8fafe;
+  color: #334866;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__buttons .is-solid {
+  background: #d81b50;
+  border-color: #efc3d0;
+  color: #ffffff;
+}
+
+.student-courses-guide-shell__menu,
+.student-courses-guide-shell__menu-card {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.student-courses-guide-shell__menu span,
+.student-courses-guide-shell__menu-card span,
+.student-courses-guide-shell__preview-card b {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  border-radius: 0.62rem;
+  border: 1px solid #d8e2ee;
+  background: #ffffff;
+  color: #334866;
+  padding-inline: 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.student-courses-guide-shell__menu-card,
+.student-courses-guide-shell__preview-card {
+  padding: 0.82rem;
+}
+
+.student-courses-guide-shell__preview-card {
+  gap: 0.58rem;
+}
+
+.student-courses-guide-shell__preview-card div {
+  min-height: 5.8rem;
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, #8ec5fc 0%, #e0c3fc 100%);
+}
+
+.student-courses-guide-shell__preview-card b {
+  justify-content: center;
+  background: #d81b50;
+  border-color: #efc3d0;
+  color: #ffffff;
+}
+
+.student-courses-guide-shell__calendar-card header,
+.student-courses-guide-shell__events-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.student-courses-guide-shell__calendar-card header span {
+  color: #657691;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__weekdays,
+.student-courses-guide-shell__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.student-courses-guide-shell__weekdays {
+  margin-top: 0.7rem;
+}
+
+.student-courses-guide-shell__weekdays small {
+  text-align: center;
+}
+
+.student-courses-guide-shell__days {
+  margin-top: 0.5rem;
+}
+
+.student-courses-guide-shell__days span {
+  display: grid;
+  min-height: 2rem;
+  place-items: center;
+  border-radius: 0.65rem;
+  border: 1px solid #dde4ef;
+  background: #ffffff;
+  color: #16203a;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.student-courses-guide-shell__days span[data-selected='true'] {
+  border-color: #d81b50;
+  background: #d81b50;
+  color: #ffffff;
+}
+
+.student-courses-guide-shell__events-card {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.student-courses-guide-shell__events-head {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.student-courses-guide-shell__event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  border: 1px solid #dde4ef;
+  border-radius: 0.8rem;
+  background: #ffffff;
+  padding: 0.68rem;
+}
+
+.student-courses-guide-shell__event-row > span {
+  display: grid;
+  min-width: 3.65rem;
+  place-items: center;
+  border-radius: 0.72rem;
+  border: 1px solid #f7bfd1;
+  background: #fff2f7;
+  color: #b11140;
+  padding: 0.46rem;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.student-courses-guide-shell__event-row div {
+  display: grid;
+  gap: 0.14rem;
+  min-width: 0;
+}
+
+.student-courses-guide-shell__event-row div strong {
+  display: block;
+  color: #183153;
+  font-size: 0.8rem;
+  line-height: 1.25;
+}
+
+.student-courses-guide-shell__event-row div p {
+  display: block;
+  line-height: 1.28;
+}
+
+.student-courses-guide-pin {
+  border-color: #7f1d1d;
+  color: #7f1d1d;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-tools {
+  left: 1rem;
+  top: 3.1rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-tools::after {
+  left: 8rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-help {
+  right: 1rem;
+  top: 3.1rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-help::after {
+  right: 4.1rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-badge {
+  right: 1rem;
+  top: 4.3rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-badge::after {
+  right: 7.4rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-progress {
+  left: 1rem;
+  bottom: 8.35rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-progress::after {
+  left: 6.8rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-tasks {
+  left: 1rem;
+  bottom: 10.1rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-tasks::after {
+  left: 6rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-open {
+  right: 1rem;
+  bottom: 10.1rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-open::after {
+  right: 8rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-hidden {
+  left: 1rem;
+  top: 3.2rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-hidden::after {
+  left: 5.8rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-customize {
+  right: 1rem;
+  bottom: 11rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-customize::after {
+  right: 7rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-calendar {
+  left: 1rem;
+  top: 6.2rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-calendar::after {
+  left: 5.8rem;
+  top: 50%;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-events {
+  right: 1rem;
+  top: 6.2rem;
+}
+
+.student-courses-guide-pin.is-student-courses-guide-events::after {
+  right: 6.1rem;
+  top: 50%;
+}
+
 @media (max-width: 980px) {
   .student-profile-support-grid {
     grid-template-columns: 1fr;
@@ -9462,7 +10646,13 @@ html[data-theme='dark'] {
   .student-lxp-guide-shell__card-grid,
   .student-lxp-guide-shell__stats,
   .student-lxp-guide-shell__buttons,
-  .student-lxp-guide-dialog .teacher-intervention-workspace__manual-layout {
+  .student-lxp-guide-dialog .teacher-intervention-workspace__manual-layout,
+  .student-courses-guide-shell__course-grid,
+  .student-courses-guide-shell__calendar-layout,
+  .student-courses-guide-shell__organize-grid,
+  .student-courses-guide-shell__stats,
+  .student-courses-guide-shell__buttons,
+  .student-courses-guide-dialog .teacher-intervention-workspace__manual-layout {
     grid-template-columns: 1fr;
   }
 
@@ -9484,6 +10674,37 @@ html[data-theme='dark'] {
 
   .student-lxp-guide-pin::after {
     display: none;
+  }
+
+  .student-courses-guide-pin {
+    font-size: 0.62rem;
+    padding: 0.24rem 0.68rem;
+  }
+
+  .student-courses-guide-shell__toolbar {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .student-courses-guide-shell__toolbar .is-search,
+  .student-courses-guide-shell__toolbar .is-strong {
+    grid-column: span 2;
+  }
+
+  .student-courses-guide-shell__toolbar strong {
+    grid-column: auto;
+  }
+
+  .student-courses-guide-shell__toolbar.is-short {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .student-courses-guide-pin.is-student-courses-guide-progress {
+    bottom: 10.2rem;
+  }
+
+  .student-courses-guide-pin.is-student-courses-guide-tools,
+  .student-courses-guide-pin.is-student-courses-guide-help {
+    top: 1rem;
   }
 }
 
@@ -10504,6 +11725,15 @@ html[data-theme='dark'] {
   gap: 0.9rem;
 }
 
+.teacher-class-workspace__hero-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .teacher-class-workspace__hero-icon {
   width: 3.5rem;
   height: 3.5rem;
@@ -11265,6 +12495,16 @@ html[data-theme='dark'] {
 @media (max-width: 768px) {
   .teacher-class-workspace__hero-copy h1 {
     font-size: 1.7rem;
+  }
+
+  .teacher-class-workspace__hero-row {
+    flex-wrap: wrap;
+  }
+
+  .teacher-class-workspace__hero-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
   }
 
   .teacher-class-workspace__body {
@@ -12031,6 +13271,38 @@ html[data-theme='dark'] {
   margin: 0.55rem 0 0.32rem;
   color: #132a4a;
   line-height: 1.25;
+}
+
+.assessment-question-editor__compact-prompt.rich-text-editor {
+  border: 0;
+  border-bottom: 1px solid #d9e3ef;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.assessment-question-editor__compact-prompt .rich-text-editor__toolbar {
+  display: none;
+}
+
+.assessment-question-editor__compact-prompt:focus-within .rich-text-editor__toolbar {
+  display: flex;
+}
+
+.assessment-question-editor__compact-prompt .rich-text-editor__surface {
+  min-height: 3.6rem;
+}
+
+.assessment-question-editor__compact-prompt .rich-text-editor__canvas {
+  padding: 0.72rem 0;
+}
+
+.assessment-question-editor__compact-prompt .rich-text-editor__canvas .ProseMirror {
+  min-height: 2.2rem;
+}
+
+.assessment-question-editor__compact-prompt .rich-text-editor__canvas .ProseMirror p {
+  margin: 0;
 }
 
 .rich-text-editor__canvas .ProseMirror p.is-editor-empty:first-child::before {

@@ -933,9 +933,18 @@ export default function StudentAssessmentTakePage() {
           points: current.points,
           promptHtml: current.content ?? '<p></p>',
           imageUrl: current.imageUrl,
+          imageDisplayMode: current.imageDisplayMode,
+          imageZoom: current.imageZoom,
+          imagePositionX: current.imagePositionX,
+          imagePositionY: current.imagePositionY,
           options: (current.options || []).map((opt) => ({
             id: opt.id,
             text: opt.text,
+            imageUrl: opt.imageUrl,
+            imageDisplayMode: opt.imageDisplayMode,
+            imageZoom: opt.imageZoom,
+            imagePositionX: opt.imagePositionX,
+            imagePositionY: opt.imagePositionY,
           })),
         }}
         currentIdx={currentIdx}

@@ -25,6 +25,9 @@ function sanitizeQuestionOption(option: ClassTemplateQuestionOption): ClassTempl
     text: option.text,
     isCorrect: option.isCorrect,
     order: option.order,
+    imageUrl: option.imageUrl,
+    imageDisplayMode: option.imageDisplayMode,
+    imageZoom: option.imageZoom,
   };
 }
 
@@ -38,6 +41,8 @@ function sanitizeQuestion(question: ClassTemplateQuestion): ClassTemplateQuestio
     isRequired: question.isRequired,
     explanation: question.explanation,
     imageUrl: question.imageUrl,
+    imageDisplayMode: question.imageDisplayMode,
+    imageZoom: question.imageZoom,
     options: question.options?.map(sanitizeQuestionOption),
   };
 }
@@ -214,6 +219,15 @@ export const classTemplateService = {
       sanitizeContentPayload(content),
     );
     return data as { success: boolean; message: string; data: ClassTemplateContent };
+  },
+
+  async uploadAssessmentImage(id: string, file: File) {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/class-templates/${id}/assessment-images`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data as { success: boolean; message: string; data: { imageUrl: string } };
   },
 
   async exportEngine(id: string) {

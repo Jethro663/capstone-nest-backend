@@ -216,7 +216,7 @@ function TextListEditor({
             <RichTextEditor
               value={item.html}
               onChange={(html) => updateItem(item.id, html)}
-              minHeight={86}
+              minHeight={120}
               placeholder={placeholder}
             />
           </div>
@@ -568,7 +568,7 @@ export function LessonBlockTeacherEditor({
                 <RichTextEditor
                   value={scenarioHtml}
                   onChange={setScenarioHtml}
-                  minHeight={120}
+                  minHeight={170}
                   placeholder="Set up the worked example..."
                 />
               </div>
@@ -612,7 +612,7 @@ export function LessonBlockTeacherEditor({
                     <RichTextEditor
                       value={step.html}
                       onChange={(html) => setSteps(steps.map((entry) => (entry.id === step.id ? { ...entry, html } : entry)))}
-                      minHeight={96}
+                      minHeight={136}
                       placeholder="Explain this step..."
                     />
                   </div>
@@ -623,7 +623,7 @@ export function LessonBlockTeacherEditor({
                 <RichTextEditor
                   value={answerHtml}
                   onChange={setAnswerHtml}
-                  minHeight={120}
+                  minHeight={170}
                   placeholder="Explain the answer and why it works..."
                 />
               </div>
@@ -636,7 +636,7 @@ export function LessonBlockTeacherEditor({
               <RichTextEditor
                 value={takeawayHtml}
                 onChange={setTakeawayHtml}
-                minHeight={150}
+                minHeight={210}
                 placeholder="What should students remember after this lesson?"
               />
             </div>
@@ -648,7 +648,7 @@ export function LessonBlockTeacherEditor({
               <RichTextEditor
                 value={promptHtml}
                 onChange={setPromptHtml}
-                minHeight={150}
+                minHeight={210}
                 placeholder="Ask students to connect this idea to what they already know..."
               />
             </div>
@@ -660,7 +660,7 @@ export function LessonBlockTeacherEditor({
               <RichTextEditor
                 value={bodyHtml}
                 onChange={setBodyHtml}
-                minHeight={220}
+                minHeight={340}
                 placeholder="Write lesson content..."
               />
             </div>
@@ -678,7 +678,7 @@ export function LessonBlockTeacherEditor({
             <RichTextEditor
               value={checkpointPrompt}
               onChange={setCheckpointPrompt}
-              minHeight={120}
+              minHeight={170}
               placeholder="Ask a quick concept check..."
             />
           </div>
@@ -766,7 +766,7 @@ export function LessonBlockTeacherEditor({
                   <RichTextEditor
                     value={choice.html}
                     onChange={(html) => updateChoice(choice.id, html)}
-                    minHeight={82}
+                    minHeight={112}
                     placeholder={`Option ${index + 1}`}
                   />
                 </div>
@@ -778,7 +778,7 @@ export function LessonBlockTeacherEditor({
             <RichTextEditor
               value={explanation}
               onChange={setExplanation}
-              minHeight={130}
+              minHeight={180}
               placeholder="Give a hint or explain why the correct answer works..."
             />
           </div>

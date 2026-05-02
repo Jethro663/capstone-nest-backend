@@ -44,7 +44,8 @@ class JaPracticeServiceAskTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["blocked"])
         self.assertFalse(result["insufficientEvidence"])
-        self.assertIn("I can help with summaries", result["reply"])
+        self.assertIn("Main idea", result["reply"])
+        self.assertIn("Pick one visible lesson", result["reply"])
         mocked_search.assert_awaited_once()
         mocked_generate.assert_not_awaited()
 
@@ -98,6 +99,9 @@ class JaPracticeServiceAskTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["insufficientEvidence"])
         self.assertEqual(len(result["citations"]), 1)
         self.assertEqual(result["citations"][0]["lessonId"], "lesson-2")
+        self.assertIn("Main idea", result["reply"])
+        self.assertIn("Break it down", result["reply"])
+        self.assertIn("Try this now", result["reply"])
         self.assertIn("numerator and denominator", result["reply"])
         self.assertEqual(mocked_search.await_count, 2)
         _, first_kwargs = mocked_search.await_args_list[0]
@@ -209,6 +213,7 @@ class JaPracticeServiceAskTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result["blocked"])
         self.assertTrue(result["insufficientEvidence"])
+        self.assertIn("Watch out", result["reply"])
         self.assertIn("Equivalent Fractions", result["reply"])
         self.assertNotIn("Pick one visible lesson context", result["reply"])
         self.assertEqual(mocked_search.await_count, 2)
@@ -263,6 +268,7 @@ class JaPracticeServiceAskTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(result["blocked"])
         self.assertEqual(result["reason"], "lesson_context_mismatch")
+        self.assertIn("Watch out", result["reply"])
         self.assertIn("outside Karunungang Bayan", result["reply"])
         mocked_search.assert_awaited_once()
         mocked_generate.assert_not_awaited()

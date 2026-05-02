@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode, SVGProps } from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentClassDetailPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -20,6 +20,7 @@ jest.mock('framer-motion', () => ({
     section: ({ children }: { children: ReactNode }) => <section>{children}</section>,
     article: ({ children }: { children: ReactNode }) => <article>{children}</article>,
     div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    circle: (props: SVGProps<SVGCircleElement>) => <circle {...props} />,
   },
 }));
 
@@ -152,6 +153,33 @@ describe('StudentClassDetailPage module links', () => {
     );
   });
 
+  it('does not render a fallback description when a module has no description', async () => {
+    mockedModuleService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      count: 1,
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Module One',
+          order: 1,
+          isVisible: true,
+          isLocked: false,
+          sections: [],
+          gradingScaleEntries: [],
+        },
+      ],
+    } as Awaited<ReturnType<typeof moduleService.getByClass>>);
+
+    render(<StudentClassDetailPage />);
+
+    await screen.findByRole('link', { name: 'Open' });
+    expect(
+      screen.queryByText('Extended learning and higher-order thinking activities.'),
+    ).not.toBeInTheDocument();
+  });
+
   it('renders manual and backend-gated copied template assignments returned by the API', async () => {
     currentView = 'assignments';
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -225,6 +253,55 @@ describe('StudentClassDetailPage module links', () => {
     );
   });
 
+  it('opens the class page guide, walks through each page, and closes it', async () => {
+    render(<StudentClassDetailPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /class page help/i }));
+
+    expect(await screen.findByText('Student guide: Class Page')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Start here on the class page')).toBeInTheDocument();
+    expect(screen.getByText('Class tabs')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 2 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Open modules to study step by step')).toBeInTheDocument();
+    expect(screen.getByText('View switch')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 3 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Use assignments to find class work fast')).toBeInTheDocument();
+    expect(screen.getByText('Take button')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 4 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Check updates and join class discussions')).toBeInTheDocument();
+    expect(screen.getByText('Discussion thread')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 5 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Use classmates when you need names and section info')).toBeInTheDocument();
+    expect(screen.getByText('Student row')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 6 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Read grades as your class record snapshot')).toBeInTheDocument();
+    expect(screen.getByText('Ledger row')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 7 of 7')).toBeInTheDocument();
+    expect(screen.getByText('Use the class calendar for due dates and events')).toBeInTheDocument();
+    expect(screen.getByText('Kind tag')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(screen.getByText('Page 6 of 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close guide/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Student guide: Class Page')).not.toBeInTheDocument();
+    });
+  });
+
   it('renders classmate names and emails from enriched enrollments', async () => {
     currentView = 'classmates';
     mockedClassService.getById.mockResolvedValue({
@@ -273,5 +350,105 @@ describe('StudentClassDetailPage module links', () => {
     expect(screen.getByText('Mia Villanueva')).toBeInTheDocument();
     expect(screen.getByText('student72@lms.local')).toBeInTheDocument();
     expect(screen.queryByText('Unnamed student')).not.toBeInTheDocument();
+  });
+
+  it('renders the grades tab as a compact gradebook table', async () => {
+    currentView = 'grades';
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-1',
+          classId: 'class-1',
+          title: 'Seatwork 1',
+          type: 'assignment',
+          totalPoints: 20,
+          dueDate: '2026-04-10T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'assessment-2',
+          classId: 'class-1',
+          title: 'Performance Task 1',
+          type: 'performance_task',
+          totalPoints: 40,
+          dueDate: '2026-04-12T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'assessment-3',
+          classId: 'class-1',
+          title: 'Quarter Exam',
+          type: 'quarterly_assessment',
+          totalPoints: 50,
+          dueDate: '2026-04-15T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+      ],
+      count: 3,
+      total: 3,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
+    mockedAssessmentService.getStudentAttempts
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [
+          {
+            id: 'attempt-1',
+            assessmentId: 'assessment-1',
+            studentId: 'student-1',
+            score: 18,
+            totalPoints: 20,
+            isSubmitted: true,
+            submittedAt: '2026-04-10T10:00:00.000Z',
+            updatedAt: '2026-04-10T10:00:00.000Z',
+            createdAt: '2026-04-10T09:00:00.000Z',
+          },
+        ],
+        count: 1,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>)
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [
+          {
+            id: 'attempt-2',
+            assessmentId: 'assessment-2',
+            studentId: 'student-1',
+            score: 34,
+            totalPoints: 40,
+            isSubmitted: true,
+            submittedAt: '2026-04-12T10:00:00.000Z',
+            updatedAt: '2026-04-12T10:00:00.000Z',
+            createdAt: '2026-04-12T09:00:00.000Z',
+          },
+        ],
+        count: 1,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>)
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [],
+        count: 0,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Gradebook')).toBeInTheDocument();
+    expect(screen.getByText('Item Name')).toBeInTheDocument();
+    expect(screen.getByText('Due Date')).toBeInTheDocument();
+    expect(screen.getByText('Status')).toBeInTheDocument();
+    expect(screen.getByText('Grade')).toBeInTheDocument();
+    expect(screen.getAllByText('Graded').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not graded').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(3);
+    expect(screen.queryByText('Class Record Snapshot')).not.toBeInTheDocument();
   });
 });

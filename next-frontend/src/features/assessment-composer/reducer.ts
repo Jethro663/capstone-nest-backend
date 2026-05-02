@@ -17,18 +17,70 @@ export function supportsAssessmentComposerOptions(type: QuestionType) {
 function createDefaultOptionsForType(type: QuestionType): AssessmentComposerOptionDraft[] {
   if (type === 'true_false') {
     return [
-      { id: createTempId(), text: 'True', isCorrect: false, order: 1 },
-      { id: createTempId(), text: 'False', isCorrect: false, order: 2 },
+      {
+        id: createTempId(),
+        text: 'True',
+        isCorrect: false,
+        order: 1,
+        imageUrl: '',
+        imageDisplayMode: 'default',
+        imageZoom: 100,
+        imagePositionX: 50,
+        imagePositionY: 50,
+      },
+      {
+        id: createTempId(),
+        text: 'False',
+        isCorrect: false,
+        order: 2,
+        imageUrl: '',
+        imageDisplayMode: 'default',
+        imageZoom: 100,
+        imagePositionX: 50,
+        imagePositionY: 50,
+      },
     ];
   }
 
   if (type === 'fill_blank') {
-    return [{ id: createTempId(), text: '', isCorrect: true, order: 1 }];
+    return [
+      {
+        id: createTempId(),
+        text: '',
+        isCorrect: true,
+        order: 1,
+        imageUrl: '',
+        imageDisplayMode: 'default',
+        imageZoom: 100,
+        imagePositionX: 50,
+        imagePositionY: 50,
+      },
+    ];
   }
 
   return [
-    { id: createTempId(), text: '', isCorrect: false, order: 1 },
-    { id: createTempId(), text: '', isCorrect: false, order: 2 },
+    {
+      id: createTempId(),
+      text: '',
+      isCorrect: false,
+      order: 1,
+      imageUrl: '',
+      imageDisplayMode: 'default',
+      imageZoom: 100,
+      imagePositionX: 50,
+      imagePositionY: 50,
+    },
+    {
+      id: createTempId(),
+      text: '',
+      isCorrect: false,
+      order: 2,
+      imageUrl: '',
+      imageDisplayMode: 'default',
+      imageZoom: 100,
+      imagePositionX: 50,
+      imagePositionY: 50,
+    },
   ];
 }
 
@@ -44,6 +96,10 @@ export function createAssessmentComposerQuestion(
     isRequired: true,
     explanation: '',
     imageUrl: '',
+    imageDisplayMode: 'default',
+    imageZoom: 100,
+    imagePositionX: 50,
+    imagePositionY: 50,
     conceptTags: [],
     fillBlankSmartCaseInsensitive: true,
     fillBlankExperimentalSmartMatch: false,
@@ -66,6 +122,11 @@ export function duplicateAssessmentComposerQuestion(
       ...option,
       id: createTempId(),
       order: index + 1,
+      imageUrl: option.imageUrl ?? '',
+      imageDisplayMode: option.imageDisplayMode ?? 'default',
+      imageZoom: option.imageZoom ?? 100,
+      imagePositionX: option.imagePositionX ?? 50,
+      imagePositionY: option.imagePositionY ?? 50,
     })),
   };
 }

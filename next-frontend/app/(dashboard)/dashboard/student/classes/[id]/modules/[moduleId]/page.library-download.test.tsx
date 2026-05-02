@@ -303,4 +303,76 @@ describe('StudentModuleDetailPage library downloads', () => {
     expect(screen.getByText('Mga Karunungang Bayan')).toBeInTheDocument();
     expect(screen.queryByText('No lesson content available.')).not.toBeInTheDocument();
   });
+
+  it('does not duplicate the lesson hero when a lesson is opened inside the module route', async () => {
+    searchParamsMock.get.mockImplementation((key: string) => (key === 'lessonId' ? 'lesson-1' : null));
+    mockedModuleService.getByClassAndModule.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'module-1',
+        classId: 'class-1',
+        title: 'Module 1',
+        description: 'Desc',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        requiredCompletedCount: 0,
+        requiredVisibleCount: 0,
+        progressPercent: 100,
+        sections: [
+          {
+            id: 'section-1',
+            moduleId: 'module-1',
+            title: 'Section A',
+            order: 1,
+            items: [
+              {
+                id: 'item-lesson-1',
+                moduleSectionId: 'section-1',
+                itemType: 'lesson',
+                lessonId: 'lesson-1',
+                order: 1,
+                isVisible: true,
+                isRequired: false,
+                isGiven: true,
+                completed: true,
+                lessonPoints: 0,
+                lesson: {
+                  id: 'lesson-1',
+                  title: 'Lesson #1',
+                  isDraft: false,
+                },
+              },
+            ],
+          },
+        ],
+        gradingScaleEntries: [],
+      } as never,
+    });
+    mockedLessonService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'lesson-1',
+        classId: 'class-1',
+        title: 'Lesson #1',
+        description: '<p>What I Need To Know</p>',
+        order: 1,
+        isDraft: false,
+        contentBlocks: [],
+      },
+    });
+    mockedLessonService.getCompletionStatus.mockResolvedValue({
+      success: true,
+      data: { completed: true },
+    });
+
+    render(<StudentModuleDetailPage />);
+
+    await screen.findByText('What I Need To Know');
+
+    expect(screen.getAllByRole('link', { name: 'Back' })).toHaveLength(1);
+    expect(screen.getAllByRole('heading', { name: 'Lesson #1', level: 1 })).toHaveLength(1);
+  });
 });

@@ -368,8 +368,28 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(screen.queryByPlaceholderText(/Ask JA anything/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Explain this topic in simpler words/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Ask/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: /Practice/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Replay/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Practice/i })).not.toBeInTheDocument();
+  });
+
+  it('auto-opens the JA guide and lets students reopen it from the top bar', async () => {
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    expect(
+      await screen.findByRole('heading', { name: /Before you use JA Hub/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Close guide/i }));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('heading', { name: /Before you use JA Hub/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /JA guide/i }));
+    expect(
+      await screen.findByRole('heading', { name: /Before you use JA Hub/i }),
+    ).toBeInTheDocument();
   });
 
   it('shows available lesson contexts and ask guidelines on an empty Ask chat', async () => {
@@ -456,15 +476,14 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(await screen.findByText('Activity history')).toBeInTheDocument();
   });
 
-  it('renders one unified activity rail across Ask, Practice, and Replay', async () => {
+  it('renders one unified activity rail across Ask and Replay', async () => {
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
     expect(await screen.findByRole('button', { name: /^All$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Ask$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Practice$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Replay$/i })).toBeInTheDocument();
     expect(screen.getByText('Fractions explanation')).toBeInTheDocument();
-    expect(screen.getByText('Practice Mission')).toBeInTheDocument();
+    expect(screen.queryByText('Practice Mission')).not.toBeInTheDocument();
     expect(screen.getByText('Assessment Replay')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Replay$/i }));
@@ -472,6 +491,14 @@ describe('StudentJaWorkspace refactored shell', () => {
       expect(screen.queryByText('Fractions explanation')).not.toBeInTheDocument();
     });
     expect(screen.getByText('Assessment Replay')).toBeInTheDocument();
+  });
+
+  it('falls back to Ask when practice is passed as the initial mode', async () => {
+    render(<StudentJaWorkspace initialMode={'practice' as never} initialClassId="class-1" />);
+
+    expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Generate Practice Run/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Practice/i })).not.toBeInTheDocument();
   });
 
   it('renders replay rich text, extracts coach copy, and navigates between replay items', async () => {
@@ -499,8 +526,8 @@ describe('StudentJaWorkspace refactored shell', () => {
     fireEvent.click(await screen.findByText('Assessment Replay'));
     expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Practice Fresh objective checks/i }));
-    expect(await screen.findByText('Start your next practice run')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Ask Class-grounded mentor chat/i }));
+    expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Replay Revisit weak spots/i }));
     expect(await screen.findByText('Pick an assessment to replay')).toBeInTheDocument();
@@ -759,6 +786,7 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
+    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
     fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
     fireEvent.click(screen.getByText('Summarize main idea'));
@@ -774,6 +802,11 @@ describe('StudentJaWorkspace refactored shell', () => {
       quickAction: 'Summarize main idea',
       lessonId: 'lesson-2',
     });
+    const studentPromptBubble = screen
+      .getAllByText('Summarize main idea')
+      .map((node) => node.closest('.ja-bubble'))
+      .find((node): node is HTMLElement => node instanceof HTMLElement);
+    expect(studentPromptBubble).toHaveClass('ja-bubble--student');
     expect(
       await screen.findByText(/Equivalent fractions are different forms of the same value/i),
     ).toBeInTheDocument();
@@ -807,6 +840,169 @@ describe('StudentJaWorkspace refactored shell', () => {
     });
     expect(mockedJaService.getHub).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Preparing JA Hub/i)).not.toBeInTheDocument();
+  });
+
+  it('renders structured assistant cards with class evidence and inline follow-up actions', async () => {
+    mockedJaService.getAskThread.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-immersive',
+          classId: 'class-1',
+          title: 'Ask: Equivalent Fractions',
+          status: 'active',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        messages: [],
+      },
+    } as never);
+    mockedJaService.sendAskMessage.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-immersive',
+          classId: 'class-1',
+          title: 'Ask: Equivalent Fractions',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        message: {
+          id: 'assistant-immersive',
+          role: 'assistant',
+          content: [
+            '## Main idea',
+            'Equivalent fractions name the same amount using different numbers.',
+            '',
+            '## Break it down',
+            '- **Compare** the numerator and denominator together.',
+            '- Multiply or divide both by the same number.',
+            '',
+            '## Try this now',
+            '- Rewrite 1/2 as 2/4.',
+          ].join('\n'),
+          blocked: false,
+          citations: [
+            {
+              lessonId: 'lesson-2',
+              lessonTitle: 'Equivalent Fractions',
+              sourceType: 'lesson_block',
+              chunkText: 'Equivalent fractions represent the same value in different forms.',
+            },
+          ],
+          createdAt: '2026-05-01T09:00:00.000Z',
+        },
+        blocked: false,
+        insufficientEvidence: false,
+      },
+    } as never);
+    mockedJaService.sendAskMessage.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-immersive',
+          classId: 'class-1',
+          title: 'Ask: Equivalent Fractions',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        message: {
+          id: 'assistant-follow-up',
+          role: 'assistant',
+          content: '## Main idea\nHere is a simpler version.',
+          blocked: false,
+          citations: [],
+          createdAt: '2026-05-01T09:01:00.000Z',
+        },
+        blocked: false,
+        insufficientEvidence: false,
+      },
+    } as never);
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByText('Summarize main idea'));
+
+    expect(await screen.findByText('Main idea')).toBeInTheDocument();
+    expect(screen.getByText('Break it down')).toBeInTheDocument();
+    expect(screen.getByText('Try this now')).toBeInTheDocument();
+    expect(screen.queryByText('**Compare** the numerator and denominator together.')).not.toBeInTheDocument();
+    const compareStrong = screen.getByText('Compare', { selector: 'strong' });
+    expect(compareStrong).toBeInTheDocument();
+    expect(compareStrong.closest('li')).toHaveTextContent(
+      'Compare the numerator and denominator together.',
+    );
+    expect(screen.getByText('From your class')).toBeInTheDocument();
+    expect(screen.getByText('Equivalent fractions represent the same value in different forms.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explain simpler' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Give analogy' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explain simpler' }));
+
+    await waitFor(() => {
+      expect(mockedJaService.sendAskMessage).toHaveBeenLastCalledWith('thread-immersive', {
+        message: 'Explain simpler',
+        quickAction: 'Explain simpler',
+        lessonId: 'lesson-2',
+      });
+    });
+  });
+
+  it('renders guarded assistant replies with warning treatment', async () => {
+    mockedJaService.getAskThread.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-guarded',
+          classId: 'class-1',
+          title: 'Ask: Equivalent Fractions',
+          status: 'active',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        messages: [],
+      },
+    } as never);
+    mockedJaService.sendAskMessage.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-guarded',
+          classId: 'class-1',
+          title: 'Ask: Equivalent Fractions',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        message: {
+          id: 'assistant-guarded',
+          role: 'assistant',
+          content: '## Watch out\nI cannot give direct answer keys, but I can guide you step by step.',
+          blocked: true,
+          citations: [],
+          createdAt: '2026-05-01T09:02:00.000Z',
+        },
+        blocked: true,
+        insufficientEvidence: false,
+      },
+    } as never);
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByText('Summarize main idea'));
+
+    expect(await screen.findByText('Watch out')).toBeInTheDocument();
+    expect(screen.getAllByText('Guarded').length).toBeGreaterThan(0);
   });
 
   it('shows a view-only outage state and keeps history usable when AI is degraded', async () => {
@@ -843,7 +1039,7 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(mockedJaService.sendAskMessage).not.toHaveBeenCalled();
   });
 
-  it('blocks JA practice and replay generation calls when AI is degraded', async () => {
+  it('blocks replay generation calls when AI is degraded', async () => {
     mockedHealthService.getReadiness.mockResolvedValueOnce({
       ready: false,
       timestamp: '2026-04-30T00:00:00.000Z',
@@ -857,14 +1053,9 @@ describe('StudentJaWorkspace refactored shell', () => {
       },
     });
 
-    render(<StudentJaWorkspace initialMode="practice" initialClassId="class-1" />);
+    render(<StudentJaWorkspace initialMode="review" initialClassId="class-1" />);
 
     expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Generate Practice Run/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: /Generate Practice Run/i }));
-    expect(mockedJaService.createSession).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('tab', { name: /Replay Revisit weak spots/i }));
     const replayButton = await screen.findByRole('button', {
       name: /Fractions Quiz.*Submitted.*62%/i,
     });

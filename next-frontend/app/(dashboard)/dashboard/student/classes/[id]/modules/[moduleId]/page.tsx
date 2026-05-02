@@ -471,6 +471,34 @@ export default function StudentModuleDetailPage() {
     return <p className="text-sm text-slate-500">Module not found.</p>;
   }
 
+  if (currentMode === 'lesson' && !module.isLocked) {
+    return (
+      <StudentLessonReaderPanel
+        classItem={classItem}
+        module={module}
+        lesson={lesson}
+        lessonBlocks={lessonBlocks}
+        lessonLoading={lessonLoading}
+        lessonCompleted={lessonCompleted}
+        completingLesson={completingLesson}
+        bottomReachedAt={bottomReachedAt}
+        countdownLeft={countdownLeft}
+        checkpointGate={checkpointGate}
+        checkpointSelections={checkpointSelections}
+        checkpointResults={checkpointResults}
+        lessonAttachments={lessonAttachments}
+        lessonPoints={selectedLessonItem?.lessonPoints ?? 0}
+        backHref={`/dashboard/student/classes/${classId}?view=modules`}
+        backLabel="Back"
+        inlineBackLabel="Back to Module"
+        onInlineBack={openOverview}
+        onCompleteLesson={completeLesson}
+        onCheckpointAnswer={handleCheckpointAnswer}
+        onDownloadAttachment={handleDownloadAttachment}
+      />
+    );
+  }
+
   const lessonCount = flatItems.filter((item) => item.itemType === 'lesson').length;
   const assessmentCount = flatItems.filter((item) => item.itemType === 'assessment').length;
 
@@ -633,32 +661,6 @@ export default function StudentModuleDetailPage() {
               </div>
             ))
           )
-        ) : null}
-
-        {currentMode === 'lesson' && !module.isLocked ? (
-          <StudentLessonReaderPanel
-            classItem={classItem}
-            module={module}
-            lesson={lesson}
-            lessonBlocks={lessonBlocks}
-            lessonLoading={lessonLoading}
-            lessonCompleted={lessonCompleted}
-            completingLesson={completingLesson}
-            bottomReachedAt={bottomReachedAt}
-            countdownLeft={countdownLeft}
-            checkpointGate={checkpointGate}
-            checkpointSelections={checkpointSelections}
-            checkpointResults={checkpointResults}
-            lessonAttachments={lessonAttachments}
-            lessonPoints={selectedLessonItem?.lessonPoints ?? 0}
-            backHref={`/dashboard/student/classes/${classId}?view=modules`}
-            backLabel="Back"
-            inlineBackLabel="Back to Module"
-            onInlineBack={openOverview}
-            onCompleteLesson={completeLesson}
-            onCheckpointAnswer={handleCheckpointAnswer}
-            onDownloadAttachment={handleDownloadAttachment}
-          />
         ) : null}
 
         {currentMode === 'assessment' && !module.isLocked ? (

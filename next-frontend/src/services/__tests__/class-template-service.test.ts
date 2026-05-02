@@ -107,6 +107,27 @@ describe('classTemplateService', () => {
     expect(mockedApi.get).toHaveBeenCalledWith('/class-templates/template-1');
   });
 
+  it('uploads template assessment images immediately and returns the hosted url', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { imageUrl: '/api/class-templates/images/template-image.png' },
+      },
+    });
+
+    const file = new File(['img'], 'template-image.png', { type: 'image/png' });
+    const result = await classTemplateService.uploadAssessmentImage('template-1', file);
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/class-templates/template-1/assessment-images',
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    );
+    expect(result.data.imageUrl).toBe('/api/class-templates/images/template-image.png');
+  });
+
   it('calls engine validate and import endpoints', async () => {
     mockedApi.post.mockResolvedValue({ data: { success: true, data: {} } });
 

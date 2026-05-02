@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  FolderOpen,
   GripVertical,
   Layers3,
   Lock,
@@ -19,6 +20,7 @@ import {
   Save,
   Trash2,
   Unlock,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
@@ -46,6 +48,79 @@ import './module-workspace.css';
 type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes';
 type AssessmentAttachMode = 'create-new' | 'attach-existing';
 type FileAttachSource = 'upload' | 'library';
+
+const ATTACH_BLOCK_OPTIONS: Array<{
+  type: ModuleItemType;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+  tone: 'lesson' | 'assessment' | 'file';
+}> = [
+  {
+    type: 'lesson',
+    label: 'Lesson',
+    description: 'Attach lesson content already created in this class.',
+    icon: BookOpen,
+    tone: 'lesson',
+  },
+  {
+    type: 'assessment',
+    label: 'Assessment',
+    description: 'Attach assessment content and control student release with Give.',
+    icon: ClipboardList,
+    tone: 'assessment',
+  },
+  {
+    type: 'file',
+    label: 'PDF',
+    description: 'Upload a PDF resource block for this section.',
+    icon: FileText,
+    tone: 'file',
+  },
+];
+
+const FILE_ATTACH_SOURCE_OPTIONS: Array<{
+  value: FileAttachSource;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+  tone: 'upload' | 'library';
+}> = [
+  {
+    value: 'upload',
+    label: 'Upload New PDF',
+    description: 'Upload a fresh PDF file for this module block.',
+    icon: Upload,
+    tone: 'upload',
+  },
+  {
+    value: 'library',
+    label: 'Choose from Library',
+    description: 'Attach an existing General Module or My Library file.',
+    icon: FolderOpen,
+    tone: 'library',
+  },
+];
+
+const ASSESSMENT_ATTACH_MODE_OPTIONS: Array<{
+  value: AssessmentAttachMode;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+}> = [
+  {
+    value: 'create-new',
+    label: 'Create New Assessment',
+    description: 'Start with a blank assessment and open the editor.',
+    icon: ClipboardList,
+  },
+  {
+    value: 'attach-existing',
+    label: 'Attach Existing Assessment',
+    description: 'Reuse an assessment already created for this class.',
+    icon: FolderOpen,
+  },
+];
 
 type AttachState = {
   open: boolean;
@@ -177,6 +252,10 @@ function itemMeta(item: ModuleItem) {
     : 'Lesson';
 }
 
+function isDraftAssessmentItem(item: ModuleItem) {
+  return item.itemType === 'assessment' && !item.assessment?.isPublished;
+}
+
 function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) {
   if (item.itemType === 'lesson' && item.lessonId) {
     return `/dashboard/teacher/lessons/${item.lessonId}/edit`;
@@ -198,7 +277,6 @@ export default function TeacherModuleDetailPage() {
   const moduleId = toParamValue(params.moduleId);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
-  const [classModules, setClassModules] = useState<ClassModule[]>([]);
   const [module, setModule] = useState<ClassModule | null>(null);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeTab, setActiveTab] = useState<ModuleTab>('sections');
@@ -253,7 +331,6 @@ export default function TeacherModuleDetailPage() {
         normalizedModules.find((entry) => entry.id === moduleId) || null;
 
       setClassItem(resolvedClass);
-      setClassModules(normalizedModules);
       setModule(currentModule);
       setAssessments(assessmentResponse.data || []);
       setNotesDraft(currentModule?.teacherNotes || '');
@@ -267,7 +344,6 @@ export default function TeacherModuleDetailPage() {
       });
     } catch {
       setClassItem(null);
-      setClassModules([]);
       setModule(null);
       setAssessments([]);
       toast.error('Unable to load module details');
@@ -1139,7 +1215,7 @@ export default function TeacherModuleDetailPage() {
                                         <input
                                           type="checkbox"
                                           checked={item.isGiven}
-                                          disabled={pending}
+                                          disabled={pending || isDraftAssessmentItem(item)}
                                           onChange={(event) =>
                                             void handleReleaseCoreItem(section.id, item.id, { isGiven: event.target.checked })
                                           }
@@ -1177,7 +1253,7 @@ export default function TeacherModuleDetailPage() {
                                         <input
                                           type="checkbox"
                                           checked={item.isGiven}
-                                          disabled={pending}
+                                          disabled={pending || isDraftAssessmentItem(item)}
                                           onChange={(event) =>
                                             void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
                                           }
@@ -1230,8 +1306,9 @@ export default function TeacherModuleDetailPage() {
                     ) : (
                       <button
                         type="button"
-                        className="teacher-module-detail__outline"
+                        className="teacher-module-detail__outline teacher-module-detail__section-add-cta"
                         data-priority="section-add"
+                        aria-label="Add Block"
                         onClick={() =>
                           setAttachState({
                             open: true,
@@ -1244,8 +1321,13 @@ export default function TeacherModuleDetailPage() {
                           })
                         }
                       >
-                        <Plus className="h-4 w-4" />
-                        Add Block
+                        <span className="teacher-module-detail__section-add-icon" aria-hidden="true">
+                          <Plus className="h-4 w-4" />
+                        </span>
+                        <span className="teacher-module-detail__section-add-copy">
+                          <span>Add Block</span>
+                          <small aria-hidden="true">Lesson, assessment, or PDF</small>
+                        </span>
                       </button>
                     )}
                   </footer>
@@ -1518,26 +1600,7 @@ export default function TeacherModuleDetailPage() {
           </DialogHeader>
           <div className="teacher-module-detail__attach-modal-body">
             <div className="teacher-module-detail__attach-type-grid">
-              {([
-                {
-                  type: 'lesson' as const,
-                  label: 'Lesson',
-                  description: 'Attach lesson content already created in this class.',
-                  icon: BookOpen,
-                },
-                {
-                  type: 'assessment' as const,
-                  label: 'Assessment',
-                  description: 'Attach assessment content and control student release with Give.',
-                  icon: ClipboardList,
-                },
-                {
-                  type: 'file' as const,
-                  label: 'PDF',
-                  description: 'Upload a PDF resource block for this section.',
-                  icon: FileText,
-                },
-              ]).map((option) => {
+              {ATTACH_BLOCK_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 return (
                   <button
@@ -1545,6 +1608,7 @@ export default function TeacherModuleDetailPage() {
                     type="button"
                     className="teacher-module-detail__attach-type"
                     data-active={attachState.itemType === option.type}
+                    data-tone={option.tone}
                     onClick={() =>
                       setAttachState((current) => ({
                         ...current,
@@ -1556,10 +1620,14 @@ export default function TeacherModuleDetailPage() {
                       }))
                     }
                   >
-                    <Icon className="h-4 w-4" />
-                    <div>
+                    <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="teacher-module-detail__attach-type-copy">
                       <strong>{option.label}</strong>
-                      <p>{option.description}</p>
+                      <span className="teacher-module-detail__attach-type-description">
+                        {option.description}
+                      </span>
                     </div>
                   </button>
                 );
@@ -1569,35 +1637,39 @@ export default function TeacherModuleDetailPage() {
             {attachState.itemType === 'file' ? (
               <div className="teacher-module-detail__attach-field">
                 <div className="teacher-module-detail__attach-type-grid">
-                  <button
-                    type="button"
-                    className="teacher-module-detail__attach-type"
-                    data-active={attachSource === 'upload'}
-                    onClick={() => {
-                      setAttachSource('upload');
-                      setAttachState((current) => ({ ...current, itemId: '', file: null }));
-                    }}
-                  >
-                    <div>
-                      <strong>Upload New PDF</strong>
-                      <p>Upload a fresh PDF file for this module block.</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="teacher-module-detail__attach-type"
-                    data-active={attachSource === 'library'}
-                    onClick={() => {
-                      setAttachSource('library');
-                      setAttachState((current) => ({ ...current, file: null }));
-                      setLibraryPickerOpen(true);
-                    }}
-                  >
-                    <div>
-                      <strong>Choose from Library</strong>
-                      <p>Attach an existing General Module or My Library file.</p>
-                    </div>
-                  </button>
+                  {FILE_ATTACH_SOURCE_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachSource === option.value}
+                        data-tone={option.tone}
+                        onClick={() => {
+                          setAttachSource(option.value);
+                          setAttachState((current) => ({
+                            ...current,
+                            itemId: option.value === 'upload' ? '' : current.itemId,
+                            file: null,
+                          }));
+                          if (option.value === 'library') {
+                            setLibraryPickerOpen(true);
+                          }
+                        }}
+                      >
+                        <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="teacher-module-detail__attach-type-copy">
+                          <strong>{option.label}</strong>
+                          <span className="teacher-module-detail__attach-type-description">
+                            {option.description}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {attachSource === 'upload' ? (
@@ -1672,40 +1744,35 @@ export default function TeacherModuleDetailPage() {
                 {attachState.itemType === 'assessment' ? (
                   <>
                     <div className="teacher-module-detail__attach-type-grid">
-                      <button
-                        type="button"
-                        className="teacher-module-detail__attach-type"
-                        data-active={attachState.assessmentMode === 'create-new'}
-                        onClick={() =>
-                          setAttachState((current) => ({
-                            ...current,
-                            assessmentMode: 'create-new',
-                            itemId: '',
-                          }))
-                        }
-                      >
-                        <div>
-                          <strong>Create New Assessment</strong>
-                          <p>Start with a blank assessment and open the editor.</p>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        className="teacher-module-detail__attach-type"
-                        data-active={attachState.assessmentMode === 'attach-existing'}
-                        onClick={() =>
-                          setAttachState((current) => ({
-                            ...current,
-                            assessmentMode: 'attach-existing',
-                            itemId: '',
-                          }))
-                        }
-                      >
-                        <div>
-                          <strong>Attach Existing Assessment</strong>
-                          <p>Reuse an assessment already created for this class.</p>
-                        </div>
-                      </button>
+                      {ASSESSMENT_ATTACH_MODE_OPTIONS.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="teacher-module-detail__attach-type"
+                            data-active={attachState.assessmentMode === option.value}
+                            data-tone="assessment"
+                            onClick={() =>
+                              setAttachState((current) => ({
+                                ...current,
+                                assessmentMode: option.value,
+                                itemId: '',
+                              }))
+                            }
+                          >
+                            <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <div className="teacher-module-detail__attach-type-copy">
+                              <strong>{option.label}</strong>
+                              <span className="teacher-module-detail__attach-type-description">
+                                {option.description}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {attachState.assessmentMode === 'create-new' ? (

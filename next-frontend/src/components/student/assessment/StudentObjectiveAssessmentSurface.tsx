@@ -20,6 +20,10 @@ interface ObjectiveAssessmentSurfaceQuestion {
   points?: number | null;
   promptHtml: string;
   imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   options?: SharedQuestionOption[];
 }
 
@@ -122,14 +126,27 @@ export function StudentObjectiveAssessmentSurface({
                   />
                   {question.imageUrl ? (
                     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
-                      <Image
-                        src={question.imageUrl}
-                        alt="Question"
-                        width={1200}
-                        height={675}
-                        unoptimized
-                        className="max-h-[360px] h-auto w-full rounded-xl object-contain"
-                      />
+                      <div
+                        className="mx-auto overflow-hidden rounded-xl"
+                        style={{
+                          maxWidth: question.imageDisplayMode === 'expanded' ? '100%' : '780px',
+                          height: question.imageDisplayMode === 'expanded' ? '440px' : '360px',
+                        }}
+                      >
+                        <Image
+                          src={question.imageUrl}
+                          alt="Question"
+                          width={1200}
+                          height={675}
+                          unoptimized
+                          className="h-full w-full rounded-xl object-cover"
+                          style={{
+                            objectPosition: `${Math.min(Math.max(question.imagePositionX ?? 50, 0), 100)}% ${Math.min(Math.max(question.imagePositionY ?? 50, 0), 100)}%`,
+                            transform: `scale(${Math.max(question.imageZoom ?? 100, 100) / 100})`,
+                            transformOrigin: 'center',
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </div>

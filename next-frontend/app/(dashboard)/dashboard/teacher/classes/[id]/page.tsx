@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Cropper from 'react-easy-crop';
 import {
   useCallback,
   useEffect,
@@ -11,6 +12,7 @@ import {
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
+import type { Area, Point } from 'react-easy-crop';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -56,6 +58,14 @@ import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
+import {
+  createCroppedModuleCoverBlob,
+  DEFAULT_MODULE_GRADIENT,
+  MODULE_GRADIENT_OPTIONS,
+  MODULE_STOCK_IMAGE_OPTIONS,
+  sanitizeModuleCoverUploadName,
+  validateModuleCoverFile,
+} from '@/lib/module-cover-images';
 import {
   hasCoreAssessmentPlacementForPublish,
   resolveAssessmentForPublishValidation,
@@ -116,6 +126,14 @@ interface ModulePresentationDraft {
   imageScale: number;
 }
 
+interface LocalModuleCoverDraft {
+  file: File;
+  objectUrl: string;
+  crop: Point;
+  zoom: number;
+  croppedAreaPixels: Area | null;
+}
+
 interface StudentRow {
   enrollmentId: string;
   studentId: string;
@@ -168,20 +186,6 @@ const ASSIGNMENT_FILTERS: Array<{ key: AssignmentFilter; label: string }> = [
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STORAGE_KEY_MODULES_VIEW = 'teacher-class-detail-modules-view-v1';
 const STORAGE_KEY_CALENDAR_VIEW = 'teacher-class-detail-calendar-view-v1';
-const DEFAULT_MODULE_GRADIENT = 'oceanic-blue';
-const MODULE_STOCK_IMAGES = [
-  '/images/modules/module-stock-board.svg',
-  '/images/modules/module-stock-library.svg',
-  '/images/modules/module-stock-science.svg',
-] as const;
-const MODULE_GRADIENT_OPTIONS = [
-  { id: 'oceanic-blue', label: 'Oceanic Blue', background: 'linear-gradient(135deg, #2b4fdd 0%, #3c62f0 100%)' },
-  { id: 'emerald-wave', label: 'Emerald Wave', background: 'linear-gradient(135deg, #089f79 0%, #10b78f 100%)' },
-  { id: 'violet-burst', label: 'Violet Burst', background: 'linear-gradient(135deg, #7f22f0 0%, #9a44f6 100%)' },
-  { id: 'sunset-orange', label: 'Sunset Orange', background: 'linear-gradient(135deg, #d76a1f 0%, #f08d2d 100%)' },
-  { id: 'rose-dusk', label: 'Rose Dusk', background: 'linear-gradient(135deg, #d42756 0%, #ef5f87 100%)' },
-  { id: 'slate-night', label: 'Slate Night', background: 'linear-gradient(135deg, #1d304f 0%, #2e4a73 100%)' },
-] as const;
 
 function normalizeModulesOrder(modules: ClassModule[]) {
   return modules.map((module, index) => ({ ...module, order: index + 1 }));
@@ -345,8 +349,7 @@ function normalizeModulePresentation(module: ClassModule): ModulePresentationDra
     DEFAULT_MODULE_GRADIENT;
 
   const coverImageUrl = module.coverImageUrl || null;
-  const themeKind: ModuleThemeKind =
-    module.themeKind === 'image' && coverImageUrl ? 'image' : 'gradient';
+  const themeKind: ModuleThemeKind = module.themeKind === 'image' ? 'image' : 'gradient';
 
   const clamp = (value: number | undefined, min: number, max: number, fallback: number) =>
     typeof value === 'number' ? Math.min(Math.max(value, min), max) : fallback;
@@ -410,7 +413,8 @@ export default function TeacherClassDetailPage() {
     imageScale: 120,
   });
   const [savingModuleDesign, setSavingModuleDesign] = useState(false);
-  const [uploadingModuleCover, setUploadingModuleCover] = useState(false);
+  const [moduleCoverError, setModuleCoverError] = useState<string | null>(null);
+  const [localModuleCoverDraft, setLocalModuleCoverDraft] = useState<LocalModuleCoverDraft | null>(null);
 
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('all');
   const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
@@ -949,6 +953,30 @@ export default function TeacherClassDetailPage() {
     MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
     MODULE_GRADIENT_OPTIONS[0].background;
 
+  useEffect(() => {
+    const objectUrl = localModuleCoverDraft?.objectUrl;
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [localModuleCoverDraft?.objectUrl]);
+
+  const clearLocalModuleCoverDraft = useCallback(() => {
+    setLocalModuleCoverDraft((current) => {
+      if (current?.objectUrl) {
+        URL.revokeObjectURL(current.objectUrl);
+      }
+      return null;
+    });
+  }, []);
+
+  const closeModuleDesignDialog = useCallback(() => {
+    setCustomizingModuleId(null);
+    setModuleCoverError(null);
+    clearLocalModuleCoverDraft();
+  }, [clearLocalModuleCoverDraft]);
+
   const allModulesSelected = modules.length > 0 && selectedModuleIds.length === modules.length;
   const allFilteredAssessmentsSelected =
     filteredAssignments.length > 0 && selectedAssessmentIds.length === filteredAssignments.length;
@@ -1101,6 +1129,8 @@ export default function TeacherClassDetailPage() {
   const openModuleDesignDialog = (module: ClassModule) => {
     setCustomizingModuleId(module.id);
     setModuleDraft(normalizeModulePresentation(module));
+    setModuleCoverError(null);
+    clearLocalModuleCoverDraft();
   };
 
   const toggleCoreModuleVisibility = async (module: ClassModule) => {
@@ -1128,24 +1158,31 @@ export default function TeacherClassDetailPage() {
   const handleUploadModuleCover = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !customizingModuleId) return;
+    if (!file) return;
 
     try {
-      setUploadingModuleCover(true);
-      const response = await moduleService.uploadCover(customizingModuleId, file);
-      const nextCover = response.data.coverImageUrl;
+      setModuleCoverError(null);
+      await validateModuleCoverFile(file);
+      const nextObjectUrl = URL.createObjectURL(file);
+      clearLocalModuleCoverDraft();
+      setLocalModuleCoverDraft({
+        file,
+        objectUrl: nextObjectUrl,
+        crop: { x: 0, y: 0 },
+        zoom: 1,
+        croppedAreaPixels: null,
+      });
       setModuleDraft((current) => ({
         ...current,
         themeKind: 'image',
-        coverImageUrl: nextCover,
+        imagePositionX: 50,
+        imagePositionY: 50,
+        imageScale: 120,
       }));
-      setModules((current) =>
-        current.map((module) => (module.id === customizingModuleId ? response.data.module : module)),
-      );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to upload cover image'));
-    } finally {
-      setUploadingModuleCover(false);
+      setModuleCoverError(
+        error instanceof Error ? error.message : 'Failed to prepare cover image.',
+      );
     }
   };
 
@@ -1153,6 +1190,36 @@ export default function TeacherClassDetailPage() {
     if (!customizingModuleId || savingModuleDesign) return;
     try {
       setSavingModuleDesign(true);
+      setModuleCoverError(null);
+
+      if (moduleDraft.themeKind === 'image' && localModuleCoverDraft) {
+        const croppedBlob = await createCroppedModuleCoverBlob(
+          localModuleCoverDraft.objectUrl,
+          localModuleCoverDraft.croppedAreaPixels,
+        );
+        const uploadFile = new File(
+          [croppedBlob],
+          `${sanitizeModuleCoverUploadName(localModuleCoverDraft.file.name)}.png`,
+          { type: 'image/png' },
+        );
+        const uploadResponse = await moduleService.uploadCover(customizingModuleId, uploadFile);
+        setModules((current) =>
+          current.map((module) =>
+            module.id === customizingModuleId ? uploadResponse.data.module : module,
+          ),
+        );
+        clearLocalModuleCoverDraft();
+        setCustomizingModuleId(null);
+        toast.success('Module design updated');
+        return;
+      }
+
+      if (moduleDraft.themeKind === 'image' && !moduleDraft.coverImageUrl) {
+        throw new Error(
+          'Choose a stock image or upload a custom image before saving image mode.',
+        );
+      }
+
       const response = await moduleService.update(customizingModuleId, {
         themeKind: moduleDraft.themeKind,
         gradientId: moduleDraft.gradientId,
@@ -1166,10 +1233,12 @@ export default function TeacherClassDetailPage() {
           module.id === customizingModuleId ? response.data : module,
         ),
       );
-      setCustomizingModuleId(null);
+      closeModuleDesignDialog();
       toast.success('Module design updated');
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to update module design'));
+      const message = getApiErrorMessage(error, 'Failed to update module design');
+      setModuleCoverError(message);
+      toast.error(message);
     } finally {
       setSavingModuleDesign(false);
     }
@@ -1713,7 +1782,8 @@ export default function TeacherClassDetailPage() {
                 const isSelected = selectedModuleIds.includes(module.id);
                 const isCoreModule = Boolean(module.isCoreTemplateAsset);
                 const mediaSource =
-                  module.coverImageUrl || MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
+                  module.coverImageUrl ||
+                  MODULE_STOCK_IMAGE_OPTIONS[index % MODULE_STOCK_IMAGE_OPTIONS.length].imageUrl;
                 const gradientBackground = getModuleGradient(module.gradientId);
                 const imagePositionX = module.imagePositionX ?? 50;
                 const imagePositionY = module.imagePositionY ?? 50;
@@ -1797,7 +1867,7 @@ export default function TeacherClassDetailPage() {
                     {isCoreModule ? (
                       <button
                         type="button"
-                        className="teacher-class-workspace__outline"
+                        className="teacher-class-workspace__outline teacher-class-workspace__module-core-action"
                         onClick={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -1807,10 +1877,10 @@ export default function TeacherClassDetailPage() {
                         {module.isVisible ? 'Hide Core' : 'Release Core'}
                       </button>
                     ) : (
-                      <>
+                      <div className="teacher-class-workspace__module-actions">
                         <button
                           type="button"
-                          className="teacher-class-workspace__ghost-icon"
+                          className="teacher-class-workspace__module-action teacher-class-workspace__module-action--design"
                           onClick={() => openModuleDesignDialog(module)}
                           aria-label="Customize module design"
                           title="Customize module design"
@@ -1819,14 +1889,15 @@ export default function TeacherClassDetailPage() {
                         </button>
                         <button
                           type="button"
-                          className="teacher-class-workspace__ghost-icon"
+                          className="teacher-class-workspace__module-action teacher-class-workspace__module-action--delete"
                           onClick={() => handleDeleteModule(module.id)}
                           disabled={busyModuleId === module.id}
                           aria-label="Delete module"
+                          title="Delete module"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
-                      </>
+                      </div>
                     )}
                   </article>
                 );
@@ -2811,7 +2882,7 @@ export default function TeacherClassDetailPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(customizingModuleId)} onOpenChange={(open) => !open && setCustomizingModuleId(null)}>
+      <Dialog open={Boolean(customizingModuleId)} onOpenChange={(open) => !open && closeModuleDesignDialog()}>
         <DialogContent className="teacher-module-modal teacher-module-modal--design">
           <DialogHeader>
             <DialogTitle>Customize Module Design</DialogTitle>
@@ -2824,122 +2895,158 @@ export default function TeacherClassDetailPage() {
               <button
                 type="button"
                 data-active={moduleDraft.themeKind === 'gradient'}
-                onClick={() => setModuleDraft((current) => ({ ...current, themeKind: 'gradient' }))}
+                onClick={() => {
+                  setModuleCoverError(null);
+                  setModuleDraft((current) => ({ ...current, themeKind: 'gradient' }));
+                }}
               >
                 Gradient
               </button>
               <button
                 type="button"
                 data-active={moduleDraft.themeKind === 'image'}
-                onClick={() =>
-                  setModuleDraft((current) => ({
-                    ...current,
-                    themeKind: current.coverImageUrl ? 'image' : 'gradient',
-                  }))
-                }
+                onClick={() => {
+                  setModuleCoverError(null);
+                  setModuleDraft((current) => ({ ...current, themeKind: 'image' }));
+                }}
               >
                 Image
               </button>
             </div>
 
-            <div className="teacher-module-modal__palette">
-              {MODULE_GRADIENT_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  data-active={moduleDraft.gradientId === option.id}
-                  onClick={() => setModuleDraft((current) => ({ ...current, gradientId: option.id }))}
-                  aria-label={option.label}
-                  title={option.label}
-                  style={{ background: option.background }}
-                />
-              ))}
-            </div>
+            {moduleDraft.themeKind === 'gradient' ? (
+              <div className="teacher-module-modal__palette">
+                {MODULE_GRADIENT_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    data-active={moduleDraft.gradientId === option.id}
+                    onClick={() => setModuleDraft((current) => ({ ...current, gradientId: option.id }))}
+                    aria-label={option.label}
+                    title={option.label}
+                    style={{ background: option.background }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="teacher-module-modal__stock-grid">
+                  {MODULE_STOCK_IMAGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      data-active={!localModuleCoverDraft && moduleDraft.coverImageUrl === option.imageUrl}
+                      onClick={() => {
+                        setModuleCoverError(null);
+                        clearLocalModuleCoverDraft();
+                        setModuleDraft((current) => ({
+                          ...current,
+                          themeKind: 'image',
+                          coverImageUrl: option.imageUrl,
+                          imagePositionX: 50,
+                          imagePositionY: 50,
+                          imageScale: 120,
+                        }));
+                      }}
+                      style={{
+                        backgroundImage: `url(${option.imageUrl})`,
+                      }}
+                      aria-label={option.label}
+                      title={option.label}
+                    />
+                  ))}
+                </div>
 
-            <div className="teacher-module-modal__stock-grid">
-              {MODULE_STOCK_IMAGES.map((imageUrl) => (
-                <button
-                  key={imageUrl}
-                  type="button"
-                  data-active={moduleDraft.coverImageUrl === imageUrl}
-                  onClick={() =>
-                    setModuleDraft((current) => ({
-                      ...current,
-                      themeKind: 'image',
-                      coverImageUrl: imageUrl,
-                    }))
-                  }
-                  style={{
-                    backgroundImage: `url(${imageUrl})`,
-                  }}
-                  aria-label="Use stock image"
-                />
-              ))}
-            </div>
+                <div className="teacher-module-modal__upload">
+                  <label htmlFor="module-cover-upload">Upload custom image</label>
+                  <input
+                    id="module-cover-upload"
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    onChange={(event) => void handleUploadModuleCover(event)}
+                    disabled={savingModuleDesign}
+                  />
+                  <small>Only PNG, JPG, JPEG, or WebP up to 5 MB.</small>
+                </div>
 
-            <div className="teacher-module-modal__upload">
-              <label htmlFor="module-cover-upload">
-                {uploadingModuleCover ? 'Uploading cover...' : 'Upload custom image'}
-              </label>
-              <input
-                id="module-cover-upload"
-                type="file"
-                accept="image/*"
-                onChange={(event) => void handleUploadModuleCover(event)}
-                disabled={uploadingModuleCover}
-              />
-            </div>
+                {localModuleCoverDraft ? (
+                  <div className="teacher-module-modal__cropper-shell">
+                    <div className="teacher-module-modal__cropper-frame">
+                      <Cropper
+                        image={localModuleCoverDraft.objectUrl}
+                        crop={localModuleCoverDraft.crop}
+                        zoom={localModuleCoverDraft.zoom}
+                        aspect={16 / 9}
+                        cropShape="rect"
+                        showGrid={false}
+                        onCropChange={(crop) =>
+                          setLocalModuleCoverDraft((current) =>
+                            current ? { ...current, crop } : current,
+                          )
+                        }
+                        onZoomChange={(zoom) =>
+                          setLocalModuleCoverDraft((current) =>
+                            current ? { ...current, zoom } : current,
+                          )
+                        }
+                        onCropComplete={(_croppedArea, croppedAreaPixels) =>
+                          setLocalModuleCoverDraft((current) =>
+                            current ? { ...current, croppedAreaPixels } : current,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="teacher-module-modal__cropper-tools">
+                      <label>
+                        Zoom
+                        <input
+                          type="range"
+                          min={1}
+                          max={3}
+                          step={0.05}
+                          value={localModuleCoverDraft.zoom}
+                          onChange={(event) =>
+                            setLocalModuleCoverDraft((current) =>
+                              current
+                                ? { ...current, zoom: Number(event.target.value) }
+                                : current,
+                            )
+                          }
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="teacher-module-modal__cropper-reset"
+                        onClick={() =>
+                          setLocalModuleCoverDraft((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  crop: { x: 0, y: 0 },
+                                  zoom: 1,
+                                  croppedAreaPixels: null,
+                                }
+                              : current,
+                          )
+                        }
+                      >
+                        Reset framing
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
 
-            <div className="teacher-module-modal__sliders">
-              <label>
-                X Position
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={moduleDraft.imagePositionX}
-                  onChange={(event) =>
-                    setModuleDraft((current) => ({
-                      ...current,
-                      imagePositionX: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Y Position
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={moduleDraft.imagePositionY}
-                  onChange={(event) =>
-                    setModuleDraft((current) => ({
-                      ...current,
-                      imagePositionY: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-              <label>
-                Zoom
-                <input
-                  type="range"
-                  min={100}
-                  max={220}
-                  value={moduleDraft.imageScale}
-                  onChange={(event) =>
-                    setModuleDraft((current) => ({
-                      ...current,
-                      imageScale: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-            </div>
+            {moduleCoverError ? (
+              <div className="teacher-module-modal__error" role="alert">
+                {moduleCoverError}
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setCustomizingModuleId(null)}>
+            <Button type="button" variant="outline" onClick={closeModuleDesignDialog}>
               Cancel
             </Button>
             <Button

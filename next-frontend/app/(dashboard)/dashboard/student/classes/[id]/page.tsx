@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   BookOpen,
+  BookText,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
   ClipboardList,
   Clock3,
   FileSpreadsheet,
@@ -28,6 +33,15 @@ import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 import { discussionBoardService } from '@/services/discussion-board-service';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import './student-class-detail.css';
@@ -56,6 +70,14 @@ type AssignmentCategory =
   | 'discussion';
 type CalendarKind = 'assessment' | 'event' | 'holiday';
 type ModuleCardView = 'card' | 'wide';
+type StudentClassGuideScreen =
+  | 'overview'
+  | 'modules'
+  | 'assignments'
+  | 'updates'
+  | 'classmates'
+  | 'grades'
+  | 'calendar';
 
 interface AssignmentRow {
   assessment: Assessment;
@@ -65,11 +87,21 @@ interface AssignmentRow {
 interface GradeRow {
   id: string;
   title: string;
+  category: Exclude<AssignmentCategory, 'all'>;
   categoryLabel: string;
   scoreText: string;
   percentText: string;
-  dateText: string;
+  dueText: string;
+  detailText: string;
   isPending: boolean;
+  scoreValue: number | null;
+  possiblePoints: number;
+  percentValue: number | null;
+  sortTime: number;
+  statusLabel: string;
+  statusTone: 'graded' | 'submitted' | 'pending';
+  gradeTone: 'excellent' | 'good' | 'warning' | 'muted';
+  actionHref: string;
 }
 
 interface CalendarRow {
@@ -100,6 +132,200 @@ const ASSIGNMENT_FILTERS: Array<{ key: AssignmentCategory; label: string }> = [
 const MODULE_CARD_VIEW_STORAGE_KEY_PREFIX = 'nexora.student.class.modules.view';
 
 const moduleToneByIndex = ['blue', 'green', 'violet'] as const;
+const DEFAULT_MODULE_GRADIENT = 'oceanic-blue';
+const MODULE_STOCK_IMAGES = [
+  '/images/modules/module-stock-board.svg',
+  '/images/modules/module-stock-library.svg',
+  '/images/modules/module-stock-science.svg',
+] as const;
+const MODULE_GRADIENT_OPTIONS = [
+  { id: 'oceanic-blue', label: 'Oceanic Blue', background: 'linear-gradient(135deg, #2b4fdd 0%, #3c62f0 100%)' },
+  { id: 'emerald-wave', label: 'Emerald Wave', background: 'linear-gradient(135deg, #089f79 0%, #10b78f 100%)' },
+  { id: 'violet-burst', label: 'Violet Burst', background: 'linear-gradient(135deg, #7f22f0 0%, #9a44f6 100%)' },
+  { id: 'sunset-orange', label: 'Sunset Orange', background: 'linear-gradient(135deg, #d76a1f 0%, #f08d2d 100%)' },
+  { id: 'rose-dusk', label: 'Rose Dusk', background: 'linear-gradient(135deg, #d42756 0%, #ef5f87 100%)' },
+  { id: 'slate-night', label: 'Slate Night', background: 'linear-gradient(135deg, #1d304f 0%, #2e4a73 100%)' },
+] as const;
+const studentClassGuidePages: Array<{
+  title: string;
+  description: string;
+  screen: StudentClassGuideScreen;
+  reminder: string;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start here on the class page',
+    description:
+      'This page is the home for one subject. The top area shows your class details, and the tabs below open each part of the class.',
+    screen: 'overview',
+    reminder: 'Simple rule: pick the tab that matches what you need before scrolling too far down.',
+    steps: [
+      {
+        action: 'Read',
+        body: 'Check the subject title, teacher line, schedule, room, and module count first.',
+      },
+      {
+        action: 'Move tabs',
+        body: 'Use the tab row to switch between modules, assignments, announcements, discussion, classmates, grades, and calendar.',
+      },
+      {
+        action: 'Go back',
+        body: 'Use Back to Courses when you want to return to your full class list.',
+      },
+      {
+        action: 'Open help',
+        body: 'Tap the question mark button if you want this guide again at any time.',
+      },
+    ],
+  },
+  {
+    title: 'Open modules to study step by step',
+    description:
+      'The Modules tab is where you open the main learning content for this class. Each card shows what is inside before you open it.',
+    screen: 'modules',
+    reminder: 'If you are not sure where to continue, start with the first available module.',
+    steps: [
+      {
+        action: 'Check',
+        body: 'Read the module title, short description, lesson count, assessment count, and progress first.',
+      },
+      {
+        action: 'Switch view',
+        body: 'Use Grid View or Wide Card View to choose the layout that is easier for you to read.',
+      },
+      {
+        action: 'Watch status',
+        body: 'Available means you can open it now. Locked means it is not ready for you yet.',
+      },
+      {
+        action: 'Open',
+        body: 'Use the Open link or the module card itself to enter that module.',
+      },
+    ],
+  },
+  {
+    title: 'Use assignments to find class work fast',
+    description:
+      'The Assignments tab groups your class work in one place, with filters to help you focus on the kind of task you need.',
+    screen: 'assignments',
+    reminder: 'Best habit: read the due date and points before you press Take.',
+    steps: [
+      {
+        action: 'Filter',
+        body: 'Use the filter chips like All, Written Work, Performance Task, Quarterly Assessment, or Discussion.',
+      },
+      {
+        action: 'Read',
+        body: 'Each row shows the task title, type, due date, and total points.',
+      },
+      {
+        action: 'Take',
+        body: 'Press Take when you are ready to open that assessment.',
+      },
+      {
+        action: 'Watch out',
+        body: 'If the due date is close, finish that task first so you do not miss it.',
+        tone: 'caution',
+      },
+    ],
+  },
+  {
+    title: 'Check updates and join class discussions',
+    description:
+      'Announcements and Discussion help you stay updated and talk inside the class. One is for notices, and the other is for active threads.',
+    screen: 'updates',
+    reminder: 'Read pinned updates first because they are usually the most important.',
+    steps: [
+      {
+        action: 'Read announcements',
+        body: 'Open the Announcements tab for teacher notices, reminders, and class news.',
+      },
+      {
+        action: 'Open threads',
+        body: 'Use the Discussion Board tab when you want to read or join a conversation.',
+      },
+      {
+        action: 'Post carefully',
+        body: 'If comments are open, write clearly and upload only class-related images or replies.',
+      },
+      {
+        action: 'React',
+        body: 'Use the thread reactions only when they match what you really want to say.',
+      },
+    ],
+  },
+  {
+    title: 'Use classmates when you need names and section info',
+    description:
+      'The Classmates tab is a simple class list. It helps you check who is in the class and which section the class belongs to.',
+    screen: 'classmates',
+    reminder: 'This tab is for viewing classmate details, not for editing them.',
+    steps: [
+      {
+        action: 'Look',
+        body: 'Read the student name first, then the email and section columns.',
+      },
+      {
+        action: 'Match',
+        body: 'Use the initials bubble to quickly match the row to the student name.',
+      },
+      {
+        action: 'Confirm',
+        body: 'If you need to make sure someone is in the class, this is the best tab to check.',
+      },
+    ],
+  },
+  {
+    title: 'Read grades as your class record snapshot',
+    description:
+      'The Grades tab turns your class record into a simpler view, so you can track overall standing, category averages, and each scored item.',
+    screen: 'grades',
+    reminder: 'If a score is still pending, wait for teacher checking before expecting a final number.',
+    steps: [
+      {
+        action: 'Start',
+        body: 'Look at the big class record summary first to see your overall standing in the class.',
+      },
+      {
+        action: 'Compare',
+        body: 'Read the category cards to see which grading area is strongest and which one needs work.',
+      },
+      {
+        action: 'Check rows',
+        body: 'Use the assessment ledger to read every score and the date it belongs to.',
+      },
+      {
+        action: 'Be patient',
+        body: 'Pending rows mean the task is not fully graded yet.',
+      },
+    ],
+  },
+  {
+    title: 'Use the class calendar for due dates and events',
+    description:
+      'The Calendar tab mixes assessments and school events into one list so you can see what is coming up for this class.',
+    screen: 'calendar',
+    reminder: 'Check this tab often before a busy week so you do not miss class deadlines.',
+    steps: [
+      {
+        action: 'Read date',
+        body: 'The day badge on the left tells you exactly when the event or assessment happens.',
+      },
+      {
+        action: 'Read kind',
+        body: 'The tag on the right shows whether the row is an Assessment, Event, or Holiday.',
+      },
+      {
+        action: 'Match details',
+        body: 'Use the title and small subtitle to know what the row is about.',
+      },
+    ],
+  },
+];
 
 const staggerContainer = {
   hidden: { opacity: 0 },
@@ -121,6 +347,366 @@ const staggerItem = {
     },
   },
 };
+
+function StudentClassGuideBuddy({
+  src,
+  alt,
+  label,
+  tip,
+}: {
+  src: string;
+  alt: string;
+  label: string;
+  tip: string;
+}) {
+  return (
+    <div className="student-class-guide-shell__ja-tip">
+      <div className="student-class-guide-shell__ja-image">
+        <Image src={src} alt={alt} fill sizes="72px" className="object-contain" />
+      </div>
+      <div className="student-class-guide-shell__ja-copy">
+        <small>{label}</small>
+        <strong>{tip}</strong>
+      </div>
+    </div>
+  );
+}
+
+function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScreen }) {
+  if (screen === 'overview') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__hero">
+            <div className="student-class-guide-shell__hero-copy">
+              <small>Class page</small>
+              <strong>Mathematics 7</strong>
+              <p>Grade 7 - Section A - Mrs. Cruz</p>
+            </div>
+            <div className="student-class-guide-shell__hero-actions">
+              <span>Back to Courses</span>
+              <b>?</b>
+            </div>
+          </div>
+
+          <div className="student-class-guide-shell__meta-row">
+            <span>MON/WED 8:00 AM - 9:00 AM</span>
+            <span>Room 402</span>
+            <span>6 modules</span>
+          </div>
+
+          <div className="student-class-guide-shell__tabs">
+            <b>Modules</b>
+            <span>Assignments</span>
+            <span>Announcements</span>
+            <span>Discussion Board</span>
+            <span>Classmates</span>
+            <span>Grades</span>
+            <span>Calendar</span>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_wave.png"
+            alt="JA waving beside the class guide"
+            label="JA says"
+            tip="This one page holds almost everything for one subject."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-tabs">
+          Class tabs
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-help">
+          Help button
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'modules') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__panel-head">
+            <div>
+              <small>Modules</small>
+              <strong>Course Modules</strong>
+            </div>
+            <div className="student-class-guide-shell__view-toggle">
+              <span>Grid</span>
+              <b>Wide</b>
+            </div>
+          </div>
+
+          <div className="student-class-guide-shell__module-grid">
+            <article>
+              <header>
+                <span>1</span>
+                <div>
+                  <strong>Numbers and Patterns</strong>
+                  <p>Core lessons and first checks.</p>
+                </div>
+              </header>
+              <div className="student-class-guide-shell__module-stats">
+                <i>4 Lessons</i>
+                <i>2 Assessments</i>
+                <i>70% Progress</i>
+              </div>
+              <footer>
+                <small>Available</small>
+                <b>Open</b>
+              </footer>
+            </article>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_cheer.png"
+            alt="JA cheering beside modules"
+            label="Quick tip"
+            tip="Use the status and progress before choosing which module to open."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-view">
+          View switch
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-module">
+          Module card
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'assignments') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__filter-row">
+            <b>All</b>
+            <span>Written Work</span>
+            <span>Performance Task</span>
+            <span>Quarterly Assessment</span>
+          </div>
+
+          <div className="student-class-guide-shell__assignment-list">
+            <article>
+              <div>
+                <small>Written Work</small>
+                <strong>Seatwork 1</strong>
+                <p>Due Apr 10, 2026 - 20 pts</p>
+              </div>
+              <b>Take</b>
+            </article>
+            <article>
+              <div>
+                <small>Performance Task</small>
+                <strong>Poster Activity</strong>
+                <p>Due Apr 12, 2026 - 40 pts</p>
+              </div>
+              <b>Take</b>
+            </article>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_thinking.png"
+            alt="JA thinking beside assignments"
+            label="JA says"
+            tip="Filter first if you only want one kind of task."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-filter">
+          Filters
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-take">
+          Take button
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'updates') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__update-grid">
+            <article>
+              <small>Announcements</small>
+              <strong>Science Fair Reminder</strong>
+              <p>Bring your materials this Friday.</p>
+              <i>Pinned</i>
+            </article>
+            <article>
+              <small>Discussion Board</small>
+              <strong>Quadratic Formula Questions</strong>
+              <p>8 comments - published</p>
+              <b>Open Thread</b>
+            </article>
+          </div>
+
+          <div className="student-class-guide-shell__reaction-row">
+            <span>Like 2</span>
+            <span>Heart 1</span>
+            <span>Wow 0</span>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_wave.png"
+            alt="JA waving beside class updates"
+            label="Friendly reminder"
+            tip="Pinned notices and open threads usually matter most."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-announcement">
+          Announcement
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-thread">
+          Discussion thread
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'classmates') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__table">
+            <div className="student-class-guide-shell__table-head">
+              <strong>Student</strong>
+              <strong>Email</strong>
+              <strong>Section</strong>
+            </div>
+            <div className="student-class-guide-shell__table-row">
+              <span className="is-badge">LN</span>
+              <b>Liam Navarro</b>
+              <i>student71@lms.local</i>
+              <u>Grade 10 - Rizal</u>
+            </div>
+            <div className="student-class-guide-shell__table-row">
+              <span className="is-badge">MV</span>
+              <b>Mia Villanueva</b>
+              <i>student72@lms.local</i>
+              <u>Grade 10 - Rizal</u>
+            </div>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_cheer.png"
+            alt="JA cheering beside classmates"
+            label="JA says"
+            tip="Use this tab when you need to confirm who is in the class."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-classmate">
+          Student row
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'grades') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+        <div className="student-class-guide-shell">
+          <div className="student-class-guide-shell__grade-summary">
+            <div className="student-class-guide-shell__grade-ring">88%</div>
+            <div>
+              <small>Class Record Snapshot</small>
+              <strong>Stable progress</strong>
+              <p>44 / 50 total points earned</p>
+            </div>
+          </div>
+
+          <div className="student-class-guide-shell__grade-cards">
+            <article>
+              <small>Written Work</small>
+              <strong>90%</strong>
+            </article>
+            <article>
+              <small>Performance Task</small>
+              <strong>85%</strong>
+            </article>
+            <article>
+              <small>Quarterly Assessment</small>
+              <strong>88%</strong>
+            </article>
+          </div>
+
+          <div className="student-class-guide-shell__ledger-row">
+            <div>
+              <small>Written Work</small>
+              <strong>Seatwork 1</strong>
+              <p>Apr 10, 2026</p>
+            </div>
+            <b>18 / 20</b>
+          </div>
+
+          <StudentClassGuideBuddy
+            src="/images/JA/ja_thinking.png"
+            alt="JA thinking beside grades"
+            label="Quick tip"
+            tip="Read the big summary first, then check the category cards and ledger."
+          />
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-summary">
+          Grade summary
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-ledger">
+          Ledger row
+        </em>
+      </div>
+    );
+  }
+
+  return (
+    <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
+      <div className="student-class-guide-shell">
+        <div className="student-class-guide-shell__calendar-list">
+          <article>
+            <span>
+              <b>15</b>
+              <small>MAY</small>
+            </span>
+            <div>
+              <strong>Quarter Exam</strong>
+              <p>Mathematics 7</p>
+            </div>
+            <i>Assessment</i>
+          </article>
+          <article>
+            <span>
+              <b>16</b>
+              <small>MAY</small>
+            </span>
+            <div>
+              <strong>Midyear Break</strong>
+              <p>All students</p>
+            </div>
+            <i>Holiday</i>
+          </article>
+        </div>
+
+        <StudentClassGuideBuddy
+          src="/images/JA/ja_wave.png"
+          alt="JA waving beside the class calendar"
+          label="JA says"
+          tip="The date badge and kind tag help you read this list quickly."
+        />
+      </div>
+
+      <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-date">
+        Date badge
+      </em>
+      <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-kind">
+        Kind tag
+      </em>
+    </div>
+  );
+}
 
 function isStudentClassTab(value: string | null): value is StudentClassTab {
   return (
@@ -197,6 +783,14 @@ function summarizeModule(moduleEntry: ClassModule) {
   );
 }
 
+function getModuleGradient(gradientId?: string) {
+  return (
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === DEFAULT_MODULE_GRADIENT)?.background ||
+    MODULE_GRADIENT_OPTIONS[0].background
+  );
+}
+
 function resolveAssignmentCategory(assessment: Assessment): Exclude<AssignmentCategory, 'all'> {
   const type = assessment.type.toLowerCase();
   const title = assessment.title.toLowerCase();
@@ -241,6 +835,11 @@ function sortByDateAsc<T>(items: T[], resolver: (item: T) => Date | null) {
 function formatDateLong(value: Date | null) {
   if (!value) return '--';
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatScoreNumber(value: number | null) {
+  if (value === null) return '--';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function formatStudentName(student?: Enrollment['student']) {
@@ -334,6 +933,8 @@ export default function StudentClassDetailPage() {
   const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('all');
   const [moduleCardView, setModuleCardView] = useState<ModuleCardView>('wide');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
 
   const fetchPageData = useCallback(async () => {
     if (!classId) {
@@ -608,27 +1209,61 @@ export default function StudentClassDetailPage() {
   }, [assessments, assignmentFilter]);
 
   const gradeRows = useMemo<GradeRow[]>(() => {
-    return assessments.map((assessment) => {
-      const category = resolveAssignmentCategory(assessment);
-      const attempts = attemptsByAssessment[assessment.id] || [];
-      const latestSubmitted = getLatestSubmittedAttempt(attempts);
-      const possiblePoints = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
-      const score = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
-      const percent =
-        score !== null && possiblePoints > 0 ? Math.round((score / possiblePoints) * 100) : null;
-      const submittedDate = parseDate(latestSubmitted?.submittedAt || latestSubmitted?.updatedAt);
+    return assessments
+      .map((assessment) => {
+        const category = resolveAssignmentCategory(assessment);
+        const attempts = attemptsByAssessment[assessment.id] || [];
+        const submittedAttempts = attempts.filter((attempt) => attempt.isSubmitted);
+        const latestSubmitted = getLatestSubmittedAttempt(attempts);
+        const possiblePoints = latestSubmitted?.totalPoints ?? assessment.totalPoints ?? 0;
+        const score = typeof latestSubmitted?.score === 'number' ? latestSubmitted.score : null;
+        const percent =
+          score !== null && possiblePoints > 0 ? Math.round((score / possiblePoints) * 100) : null;
+        const submittedDate = parseDate(latestSubmitted?.submittedAt || latestSubmitted?.updatedAt);
+        const dueDate = parseDate(assessment.dueDate);
+        const sortTime = (submittedDate || dueDate)?.getTime() ?? 0;
+        const submittedCount = submittedAttempts.length;
+        const statusLabel =
+          score !== null ? 'Graded' : latestSubmitted ? 'Submitted' : 'Pending';
+        const statusTone: GradeRow['statusTone'] =
+          score !== null ? 'graded' : latestSubmitted ? 'submitted' : 'pending';
+        const gradeTone: GradeRow['gradeTone'] =
+          score === null || percent === null
+            ? 'muted'
+            : percent >= 90
+              ? 'excellent'
+              : percent >= 75
+                ? 'good'
+                : 'warning';
 
-      return {
-        id: assessment.id,
-        title: assessment.title,
-        categoryLabel: assignmentCategoryLabel(category),
-        scoreText: score === null ? 'Pending' : `${score}/${possiblePoints || '--'}`,
-        percentText: score === null || percent === null ? '' : `(${percent}%)`,
-        dateText: score === null ? formatDateLong(parseDate(assessment.dueDate)) : formatDateLong(submittedDate),
-        isPending: score === null,
-      };
-    });
-  }, [assessments, attemptsByAssessment]);
+        return {
+          id: assessment.id,
+          title: assessment.title,
+          category,
+          categoryLabel: assignmentCategoryLabel(category),
+          scoreText:
+            score === null
+              ? 'Not graded'
+              : `${formatScoreNumber(score)} / ${possiblePoints || '--'}`,
+          percentText: score === null || percent === null ? '' : `${percent}%`,
+          dueText: formatDateLong(dueDate),
+          detailText:
+            submittedCount > 0
+              ? `${submittedCount} attempt${submittedCount === 1 ? '' : 's'} submitted`
+              : `${assessment.totalPoints ?? 0} pts available`,
+          isPending: score === null,
+          scoreValue: score,
+          possiblePoints,
+          percentValue: percent,
+          sortTime,
+          statusLabel,
+          statusTone,
+          gradeTone,
+          actionHref: `/dashboard/student/assessments/${assessment.id}?classId=${classId}`,
+        };
+      })
+      .sort((left, right) => right.sortTime - left.sortTime);
+  }, [assessments, attemptsByAssessment, classId]);
 
   const gradeSummary = useMemo(() => {
     const scoredRows = assessments
@@ -652,22 +1287,6 @@ export default function StudentClassDetailPage() {
       possibleTotal,
       percent,
       tone,
-      label:
-        tone === 'outstanding'
-          ? 'Outstanding'
-          : tone === 'good'
-            ? 'Good Standing'
-            : tone === 'fair'
-              ? 'Needs Attention'
-              : 'At Risk',
-      helper:
-        tone === 'outstanding'
-          ? 'On track'
-          : tone === 'good'
-            ? 'Stable progress'
-            : tone === 'fair'
-              ? 'Review upcoming assessments'
-              : 'Immediate intervention needed',
     };
   }, [assessments, attemptsByAssessment]);
 
@@ -703,6 +1322,7 @@ export default function StudentClassDetailPage() {
 
   const classmateRows = useMemo(() => getEnrollmentRows(classItem), [classItem]);
   const scheduleLabel = useMemo(() => formatScheduleLabel(classItem), [classItem]);
+  const activeGuidePage = studentClassGuidePages[helpPage] ?? studentClassGuidePages[0];
 
   if (loading) {
     return (
@@ -726,37 +1346,52 @@ export default function StudentClassDetailPage() {
   }
 
   return (
-    <ClassWorkspaceShell
-      className="student-class-workspace"
-      backHref="/dashboard/student/courses"
-      backLabel={
-        <>
-          <ArrowLeft className="h-4 w-4" />
-          Back to Courses
-        </>
-      }
-      icon={<BookOpen className="h-5 w-5" />}
-      title={classItem.subjectName || classItem.className || 'Class'}
-      subtitle={formatClassLine(classItem)}
-      metaItems={[
-        {
-          key: 'schedule',
-          icon: <Clock3 className="h-3.5 w-3.5" />,
-          label: scheduleLabel,
-        },
-        {
-          key: 'room',
-          icon: <School className="h-3.5 w-3.5" />,
-          label: classItem.room ? `Room ${classItem.room}` : 'Room TBA',
-        },
-        {
-          key: 'modules',
-          icon: <FolderOpen className="h-3.5 w-3.5" />,
-          label: `${modules.length} module${modules.length === 1 ? '' : 's'}`,
-        },
-      ]}
-      tabs={workspaceTabs}
-    >
+    <>
+      <ClassWorkspaceShell
+        className="student-class-workspace"
+        backHref="/dashboard/student/courses"
+        backLabel={
+          <>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Courses
+          </>
+        }
+        icon={<BookOpen className="h-5 w-5" />}
+        title={classItem.subjectName || classItem.className || 'Class'}
+        subtitle={formatClassLine(classItem)}
+        metaItems={[
+          {
+            key: 'schedule',
+            icon: <Clock3 className="h-3.5 w-3.5" />,
+            label: scheduleLabel,
+          },
+          {
+            key: 'room',
+            icon: <School className="h-3.5 w-3.5" />,
+            label: classItem.room ? `Room ${classItem.room}` : 'Room TBA',
+          },
+          {
+            key: 'modules',
+            icon: <FolderOpen className="h-3.5 w-3.5" />,
+            label: `${modules.length} module${modules.length === 1 ? '' : 's'}`,
+          },
+        ]}
+        tabs={workspaceTabs}
+        heroActions={
+          <Button
+            type="button"
+            variant="outline"
+            className="student-class-help-button"
+            aria-label="Class page help"
+            onClick={() => {
+              setHelpPage(0);
+              setHelpOpen(true);
+            }}
+          >
+            <CircleHelp className="h-4 w-4" />
+          </Button>
+        }
+      >
       {currentTab === 'modules' ? (
         <motion.section
           className="student-class-panel"
@@ -798,6 +1433,13 @@ export default function StudentClassDetailPage() {
               {modules.map((moduleEntry, index) => {
                 const summary = summarizeModule(moduleEntry);
                 const openHref = getOpenModuleHref(moduleEntry, classId);
+                const mediaSource =
+                  moduleEntry.coverImageUrl ||
+                  MODULE_STOCK_IMAGES[index % MODULE_STOCK_IMAGES.length];
+                const gradientBackground = getModuleGradient(moduleEntry.gradientId);
+                const imagePositionX = moduleEntry.imagePositionX ?? 50;
+                const imagePositionY = moduleEntry.imagePositionY ?? 50;
+                const imageScale = moduleEntry.imageScale ?? 120;
                 return (
                   <motion.article
                     key={moduleEntry.id}
@@ -812,31 +1454,54 @@ export default function StudentClassDetailPage() {
                       className="student-class-module-card__body-link"
                       aria-label={`Open ${moduleEntry.title} module`}
                     >
-                      <header>
-                        <span className="student-class-module-card__index">{index + 1}</span>
-                        <div>
-                          <h3>{moduleEntry.title}</h3>
-                          {moduleEntry.description ? (
-                            <RichTextRenderer html={moduleEntry.description} />
-                          ) : (
-                            <p>Extended learning and higher-order thinking activities.</p>
-                          )}
+                      <div className="student-class-module-card__media-wrap">
+                        <div
+                          className="student-class-module-card__media"
+                          style={{
+                            backgroundImage: `linear-gradient(120deg, rgba(8, 23, 44, 0.26), rgba(8, 23, 44, 0.12)), url(${mediaSource})`,
+                            backgroundSize: `${imageScale}%`,
+                            backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
+                            backgroundRepeat: 'no-repeat',
+                            backgroundColor: '#f1f5fb',
+                          }}
+                        >
+                          <div
+                            className="student-class-module-card__media-gradient"
+                            style={{ background: gradientBackground }}
+                          />
                         </div>
-                      </header>
+                      </div>
 
-                      <div className="student-class-module-card__stats">
-                        <article>
-                          <strong>{summary.lessons}</strong>
-                          <span>Lessons</span>
-                        </article>
-                        <article>
-                          <strong>{summary.assessments}</strong>
-                          <span>Assessments</span>
-                        </article>
-                        <article>
-                          <strong>{moduleEntry.progressPercent ?? 0}%</strong>
-                          <span>Progress</span>
-                        </article>
+                      <div className="student-class-module-card__content">
+                        <header>
+                          <span className="student-class-module-card__index">{index + 1}</span>
+                          <div className="student-class-module-card__copy">
+                          <h3>{moduleEntry.title}</h3>
+                            {moduleEntry.isCoreTemplateAsset ? (
+                              <span className="student-class-module-card__pill">Core Module</span>
+                            ) : null}
+                            {moduleEntry.description ? (
+                              <RichTextRenderer html={moduleEntry.description} />
+                            ) : null}
+                          </div>
+                        </header>
+
+                        <div className="student-class-module-card__stats">
+                          <article>
+                            <BookText className="h-3.5 w-3.5" />
+                            <strong>{summary.lessons}</strong>
+                            <span>Lessons</span>
+                          </article>
+                          <article>
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            <strong>{summary.assessments}</strong>
+                            <span>Assessments</span>
+                          </article>
+                          <article>
+                            <strong>{moduleEntry.progressPercent ?? 0}%</strong>
+                            <span>Progress</span>
+                          </article>
+                        </div>
                       </div>
                     </Link>
 
@@ -1137,116 +1802,212 @@ export default function StudentClassDetailPage() {
 
       {currentTab === 'grades' ? (
         <motion.section className="student-class-panel" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <header className="student-class-panel__head">
-            <h2>My Grades</h2>
-            <p>Grade breakdown for {classItem.subjectName}</p>
-          </header>
-
-          <article className="student-class-grade-summary" data-tone={gradeSummary.tone}>
-            <div className="student-class-grade-summary__ring-wrap">
-              <svg viewBox="0 0 42 42" className="student-class-grade-summary__ring" aria-hidden="true">
-                <circle cx="21" cy="21" r="15.915" />
-                <motion.circle
-                  cx="21"
-                  cy="21"
-                  r="15.915"
-                  initial={{ strokeDasharray: '0 100' }}
-                  animate={{ strokeDasharray: `${gradeSummary.percent} 100` }}
-                  transition={{ duration: 0.45, ease: 'easeOut' }}
-                />
-              </svg>
+          <header className="student-gradebook__head">
+            <div>
+              <h2>Gradebook</h2>
+              <p>{gradeRows.length} graded items and submissions for {classItem.subjectName}</p>
+            </div>
+            <div className="student-gradebook__overall" data-tone={gradeSummary.tone}>
+              <span>Overall</span>
               <strong>{gradeSummary.percent}%</strong>
             </div>
-            <div className="student-class-grade-summary__copy">
-              <h3>{gradeSummary.label}</h3>
-              <p>
-                {Math.round(gradeSummary.earnedTotal)} / {Math.round(gradeSummary.possibleTotal)} total points
-                earned
-              </p>
-              <span>{gradeSummary.helper}</span>
-            </div>
-          </article>
+          </header>
 
-          <div className="student-class-table-wrap">
-            <table className="student-class-table student-class-table--grades">
-              <thead>
-                <tr>
-                  <th>Assessment</th>
-                  <th>Category</th>
-                  <th>Score</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gradeRows.map((row) => (
-                  <tr key={row.id} data-pending={row.isPending}>
-                    <td>{row.title}</td>
-                    <td>
-                      <span className="student-class-grade-tag">{row.categoryLabel}</span>
-                    </td>
-                    <td>
-                      <strong>{row.scoreText}</strong>
-                      {row.percentText ? <span>{row.percentText}</span> : null}
-                    </td>
-                    <td>{row.dateText}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {gradeRows.length === 0 ? (
-              <div className="teacher-class-workspace__empty">No grade records yet.</div>
-            ) : null}
+          <div className="student-gradebook">
+            <div className="student-gradebook__rule" aria-hidden="true" />
+            <div className="student-class-table-wrap student-class-table-wrap--gradebook">
+
+              {gradeRows.length === 0 ? (
+                <div className="teacher-class-workspace__empty">No grade records yet.</div>
+              ) : (
+                <table className="student-class-table student-class-table--gradebook">
+                  <thead>
+                    <tr>
+                      <th>Item Name</th>
+                      <th>Due Date</th>
+                      <th>Status</th>
+                      <th>Grade</th>
+                      <th>Results</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gradeRows.map((row) => (
+                      <tr key={row.id} data-pending={row.isPending}>
+                        <td>
+                          <div className="student-gradebook__item">
+                            <span
+                              className="student-gradebook__dot"
+                              data-category={row.category}
+                              aria-hidden="true"
+                            />
+                            <div className="student-gradebook__item-copy">
+                              <strong>{row.title}</strong>
+                              <p>
+                                {row.categoryLabel} - {row.detailText}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{row.dueText}</td>
+                        <td>
+                          <span className="student-gradebook__status" data-tone={row.statusTone}>
+                            {row.statusLabel}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="student-gradebook__grade-cell">
+                            <span className="student-gradebook__grade-pill" data-tone={row.gradeTone}>
+                              {row.scoreText}
+                            </span>
+                            <small>{row.percentText || 'Not graded'}</small>
+                          </div>
+                        </td>
+                        <td>
+                          <Link href={row.actionHref} className="student-gradebook__view">
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </motion.section>
       ) : null}
 
-      {currentTab === 'calendar' ? (
-        <motion.section
-          className="student-class-panel"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="show"
-        >
-          <header className="student-class-panel__head">
-            <h2>Class Calendar</h2>
-            <p>Upcoming events and due dates for {classItem.subjectName}</p>
-          </header>
+        {currentTab === 'calendar' ? (
+          <motion.section
+            className="student-class-panel"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="show"
+          >
+            <header className="student-class-panel__head">
+              <h2>Class Calendar</h2>
+              <p>Upcoming events and due dates for {classItem.subjectName}</p>
+            </header>
 
-          {calendarRows.length === 0 ? (
-            <div className="teacher-class-workspace__empty">No upcoming events.</div>
-          ) : (
-            <div className="student-class-stack">
-              {calendarRows.map((entry) => {
-                const dayBadge = formatCalendarDay(entry.date);
-                return (
-                  <motion.article
-                    key={entry.id}
-                    className="student-class-calendar-row"
-                    data-kind={entry.kind}
-                    variants={staggerItem}
-                  >
-                    <div className="student-class-calendar-row__date">
-                      <strong>{dayBadge.day}</strong>
-                      <span>{dayBadge.month}</span>
-                    </div>
-                    <div className="student-class-calendar-row__copy">
-                      <h3>{entry.title}</h3>
-                      <p>{entry.subtitle}</p>
-                    </div>
-                    <span className="student-class-calendar-row__kind">
-                      {entry.kind === 'assessment'
-                        ? 'Assessment'
-                        : entry.kind === 'holiday'
-                          ? 'Holiday'
-                          : 'Event'}
-                    </span>
-                  </motion.article>
-                );
-              })}
+            {calendarRows.length === 0 ? (
+              <div className="teacher-class-workspace__empty">No upcoming events.</div>
+            ) : (
+              <div className="student-class-stack">
+                {calendarRows.map((entry) => {
+                  const dayBadge = formatCalendarDay(entry.date);
+                  return (
+                    <motion.article
+                      key={entry.id}
+                      className="student-class-calendar-row"
+                      data-kind={entry.kind}
+                      variants={staggerItem}
+                    >
+                      <div className="student-class-calendar-row__date">
+                        <strong>{dayBadge.day}</strong>
+                        <span>{dayBadge.month}</span>
+                      </div>
+                      <div className="student-class-calendar-row__copy">
+                        <h3>{entry.title}</h3>
+                        <p>{entry.subtitle}</p>
+                      </div>
+                      <span className="student-class-calendar-row__kind">
+                        {entry.kind === 'assessment'
+                          ? 'Assessment'
+                          : entry.kind === 'holiday'
+                            ? 'Holiday'
+                            : 'Event'}
+                      </span>
+                    </motion.article>
+                  );
+                })}
+              </div>
+            )}
+          </motion.section>
+        ) : null}
+      </ClassWorkspaceShell>
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) setHelpPage(0);
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog student-class-guide-dialog">
+          <DialogHeader>
+            <DialogTitle>Student guide: Class Page</DialogTitle>
+            <DialogDescription>
+              This guide explains each part of the class page in simple steps, with examples that match the student view.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-label="Class Page guide pages">
+            <span>{`Page ${helpPage + 1} of ${studentClassGuidePages.length}`}</span>
+            <div className="teacher-intervention-workspace__manual-dots">
+              {studentClassGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
             </div>
-          )}
-        </motion.section>
-      ) : null}
-    </ClassWorkspaceShell>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <div className="teacher-intervention-workspace__manual-copy">
+              <span className="teacher-intervention-workspace__manual-kicker">Class page tour</span>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+
+              <div className="route-guide-steps">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${activeGuidePage.title}-${step.action}-${index}`}
+                    className={`route-guide-step${step.tone ? ` is-${step.tone}` : ''}`}
+                  >
+                    <span className="route-guide-step__index">{index + 1}</span>
+                    <div>
+                      <strong>{step.action}</strong>
+                      <p>{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</div>
+            </div>
+
+            <StudentClassGuideScreenshot screen={activeGuidePage.screen} />
+          </div>
+
+          <DialogFooter className="teacher-intervention-workspace__manual-footer">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setHelpPage((current) => Math.max(0, current - 1))}
+              disabled={helpPage === 0}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Previous page
+            </Button>
+            <Button type="button" variant="ghost" aria-label="Close guide" onClick={() => setHelpOpen(false)}>
+              Close guide
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                setHelpPage((current) => Math.min(studentClassGuidePages.length - 1, current + 1))
+              }
+              disabled={helpPage === studentClassGuidePages.length - 1}
+            >
+              Next page
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -5,6 +5,7 @@ jest.mock('@/lib/api-client', () => ({
   api: {
     post: jest.fn(),
     get: jest.fn(),
+    patch: jest.fn(),
   },
 }));
 
@@ -59,6 +60,39 @@ describe('assessmentService', () => {
     expect(mockedApi.post).toHaveBeenCalledWith('/assessments/assessment-1/unsubmit-file-upload');
     expect(result.data.id).toBe('attempt-1');
     expect(result.data.isSubmitted).toBe(false);
+  });
+
+  it('uploads assessment question and option images through multipart form requests', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          imageUrl: '/api/assessments/questions/images/uploaded.png',
+        },
+      },
+    });
+
+    const file = new File(['img'], 'uploaded.png', { type: 'image/png' });
+
+    await assessmentService.uploadQuestionImage('question-1', file);
+    await assessmentService.uploadOptionImage('option-1', file);
+
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      1,
+      '/assessments/questions/question-1/image',
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    );
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      2,
+      '/assessments/options/option-1/image',
+      expect.any(FormData),
+      expect.objectContaining({
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }),
+    );
   });
 
   it('downloads teacher attachments through the authenticated api client', async () => {

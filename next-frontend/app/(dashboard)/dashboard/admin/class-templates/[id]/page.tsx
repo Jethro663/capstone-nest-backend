@@ -1,6 +1,6 @@
 'use client';
 
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -21,6 +21,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { normalizeRichText } from '@/lib/rich-text';
+import {
+  DEFAULT_MODULE_GRADIENT,
+  MODULE_GRADIENT_OPTIONS,
+  MODULE_STOCK_IMAGE_OPTIONS,
+} from '@/lib/module-cover-images';
 import {
   buildIndexKey,
   clearTemplateEditorDraft,
@@ -134,6 +139,21 @@ function reindexTemplateAssessments(assessments: ClassTemplateAssessment[]) {
   }));
 }
 
+function reindexTemplateModules(modules: ClassTemplateModule[]) {
+  return modules.map((module, index) => ({
+    ...module,
+    order: index + 1,
+  }));
+}
+
+function moveEntry<T>(list: T[], fromIndex: number, toIndex: number) {
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  if (!moved) return list;
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
 function formatTemplateAssessmentType(type: string | undefined) {
   switch (type) {
     case 'file_upload':
@@ -145,6 +165,15 @@ function formatTemplateAssessmentType(type: string | undefined) {
     default:
       return 'Quiz';
   }
+}
+
+function getModuleGradient(gradientId?: string) {
+  return (
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === DEFAULT_MODULE_GRADIENT)?.background ||
+    MODULE_GRADIENT_OPTIONS[0]?.background ||
+    'linear-gradient(135deg, #89a0c9 0%, #486ede 100%)'
+  );
 }
 
 export default function ClassTemplateEditorPage() {
@@ -170,6 +199,8 @@ export default function ClassTemplateEditorPage() {
   const [name, setName] = useState('');
   const [selectedModuleIndexes, setSelectedModuleIndexes] = useState<number[]>([]);
   const [moduleView, setModuleView] = useState<'cards' | 'compact'>('cards');
+  const [draggingModuleIndex, setDraggingModuleIndex] = useState<number | null>(null);
+  const [dropTargetModuleIndex, setDropTargetModuleIndex] = useState<number | null>(null);
 
   const savePayload = useMemo(
     () => ({ modules, assessments, announcements }),
@@ -409,7 +440,11 @@ export default function ClassTemplateEditorPage() {
 
   const removeSelectedModules = () => {
     if (!selectedModuleIndexes.length) return;
-    setModules((current) => current.filter((_, index) => !selectedModuleIndexes.includes(index)));
+    setModules((current) =>
+      reindexTemplateModules(
+        current.filter((_, index) => !selectedModuleIndexes.includes(index)),
+      ),
+    );
     setSelectedModuleIndexes([]);
   };
 
@@ -474,6 +509,55 @@ export default function ClassTemplateEditorPage() {
 
   const openModuleWorkspace = (moduleIndex: number) => {
     router.push(`/dashboard/admin/class-templates/${templateId}/modules/${buildIndexKey(moduleIndex)}`);
+  };
+
+  const handleModuleDragStart = (
+    event: ReactDragEvent<HTMLButtonElement>,
+    moduleIndex: number,
+  ) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(moduleIndex));
+    setDraggingModuleIndex(moduleIndex);
+  };
+
+  const handleModuleDragOver = (
+    event: ReactDragEvent<HTMLElement>,
+    moduleIndex: number,
+  ) => {
+    if (draggingModuleIndex === null || draggingModuleIndex === moduleIndex) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTargetModuleIndex(moduleIndex);
+  };
+
+  const handleModuleDrop = (
+    event: ReactDragEvent<HTMLElement>,
+    targetModuleIndex: number,
+  ) => {
+    event.preventDefault();
+    const sourceModuleIndex =
+      draggingModuleIndex ?? Number.parseInt(event.dataTransfer.getData('text/plain'), 10);
+    setDraggingModuleIndex(null);
+    setDropTargetModuleIndex(null);
+
+    if (
+      Number.isNaN(sourceModuleIndex) ||
+      sourceModuleIndex === targetModuleIndex ||
+      sourceModuleIndex < 0 ||
+      targetModuleIndex < 0
+    ) {
+      return;
+    }
+
+    setModules((current) =>
+      reindexTemplateModules(moveEntry(current, sourceModuleIndex, targetModuleIndex)),
+    );
+    setSelectedModuleIndexes([]);
+  };
+
+  const handleModuleDragEnd = () => {
+    setDraggingModuleIndex(null);
+    setDropTargetModuleIndex(null);
   };
 
   const openAnnouncementStudio = (announcementIndex: number) => {
@@ -735,12 +819,25 @@ export default function ClassTemplateEditorPage() {
               const description = summarizeRichText(module.description);
               const isSelected = selectedModuleIndexes.includes(moduleIndex);
               const accentColor = moduleIndex % 2 === 0 ? '#3d64de' : '#1ea673';
+              const mediaSource =
+                module.coverImageUrl ||
+                MODULE_STOCK_IMAGE_OPTIONS[moduleIndex % MODULE_STOCK_IMAGE_OPTIONS.length]?.imageUrl;
+              const imagePositionX = module.imagePositionX ?? 50;
+              const imagePositionY = module.imagePositionY ?? 50;
+              const imageScale = module.imageScale ?? 120;
+              const isImageTheme = module.themeKind === 'image' && Boolean(mediaSource);
 
               return (
                 <article
                   key={`${module.id ?? 'new'}-${moduleIndex}`}
-                  className="relative overflow-hidden rounded-3xl border border-[#c9d7ec] bg-white p-3 shadow-[0_12px_28px_-28px_rgba(17,41,88,0.45)]"
+                  className={`relative overflow-hidden rounded-3xl border bg-white p-3 shadow-[0_12px_28px_-28px_rgba(17,41,88,0.45)] transition ${
+                    dropTargetModuleIndex === moduleIndex
+                      ? 'border-[#6b82d9] ring-2 ring-[#d7e3ff]'
+                      : 'border-[#c9d7ec]'
+                  }`}
                   style={{ borderTop: `4px solid ${accentColor}` }}
+                  onDragOver={(event) => handleModuleDragOver(event, moduleIndex)}
+                  onDrop={(event) => handleModuleDrop(event, moduleIndex)}
                 >
                   <div
                     data-testid={`open-module-workspace-${moduleIndex}`}
@@ -769,19 +866,40 @@ export default function ClassTemplateEditorPage() {
                           type="button"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#d2ddec] bg-[#eff4fb] text-[#6d83a8]"
                           onClick={(event) => event.stopPropagation()}
+                          onDragStart={(event) => handleModuleDragStart(event, moduleIndex)}
+                          onDragEnd={handleModuleDragEnd}
+                          draggable
                           aria-label="Drag module"
+                          title="Drag to reorder"
                         >
                           <GripVertical className="h-3.5 w-3.5" />
                         </button>
                       </div>
 
-                      <div className="h-20 w-28 rounded-2xl bg-gradient-to-b from-[#b6c4d9] via-[#89a0c9] to-[#486ede] p-1.5">
-                        <div className="h-full rounded-xl border border-[#9ab1d4] bg-[rgba(255,255,255,0.22)] p-1.5">
+                      <div
+                        className="relative h-20 w-28 overflow-hidden rounded-2xl p-1.5"
+                        style={{
+                          background: isImageTheme ? getModuleGradient(module.gradientId) : getModuleGradient(module.gradientId),
+                        }}
+                      >
+                        {isImageTheme ? (
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              backgroundImage: `url(${mediaSource})`,
+                              backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
+                              backgroundRepeat: 'no-repeat',
+                              backgroundSize: `${imageScale}%`,
+                            }}
+                          />
+                        ) : null}
+                        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,25,54,0.1),rgba(7,25,54,0.42))]" />
+                        <div className="relative h-full rounded-xl border border-[rgba(255,255,255,0.3)] bg-[rgba(255,255,255,0.16)] p-1.5 backdrop-blur-[1px]">
                           <div className="space-y-1">
-                            <div className="h-1.5 w-4/5 rounded bg-[rgba(226,238,255,0.92)]" />
-                            <div className="h-1.5 w-3/4 rounded bg-[rgba(226,238,255,0.8)]" />
-                            <div className="h-1.5 w-2/3 rounded bg-[rgba(226,238,255,0.68)]" />
-                            <div className="mt-2.5 h-1.5 w-1/2 rounded bg-[rgba(226,238,255,0.72)]" />
+                            <div className="h-1.5 w-4/5 rounded bg-[rgba(255,255,255,0.92)]" />
+                            <div className="h-1.5 w-3/4 rounded bg-[rgba(255,255,255,0.78)]" />
+                            <div className="h-1.5 w-2/3 rounded bg-[rgba(255,255,255,0.64)]" />
+                            <div className="mt-2.5 h-1.5 w-1/2 rounded bg-[rgba(255,255,255,0.72)]" />
                           </div>
                         </div>
                       </div>

@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -67,6 +68,32 @@ export class TemplateQuestionOptionDto {
   @IsOptional()
   @IsInt()
   order?: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDisplayMode?: 'default' | 'expanded';
+
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(200)
+  imageZoom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionY?: number;
 }
 
 export class TemplateQuestionDto {
@@ -100,6 +127,28 @@ export class TemplateQuestionDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDisplayMode?: 'default' | 'expanded';
+
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(200)
+  imageZoom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionY?: number;
 
   @IsOptional()
   @IsArray()

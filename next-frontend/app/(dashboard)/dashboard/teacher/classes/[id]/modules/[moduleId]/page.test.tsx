@@ -560,6 +560,61 @@ describe('TeacherModuleDetailPage', () => {
     expect(submitButton).not.toBeDisabled();
   });
 
+  it('disables Give for attached draft assessments', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Module 1',
+          description: 'Desc',
+          order: 1,
+          isVisible: true,
+          isLocked: false,
+          teacherNotes: '',
+          sections: [
+            {
+              id: 'section-1',
+              moduleId: 'module-1',
+              title: 'Section A',
+              description: '',
+              order: 1,
+              items: [
+                {
+                  id: 'item-1',
+                  moduleSectionId: 'section-1',
+                  itemType: 'assessment',
+                  assessmentId: 'assessment-existing',
+                  order: 1,
+                  isVisible: true,
+                  isRequired: true,
+                  isGiven: false,
+                  assessment: {
+                    id: 'assessment-existing',
+                    classId: 'class-1',
+                    title: 'Draft Quiz',
+                    type: 'quiz',
+                    totalPoints: 10,
+                    isPublished: false,
+                  },
+                },
+              ],
+            },
+          ],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Draft Quiz');
+    expect(screen.getByRole('checkbox', { name: 'Give' })).toBeDisabled();
+  });
+
   it('attaches an existing library file instead of uploading a new pdf', async () => {
     render(<TeacherModuleDetailPage />);
 

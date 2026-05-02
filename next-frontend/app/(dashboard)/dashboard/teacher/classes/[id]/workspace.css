@@ -682,6 +682,81 @@
   opacity: 0.4;
 }
 
+.teacher-class-workspace__module-actions {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  align-self: center;
+}
+
+.teacher-class-workspace__module-core-action {
+  align-self: center;
+  min-height: 2.55rem;
+  padding-inline: 0.92rem;
+  white-space: nowrap;
+  box-shadow: 0 10px 18px -18px rgba(15, 23, 42, 0.45);
+}
+
+.teacher-class-workspace__module-action {
+  border: 1px solid #d2ddec;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 0.85rem;
+  background: #f9fbfe;
+  color: #435f86;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 10px 18px -18px rgba(15, 23, 42, 0.45);
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.teacher-class-workspace__module-action:hover {
+  background: #f0f5fb;
+  border-color: #c4d5ea;
+  box-shadow: 0 14px 24px -18px rgba(59, 88, 122, 0.4);
+  transform: translateY(-1px);
+}
+
+.teacher-class-workspace__module-action:disabled {
+  opacity: 0.56;
+  transform: none;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.teacher-class-workspace__module-action--design {
+  background: #f3f7ff;
+  border-color: #ccdaf2;
+  color: #31537f;
+}
+
+.teacher-class-workspace__module-action--design:hover {
+  background: #e9f1ff;
+  border-color: #b6cbed;
+  color: #243f63;
+}
+
+.teacher-class-workspace__module-action--delete {
+  background: #fff4f6;
+  border-color: #f0c2c8;
+  color: #bb2231;
+}
+
+.teacher-class-workspace__module-action--delete:hover {
+  background: #ffe9ed;
+  border-color: #e5a5ae;
+  color: #a11626;
+}
+
 .teacher-class-workspace__chips {
   display: flex;
   align-items: center;
@@ -1430,7 +1505,7 @@
 
 .teacher-module-modal__stock-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.42rem;
 }
 
@@ -1439,6 +1514,7 @@
   border-radius: 0.62rem;
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
   min-height: 4.6rem;
 }
 
@@ -1447,24 +1523,99 @@
   outline-offset: 1px;
 }
 
-.teacher-module-modal__upload input {
-  width: 100%;
+.teacher-module-modal__upload {
+  display: grid;
+  gap: 0.28rem;
 }
 
-.teacher-module-modal__sliders {
+.teacher-module-modal__upload input {
+  width: 100%;
+  border: 1px solid #d6e0ed;
+  border-radius: 0.72rem;
+  background: #f8fbff;
+  color: #456182;
+  min-height: 2.85rem;
+  padding: 0.38rem 0.48rem;
+}
+
+.teacher-module-modal__upload input::file-selector-button {
+  border: 1px solid #cfdced;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #25456d;
+  min-height: 2rem;
+  padding: 0.28rem 0.82rem;
+  margin-right: 0.72rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.teacher-module-modal__upload input:hover::file-selector-button {
+  background: #f0f5fb;
+  border-color: #bfd2e8;
+  color: #17385f;
+}
+
+.teacher-module-modal__upload input:focus-visible {
+  outline: 2px solid #1d4d93;
+  outline-offset: 2px;
+}
+
+.teacher-module-modal__upload small {
+  color: #6a7f9f;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.teacher-module-modal__cropper-shell {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teacher-module-modal__cropper-frame {
+  position: relative;
+  width: 100%;
+  min-height: 14rem;
+  border: 1px solid #d6e0ed;
+  border-radius: 0.85rem;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(236, 242, 252, 0.95), rgba(248, 251, 255, 0.95));
+}
+
+.teacher-module-modal__cropper-tools {
   display: grid;
   gap: 0.42rem;
 }
 
-.teacher-module-modal__sliders label {
+.teacher-module-modal__cropper-tools label {
   display: grid;
   grid-template-columns: 5.3rem minmax(0, 1fr);
   align-items: center;
   margin: 0;
 }
 
-.teacher-module-modal__sliders input[type='range'] {
+.teacher-module-modal__cropper-tools input[type='range'] {
   width: 100%;
+}
+
+.teacher-module-modal__cropper-reset {
+  width: fit-content;
+}
+
+.teacher-module-modal__error {
+  border: 1px solid #f0c2c8;
+  border-radius: 0.72rem;
+  background: #fff4f6;
+  color: #a11626;
+  padding: 0.72rem 0.82rem;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .teacher-class-workspace__calendar-board {
@@ -1665,6 +1816,16 @@
   }
 
   .teacher-class-workspace__ghost-icon {
+    justify-self: flex-end;
+  }
+
+  .teacher-class-workspace__module-actions {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .teacher-class-workspace__module-core-action {
     justify-self: flex-end;
   }
 

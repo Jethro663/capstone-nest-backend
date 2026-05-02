@@ -646,6 +646,18 @@
   text-decoration: none;
 }
 
+.ja-guide-trigger {
+  border-color: color-mix(in srgb, var(--student-accent) 18%, var(--ja-outline-soft));
+  background: color-mix(in srgb, var(--student-accent-soft) 58%, #ffffff);
+  color: color-mix(in srgb, var(--student-accent) 72%, var(--student-text-strong));
+}
+
+.ja-guide-trigger:hover {
+  border-color: color-mix(in srgb, var(--student-accent) 42%, var(--ja-outline-strong));
+  background: color-mix(in srgb, var(--student-accent-soft) 82%, #ffffff);
+  color: var(--student-text-strong);
+}
+
 .ja-thread-shell,
 .ja-session-empty,
 .ja-session-active,
@@ -1450,10 +1462,10 @@
 .ja-hub-layout.ask-mode,
 .ja-hub-layout.history-hidden,
 .ja-hub-layout.ask-mode.history-hidden {
-  width: 100%;
+  width: calc(100% + 3rem);
   height: calc(100dvh - 6.25rem);
   min-height: 680px;
-  margin: 0 auto;
+  margin: -1.5rem;
   display: flex;
   align-items: stretch;
   gap: 0;
@@ -1758,6 +1770,10 @@
   background: var(--student-elevated);
 }
 
+.ja-guide-trigger {
+  background: color-mix(in srgb, var(--student-accent-soft) 72%, #ffffff);
+}
+
 .ja-new-chat-button {
   border-color: color-mix(in srgb, var(--ja-reference-blue) 24%, var(--ja-reference-line));
   background: color-mix(in srgb, var(--student-accent-soft) 72%, #ffffff);
@@ -2001,8 +2017,14 @@
 .ja-bubble.ja {
   border: 1px solid var(--ja-reference-line);
   border-top-left-radius: 0.18rem;
-  background: var(--student-surface-soft);
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--student-elevated) 96%, #ffffff),
+      color-mix(in srgb, var(--student-surface-soft) 90%, #ffffff)
+    );
   color: var(--student-text-strong);
+  box-shadow: 0 20px 34px -28px rgba(15, 23, 42, 0.28);
 }
 
 .ja-bubble.ja-intro-bubble {
@@ -2019,16 +2041,168 @@
     );
 }
 
-.ja-bubble.user {
+.ja-bubble.user,
+.ja-bubble--student {
   border-top-right-radius: 0.18rem;
-  background: var(--ja-reference-blue-dark);
+  background: linear-gradient(120deg, #0f2245 0%, #132b57 100%);
   color: #ffffff;
+  box-shadow: 0 14px 24px -20px rgba(15, 34, 69, 0.72);
 }
 
 .ja-bubble.notice {
   border-color: #fac775;
   background: #faeeda;
   color: #633806;
+}
+
+.ja-bubble--grounded {
+  border-color: color-mix(in srgb, var(--ja-reference-blue) 14%, var(--ja-reference-line));
+}
+
+.ja-bubble--thin-evidence {
+  border-color: color-mix(in srgb, #f2b84b 48%, var(--ja-reference-line));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #fffaf0 92%, #ffffff),
+      color-mix(in srgb, #fdf1d9 82%, #ffffff)
+    );
+}
+
+.ja-bubble--guarded {
+  border-color: #fac775;
+}
+
+.ja-bubble--pending {
+  box-shadow: 0 18px 30px -24px rgba(15, 23, 42, 0.26);
+}
+
+.ja-bubble__meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ja-bubble__speaker {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.ja-bubble__speaker span {
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ja-reference-blue-dark);
+}
+
+.ja-bubble__speaker small {
+  color: var(--ja-reference-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.ja-bubble__content {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ja-bubble__content h1,
+.ja-bubble__content h2,
+.ja-bubble__content h3,
+.ja-bubble__content h4,
+.ja-bubble__content h5,
+.ja-bubble__content h6 {
+  margin: 0;
+  color: var(--student-text-strong);
+  line-height: 1.2;
+}
+
+.ja-bubble__content p,
+.ja-bubble__content ul,
+.ja-bubble__content ol {
+  margin: 0;
+}
+
+.ja-bubble__content ul,
+.ja-bubble__content ol {
+  padding-left: 1.1rem;
+}
+
+.ja-bubble__evidence {
+  margin-top: 0.9rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ja-bubble__evidence-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  color: var(--ja-reference-blue-dark);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.ja-bubble__evidence-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.ja-evidence-card {
+  padding: 0.72rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--ja-reference-blue) 12%, var(--ja-reference-line));
+  border-radius: 0.88rem;
+  background: color-mix(in srgb, var(--student-elevated) 90%, #ffffff);
+}
+
+.ja-evidence-card strong {
+  display: block;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--student-text-strong);
+}
+
+.ja-evidence-card p {
+  margin-top: 0.32rem;
+  color: var(--student-text);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.ja-evidence-card span {
+  display: inline-flex;
+  margin-top: 0.42rem;
+  color: var(--ja-reference-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.ja-bubble__actions {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.46rem;
+}
+
+.ja-bubble__action {
+  padding: 0.42rem 0.74rem;
+  border: 1px solid color-mix(in srgb, var(--ja-reference-blue) 16%, var(--ja-reference-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--student-elevated) 88%, #ffffff);
+  color: var(--ja-reference-blue-dark);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ja-bubble__action:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--ja-reference-blue) 28%, var(--ja-reference-line));
+  background: color-mix(in srgb, var(--student-accent-soft) 64%, #ffffff);
+  color: var(--student-text-strong);
 }
 
 .ja-msg-row.is-pending .ja-bubble {
@@ -2246,17 +2420,14 @@
 }
 
 @media (max-width: 920px) {
-  .ja-page-shell {
-    min-height: calc(100dvh - 4.5rem);
-    padding: 0.5rem;
-  }
-
   .ja-hub-layout,
   .ja-hub-layout.ask-mode,
   .ja-hub-layout.history-hidden,
   .ja-hub-layout.ask-mode.history-hidden {
+    width: calc(100% + 1rem);
     height: calc(100dvh - 5.5rem);
     min-height: 0;
+    margin: -0.5rem;
     flex-direction: column;
     border-radius: 1rem;
   }
@@ -2326,17 +2497,14 @@
 }
 
 @media (max-width: 640px) {
-  .ja-page-shell {
-    margin: -1rem;
-    padding: 0;
-  }
-
   .ja-hub-layout,
   .ja-hub-layout.ask-mode,
   .ja-hub-layout.history-hidden,
   .ja-hub-layout.ask-mode.history-hidden {
+    width: calc(100% + 2rem);
     height: calc(100dvh - 4.5rem);
     min-height: 0;
+    margin: -1rem;
     border-right: 0;
     border-left: 0;
     border-radius: 0;

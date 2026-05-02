@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -31,6 +32,8 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   minHeight?: number;
+  maxLength?: number;
+  toolbarActions?: ReactNode;
 }
 
 type ToolAction = {
@@ -47,6 +50,8 @@ export function RichTextEditor({
   placeholder = 'Write something...',
   className,
   minHeight = 140,
+  maxLength,
+  toolbarActions,
 }: RichTextEditorProps) {
   const editorRef = useRef<Editor | null>(null);
   const editor = useEditor({
@@ -146,6 +151,13 @@ export function RichTextEditor({
       editorRef.current = editorInstance;
     },
     onUpdate: ({ editor: editorInstance }) => {
+      if (typeof maxLength === 'number' && maxLength > 0) {
+        const plainTextLength = editorInstance.getText().length;
+        if (plainTextLength > maxLength) {
+          editorInstance.commands.setContent(normalizeRichText(value || ''), { emitUpdate: false });
+          return;
+        }
+      }
       onChange(normalizeRichText(editorInstance.getHTML()));
     },
   });
@@ -257,23 +269,26 @@ export function RichTextEditor({
   return (
     <div className={cn('rich-text-editor', className)}>
       <div className="rich-text-editor__toolbar" role="toolbar" aria-label="Formatting controls">
-        {tools.map((tool) => {
-          const Icon = tool.icon;
-          return (
-            <button
-              key={tool.label}
-              type="button"
-              className="rich-text-editor__tool"
-              onClick={tool.onClick}
-              disabled={tool.isDisabled}
-              data-active={tool.isActive ? 'true' : 'false'}
-              aria-label={tool.label}
-              title={tool.label}
-            >
-              <Icon className="h-4 w-4" />
-            </button>
-          );
-        })}
+        <div className="flex flex-1 flex-wrap gap-1">
+          {tools.map((tool) => {
+            const Icon = tool.icon;
+            return (
+              <button
+                key={tool.label}
+                type="button"
+                className="rich-text-editor__tool"
+                onClick={tool.onClick}
+                disabled={tool.isDisabled}
+                data-active={tool.isActive ? 'true' : 'false'}
+                aria-label={tool.label}
+                title={tool.label}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            );
+          })}
+        </div>
+        {toolbarActions ? <div className="ml-auto flex items-center gap-2">{toolbarActions}</div> : null}
       </div>
       <div className="rich-text-editor__surface" style={{ minHeight }}>
         <EditorContent editor={editor} />

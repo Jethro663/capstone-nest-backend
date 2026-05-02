@@ -134,6 +134,16 @@ export const assessmentService = {
     return data;
   },
 
+  /** POST /assessments/options/:id/image — Upload question option image */
+  async uploadOptionImage(optionId: string, file: File): Promise<{ success: boolean; message: string; data: { imageUrl: string } }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/assessments/options/${optionId}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
   /** POST /assessments/:assessmentId/teacher-attachment — Upload teacher reference file */
   async uploadTeacherAttachment(
     assessmentId: string,

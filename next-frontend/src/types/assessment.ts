@@ -92,6 +92,10 @@ export interface AssessmentQuestion {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
   options?: QuestionOption[];
 }
@@ -101,6 +105,11 @@ export interface QuestionOption {
   text: string;
   isCorrect: boolean;
   order: number;
+  imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
 }
 
 export interface CreateAssessmentDto {
@@ -167,8 +176,21 @@ export interface CreateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
-  options?: { text: string; isCorrect: boolean; order: number }[];
+  options?: {
+    text: string;
+    isCorrect: boolean;
+    order: number;
+    imageUrl?: string;
+    imageDisplayMode?: 'default' | 'expanded';
+    imageZoom?: number;
+    imagePositionX?: number;
+    imagePositionY?: number;
+  }[];
 }
 
 export interface UpdateQuestionDto {
@@ -178,8 +200,21 @@ export interface UpdateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
-  options?: { text: string; isCorrect: boolean; order: number }[];
+  options?: {
+    text: string;
+    isCorrect: boolean;
+    order: number;
+    imageUrl?: string;
+    imageDisplayMode?: 'default' | 'expanded';
+    imageZoom?: number;
+    imagePositionX?: number;
+    imagePositionY?: number;
+  }[];
 }
 
 export interface AssessmentAttempt {

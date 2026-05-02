@@ -4,6 +4,7 @@ import StudentAssessmentTakePage from './page';
 import { assessmentService } from '@/services/assessment-service';
 
 const replace = jest.fn();
+const studentObjectiveAssessmentSurfaceMock = jest.fn(() => null);
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'assessment-1' }),
@@ -25,6 +26,13 @@ jest.mock('framer-motion', () => ({
     div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   },
   useReducedMotion: () => true,
+}));
+
+jest.mock('@/components/student/assessment/StudentObjectiveAssessmentSurface', () => ({
+  StudentObjectiveAssessmentSurface: (props: unknown) => {
+    studentObjectiveAssessmentSurfaceMock(props);
+    return null;
+  },
 }));
 
 jest.mock('@/services/assessment-service', () => ({
@@ -130,5 +138,109 @@ describe('StudentAssessmentTakePage', () => {
     });
 
     expect(mockedAssessmentService.startAttempt).not.toHaveBeenCalled();
+  });
+
+  it('passes option image fields through to the student objective surface', async () => {
+    mockedAssessmentService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'assessment-1',
+        title: 'Choice Assessment',
+        classId: 'class-1',
+        type: 'quiz',
+        isPublished: true,
+        randomizeQuestions: false,
+        questions: [
+          {
+            id: 'question-1',
+            assessmentId: 'assessment-1',
+            type: 'multiple_choice',
+            content: '<p>Pick the image answer</p>',
+            points: 5,
+            order: 1,
+            imageUrl: '/api/assessments/questions/images/question.png',
+            imageDisplayMode: 'expanded',
+            imageZoom: 120,
+            imagePositionX: 35,
+            imagePositionY: 65,
+            options: [
+              {
+                id: 'option-1',
+                text: '',
+                imageUrl: '/api/assessments/questions/images/option.png',
+                imageDisplayMode: 'expanded',
+                imageZoom: 130,
+                imagePositionX: 20,
+                imagePositionY: 80,
+              },
+              {
+                id: 'option-2',
+                text: 'Text choice',
+              },
+            ],
+          },
+        ],
+      },
+    });
+    mockedAssessmentService.getOngoingAttempt.mockResolvedValue({
+      success: true,
+      message: 'ongoing',
+      data: {
+        attempt: {
+          id: 'attempt-1',
+          assessmentId: 'assessment-1',
+          studentId: 'student-1',
+          startedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          draftResponses: [],
+          questionOrder: ['question-1'],
+          lastQuestionIndex: 0,
+          violationCount: 0,
+        },
+        timeLimitMinutes: null,
+        strictMode: false,
+        timedQuestionsEnabled: false,
+      },
+    });
+
+    render(<StudentAssessmentTakePage />);
+
+    await waitFor(() => {
+      expect(studentObjectiveAssessmentSurfaceMock).toHaveBeenCalled();
+    });
+
+    const lastCall =
+      studentObjectiveAssessmentSurfaceMock.mock.calls[
+        studentObjectiveAssessmentSurfaceMock.mock.calls.length - 1
+      ]?.[0] as {
+      question: {
+        imageUrl?: string;
+        imageDisplayMode?: string;
+        imageZoom?: number;
+        imagePositionX?: number;
+        imagePositionY?: number;
+        options: Array<{
+          imageUrl?: string;
+          imageDisplayMode?: string;
+          imageZoom?: number;
+          imagePositionX?: number;
+          imagePositionY?: number;
+        }>;
+      };
+    };
+
+    expect(lastCall.question.imageUrl).toBe('/api/assessments/questions/images/question.png');
+    expect(lastCall.question.imageDisplayMode).toBe('expanded');
+    expect(lastCall.question.imageZoom).toBe(120);
+    expect(lastCall.question.imagePositionX).toBe(35);
+    expect(lastCall.question.imagePositionY).toBe(65);
+    expect(lastCall.question.options[0]).toMatchObject({
+      imageUrl: '/api/assessments/questions/images/option.png',
+      imageDisplayMode: 'expanded',
+      imageZoom: 130,
+      imagePositionX: 20,
+      imagePositionY: 80,
+    });
   });
 });

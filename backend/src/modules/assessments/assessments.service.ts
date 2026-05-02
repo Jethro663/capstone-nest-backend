@@ -206,6 +206,83 @@ export class AssessmentsService {
     return trimmed ? sanitizeRichTextHtml(trimmed) : null;
   }
 
+  private normalizeImageDisplayMode(value: unknown): 'default' | 'expanded' {
+    return value === 'expanded' ? 'expanded' : 'default';
+  }
+
+  private normalizeImageZoom(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 100;
+    return Math.min(Math.max(parsed, 50), 200);
+  }
+
+  private normalizeImagePosition(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 50;
+    return Math.min(Math.max(parsed, 0), 100);
+  }
+
+  private buildImageMetadata(
+    existing: Record<string, unknown> | null | undefined,
+    imageDisplayMode?: unknown,
+    imageZoom?: unknown,
+    imagePositionX?: unknown,
+    imagePositionY?: unknown,
+  ) {
+    return {
+      ...(existing && typeof existing === 'object' ? existing : {}),
+      imageDisplayMode: this.normalizeImageDisplayMode(imageDisplayMode),
+      imageZoom: this.normalizeImageZoom(imageZoom),
+      imagePositionX: this.normalizeImagePosition(imagePositionX),
+      imagePositionY: this.normalizeImagePosition(imagePositionY),
+    };
+  }
+
+  private decorateAssessmentOption(option: any) {
+    const metadata =
+      option?.metadata && typeof option.metadata === 'object'
+        ? (option.metadata as Record<string, unknown>)
+        : {};
+
+    return {
+      ...option,
+      imageUrl:
+        typeof option?.imageUrl === 'string'
+          ? option.imageUrl
+          : typeof metadata.imageUrl === 'string'
+            ? metadata.imageUrl
+            : null,
+      imageDisplayMode: this.normalizeImageDisplayMode(
+        metadata.imageDisplayMode,
+      ),
+      imageZoom: this.normalizeImageZoom(metadata.imageZoom),
+      imagePositionX: this.normalizeImagePosition(metadata.imagePositionX),
+      imagePositionY: this.normalizeImagePosition(metadata.imagePositionY),
+    };
+  }
+
+  private decorateAssessmentQuestion(question: any) {
+    const metadata =
+      question?.metadata && typeof question.metadata === 'object'
+        ? (question.metadata as Record<string, unknown>)
+        : {};
+
+    return {
+      ...question,
+      imageDisplayMode: this.normalizeImageDisplayMode(
+        metadata.imageDisplayMode,
+      ),
+      imageZoom: this.normalizeImageZoom(metadata.imageZoom),
+      imagePositionX: this.normalizeImagePosition(metadata.imagePositionX),
+      imagePositionY: this.normalizeImagePosition(metadata.imagePositionY),
+      options: Array.isArray(question?.options)
+        ? question.options.map((option: any) =>
+            this.decorateAssessmentOption(option),
+          )
+        : [],
+    };
+  }
+
   private sumRubricPoints(criteria: RubricCriterion[]) {
     return criteria.reduce((total, criterion) => total + criterion.points, 0);
   }
@@ -1311,12 +1388,16 @@ export class AssessmentsService {
 
     const sanitizedQuestions =
       viewerRole === 'student'
-        ? assessment.questions.map((question) =>
-            question.type === QuestionType.FILL_BLANK
-              ? { ...question, options: [] }
-              : question,
+        ? assessment.questions.map((question) => {
+            const decoratedQuestion = this.decorateAssessmentQuestion(question);
+            return question.type === QuestionType.FILL_BLANK
+              ? { ...decoratedQuestion, options: [] }
+              : decoratedQuestion;
+          },
           )
-        : assessment.questions;
+        : assessment.questions.map((question) =>
+            this.decorateAssessmentQuestion(question),
+          );
 
     const assessmentWithAttachment = {
       ...assessment,
@@ -2026,6 +2107,13 @@ export class AssessmentsService {
           createQuestionDto.explanation,
         ),
         imageUrl: createQuestionDto.imageUrl,
+        metadata: this.buildImageMetadata(
+          undefined,
+          createQuestionDto.imageDisplayMode,
+          createQuestionDto.imageZoom,
+          createQuestionDto.imagePositionX,
+          createQuestionDto.imagePositionY,
+        ),
         conceptTags: createQuestionDto.conceptTags,
       })
       .returning();
@@ -2036,8 +2124,16 @@ export class AssessmentsService {
         createQuestionDto.options.map((opt) => ({
           questionId: newQuestion.id,
           text: opt.text,
+          imageUrl: opt.imageUrl,
           isCorrect: opt.isCorrect,
           order: opt.order,
+          metadata: this.buildImageMetadata(
+            undefined,
+            opt.imageDisplayMode,
+            opt.imageZoom,
+            opt.imagePositionX,
+            opt.imagePositionY,
+          ),
         })),
       );
     }
@@ -2086,7 +2182,7 @@ export class AssessmentsService {
       throw new NotFoundException(`Question with ID "${questionId}" not found`);
     }
 
-    return question;
+    return this.decorateAssessmentQuestion(question);
   }
 
   /**
@@ -2121,6 +2217,10 @@ export class AssessmentsService {
       updateQuestionDto.isRequired !== undefined ||
       updateQuestionDto.explanation !== undefined ||
       updateQuestionDto.imageUrl !== undefined ||
+      updateQuestionDto.imageDisplayMode !== undefined ||
+      updateQuestionDto.imageZoom !== undefined ||
+      updateQuestionDto.imagePositionX !== undefined ||
+      updateQuestionDto.imagePositionY !== undefined ||
       updateQuestionDto.conceptTags !== undefined
     ) {
       const setData: Record<string, any> = { updatedAt: new Date() };
@@ -2139,6 +2239,20 @@ export class AssessmentsService {
         );
       if (updateQuestionDto.imageUrl !== undefined)
         setData.imageUrl = updateQuestionDto.imageUrl;
+      if (
+        updateQuestionDto.imageDisplayMode !== undefined ||
+        updateQuestionDto.imageZoom !== undefined ||
+        updateQuestionDto.imagePositionX !== undefined ||
+        updateQuestionDto.imagePositionY !== undefined
+      ) {
+        setData.metadata = this.buildImageMetadata(
+          question.metadata as Record<string, unknown> | undefined,
+          updateQuestionDto.imageDisplayMode,
+          updateQuestionDto.imageZoom,
+          updateQuestionDto.imagePositionX,
+          updateQuestionDto.imagePositionY,
+        );
+      }
       if (updateQuestionDto.conceptTags !== undefined)
         setData.conceptTags = updateQuestionDto.conceptTags;
 
@@ -2161,8 +2275,16 @@ export class AssessmentsService {
           updateQuestionDto.options.map((opt) => ({
             questionId,
             text: opt.text,
+            imageUrl: opt.imageUrl,
             isCorrect: opt.isCorrect,
             order: opt.order,
+            metadata: this.buildImageMetadata(
+              undefined,
+              opt.imageDisplayMode,
+              opt.imageZoom,
+              opt.imagePositionX,
+              opt.imagePositionY,
+            ),
           })),
         );
       }
@@ -2199,6 +2321,75 @@ export class AssessmentsService {
     });
 
     return updatedQuestion;
+  }
+
+  async updateQuestionOptionImage(
+    optionId: string,
+    imageUrl: string | null,
+    currentUser: any,
+  ) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const option = await this.db.query.assessmentQuestionOptions.findFirst({
+      where: eq(assessmentQuestionOptions.id, optionId),
+    });
+
+    if (!option) {
+      throw new NotFoundException(
+        `Question option with ID "${optionId}" not found`,
+      );
+    }
+
+    const question = await this.getQuestionById(option.questionId);
+    const assessment = await this.getAssessmentById(question.assessmentId);
+
+    if (role === 'teacher' && assessment.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only manage questions for your own class assessments',
+      );
+    }
+
+    await this.db
+      .update(assessmentQuestionOptions)
+      .set({
+        imageUrl,
+        metadata: this.buildImageMetadata(
+          option.metadata as Record<string, unknown> | undefined,
+          (option.metadata as Record<string, unknown> | undefined)
+            ?.imageDisplayMode,
+          (option.metadata as Record<string, unknown> | undefined)?.imageZoom,
+          (option.metadata as Record<string, unknown> | undefined)
+            ?.imagePositionX,
+          (option.metadata as Record<string, unknown> | undefined)
+            ?.imagePositionY,
+        ),
+      })
+      .where(eq(assessmentQuestionOptions.id, optionId));
+
+    await this.ragIndexingService.queueClassReindex(assessment.classId, {
+      reason: 'assessment_question_option_updated',
+      actorId: userId,
+      source: 'assessments.updateQuestionOptionImage',
+    });
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.question_option.updated',
+      targetType: 'assessment_question_option',
+      targetId: optionId,
+      metadata: {
+        assessmentId: question.assessmentId,
+        classId: assessment.classId,
+        imageUrl,
+      },
+    });
+
+    return this.getQuestionById(question.id);
   }
 
   /**

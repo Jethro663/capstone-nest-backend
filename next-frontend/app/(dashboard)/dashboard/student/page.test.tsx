@@ -1,6 +1,6 @@
 'use client';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentDashboardPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -295,5 +295,144 @@ describe('StudentDashboardPage', () => {
     expect(screen.getByText('Activity 1.1')).toBeInTheDocument();
     expect(screen.queryByText('Short Quiz #1')).not.toBeInTheDocument();
     expect(screen.getByText('You have 1 pending task today')).toBeInTheDocument();
+  });
+
+  it('opens the main dashboard guide, covers every page, and closes it', async () => {
+    mockedClassService.getByStudent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          section: { id: 'section-1', name: 'Rizal', gradeLevel: 'Grade 10' },
+          teacher: { id: 'teacher-1', firstName: 'Lopez', lastName: 'Santos' },
+          schedules: [
+            {
+              id: 'sched-1',
+              days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+              startTime: '08:00',
+              endTime: '09:00',
+            },
+          ],
+        },
+      ],
+    });
+
+    mockedLessonService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'lesson-1',
+          classId: 'class-1',
+          title: 'Linear Equations',
+          order: 1,
+          isDraft: false,
+        },
+      ],
+    });
+
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-1',
+          classId: 'class-1',
+          title: 'Algebra Quiz',
+          type: 'assignment',
+          isPublished: true,
+          dueDate: '2026-06-18T00:00:00.000Z',
+        },
+      ],
+    });
+
+    mockedAssessmentService.getStudentAttempts.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+      count: 0,
+    });
+
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'ann-1',
+          classId: 'class-1',
+          title: 'Science Fair Prep',
+          content: 'Bring your project materials this Friday.',
+          isPinned: false,
+          isArchived: false,
+          createdAt: '2026-04-03T00:00:00.000Z',
+        },
+      ],
+    });
+
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'event-1',
+          eventType: 'holiday_break',
+          schoolYear: '2025-2026',
+          title: 'Midyear Break',
+          startsAt: '2026-04-15T00:00:00.000Z',
+          endsAt: '2026-04-18T00:00:00.000Z',
+          allDay: true,
+        },
+      ],
+    });
+
+    render(<StudentDashboardPage />);
+
+    await screen.findByRole('heading', { name: 'Your Learning Hub' });
+    fireEvent.click(screen.getByRole('button', { name: /dashboard help/i }));
+
+    expect(await screen.findByText('Student guide: Main Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Start here on your main dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Dashboard buttons')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 2 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Check pending tasks before anything else')).toBeInTheDocument();
+    expect(screen.getByText('Task card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 3 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Use recent lessons for quick review')).toBeInTheDocument();
+    expect(screen.getByText('Open lesson')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 4 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Read your day schedule for today only')).toBeInTheDocument();
+    expect(screen.getByText('Class details')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Use the calendar and event list together')).toBeInTheDocument();
+    expect(screen.getByText('Event list')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(screen.getByText('Page 6 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Do not skip reminders and school notices')).toBeInTheDocument();
+    expect(screen.getByText('Reminder popup')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close guide/i }));
+    await waitFor(() => {
+      expect(screen.queryByText('Student guide: Main Dashboard')).not.toBeInTheDocument();
+    });
   });
 });

@@ -1,0 +1,1162 @@
+[
+  {
+    "index": 25,
+    "style": "Heading 1",
+    "text": "LIST OF FIGURES"
+  },
+  {
+    "index": 26,
+    "style": "table of figures",
+    "text": "Figure 1: System Architecture\t44"
+  },
+  {
+    "index": 27,
+    "style": "table of figures",
+    "text": "Figure 2. The Agile Development\t48"
+  },
+  {
+    "index": 28,
+    "style": "table of figures",
+    "text": "Figure 3: Use Case Diagram for Nexora Web Application\t56"
+  },
+  {
+    "index": 29,
+    "style": "table of figures",
+    "text": "Figure 4: Use Case Diagram for Nexora Mobile Application\t56"
+  },
+  {
+    "index": 30,
+    "style": "table of figures",
+    "text": "Figure 5: Functional Decomposition Diagram of the Admin Portal\t101"
+  },
+  {
+    "index": 31,
+    "style": "table of figures",
+    "text": "Figure 6: Functional Decomposition Diagram of the Teacher Portal\t101"
+  },
+  {
+    "index": 32,
+    "style": "table of figures",
+    "text": "Figure 7: Functional Decomposition Diagram of the Student Portal\t102"
+  },
+  {
+    "index": 33,
+    "style": "table of figures",
+    "text": "Figure 8: Mobile Login & OTP Verification\t103"
+  },
+  {
+    "index": 34,
+    "style": "table of figures",
+    "text": "Figure 9: Process Flow of Mobile Forgot Password and Account Recovery\t104"
+  },
+  {
+    "index": 35,
+    "style": "table of figures",
+    "text": "Figure 10: Process Flow of View Dashboard and \"Continue Learning\" Logic\t105"
+  },
+  {
+    "index": 36,
+    "style": "table of figures",
+    "text": "Figure 11: Process Flow of View Modules and 30-Second Lesson Completion Tracking\t106"
+  },
+  {
+    "index": 37,
+    "style": "table of figures",
+    "text": "Figure 12: Process Flow of Taking Assessments and Summative Submission\t107"
+  },
+  {
+    "index": 38,
+    "style": "table of figures",
+    "text": "Figure 13: Process Flow of LXP Remedial Access and 60% Mastery Threshold Gating\t108"
+  },
+  {
+    "index": 39,
+    "style": "table of figures",
+    "text": "Figure 14: Process Flow of RAG-Based Interaction with JAKIPIR AI Mentor\t109"
+  },
+  {
+    "index": 40,
+    "style": "table of figures",
+    "text": "Figure 15: Process Flow of View Performance Analytics and Quarterly Trends\t110"
+  },
+  {
+    "index": 41,
+    "style": "table of figures",
+    "text": "Figure 16: Process Flow of Mobile Profile Management and Data Persistence\t111"
+  },
+  {
+    "index": 42,
+    "style": "table of figures",
+    "text": "Figure 17: Process Flow of Web Login and Dashboard Navigation\t112"
+  },
+  {
+    "index": 43,
+    "style": "table of figures",
+    "text": "Figure 18: Process Flow of Web Course Browsing and Filtering\t113"
+  },
+  {
+    "index": 44,
+    "style": "table of figures",
+    "text": "Figure 19: Process Flow of Assessment Taking with Out-of-Focus Warning Logic\t114"
+  },
+  {
+    "index": 45,
+    "style": "table of figures",
+    "text": "Figure 20: Process Flow of Discussion Board Participation and Thread Replies\t115"
+  },
+  {
+    "index": 46,
+    "style": "table of figures",
+    "text": "Figure 21: Process Flow of Web Profile Management and Account Locking\t116"
+  },
+  {
+    "index": 47,
+    "style": "table of figures",
+    "text": "Figure 22: Process Flow of Managing Classes and Instructional Materials\t117"
+  },
+  {
+    "index": 48,
+    "style": "table of figures",
+    "text": "Figure 23: Process Flow of AI PDF Extraction and Layout-Aware Section Application\t118"
+  },
+  {
+    "index": 49,
+    "style": "table of figures",
+    "text": "Figure 24: Process Flow of AI Quiz Drafting and Assessment Studio Workspace\t119"
+  },
+  {
+    "index": 50,
+    "style": "table of figures",
+    "text": "Figure 25: Process Flow of Asynchronous AI Job Monitoring and Status Updates\t120"
+  },
+  {
+    "index": 51,
+    "style": "table of figures",
+    "text": "Figure 26: Process Flow of Class Record Synchronization and Spreadsheet Management\t121"
+  },
+  {
+    "index": 52,
+    "style": "table of figures",
+    "text": "Figure 27: Process Flow of Student Intervention Triage and Outcome Tracking\t122"
+  },
+  {
+    "index": 53,
+    "style": "table of figures",
+    "text": "Figure 28: Process Flow of Learning Gap Analysis and Competency Heatmap Generation\t123"
+  },
+  {
+    "index": 54,
+    "style": "table of figures",
+    "text": "Figure 29: Process Flow of Academic Report Generation and Data Export\t124"
+  },
+  {
+    "index": 55,
+    "style": "table of figures",
+    "text": "Figure 30: Process Flow of Creating Class Announcements and Discussion Threads\t125"
+  },
+  {
+    "index": 56,
+    "style": "table of figures",
+    "text": "Figure 31: Process Flow of Admin Dashboard Overview and Quick Route Navigation\t126"
+  },
+  {
+    "index": 57,
+    "style": "table of figures",
+    "text": "Figure 32: Process Flow of User Lifecycle Management (Create, Suspend, Purge)\t127"
+  },
+  {
+    "index": 58,
+    "style": "table of figures",
+    "text": "Figure 33: Process Flow of Admin-Triggered User Password Reset\t128"
+  },
+  {
+    "index": 59,
+    "style": "table of figures",
+    "text": "Figure 34: Process Flow of Section Creation and Roster Management\t129"
+  },
+  {
+    "index": 60,
+    "style": "table of figures",
+    "text": "Figure 35: Process Flow of Bulk Roster Import (CSV/Excel) and Validation Logic\t130"
+  },
+  {
+    "index": 61,
+    "style": "table of figures",
+    "text": "Figure 36: Process Flow of School Calendar and Event Timeline Management\t131"
+  },
+  {
+    "index": 62,
+    "style": "table of figures",
+    "text": "Figure 37: Process Flow of System Diagnostics and Dependency Health Checks\t132"
+  },
+  {
+    "index": 63,
+    "style": "table of figures",
+    "text": "Figure 38: Process Flow of Audit Trail Review and Security Log Filtering\t133"
+  },
+  {
+    "index": 64,
+    "style": "table of figures",
+    "text": "Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)\t134"
+  },
+  {
+    "index": 70,
+    "style": "Heading 1",
+    "text": "LIST OF TABLES"
+  },
+  {
+    "index": 71,
+    "style": "table of figures",
+    "text": "Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)\t21"
+  },
+  {
+    "index": 72,
+    "style": "table of figures",
+    "text": "Table 2: Gap Analysis Table of Related System Applications\t33"
+  },
+  {
+    "index": 73,
+    "style": "table of figures",
+    "text": "Table 3: Software Requirements\t38"
+  },
+  {
+    "index": 74,
+    "style": "table of figures",
+    "text": "Table 4: Hardware Specifications\t40"
+  },
+  {
+    "index": 75,
+    "style": "table of figures",
+    "text": "Table 5: Agile Development Phases, Activities, and List of Deliverables\t48"
+  },
+  {
+    "index": 76,
+    "style": "table of figures",
+    "text": "Table 6: Functional Requirements for Analysis (Administrators and Teachers)\t50"
+  },
+  {
+    "index": 77,
+    "style": "table of figures",
+    "text": "Table 7: Functional Requirements for Analysis (Students)\t52"
+  },
+  {
+    "index": 78,
+    "style": "table of figures",
+    "text": "Table 8: Technical and Operational Constraints\t54"
+  },
+  {
+    "index": 79,
+    "style": "table of figures",
+    "text": "Table 9: Use Case Narratives of Login\t57"
+  },
+  {
+    "index": 80,
+    "style": "table of figures",
+    "text": "Table 10: Use Case Narratives of Dashboard\t59"
+  },
+  {
+    "index": 81,
+    "style": "table of figures",
+    "text": "Table 11: Use Case Narratives of My Courses\t60"
+  },
+  {
+    "index": 82,
+    "style": "table of figures",
+    "text": "Table 12: Use Case Narratives of View Modules (Mobile & Web)\t61"
+  },
+  {
+    "index": 83,
+    "style": "table of figures",
+    "text": "Table 13: Use Case Narratives of View and Complete Assessments\t62"
+  },
+  {
+    "index": 84,
+    "style": "table of figures",
+    "text": "Table 14: Use Case Narratives of Track Performance\t63"
+  },
+  {
+    "index": 85,
+    "style": "table of figures",
+    "text": "Table 15: Use Case Narratives of Access LXP\t64"
+  },
+  {
+    "index": 86,
+    "style": "table of figures",
+    "text": "Table 16: Use Case Narratives of AI Mentor\t65"
+  },
+  {
+    "index": 87,
+    "style": "table of figures",
+    "text": "Table 17: Use Case Narratives of Student Profile\t66"
+  },
+  {
+    "index": 88,
+    "style": "table of figures",
+    "text": "Table 18: Use Case Narratives of Student Profile\t67"
+  },
+  {
+    "index": 89,
+    "style": "table of figures",
+    "text": "Table 19: Use Case Narratives of Logout\t68"
+  },
+  {
+    "index": 90,
+    "style": "table of figures",
+    "text": "Table 20: Use Case Narratives of View My Classes\t69"
+  },
+  {
+    "index": 91,
+    "style": "table of figures",
+    "text": "Table 21: Use Case Narratives of Manage Class Lessons\t70"
+  },
+  {
+    "index": 92,
+    "style": "table of figures",
+    "text": "Table 22: Use Case Narratives of Upload Learning Modules\t71"
+  },
+  {
+    "index": 93,
+    "style": "table of figures",
+    "text": "Table 23: Use Case Narratives of Create and Manage Assignments\t72"
+  },
+  {
+    "index": 94,
+    "style": "table of figures",
+    "text": "Table 24: Use Case Narratives of Disccusion Board (Teacher)\t73"
+  },
+  {
+    "index": 95,
+    "style": "table of figures",
+    "text": "Table 25: Use Case Narratives of Manage Class Record\t74"
+  },
+  {
+    "index": 96,
+    "style": "table of figures",
+    "text": "Table 26: Use Case Narratives of Manage Class Roster\t75"
+  },
+  {
+    "index": 97,
+    "style": "table of figures",
+    "text": "Table 27: Use Case Narratives of AI Draft Quiz Workspace\t76"
+  },
+  {
+    "index": 98,
+    "style": "table of figures",
+    "text": "Table 28: Use Case Narratives of AI Extraction\t77"
+  },
+  {
+    "index": 99,
+    "style": "table of figures",
+    "text": "Table 29: Use Case Narratives of Class Announcement\t78"
+  },
+  {
+    "index": 100,
+    "style": "table of figures",
+    "text": "Table 30: Use Case Narratives of Student Interventions\t79"
+  },
+  {
+    "index": 101,
+    "style": "table of figures",
+    "text": "Table 31: Use Case Narratives of Student Performance\t80"
+  },
+  {
+    "index": 102,
+    "style": "table of figures",
+    "text": "Table 32: Use Case Narratives of Generate Reports\t81"
+  },
+  {
+    "index": 103,
+    "style": "table of figures",
+    "text": "Table 33: Use Case Narratives of Manage Teacher Profile\t82"
+  },
+  {
+    "index": 104,
+    "style": "table of figures",
+    "text": "Table 34: Use Case Narratives of View My Section\t83"
+  },
+  {
+    "index": 105,
+    "style": "table of figures",
+    "text": "Table 35: Use Case Narratives of Nexora Library\t84"
+  },
+  {
+    "index": 106,
+    "style": "table of figures",
+    "text": "Table 36: Use Case Narratives of Dashboard (Admin)\t86"
+  },
+  {
+    "index": 107,
+    "style": "table of figures",
+    "text": "Table 37: Use Case Narratives of System Diagnostics\t87"
+  },
+  {
+    "index": 108,
+    "style": "table of figures",
+    "text": "Table 38: Use Case Narratives of Manage Users\t88"
+  },
+  {
+    "index": 109,
+    "style": "table of figures",
+    "text": "Table 39: Use Case Narratives of Manage Sections\t89"
+  },
+  {
+    "index": 110,
+    "style": "table of figures",
+    "text": "Table 40: Use Case Narratives of Manage School Calendar\t90"
+  },
+  {
+    "index": 111,
+    "style": "table of figures",
+    "text": "Table 41: Use Case Narratives of Nexora Library (Administrator)\t91"
+  },
+  {
+    "index": 112,
+    "style": "table of figures",
+    "text": "Table 42: Use Case Narratives of Import Rosters\t92"
+  },
+  {
+    "index": 113,
+    "style": "table of figures",
+    "text": "Table 43: Use Case Narratives of Reports (Administrator)\t93"
+  },
+  {
+    "index": 114,
+    "style": "table of figures",
+    "text": "Table 44: Use Case Narratives of Evaluations (Administrator)\t94"
+  },
+  {
+    "index": 115,
+    "style": "table of figures",
+    "text": "Table 45: Use Case Narratives of Announcement (Administrator)\t95"
+  },
+  {
+    "index": 116,
+    "style": "table of figures",
+    "text": "Table 46: Use Case Narratives of AI Chatbot (Administrator)\t96"
+  },
+  {
+    "index": 117,
+    "style": "table of figures",
+    "text": "Table 47: Use Case Narratives of Audit Trail\t97"
+  },
+  {
+    "index": 118,
+    "style": "table of figures",
+    "text": "Table 48: Use Case Narratives of System Settings\t98"
+  },
+  {
+    "index": 119,
+    "style": "table of figures",
+    "text": "Table 49: Use Case Narratives of Profile (Administrator)\t99"
+  },
+  {
+    "index": 138,
+    "style": "Heading 1",
+    "text": "CHAPTER I \nINTRODUCTION"
+  },
+  {
+    "index": 153,
+    "style": "Heading 2",
+    "text": "1.1 PROJECT CONTEXT"
+  },
+  {
+    "index": 160,
+    "style": "Heading 2",
+    "text": "1.2 PURPOSE AND DESCRIPTION"
+  },
+  {
+    "index": 169,
+    "style": "Heading 2",
+    "text": "1.3 OBJECTIVES"
+  },
+  {
+    "index": 182,
+    "style": "Heading 2",
+    "text": "1.4 SCOPE AND DELIMITATION"
+  },
+  {
+    "index": 206,
+    "style": "Heading 1",
+    "text": "CHAPTER 2\nREVIEW OF RELATED LITERATURE AND SYSTEMS"
+  },
+  {
+    "index": 208,
+    "style": "Heading 2",
+    "text": "2.1 RELATED LITERATURE/STUDIES"
+  },
+  {
+    "index": 216,
+    "style": "Caption",
+    "text": "Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)"
+  },
+  {
+    "index": 217,
+    "style": "Normal",
+    "text": "Table 1 synthesizes the fundamental functional and philosophical differences between traditional Learning Management Systems and Learning Experience Platforms, based on the reviewed literature."
+  },
+  {
+    "index": 246,
+    "style": "Heading 2",
+    "text": "2.2 RELATED SYSTEMS"
+  },
+  {
+    "index": 264,
+    "style": "Caption",
+    "text": "Table 2: Gap Analysis Table of Related System Applications"
+  },
+  {
+    "index": 265,
+    "style": "Normal",
+    "text": "Table 2 details a comprehensive comparative analysis of the systems against the specific functionalities proposed for the present study. This analysis isolates the technological gaps that Nexora intends to fill within the educational technology landscape."
+  },
+  {
+    "index": 270,
+    "style": "Heading 2",
+    "text": "2.3 SYNTHESIS"
+  },
+  {
+    "index": 286,
+    "style": "Heading 1",
+    "text": "CHAPTER 3"
+  },
+  {
+    "index": 288,
+    "style": "Heading 1",
+    "text": "TECHNICAL BACKGROUND"
+  },
+  {
+    "index": 289,
+    "style": "Heading 2",
+    "text": "3.1 DETAILS OF THE TECHNOLOGY TO BE USED"
+  },
+  {
+    "index": 296,
+    "style": "Caption",
+    "text": "Table 3: Software Requirements"
+  },
+  {
+    "index": 297,
+    "style": "Normal",
+    "text": "Table 3 details the software stack required for the development and deployment of the Nexora ecosystem, spanning the frontend, backend, and AI service layers."
+  },
+  {
+    "index": 311,
+    "style": "Caption",
+    "text": "Table 4: Hardware Specifications"
+  },
+  {
+    "index": 312,
+    "style": "Normal",
+    "text": "Table 4 outlines the hardware baseline required for developers to build the system and for schools to implement the platform effectively."
+  },
+  {
+    "index": 329,
+    "style": "Heading 2",
+    "text": "3.2 PROJECT TECHNICAL DESCRIPTION"
+  },
+  {
+    "index": 339,
+    "style": "Caption",
+    "text": "Figure 1: System Architecture"
+  },
+  {
+    "index": 371,
+    "style": "Heading 1",
+    "text": "CHAPTER 4\nMETHODOLOGY, RESULTS AND DISCUSSION"
+  },
+  {
+    "index": 373,
+    "style": "Heading 2",
+    "text": "4.1 REQUIREMENTS ANALYSIS AND DOCUMENTATION"
+  },
+  {
+    "index": 380,
+    "style": "Caption",
+    "text": "Figure 2. The Agile Development"
+  },
+  {
+    "index": 383,
+    "style": "Caption",
+    "text": "Table 5: Agile Development Phases, Activities, and List of Deliverables"
+  },
+  {
+    "index": 388,
+    "style": "Caption",
+    "text": "Table 6: Functional Requirements for Analysis (Administrators and Teachers)"
+  },
+  {
+    "index": 392,
+    "style": "Caption",
+    "text": "Table 7: Functional Requirements for Analysis (Students)"
+  },
+  {
+    "index": 396,
+    "style": "Caption",
+    "text": "Table 8: Technical and Operational Constraints"
+  },
+  {
+    "index": 400,
+    "style": "Heading 2",
+    "text": "4.2 DESIGN OF SOFTWARE, SYSTEMS, PRODUCT, AND/OR PROCESSES"
+  },
+  {
+    "index": 403,
+    "style": "Caption",
+    "text": "Figure 3: Use Case Diagram for Nexora Web Application"
+  },
+  {
+    "index": 404,
+    "style": "Caption",
+    "text": "Figure 4: Use Case Diagram for Nexora Mobile Application"
+  },
+  {
+    "index": 413,
+    "style": "Caption",
+    "text": "Table 9: Use Case Narratives of Login"
+  },
+  {
+    "index": 415,
+    "style": "Caption",
+    "text": "Table 10: Use Case Narratives of Dashboard"
+  },
+  {
+    "index": 417,
+    "style": "Caption",
+    "text": "Table 11: Use Case Narratives of My Courses"
+  },
+  {
+    "index": 419,
+    "style": "Caption",
+    "text": "Table 12: Use Case Narratives of View Modules (Mobile & Web)"
+  },
+  {
+    "index": 421,
+    "style": "Caption",
+    "text": "Table 13: Use Case Narratives of View and Complete Assessments"
+  },
+  {
+    "index": 423,
+    "style": "Caption",
+    "text": "Table 14: Use Case Narratives of Track Performance"
+  },
+  {
+    "index": 425,
+    "style": "Caption",
+    "text": "Table 15: Use Case Narratives of Access LXP"
+  },
+  {
+    "index": 427,
+    "style": "Caption",
+    "text": "Table 16: Use Case Narratives of AI Mentor"
+  },
+  {
+    "index": 429,
+    "style": "Caption",
+    "text": "Table 17: Use Case Narratives of Student Profile"
+  },
+  {
+    "index": 431,
+    "style": "Caption",
+    "text": "Table 18: Use Case Narratives of Student Profile"
+  },
+  {
+    "index": 433,
+    "style": "Caption",
+    "text": "Table 19: Use Case Narratives of Logout"
+  },
+  {
+    "index": 436,
+    "style": "Caption",
+    "text": "Table 20: Use Case Narratives of View My Classes"
+  },
+  {
+    "index": 438,
+    "style": "Caption",
+    "text": "Table 21: Use Case Narratives of Manage Class Lessons"
+  },
+  {
+    "index": 440,
+    "style": "Caption",
+    "text": "Table 22: Use Case Narratives of Upload Learning Modules"
+  },
+  {
+    "index": 442,
+    "style": "Caption",
+    "text": "Table 23: Use Case Narratives of Create and Manage Assignments"
+  },
+  {
+    "index": 444,
+    "style": "Caption",
+    "text": "Table 24: Use Case Narratives of Disccusion Board (Teacher)"
+  },
+  {
+    "index": 446,
+    "style": "Caption",
+    "text": "Table 25: Use Case Narratives of Manage Class Record"
+  },
+  {
+    "index": 448,
+    "style": "Caption",
+    "text": "Table 26: Use Case Narratives of Manage Class Roster"
+  },
+  {
+    "index": 450,
+    "style": "Caption",
+    "text": "Table 27: Use Case Narratives of AI Draft Quiz Workspace"
+  },
+  {
+    "index": 452,
+    "style": "Caption",
+    "text": "Table 28: Use Case Narratives of AI Extraction"
+  },
+  {
+    "index": 454,
+    "style": "Caption",
+    "text": "Table 29: Use Case Narratives of Class Announcement"
+  },
+  {
+    "index": 456,
+    "style": "Caption",
+    "text": "Table 30: Use Case Narratives of Student Interventions"
+  },
+  {
+    "index": 458,
+    "style": "Caption",
+    "text": "Table 31: Use Case Narratives of Student Performance"
+  },
+  {
+    "index": 460,
+    "style": "Caption",
+    "text": "Table 32: Use Case Narratives of Generate Reports"
+  },
+  {
+    "index": 462,
+    "style": "Caption",
+    "text": "Table 33: Use Case Narratives of Manage Teacher Profile"
+  },
+  {
+    "index": 464,
+    "style": "Caption",
+    "text": "Table 34: Use Case Narratives of View My Section"
+  },
+  {
+    "index": 466,
+    "style": "Caption",
+    "text": "Table 35: Use Case Narratives of Nexora Library"
+  },
+  {
+    "index": 467,
+    "style": "Normal",
+    "text": "Table 31. Use Case Narratives of View Evaluations"
+  },
+  {
+    "index": 473,
+    "style": "Caption",
+    "text": "Table 36: Use Case Narratives of Dashboard (Admin)"
+  },
+  {
+    "index": 475,
+    "style": "Caption",
+    "text": "Table 37: Use Case Narratives of System Diagnostics"
+  },
+  {
+    "index": 477,
+    "style": "Caption",
+    "text": "Table 38: Use Case Narratives of Manage Users"
+  },
+  {
+    "index": 479,
+    "style": "Caption",
+    "text": "Table 39: Use Case Narratives of Manage Sections"
+  },
+  {
+    "index": 481,
+    "style": "Caption",
+    "text": "Table 40: Use Case Narratives of Manage School Calendar"
+  },
+  {
+    "index": 483,
+    "style": "Caption",
+    "text": "Table 41: Use Case Narratives of Nexora Library (Administrator)"
+  },
+  {
+    "index": 485,
+    "style": "Caption",
+    "text": "Table 42: Use Case Narratives of Import Rosters"
+  },
+  {
+    "index": 487,
+    "style": "Caption",
+    "text": "Table 43: Use Case Narratives of Reports (Administrator)"
+  },
+  {
+    "index": 489,
+    "style": "Caption",
+    "text": "Table 44: Use Case Narratives of Evaluations (Administrator)"
+  },
+  {
+    "index": 491,
+    "style": "Caption",
+    "text": "Table 45: Use Case Narratives of Announcement (Administrator)"
+  },
+  {
+    "index": 493,
+    "style": "Caption",
+    "text": "Table 46: Use Case Narratives of AI Chatbot (Administrator)"
+  },
+  {
+    "index": 495,
+    "style": "Caption",
+    "text": "Table 47: Use Case Narratives of Audit Trail"
+  },
+  {
+    "index": 497,
+    "style": "Caption",
+    "text": "Table 48: Use Case Narratives of System Settings"
+  },
+  {
+    "index": 499,
+    "style": "Caption",
+    "text": "Table 49: Use Case Narratives of Profile (Administrator)"
+  },
+  {
+    "index": 503,
+    "style": "Caption",
+    "text": "Figure 5: Functional Decomposition Diagram of the Admin Portal"
+  },
+  {
+    "index": 506,
+    "style": "Caption",
+    "text": "Figure 6: Functional Decomposition Diagram of the Teacher Portal"
+  },
+  {
+    "index": 510,
+    "style": "Normal",
+    "text": "Figure 7: Functional Decomposition Diagram of the Student Portal"
+  },
+  {
+    "index": 516,
+    "style": "Normal",
+    "text": "Figure 8: Mobile Login & OTP Verification"
+  },
+  {
+    "index": 517,
+    "style": "Normal",
+    "text": "Figure 8 illustrates the process by which a student accesses the Nexora mobile application using their registered credentials. It begins when the student opens the application and inputs their email and password, followed by system-performed credential validation. If it is the user’s first login, the system triggers a multi-factor verification flow requiring a One-Time Password (OTP) and a mandatory password update; otherwise, the user is directly authenticated and redirected to the dashboard. This diagram clearly shows the interaction between the student and the system through defined actions and decision points, ensuring a secure and structured entry into the ecosystem."
+  },
+  {
+    "index": 519,
+    "style": "Caption",
+    "text": "Figure 9: Process Flow of Mobile Forgot Password and Account Recovery"
+  },
+  {
+    "index": 520,
+    "style": "Normal",
+    "text": "Figure 9 represents the account recovery process for students who have lost access to their credentials. It begins when the student selects the \"Forgot Password\" option and enters their registered email address, prompting the system to validate the record in the database. If the email exists, the system generates and sends a secure reset link to the user; otherwise, an error message is displayed for retry. This process ensures a structured and secure method for updating credentials and returning the student to the login interface."
+  },
+  {
+    "index": 522,
+    "style": "Caption",
+    "text": "Figure 10: Process Flow of View Dashboard and \"Continue Learning\" Logic"
+  },
+  {
+    "index": 523,
+    "style": "Normal",
+    "text": "Figure 10 highlights the intelligent navigation within the student's mobile dashboard designed to facilitate instructional continuity. Upon successful authentication, the system fetches the student’s progress data to identify the last lesson or assessment accessed and renders a dynamic \"Continue Learning\" card. The student can click this card to be immediately redirected to their current point in the curriculum, ensuring a seamless transition between study sessions. This diagram visualizes how the system leverages historical engagement patterns to streamline the learner's journey."
+  },
+  {
+    "index": 525,
+    "style": "Caption",
+    "text": "Figure 11: Process Flow of View Modules and 30-Second Lesson Completion Tracking"
+  },
+  {
+    "index": 526,
+    "style": "Normal",
+    "text": "Figure 11 illustrates the interaction between the student and the learning modules, specifically focusing on the automated completion tracking mechanism. When a student opens a lesson, the system initializes an active timer and monitors the duration of engagement. Once the 30-second mastery floor is elapsed, the system sends a completion flag to the NestJS backend, updating the progress bar and marking the lesson as done in the UI. This flow ensures that student engagement is quantified before they are permitted to move on to summative assessments."
+  },
+  {
+    "index": 528,
+    "style": "Caption",
+    "text": "Figure 12: Process Flow of Taking Assessments and Summative Submission"
+  },
+  {
+    "index": 529,
+    "style": "Normal",
+    "text": "Figure 12 details the workflow for completing and submitting academic assessments through the mobile interface. It begins when the student selects an assignment and fetches the corresponding question set, followed by the input of answers or file uploads. Upon submission, the system performs an immediate calculation of the raw score and records the attempt in the PostgreSQL database. This diagram shows the direct feedback loop between the student's submission and the generation of their performance summary."
+  },
+  {
+    "index": 531,
+    "style": "Caption",
+    "text": "Figure 13: Process Flow of LXP Remedial Access and 60% Mastery Threshold Gating"
+  },
+  {
+    "index": 532,
+    "style": "Normal",
+    "text": "Figure 13 visualizes the critical \"logical spine\" of the Nexora system: the automated triage of struggling students. After an assessment is submitted, the system compares the calculated score against a defined 60% mastery threshold. If the score falls below this floor, the system triggers an \"At-Risk\" state, unlocks the Learning Experience Platform (LXP) sidebar, and notifies the teacher; if the threshold is met, the student continues the standard linear path. This diagram highlights the dynamic state changes that govern access to remedial resources."
+  },
+  {
+    "index": 534,
+    "style": "Caption",
+    "text": "Figure 14: Process Flow of RAG-Based Interaction with JAKIPIR AI Mentor"
+  },
+  {
+    "index": 535,
+    "style": "Normal",
+    "text": "Figure 14 illustrates the sophisticated retrieval-augmented generation (RAG) pipeline used during student interactions with the JAKIPIR AI Mentor. When a student inputs a natural language query regarding a concept failure, the FastAPI microservice performs a vector similarity search in the pgvector database to retrieve relevant chunks of the original DepEd PDF. The system then synthesizes an adaptive hint that provides instructional guidance without giving the direct answer. This flow ensures that AI support is strictly grounded in authorized class materials to prevent hallucinations and maintain academic integrity."
+  },
+  {
+    "index": 537,
+    "style": "Normal",
+    "text": "Figure 15: Process Flow of View Performance Analytics and Quarterly Trends"
+  },
+  {
+    "index": 538,
+    "style": "Normal",
+    "text": "Figure 15 represents the process by which students monitor their own academic growth through the performance tab. The system aggregates all recorded assessment scores and computes a blended average to render visual quarterly trend charts and identify specific learning gaps. This diagram shows how the system transforms raw data into metacognitive insights, allowing students to visualize which competencies require additional focus through the LXP."
+  },
+  {
+    "index": 540,
+    "style": "Caption",
+    "text": "Figure 16: Process Flow of Mobile Profile Management and Data Persistence"
+  },
+  {
+    "index": 541,
+    "style": "Normal",
+    "text": "Figure 16 details the profile management workflow on the mobile side, emphasizing the lack of detail-locking as identified in QA testing. It begins when the student accesses their profile to modify personal information or upload an avatar, followed by a system validation of the mobile number format. Once saved, the updated information is synchronized with the NestJS backend and reflected across the web portal. This diagram visualizes the data persistence loop between the mobile client and the centralized database."
+  },
+  {
+    "index": 544,
+    "style": "Caption",
+    "text": "Figure 17: Process Flow of Web Login and Dashboard Navigation"
+  },
+  {
+    "index": 545,
+    "style": "Normal",
+    "text": "Figure 17 illustrates the web-based authentication process for students, highlighting the loading of the dashboard shell and role-based notifications. It begins with the submission of credentials and follows with the system fetching relevant academic tasks and grid components for display. This diagram shows how the web portal initializes the student's workspace, providing a centralized view of announcements and quick navigation links."
+  },
+  {
+    "index": 547,
+    "style": "Caption",
+    "text": "Figure 18: Process Flow of Web Course Browsing and Filtering"
+  },
+  {
+    "index": 548,
+    "style": "Normal",
+    "text": "Figure 18 describes the interaction through which students browse and filter their enrolled courses on the web portal. It begins when the user accesses the \"My Courses\" section, triggering a backend fetch of the enrollment list. The student can then apply subject or grade filters to execute a search, with the system rendering the filtered course cards in real-time. This flow ensures that students can efficiently manage and locate materials across multiple subjects."
+  },
+  {
+    "index": 550,
+    "style": "Caption",
+    "text": "Figure 19: Process Flow of Assessment Taking with Out-of-Focus Warning Logic"
+  },
+  {
+    "index": 551,
+    "style": "Normal",
+    "text": "Figure 19 details the proctoring logic embedded within the web assessment interface to prevent unauthorized tab-switching. During an active quiz, the system employs a browser focus listener to detect if the user navigates away from the assessment page. If focus is lost, the system triggers a warning; if three warnings are reached, the system automatically submits the quiz and locks the attempt. This diagram highlights the technical measures taken to maintain assessment security in a web environment."
+  },
+  {
+    "index": 553,
+    "style": "Normal",
+    "text": "Figure 20: Process Flow of Discussion Board Participation and Thread Replies"
+  },
+  {
+    "index": 554,
+    "style": "Normal",
+    "text": "Figure 20 represents the social learning workflow within the web application’s discussion board. It begins when a student selects a class and opens a specific discussion thread to input text or attachments. Upon submission, the system utilizes Socket.IO to broadcast the update to all connected classmates and refreshes the comment feed. This process ensures real-time collaboration and engagement within the instructional workspace."
+  },
+  {
+    "index": 556,
+    "style": "Caption",
+    "text": "Figure 21: Process Flow of Web Profile Management and Account Locking"
+  },
+  {
+    "index": 557,
+    "style": "Normal",
+    "text": "Figure 21 illustrates the profile management process on the web, specifically focusing on the \"save and lock\" logic that differs from the mobile app. After the student modifies their information and submits the update, the system validates the input and saves it to the PostgreSQL database. Crucially, the system then toggles a \"Locked\" state that transforms the UI into a read-only mode to prevent unauthorized tampering with official records."
+  },
+  {
+    "index": 562,
+    "style": "Caption",
+    "text": "Figure 22: Process Flow of Managing Classes and Instructional Materials"
+  },
+  {
+    "index": 563,
+    "style": "Normal",
+    "text": "Figure 22 describes how teachers manage their assigned classes and structure their instructional hierarchy. It begins at the teacher dashboard, where the educator selects a class to create modules and add lessons or assessments. The teacher can then toggle the visibility of these items, with the system updating the student feed accordingly. This diagram clearly shows the teacher's administrative control over the digital classroom environment."
+  },
+  {
+    "index": 565,
+    "style": "Normal",
+    "text": "Figure 23: Process Flow of AI PDF Extraction and Layout-Aware Section Application"
+  },
+  {
+    "index": 566,
+    "style": "Normal",
+    "text": "Figure 23 illustrates the AI-driven content generation pipeline that alleviates teacher workload. It begins when the teacher uploads an unstructured DepEd PDF module, which is then processed by the FastAPI microservice using layout-aware segmentation. The AI extracts key formulas and identifies sections to generate structured content drafts. This flow includes a \"Teacher Review\" node where the educator must validate the extracted data before applying it as a structured lesson in the class."
+  },
+  {
+    "index": 568,
+    "style": "Caption",
+    "text": "Figure 24: Process Flow of AI Quiz Drafting and Assessment Studio Workspace"
+  },
+  {
+    "index": 569,
+    "style": "Normal",
+    "text": "Figure 24 details the interaction between the teacher and the LLM-powered quiz generation tool. The teacher selects a source module and sets generation parameters, prompting the LLM to create a draft question set. The teacher then reviews and edits the AI-generated draft in the Assessment Studio before finalizing and publishing it to the students. This process highlights how AI serves as a \"co-pilot\" for instructional design rather than a replacement for teacher oversight."
+  },
+  {
+    "index": 571,
+    "style": "Normal",
+    "text": "Figure 25: Process Flow of Asynchronous AI Job Monitoring and Status Updates"
+  },
+  {
+    "index": 572,
+    "style": "Normal",
+    "text": "Figure 25 represents the technical management of intensive AI tasks using background processing. When a teacher initiates a PDF extraction or quiz generation job, the system adds the task to a BullMQ queue managed by Redis. The system then provides real-time progress updates via Socket.IO, ensuring the teacher is notified as soon as the AI job is completed. This flow visualizes how Nexora maintains platform responsiveness during high-compute activities."
+  },
+  {
+    "index": 574,
+    "style": "Caption",
+    "text": "Figure 26: Process Flow of Class Record Synchronization and Spreadsheet Management"
+  },
+  {
+    "index": 575,
+    "style": "Normal",
+    "text": "Figure 26 illustrates the process of aggregating student performance data into a centralized class record. The system fetches and synchronizes assessment scores to generate a dynamic spreadsheet view, where the teacher can calculate final averages and lock the records for the quarter. This diagram highlights the interaction between assessment submission events and the official administrative gradebook."
+  },
+  {
+    "index": 577,
+    "style": "Caption",
+    "text": "Figure 27: Process Flow of Student Intervention Triage and Outcome Tracking"
+  },
+  {
+    "index": 578,
+    "style": "Normal",
+    "text": "Figure 27 represents the teacher-facing intervention workflow triggered by student failures. When the system detects an at-risk student (via the $60\\%$ threshold check), it adds the student to the teacher's Intervention Queue. The teacher can then assign targeted remedial tasks through the LXP and monitor progress until the learning objective is met. This flow ensures that remediation is tracked and resolved systematically."
+  },
+  {
+    "index": 580,
+    "style": "Caption",
+    "text": "Figure 28: Process Flow of Learning Gap Analysis and Competency Heatmap Generation"
+  },
+  {
+    "index": 581,
+    "style": "Normal",
+    "text": "Figure 28 details the visual analytics pipeline used to identify instructional weaknesses across a section. The system fetches assessment logs and groups them by competency ID to render a color-coded heatmap of mastery levels. Teachers can use this insight to adjust their face-to-face instruction or export the data for institutional reports. This diagram shows how the system bridges raw grading with pedagogical strategy."
+  },
+  {
+    "index": 583,
+    "style": "Normal",
+    "text": "Figure 29: Process Flow of Academic Report Generation and Data Export"
+  },
+  {
+    "index": 584,
+    "style": "Normal",
+    "text": "Figure 29 illustrates the workflow for generating and exporting institutional records. It begins when the teacher selects a report type (e.g., passing rate or masterlist) and sets the relevant parameters. The system then initiates backend aggregation and formats the data into PDF or CSV files for download. This process ensures that educators can fulfill administrative reporting requirements with minimal manual input."
+  },
+  {
+    "index": 586,
+    "style": "Caption",
+    "text": "Figure 30: Process Flow of Creating Class Announcements and Discussion Threads"
+  },
+  {
+    "index": 587,
+    "style": "Normal",
+    "text": "Figure 30 describes how teachers communicate updates and urgent notifications to their students. It begins with the composition of a message and the selection of target sections or pinned status. Upon publishing, the system sends immediate push notifications to student mobile clients and updates the web announcement hub. This diagram visualizes the communication fan-out across the Nexora ecosystem."
+  },
+  {
+    "index": 596,
+    "style": "Caption",
+    "text": "Figure 31: Process Flow of Admin Dashboard Overview and Quick Route Navigation"
+  },
+  {
+    "index": 597,
+    "style": "Normal",
+    "text": "Figure 31 illustrates the centralized system oversight provided to the administrator. Upon login, the system fetches global metrics, including total user mix and active classes, and displays a snapshot of dependency health. This dashboard serves as the primary gateway for the administrator to navigate toward more specialized modules using quick-access routes."
+  },
+  {
+    "index": 599,
+    "style": "Caption",
+    "text": "Figure 32: Process Flow of User Lifecycle Management (Create, Suspend, Purge)"
+  },
+  {
+    "index": 600,
+    "style": "Normal",
+    "text": "Figure 32 represents the administrative management of user accounts across the platform. It begins with the search or filtering of the user directory, followed by the selection of a specific action such as account suspension, reactivation, or a hard purge from the PostgreSQL database. This process ensures that the administrator can maintain institutional security by controlling access tokens and data persistence."
+  },
+  {
+    "index": 602,
+    "style": "Caption",
+    "text": "Figure 33: Process Flow of Admin-Triggered User Password Reset"
+  },
+  {
+    "index": 603,
+    "style": "Normal",
+    "text": "Figure 33 highlights the manual override process for user account recovery. The administrator can trigger a reset for any user, prompting the system to generate temporary credentials and send them via automated email. This action is simultaneously logged in the audit trail to ensure administrative accountability and security monitoring."
+  },
+  {
+    "index": 605,
+    "style": "Normal",
+    "text": "Figure 34: Process Flow of Section Creation and Roster Management"
+  },
+  {
+    "index": 606,
+    "style": "Normal",
+    "text": "Figure 34 illustrates the logistics of structuring the school year within the platform. The administrator inputs section details, assigns a teacher as the adviser, and populates the roster by selecting students from the masterlist. The system then validates enrollment counts to ensure sections do not exceed capacity before updating the institutional directory."
+  },
+  {
+    "index": 608,
+    "style": "Caption",
+    "text": "Figure 35: Process Flow of Bulk Roster Import (CSV/Excel) and Validation Logic"
+  },
+  {
+    "index": 609,
+    "style": "Normal",
+    "text": "Figure 35 details the technical pipeline for handling large-scale data ingestion. It begins with the upload of a CSV or Excel file, where the system parses headers and performs row-level validation. If errors are found, the system reports them to the administrator; if valid, the system commits a bulk batch write to the database. This flow ensures that school enrollment can be managed efficiently without manual record entry."
+  },
+  {
+    "index": 611,
+    "style": "Caption",
+    "text": "Figure 36: Process Flow of School Calendar and Event Timeline Management"
+  },
+  {
+    "index": 612,
+    "style": "Normal",
+    "text": "Figure 36 represents the school-wide scheduling process where the administrator creates and publishes events. The system validates the start and end dates and synchronizes the event with all teacher and student calendars. This process ensures that academic timelines are visible and consistent across all user portals."
+  },
+  {
+    "index": 614,
+    "style": "Caption",
+    "text": "Figure 37: Process Flow of System Diagnostics and Dependency Health Checks"
+  },
+  {
+    "index": 615,
+    "style": "Normal",
+    "text": "Figure 37 illustrates the infrastructure monitoring capabilities of the platform. The administrator triggers a health probe, which pings critical dependencies including PostgreSQL, Redis, and the Ollama AI service. The system then renders diagnostic metrics on a dashboard, highlighting any service failures to facilitate rapid troubleshooting."
+  },
+  {
+    "index": 617,
+    "style": "Normal",
+    "text": "Figure 38: Process Flow of Audit Trail Review and Security Log Filtering"
+  },
+  {
+    "index": 618,
+    "style": "Normal",
+    "text": "Figure 38 details the security monitoring workflow for administrators. The system queries the action logs based on selected date ranges or actors and renders a chronological list of activities. This diagram highlights how the administrator can audit system changes and review security events to maintain institutional data integrity."
+  },
+  {
+    "index": 620,
+    "style": "Normal",
+    "text": "Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)"
+  },
+  {
+    "index": 621,
+    "style": "Normal",
+    "text": "Figure 39 represents the critical transition between academic periods. It begins when the administrator requests a state change, prompting the system to preview the impact on enrollments and archive past records. After a secure confirmation, the system initializes the new school year or quarter, locking previous grades to ensure record-keeping accuracy."
+  },
+  {
+    "index": 644,
+    "style": "Normal",
+    "text": "References"
+  }
+]

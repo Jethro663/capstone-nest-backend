@@ -171,4 +171,30 @@ describe('Sidebar route warmup', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/dashboard/student/courses');
   });
+
+  it('routes student updates category items to announcements and calendar pages', () => {
+    usePathnameMock.mockReturnValue('/dashboard/student/announcements');
+    useAuthMock.mockReturnValue({
+      role: 'student',
+      user: {
+        firstName: 'Student',
+        lastName: 'User',
+        email: 'student@lms.local',
+      },
+    });
+
+    render(<Sidebar shellRole="student" />);
+
+    const updatesCategory = screen.getByRole('button', {
+      name: /Updates/i,
+    });
+
+    expect(updatesCategory).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: /Announcements/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Calendar/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Calendar/i }));
+
+    expect(pushMock).toHaveBeenCalledWith('/dashboard/student/calendar');
+  });
 });

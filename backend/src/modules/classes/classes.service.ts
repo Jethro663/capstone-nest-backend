@@ -821,6 +821,11 @@ export class ClassesService {
         const normalizedQuestionExplanation = templateQuestion.explanation
           ? sanitizeRichTextHtml(templateQuestion.explanation)
           : null;
+        const templateQuestionMetadata =
+          templateQuestion.metadata &&
+          typeof templateQuestion.metadata === 'object'
+            ? (templateQuestion.metadata as Record<string, unknown>)
+            : {};
         const [question] = await database
           .insert(assessmentQuestions)
           .values({
@@ -832,6 +837,19 @@ export class ClassesService {
             isRequired: templateQuestion.isRequired ?? true,
             explanation: normalizedQuestionExplanation,
             imageUrl: templateQuestion.imageUrl ?? null,
+            metadata: {
+              imageDisplayMode:
+                templateQuestionMetadata.imageDisplayMode === 'expanded'
+                  ? 'expanded'
+                  : 'default',
+              imageZoom:
+                typeof templateQuestionMetadata.imageZoom === 'number'
+                  ? Math.min(
+                      Math.max(templateQuestionMetadata.imageZoom, 50),
+                      200,
+                    )
+                  : 100,
+            },
           })
           .returning();
 
@@ -840,12 +858,32 @@ export class ClassesService {
           : [];
         if (options.length > 0) {
           await database.insert(assessmentQuestionOptions).values(
-            options.map((option: any, optionIndex: number) => ({
-              questionId: question.id,
-              text: option.text ?? '',
-              isCorrect: option.isCorrect ?? false,
-              order: option.order ?? optionIndex + 1,
-            })),
+            options.map((option: any, optionIndex: number) => {
+              const optionMetadata =
+                option.metadata && typeof option.metadata === 'object'
+                  ? (option.metadata as Record<string, unknown>)
+                  : {};
+              return {
+                questionId: question.id,
+                text: option.text ?? '',
+                imageUrl:
+                  typeof optionMetadata.imageUrl === 'string'
+                    ? optionMetadata.imageUrl
+                    : null,
+                isCorrect: option.isCorrect ?? false,
+                order: option.order ?? optionIndex + 1,
+                metadata: {
+                  imageDisplayMode:
+                    optionMetadata.imageDisplayMode === 'expanded'
+                      ? 'expanded'
+                      : 'default',
+                  imageZoom:
+                    typeof optionMetadata.imageZoom === 'number'
+                      ? Math.min(Math.max(optionMetadata.imageZoom, 50), 200)
+                      : 100,
+                },
+              };
+            }),
           );
         }
       }

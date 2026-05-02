@@ -50,6 +50,7 @@ const ALLOWED_IMAGE_MIMES = [
   'image/gif',
   'image/webp',
 ];
+const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const ALLOWED_ASSESSMENT_FILE_MIMES = [
   'application/pdf',
   'application/msword',
@@ -73,6 +74,17 @@ const ALLOWED_ASSESSMENT_FILE_MIMES = [
 ];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+function isAllowedImageUpload(file: {
+  originalname: string;
+  mimetype: string;
+}) {
+  const extension = path.extname(file.originalname).toLowerCase();
+  return (
+    ALLOWED_IMAGE_MIMES.includes(file.mimetype) &&
+    ALLOWED_IMAGE_EXTENSIONS.includes(extension)
+  );
+}
 
 @ApiTags('Assessments')
 @ApiBearerAuth('token')
@@ -319,12 +331,12 @@ export class AssessmentsController {
       }),
       limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
       fileFilter: (_req, file, cb) => {
-        if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+        if (isAllowedImageUpload(file)) {
           cb(null, true);
         } else {
           cb(
             new BadRequestException(
-              'Only JPEG, PNG, GIF and WebP images are allowed',
+              'Only JPG, PNG, GIF, and WEBP image files are allowed',
             ),
             false,
           );
@@ -347,6 +359,55 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Image uploaded successfully',
+      data: { imageUrl },
+    };
+  }
+
+  @Post('options/:id/image')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(IMAGE_UPLOAD_DEST, { recursive: true });
+          cb(null, IMAGE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (isAllowedImageUpload(file)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only JPG, PNG, GIF, and WEBP image files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async uploadOptionImage(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    const imageUrl = `/api/assessments/questions/images/${file.filename}`;
+    await this.assessmentsService.updateQuestionOptionImage(id, imageUrl, user);
+
+    return {
+      success: true,
+      message: 'Option image uploaded successfully',
       data: { imageUrl },
     };
   }

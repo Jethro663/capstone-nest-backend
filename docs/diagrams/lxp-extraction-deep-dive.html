@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nexora LXP and Extraction Deep Dive</title>
+  <style>
+    :root {
+      --bg: #eef3f8;
+      --paper: #ffffff;
+      --ink: #17202a;
+      --muted: #536471;
+      --border: #d6dde6;
+      --shadow: 0 18px 48px rgba(17, 24, 39, 0.08);
+      --browser: #0f766e;
+      --frontend: #2563eb;
+      --backend: #dc2626;
+      --db: #8b5cf6;
+      --python: #ea580c;
+      --model: #374151;
+      --warning: #fff3cd;
+      --warning-border: #e3b341;
+      --success: #e8f7ec;
+      --success-border: #46a758;
+      --danger: #fff1f2;
+      --danger-border: #e11d48;
+      --code: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(234, 88, 12, 0.08), transparent 24%),
+        linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    code {
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 0.94em;
+      color: var(--code);
+      background: #f3f6fb;
+      border: 1px solid #dde5f0;
+      border-radius: 6px;
+      padding: 1px 6px;
+    }
+
+    .page {
+      width: min(1680px, calc(100vw - 28px));
+      margin: 14px auto 32px;
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(214, 221, 230, 0.9);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero {
+      padding: 28px 28px 18px;
+      border-bottom: 1px solid var(--border);
+      background:
+        linear-gradient(135deg, rgba(37, 99, 235, 0.07), rgba(15, 118, 110, 0.03)),
+        #fff;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1d4ed8;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .hero h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(32px, 4vw, 52px);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 1200px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .top-links {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    .top-links a {
+      text-decoration: none;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid #dbe4ef;
+      background: #fff;
+      color: #314155;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .content {
+      padding: 24px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .callout,
+    .section,
+    .artifact {
+      background: var(--paper);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+    }
+
+    .callout {
+      padding: 18px 20px;
+    }
+
+    .callout.warning {
+      background: var(--warning);
+      border-color: var(--warning-border);
+    }
+
+    .callout.success {
+      background: var(--success);
+      border-color: var(--success-border);
+    }
+
+    .callout.danger {
+      background: var(--danger);
+      border-color: var(--danger-border);
+    }
+
+    .callout h2,
+    .section h2,
+    .artifact h2 {
+      margin: 0 0 10px;
+      font-size: 22px;
+      letter-spacing: -0.02em;
+    }
+
+    .callout p,
+    .artifact p {
+      margin: 0;
+      color: #324256;
+    }
+
+    .callout ul,
+    .artifact ul {
+      margin: 12px 0 0;
+      padding-left: 18px;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .legend-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: #fbfdff;
+      min-height: 92px;
+    }
+
+    .legend-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .legend-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .legend-item.browser strong { color: var(--browser); }
+    .legend-item.frontend strong { color: var(--frontend); }
+    .legend-item.backend strong { color: var(--backend); }
+    .legend-item.db strong { color: var(--db); }
+    .legend-item.python strong { color: var(--python); }
+    .legend-item.model strong { color: var(--model); }
+
+    .section-header {
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-header p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .section-body {
+      padding: 18px 18px 22px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .summary-card {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #ffffff, #f8fbff);
+    }
+
+    .summary-card h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+    }
+
+    .summary-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .lane-wrapper {
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+
+    .lane-grid {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(280px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .lane {
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: #fbfdff;
+      overflow: hidden;
+    }
+
+    .lane-head {
+      padding: 12px 14px;
+      color: #fff;
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .lane.browser .lane-head { background: var(--browser); }
+    .lane.frontend .lane-head { background: var(--frontend); }
+    .lane.backend .lane-head { background: var(--backend); }
+    .lane.db .lane-head { background: var(--db); }
+    .lane.python .lane-head { background: var(--python); }
+    .lane.model .lane-head { background: var(--model); }
+
+    .lane-body {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      border-radius: 16px;
+      border: 1px solid #d9e1ea;
+      background: #fff;
+      padding: 12px 12px 12px 14px;
+      position: relative;
+      min-height: 120px;
+    }
+
+    .step::before {
+      content: attr(data-step);
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #eff4fa;
+      border: 1px solid #d7e0ea;
+      color: #445468;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .step h4 {
+      margin: 0 34px 8px 0;
+      font-size: 15px;
+      line-height: 1.25;
+    }
+
+    .step p {
+      margin: 0 0 8px;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .step ul {
+      margin: 8px 0 0;
+      padding-left: 16px;
+      color: #445468;
+      font-size: 13px;
+    }
+
+    .step.browser { border-left: 4px solid var(--browser); }
+    .step.frontend { border-left: 4px solid var(--frontend); }
+    .step.backend { border-left: 4px solid var(--backend); }
+    .step.db { border-left: 4px solid var(--db); }
+    .step.python { border-left: 4px solid var(--python); }
+    .step.model { border-left: 4px solid var(--model); }
+
+    .flow-note {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px dashed #b8c6d8;
+      background: #f8fbff;
+      color: #3b4a5e;
+      font-size: 14px;
+    }
+
+    .artifact {
+      padding: 18px 20px;
+    }
+
+    .artifact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .artifact-card {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: #f9fbfe;
+      padding: 14px 16px;
+    }
+
+    .artifact-card h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+
+    .artifact-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: #425466;
+      font-size: 13px;
+    }
+
+    .hotspots {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(280px, 1fr));
+      gap: 14px;
+    }
+
+    .hotspot {
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 16px;
+      background: linear-gradient(180deg, #ffffff, #fafcff);
+    }
+
+    .hotspot h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .hotspot p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .anchor-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .anchor-list span {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #d9e1eb;
+      background: #fff;
+      color: #405165;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 1400px) {
+      .lane-grid {
+        grid-template-columns: repeat(2, minmax(260px, 1fr));
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .legend,
+      .summary-grid,
+      .artifact-grid,
+      .hotspots {
+        grid-template-columns: 1fr;
+      }
+
+      .lane-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <div class="eyebrow">Nexora Internal Deep Dive</div>
+      <h1>LXP Module + PDF Extraction Feature</h1>
+      <p>
+        This diagram is grounded in the current repo flow across <code>next-frontend</code>,
+        <code>backend</code>, and <code>ai-service</code>. It traces what happens from the user click,
+        to the Nest controller and service path, to the exact places where Python actually runs,
+        and back to the UI.
+      </p>
+    </header>
+
+    <nav class="top-links">
+      <a href="#truths">Core Truths</a>
+      <a href="#lxp-list">LXP Path List</a>
+      <a href="#lxp-detail">LXP Detail + Progress</a>
+      <a href="#lxp-ja-bridge">LXP to JA Review Bridge</a>
+      <a href="#tutor-python">Student Tutor Python Path</a>
+      <a href="#extract-pipeline">PDF Extraction Pipeline</a>
+      <a href="#extract-apply">Extraction Apply</a>
+      <a href="#hotspots">Improvement Hotspots</a>
+    </nav>
+
+    <main class="content">
+      <section class="callout warning" id="truths">
+        <h2>Three Core Truths Before You Read the Flow</h2>
+        <ul>
+          <li>Most of student LXP is not Python-driven. The path list, overview, playlist, checkpoint progress, and intervention-case closure are primarily <code>Next.js -> NestJS -> PostgreSQL</code>.</li>
+          <li>Python appears when the learner leaves plain LXP and enters an AI surface: <code>student tutor</code>, <code>JA review generation</code>, or <code>PDF/module extraction</code>.</li>
+          <li>Assessment retry checkpoints inside LXP are intentionally completed outside the plain LXP endpoint. The real completion bridge is <code>LXP -> JA Review -> JA completeSession() -> LxpService.completeAssessmentRetryFromJaReview()</code>.</li>
+        </ul>
+
+        <div class="legend">
+          <div class="legend-item browser">
+            <strong>Browser</strong>
+            <p>The user route, click, state transition, and rendered result in the dashboard.</p>
+          </div>
+          <div class="legend-item frontend">
+            <strong>Next Frontend</strong>
+            <p>React components and service wrappers like <code>lxpService</code>, <code>jaService</code>, and <code>extractionService</code>.</p>
+          </div>
+          <div class="legend-item backend">
+            <strong>Nest Backend</strong>
+            <p>Role checks, policy checks, proxy forwarding, DB orchestration, audit logging, and response envelopes.</p>
+          </div>
+          <div class="legend-item db">
+            <strong>Database</strong>
+            <p>Drizzle or SQL-backed reads and writes across enrollments, intervention cases, LXP progress, extracted modules, and content tables.</p>
+          </div>
+          <div class="legend-item python">
+            <strong>AI Service Python</strong>
+            <p>FastAPI routes, tutoring logic, retrieval, extraction, graph assembly, rule fallback, and apply logic.</p>
+          </div>
+          <div class="legend-item model">
+            <strong>Model and Rules</strong>
+            <p>Ollama generation, JSON-schema output, deterministic objective grading, and rule-based extraction fallback.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="artifact">
+        <h2>Repo Anchors Used For This Map</h2>
+        <p>These are the main owners behind the flows shown below.</p>
+        <div class="anchor-list">
+          <span><code>next-frontend/src/components/student/lxp/StudentLxpExperience.tsx</code></span>
+          <span><code>next-frontend/src/components/student/lxp/StudentLxpDetailExperience.tsx</code></span>
+          <span><code>next-frontend/src/services/lxp-service.ts</code></span>
+          <span><code>next-frontend/src/services/ai-service.ts</code></span>
+          <span><code>next-frontend/src/services/extraction-service.ts</code></span>
+          <span><code>backend/src/modules/lxp/lxp.controller.ts</code></span>
+          <span><code>backend/src/modules/lxp/lxp.service.ts</code></span>
+          <span><code>backend/src/modules/ja/ja.service.ts</code></span>
+          <span><code>backend/src/modules/ai-mentor/ai-mentor.controller.ts</code></span>
+          <span><code>backend/src/modules/ai-mentor/ai-proxy.service.ts</code></span>
+          <span><code>ai-service/app/main.py</code></span>
+          <span><code>ai-service/app/student_tutor_service.py</code></span>
+          <span><code>ai-service/app/extraction_pipeline.py</code></span>
+        </div>
+      </section>
+
+      <section class="section" id="lxp-list">
+        <div class="section-header">
+          <h2>Flow A: Student Opens The LXP Path List</h2>
+          <p>
+            Route: <code>/dashboard/student/lxp</code>. This is the first important distinction:
+            this page does not ask Python to "generate LXP". It asks backend LXP logic to compute which
+            intervention paths already exist for the student.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>Primary intent</h3>
+              <p>Show active or completed Learners Path cases and counts per class.</p>
+            </div>
+            <div class="summary-card">
+              <h3>Main endpoint</h3>
+              <p><code>GET /api/lxp/me/eligibility</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Python involved?</h3>
+              <p>No. This is computed from enrollments, performance snapshots, intervention cases, and intervention assignments.</p>
+            </div>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Student opens the LXP page</h4>
+                    <p>The App Router renders <code>StudentLxpPage</code>, which returns <code>StudentLxpExperience</code>.</p>
+                  </div>
+                  <div class="step browser" data-step="7">
+                    <h4>Cards appear with path counts</h4>
+                    <p>The student sees per-class intervention state, score context, pending steps, completed checkpoints, and subject metadata.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Component normalizes legacy route state</h4>
+                    <p><code>StudentLxpExperience</code> checks query params in <code>useEffect()</code>. Old LXP-to-JA patterns are redirected into the newer routes when needed.</p>
+                  </div>
+                  <div class="step frontend" data-step="3">
+                    <h4>Path fetch starts</h4>
+                    <p><code>fetchPaths()</code> calls <code>lxpService.getEligibility()</code>, then maps <code>response.data.paths</code> into rendered cards.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="4">
+                    <h4>LxpController delegates immediately</h4>
+                    <p><code>getEligibility()</code> is a thin route wrapper on <code>GET lxp/me/eligibility</code>. It passes the authenticated student id to <code>LxpService.getStudentEligibility()</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="5">
+                    <h4>Service computes path inventory</h4>
+                    <ul>
+                      <li>Reads <code>enrollments</code> for classes where the student is currently enrolled.</li>
+                      <li>Reads <code>performanceSnapshots</code> to know <code>isAtRisk</code>, <code>blendedScore</code>, and threshold.</li>
+                      <li>Reads <code>interventionCases</code> with status <code>active</code> or <code>completed</code>.</li>
+                      <li>Reads <code>interventionAssignments</code> to compute step counts, replay counts, total, pending, and completion percent.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="6">
+                    <h4>Backend assembles return payload</h4>
+                    <p>The payload includes <code>threshold</code>, <code>eligibleClasses</code>, and <code>paths</code>. Each path already contains class identity, case id, status, score context, and progress math.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="0">
+                    <h4>Not used in this flow</h4>
+                    <p>This page is a read-only LXP inventory page. No request is sent to <code>ai-service</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="0">
+                    <h4>No generation stage</h4>
+                    <p>There is no model call, no retrieval, no prompt, and no Python-generated response involved in the initial path list.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-note">
+            The "LXP page" is mostly a projection over already-existing academic recovery state. If the student asks "why do I have this path?", the answer originates in <code>performanceSnapshots</code> and <code>interventionCases</code>, not in a live Python generation.
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="lxp-detail">
+        <div class="section-header">
+          <h2>Flow B: Student Opens One LXP Path And Works Through Steps</h2>
+          <p>
+            Route: <code>/dashboard/student/lxp/[classId]</code>. This page is where the student sees overview data,
+            ordered checkpoints, lesson-review actions, and assessment-retry handoffs.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>Primary endpoints</h3>
+              <p><code>GET /api/lxp/me/overview/:classId</code> and <code>GET /api/lxp/me/playlist/:classId</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Backend job</h3>
+              <p>Validate enrollment, validate active case, ensure default assignments, compute progress, then shape the UI-friendly response.</p>
+            </div>
+            <div class="summary-card">
+              <h3>Python involved?</h3>
+              <p>Still no for plain detail loading and lesson-review completion. Python starts only when the student jumps into AI surfaces from here.</p>
+            </div>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Student clicks a path card</h4>
+                    <p>The list page uses <code>router.push('/dashboard/student/lxp/:classId')</code>.</p>
+                  </div>
+                  <div class="step browser" data-step="8">
+                    <h4>UI renders tabs and checkpoints</h4>
+                    <p>The page separates <code>steps</code>, <code>replays</code>, <code>case</code>, and <code>overview</code> while keeping the path state in sync.</p>
+                  </div>
+                  <div class="step browser" data-step="14">
+                    <h4>Student completes a lesson-review checkpoint</h4>
+                    <p>The "mark complete" action only applies to <code>lesson_review</code> checkpoints. Retry checkpoints are blocked here by design.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Detail component starts two requests in parallel</h4>
+                    <p><code>StudentLxpDetailExperience</code> calls <code>Promise.all([lxpService.getOverview(), lxpService.getPlaylist()])</code> inside <code>fetchDetail()</code>.</p>
+                  </div>
+                  <div class="step frontend" data-step="13">
+                    <h4>Checkpoint completion request</h4>
+                    <p><code>lxpService.completeCheckpoint(classId, checkpointId)</code> is called only when the checkpoint is not read-only and not an assessment retry.</p>
+                  </div>
+                  <div class="step frontend" data-step="18">
+                    <h4>Frontend refreshes state after completion</h4>
+                    <p>After completion, the page stores the returned playlist, re-fetches overview, and re-renders the progress meter and next actions.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="3">
+                    <h4>Overview controller path</h4>
+                    <p><code>LxpController.getOverview()</code> routes to <code>LxpService.getStudentOverview(studentId, classId)</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="4">
+                    <h4>Playlist controller path</h4>
+                    <p><code>LxpController.getPlaylist()</code> routes to <code>LxpService.getStudentPlaylist(studentId, classId)</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="12">
+                    <h4>Completion controller path</h4>
+                    <p><code>LxpController.completeCheckpoint()</code> routes to <code>LxpService.completeCheckpoint()</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="17">
+                    <h4>Audit and notify on close-out</h4>
+                    <p>If all assignments become complete, the service writes audit events and sends a teacher notification that the intervention cycle is done.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="5">
+                    <h4>Shared guards before data shaping</h4>
+                    <ul>
+                      <li><code>assertStudentEnrollment()</code> ensures the student belongs to the class.</li>
+                      <li><code>getReadableStudentInterventionCase()</code> looks for an active or completed path case.</li>
+                      <li>If only a pending case exists, the backend throws "pending teacher approval".</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="6">
+                    <h4>Default assignments and progress are materialized</h4>
+                    <p>For active cases, <code>ensureDefaultAssignments()</code> runs before returning data, and the service loads or creates <code>lxpProgress</code>.</p>
+                  </div>
+                  <div class="step db" data-step="7">
+                    <h4>Overview payload is assembled</h4>
+                    <ul>
+                      <li>Reads current class snapshot and all enrolled-class snapshots.</li>
+                      <li>Builds <code>subjectMastery</code>, <code>recommendedAction</code>, <code>upcomingAssessments</code>, <code>recentActivity</code>, and <code>weakFocusItems</code>.</li>
+                      <li>Uses intervention status plus progress to derive the status summary.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="9">
+                    <h4>Playlist payload is assembled</h4>
+                    <p>The ordered checkpoint list comes from <code>interventionAssignments</code> joined to lessons and assessments, plus a progress summary from <code>lxpProgress</code>.</p>
+                  </div>
+                  <div class="step db" data-step="15">
+                    <h4>Lesson-review checkpoint transaction</h4>
+                    <ul>
+                      <li>Validates the assignment belongs to the current student and class.</li>
+                      <li>Rejects completion if the case is inactive.</li>
+                      <li>Rejects completion if the assignment type is <code>assessment_retry</code>.</li>
+                      <li>Marks the assignment complete, updates <code>lxpProgress</code>, and checks whether every assignment is now done.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="16">
+                    <h4>Case may auto-close</h4>
+                    <p>If every assignment in the case is completed, the service updates <code>interventionCases.status</code> to <code>completed</code>, sets <code>closedAt</code>, and appends an auto-completion note.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="0">
+                    <h4>Not used for plain detail or lesson-review completion</h4>
+                    <p>The detail page itself stays in the Nest and database boundary until the student chooses a JA or tutor action.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="0">
+                    <h4>No live model call here</h4>
+                    <p>Progress calculation, next-step selection, and checkpoint closure are deterministic service logic.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="artifact-grid">
+            <div class="artifact-card">
+              <h3>Overview response contains</h3>
+              <ul>
+                <li><code>selectedClass</code></li>
+                <li><code>interventionStatus</code></li>
+                <li><code>progress</code></li>
+                <li><code>subjectMastery</code></li>
+                <li><code>recommendedAction</code></li>
+                <li><code>upcomingAssessments</code></li>
+                <li><code>recentActivity</code></li>
+                <li><code>weakFocusItems</code></li>
+              </ul>
+            </div>
+            <div class="artifact-card">
+              <h3>Playlist response contains</h3>
+              <ul>
+                <li><code>interventionCase</code></li>
+                <li><code>progress</code></li>
+                <li><code>checkpoints[]</code> with <code>lesson_review</code> or <code>assessment_retry</code></li>
+                <li>Linked lesson metadata or linked assessment metadata per checkpoint</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="lxp-ja-bridge">
+        <div class="section-header">
+          <h2>Flow C: LXP Assessment Retry Does Not Finish Inside LXP</h2>
+          <p>
+            This is the most important hidden bridge in the module. When the student clicks a replay checkpoint,
+            the detail page routes them into JA review. The checkpoint is only completed after JA session completion,
+            not when the student clicks inside LXP.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="callout success">
+            <h2>Why this matters</h2>
+            <p>
+              If you want to improve LXP retry behavior, the real closing logic lives in <code>backend/src/modules/ja/ja.service.ts</code>
+              and then bounces back into <code>LxpService.completeAssessmentRetryFromJaReview()</code>. If you change only the LXP page,
+              you will miss the actual completion seam.
+            </p>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Student clicks a replay checkpoint</h4>
+                    <p>The LXP detail page builds a JA review link using <code>mode=review</code>, <code>classId</code>, <code>entry=lxp</code>, and a <code>returnTo</code> route back to the replay tab.</p>
+                  </div>
+                  <div class="step browser" data-step="10">
+                    <h4>Student answers the JA review session</h4>
+                    <p>The review UI runs its own cycle until the student completes all required items.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Frontend leaves LXP and enters JA</h4>
+                    <p>The replay card uses <code>/dashboard/student/ja?...mode=review...</code>. From there, <code>jaService</code> handles review bootstrap, session generation, responses, events, and completion.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="3">
+                    <h4>Backend JA routes proxy into ai-service</h4>
+                    <p><code>ja.service.ts</code> forwards review-session generation to <code>/student/ja/review/sessions/generate</code> through <code>AiProxyService</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="11">
+                    <h4>JA completion becomes the LXP bridge point</h4>
+                    <p>In <code>completeSession()</code>, if the session mode is <code>review</code>, the service looks for a linked assessment id in the JA source snapshot.</p>
+                  </div>
+                  <div class="step backend" data-step="12">
+                    <h4>JA calls back into LXP service</h4>
+                    <p><code>completeSession()</code> calls <code>lxpService.completeAssessmentRetryFromJaReview(studentId, session.classId, linkedAssessmentId, sessionId)</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="9">
+                    <h4>JA completion writes its own progress first</h4>
+                    <p><code>jaSessions</code>, <code>jaSessionResponses</code>, <code>jaXpLedger</code>, <code>jaProgress</code>, and <code>jaSessionEvents</code> are updated before the LXP checkpoint bridge runs.</p>
+                  </div>
+                  <div class="step db" data-step="13">
+                    <h4>LXP retry checkpoint is marked complete</h4>
+                    <ul>
+                      <li>Finds the retry assignment by <code>assessmentId</code>.</li>
+                      <li>Validates student, class, and active case.</li>
+                      <li>Marks that intervention assignment complete.</li>
+                      <li>Updates <code>lxpProgress</code>.</li>
+                      <li>Optionally closes the intervention case if all assignments are done.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="14">
+                    <h4>Audit trail keeps the source</h4>
+                    <p>The LXP audit metadata records <code>source: 'ja_review'</code> and the originating <code>jaSessionId</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="4">
+                    <h4>JA review packet is generated in ai-service</h4>
+                    <p><code>ai-service/app/main.py</code> exposes <code>/student/ja/review/bootstrap</code> and <code>/student/ja/review/sessions/generate</code>. This is where the AI-side review packet is built.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="5">
+                    <h4>Review content is AI-generated before the student answers</h4>
+                    <p>The review packet is created on the Python side. The exact challenge content lives in the JA AI path, then the Nest JA service owns the completion ledger and bridge back to LXP.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-note">
+            Hidden dependency to remember: if JA review breaks, LXP replay completion also breaks, because LXP retry checkpoints depend on JA session completion to close them.
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="tutor-python">
+        <div class="section-header">
+          <h2>Flow D: The Python Generation Path Closest To LXP Student Support</h2>
+          <p>
+            If your goal is "show me the Python generation path", the clearest student-facing example is the tutor flow.
+            This is where Nest forwards to Python, Python retrieves class evidence, calls the model, stores session state,
+            and sends generated tutoring output back.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>Main frontend service</h3>
+              <p><code>next-frontend/src/services/ai-service.ts</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Main backend route group</h3>
+              <p><code>/api/ai/student/tutor/*</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Main Python owner</h3>
+              <p><code>ai-service/app/student_tutor_service.py</code></p>
+            </div>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Student opens tutor support</h4>
+                    <p>The browser asks for bootstrap data first: classes, recent lessons, recent attempts, recommendations, and history.</p>
+                  </div>
+                  <div class="step browser" data-step="8">
+                    <h4>Student chooses one recommendation</h4>
+                    <p>The chosen focus item becomes the seed for the generated tutoring packet.</p>
+                  </div>
+                  <div class="step browser" data-step="16">
+                    <h4>Student receives generated lesson and questions</h4>
+                    <p>The UI gets a session id, lesson plan, lesson body, practice questions, tutor plan, citations, and grounding status.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Service wrapper calls backend AI routes</h4>
+                    <ul>
+                      <li><code>getStudentTutorBootstrap()</code></li>
+                      <li><code>startStudentTutorSession()</code></li>
+                      <li><code>sendStudentTutorMessage()</code></li>
+                      <li><code>submitStudentTutorAnswers()</code></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="3">
+                    <h4>Backend checks policy and source visibility</h4>
+                    <p><code>ai-mentor.controller.ts</code> filters lesson ids and assessment ids the student is still allowed to see, then forwards the call with <code>X-User-*</code> headers.</p>
+                  </div>
+                  <div class="step backend" data-step="15">
+                    <h4>Backend sanitizes citations on the way back</h4>
+                    <p>Returned citations are filtered again so the student only receives evidence linked to allowed lessons or assessments.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="4">
+                    <h4>Bootstrap gathers recent context</h4>
+                    <p>Python-side bootstrap reads the student's classes, recent lessons, recent attempts, and prior tutor history.</p>
+                  </div>
+                  <div class="step db" data-step="5">
+                    <h4>Retrieval pulls class-grounded evidence</h4>
+                    <p><code>_build_context_bundle()</code> runs <code>similarity_search()</code> scoped by class, grade, subject key, and optionally lesson or assessment source ids.</p>
+                  </div>
+                  <div class="step db" data-step="14">
+                    <h4>Session state is persisted</h4>
+                    <p><code>_log_tutor_turn()</code> stores tutor state and messages so the session can be reloaded and continued later.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="6">
+                    <h4>Python builds recommendations</h4>
+                    <p><code>bootstrap_student_tutor()</code> and <code>_build_recommendations()</code> decide what the student most likely needs to review.</p>
+                  </div>
+                  <div class="step python" data-step="9">
+                    <h4>Python plans before writing</h4>
+                    <p><code>_plan_tutor_packet()</code> asks the model for a JSON plan: teaching goal, misconceptions, required evidence, intended difficulty, and answer guardrail.</p>
+                  </div>
+                  <div class="step python" data-step="12">
+                    <h4>Python generates the lesson packet</h4>
+                    <p><code>_generate_lesson_and_questions()</code> asks for <code>lessonPlan</code>, <code>lessonBody</code>, <code>analogy</code>, <code>misconceptionCorrection</code>, <code>citationGrounding</code>, and exactly 3 questions.</p>
+                  </div>
+                  <div class="step python" data-step="17">
+                    <h4>Follow-up messages and answer evaluation stay in Python</h4>
+                    <p>Later turns go through <code>continue_student_tutor_session()</code> and <code>submit_student_tutor_answers()</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="10">
+                    <h4>Model call 1: plan generation</h4>
+                    <p><code>ollama_client.generate(... task='chat', response_format=TUTOR_PLAN_FORMAT)</code></p>
+                  </div>
+                  <div class="step model" data-step="13">
+                    <h4>Model call 2: tutoring packet generation</h4>
+                    <p><code>ollama_client.generate(... response_format=TUTOR_PACKET_FORMAT)</code>. If anything fails, Python falls back to a conservative packet builder.</p>
+                  </div>
+                  <div class="step model" data-step="18">
+                    <h4>Answer checking is hybrid, not fully free-form</h4>
+                    <p><code>_evaluate_answers()</code> can use the model, but <code>_apply_deterministic_override()</code> and <code>evaluate_objective_answer()</code> force objective corrections when the question type allows it.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-note">
+            This tutor path is a good example of "Python generation to output": request enters Nest, Nest proxies to FastAPI, FastAPI retrieves evidence, calls Ollama for JSON, stores state, and returns structured output to the browser.
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="extract-pipeline">
+        <div class="section-header">
+          <h2>Flow E: PDF or Module Extraction Pipeline</h2>
+          <p>
+            This is the most Python-heavy path in the repo. It starts from a teacher upload, creates an extraction record,
+            runs in the background, then produces editable structured content plus audit metadata before anything is applied
+            to live LMS content tables.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>User click origin</h3>
+              <p><code>next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Main Python entry</h3>
+              <p><code>POST /extract</code> in <code>ai-service/app/main.py</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Core worker</h3>
+              <p><code>run_extraction(db, extraction_id, file_id, user_id)</code></p>
+            </div>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Teacher chooses a file for extraction</h4>
+                    <p>The teacher class page calls <code>handleExtractionSelect()</code> and then <code>handleExtractionFile()</code>.</p>
+                  </div>
+                  <div class="step browser" data-step="23">
+                    <h4>Teacher sees status change over time</h4>
+                    <p>The review route later polls every 3 seconds while extraction status is <code>pending</code> or <code>processing</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Frontend uploads the file first</h4>
+                    <p><code>fileService.upload()</code> sends the PDF with <code>classId</code>, <code>scope=private</code>, <code>subjectKey</code>, <code>gradeLevel</code>, and <code>aiEnabled=true</code>.</p>
+                  </div>
+                  <div class="step frontend" data-step="3">
+                    <h4>Frontend queues extraction</h4>
+                    <p>After upload succeeds, <code>extractionService.extractModule({ fileId })</code> hits the backend AI route.</p>
+                  </div>
+                  <div class="step frontend" data-step="24">
+                    <h4>Review page hydrates editable state</h4>
+                    <p>Once status becomes <code>completed</code>, the review page fetches full extraction content and clones sections into local edit state.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="4">
+                    <h4>Backend enforces access</h4>
+                    <p><code>POST /api/ai/extract-module</code> runs <code>assertTeacherFileAccess()</code>, then forwards <code>POST /extract</code> through <code>AiProxyService.forward()</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="5">
+                    <h4>Proxy adds identity headers</h4>
+                    <p>The backend forwards <code>X-User-Id</code>, <code>X-User-Email</code>, <code>X-User-Roles</code>, and optional <code>X-Internal-Service-Token</code>.</p>
+                  </div>
+                  <div class="step backend" data-step="25">
+                    <h4>Backend later proxies status and detail routes too</h4>
+                    <p><code>/api/ai/extractions/:id/status</code>, <code>/api/ai/extractions/:id</code>, and related review routes are all backend-proxied. Some have degraded cached fallback behavior if <code>ai-service</code> is unavailable.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="6">
+                    <h4>Python validates upload ownership and existence</h4>
+                    <ul>
+                      <li>Reads <code>uploaded_files</code> by id.</li>
+                      <li>Checks teacher ownership unless the caller is admin.</li>
+                      <li>Materializes the backend upload path.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="7">
+                    <h4>Extraction row is created immediately</h4>
+                    <p><code>extracted_modules</code> gets a new row with status <code>pending</code> and <code>progress_percent = 0</code>, then the API returns <code>202</code> with the new <code>extractionId</code>.</p>
+                  </div>
+                  <div class="step db" data-step="22">
+                    <h4>Structured output is persisted before the teacher edits it</h4>
+                    <p>When finished, the worker writes <code>structured_content</code>, <code>model_used</code>, chunk counts, progress, and final extraction status back into <code>extracted_modules</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="8">
+                    <h4>Extraction is scheduled as a background task</h4>
+                    <p><code>/extract</code> does not wait for the heavy work. It creates an async task that calls <code>run_extraction()</code> on the live event loop.</p>
+                  </div>
+                  <div class="step python" data-step="9">
+                    <h4>PDF ingest stage</h4>
+                    <ul>
+                      <li>Updates progress to 5 and 10.</li>
+                      <li>Opens the PDF with <code>fitz</code>.</li>
+                      <li>Extracts page text via <code>_extract_pdf_pages()</code>.</li>
+                      <li>Extracts embedded images via <code>_extract_pdf_embedded_images()</code>.</li>
+                      <li>Builds one raw text string across pages.</li>
+                    </ul>
+                  </div>
+                  <div class="step python" data-step="12">
+                    <h4>Branch decision: text path or vision path</h4>
+                    <p>If the PDF has almost no extractable text, Python switches to <code>uses_vision_extraction = true</code>. Otherwise it stays on the text-first path.</p>
+                  </div>
+                  <div class="step python" data-step="15">
+                    <h4>Text extraction path</h4>
+                    <ul>
+                      <li><code>sanitize_extracted_text()</code> cleans the raw text.</li>
+                      <li><code>_classify_content()</code> can reject unsafe content before structure detection.</li>
+                      <li><code>chunk_text(... max_chunk_size=8000)</code> segments the module.</li>
+                      <li>Each chunk goes through AI structure detection or rule fallback.</li>
+                    </ul>
+                  </div>
+                  <div class="step python" data-step="18">
+                    <h4>Graph and coherence assembly</h4>
+                    <ul>
+                      <li><code>_build_document_graph()</code> creates section, span, question, and figure nodes.</li>
+                      <li><code>_assemble_sections_from_graph()</code> reassigns spans for coherence and merges weak fragments.</li>
+                      <li><code>_attach_images_to_sections()</code> scores image-to-section matches and adds image blocks.</li>
+                      <li><code>_derive_section_assessment_draft()</code> prepares draft checkpoint questions per section.</li>
+                    </ul>
+                  </div>
+                  <div class="step python" data-step="20">
+                    <h4>Audit and quality stage</h4>
+                    <p>Python computes <code>overallConfidence</code>, <code>coherenceScore</code>, <code>warnings</code>, <code>qualityGate</code>, <code>reviewRequired</code>, <code>confidenceBreakdown</code>, and <code>repairNotes</code>.</p>
+                  </div>
+                  <div class="step python" data-step="21">
+                    <h4>Validation and logging stage</h4>
+                    <p><code>validate_extraction_output()</code> sanitizes the result, then Python logs a <code>module_extraction</code> record to <code>ai_interaction_logs</code>.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="10">
+                    <h4>Vision path model call</h4>
+                    <p>If the PDF is mostly scanned, <code>ollama_client.generate(... task='vision_extraction')</code> receives rendered page images and must return JSON with title, description, sections, and audit.</p>
+                  </div>
+                  <div class="step model" data-step="13">
+                    <h4>Text structure detection call</h4>
+                    <p>For readable PDFs, each chunk can go through <code>_detect_structure_with_ai()</code> using <code>task='text_extraction'</code>.</p>
+                  </div>
+                  <div class="step model" data-step="14">
+                    <h4>Rule fallback exists</h4>
+                    <p>If the AI structure detector fails or Ollama is unavailable, Python falls back to <code>_detect_structure_with_rules()</code> so extraction can still continue.</p>
+                  </div>
+                  <div class="step model" data-step="19">
+                    <h4>Model output is never trusted raw</h4>
+                    <p>The JSON is normalized, validated, rescored, and post-processed before it becomes the stored extraction result.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="artifact-grid">
+            <div class="artifact-card">
+              <h3>Stored extraction structure</h3>
+              <ul>
+                <li><code>title</code></li>
+                <li><code>description</code></li>
+                <li><code>sections[]</code></li>
+                <li><code>sections[].lessonBlocks[]</code></li>
+                <li><code>sections[].assessmentDraft</code></li>
+                <li><code>audit</code></li>
+              </ul>
+            </div>
+            <div class="artifact-card">
+              <h3>Important audit fields</h3>
+              <ul>
+                <li><code>qualityGate</code> = <code>pass | warn | fail</code></li>
+                <li><code>reviewRequired</code></li>
+                <li><code>overallConfidence</code></li>
+                <li><code>coherenceScore</code></li>
+                <li><code>imageAssignmentSummary</code></li>
+                <li><code>reviewFlags</code></li>
+                <li><code>repairNotes</code></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="extract-apply">
+        <div class="section-header">
+          <h2>Flow F: Teacher Review, Save, And Apply Extraction Into Real LMS Content</h2>
+          <p>
+            The extraction result is intentionally not live LMS content yet. It becomes live draft content only after the teacher reviews,
+            optionally edits, and explicitly applies it.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="summary-grid">
+            <div class="summary-card">
+              <h3>Review page</h3>
+              <p><code>next-frontend/app/(dashboard)/dashboard/teacher/extractions/[id]/page.tsx</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Save endpoint</h3>
+              <p><code>PATCH /api/ai/extractions/:id</code></p>
+            </div>
+            <div class="summary-card">
+              <h3>Apply endpoint</h3>
+              <p><code>POST /api/ai/extractions/:id/apply</code></p>
+            </div>
+          </div>
+
+          <div class="lane-wrapper">
+            <div class="lane-grid">
+              <div class="lane browser">
+                <div class="lane-head">Browser</div>
+                <div class="lane-body">
+                  <div class="step browser" data-step="1">
+                    <h4>Teacher opens extraction review page</h4>
+                    <p>The page loads the extraction, shows status, quality flags, block-level content, section navigation, and apply controls.</p>
+                  </div>
+                  <div class="step browser" data-step="10">
+                    <h4>Teacher edits and removes blocks locally</h4>
+                    <p>The review UI tracks removed block keys, section edits, focused items, and dirty state before persisting.</p>
+                  </div>
+                  <div class="step browser" data-step="19">
+                    <h4>Teacher clicks Apply</h4>
+                    <p>Selected sections are sent for conversion into class modules, lessons, and draft assessments.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane frontend">
+                <div class="lane-head">Next Frontend</div>
+                <div class="lane-body">
+                  <div class="step frontend" data-step="2">
+                    <h4>Review page polls while processing</h4>
+                    <p><code>extractionService.getStatus(extractionId)</code> runs every 3 seconds until the status changes to <code>completed</code> or <code>failed</code>.</p>
+                  </div>
+                  <div class="step frontend" data-step="11">
+                    <h4>Save serializes edited sections</h4>
+                    <p><code>handleSave()</code> sends <code>title</code>, <code>description</code>, and sanitized <code>sections</code>. It can retry with legacy <code>lessons</code> payload compatibility if needed.</p>
+                  </div>
+                  <div class="step frontend" data-step="20">
+                    <h4>Apply sends selected section indices</h4>
+                    <p><code>handleApply()</code> calls <code>extractionService.apply(extractionId, { sectionIndices })</code>, then reloads the extraction state after success.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane backend">
+                <div class="lane-head">Nest Backend</div>
+                <div class="lane-body">
+                  <div class="step backend" data-step="12">
+                    <h4>Backend proxies save and apply, then audits</h4>
+                    <p>The Nest controller forwards <code>PATCH /extractions/:id</code> and <code>POST /extractions/:id/apply</code>, then records audit metadata such as requested section counts and created artifacts.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane db">
+                <div class="lane-head">Database</div>
+                <div class="lane-body">
+                  <div class="step db" data-step="13">
+                    <h4>Save stage mutates only the extraction record</h4>
+                    <p><code>update_extraction()</code> rewrites <code>extracted_modules.structured_content</code>. No live lessons or modules are created yet.</p>
+                  </div>
+                  <div class="step db" data-step="21">
+                    <h4>Apply reads extraction and class context</h4>
+                    <ul>
+                      <li>Checks the extraction exists, is completed, and is not already applied.</li>
+                      <li>Loads normalized structured content and chosen sections.</li>
+                      <li>Confirms the class still exists.</li>
+                      <li>Finds next module order and next lesson order.</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="22">
+                    <h4>Apply creates the real LMS module shell</h4>
+                    <p><code>class_modules</code> gets a new hidden and locked module with teacher notes showing it came from the extraction.</p>
+                  </div>
+                  <div class="step db" data-step="23">
+                    <h4>Each chosen section becomes concrete LMS rows</h4>
+                    <ul>
+                      <li><code>module_sections</code></li>
+                      <li><code>lessons</code> with <code>source_extraction_id</code></li>
+                      <li><code>lesson_content_blocks</code></li>
+                      <li><code>module_items</code> for the lesson</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="24">
+                    <h4>Assessment drafts are optionally created too</h4>
+                    <ul>
+                      <li><code>assessments</code> with <code>ai_origin = 'ai_extraction_draft'</code></li>
+                      <li><code>assessment_questions</code></li>
+                      <li><code>assessment_question_options</code></li>
+                      <li><code>module_items</code> for the assessment</li>
+                    </ul>
+                  </div>
+                  <div class="step db" data-step="25">
+                    <h4>Extraction is marked applied and class content is reindexed</h4>
+                    <p>After inserts, <code>extracted_modules</code> is updated to <code>is_applied = true</code>, status <code>applied</code>, then <code>reindex_class_content()</code> runs so retrieval can use the new content later.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane python">
+                <div class="lane-head">AI Service Python</div>
+                <div class="lane-body">
+                  <div class="step python" data-step="14">
+                    <h4>Python stays the owner through apply</h4>
+                    <p>Unlike many systems that only generate JSON, this Python service also owns the apply stage that writes module, lesson, block, and assessment rows.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lane model">
+                <div class="lane-head">Model and Rules</div>
+                <div class="lane-body">
+                  <div class="step model" data-step="15">
+                    <h4>No fresh model call during apply</h4>
+                    <p>Apply uses the already-reviewed extraction result. The heavy generation happened earlier during <code>run_extraction()</code>.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-note">
+            Conceptually, extraction has two completely separate phases:
+            <strong>generate structured draft</strong> and <strong>apply reviewed draft into LMS tables</strong>.
+            The second phase is a content-import operation, not an AI-generation operation.
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="hotspots">
+        <div class="section-header">
+          <h2>Improvement Hotspots You Can Attack Next</h2>
+          <p>
+            These are grounded from the current implementation shape, not generic advice.
+            They are useful if your goal is to make LXP or extraction more robust, faster, or easier to maintain.
+          </p>
+        </div>
+        <div class="section-body">
+          <div class="hotspots">
+            <div class="hotspot">
+              <h3>LXP detail duplicates work across two endpoints</h3>
+              <p>
+                <code>getStudentOverview()</code> and <code>getStudentPlaylist()</code> both repeat case checks,
+                default assignment setup, and progress loading. A combined read model or shared loader could reduce
+                duplicate queries and drift risk.
+              </p>
+            </div>
+            <div class="hotspot">
+              <h3>LXP replay completion is split across subsystems</h3>
+              <p>
+                Replay completion depends on JA review completion. That is accurate to the product flow, but it also
+                means troubleshooting replay bugs requires reading both <code>ja.service.ts</code> and <code>lxp.service.ts</code>.
+                A clearer event contract or dedicated bridge abstraction could help.
+              </p>
+            </div>
+            <div class="hotspot">
+              <h3>Tutor generation uses two model calls per session start</h3>
+              <p>
+                The tutor path first plans, then generates the lesson packet. That helps control output quality, but it
+                also adds latency. If startup speed becomes a problem, this is one of the first places to profile.
+              </p>
+            </div>
+            <div class="hotspot">
+              <h3>Extraction jobs run on the live service event loop</h3>
+              <p>
+                <code>/extract</code> creates an async background task in-process. If the Python service restarts mid-job,
+                that work is exposed to interruption. Moving extraction to a durable queue worker would improve resilience.
+              </p>
+            </div>
+            <div class="hotspot">
+              <h3>Extraction apply is operationally heavy</h3>
+              <p>
+                One apply call can create module rows, lesson rows, block rows, assessment rows, option rows, and trigger
+                reindexing. Wrapping the whole apply phase in a very explicit transaction boundary and richer post-apply
+                reporting would make failures easier to reason about.
+              </p>
+            </div>
+            <div class="hotspot">
+              <h3>The extraction audit is already strong enough to power better UX</h3>
+              <p>
+                The pipeline already computes <code>qualityGate</code>, <code>reviewRequired</code>, <code>coherenceScore</code>,
+                <code>reviewFlags</code>, and image assignment summaries. You can expose more of that directly in the teacher UI to
+                prioritize review work instead of treating all extracted sections as equally trustworthy.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

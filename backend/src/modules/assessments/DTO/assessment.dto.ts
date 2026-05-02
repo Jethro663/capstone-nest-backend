@@ -309,6 +309,32 @@ export class OptionDto {
 
   @IsInt()
   order: number;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDisplayMode?: 'default' | 'expanded';
+
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(200)
+  imageZoom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionY?: number;
 }
 
 export class CreateQuestionDto {
@@ -338,6 +364,28 @@ export class CreateQuestionDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDisplayMode?: 'default' | 'expanded';
+
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(200)
+  imageZoom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionY?: number;
 
   @IsOptional()
   @IsArray()
@@ -375,6 +423,28 @@ export class UpdateQuestionDto {
   @IsOptional()
   @IsString()
   imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageDisplayMode?: 'default' | 'expanded';
+
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(200)
+  imageZoom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionX?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imagePositionY?: number;
 
   @IsOptional()
   @IsArray()

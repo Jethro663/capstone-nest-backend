@@ -716,6 +716,8 @@ export class ContentModulesService {
         title: dto.title.trim(),
         description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
+        isVisible: dto.isVisible ?? false,
+        isLocked: dto.isLocked ?? true,
       })
       .returning();
 
