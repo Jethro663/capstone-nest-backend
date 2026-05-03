@@ -18,6 +18,10 @@ import { ProfileScreen } from "../screens/ProfileScreen";
 import { AnnouncementsScreen } from "../screens/AnnouncementsScreen";
 import { SubjectLessonsScreen as ClassWorkspaceScreen } from "../screens/SubjectLessonsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
+import { VerifyEmailScreen } from "../screens/VerifyEmailScreen";
+import { ForgotPasswordScreen } from "../screens/ForgotPasswordScreen";
+import { ResetPasswordScreen } from "../screens/ResetPasswordScreen";
+import { SetInitialPasswordScreen } from "../screens/SetInitialPasswordScreen";
 import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
@@ -331,6 +335,10 @@ function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
+      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+      <AuthStack.Screen name="SetInitialPassword" component={SetInitialPasswordScreen} />
     </AuthStack.Navigator>
   );
 }

@@ -34,11 +34,14 @@ function normalizeEnvelope<T>(payload: unknown): Envelope<T> {
 function normalizeHealth(payload: Record<string, unknown> | undefined): AdminAnalyticsHealthStatus {
   return {
     online:
+      payload?.runtimeAvailable === true ||
+      payload?.cloudAvailable === true ||
       payload?.ollamaOnline === true ||
       payload?.ollamaAvailable === true,
     model:
       (typeof payload?.model === 'string' && payload.model) ||
       (typeof payload?.configuredModel === 'string' && payload.configuredModel) ||
+      (typeof payload?.configuredTextModel === 'string' && payload.configuredTextModel) ||
       'unknown',
   };
 }

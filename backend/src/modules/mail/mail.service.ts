@@ -6,10 +6,11 @@ import { OTP_TTL_MINUTES } from '../../common/constants';
 export class MailService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailService.name);
+  private readonly emailService = process.env.EMAIL_SERVICE?.toLowerCase() || '';
+  private readonly resendApiKey = process.env.RESEND_API_KEY || '';
 
   constructor() {
-    // Only initialize transporter if credentials exist or we are in dev
-    if (process.env.EMAIL_SERVICE?.toLowerCase() === 'gmail') {
+    if (this.emailService === 'gmail') {
       this.transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -17,7 +18,6 @@ export class MailService {
           pass: process.env.EMAIL_PASSWORD,
         },
       });
-      // Verify SMTP connectivity at startup so misconfigurations surface early
       this.transporter.verify().catch((err) => {
         this.logger.error(
           '[MAIL] SMTP transporter verification failed',
@@ -27,61 +27,111 @@ export class MailService {
     }
   }
 
+  private isResendEnabled() {
+    return this.emailService === 'resend' && Boolean(this.resendApiKey.trim());
+  }
+
+  private getFromAddress() {
+    return process.env.EMAIL_FROM || process.env.EMAIL_USER || '';
+  }
+
+  private async sendViaResend(options: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<void> {
+    const from = this.getFromAddress();
+    if (!from) {
+      throw new Error('EMAIL_FROM is required for Resend email delivery');
+    }
+
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [options.to],
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(
+        `[MAIL] Resend API returned ${response.status}: ${errorText}`,
+      );
+      throw new Error('Email delivery failed');
+    }
+  }
+
+  private async sendMail(options: {
+    to: string;
+    subject: string;
+    html: string;
+    text: string;
+  }): Promise<{ success: boolean; mode: 'development' | 'production' }> {
+    if (this.isResendEnabled()) {
+      await this.sendViaResend(options);
+      return { success: true, mode: 'production' };
+    }
+
+    if (!this.transporter) {
+      this.logger.debug(
+        `[DEV MODE] Email skipped for ${options.to} (no configured transporter)`,
+      );
+      return { success: true, mode: 'development' };
+    }
+
+    await this.transporter.sendMail({
+      from: this.getFromAddress(),
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    return { success: true, mode: 'production' };
+  }
+
   async sendOtpEmail(
     email: string,
     otp: string,
     purpose: 'email_verification' | 'password_reset' = 'email_verification',
   ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
-    if (!this.transporter) {
-      this.logger.debug(`[DEV MODE] OTP for ${email}: ${otp}`);
-      return { success: true, mode: 'development' };
-    }
-
     const subject =
       purpose === 'email_verification'
         ? 'Verify Your Nexora Account'
         : 'Reset Your Nexora Password';
 
     try {
-      await this.transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      return await this.sendMail({
         to: email,
         subject,
         html: this.getOtpTemplate(otp, purpose),
         text: `Your Nexora verification code is: ${otp}. Expires in ${OTP_TTL_MINUTES} minutes.`,
       });
-      return { success: true, mode: 'production' };
     } catch (error) {
       this.logger.error(`Failed to send email to ${email}`, error.stack);
-      throw new Error('Email delivery failed'); // Filtered by Global Exception Filter
+      throw new Error('Email delivery failed');
     }
   }
 
-  /**
-   * Send temporary password to new user's email
-   * @param email User's email address
-   * @param password Temporary password
-   */
   async sendPasswordEmail(
     email: string,
     password: string,
   ): Promise<{ success: boolean; mode: 'development' | 'production' }> {
-    if (!this.transporter) {
-      this.logger.debug(
-        `[DEV MODE] Password email skipped for ${email} (no transporter)`,
-      );
-      return { success: true, mode: 'development' };
-    }
-
     try {
-      await this.transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      return await this.sendMail({
         to: email,
         subject: 'Your Nexora Account Credentials',
         html: this.getPasswordTemplate(password),
         text: `Your temporary Nexora account password is: ${password}. Please log in and change it immediately after verifying your email.`,
       });
-      return { success: true, mode: 'production' };
     } catch (error) {
       this.logger.error(
         `Failed to send password email to ${email}`,
@@ -96,57 +146,95 @@ export class MailService {
     purpose: 'email_verification' | 'password_reset',
   ) {
     const isVerification = purpose === 'email_verification';
-    const color = isVerification ? '#4CAF50' : '#2196F3';
     const title = isVerification
-      ? 'Email Verification'
-      : 'Password Reset Request';
+      ? 'Confirm your email'
+      : 'Reset your password';
+    const intro = isVerification
+      ? 'Use this one-time code to activate your Nexora account.'
+      : 'Use this one-time code to continue your password reset request.';
+    const accent = isVerification ? '#7f1d1d' : '#9f1239';
+    const accentSoft = isVerification ? '#fb7185' : '#f43f5e';
 
     return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: ${color}; color: white; padding: 20px; text-align: center;">
-            <h1>Nexora LMS</h1>
-        </div>
-        <div style="padding: 30px; background-color: #f9f9f9;">
-            <h2>${title}</h2>
-            <p>Use the code below to complete your request:</p>
-            <div style="font-size: 32px; font-weight: bold; color: ${color}; text-align: center; margin: 20px 0;">
+      <div style="margin:0;background-color:#fff7f5;padding:32px 18px;color:#1f2937;font-family:Arial,sans-serif;">
+        <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#fffaf9 0%,#fff5f4 100%);border:1px solid #f3d6d3;">
+          <div style="height:6px;background:linear-gradient(90deg,${accent} 0%,${accentSoft} 100%);"></div>
+          <div style="padding:28px 28px 24px 28px;">
+            <p style="margin:0 0 10px 0;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#9f5f5f;">
+              Nexora LMS
+            </p>
+            <h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;color:#3f1518;">
+              ${title}
+            </h1>
+            <p style="margin:14px 0 0 0;font-size:15px;line-height:1.8;color:#6b4b4b;">
+              ${intro}
+            </p>
+            <div style="margin:24px 0 18px 0;padding:14px 16px;border-top:1px solid #edd4d0;border-bottom:1px solid #edd4d0;">
+              <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#a16262;">
+                Verification code
+              </p>
+              <div style="font-size:30px;line-height:1;font-weight:700;letter-spacing:0.32em;color:${accent};font-family:'Courier New',monospace;">
                 ${otp}
+              </div>
             </div>
-            <p><strong>Expires in ${OTP_TTL_MINUTES} minutes.</strong></p>
+            <p style="margin:0;font-size:14px;line-height:1.8;color:#6b4b4b;">
+              This code expires in <strong style="color:#3f1518;">${OTP_TTL_MINUTES} minutes</strong>.
+            </p>
+            <p style="margin:18px 0 0 0;font-size:14px;line-height:1.8;color:#7b5e5e;">
+              If you did not request this, you can safely ignore this email.
+            </p>
+            <div style="margin-top:24px;padding-top:16px;border-top:1px solid #edd4d0;font-size:12px;line-height:1.7;color:#9a7a7a;">
+              Automated message from Nexora. Please do not reply.
+            </div>
+          </div>
         </div>
       </div>
     `;
   }
 
-  /**
-   * Template for temporary password email
-   */
   private getPasswordTemplate(password: string) {
     return `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background-color: #2196F3; color: white; padding: 20px; text-align: center;">
-            <h1>Nexora LMS</h1>
-        </div>
-        <div style="padding: 30px; background-color: #f9f9f9;">
-            <h2>Your Account is Ready!</h2>
-            <p>Your Nexora account has been created. Here is your temporary password:</p>
-            <div style="font-size: 24px; font-weight: bold; color: #2196F3; text-align: center; margin: 20px 0; padding: 15px; background-color: white; border-radius: 8px; font-family: 'Courier New', monospace;">
-                ${password}
-            </div>
-            <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-              <p style="margin: 0; color: #856404;"><strong>⚠️ Important — Two steps before you can log in:</strong></p>
-              <ol style="margin: 10px 0 0 0; color: #856404;">
-                <li><strong>Verify your email first</strong> — check the separate verification email we sent you and enter the 6-digit code.</li>
-                <li><strong>Then log in</strong> using the temporary password above.</li>
-                <li>Do not share this password with anyone.</li>
-              </ol>
-            </div>
-            <p style="margin-top: 20px; text-align: center;">
-              <a href="${process.env.FRONTEND_URL || '#'}" style="display: inline-block; padding: 12px 30px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 6px;">Go to Nexora</a>
+      <div style="margin:0;background-color:#fff7f5;padding:32px 18px;color:#1f2937;font-family:Arial,sans-serif;">
+        <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#fffaf9 0%,#fff5f4 100%);border:1px solid #f3d6d3;">
+          <div style="height:6px;background:linear-gradient(90deg,#7f1d1d 0%,#fb7185 100%);"></div>
+          <div style="padding:28px 28px 24px 28px;">
+            <p style="margin:0 0 10px 0;font-size:11px;letter-spacing:0.24em;text-transform:uppercase;color:#9f5f5f;">
+              Nexora LMS
             </p>
-        </div>
-        <div style="padding: 20px; text-align: center; color: #999; font-size: 12px;">
-          <p>This is an automated message. Please do not reply to this email.</p>
+            <h1 style="margin:0;font-size:24px;line-height:1.2;font-weight:700;color:#3f1518;">
+              Your account is ready
+            </h1>
+            <p style="margin:14px 0 0 0;font-size:15px;line-height:1.8;color:#6b4b4b;">
+              Your Nexora account has been created. Use the temporary password below for your first sign in.
+            </p>
+            <div style="margin:24px 0 18px 0;padding:14px 16px;border-top:1px solid #edd4d0;border-bottom:1px solid #edd4d0;">
+              <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#a16262;">
+                Temporary password
+              </p>
+              <div style="font-size:24px;line-height:1.2;font-weight:700;letter-spacing:0.08em;color:#7f1d1d;font-family:'Courier New',monospace;word-break:break-word;">
+                ${password}
+              </div>
+            </div>
+            <p style="margin:0 0 8px 0;font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:#a16262;">
+              Before you log in
+            </p>
+            <ol style="margin:0;padding-left:18px;font-size:14px;line-height:1.9;color:#6b4b4b;">
+              <li><strong style="color:#3f1518;">Verify your email first</strong> using the separate OTP email.</li>
+              <li><strong style="color:#3f1518;">Sign in to Nexora</strong> with the temporary password above.</li>
+              <li><strong style="color:#3f1518;">Change your password</strong> after your first successful login.</li>
+            </ol>
+            <p style="margin:18px 0 0 0;font-size:14px;line-height:1.8;color:#7b5e5e;">
+              Keep this password private and do not forward this email.
+            </p>
+            <p style="margin:22px 0 0 0;">
+              <a href="${process.env.FRONTEND_URL || '#'}" style="display:inline-block;padding:11px 18px;background:#7f1d1d;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">
+                Open Nexora
+              </a>
+            </p>
+            <div style="margin-top:24px;padding-top:16px;border-top:1px solid #edd4d0;font-size:12px;line-height:1.7;color:#9a7a7a;">
+              Automated message from Nexora. Please do not reply.
+            </div>
+          </div>
         </div>
       </div>
     `;

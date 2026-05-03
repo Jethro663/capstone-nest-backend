@@ -1266,7 +1266,7 @@ describe("mobile rendered screen flows", () => {
       message: {
         id: "message-1",
         role: "assistant",
-        content: "Here is a grounded explanation.",
+        content: "<p><strong>Here is a grounded explanation.</strong></p><ul><li>Review the equivalent values first.</li></ul>",
         blocked: false,
       },
       blocked: false,
@@ -1467,7 +1467,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("LXP data is partially unavailable");
   });
 
-  it("renders the JA hub as a four-mode dark workspace with Learners Path embedded", () => {
+  it("renders the JA hub as an ask-first dark workspace with Learners Path embedded", () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1486,11 +1486,11 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("JA Hub");
     expect(renderedText).toContain("Activity History");
-    expect(renderedText).toContain("Practice");
     expect(renderedText).toContain("Ask");
     expect(renderedText).toContain("Replay");
     expect(renderedText).toContain("Learners Path");
-    expect(renderedText).toContain("Generate Practice Run");
+    expect(renderedText).not.toContain("Practice");
+    expect(renderedText).not.toContain("Generate Practice Run");
   });
 
   it("renders JA Ask with a chat composer and requires lesson context before sending", async () => {
@@ -1543,6 +1543,13 @@ describe("mobile rendered screen flows", () => {
       quickAction: "Explain the lesson",
       lessonId: "lesson-1",
     });
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(renderedText).toContain("Here is a grounded explanation.");
+    expect(renderedText).toContain("Review the equivalent values first.");
+    expect(renderedText).not.toContain("<p>");
   });
 
   it("switches JA classes from the header and clears ask state", async () => {

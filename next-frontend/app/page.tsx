@@ -7,6 +7,7 @@ import { IBM_Plex_Mono, Space_Grotesk } from 'next/font/google';
 import { useRouter } from 'next/navigation';
 import { motion, type Variants, useReducedMotion } from 'framer-motion';
 import {
+  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Bot,
@@ -662,6 +663,14 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
+                href="/downloads/nexora-student-mobile-release.apk"
+                download
+                className="inline-flex items-center justify-center gap-3 rounded-full border border-white/24 bg-white/10 px-5 py-3 text-base font-semibold text-white transition-colors duration-200 hover:bg-white/14"
+              >
+                Download Android APK
+                <ArrowDown className="h-4 w-4" />
+              </a>
+              <a
                 href="#contact"
                 className="inline-flex items-center justify-center gap-3 rounded-full border border-white/24 bg-white/10 px-5 py-3 text-base font-semibold text-white transition-colors duration-200 hover:bg-white/14"
               >
@@ -669,6 +678,9 @@ export default function LandingPage() {
                 <ArrowUpRight className="h-4 w-4" />
               </a>
             </div>
+            <p className={`${ibmPlexMono.className} text-[0.68rem] uppercase tracking-[0.18em] text-rose-100/78`}>
+              Android APK is available from this site. A hosted mobile API URL is still required before broad student-device rollout.
+            </p>
           </motion.div>
         </section>
       </main>

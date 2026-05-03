@@ -4,8 +4,9 @@
 
 'use client';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Menu, Moon, User } from 'lucide-react';
+import { Bell, ChevronDown, Download, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export function TopBar({
     unreadCount > 0
       ? `Open notifications (${unreadCount > 9 ? '9+' : unreadCount} unread)`
       : 'Open notifications';
+  const studentApkHref = '/downloads/nexora-student-mobile-release.apk';
 
   if (isAdminShell) {
     return (
@@ -233,14 +235,37 @@ export function TopBar({
         </div>
 
         <div className="student-topbar-shell__actions">
-          <button
-            type="button"
+          <a
+            href={studentApkHref}
+            download
             className="student-topbar-shell__icon-button"
-            title="Student theme"
-            aria-label="Student theme"
+            title="Download Android app (APK)"
+            aria-label="Download Android app APK"
           >
-            <Moon className="h-5 w-5" />
-          </button>
+            <span className="student-topbar-shell__apk-art" aria-hidden="true">
+              <span className="student-topbar-shell__apk-plate">
+                <Image
+                  src="/nexora-mark.svg"
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="student-topbar-shell__apk-mark"
+                />
+              </span>
+              <span className="student-topbar-shell__apk-mascot-badge">
+                <Image
+                  src="/images/JA/ja_wave.png"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="student-topbar-shell__apk-mascot"
+                />
+              </span>
+              <span className="student-topbar-shell__apk-download-badge">
+                <Download className="h-2.5 w-2.5" />
+              </span>
+            </span>
+          </a>
 
           <button
             type="button"

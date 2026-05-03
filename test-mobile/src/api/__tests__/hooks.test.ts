@@ -35,6 +35,33 @@ jest.mock('expo-constants', () => ({
     hostUri: 'localhost:3000',
   },
 }));
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+  },
+  Linking: {
+    canOpenURL: jest.fn().mockResolvedValue(true),
+    openURL: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
+  cacheDirectory: 'file:///cache/',
+  EncodingType: { Base64: 'base64' },
+  downloadAsync: jest.fn().mockResolvedValue({
+    uri: 'file:///documents/downloaded.pdf',
+    status: 200,
+    headers: {},
+  }),
+  getContentUriAsync: jest.fn().mockResolvedValue('file:///documents/downloaded.pdf'),
+  readAsStringAsync: jest.fn().mockResolvedValue(''),
+  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+}));
 
 const {
   queryKeys,

@@ -57,4 +57,8 @@ export type MainTabParamList = {
 
 export type AuthStackParamList = {
   Login: undefined;
+  VerifyEmail: { email: string; flow?: "activation" | "verification" };
+  ForgotPassword: undefined;
+  ResetPassword: { email?: string; code?: string } | undefined;
+  SetInitialPassword: { email: string };
 };
