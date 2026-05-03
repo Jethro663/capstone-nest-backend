@@ -223,7 +223,134 @@ describe('StudentClassDetailPage module links', () => {
 
     expect(await screen.findByText('Manual Essay')).toBeInTheDocument();
     expect(screen.getByText('Given Core Quiz')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Take' })).toHaveLength(2);
+    expect(screen.getByRole('link', { name: /Manual Essay/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Given Core Quiz/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Take' })).not.toBeInTheDocument();
+  });
+
+  it('groups assignments into upcoming, past due, and completed tabs with student status tags', async () => {
+    currentView = 'assignments';
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-upcoming',
+          classId: 'class-1',
+          title: 'Future Quiz',
+          type: 'quiz',
+          totalPoints: 20,
+          maxAttempts: 1,
+          dueDate: '2099-04-10T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'assessment-past',
+          classId: 'class-1',
+          title: 'Old Seatwork',
+          type: 'assignment',
+          totalPoints: 15,
+          maxAttempts: 1,
+          dueDate: '2000-04-10T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'assessment-completed',
+          classId: 'class-1',
+          title: 'Submitted Lab',
+          type: 'performance_task',
+          totalPoints: 25,
+          maxAttempts: 1,
+          dueDate: '2099-04-12T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+        {
+          id: 'assessment-out',
+          classId: 'class-1',
+          title: 'Used Quiz',
+          type: 'quiz',
+          totalPoints: 10,
+          maxAttempts: 1,
+          dueDate: '2099-04-14T00:00:00.000Z',
+          isPublished: true,
+          questions: [],
+        },
+      ],
+      count: 4,
+      total: 4,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
+    mockedAssessmentService.getStudentAttempts
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [],
+        count: 0,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>)
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [],
+        count: 0,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>)
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [
+          {
+            id: 'attempt-1',
+            assessmentId: 'assessment-completed',
+            studentId: 'student-1',
+            score: 23,
+            totalPoints: 25,
+            isSubmitted: true,
+            isReturned: true,
+            submittedAt: '2099-04-11T10:00:00.000Z',
+            updatedAt: '2099-04-11T10:00:00.000Z',
+            createdAt: '2099-04-11T09:00:00.000Z',
+          },
+        ],
+        count: 1,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>)
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [
+          {
+            id: 'attempt-2',
+            assessmentId: 'assessment-out',
+            studentId: 'student-1',
+            score: 6,
+            totalPoints: 10,
+            isSubmitted: true,
+            isReturned: false,
+            submittedAt: '2099-04-13T10:00:00.000Z',
+            updatedAt: '2099-04-13T10:00:00.000Z',
+            createdAt: '2099-04-13T09:00:00.000Z',
+          },
+        ],
+        count: 1,
+      } as Awaited<ReturnType<typeof assessmentService.getStudentAttempts>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Future Quiz')).toBeInTheDocument();
+    expect(screen.queryByText('Old Seatwork')).not.toBeInTheDocument();
+    expect(screen.queryByText('Submitted Lab')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Past Due' }));
+    expect(await screen.findByText('Old Seatwork')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Completed' }));
+    expect(await screen.findByText('Submitted Lab')).toBeInTheDocument();
+    expect(screen.getAllByText('Graded').length).toBeGreaterThan(0);
+    expect(screen.getByText('Used Quiz')).toBeInTheDocument();
+    expect(screen.getAllByText('Out of Attempts').length).toBeGreaterThan(0);
   });
 
   it('does not render JA as an embedded class surface', async () => {
@@ -271,7 +398,7 @@ describe('StudentClassDetailPage module links', () => {
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(screen.getByText('Page 3 of 7')).toBeInTheDocument();
     expect(screen.getByText('Use assignments to find class work fast')).toBeInTheDocument();
-    expect(screen.getByText('Take button')).toBeInTheDocument();
+    expect(screen.getByText('Assignment row')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(screen.getByText('Page 4 of 7')).toBeInTheDocument();

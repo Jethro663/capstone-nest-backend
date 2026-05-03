@@ -639,6 +639,7 @@ export const assessmentAttempts = pgTable(
     teacherFeedback: text('teacher_feedback'),
     rubricScores: json('rubric_scores'),
     directScore: integer('direct_score'),
+    submittedFiles: json('submitted_files'),
     submittedFileId: uuid('submitted_file_id'),
     submittedFileOriginalName: text('submitted_file_original_name'),
     submittedFileMimeType: varchar('submitted_file_mime_type', {

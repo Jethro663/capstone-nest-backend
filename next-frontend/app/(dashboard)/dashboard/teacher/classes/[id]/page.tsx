@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ChangeEvent,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
@@ -28,6 +29,7 @@ import {
   Grid2X2,
   GripVertical,
   LayoutPanelTop,
+  CircleHelp,
   Megaphone,
   MessageSquare,
   Palette,
@@ -186,6 +188,586 @@ const ASSIGNMENT_FILTERS: Array<{ key: AssignmentFilter; label: string }> = [
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STORAGE_KEY_MODULES_VIEW = 'teacher-class-detail-modules-view-v1';
 const STORAGE_KEY_CALENDAR_VIEW = 'teacher-class-detail-calendar-view-v1';
+type TeacherClassGuideScreen =
+  | 'header'
+  | 'modules'
+  | 'assignments'
+  | 'extraction'
+  | 'community'
+  | 'students'
+  | 'class-record'
+  | 'calendar';
+type GuidePinProps = {
+  children: string;
+  lineSide: 'left' | 'right';
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+const teacherClassGuideDialogStyle = {
+  '--intervention-border': '#dbe2ec',
+  '--intervention-border-soft': '#edf1f6',
+  '--intervention-muted': '#637083',
+  '--intervention-strong': '#111827',
+  '--intervention-red': '#a32d2d',
+  '--intervention-red-soft': '#fcebeb',
+} as CSSProperties;
+
+const teacherClassGuidePages: Array<{
+  title: string;
+  description: string;
+  screen: TeacherClassGuideScreen;
+  reminder: string;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start at the top of the class workspace',
+    description:
+      'Use the header to confirm where you are, how many learners are enrolled, and where the current class tab points.',
+    screen: 'header',
+    reminder: 'Keep this header in view while moving between tabs so actions always map to the right class.',
+    steps: [
+      {
+        action: 'Read',
+        body: 'Check the class title, section details, room, and schedule from the title card.',
+      },
+      {
+        action: 'Go back',
+        body: 'Use Back to Classes if you want to return to your class list safely.',
+      },
+      {
+        action: 'Open tabs',
+        body: 'Move across Modules, Assignments, Extraction, and other sections using the tab row.',
+      },
+      {
+        action: 'Open help',
+        body: 'Tap this guide button again anytime you need these instructions while working.',
+      },
+    ],
+  },
+  {
+    title: 'Manage class modules first',
+    description:
+      'Modules are the learning map for the class. The tab is where you build learning flow and check lesson progress.',
+    screen: 'modules',
+    reminder:
+      'Switch to Compact or Wide view when you compare module quality and progress at a glance.',
+    steps: [
+      {
+        action: 'Create',
+        body: 'Open Add Module to create a new unit before posting assignments or discussions.',
+      },
+      {
+        action: 'Rearrange',
+        body: 'Use Select All and Delete Selected only when you intentionally want bulk changes.',
+      },
+      {
+        action: 'Review',
+        body: 'Inspect each module card for lesson count, assignment count, and progress indicator.',
+      },
+      {
+        action: 'Edit style',
+        body: 'Use Design if you want a custom cover and gradient on a module.',
+      },
+    ],
+  },
+  {
+    title: 'Use assignment filters and assignment actions',
+    description:
+      'Assignments can be filtered by timing and type so you can move quickly from overdue to draft or graded work.',
+    screen: 'assignments',
+    reminder: 'For new classes, start with All and then narrow to Written Work or Discussion.',
+    steps: [
+      {
+        action: 'Filter',
+        body: 'Use All, Written Work, Performance, or Quarterly to narrow the assignment list.',
+      },
+      {
+        action: 'Check status',
+        body: 'Look at Published and Draft tags to avoid editing items that are already live.',
+      },
+      {
+        action: 'Select',
+        body: 'Use row selection when multiple items need the same action.',
+      },
+      {
+        action: 'Open',
+        body: 'Open assignment cards to review title, points, and due date details.',
+      },
+    ],
+  },
+  {
+    title: 'Run AI extraction when you need fast lesson input',
+    description:
+      'The extraction tab is for uploading a PDF and turning it into a structured draft for module work.',
+    screen: 'extraction',
+    reminder: 'Extraction can pause when AI is unavailable; the notice and upload state will reflect that.',
+    steps: [
+      {
+        action: 'Drop PDF',
+        body: 'Use the extraction dropzone to start converting source material.',
+      },
+      {
+        action: 'Track',
+        body: 'Review extraction status text to see Completed, Failed, or images that still need review.',
+      },
+      {
+        action: 'Open result',
+        body: 'Open an extraction row to inspect parsed title, sections, and assignment suggestions.',
+      },
+    ],
+  },
+  {
+    title: 'Keep class communication in one workflow',
+    description:
+      'Announcements and Discussion sit near each other so notices and student questions stay on the same class page.',
+    screen: 'community',
+    reminder:
+      'If students need immediate visibility, post to Announcements first and then link to a discussion for questions.',
+    steps: [
+      {
+        action: 'Create',
+        body: 'Use New Announcement for formal class-wide updates.',
+      },
+      {
+        action: 'Start thread',
+        body: 'Use New Thread to start a discussion area with comments and attachments.',
+      },
+      {
+        action: 'Pin wisely',
+        body: 'Pin posts and threads only for high-priority information.',
+      },
+    ],
+  },
+  {
+    title: 'Review students from one tab',
+    description:
+      'The students tab is where you view class members, open profiles, and remove people who no longer belong.',
+    screen: 'students',
+    reminder: 'Removing a student happens intentionally. Confirm before finalizing any deletion.',
+    steps: [
+      {
+        action: 'Add',
+        body: 'Use Add Student when enrolling new learners for this class.',
+      },
+      {
+        action: 'Open profile',
+        body: 'Open a student row to inspect contact details and performance history.',
+      },
+      {
+        action: 'Read grade',
+        body: 'Use the Grade % column to identify quickly who may need a follow-up.',
+      },
+      {
+        action: 'Remove',
+        body: 'Use Remove only when enrollment has truly changed.',
+      },
+    ],
+  },
+  {
+    title: 'View class record and progress summaries',
+    description:
+      'Class Record gives one view for workbook data, category points, and the current progress snapshot.',
+    screen: 'class-record',
+    reminder: 'Keep student privacy in mind and open workbook entries only for official grading workflows.',
+    steps: [
+      {
+        action: 'Open',
+        body: 'Use this tab to open the class record workbook inside the class context.',
+      },
+      {
+        action: 'Read trends',
+        body: 'Check the summary before making new grade edits or posting extra remediation.',
+      },
+    ],
+  },
+  {
+    title: 'Plan with the class calendar',
+    description:
+      'The calendar keeps assessments, announcements, and events in one quick schedule view.',
+    screen: 'calendar',
+    reminder: 'Check Upcoming before Calendar view when you only need short-term deadlines.',
+    steps: [
+      {
+        action: 'Choose',
+        body: 'Pick Calendar for date blocks or Upcoming for a simple list workflow.',
+      },
+      {
+        action: 'Select date',
+        body: 'In Calendar view, click a date to review events for that day.',
+      },
+      {
+        action: 'Open full calendar',
+        body: 'Use Full Calendar when you need a cross-class schedule check.',
+      },
+    ],
+  },
+];
+
+function GuidePin({ children, lineSide, lineWidth, style }: GuidePinProps) {
+  return (
+    <em
+      className="pointer-events-none absolute z-10 inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
+            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+        }
+      />
+    </em>
+  );
+}
+
+function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScreen }) {
+  if (screen === 'header') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class detail header screenshot"
+      >
+        <div className="absolute inset-x-0 top-0 flex h-8 items-center gap-1 border-b border-[#edf1f6] bg-white px-3">
+          <span className="h-2 w-2 rounded-full bg-[#f87171]" />
+          <span className="h-2 w-2 rounded-full bg-[#fbbf24]" />
+          <span className="h-2 w-2 rounded-full bg-[#34d399]" />
+        </div>
+        <div className="rounded-xl border border-[#1d3659] bg-[#10254a] p-4 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <small className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#c4d0e2]">
+                Teacher Class Detail
+              </small>
+              <strong className="mt-1 block text-[1.1rem] font-black leading-tight text-white">Science 7</strong>
+              <p className="mt-1.5 text-sm text-[#b6c8df]">Grade 7 - Rizal - Schedule TBA - Room 201</p>
+            </div>
+            <span className="rounded-full border border-[#284269] bg-[#17345d] px-3 py-1 text-[0.62rem] font-black">
+              ? Help
+            </span>
+          </div>
+          <div className="mt-3 grid gap-2 rounded-lg border border-[#263e62] bg-[#17345d] p-2">
+            <a className="h-3 w-max border-b border-dotted border-[#91a7c1] pb-1 text-xs font-black text-[#f0f6ff]">
+              Back to Classes
+            </a>
+            <div className="flex flex-wrap gap-2 text-[0.62rem] font-black">
+              <span className="rounded-full bg-[#f0f5ff] px-2 py-1 text-[#10254a]">Modules</span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Assignments</span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Extraction</span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Students</span>
+            </div>
+          </div>
+        </div>
+
+        <GuidePin lineSide="left" lineWidth="6.2rem" style={{ right: '1rem', top: '1.95rem' }}>
+          Help button
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1.2rem', top: '8.2rem' }}>
+          Back to Classes
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="8rem" style={{ left: '1.2rem', top: '9.8rem' }}>
+          Module tabs
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'modules') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class modules screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <small className="text-[0.64rem] font-black uppercase tracking-[0.08em] text-[#647083]">Course Modules</small>
+              <strong className="text-lg font-black text-[#111827]">3 modules</strong>
+            </div>
+            <div className="inline-flex items-center gap-2">
+              <span className="inline-flex h-8 min-w-16 items-center justify-center rounded-full border border-[#d2ddec] bg-[#f7fafe] text-[0.72rem] font-black text-[#4f6694]">
+                Wide
+              </span>
+              <span className="inline-flex h-8 min-w-16 items-center justify-center rounded-full border border-[#e8eff7] bg-white text-[0.72rem] font-black text-[#4f6694]">
+                Compact
+              </span>
+              <span className="inline-flex h-8 min-w-20 items-center justify-center rounded-full border border-[#e8eff7] bg-[#f8fbfe] text-[0.72rem] font-black text-[#4f6694]">
+                Select All
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <strong className="text-sm font-black text-[#143155]">Week 1: Foundations</strong>
+              <span className="rounded-full bg-[#fff1f5] px-2 py-1 text-[0.56rem] font-black text-[#9f2342]">
+                Locked
+              </span>
+            </div>
+            <p className="text-sm text-[#60789a]">3 lessons - 2 assessments - 40% complete</p>
+            <div className="mt-2 inline-flex gap-2">
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Preview
+              </span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Design
+              </span>
+            </div>
+          </div>
+        </div>
+        <GuidePin lineSide="right" lineWidth="4.7rem" style={{ left: '1rem', top: '1.2rem' }}>
+          Add module / filters
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.5rem" style={{ right: '1rem', top: '2.6rem' }}>
+          View style
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5.2rem" style={{ left: '1rem', top: '7.9rem' }}>
+          Module card
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'assignments') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class assignments screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div>
+              <strong className="text-lg font-black text-[#111827]">Assignments</strong>
+              <p className="text-sm text-[#647083]">8 total</p>
+            </div>
+            <div className="inline-flex rounded-full border border-[#d2ddec] bg-[#f7fafe] p-1">
+              <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">All</span>
+              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Written</span>
+              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Discussion</span>
+            </div>
+          </div>
+          <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <small className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#7a8ea8]">Published</small>
+                <strong className="mt-0.5 block text-[#111827]">Seatwork 1 Quiz</strong>
+                <p className="mt-1 text-sm text-[#60789a]">Due Apr 10, 2026 - 20 pts</p>
+              </div>
+              <div className="inline-flex gap-1">
+                <span className="rounded-full border border-[#e7edf5] px-2 py-1 text-[0.56rem] font-black text-[#4f6694]">
+                  Edit
+                </span>
+                <span className="rounded-full border border-[#f2d3d8] px-2 py-1 text-[0.56rem] font-black text-[#b71d3a]">
+                  Delete
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <GuidePin lineSide="left" lineWidth="6.1rem" style={{ left: '1rem', top: '1.1rem' }}>
+          Filter chips
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5.8rem" style={{ right: '1rem', top: '6rem' }}>
+          Assignment actions
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'extraction') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class extraction screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="mb-2">
+            <strong className="text-lg font-black text-[#111827]">AI Extractions</strong>
+            <p className="text-sm text-[#647083]">Upload a PDF to extract lesson content.</p>
+          </div>
+          <div className="rounded-lg border border-[#d6e3f3] bg-[#f7fbff] px-3 py-4 text-center">
+            <strong className="text-sm text-[#143155]">Drop a PDF here to extract module</strong>
+            <p className="mt-1 text-sm text-[#647083]">or click to browse</p>
+          </div>
+          <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <strong className="text-sm text-[#111827]">Cells and Systems</strong>
+              <span className="rounded-full border border-[#cce3f7] px-2 py-1 text-xs font-black text-[#2862a6]">Ready</span>
+            </div>
+            <p className="text-xs text-[#677f9e]">2026-04-30</p>
+            <span className="mt-2 inline-flex rounded-full border border-[#d2ddec] px-2 py-1 text-xs font-black text-[#4f6694]">
+              View
+            </span>
+          </div>
+        </div>
+        <GuidePin lineSide="right" lineWidth="4.6rem" style={{ left: '1rem', top: '1.1rem' }}>
+          PDF dropzone
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="5rem" style={{ right: '1rem', top: '7.4rem' }}>
+          Extraction history
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'community') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class community screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <strong className="text-base font-black text-[#111827]">Announcements</strong>
+              <p className="text-sm text-[#647083]">6 posts</p>
+            </div>
+            <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
+              + New Announcement
+            </span>
+          </div>
+          <div className="mb-3 rounded-lg border border-[#d8e3f3] bg-[#f8fbff] p-2">
+            <span className="rounded-full border border-[#e6a8b4] bg-[#fff2f5] px-2 py-1 text-[0.56rem] font-black text-[#8f1f45]">
+              Pinned
+            </span>
+            <strong className="mt-1 block text-sm text-[#111827]">Science Fair Reminder</strong>
+          </div>
+          <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <strong className="text-base font-black text-[#111827]">Discussion Board</strong>
+                <p className="text-sm text-[#647083]">2 threads</p>
+              </div>
+              <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
+                + New Thread
+              </span>
+            </div>
+            <div className="rounded-lg border border-[#d8e4f4] bg-[#f8fbff] p-2">
+              <small className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#7a8ea8]">
+                Discussion thread
+              </small>
+              <strong className="mt-0.5 block text-sm text-[#111827]">How to solve slope questions?</strong>
+            </div>
+          </div>
+        </div>
+        <GuidePin lineSide="left" lineWidth="6.3rem" style={{ left: '1rem', top: '1.05rem' }}>
+          New Announcement
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1rem', top: '9.25rem' }}>
+          New Thread
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'students') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class students screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <strong className="text-lg font-black text-[#111827]">Students (18)</strong>
+            <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
+              + Add Student
+            </span>
+          </div>
+          <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="rounded-full bg-[#d5e3f7] p-2 text-xs font-black text-[#1f3d66]">LN</span>
+              <strong className="text-sm text-[#111827]">Liam Navarro</strong>
+              <span className="text-sm text-[#4f6694]">88.0%</span>
+            </div>
+            <p className="text-xs text-[#647083]">student71@lms.local - 17-11-0011</p>
+          </div>
+          <div className="mt-2 rounded-lg border border-[#f0d8db] bg-[#fff2f5] px-3 py-2 text-right">
+            <span className="text-xs font-black text-[#9f1e3d]">Delete</span>
+          </div>
+        </div>
+        <GuidePin lineSide="right" lineWidth="4.8rem" style={{ left: '1rem', top: '1.35rem' }}>
+          Add Student
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.4rem" style={{ right: '1rem', top: '6.4rem' }}>
+          Student row
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'class-record') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="class record screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <strong className="text-lg font-black text-[#111827]">Class Record Workspace</strong>
+          <p className="text-sm text-[#647083]">Track grade summaries and workbook milestones.</p>
+          <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="mb-2 grid gap-1">
+              <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#647083]">Summary</span>
+              <strong className="text-2xl font-black text-[#111827]">92/140</strong>
+              <span className="text-sm text-[#647083]">Written Work | Performance | Quarterly</span>
+            </div>
+            <div className="grid gap-2">
+              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">Written Work: 93%</span>
+              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">Performance Task: 90%</span>
+            </div>
+          </div>
+        </div>
+        <GuidePin lineSide="right" lineWidth="5.4rem" style={{ left: '1rem', top: '1.05rem' }}>
+          Class Record tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.5rem" style={{ right: '1rem', top: '6rem' }}>
+          Score snapshot
+        </GuidePin>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+      aria-label="class calendar screenshot"
+    >
+      <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div>
+            <strong className="text-lg font-black text-[#111827]">Class Calendar</strong>
+            <p className="text-sm text-[#647083]">Upcoming events and assessments</p>
+          </div>
+          <div className="inline-flex rounded-full border border-[#d2ddec] bg-[#f7fafe] p-1">
+            <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">Calendar</span>
+            <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Upcoming</span>
+          </div>
+        </div>
+        <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-sm font-black text-[#143155]">May 15</span>
+            <span className="rounded-full border border-[#dce2ec] bg-[#ecf3ff] px-2 py-1 text-[0.58rem] font-black text-[#3f5f89]">
+              Assessment
+            </span>
+          </div>
+          <strong className="text-sm font-black text-[#111827]">Quarter Examination</strong>
+          <p className="text-xs text-[#647083]">Mathematics 7</p>
+        </div>
+      </div>
+      <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '1.4rem' }}>
+        View switch
+      </GuidePin>
+      <GuidePin lineSide="left" lineWidth="4.8rem" style={{ right: '1rem', top: '8.1rem' }}>
+        Event row
+      </GuidePin>
+    </div>
+  );
+}
 
 function normalizeModulesOrder(modules: ClassModule[]) {
   return modules.map((module, index) => ({ ...module, order: index + 1 }));
@@ -228,6 +810,15 @@ function formatRelativeTime(value?: string | null) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+function getExtractionStatusLabel(extraction: Extraction) {
+  if (extraction.extractionStatus === 'failed') return 'Failed';
+  const unassigned = extraction.structuredContent?.audit?.imageAssignmentSummary?.unassigned ?? 0;
+  if (unassigned > 0) return 'Images unassigned';
+  if (extraction.reviewRequired) return 'Needs review';
+  if (extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'applied') return 'Ready';
+  return extraction.extractionStatus;
 }
 
 function normalizeLibrarySubjectKey(
@@ -443,6 +1034,8 @@ export default function TeacherClassDetailPage() {
   const [discussionAttachmentFiles, setDiscussionAttachmentFiles] = useState<File[]>([]);
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [busyDiscussionThreadId, setBusyDiscussionThreadId] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
 
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
@@ -801,6 +1394,8 @@ export default function TeacherClassDetailPage() {
     () => aiDraftJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus)).length,
     [aiDraftJobs],
   );
+  const activeGuidePage =
+    teacherClassGuidePages[helpPage] ?? teacherClassGuidePages[0];
 
   useEffect(() => {
     const assessmentIdSet = new Set(filteredAssignments.map((assessment) => assessment.id));
@@ -1718,6 +2313,20 @@ export default function TeacherClassDetailPage() {
           { key: 'modules', label: `${modules.length} modules` },
         ]}
         tabs={workspaceTabs}
+        heroActions={
+          <Button
+            type="button"
+            variant="outline"
+            className="teacher-class-help-button"
+            aria-label="Module help"
+            onClick={() => {
+              setHelpPage(0);
+              setHelpOpen(true);
+            }}
+          >
+            <CircleHelp className="h-4 w-4" />
+          </Button>
+        }
       >
         {activeTab === 'modules' ? (
           <div className="teacher-class-workspace__panel">
@@ -2003,7 +2612,7 @@ export default function TeacherClassDetailPage() {
                           <div>
                             <strong>{entry.jobId}</strong>
                             <p className="text-xs text-muted-foreground">
-                              {entry.lastKnownStatus} • {Math.round(entry.lastKnownProgress)}% • {formatRelativeTime(entry.updatedAt || entry.createdAt)}
+                              {entry.lastKnownStatus} - {Math.round(entry.lastKnownProgress)}% - {formatRelativeTime(entry.updatedAt || entry.createdAt)}
                             </p>
                           </div>
                           <div className="teacher-class-workspace__selection-actions">
@@ -2195,7 +2804,7 @@ export default function TeacherClassDetailPage() {
                       <p>{formatDateYmd(extraction.createdAt)}</p>
                     </div>
                     <div className="teacher-class-workspace__extract-item-actions">
-                      <span data-status={extraction.extractionStatus}>{extraction.extractionStatus}</span>
+                      <span data-status={extraction.extractionStatus}>{getExtractionStatusLabel(extraction)}</span>
                       <Link href={`/dashboard/teacher/extractions/${extraction.id}`} className="teacher-class-workspace__outline">
                         <Eye className="h-4 w-4" />
                         View
@@ -2446,7 +3055,7 @@ export default function TeacherClassDetailPage() {
                       className="teacher-class-workspace__announcement-rich"
                     />
                     <small>
-                      {formatDateYmd(thread.publishedAt || thread.createdAt)} • Theme {thread.themeId}
+                      {formatDateYmd(thread.publishedAt || thread.createdAt)} - Theme {thread.themeId}
                     </small>
                     {thread.attachments.length > 0 ? (
                       <div className="teacher-class-workspace__assignment-actions">
@@ -2564,7 +3173,7 @@ export default function TeacherClassDetailPage() {
                           </div>
                         ) : null}
                         <small>
-                          {comment.reactions.like} like • {comment.reactions.heart} heart • {comment.reactions.wow} wow
+                          {comment.reactions.like} like - {comment.reactions.heart} heart - {comment.reactions.wow} wow
                         </small>
                       </div>
                     </article>
@@ -3057,6 +3666,101 @@ export default function TeacherClassDetailPage() {
             >
               {savingModuleDesign ? 'Saving...' : 'Save Design'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) {
+            setHelpPage(0);
+          }
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog teacher-class-guide-dialog" style={teacherClassGuideDialogStyle}>
+          <DialogHeader>
+            <DialogTitle>Teacher guide: Class Workspace</DialogTitle>
+            <DialogDescription>
+              Read this guide one page at a time. Each screenshot points to the core controls for this class page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {teacherClassGuidePages.length}</span>
+            <div>
+              {teacherClassGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <TeacherClassGuideScreenshot screen={activeGuidePage.screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Teacher workspace walkthrough</p>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+              <div className="route-guide-steps grid gap-3">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${step.action}-${step.body}`}
+                    className={`route-guide-step grid grid-cols-[1.9rem_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[#edf1f6] border-l-[3px] bg-white p-3 shadow-sm ${
+                      step.tone === 'caution' ? 'is-caution' : ''
+                    }`}
+                  >
+                    <span
+                      className={`route-guide-step__index inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white ${
+                        step.tone === 'caution' ? 'bg-[#b7791f]' : 'bg-[#a32d2d]'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <strong className="block text-sm font-black text-[#111827]">{step.action}</strong>
+                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="teacher-intervention-workspace__manual-reminder">
+                {activeGuidePage.reminder}
+              </p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <div className="teacher-intervention-workspace__manual-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                disabled={helpPage === 0}
+              >
+                Previous page
+              </Button>
+              {helpPage < teacherClassGuidePages.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setHelpPage((current) => Math.min(current + 1, teacherClassGuidePages.length - 1))
+                  }
+                >
+                  Next page
+                </Button>
+              ) : (
+                <Button type="button" onClick={() => setHelpOpen(false)}>
+                  Close guide
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

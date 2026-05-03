@@ -234,4 +234,58 @@ describe('TeacherClassDetailPage design modal', () => {
       expect(mockedModuleService.uploadCover).toHaveBeenCalledTimes(1),
     );
   });
+
+  it('opens the helper guide and walks through all pages', async () => {
+    render(<TeacherClassDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /module help/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+
+    expect(await screen.findByText('Teacher guide: Class Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Start at the top of the class workspace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Manage class modules first')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 3 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Use assignment filters and assignment actions')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 4 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Run AI extraction when you need fast lesson input')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 5 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Keep class communication in one workflow')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 6 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Review students from one tab')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 7 of 8')).toBeInTheDocument();
+    expect(screen.getByText('View class record and progress summaries')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 8 of 8')).toBeInTheDocument();
+    expect(screen.getByText('Plan with the class calendar')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByText('Page 7 of 8')).toBeInTheDocument();
+    expect(screen.getByText('View class record and progress summaries')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Close guide')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Teacher guide: Class Workspace')).not.toBeInTheDocument();
+    });
+  });
 });

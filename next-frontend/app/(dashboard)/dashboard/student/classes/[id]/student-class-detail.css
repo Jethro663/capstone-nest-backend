@@ -365,10 +365,15 @@
   background: #fff;
   box-shadow: 0 10px 20px -24px rgba(15, 23, 42, 0.55);
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 0.8rem;
   align-items: center;
-  padding: 0.78rem;
+  overflow: hidden;
+}
+
+.student-class-assignment-row:hover {
+  border-color: #cbdcf2;
+  box-shadow: 0 14px 30px -26px rgba(15, 23, 42, 0.58);
 }
 
 .student-class-assignment-row__icon {
@@ -397,34 +402,36 @@
   font-weight: 700;
 }
 
-.student-class-assignment-row__chips span[data-status='published'] {
+.student-class-assignment-row__chips span[data-status='graded'] {
   border: 1px solid #bde6c9;
   background: #ebfbf0;
   color: #0b8f5f;
 }
 
-.student-class-assignment-row__chips span[data-type='written_work'] {
-  border: 1px solid #b9d5ff;
-  background: #e9f2ff;
-  color: #2964cb;
-}
-
-.student-class-assignment-row__chips span[data-type='performance_task'] {
-  border: 1px solid #d7c2fd;
-  background: #f3ecff;
-  color: #7336d9;
-}
-
-.student-class-assignment-row__chips span[data-type='quarterly_assessment'] {
+.student-class-assignment-row__chips span[data-status='attempts'] {
   border: 1px solid #f0d6b7;
   background: #fff3e3;
   color: #bf6f00;
 }
 
-.student-class-assignment-row__chips span[data-type='discussion'] {
+.student-class-assignment-row__chips span[data-status='submitted'] {
   border: 1px solid #b8ebde;
   background: #ebfbf5;
   color: #087f62;
+}
+
+.student-class-assignment-row__body {
+  min-width: 0;
+  color: inherit;
+  padding: 0.78rem;
+  text-decoration: none;
+  width: 100%;
+}
+
+.student-class-assignment-row__main {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
 }
 
 .student-class-assignment-row h3 {
@@ -441,22 +448,33 @@
   font-weight: 600;
 }
 
+.student-class-assignment-row__body:hover h3 {
+  text-decoration: underline;
+}
+
 .student-class-assignment-row__take {
   min-height: 2.5rem;
+  border: 1px solid #d7e3f3;
   border-radius: 999px;
-  background: #e70012;
-  color: #fff;
-  font-size: 1rem;
+  background: #fff;
+  color: #24456f;
+  font-size: 0.96rem;
   font-weight: 700;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding-inline: 1.15rem;
+  padding-inline: 1rem;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease;
 }
 
 .student-class-assignment-row__take:hover {
-  background: #d10010;
+  border-color: #bdd2f2;
+  background: #f6f9ff;
+  color: #183c72;
 }
 
 .student-class-announcement-card {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useMemo, type Dispatch, type SetStateAction } from 'react';
 import Image from 'next/image';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,8 +13,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type {
+  ManualResponseScore,
   RubricCriterion,
   RubricScore,
+  SubmissionTimelineEntry,
   SubmissionsResponse,
   StudentSubmission,
   SubmissionStatus,
@@ -60,6 +62,7 @@ interface AttemptResultData {
   isReturned?: boolean;
   teacherFeedback?: string;
   assessment?: {
+    type?: string;
     totalPoints?: number;
     rubricCriteria?: RubricCriterion[];
   };
@@ -71,6 +74,13 @@ interface AttemptResultData {
     sizeBytes: number;
     uploadedAt: string;
   } | null;
+  submittedFiles?: Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  }>;
 }
 
 function canPreviewSubmissionFile(mimeType?: string | null) {
@@ -80,6 +90,41 @@ function canPreviewSubmissionFile(mimeType?: string | null) {
     || mimeType === 'application/pdf'
     || mimeType.startsWith('text/')
   );
+}
+
+function normalizeScoreTextInput(value: string, max: number) {
+  const digits = value.replace(/\D+/g, '');
+  if (!digits) return '';
+
+  const numericValue = Number(digits);
+  if (!Number.isFinite(numericValue)) return '';
+
+  return String(Math.min(numericValue, max));
+}
+
+function formatTimelineAction(entry: SubmissionTimelineEntry, attempts: StudentAttemptSummary[]) {
+  const attempt = attempts.find((current) => current.id === entry.attemptId);
+  const attemptLabel = attempt?.attemptNumber ? `Attempt ${attempt.attemptNumber}` : 'Attempt';
+  const fileLabel = typeof entry.metadata?.originalName === 'string' ? entry.metadata.originalName : null;
+
+  switch (entry.action) {
+    case 'assessment.submission.file_uploaded':
+      return `${attemptLabel}: attached ${fileLabel ?? 'a file'}`;
+    case 'assessment.submission.file_removed':
+      return `${attemptLabel}: removed ${fileLabel ?? 'a file'}`;
+    case 'assessment.submission.submitted':
+      return `${attemptLabel}: submitted for review`;
+    case 'assessment.submission.unsubmitted':
+      return `${attemptLabel}: restored to draft`;
+    case 'assessment.submission.auto_submitted':
+      return `${attemptLabel}: auto-submitted`;
+    case 'assessment.grade.returned':
+      return `${attemptLabel}: grade posted`;
+    case 'assessment.grade.unreturned':
+      return `${attemptLabel}: posted grade withdrawn`;
+    default:
+      return `${attemptLabel}: ${entry.action}`;
+  }
 }
 
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
@@ -92,7 +137,7 @@ const STATUS_COLORS: Record<SubmissionStatus, string> = {
 const STATUS_LABELS: Record<SubmissionStatus, string> = {
   not_started: 'Not Started',
   in_progress: 'In Progress',
-  turned_in: 'Graded',
+  turned_in: 'Pending Score',
   returned: 'Posted',
 };
 
@@ -111,9 +156,11 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
   const [loadingAttempt, setLoadingAttempt] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [returning, setReturning] = useState(false);
+  const [unreturning, setUnreturning] = useState(false);
   const [search, setSearch] = useState('');
-  const [directScore, setDirectScore] = useState<number | ''>('');
+  const [directScore, setDirectScore] = useState<string>('');
   const [rubricScores, setRubricScores] = useState<RubricScore[]>([]);
+  const [manualScoreInputs, setManualScoreInputs] = useState<Record<string, string>>({});
 
   const selectedStudent = studentsWithAttempts.find((s) => s.studentId === selectedStudentId);
 
@@ -145,6 +192,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     if (!selectedAttempt?.id) {
       setAttemptData(null);
       setFeedback('');
+      setManualScoreInputs({});
       return;
     }
 
@@ -171,7 +219,18 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
                 })
               : [],
           );
-          setDirectScore(payload.directScore ?? payload.score ?? '');
+          setDirectScore(
+            payload.directScore === null || payload.directScore === undefined
+              ? (payload.score === null || payload.score === undefined ? '' : String(payload.score))
+              : String(payload.directScore),
+          );
+          setManualScoreInputs(
+            Object.fromEntries(
+              (payload.responses ?? [])
+                .filter((response) => Boolean(response.questionId))
+                .map((response) => [response.questionId as string, String(response.pointsEarned ?? 0)]),
+            ),
+          );
         }
       } catch {
         if (!cancelled) toast.error('Failed to load student attempt');
@@ -188,15 +247,36 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     if (!selectedStudent || !selectedAttempt?.id) return;
     try {
       setReturning(true);
+      const isFileUploadAssessment = attemptData?.assessment?.type === 'file_upload';
+      const normalizedManualResponseScores: ManualResponseScore[] = !isFileUploadAssessment
+        ? (attemptData?.responses ?? [])
+          .filter((response): response is AttemptResponse & { questionId: string; question: AttemptQuestion } => (
+            Boolean(response.questionId) && Boolean(response.question)
+          ))
+          .map((response) => ({
+            questionId: response.questionId,
+            pointsEarned: Number(
+              normalizeScoreTextInput(
+                manualScoreInputs[response.questionId] ?? String(response.pointsEarned ?? 0),
+                response.question.points ?? 0,
+              ) || '0',
+            ),
+          }))
+        : [];
+
       await assessmentService.returnGrade(selectedAttempt.id, {
         teacherFeedback: feedback || undefined,
         directScore:
-          (attemptData?.assessment?.rubricCriteria?.length ?? 0) === 0 && directScore !== ''
+          isFileUploadAssessment && (attemptData?.assessment?.rubricCriteria?.length ?? 0) === 0 && directScore !== ''
             ? Number(directScore)
             : undefined,
         rubricScores:
-          (attemptData?.assessment?.rubricCriteria?.length ?? 0) > 0
+          isFileUploadAssessment && (attemptData?.assessment?.rubricCriteria?.length ?? 0) > 0
             ? rubricScores
+            : undefined,
+        manualResponseScores:
+          !isFileUploadAssessment && normalizedManualResponseScores.length > 0
+            ? normalizedManualResponseScores
             : undefined,
       });
       toast.success(
@@ -214,6 +294,29 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
       toast.error(errorMessage);
     } finally {
       setReturning(false);
+    }
+  };
+
+  const handleUnreturnGrade = async () => {
+    if (!selectedStudent || !selectedAttempt?.id) return;
+    try {
+      setUnreturning(true);
+      await assessmentService.unreturnGrade(selectedAttempt.id);
+      toast.success(
+        `Posted grade restored to pending review for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+      );
+      onGradeReturned();
+    } catch (err: unknown) {
+      const errorMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === 'string'
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : 'Failed to restore the posted grade';
+      toast.error(errorMessage);
+    } finally {
+      setUnreturning(false);
     }
   };
 
@@ -235,17 +338,17 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
   }
 
   return (
-    <div className="flex gap-4 min-h-[500px]">
+    <div className="flex min-h-[500px] gap-4 rounded-[1.15rem] bg-slate-50/70 p-3">
       {/* Left Sidebar — Student List */}
-      <div className="w-72 shrink-0 space-y-2">
+      <div className="w-72 shrink-0 space-y-3">
         <input
           type="text"
           placeholder="Search students…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.3)] focus:outline-none focus:ring-2 focus:ring-slate-300"
         />
-        <div className="space-y-1 max-h-[460px] overflow-y-auto pr-1">
+        <div className="max-h-[460px] space-y-2 overflow-y-auto pr-1">
           {filteredStudents.map((student, i) => (
             <motion.button
               key={student.studentId}
@@ -254,10 +357,10 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
               transition={{ delay: i * 0.03 }}
               onClick={() => setSelectedStudentId(student.studentId)}
               className={cn(
-                'w-full text-left rounded-lg px-3 py-2.5 transition-colors text-sm',
+                'w-full rounded-xl border px-3 py-3 text-left text-sm shadow-[0_10px_24px_-24px_rgba(15,23,42,0.35)] transition-colors',
                 selectedStudentId === student.studentId
-                  ? 'bg-primary/10 border border-primary/20'
-                  : 'hover:bg-muted',
+                  ? 'border-slate-300 bg-white'
+                  : 'border-slate-200 bg-white hover:bg-slate-50',
               )}
             >
               <p className="font-medium truncate">
@@ -302,10 +405,14 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
                 setFeedback={setFeedback}
                 directScore={directScore}
                 setDirectScore={setDirectScore}
+                manualScoreInputs={manualScoreInputs}
+                setManualScoreInputs={setManualScoreInputs}
                 rubricScores={rubricScores}
                 setRubricScores={setRubricScores}
                 onReturn={handleReturnGrade}
+                onUndoReturn={handleUnreturnGrade}
                 returning={returning}
+                unreturning={unreturning}
               />
             </motion.div>
           ) : (
@@ -333,10 +440,14 @@ function AttemptDetailPanel({
   setFeedback,
   directScore,
   setDirectScore,
+  manualScoreInputs,
+  setManualScoreInputs,
   rubricScores,
   setRubricScores,
   onReturn,
+  onUndoReturn,
   returning,
+  unreturning,
 }: {
   student: StudentSubmission;
   selectedAttempt: StudentAttemptSummary | null;
@@ -345,26 +456,66 @@ function AttemptDetailPanel({
   data: AttemptResultData;
   feedback: string;
   setFeedback: (v: string) => void;
-  directScore: number | '';
-  setDirectScore: (value: number | '') => void;
+  directScore: string;
+  setDirectScore: (value: string) => void;
+  manualScoreInputs: Record<string, string>;
+  setManualScoreInputs: Dispatch<SetStateAction<Record<string, string>>>;
   rubricScores: RubricScore[];
   setRubricScores: Dispatch<SetStateAction<RubricScore[]>>;
   onReturn: () => void;
+  onUndoReturn: () => void;
   returning: boolean;
+  unreturning: boolean;
 }) {
-  const score = data.score ?? selectedAttempt?.score ?? student.attempt?.score ?? 0;
   const totalPoints = data.assessment?.totalPoints ?? 0;
-  const responses = data.responses ?? [];
-  const submittedFile = data.submittedFile;
-  const hasSubmissionFile = Boolean(submittedFile && selectedAttempt?.id);
-  const canPreviewFile = canPreviewSubmissionFile(submittedFile?.mimeType);
+  const responses = useMemo(() => data.responses ?? [], [data.responses]);
+  const isFileUploadAssessment = data.assessment?.type === 'file_upload';
+  const submittedFiles = data.submittedFiles?.length
+    ? data.submittedFiles
+    : (data.submittedFile ? [data.submittedFile] : []);
+  const hasSubmissionFile = Boolean(submittedFiles.length > 0 && selectedAttempt?.id);
   const timeSpent = selectedAttempt?.timeSpentSeconds ?? student.attempt?.timeSpentSeconds;
   const submittedAt = selectedAttempt?.submittedAt;
   const isReturned = Boolean(selectedAttempt?.isReturned ?? data?.isReturned ?? student.status === 'returned');
-  const rubricCriteria = data.assessment?.rubricCriteria ?? [];
+  const latestAttemptId = attempts[0]?.id ?? null;
+  const isLatestAttempt = !latestAttemptId || selectedAttempt?.id === latestAttemptId;
+  const timeline = student.timeline ?? [];
+  const rubricCriteria = useMemo(
+    () => data.assessment?.rubricCriteria ?? [],
+    [data.assessment?.rubricCriteria],
+  );
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<(typeof submittedFiles)[number] | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [timelineOpen, setTimelineOpen] = useState(false);
+  const [rubricInputValues, setRubricInputValues] = useState<Record<string, string>>({});
+  const score = useMemo(() => {
+    if (!isReturned && !isFileUploadAssessment && responses.length > 0) {
+      const earnedPoints = responses.reduce((total, response) => {
+        const questionMaxPoints = response.question?.points ?? 0;
+        const normalizedValue = normalizeScoreTextInput(
+          manualScoreInputs[response.questionId ?? ''] ?? String(response.pointsEarned ?? 0),
+          questionMaxPoints,
+        );
+
+        return total + Number(normalizedValue || '0');
+      }, 0);
+
+      return Math.round((earnedPoints / Math.max(totalPoints, 1)) * 100);
+    }
+
+    return data.score ?? selectedAttempt?.score ?? student.attempt?.score ?? 0;
+  }, [
+    data.score,
+    isFileUploadAssessment,
+    isReturned,
+    manualScoreInputs,
+    responses,
+    selectedAttempt?.score,
+    student.attempt?.score,
+    totalPoints,
+  ]);
 
   const formatDateTime = (value?: string) => {
     if (!value) return '-';
@@ -391,31 +542,52 @@ function AttemptDetailPanel({
   useEffect(() => {
     setPreviewError(null);
     setPreviewLoading(false);
+    setPreviewFile(null);
     setPreviewUrl((currentUrl) => {
       if (currentUrl) {
         window.URL.revokeObjectURL(currentUrl);
       }
       return null;
     });
-  }, [selectedAttempt?.id, submittedFile?.id]);
+  }, [selectedAttempt?.id]);
 
-  const handlePreviewFile = async () => {
-    if (!selectedAttempt?.id || !submittedFile) return;
+  useEffect(() => {
+    if (rubricCriteria.length === 0) {
+      setRubricInputValues({});
+      return;
+    }
+
+    setRubricInputValues(
+      Object.fromEntries(
+        rubricCriteria.map((criterion) => {
+          const currentScore = rubricScores.find((score) => score.criterionId === criterion.id);
+          return [criterion.id, String(currentScore?.pointsEarned ?? 0)];
+        }),
+      ),
+    );
+  }, [rubricCriteria, rubricScores]);
+
+  const handlePreviewFile = async (file: (typeof submittedFiles)[number]) => {
+    if (!selectedAttempt?.id) return;
+    const canPreviewFile = canPreviewSubmissionFile(file.mimeType);
 
     if (!canPreviewFile) {
       await assessmentService.openAttemptSubmissionFile(
         selectedAttempt.id,
-        submittedFile.originalName,
+        file.originalName,
+        file.id,
       );
       return;
     }
 
     setPreviewLoading(true);
     setPreviewError(null);
+    setPreviewFile(file);
     try {
       const { blob } = await assessmentService.getAttemptSubmissionFileBlob(
         selectedAttempt.id,
-        submittedFile.originalName,
+        file.originalName,
+        file.id,
       );
       setPreviewUrl((currentUrl) => {
         if (currentUrl) {
@@ -456,6 +628,9 @@ function AttemptDetailPanel({
                     ) : (
                       <Badge className="h-5 px-1.5 text-[10px]" variant="secondary">Pending</Badge>
                     )}
+                    {attempt.id === latestAttemptId && (
+                      <Badge className="h-5 px-1.5 text-[10px]" variant="outline">Latest</Badge>
+                    )}
                     {attempt.isLate && (
                       <Badge className="h-5 px-1.5 text-[10px]" variant="destructive">Late</Badge>
                     )}
@@ -471,17 +646,70 @@ function AttemptDetailPanel({
         </Card>
       )}
 
-      <Card>
+      {isFileUploadAssessment && timeline.length > 0 && (
+        <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+          <CardContent className="p-0">
+            <button
+              type="button"
+              onClick={() => setTimelineOpen((current) => !current)}
+              className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-slate-50"
+            >
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Submission Timeline
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Full history of uploads, submits, reversals, and score posting.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                  {timeline.length} events
+                </Badge>
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  {timelineOpen ? 'Hide' : 'Show'}
+                </span>
+              </div>
+            </button>
+            {timelineOpen ? (
+              <div className="space-y-2 border-t border-slate-200 px-4 py-4">
+              {timeline.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 md:flex-row md:items-start md:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">
+                      {formatTimelineAction(entry, attempts)}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {entry.actorName ? `${entry.actorName} • ` : ''}{formatDateTime(entry.createdAt)}
+                    </p>
+                  </div>
+                  {entry.attemptId === selectedAttempt?.id ? (
+                    <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                      Current attempt
+                    </Badge>
+                  ) : null}
+                </div>
+              ))}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="font-semibold text-lg">
+              <h3 className="text-xl font-semibold text-slate-900">
                 {student.firstName} {student.lastName}
               </h3>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                {student.email && <p className="text-sm text-muted-foreground">{student.email}</p>}
+                {student.email && <p className="text-sm text-slate-600">{student.email}</p>}
                 {submittedAt && (
-                  <Badge variant="outline" className="text-[11px]">
+                  <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-700">
                     Submitted: {formatDateTime(submittedAt)}
                   </Badge>
                 )}
@@ -490,19 +718,19 @@ function AttemptDetailPanel({
                     Late{selectedAttempt.lateByMinutes ? ` (${selectedAttempt.lateByMinutes} min)` : ''}
                   </Badge>
                 ) : submittedAt ? (
-                  <Badge variant="secondary" className="text-[11px]">On Time</Badge>
+                  <Badge className="border-0 bg-slate-700 text-[11px] text-white hover:bg-slate-700">On Time</Badge>
                 ) : null}
               </div>
-              <p className="text-base font-semibold mt-2">
+              <p className="mt-2 text-base font-medium text-slate-900">
                 Time done: {timeSpent ? `${Math.floor(timeSpent / 60)}m ${timeSpent % 60}s` : '-'}
               </p>
             </div>
             <div className="text-right">
-              <p className={cn('text-3xl font-bold', score >= 70 ? 'text-emerald-600' : score >= 40 ? 'text-amber-600' : 'text-red-500')}>
+              <p className={cn('text-3xl font-bold', score >= 70 ? 'text-emerald-600' : score >= 40 ? 'text-amber-600' : 'text-rose-500')}>
                 {score}%
               </p>
               {totalPoints > 0 && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-500">
                   {Math.round((score / 100) * totalPoints)} / {totalPoints} pts
                 </p>
               )}
@@ -511,39 +739,77 @@ function AttemptDetailPanel({
         </CardContent>
       </Card>
 
-      {hasSubmissionFile && submittedFile && selectedAttempt?.id && (
-        <Card>
+      {hasSubmissionFile && selectedAttempt?.id && (
+        <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
           <CardContent className="p-4 space-y-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Submitted File
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  {submittedFiles.length > 1 ? 'Submitted Files' : 'Submitted File'}
                 </p>
-                <p className="text-sm font-medium truncate">{submittedFile.originalName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {(submittedFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {submittedFile.mimeType}
+                <p className="text-xs text-slate-600">
+                  {submittedFiles.length > 1
+                    ? `${submittedFiles.length} attachments were submitted with this attempt.`
+                    : 'Review the uploaded file below.'}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handlePreviewFile()}
-                  disabled={previewLoading}
-                >
-                  {canPreviewFile ? (previewLoading ? 'Loading Preview...' : 'Preview in LMS') : 'Open File'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void assessmentService.downloadAttemptSubmissionFile(
-                    selectedAttempt.id,
-                    submittedFile.originalName,
-                  )}
-                >
-                  Download
-                </Button>
-              </div>
+              {submittedFiles.length > 1 ? (
+                <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                  {submittedFiles.length} attachments
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="space-y-3">
+              {submittedFiles.map((file, index) => {
+                const canPreviewFile = canPreviewSubmissionFile(file.mimeType);
+                const isPreviewingCurrentFile = previewFile?.id === file.id;
+                return (
+                  <div
+                    key={file.id}
+                    className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Attachment {index + 1}
+                      </p>
+                      <p className="text-sm font-semibold text-slate-900 truncate">{file.originalName}</p>
+                      <p className="text-xs text-slate-500">
+                        {(file.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {file.mimeType}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handlePreviewFile(file)}
+                        disabled={previewLoading && isPreviewingCurrentFile}
+                        aria-label={`Preview ${file.originalName}`}
+                      >
+                        {canPreviewFile
+                          ? (
+                              previewLoading && isPreviewingCurrentFile
+                                ? 'Loading Preview...'
+                                : 'Preview in LMS'
+                            )
+                          : 'Open File'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void assessmentService.downloadAttemptSubmissionAttachmentFile(
+                          selectedAttempt.id,
+                          file.id,
+                          file.originalName,
+                        )}
+                        aria-label={`Download ${file.originalName}`}
+                      >
+                        Download
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
             {previewError && (
@@ -552,12 +818,12 @@ function AttemptDetailPanel({
               </div>
             )}
 
-            {canPreviewFile && previewUrl && (
+            {previewFile && canPreviewSubmissionFile(previewFile.mimeType) && previewUrl && (
               <div className="overflow-hidden rounded-lg border bg-muted/20">
-                {submittedFile.mimeType.startsWith('image/') ? (
+                {previewFile.mimeType.startsWith('image/') ? (
                   <Image
                     src={previewUrl}
-                    alt={submittedFile.originalName}
+                    alt={previewFile.originalName}
                     width={1400}
                     height={1000}
                     unoptimized
@@ -565,7 +831,7 @@ function AttemptDetailPanel({
                   />
                 ) : (
                   <iframe
-                    title={`Preview of ${submittedFile.originalName}`}
+                    title={`Preview of ${previewFile.originalName}`}
                     src={previewUrl}
                     className="h-[32rem] w-full bg-background"
                   />
@@ -579,11 +845,36 @@ function AttemptDetailPanel({
       <div className="space-y-3">
         {responses.length > 0 ? (
           responses.map((r: AttemptResponse, i: number) => (
-            <ResponseCard key={r.id || r.questionId || i} response={r} index={i} />
+            <ResponseCard
+              key={r.id || r.questionId || i}
+              response={r}
+              index={i}
+              showManualScoring={!isFileUploadAssessment}
+              manualScoreInputValue={r.questionId ? (manualScoreInputs[r.questionId] ?? String(r.pointsEarned ?? 0)) : String(r.pointsEarned ?? 0)}
+              manualScoreDisabled={!isLatestAttempt || isReturned}
+              onManualScoreChange={(value) => {
+                if (!r.questionId) return;
+                setManualScoreInputs((current) => ({
+                  ...current,
+                  [r.questionId as string]: normalizeScoreTextInput(value, r.question?.points ?? 0),
+                }));
+              }}
+              onManualScoreBlur={() => {
+                if (!r.questionId) return;
+                const normalizedValue = normalizeScoreTextInput(
+                  manualScoreInputs[r.questionId] ?? String(r.pointsEarned ?? 0),
+                  r.question?.points ?? 0,
+                );
+                setManualScoreInputs((current) => ({
+                  ...current,
+                  [r.questionId as string]: normalizedValue === '' ? '0' : normalizedValue,
+                }));
+              }}
+            />
           ))
         ) : hasSubmissionFile ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+            <CardContent className="py-8 text-center text-sm text-slate-500">
               This attempt was submitted as an uploaded file. Use the preview or download actions above to review it.
             </CardContent>
           </Card>
@@ -596,16 +887,21 @@ function AttemptDetailPanel({
         )}
       </div>
 
-      {!isReturned && (
-        <Card>
-          <CardContent className="space-y-4 p-4">
+      {isFileUploadAssessment ? (
+      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+          <CardContent className="space-y-4 p-5">
             <div>
-              <p className="text-sm font-semibold">Scoring</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm font-semibold text-slate-900">Scoring</p>
+              <p className="text-xs text-slate-500">
                 {rubricCriteria.length > 0
                   ? 'Score each rubric criterion before returning the grade.'
                   : 'No rubric is attached, so return a direct score from 0 to 100.'}
               </p>
+              {isReturned ? (
+                <p className="mt-2 text-xs font-medium text-slate-600">
+                  Undo the posted grade first if you need to make a correction.
+                </p>
+              ) : null}
             </div>
 
             {rubricCriteria.length > 0 ? (
@@ -613,29 +909,51 @@ function AttemptDetailPanel({
                 {rubricCriteria.map((criterion) => {
                   const currentScore = rubricScores.find((score) => score.criterionId === criterion.id);
                   return (
-                    <div key={criterion.id} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[1.3fr_140px]">
+                    <div key={criterion.id} className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:grid-cols-[1.3fr_160px]">
                       <div className="space-y-1">
-                        <p className="font-medium">{criterion.title}</p>
+                        <p className="font-medium text-slate-900">{criterion.title}</p>
                         {criterion.description && (
-                          <p className="text-xs text-muted-foreground">{criterion.description}</p>
+                          <p className="text-xs text-slate-500">{criterion.description}</p>
                         )}
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xs text-muted-foreground">Points earned / {criterion.points}</p>
+                        <p className="text-xs text-slate-500">Points earned / {criterion.points}</p>
                         <input
-                          type="number"
-                          min={0}
-                          max={criterion.points}
-                          value={currentScore?.pointsEarned ?? 0}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={rubricInputValues[criterion.id] ?? String(currentScore?.pointsEarned ?? 0)}
                           onChange={(event) => {
-                            const nextPoints = Number(event.target.value);
+                            const nextValue = normalizeScoreTextInput(event.target.value, criterion.points);
+                            setRubricInputValues((current) => ({
+                              ...current,
+                              [criterion.id]: nextValue,
+                            }));
                             setRubricScores((current) => current.map((score) => (
                               score.criterionId === criterion.id
-                                ? { ...score, pointsEarned: nextPoints }
+                                ? { ...score, pointsEarned: nextValue === '' ? 0 : Number(nextValue) }
                                 : score
                             )));
                           }}
-                          className="w-full rounded-md border px-3 py-2 text-sm"
+                          onBlur={() => {
+                            const normalizedValue = normalizeScoreTextInput(
+                              rubricInputValues[criterion.id] ?? String(currentScore?.pointsEarned ?? 0),
+                              criterion.points,
+                            );
+                            const finalValue = normalizedValue === '' ? '0' : normalizedValue;
+                            setRubricInputValues((current) => ({
+                              ...current,
+                              [criterion.id]: finalValue,
+                            }));
+                            setRubricScores((current) => current.map((score) => (
+                              score.criterionId === criterion.id
+                                ? { ...score, pointsEarned: Number(finalValue) }
+                                : score
+                            )));
+                          }}
+                          disabled={!isLatestAttempt || isReturned}
+                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                          aria-label={`${criterion.title} points`}
                         />
                       </div>
                     </div>
@@ -646,36 +964,61 @@ function AttemptDetailPanel({
               <div className="space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct score</p>
                 <input
-                  type="number"
-                  min={0}
-                  max={100}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={directScore}
-                  onChange={(event) => setDirectScore(event.target.value === '' ? '' : Number(event.target.value))}
-                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  onChange={(event) => {
+                    setDirectScore(normalizeScoreTextInput(event.target.value, 100));
+                  }}
+                  onBlur={() => {
+                    const normalizedValue = normalizeScoreTextInput(directScore, 100);
+                    setDirectScore(normalizedValue === '' ? '0' : normalizedValue);
+                  }}
+                  disabled={!isLatestAttempt || isReturned}
+                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                  aria-label="Direct score"
                 />
               </div>
             )}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {!isReturned && (
-        <Card>
-          <CardContent className="p-4 space-y-3">
+      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+          <CardContent className="space-y-4 p-5">
+            {!isLatestAttempt ? (
+              <p className="text-xs font-medium text-amber-700">
+                Grades can only be returned for the latest submission. Earlier uploads stay visible for history only.
+              </p>
+            ) : null}
             <Textarea
               placeholder="Add feedback for this student (optional)"
               value={feedback}
               onChange={(e) => setFeedback(e.target.value)}
               rows={3}
+              disabled={!isLatestAttempt || isReturned}
             />
-            <Button onClick={onReturn} disabled={returning} className="w-full">
-              {returning
-                ? 'Returning...'
-                : `Return Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
-            </Button>
+            {isReturned ? (
+              <Button
+                variant="outline"
+                onClick={onUndoReturn}
+                disabled={unreturning || !isLatestAttempt}
+                className="w-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+              >
+                {unreturning
+                  ? 'Restoring...'
+                  : `Undo Posted Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
+              </Button>
+            ) : (
+              <Button onClick={onReturn} disabled={returning || !isLatestAttempt} className="w-full bg-slate-900 text-white hover:bg-slate-800">
+                {returning
+                  ? 'Returning...'
+                  : `Return Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
+              </Button>
+            )}
           </CardContent>
         </Card>
-      )}
 
       {isReturned && (
         <div className="py-2 text-center text-sm font-medium text-emerald-600">
@@ -685,7 +1028,23 @@ function AttemptDetailPanel({
     </div>
   );
 }
-function ResponseCard({ response: r, index }: { response: AttemptResponse; index: number }) {
+function ResponseCard({
+  response: r,
+  index,
+  showManualScoring,
+  manualScoreInputValue,
+  manualScoreDisabled,
+  onManualScoreChange,
+  onManualScoreBlur,
+}: {
+  response: AttemptResponse;
+  index: number;
+  showManualScoring: boolean;
+  manualScoreInputValue: string;
+  manualScoreDisabled: boolean;
+  onManualScoreChange: (value: string) => void;
+  onManualScoreBlur: () => void;
+}) {
   const question = r.question;
   if (!question) {
     return (
@@ -725,12 +1084,36 @@ function ResponseCard({ response: r, index }: { response: AttemptResponse; index
             <RichTextRenderer html={question.content ?? '<p>No question content.</p>'} className="text-sm font-medium" />
           </div>
           <div className="text-right shrink-0">
-            <span className={cn(
-              'text-sm font-bold',
-              isCorrect ? 'text-emerald-600' : isWrong ? 'text-red-500' : 'text-muted-foreground',
-            )}>
-              {r.pointsEarned ?? 0} / {question.points}
-            </span>
+            {showManualScoring ? (
+              <div className="min-w-[132px]">
+                <div className="flex items-center justify-end gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={manualScoreInputValue}
+                    onChange={(event) => onManualScoreChange(event.target.value)}
+                    onBlur={onManualScoreBlur}
+                    disabled={manualScoreDisabled}
+                    className="w-16 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-right text-sm font-semibold text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                    aria-label={`Score for question ${index + 1}`}
+                  />
+                  <span className="text-sm text-slate-600">
+                    / {question.points} pt{question.points === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  {r.isCorrect === null || r.isCorrect === undefined ? 'Teacher-scored' : 'Auto-graded'}
+                </p>
+              </div>
+            ) : (
+              <span className={cn(
+                'text-sm font-bold',
+                isCorrect ? 'text-emerald-600' : isWrong ? 'text-red-500' : 'text-muted-foreground',
+              )}>
+                {r.pointsEarned ?? 0} / {question.points}
+              </span>
+            )}
           </div>
         </div>
 

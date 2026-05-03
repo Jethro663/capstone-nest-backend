@@ -2,42 +2,42 @@
   {
     "index": 26,
     "style": "table of figures",
-    "text": "Figure 1: System Architecture\t44"
+    "text": "Figure 1: System Architecture\t37"
   },
   {
     "index": 27,
     "style": "table of figures",
-    "text": "Figure 2. The Agile Development\t48"
+    "text": "Figure 2. The Agile Development\t41"
   },
   {
     "index": 28,
     "style": "table of figures",
-    "text": "Figure 3: Use Case Diagram for Nexora Web Application\t56"
+    "text": "Figure 3: Use Case Diagram for Nexora Web Application\t50"
   },
   {
     "index": 29,
     "style": "table of figures",
-    "text": "Figure 4: Use Case Diagram for Nexora Mobile Application\t56"
+    "text": "Figure 4: Use Case Diagram for Nexora Mobile Application\t51"
   },
   {
     "index": 30,
     "style": "table of figures",
-    "text": "Figure 5: Functional Decomposition Diagram of the Admin Portal\t101"
+    "text": "Figure 5: Functional Decomposition Diagram of the Admin Portal\t98"
   },
   {
     "index": 31,
     "style": "table of figures",
-    "text": "Figure 6: Functional Decomposition Diagram of the Teacher Portal\t101"
+    "text": "Figure 6: Functional Decomposition Diagram of the Teacher Portal\t99"
   },
   {
     "index": 32,
     "style": "table of figures",
-    "text": "Figure 7: Functional Decomposition Diagram of the Student Portal\t102"
+    "text": "Figure 7: Functional Decomposition Diagram of the Student Portal\t100"
   },
   {
     "index": 33,
     "style": "table of figures",
-    "text": "Figure 8: Mobile Login & OTP Verification\t103"
+    "text": "Figure 8: Mobile Login & OTP Verification\t102"
   },
   {
     "index": 34,
@@ -52,7 +52,7 @@
   {
     "index": 36,
     "style": "table of figures",
-    "text": "Figure 11: Process Flow of View Modules and 30-Second Lesson Completion Tracking\t106"
+    "text": "Figure 11: Process Flow of View Modules and Time-Based Engagement Tracking\t106"
   },
   {
     "index": 37,
@@ -62,7 +62,7 @@
   {
     "index": 38,
     "style": "table of figures",
-    "text": "Figure 13: Process Flow of LXP Remedial Access and 60% Mastery Threshold Gating\t108"
+    "text": "Figure 13: Process Flow of LXP Remedial Access and 74% Mastery Threshold Gating\t108"
   },
   {
     "index": 39,
@@ -102,7 +102,7 @@
   {
     "index": 46,
     "style": "table of figures",
-    "text": "Figure 21: Process Flow of Web Profile Management and Account Locking\t116"
+    "text": "Figure 21: Process Flow of Web Profile Detail Locking\t116"
   },
   {
     "index": 47,
@@ -195,197 +195,197 @@
     "text": "Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)\t134"
   },
   {
-    "index": 339,
+    "index": 321,
     "style": "Caption",
     "text": "Figure 1: System Architecture"
   },
   {
-    "index": 380,
+    "index": 360,
     "style": "Caption",
     "text": "Figure 2. The Agile Development"
   },
   {
-    "index": 403,
+    "index": 384,
     "style": "Caption",
     "text": "Figure 3: Use Case Diagram for Nexora Web Application"
   },
   {
-    "index": 404,
+    "index": 387,
     "style": "Caption",
     "text": "Figure 4: Use Case Diagram for Nexora Mobile Application"
   },
   {
-    "index": 503,
+    "index": 505,
     "style": "Caption",
     "text": "Figure 5: Functional Decomposition Diagram of the Admin Portal"
   },
   {
-    "index": 506,
+    "index": 508,
     "style": "Caption",
     "text": "Figure 6: Functional Decomposition Diagram of the Teacher Portal"
   },
   {
-    "index": 510,
+    "index": 512,
     "style": "Normal",
     "text": "Figure 7: Functional Decomposition Diagram of the Student Portal"
   },
   {
-    "index": 516,
+    "index": 537,
     "style": "Normal",
     "text": "Figure 8: Mobile Login & OTP Verification"
   },
   {
-    "index": 519,
+    "index": 555,
     "style": "Caption",
     "text": "Figure 9: Process Flow of Mobile Forgot Password and Account Recovery"
   },
   {
-    "index": 522,
+    "index": 557,
     "style": "Caption",
     "text": "Figure 10: Process Flow of View Dashboard and \"Continue Learning\" Logic"
   },
   {
-    "index": 525,
+    "index": 559,
     "style": "Caption",
-    "text": "Figure 11: Process Flow of View Modules and 30-Second Lesson Completion Tracking"
+    "text": "Figure 11: Process Flow of View Modules and Time-Based Engagement Tracking"
   },
   {
-    "index": 528,
+    "index": 561,
     "style": "Caption",
     "text": "Figure 12: Process Flow of Taking Assessments and Summative Submission"
   },
   {
-    "index": 531,
+    "index": 564,
     "style": "Caption",
-    "text": "Figure 13: Process Flow of LXP Remedial Access and 60% Mastery Threshold Gating"
+    "text": "Figure 13: Process Flow of LXP Remedial Access and 74% Mastery Threshold Gating"
   },
   {
-    "index": 534,
+    "index": 566,
     "style": "Caption",
     "text": "Figure 14: Process Flow of RAG-Based Interaction with JAKIPIR AI Mentor"
   },
   {
-    "index": 537,
+    "index": 568,
     "style": "Normal",
     "text": "Figure 15: Process Flow of View Performance Analytics and Quarterly Trends"
   },
   {
-    "index": 540,
+    "index": 572,
     "style": "Caption",
     "text": "Figure 16: Process Flow of Mobile Profile Management and Data Persistence"
   },
   {
-    "index": 544,
+    "index": 575,
     "style": "Caption",
     "text": "Figure 17: Process Flow of Web Login and Dashboard Navigation"
   },
   {
-    "index": 547,
+    "index": 580,
     "style": "Caption",
     "text": "Figure 18: Process Flow of Web Course Browsing and Filtering"
   },
   {
-    "index": 550,
+    "index": 585,
     "style": "Caption",
     "text": "Figure 19: Process Flow of Assessment Taking with Out-of-Focus Warning Logic"
   },
   {
-    "index": 553,
+    "index": 587,
     "style": "Normal",
     "text": "Figure 20: Process Flow of Discussion Board Participation and Thread Replies"
   },
   {
-    "index": 556,
+    "index": 590,
     "style": "Caption",
-    "text": "Figure 21: Process Flow of Web Profile Management and Account Locking"
+    "text": "Figure 21: Process Flow of Web Profile Detail Locking"
   },
   {
-    "index": 562,
+    "index": 594,
     "style": "Caption",
     "text": "Figure 22: Process Flow of Managing Classes and Instructional Materials"
   },
   {
-    "index": 565,
+    "index": 599,
     "style": "Normal",
     "text": "Figure 23: Process Flow of AI PDF Extraction and Layout-Aware Section Application"
   },
   {
-    "index": 568,
+    "index": 601,
     "style": "Caption",
     "text": "Figure 24: Process Flow of AI Quiz Drafting and Assessment Studio Workspace"
   },
   {
-    "index": 571,
+    "index": 604,
     "style": "Normal",
     "text": "Figure 25: Process Flow of Asynchronous AI Job Monitoring and Status Updates"
   },
   {
-    "index": 574,
+    "index": 606,
     "style": "Caption",
     "text": "Figure 26: Process Flow of Class Record Synchronization and Spreadsheet Management"
   },
   {
-    "index": 577,
+    "index": 610,
     "style": "Caption",
     "text": "Figure 27: Process Flow of Student Intervention Triage and Outcome Tracking"
   },
   {
-    "index": 580,
+    "index": 613,
     "style": "Caption",
     "text": "Figure 28: Process Flow of Learning Gap Analysis and Competency Heatmap Generation"
   },
   {
-    "index": 583,
+    "index": 618,
     "style": "Normal",
     "text": "Figure 29: Process Flow of Academic Report Generation and Data Export"
   },
   {
-    "index": 586,
+    "index": 625,
     "style": "Caption",
     "text": "Figure 30: Process Flow of Creating Class Announcements and Discussion Threads"
   },
   {
-    "index": 596,
+    "index": 634,
     "style": "Caption",
     "text": "Figure 31: Process Flow of Admin Dashboard Overview and Quick Route Navigation"
   },
   {
-    "index": 599,
+    "index": 637,
     "style": "Caption",
     "text": "Figure 32: Process Flow of User Lifecycle Management (Create, Suspend, Purge)"
   },
   {
-    "index": 602,
+    "index": 639,
     "style": "Caption",
     "text": "Figure 33: Process Flow of Admin-Triggered User Password Reset"
   },
   {
-    "index": 605,
+    "index": 644,
     "style": "Normal",
     "text": "Figure 34: Process Flow of Section Creation and Roster Management"
   },
   {
-    "index": 608,
+    "index": 652,
     "style": "Caption",
     "text": "Figure 35: Process Flow of Bulk Roster Import (CSV/Excel) and Validation Logic"
   },
   {
-    "index": 611,
+    "index": 656,
     "style": "Caption",
     "text": "Figure 36: Process Flow of School Calendar and Event Timeline Management"
   },
   {
-    "index": 614,
+    "index": 663,
     "style": "Caption",
     "text": "Figure 37: Process Flow of System Diagnostics and Dependency Health Checks"
   },
   {
-    "index": 617,
+    "index": 670,
     "style": "Normal",
     "text": "Figure 38: Process Flow of Audit Trail Review and Security Log Filtering"
   },
   {
-    "index": 620,
+    "index": 677,
     "style": "Normal",
     "text": "Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)"
   }

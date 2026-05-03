@@ -140,9 +140,14 @@ describe('TeacherClassDetailPage extraction view', () => {
           id: 'extraction-1',
           originalName: 'Quarter 1 Module.pdf',
           extractionStatus: 'completed',
+          qualityGate: 'warn',
+          reviewRequired: true,
           createdAt: '2026-04-30T00:00:00.000Z',
           structuredContent: {
             title: 'Cells and Systems',
+            audit: {
+              imageAssignmentSummary: { assigned: 1, unassigned: 1 },
+            },
           },
         },
       ],
@@ -170,6 +175,7 @@ describe('TeacherClassDetailPage extraction view', () => {
     expect(screen.getByText(/AI service returned HTTP 503/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Drop a PDF here to extract module/i })).toBeDisabled();
     expect(screen.getByText('Cells and Systems')).toBeInTheDocument();
+    expect(screen.getByText('Images unassigned')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /View/i })).toHaveAttribute(
       'href',
       '/dashboard/teacher/extractions/extraction-1',

@@ -52,6 +52,8 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                 title: 'Section 1',
                 description: 'Section Description',
                 order: 1,
+                graphKeywords: ['photosynthesis'],
+                figureReferences: ['figure:1'],
                 lessonBlocks: [
                   {
                     type: 'text',
@@ -68,6 +70,7 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                     metadata: {
                       pageNumber: 1,
                       assignmentConfidence: 0.88,
+                      mediaAssetId: 'image-1',
                     },
                   },
                 ],
@@ -81,9 +84,35 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                 },
               },
             ],
+            mediaAssets: [
+              {
+                id: 'image-1',
+                url: 'data:image/png;base64,ZmFrZQ==',
+                pageNumber: 1,
+                caption: 'Figure from page 1',
+                selectedSectionIndex: 0,
+                teacherReviewed: true,
+                candidateSections: [{ sectionIndex: 0, score: 0.88 }],
+              },
+              {
+                id: 'image-2',
+                url: 'data:image/png;base64,dW5hc3NpZ25lZA==',
+                pageNumber: 3,
+                caption: 'Unassigned figure',
+                selectedSectionIndex: null,
+                teacherReviewed: false,
+                candidateSections: [{ sectionIndex: 0, score: 0.61 }],
+                reviewState: 'needs_teacher_assignment',
+              },
+            ],
+            audit: {
+              imageAssignmentSummary: { assigned: 1, unassigned: 1 },
+            },
           }
         : null,
     isApplied: false,
+    qualityGate: status === 'completed' ? 'warn' : null,
+    reviewRequired: status === 'completed',
     progressPercent: status === 'pending' ? 10 : 100,
     totalChunks: 10,
     processedChunks: status === 'pending' ? 1 : 10,
@@ -248,11 +277,48 @@ describe('ExtractionReviewPage', () => {
       expect(screen.getByText('Extraction Review')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apply (1 section)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
+    const applyButton = screen.getByRole('button', { name: 'Apply (1 section)' });
+    expect(applyButton).toBeDisabled();
+  });
+
+  it('renders unassigned images and marks the form dirty when an image is moved', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        ...buildExtraction('completed'),
+        reviewRequired: false,
+        structuredContent: {
+          ...buildExtraction('completed').structuredContent!,
+          mediaAssets: [
+            {
+              id: 'image-2',
+              url: 'data:image/png;base64,dW5hc3NpZ25lZA==',
+              pageNumber: 3,
+              caption: 'Unassigned figure',
+              selectedSectionIndex: null,
+              teacherReviewed: false,
+              candidateSections: [{ sectionIndex: 0, score: 0.61 }],
+              reviewState: 'needs_teacher_assignment',
+            },
+          ],
+          audit: {
+            imageAssignmentSummary: { assigned: 0, unassigned: 1 },
+          },
+        },
+      },
+    } as never);
+
+    render(<ExtractionReviewPage />);
 
     await waitFor(() => {
-      expect(mockedToast.error).toHaveBeenCalledWith(backendMessage);
+      expect(screen.getByText('Unassigned images')).toBeInTheDocument();
     });
+
+    fireEvent.change(screen.getByLabelText('Move Unassigned figure'), {
+      target: { value: '0' },
+    });
+
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
   });
 });

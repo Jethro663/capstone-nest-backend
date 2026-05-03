@@ -1,261 +1,217 @@
 [
   {
-    "name": "image1.png",
-    "size_bytes": 118356,
-    "format": "PNG",
-    "width": 711,
-    "height": 828
+    "zip_path": "word/media/image35.png",
+    "filename": "image35.png",
+    "size": 29773
   },
   {
-    "name": "image10.png",
-    "size_bytes": 21456,
-    "format": "PNG",
-    "width": 337,
-    "height": 483
+    "zip_path": "word/media/image36.png",
+    "filename": "image36.png",
+    "size": 57643
   },
   {
-    "name": "image11.png",
-    "size_bytes": 29117,
-    "format": "PNG",
-    "width": 474,
-    "height": 547
+    "zip_path": "word/media/image37.png",
+    "filename": "image37.png",
+    "size": 27784
   },
   {
-    "name": "image12.png",
-    "size_bytes": 25720,
-    "format": "PNG",
-    "width": 365,
-    "height": 538
+    "zip_path": "word/media/image38.png",
+    "filename": "image38.png",
+    "size": 22446
   },
   {
-    "name": "image13.png",
-    "size_bytes": 20752,
-    "format": "PNG",
-    "width": 345,
-    "height": 428
+    "zip_path": "word/media/image40.png",
+    "filename": "image40.png",
+    "size": 21678
   },
   {
-    "name": "image14.png",
-    "size_bytes": 29394,
-    "format": "PNG",
-    "width": 434,
-    "height": 602
+    "zip_path": "word/media/image41.png",
+    "filename": "image41.png",
+    "size": 24048
   },
   {
-    "name": "image15.png",
-    "size_bytes": 20781,
-    "format": "PNG",
-    "width": 352,
-    "height": 428
+    "zip_path": "word/media/image42.png",
+    "filename": "image42.png",
+    "size": 23364
   },
   {
-    "name": "image16.png",
-    "size_bytes": 21557,
-    "format": "PNG",
-    "width": 406,
-    "height": 428
+    "zip_path": "word/media/image43.png",
+    "filename": "image43.png",
+    "size": 23870
   },
   {
-    "name": "image17.png",
-    "size_bytes": 33328,
-    "format": "PNG",
-    "width": 554,
-    "height": 556
+    "zip_path": "word/media/image2.jpg",
+    "filename": "image2.jpg",
+    "size": 10692
   },
   {
-    "name": "image18.png",
-    "size_bytes": 23894,
-    "format": "PNG",
-    "width": 398,
-    "height": 483
+    "zip_path": "word/media/image39.png",
+    "filename": "image39.png",
+    "size": 30141
   },
   {
-    "name": "image19.png",
-    "size_bytes": 29034,
-    "format": "PNG",
-    "width": 534,
-    "height": 547
+    "zip_path": "word/media/image1.png",
+    "filename": "image1.png",
+    "size": 129
   },
   {
-    "name": "image2.png",
-    "size_bytes": 266044,
-    "format": "PNG",
-    "width": 848,
-    "height": 656
+    "zip_path": "word/media/image3.png",
+    "filename": "image3.png",
+    "size": 129
   },
   {
-    "name": "image20.png",
-    "size_bytes": 23096,
-    "format": "PNG",
-    "width": 362,
-    "height": 483
+    "zip_path": "word/media/image4.jpeg",
+    "filename": "image4.jpeg",
+    "size": 10692
   },
   {
-    "name": "image21.png",
-    "size_bytes": 25631,
-    "format": "PNG",
-    "width": 430,
-    "height": 483
+    "zip_path": "word/media/image5.png",
+    "filename": "image5.png",
+    "size": 121406
   },
   {
-    "name": "image22.png",
-    "size_bytes": 25609,
-    "format": "PNG",
-    "width": 401,
-    "height": 483
+    "zip_path": "word/media/image6.png",
+    "filename": "image6.png",
+    "size": 266044
   },
   {
-    "name": "image23.png",
-    "size_bytes": 27617,
-    "format": "PNG",
-    "width": 469,
-    "height": 492
+    "zip_path": "word/media/image7.png",
+    "filename": "image7.png",
+    "size": 181391
   },
   {
-    "name": "image24.png",
-    "size_bytes": 24397,
-    "format": "PNG",
-    "width": 471,
-    "height": 428
+    "zip_path": "word/media/image8.png",
+    "filename": "image8.png",
+    "size": 273751
   },
   {
-    "name": "image25.png",
-    "size_bytes": 27511,
-    "format": "PNG",
-    "width": 481,
-    "height": 492
+    "zip_path": "word/media/image9.png",
+    "filename": "image9.png",
+    "size": 94336
   },
   {
-    "name": "image26.png",
-    "size_bytes": 24008,
-    "format": "PNG",
-    "width": 467,
-    "height": 428
+    "zip_path": "word/media/image10.png",
+    "filename": "image10.png",
+    "size": 77225
   },
   {
-    "name": "image27.png",
-    "size_bytes": 20429,
-    "format": "PNG",
-    "width": 360,
-    "height": 428
+    "zip_path": "word/media/image11.png",
+    "filename": "image11.png",
+    "size": 88127
   },
   {
-    "name": "image28.png",
-    "size_bytes": 21654,
-    "format": "PNG",
-    "width": 435,
-    "height": 428
+    "zip_path": "word/media/image12.png",
+    "filename": "image12.png",
+    "size": 71937
   },
   {
-    "name": "image29.png",
-    "size_bytes": 26984,
-    "format": "PNG",
-    "width": 445,
-    "height": 483
+    "zip_path": "word/media/image13.png",
+    "filename": "image13.png",
+    "size": 51761
   },
   {
-    "name": "image3.png",
-    "size_bytes": 94336,
-    "format": "PNG",
-    "width": 2620,
-    "height": 1640
+    "zip_path": "word/media/image14.png",
+    "filename": "image14.png",
+    "size": 29758
   },
   {
-    "name": "image30.png",
-    "size_bytes": 37233,
-    "format": "PNG",
-    "width": 688,
-    "height": 574
+    "zip_path": "word/media/image15.png",
+    "filename": "image15.png",
+    "size": 57984
   },
   {
-    "name": "image31.png",
-    "size_bytes": 20697,
-    "format": "PNG",
-    "width": 388,
-    "height": 428
+    "zip_path": "word/media/image16.png",
+    "filename": "image16.png",
+    "size": 28229
   },
   {
-    "name": "image32.png",
-    "size_bytes": 20130,
-    "format": "PNG",
-    "width": 336,
-    "height": 428
+    "zip_path": "word/media/image17.png",
+    "filename": "image17.png",
+    "size": 36350
   },
   {
-    "name": "image33.png",
-    "size_bytes": 25669,
-    "format": "PNG",
-    "width": 453,
-    "height": 492
+    "zip_path": "word/media/image18.png",
+    "filename": "image18.png",
+    "size": 29407
   },
   {
-    "name": "image34.png",
-    "size_bytes": 20160,
-    "format": "PNG",
-    "width": 391,
-    "height": 428
+    "zip_path": "word/media/image19.png",
+    "filename": "image19.png",
+    "size": 23523
   },
   {
-    "name": "image35.png",
-    "size_bytes": 22374,
-    "format": "PNG",
-    "width": 406,
-    "height": 428
+    "zip_path": "word/media/image20.png",
+    "filename": "image20.png",
+    "size": 35431
   },
   {
-    "name": "image36.png",
-    "size_bytes": 21023,
-    "format": "PNG",
-    "width": 388,
-    "height": 428
+    "zip_path": "word/media/image21.png",
+    "filename": "image21.png",
+    "size": 24018
   },
   {
-    "name": "image37.png",
-    "size_bytes": 22049,
-    "format": "PNG",
-    "width": 402,
-    "height": 428
+    "zip_path": "word/media/image22.png",
+    "filename": "image22.png",
+    "size": 25007
   },
   {
-    "name": "image4.png",
-    "size_bytes": 77225,
-    "format": "PNG",
-    "width": 2200,
-    "height": 1463
+    "zip_path": "word/media/image23.png",
+    "filename": "image23.png",
+    "size": 44590
   },
   {
-    "name": "image5.png",
-    "size_bytes": 88127,
-    "format": "PNG",
-    "width": 2580,
-    "height": 1471
+    "zip_path": "word/media/image24.png",
+    "filename": "image24.png",
+    "size": 26687
   },
   {
-    "name": "image6.png",
-    "size_bytes": 52645,
-    "format": "PNG",
-    "width": 654,
-    "height": 946
+    "zip_path": "word/media/image25.png",
+    "filename": "image25.png",
+    "size": 32348
   },
   {
-    "name": "image7.png",
-    "size_bytes": 34509,
-    "format": "PNG",
-    "width": 536,
-    "height": 671
+    "zip_path": "word/media/image26.png",
+    "filename": "image26.png",
+    "size": 25099
   },
   {
-    "name": "image8.png",
-    "size_bytes": 24037,
-    "format": "PNG",
-    "width": 354,
-    "height": 483
+    "zip_path": "word/media/image27.png",
+    "filename": "image27.png",
+    "size": 29027
   },
   {
-    "name": "image9.png",
-    "size_bytes": 28014,
-    "format": "PNG",
-    "width": 538,
-    "height": 492
+    "zip_path": "word/media/image28.png",
+    "filename": "image28.png",
+    "size": 28858
+  },
+  {
+    "zip_path": "word/media/image29.png",
+    "filename": "image29.png",
+    "size": 37656
+  },
+  {
+    "zip_path": "word/media/image30.png",
+    "filename": "image30.png",
+    "size": 26535
+  },
+  {
+    "zip_path": "word/media/image31.png",
+    "filename": "image31.png",
+    "size": 35513
+  },
+  {
+    "zip_path": "word/media/image32.png",
+    "filename": "image32.png",
+    "size": 26013
+  },
+  {
+    "zip_path": "word/media/image33.png",
+    "filename": "image33.png",
+    "size": 22556
+  },
+  {
+    "zip_path": "word/media/image34.png",
+    "filename": "image34.png",
+    "size": 21866
   }
 ]

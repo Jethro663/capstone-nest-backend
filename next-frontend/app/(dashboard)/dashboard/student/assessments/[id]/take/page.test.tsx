@@ -43,9 +43,11 @@ jest.mock('@/services/assessment-service', () => ({
     startAttempt: jest.fn(),
     updateAttemptProgress: jest.fn(),
     uploadSubmissionFile: jest.fn(),
+    removeSubmissionFile: jest.fn(),
     submit: jest.fn(),
     downloadTeacherAttachment: jest.fn(),
     downloadAttemptSubmissionFile: jest.fn(),
+    downloadAttemptSubmissionAttachmentFile: jest.fn(),
   },
 }));
 

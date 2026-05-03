@@ -4,11 +4,10 @@ import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion, useReducedMotion } from 'framer-motion';
-import { Clock3, ListChecks, Download, UploadCloud, FileText } from 'lucide-react';
+import { Clock3, ListChecks, Download, UploadCloud, FileText, CheckCircle2, CircleDashed } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
@@ -20,6 +19,7 @@ import {
   getSubmittedAttempts,
 } from '@/utils/student-assessment-routing';
 import type { Assessment, AssessmentQuestion, UpdateAttemptProgressDto } from '@/types/assessment';
+import './take-page.css';
 
 const StudentStatusChip = dynamic(
   () =>
@@ -47,17 +47,15 @@ export default function StudentAssessmentTakePage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showMissingFilePrompt, setShowMissingFilePrompt] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
-  const [uploadedSubmission, setUploadedSubmission] = useState<{
-    attemptId: string;
-    file: {
-      id: string;
-      originalName: string;
-      mimeType: string;
-      sizeBytes: number;
-      uploadedAt: string;
-    };
-  } | null>(null);
+  const [submittedFiles, setSubmittedFiles] = useState<Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt?: string | null;
+  }>>([]);
   const [activeAttemptId, setActiveAttemptId] = useState<string | null>(null);
+  const [isAttemptSubmitted, setIsAttemptSubmitted] = useState(false);
   const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(null);
   const [attemptExpiresAt, setAttemptExpiresAt] = useState<string | null>(null);
   const [strictMode, setStrictMode] = useState(false);
@@ -77,6 +75,40 @@ export default function StudentAssessmentTakePage() {
   const handleViolationRef = useRef<((source: 'tab' | 'fullscreen') => void) | null>(null);
   const requestAssessmentFullscreenRef = useRef<(() => void) | null>(null);
   const isFileUploadAssessment = assessment?.type === 'file_upload';
+
+  const normalizeAttemptSubmittedFiles = useCallback((attempt: {
+    submittedFiles?: Array<{
+      id: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+      uploadedAt?: string | null;
+    }> | null;
+    submittedFileId?: string | null;
+    submittedFileOriginalName?: string | null;
+    submittedFileMimeType?: string | null;
+    submittedFileSizeBytes?: number | null;
+    updatedAt?: string;
+    createdAt?: string;
+  }) => {
+    if (attempt.submittedFiles && attempt.submittedFiles.length > 0) {
+      return attempt.submittedFiles;
+    }
+
+    if (!attempt.submittedFileId) {
+      return [];
+    }
+
+    return [
+      {
+        id: attempt.submittedFileId,
+        originalName: attempt.submittedFileOriginalName || 'Uploaded file',
+        mimeType: attempt.submittedFileMimeType || 'application/octet-stream',
+        sizeBytes: attempt.submittedFileSizeBytes || 0,
+        uploadedAt: attempt.updatedAt || attempt.createdAt || null,
+      },
+    ];
+  }, []);
 
   const getErrorMessage = useCallback((error: unknown) => {
     const responseMessage = (error as { response?: { data?: { message?: unknown } } })
@@ -208,22 +240,10 @@ export default function StudentAssessmentTakePage() {
       setAssessment(assessmentData);
       setQuestions(questionList);
       setResponses(restoredResponses);
+      setIsAttemptSubmitted(Boolean(ongoing.attempt.isSubmitted));
       setStrictMode(Boolean(ongoing.strictMode));
       setTimedQuestionsEnabled(Boolean(ongoing.timedQuestionsEnabled));
-      setUploadedSubmission(
-        ongoing.attempt.submittedFileId
-          ? {
-              attemptId: ongoing.attempt.id,
-              file: {
-                id: ongoing.attempt.submittedFileId,
-                originalName: ongoing.attempt.submittedFileOriginalName || 'Uploaded file',
-                mimeType: ongoing.attempt.submittedFileMimeType || 'application/octet-stream',
-                sizeBytes: ongoing.attempt.submittedFileSizeBytes || 0,
-                uploadedAt: ongoing.attempt.updatedAt || ongoing.attempt.createdAt || new Date().toISOString(),
-              },
-            }
-          : null,
-      );
+      setSubmittedFiles(normalizeAttemptSubmittedFiles(ongoing.attempt));
       applyAttemptState(
         {
           ...ongoing.attempt,
@@ -249,7 +269,7 @@ export default function StudentAssessmentTakePage() {
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, applyAttemptState, getErrorMessage, router, searchParams]);
+  }, [assessmentId, applyAttemptState, getErrorMessage, normalizeAttemptSubmittedFiles, router, searchParams]);
 
   useEffect(() => {
     fetchData();
@@ -539,7 +559,7 @@ export default function StudentAssessmentTakePage() {
     timeSpentSeconds,
   ]);
 
-  const handleUploadSubmissionFile = useCallback(async (file: File) => {
+  const handleUploadSubmissionFiles = useCallback(async (files: FileList | File[]) => {
     if (!assessment) return;
 
     const allowedExtensions =
@@ -547,25 +567,32 @@ export default function StudentAssessmentTakePage() {
         ? assessment.allowedUploadExtensions.map((ext) => ext.toLowerCase())
         : [];
     const maxUploadSize = assessment.maxUploadSizeBytes ?? 100 * 1024 * 1024;
-    const extension = file.name.includes('.')
-      ? file.name.split('.').pop()?.toLowerCase() || ''
-      : '';
-
-    if (!extension || (allowedExtensions.length > 0 && !allowedExtensions.includes(extension))) {
-      toast.error(`.${extension || 'unknown'} is not allowed for this assessment`);
-      return;
-    }
-
-    if (file.size > maxUploadSize) {
-      toast.error('File is too large. Maximum allowed size is 100 MB.');
-      return;
-    }
+    const queue = Array.from(files);
+    if (queue.length === 0) return;
 
     try {
       setUploadingFile(true);
-      const res = await assessmentService.uploadSubmissionFile(assessmentId, file);
-      setUploadedSubmission(res.data);
-      toast.success('File uploaded. You can submit when ready.');
+
+      for (const file of queue) {
+        const extension = file.name.includes('.')
+          ? file.name.split('.').pop()?.toLowerCase() || ''
+          : '';
+
+        if (!extension || (allowedExtensions.length > 0 && !allowedExtensions.includes(extension))) {
+          toast.error(`.${extension || 'unknown'} is not allowed for this assessment`);
+          continue;
+        }
+
+        if (file.size > maxUploadSize) {
+          toast.error('File is too large. Maximum allowed size is 100 MB.');
+          continue;
+        }
+
+        const res = await assessmentService.uploadSubmissionFile(assessmentId, file);
+        setSubmittedFiles((current) => res.data.files ?? [...current, res.data.file]);
+      }
+
+      toast.success('File attachments updated.');
     } catch {
       toast.error('Failed to upload file');
     } finally {
@@ -573,8 +600,19 @@ export default function StudentAssessmentTakePage() {
     }
   }, [assessment, assessmentId]);
 
+  const handleRemoveSubmissionFile = useCallback(async (fileId: string) => {
+    try {
+      const res = await assessmentService.removeSubmissionFile(assessmentId, fileId);
+      setSubmittedFiles(res.data.files);
+      toast.success('Attachment removed.');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      toast.error(errorMessage || 'Failed to remove file');
+    }
+  }, [assessmentId, getErrorMessage]);
+
   const handleSubmitFileUpload = useCallback(async () => {
-    if (!uploadedSubmission?.file?.id) {
+    if (submittedFiles.length === 0) {
       setShowMissingFilePrompt(true);
       return;
     }
@@ -586,6 +624,7 @@ export default function StudentAssessmentTakePage() {
         responses: [],
         timeSpentSeconds,
       });
+      setIsAttemptSubmitted(true);
       toast.success('File upload assessment submitted!');
       setTimeout(() => {
         router.replace(`/dashboard/student/assessments/${assessmentId}?view=submitted`);
@@ -601,7 +640,7 @@ export default function StudentAssessmentTakePage() {
       setSubmitting(false);
     }
   }, [
-    uploadedSubmission,
+    submittedFiles,
     assessmentId,
     getErrorMessage,
     isAutoSubmittedMessage,
@@ -732,7 +771,7 @@ export default function StudentAssessmentTakePage() {
 
   if (loading) {
     return (
-      <div className="max-w-5xl space-y-6">
+      <div className="student-assessment-take-theme max-w-5xl space-y-6">
         <Skeleton className="h-16 rounded-xl" />
         <Skeleton className="h-96 rounded-2xl" />
       </div>
@@ -746,81 +785,135 @@ export default function StudentAssessmentTakePage() {
   if (isFileUploadAssessment && assessment) {
     const allowedExtensions = assessment.allowedUploadExtensions || [];
     const maxUploadSize = assessment.maxUploadSizeBytes ?? 100 * 1024 * 1024;
+    const fileAttached = submittedFiles.length > 0;
+    const submissionStatusLabel = isAttemptSubmitted ? 'Turned in' : 'Not turned in';
+    const attachmentCountLabel =
+      submittedFiles.length === 1
+        ? '1 attachment'
+        : `${submittedFiles.length} attachments`;
 
     return (
-      <div className="student-page rounded-3xl p-1">
+      <div className="student-assessment-take-theme space-y-4">
         <motion.div
           initial={reduceMotion ? false : { opacity: 0, y: 8 }}
           animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="max-w-4xl mx-auto space-y-4"
+          className="mx-auto max-w-6xl space-y-4"
         >
-          <Card className="student-card overflow-hidden border-[var(--student-outline)]">
+          <Card className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_64px_-48px_rgba(15,23,42,0.35)]">
             <CardContent className="p-6 space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-lg font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
-                  <p className="text-sm student-muted-text">File Upload Assessment</p>
+              <div className="sticky top-0 z-20 -mx-6 -mt-6 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-lg font-semibold text-slate-900">{assessment.title}</p>
+                    <p className="text-sm text-slate-500">File Upload Assessment</p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <StudentStatusChip tone={isAttemptSubmitted ? 'success' : 'neutral'} className="border-slate-200 bg-white text-slate-700">
+                      {isAttemptSubmitted ? (
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                      ) : (
+                        <CircleDashed className="mr-1 h-3.5 w-3.5" />
+                      )}
+                      {submissionStatusLabel}
+                    </StudentStatusChip>
+                    {fileAttached ? (
+                      <StudentStatusChip tone="neutral" className="border-slate-200 bg-white text-slate-700">
+                        <FileText className="mr-1 h-3.5 w-3.5" />
+                        {attachmentCountLabel}
+                      </StudentStatusChip>
+                    ) : null}
+                    <StudentStatusChip tone="neutral" className="border-slate-200 bg-white text-slate-700">
+                      <Clock3 className="mr-1 h-3.5 w-3.5" />
+                      {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeSpentSeconds)}
+                    </StudentStatusChip>
+                    <Button
+                      className="min-w-[170px] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800"
+                      onClick={handleSubmitFileUpload}
+                      disabled={submitting || uploadingFile || isAttemptSubmitted}
+                      aria-label="Submit assessment"
+                    >
+                      {submitting ? 'Submitting...' : isAttemptSubmitted ? 'Submitted' : 'Submit assessment'}
+                    </Button>
+                  </div>
                 </div>
-                <StudentStatusChip tone="warning">
-                  <Clock3 className="mr-1 h-3.5 w-3.5" />
-                  {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeSpentSeconds)}
-                </StudentStatusChip>
               </div>
 
-              <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
-                <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)] mb-2">Instruction</p>
+              <div className="space-y-5">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.22)]">
+                <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Instruction</p>
                 {assessment.fileUploadInstructions ? (
                   <RichTextRenderer
                     html={assessment.fileUploadInstructions}
-                    className="text-sm leading-relaxed text-[var(--student-text-strong)]"
+                    className="text-sm leading-relaxed text-slate-900"
                   />
                 ) : (
-                  <p className="text-sm leading-relaxed text-[var(--student-text-strong)]">
+                  <p className="text-sm leading-relaxed text-slate-900">
                     No additional instruction provided.
                   </p>
                 )}
               </div>
 
               {(assessment.rubricCriteria?.length ?? 0) > 0 && (
-                <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Rubric</p>
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Rubric</p>
                   {assessment.rubricCriteria?.map((criterion) => (
-                    <div key={criterion.id} className="flex items-start justify-between gap-3 rounded-lg bg-[var(--student-surface-soft)] p-3">
+                    <div key={criterion.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-[var(--student-text-strong)]">{criterion.title}</p>
+                        <p className="text-sm font-medium text-slate-900">{criterion.title}</p>
                         {criterion.description && (
-                          <p className="text-xs text-[var(--student-text-muted)]">{criterion.description}</p>
+                          <p className="text-xs text-slate-500">{criterion.description}</p>
                         )}
                       </div>
-                      <Badge className="student-badge">{criterion.points} pts</Badge>
+                      <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{criterion.points} pts</span>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-2">
-                <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Allowed Formats</p>
-                <div className="flex flex-wrap gap-2">
-                  {allowedExtensions.length > 0 ? allowedExtensions.map((ext) => (
-                    <Badge key={ext} className="student-badge text-xs uppercase">.{ext}</Badge>
-                  )) : <span className="text-xs text-[var(--student-text-muted)]">No format restrictions configured</span>}
                 </div>
-                <p className="text-xs text-[var(--student-text-muted)]">
-                  Maximum upload size: {(maxUploadSize / (1024 * 1024)).toFixed(0)} MB
-                </p>
+
+                <div className="space-y-5">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Submission Rules</p>
+                <div className="space-y-3 text-sm text-slate-900">
+                  <div>
+                    <p className="font-medium">Allowed formats</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {allowedExtensions.length > 0 ? allowedExtensions.map((ext) => (
+                        <span key={ext} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase text-slate-700">.{ext}</span>
+                      )) : <span className="text-xs text-slate-500">No format restrictions configured</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium">Maximum upload size</p>
+                    <p className="text-xs text-slate-500">
+                      {(maxUploadSize / (1024 * 1024)).toFixed(0)} MB per attachment
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Submission mode</p>
+                    <p className="text-xs text-slate-500">
+                      You can attach multiple files before submitting. Your latest turned-in state is what the teacher reviews.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {assessment.teacherAttachmentFile && (
-                <div className="rounded-xl border border-[var(--student-outline)] p-4 flex items-center justify-between gap-3">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Teacher Reference File</p>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--student-text-strong)] truncate">{assessment.teacherAttachmentFile.originalName}</p>
-                    <p className="text-xs text-[var(--student-text-muted)]">
+                    <p className="truncate text-sm font-medium text-slate-900">{assessment.teacherAttachmentFile.originalName}</p>
+                    <p className="text-xs text-slate-500">
                       {(assessment.teacherAttachmentFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {assessment.teacherAttachmentFile.mimeType}
                     </p>
                   </div>
                   <Button
                     variant="outline"
+                    className="w-fit border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                     onClick={() => void assessmentService.downloadTeacherAttachment(
                       assessmentId,
                       assessment.teacherAttachmentFile?.originalName || 'teacher-attachment',
@@ -831,50 +924,80 @@ export default function StudentAssessmentTakePage() {
                 </div>
               )}
 
-              <div className="rounded-xl border border-[var(--student-outline)] p-4 space-y-3">
-                <p className="text-sm font-medium text-[var(--student-text-strong)]">Your Submission</p>
-                <label className="inline-flex items-center gap-2 rounded-md border border-[var(--student-outline)] px-3 py-2 text-sm cursor-pointer hover:bg-[var(--student-surface-soft)] transition-colors text-[var(--student-text-strong)]">
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">Your Submission</p>
+                    <p className="text-xs text-slate-500">
+                      Add one or more files here. You can remove draft attachments until you submit this assessment.
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{attachmentCountLabel}</span>
+                </div>
+                <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100">
                   <UploadCloud className="h-4 w-4" />
-                  {uploadingFile ? 'Uploading...' : 'Upload file'}
+                  {uploadingFile ? 'Uploading...' : fileAttached ? 'Add more files' : 'Attach files'}
                   <input
                     type="file"
+                    multiple
                     className="hidden"
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) void handleUploadSubmissionFile(file);
+                      if (e.target.files?.length) void handleUploadSubmissionFiles(e.target.files);
                       e.target.value = '';
                     }}
-                    disabled={uploadingFile}
+                    disabled={uploadingFile || isAttemptSubmitted}
                   />
                 </label>
 
-                {uploadedSubmission?.file && (
-                  <div className="rounded-md border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate text-[var(--student-text-strong)]">{uploadedSubmission.file.originalName}</p>
-                      <p className="text-xs text-[var(--student-text-muted)]">
-                        {(uploadedSubmission.file.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {uploadedSubmission.file.mimeType}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void assessmentService.downloadAttemptSubmissionFile(
-                        uploadedSubmission.attemptId,
-                        uploadedSubmission.file.originalName,
-                      )}
-                    >
-                      <FileText className="h-4 w-4 mr-1" /> View
-                    </Button>
+                {submittedFiles.length > 0 ? (
+                  <div className="space-y-3">
+                    {submittedFiles.map((file, index) => (
+                      <div key={file.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-wide text-slate-500">Attachment {index + 1}</p>
+                          <p className="truncate text-sm font-medium text-slate-900">{file.originalName}</p>
+                          <p className="text-xs text-slate-500">
+                            {(file.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {file.mimeType}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => activeAttemptId
+                              ? void assessmentService.downloadAttemptSubmissionAttachmentFile(
+                                  activeAttemptId,
+                                  file.id,
+                                  file.originalName,
+                                )
+                              : undefined}
+                          >
+                            <FileText className="mr-1 h-4 w-4" /> View file
+                          </Button>
+                          {!isAttemptSubmitted ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              onClick={() => void handleRemoveSubmissionFile(file.id)}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">
+                    No files attached yet.
                   </div>
                 )}
               </div>
-
-              <div className="flex justify-end">
-                <Button className="student-button-solid" onClick={handleSubmitFileUpload} disabled={submitting || uploadingFile}>
-                  {submitting ? 'Submitting...' : 'Submit'}
-                </Button>
-              </div>
+            </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -884,7 +1007,7 @@ export default function StudentAssessmentTakePage() {
             <DialogHeader>
               <DialogTitle>Upload required</DialogTitle>
               <DialogDescription>
-                Please upload your file before submitting this assessment.
+                Please upload at least one file before submitting this assessment.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -904,7 +1027,7 @@ export default function StudentAssessmentTakePage() {
   const progressValue = Math.round((answeredCount / questions.length) * 100);
 
   return (
-    <>
+    <div className="student-assessment-take-theme">
       <StudentObjectiveAssessmentSurface
         title={assessment.title}
         questionLabel={`Question ${currentIdx + 1} of ${questions.length}`}
@@ -1035,6 +1158,6 @@ export default function StudentAssessmentTakePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

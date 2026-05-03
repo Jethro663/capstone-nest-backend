@@ -60,6 +60,23 @@ describe('student assessment availability', () => {
     expect(availability.blockedReason).toContain('Maximum attempts reached');
   });
 
+  it('allows file upload resubmission before the due date even when attempts exist', () => {
+    const availability = getStudentAssessmentAvailability({
+      assessment: createAssessment({
+        type: 'file_upload',
+        maxAttempts: 1,
+        dueDate: '2026-05-10T00:00:00.000Z',
+      }),
+      item: createItem(),
+      submittedAttemptCount: 4,
+      now: new Date('2026-05-09T00:00:00.000Z'),
+    });
+
+    expect(availability.canStart).toBe(true);
+    expect(availability.hasAttemptsRemaining).toBe(true);
+    expect(availability.blockedReason).toBeNull();
+  });
+
   it('maps due-date API errors to a specific toast message', () => {
     const message = mapAssessmentStartError({
       response: {

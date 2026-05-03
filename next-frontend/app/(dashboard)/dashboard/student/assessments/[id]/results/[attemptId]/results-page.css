@@ -1,0 +1,43 @@
+.student-results-neutral-theme {
+  --student-page-gradient:
+    radial-gradient(circle at 12% 0%, rgba(148, 163, 184, 0.12), transparent 34%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 54%, #f8fafc 100%);
+  --student-surface: #f8fafc;
+  --student-surface-soft: #eef2f7;
+  --student-elevated: #ffffff;
+  --student-glass: rgba(255, 255, 255, 0.92);
+  --student-outline: rgba(148, 163, 184, 0.2);
+  --student-outline-strong: rgba(100, 116, 139, 0.28);
+  --student-border-strong: rgba(148, 163, 184, 0.24);
+  --student-text-strong: #0f172a;
+  --student-text-soft: #475569;
+  --student-text-muted: #64748b;
+  --student-accent: #0f172a;
+  --student-accent-contrast: #ffffff;
+  --student-accent-soft: #e2e8f0;
+  --student-accent-soft-strong: #cbd5e1;
+  --student-success-bg: #ecfdf5;
+  --student-success-border: #a7f3d0;
+  --student-success-text: #047857;
+  --student-danger-bg: #fff7ed;
+  --student-danger-border: #fed7aa;
+  --student-danger-text: #c2410c;
+  --student-shadow: 0 24px 48px -36px rgba(15, 23, 42, 0.24);
+  --student-shadow-hover: 0 28px 52px -34px rgba(15, 23, 42, 0.28);
+}
+
+.student-results-neutral-theme .student-page {
+  background: transparent;
+}
+
+.student-results-neutral-theme .student-card {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.18);
+}
+
+.student-results-neutral-theme .student-card-hover:hover {
+  transform: none;
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 22px 38px -30px rgba(15, 23, 42, 0.22);
+}

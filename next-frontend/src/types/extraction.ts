@@ -55,10 +55,34 @@ export interface ExtractionSection {
   figureReferences?: string[];
 }
 
+export interface ExtractionMediaCandidate {
+  sectionIndex: number;
+  score: number;
+  explicitMatch?: boolean;
+  scoreBreakdown?: Record<string, number>;
+}
+
+export interface ExtractionMediaAsset {
+  id: string;
+  url: string;
+  pageNumber?: number | null;
+  caption?: string | null;
+  anchorText?: string | null;
+  keywords?: string[];
+  figureReferences?: string[];
+  selectedSectionIndex?: number | null;
+  assignmentConfidence?: number | null;
+  assignmentBreakdown?: Record<string, number>;
+  candidateSections: ExtractionMediaCandidate[];
+  teacherReviewed?: boolean;
+  reviewState?: string | null;
+}
+
 export interface ExtractionStructuredContent {
   title: string;
   description: string;
   sections: ExtractionSection[];
+  mediaAssets: ExtractionMediaAsset[];
   audit?: {
     pipelineVersion?: string;
     overallConfidence?: number;
@@ -108,6 +132,10 @@ export interface Extraction {
   createdAt: string;
   updatedAt: string;
   originalName?: string;
+  qualityGate?: string | null;
+  reviewRequired?: boolean;
+  confidenceBreakdown?: Record<string, unknown>;
+  repairNotes?: string[];
 }
 
 export interface ExtractModuleDto {
@@ -124,4 +152,5 @@ export interface UpdateExtractionDto {
   description?: string;
   sections?: ExtractionSection[];
   lessons?: ExtractionLesson[];
+  mediaAssets?: ExtractionMediaAsset[];
 }

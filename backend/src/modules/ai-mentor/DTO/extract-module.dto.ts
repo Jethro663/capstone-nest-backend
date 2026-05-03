@@ -200,6 +200,98 @@ export class ExtractionAssessmentDraftDto {
   questions?: ExtractionAssessmentQuestionDto[];
 }
 
+export class ExtractionMediaCandidateDto {
+  @ApiProperty({ description: 'Candidate section index', example: 0 })
+  @IsNumber()
+  sectionIndex: number;
+
+  @ApiProperty({ description: 'Assignment score', example: 0.88 })
+  @IsNumber()
+  score: number;
+
+  @ApiPropertyOptional({ description: 'Whether the candidate was an explicit citation match' })
+  @IsOptional()
+  @IsBoolean()
+  explicitMatch?: boolean;
+
+  @ApiPropertyOptional({ description: 'Assignment score breakdown object' })
+  @IsOptional()
+  @IsObject()
+  scoreBreakdown?: Record<string, number>;
+}
+
+export class ExtractionMediaAssetDto {
+  @ApiProperty({ description: 'Stable media asset id' })
+  @IsString()
+  id: string;
+
+  @ApiProperty({ description: 'Media URL or data URL' })
+  @IsString()
+  url: string;
+
+  @ApiPropertyOptional({ description: 'Page number' })
+  @IsOptional()
+  @IsNumber()
+  pageNumber?: number;
+
+  @ApiPropertyOptional({ description: 'Caption text' })
+  @IsOptional()
+  @IsString()
+  caption?: string;
+
+  @ApiPropertyOptional({ description: 'Anchor text found near the image' })
+  @IsOptional()
+  @IsString()
+  anchorText?: string;
+
+  @ApiPropertyOptional({ description: 'Image keywords', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  keywords?: string[];
+
+  @ApiPropertyOptional({ description: 'Figure references', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  figureReferences?: string[];
+
+  @ApiPropertyOptional({ description: 'Selected section index for this image' })
+  @IsOptional()
+  @IsNumber()
+  selectedSectionIndex?: number | null;
+
+  @ApiPropertyOptional({ description: 'Assignment confidence score' })
+  @IsOptional()
+  @IsNumber()
+  assignmentConfidence?: number;
+
+  @ApiPropertyOptional({ description: 'Assignment score breakdown object' })
+  @IsOptional()
+  @IsObject()
+  assignmentBreakdown?: Record<string, number>;
+
+  @ApiPropertyOptional({
+    description: 'Candidate section scores',
+    type: [ExtractionMediaCandidateDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExtractionMediaCandidateDto)
+  candidateSections?: ExtractionMediaCandidateDto[];
+
+  @ApiPropertyOptional({ description: 'Whether a teacher has reviewed this image placement' })
+  @IsOptional()
+  @IsBoolean()
+  teacherReviewed?: boolean;
+
+  @ApiPropertyOptional({ description: 'Review state label' })
+  @IsOptional()
+  @IsString()
+  reviewState?: string;
+}
+
 export class ExtractionSectionDto {
   @ApiProperty({ description: 'Section title' })
   @IsString()
@@ -237,6 +329,18 @@ export class ExtractionSectionDto {
   @IsOptional()
   @IsNumber()
   confidence?: number;
+
+  @ApiPropertyOptional({ description: 'Graph keywords', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  graphKeywords?: string[];
+
+  @ApiPropertyOptional({ description: 'Figure references', type: [String] })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  figureReferences?: string[];
 }
 
 /**
@@ -273,4 +377,14 @@ export class UpdateExtractionDto {
   @ValidateNested({ each: true })
   @Type(() => ExtractionLessonDto)
   lessons?: ExtractionLessonDto[];
+
+  @ApiPropertyOptional({
+    description: 'Extracted image assets and teacher review state',
+    type: [ExtractionMediaAssetDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExtractionMediaAssetDto)
+  mediaAssets?: ExtractionMediaAssetDto[];
 }

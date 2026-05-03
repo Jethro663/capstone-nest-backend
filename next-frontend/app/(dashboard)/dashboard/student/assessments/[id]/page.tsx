@@ -24,7 +24,12 @@ import {
 type StatusTone = 'success' | 'warning' | 'danger' | 'neutral' | 'info';
 
 function toAssessmentTypeLabel(type: string) {
-  return type.replaceAll('_', ' ');
+  return type
+    .replaceAll('_', ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
 function getAttemptStatus(attempt: AssessmentAttempt): { tone: StatusTone; label: string } {
@@ -58,7 +63,7 @@ function getToneClasses(tone: StatusTone) {
   if (tone === 'info') {
     return 'border-sky-200 bg-sky-50 text-sky-700';
   }
-  return 'border-[var(--student-outline)] bg-[var(--student-surface)] text-[var(--student-text-strong)]';
+  return 'border-slate-200 bg-white text-slate-900';
 }
 
 function SummaryMetric({
@@ -72,14 +77,14 @@ function SummaryMetric({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
         {label}
       </p>
       <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
-        <strong className="block text-[1.35rem] font-black leading-none text-[var(--student-text-strong)]">
+        <strong className="block text-[1.35rem] font-black leading-none text-slate-900">
           {value}
         </strong>
-        {caption ? <span className="block pb-0.5 text-xs text-[var(--student-text-muted)]">{caption}</span> : null}
+        {caption ? <span className="block pb-0.5 text-xs text-slate-500">{caption}</span> : null}
       </div>
     </div>
   );
@@ -229,9 +234,25 @@ export default function StudentAssessmentPage() {
       : isPastDue
         ? 'danger'
         : 'neutral';
+  const pageShellClass = 'mx-auto w-full max-w-6xl space-y-4 pb-8';
+  const heroCardClass = 'overflow-hidden rounded-[1.1rem] border border-slate-200 bg-white shadow-[0_24px_60px_-48px_rgba(15,23,42,0.35)]';
+  const sectionDividerClass = 'divide-y divide-slate-200';
+  const summaryCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)] transition-colors hover:bg-slate-50';
+  const detailCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)]';
+  const submittedPillClass = 'rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-[0_10px_22px_-20px_rgba(15,23,42,0.18)]';
+  const primaryButtonClass = 'min-w-[10rem] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800';
+  const backButtonClass = 'inline-flex h-auto items-center gap-2 px-0 py-0 text-slate-600 hover:bg-transparent hover:text-slate-900';
+  const submittedMutedTextClass = 'text-slate-500';
+  const submittedStrongTextClass = 'text-slate-900';
+  const submittedChipClass = 'inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700';
+  const submittedEmptyClass = 'grid justify-items-center gap-2 rounded-[0.9rem] border border-dashed border-slate-300 bg-white px-4 py-8 text-center';
+  const submittedEmptyIconClass = 'grid h-12 w-12 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500';
+  const submittedListShellClass = 'overflow-hidden rounded-[0.9rem] border border-slate-200 bg-white';
+  const submittedListRowClass = 'bg-white transition-colors hover:bg-slate-50';
+  const submittedOutlineButtonClass = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900';
 
   return (
-    <div className="student-page mx-auto w-full max-w-6xl space-y-4 pb-8">
+    <div className={pageShellClass}>
       <motion.main {...motionProps.container} className="space-y-4">
         <motion.section {...motionProps.item} className="px-1 py-1">
           <div className="flex flex-col gap-5">
@@ -240,7 +261,7 @@ export default function StudentAssessmentPage() {
                 variant="ghost"
                 size="sm"
                 onClick={() => router.push(backHref)}
-                className="inline-flex h-auto items-center gap-2 px-0 py-0 text-[var(--student-accent)] hover:bg-transparent hover:text-[var(--student-text-strong)]"
+                className={backButtonClass}
               >
                 <ArrowLeft className="h-4 w-4" />
                 {classId ? 'Back to class assignments' : 'Back to dashboard'}
@@ -248,16 +269,16 @@ export default function StudentAssessmentPage() {
 
               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem_auto] lg:items-start">
                 <div className="space-y-2">
-                  <h1 className="text-[clamp(1.65rem,2.2vw,2.35rem)] font-black leading-tight tracking-[-0.03em] text-[var(--student-text-strong)]">
+                  <h1 className="text-[clamp(1.65rem,2.2vw,2.35rem)] font-black leading-tight tracking-[-0.03em] text-slate-900">
                     {assessment.title}
                   </h1>
-                  <p className="text-sm text-[var(--student-text-muted)]">{dueDateLabel}</p>
+                  <p className={`text-sm ${submittedMutedTextClass}`}>{dueDateLabel}</p>
                 </div>
 
                 <dl className="grid gap-3 text-sm lg:pt-1">
-                  <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.45)]">
-                    <dt className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">Points</dt>
-                    <dd className="mt-1 text-base font-semibold text-[var(--student-text-strong)]">
+                  <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)]">
+                    <dt className={`text-[11px] font-black uppercase tracking-[0.18em] ${submittedMutedTextClass}`}>Points</dt>
+                    <dd className={`mt-1 text-base font-semibold ${submittedStrongTextClass}`}>
                       {assessment.totalPoints ?? 0} points possible
                     </dd>
                   </div>
@@ -268,11 +289,11 @@ export default function StudentAssessmentPage() {
                 </dl>
 
                 <div className="flex flex-col items-start gap-3 lg:items-end">
-                  <div className="rounded-full border border-[var(--student-outline)] bg-[var(--student-elevated)] px-3 py-1 text-sm font-semibold text-[var(--student-text-strong)] shadow-[0_10px_22px_-20px_rgba(15,23,42,0.45)]">
+                  <div className={submittedPillClass}>
                     {attemptsRemaining} attempt{attemptsRemaining === 1 ? '' : 's'} remaining
                   </div>
                   {canStart ? (
-                    <Button onClick={handleStart} disabled={starting} className="student-button-solid min-w-[10rem]">
+                    <Button onClick={handleStart} disabled={starting} className={primaryButtonClass}>
                       {primaryActionLabel}
                     </Button>
                   ) : (
@@ -288,28 +309,28 @@ export default function StudentAssessmentPage() {
 
         <motion.section
           {...motionProps.item}
-          className="overflow-hidden rounded-[1.1rem] border border-[var(--student-outline)] bg-[var(--student-elevated)]"
+          className={heroCardClass}
         >
-          <div className="divide-y divide-[var(--student-outline)]">
+          <div className={sectionDividerClass}>
             <section className="px-4 py-4 md:px-5">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
+                <div className={summaryCardClass}>
                   <SummaryMetric label="Type" value={toAssessmentTypeLabel(assessment.type)} />
                 </div>
-                <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
+                <div className={summaryCardClass}>
                   <SummaryMetric label="Passing Score" value={`${assessment.passingScore ?? 60}%`} />
                 </div>
-                <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
+                <div className={summaryCardClass}>
                   <SummaryMetric label="Questions" value={questionCount} />
                 </div>
-                <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
+                <div className={summaryCardClass}>
                   <SummaryMetric
                     label="Attempts"
                     value={`${submittedAttempts.length} / ${maxAttempts}`}
                     caption={`${attemptsRemaining} remaining`}
                   />
                 </div>
-                <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
+                <div className={summaryCardClass}>
                   <SummaryMetric
                     label="Time Limit"
                     value={assessment.timeLimitMinutes ? assessment.timeLimitMinutes : 'No limit'}
@@ -321,21 +342,21 @@ export default function StudentAssessmentPage() {
 
             <section className="space-y-3 px-4 py-4 md:px-5">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+                <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${submittedMutedTextClass}`}>
                   Instructions
                 </p>
-                <p className="mt-1 text-sm text-[var(--student-text-muted)]">
+                <p className={`mt-1 text-sm ${submittedMutedTextClass}`}>
                   Review the task details before you begin your submission.
                 </p>
               </div>
-              <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-4">
+              <div className={detailCardClass}>
                 {assessment.description ? (
                   <RichTextRenderer
                     html={assessment.description}
-                    className="rich-text-renderer text-sm student-muted-text"
+                    className="rich-text-renderer text-sm text-slate-700"
                   />
                 ) : (
-                  <p className="text-sm student-muted-text">No instructions provided yet.</p>
+                  <p className="text-sm text-slate-700">No instructions provided yet.</p>
                 )}
               </div>
             </section>
@@ -343,19 +364,19 @@ export default function StudentAssessmentPage() {
             {assessment.teacherAttachmentFile && (
               <section className="space-y-3 px-4 py-4 md:px-5">
                 <div>
-                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
+                  <p className={`text-[11px] font-black uppercase tracking-[0.18em] ${submittedMutedTextClass}`}>
                     Reference Material
                   </p>
                 </div>
-                <div className="flex items-center gap-3 rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface)] px-4 py-3 transition-colors hover:bg-[var(--student-surface-soft)]">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[0.85rem] bg-[var(--student-accent-soft)] text-[var(--student-accent)]">
+                <div className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 transition-colors hover:bg-slate-50">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[0.85rem] bg-slate-100 text-slate-600">
                     <Paperclip className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-semibold text-[var(--student-text-strong)]">
+                    <p className={`truncate font-semibold ${submittedStrongTextClass}`}>
                       {assessment.teacherAttachmentFile.originalName}
                     </p>
-                    <p className="mt-1 text-xs text-[var(--student-text-muted)]">
+                    <p className={`mt-1 text-xs ${submittedMutedTextClass}`}>
                       {assessment.teacherAttachmentFile.mimeType}
                     </p>
                   </div>
@@ -366,27 +387,27 @@ export default function StudentAssessmentPage() {
             {(assessment.rubricCriteria?.length ?? 0) > 0 && (
               <section className="space-y-3 px-4 py-4 md:px-5">
                 <div>
-                  <h2 className="text-base font-black text-[var(--student-text-strong)]">Rubric</h2>
-                  <p className="mt-1 text-sm text-[var(--student-text-muted)]">
+                  <h2 className={`text-base font-black ${submittedStrongTextClass}`}>Rubric</h2>
+                  <p className={`mt-1 text-sm ${submittedMutedTextClass}`}>
                     These are the criteria your teacher will review.
                   </p>
                 </div>
 
-                <div className="overflow-hidden rounded-[0.9rem] border border-[var(--student-outline)]">
+                <div className={submittedListShellClass}>
                   {assessment.rubricCriteria?.map((criterion, index) => (
                     <div
                       key={criterion.id}
-                      className={`flex flex-col gap-2 bg-[var(--student-elevated)] px-4 py-3 transition-colors hover:bg-[var(--student-surface)] md:flex-row md:items-start md:justify-between ${
-                        index > 0 ? 'border-t border-[var(--student-outline)]' : ''
+                      className={`flex flex-col gap-2 px-4 py-3 md:flex-row md:items-start md:justify-between ${submittedListRowClass} ${
+                        index > 0 ? 'border-t border-slate-200' : ''
                       }`}
                     >
                       <div>
-                        <strong className="block text-sm font-bold text-[var(--student-text-strong)]">{criterion.title}</strong>
+                        <strong className={`block text-sm font-bold ${submittedStrongTextClass}`}>{criterion.title}</strong>
                         {criterion.description ? (
-                          <p className="mt-1 text-sm text-[var(--student-text-muted)]">{criterion.description}</p>
+                          <p className={`mt-1 text-sm ${submittedMutedTextClass}`}>{criterion.description}</p>
                         ) : null}
                       </div>
-                      <span className="inline-flex w-fit items-center rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-1 text-sm font-semibold text-[var(--student-text-strong)]">
+                      <span className={submittedChipClass}>
                         {criterion.points} pts
                       </span>
                     </div>
@@ -398,8 +419,8 @@ export default function StudentAssessmentPage() {
             <section className="space-y-3 px-4 py-4 md:px-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-base font-black text-[var(--student-text-strong)]">My Attempts</h2>
-                  <p className="mt-1 text-sm text-[var(--student-text-muted)]">
+                  <h2 className={`text-base font-black ${submittedStrongTextClass}`}>My Attempts</h2>
+                  <p className={`mt-1 text-sm ${submittedMutedTextClass}`}>
                     {submittedAttempts.length > 0
                       ? `${submittedAttempts.length} submitted attempt${submittedAttempts.length === 1 ? '' : 's'}`
                       : 'Your submitted work will appear here after you turn it in.'}
@@ -413,32 +434,32 @@ export default function StudentAssessmentPage() {
               </div>
 
               {submittedAttempts.length === 0 ? (
-                <div className="grid justify-items-center gap-2 rounded-[0.9rem] border border-dashed border-[var(--student-outline)] px-4 py-8 text-center">
-                  <div className="grid h-12 w-12 place-items-center rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]">
+                <div className={submittedEmptyClass}>
+                  <div className={submittedEmptyIconClass}>
                     <ClipboardAttemptIcon />
                   </div>
-                  <strong className="text-sm font-bold text-[var(--student-text-strong)]">No attempts yet</strong>
-                  <p className="max-w-md text-sm text-[var(--student-text-muted)]">
+                  <strong className={`text-sm font-bold ${submittedStrongTextClass}`}>No attempts yet</strong>
+                  <p className={`max-w-md text-sm ${submittedMutedTextClass}`}>
                     Start this assessment when you are ready.
                   </p>
                 </div>
                 ) : (
-                  <div className="overflow-hidden rounded-[0.9rem] border border-[var(--student-outline)]">
+                  <div className={submittedListShellClass}>
                   {submittedAttempts.map((attempt, index) => {
                     const status = getAttemptStatus(attempt);
 
                     return (
                       <article
                         key={attempt.id}
-                        className={`flex flex-col gap-3 bg-[var(--student-elevated)] px-4 py-3 transition-colors hover:bg-[var(--student-surface)] md:flex-row md:items-center md:justify-between ${
-                          index > 0 ? 'border-t border-[var(--student-outline)]' : ''
+                        className={`flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between ${submittedListRowClass} ${
+                          index > 0 ? 'border-t border-slate-200' : ''
                         }`}
                       >
                         <div className="space-y-1">
-                          <strong className="block text-sm font-bold text-[var(--student-text-strong)]">
+                          <strong className={`block text-sm font-bold ${submittedStrongTextClass}`}>
                             Attempt #{attempt.attemptNumber ?? '?'}
                           </strong>
-                          <span className="block text-xs text-[var(--student-text-muted)]">
+                          <span className={`block text-xs ${submittedMutedTextClass}`}>
                             {formatDate(attempt.submittedAt || attempt.createdAt || '')}
                           </span>
                         </div>
@@ -449,7 +470,7 @@ export default function StudentAssessmentPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="student-button-outline"
+                            className={submittedOutlineButtonClass}
                             onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}/results/${attempt.id}`)}
                           >
                             View Results
@@ -460,7 +481,7 @@ export default function StudentAssessmentPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="student-button-outline"
+                                className={submittedOutlineButtonClass}
                                 onClick={handleUnsubmitFileUpload}
                                 disabled={unsubmittingAttemptId === attempt.id}
                               >

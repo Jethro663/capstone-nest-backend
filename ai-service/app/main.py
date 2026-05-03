@@ -2503,6 +2503,8 @@ VALID_QUESTION_TYPES = {
     "fill_blank",
     "dropdown",
 }
+LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.85
+VERY_SHORT_APPLY_TEXT_THRESHOLD = 20
 
 
 def _safe_int(value: Any, fallback: int) -> int:
@@ -2521,6 +2523,138 @@ def _normalize_block_content(content: Any) -> dict[str, Any] | str:
     if content is None:
         return {"text": ""}
     return {"text": str(content)}
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _normalize_media_candidate(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    section_index = raw.get("sectionIndex")
+    if not isinstance(section_index, int):
+        return None
+    score = raw.get("score")
+    if not isinstance(score, (int, float)):
+        return None
+    payload = {
+        "sectionIndex": section_index,
+        "score": round(float(score), 4),
+    }
+    if isinstance(raw.get("explicitMatch"), bool):
+        payload["explicitMatch"] = bool(raw.get("explicitMatch"))
+    if isinstance(raw.get("scoreBreakdown"), dict):
+        payload["scoreBreakdown"] = {
+            str(key): round(float(value), 4)
+            for key, value in raw.get("scoreBreakdown", {}).items()
+            if isinstance(value, (int, float))
+        }
+    return payload
+
+
+def _normalize_media_asset(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    media_id = str(raw.get("id") or "").strip()
+    url = str(raw.get("url") or raw.get("dataUrl") or "").strip()
+    if not media_id or not url:
+        return None
+    selected_section_index = raw.get("selectedSectionIndex")
+    if not isinstance(selected_section_index, int):
+        selected_section_index = None
+    assignment_confidence = raw.get("assignmentConfidence")
+    candidate_sections = []
+    if isinstance(raw.get("candidateSections"), list):
+        for candidate in raw.get("candidateSections")[:3]:
+            normalized = _normalize_media_candidate(candidate)
+            if normalized is not None:
+                candidate_sections.append(normalized)
+    payload = {
+        "id": media_id,
+        "url": url,
+        "pageNumber": _safe_int(raw.get("pageNumber"), 0) or None,
+        "caption": str(raw.get("caption") or "").strip() or None,
+        "anchorText": str(raw.get("anchorText") or "").strip() or None,
+        "keywords": _normalize_string_list(raw.get("keywords")),
+        "figureReferences": _normalize_string_list(raw.get("figureReferences")),
+        "selectedSectionIndex": selected_section_index,
+        "assignmentConfidence": (
+            round(float(assignment_confidence), 4)
+            if isinstance(assignment_confidence, (int, float))
+            else None
+        ),
+        "assignmentBreakdown": (
+            {
+                str(key): round(float(value), 4)
+                for key, value in raw.get("assignmentBreakdown", {}).items()
+                if isinstance(value, (int, float))
+            }
+            if isinstance(raw.get("assignmentBreakdown"), dict)
+            else {}
+        ),
+        "candidateSections": candidate_sections,
+        "teacherReviewed": bool(raw.get("teacherReviewed")),
+        "reviewState": str(raw.get("reviewState") or "").strip() or None,
+    }
+    if payload["pageNumber"] is None:
+        payload.pop("pageNumber")
+    if payload["caption"] is None:
+        payload.pop("caption")
+    if payload["anchorText"] is None:
+        payload.pop("anchorText")
+    if payload["reviewState"] is None:
+        payload.pop("reviewState")
+    return payload
+
+
+def _synthesize_media_assets_from_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    media_assets: list[dict[str, Any]] = []
+    for section_index, section in enumerate(sections):
+        lesson_blocks = section.get("lessonBlocks") if isinstance(section.get("lessonBlocks"), list) else []
+        for block_index, block in enumerate(lesson_blocks):
+            if not isinstance(block, dict) or str(block.get("type") or "").strip().lower() != "image":
+                continue
+            content = block.get("content")
+            metadata = block.get("metadata") if isinstance(block.get("metadata"), dict) else {}
+            if not isinstance(content, dict):
+                continue
+            url = str(content.get("url") or "").strip()
+            if not url:
+                continue
+            media_asset_id = str(metadata.get("mediaAssetId") or metadata.get("imageId") or f"image-{section_index + 1}-{block_index + 1}").strip()
+            media_assets.append(
+                {
+                    "id": media_asset_id,
+                    "url": url,
+                    "pageNumber": _safe_int(metadata.get("pageNumber"), 0) or None,
+                    "caption": str(content.get("caption") or content.get("alt") or "").strip() or None,
+                    "anchorText": None,
+                    "keywords": [],
+                    "figureReferences": [],
+                    "selectedSectionIndex": section_index,
+                    "assignmentConfidence": (
+                        round(float(metadata.get("assignmentConfidence")), 4)
+                        if isinstance(metadata.get("assignmentConfidence"), (int, float))
+                        else None
+                    ),
+                    "assignmentBreakdown": (
+                        metadata.get("assignmentBreakdown")
+                        if isinstance(metadata.get("assignmentBreakdown"), dict)
+                        else {}
+                    ),
+                    "candidateSections": (
+                        [{"sectionIndex": section_index, "score": round(float(metadata.get("assignmentConfidence")), 4)}]
+                        if isinstance(metadata.get("assignmentConfidence"), (int, float))
+                        else [{"sectionIndex": section_index, "score": 1.0}]
+                    ),
+                    "teacherReviewed": True,
+                    "reviewState": "reviewed",
+                }
+            )
+    return media_assets
 
 
 def _normalize_extraction_block(block: Any, order_fallback: int) -> dict[str, Any]:
@@ -2672,6 +2806,121 @@ def _derive_assessment_draft_from_blocks(
     }
 
 
+def _refresh_media_review_state(structured_content: dict[str, Any]) -> None:
+    sections = structured_content.get("sections") if isinstance(structured_content.get("sections"), list) else []
+    media_assets = structured_content.get("mediaAssets") if isinstance(structured_content.get("mediaAssets"), list) else []
+    normalized_media_assets: list[dict[str, Any]] = []
+    section_count = len(sections)
+
+    for asset in media_assets:
+        normalized = _normalize_media_asset(asset)
+        if normalized is None:
+            continue
+        selected_index = normalized.get("selectedSectionIndex")
+        if isinstance(selected_index, int) and (selected_index < 0 or selected_index >= section_count):
+            normalized["selectedSectionIndex"] = None
+            selected_index = None
+        confidence = normalized.get("assignmentConfidence")
+        if selected_index is None:
+            normalized["teacherReviewed"] = False
+            normalized["reviewState"] = "needs_teacher_assignment"
+        elif not normalized.get("teacherReviewed") and isinstance(confidence, (int, float)) and confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD:
+            normalized["reviewState"] = "needs_teacher_review"
+        elif normalized.get("teacherReviewed"):
+            normalized["reviewState"] = "reviewed"
+        else:
+            normalized["teacherReviewed"] = True
+            normalized["reviewState"] = "auto_assigned"
+        normalized_media_assets.append(normalized)
+
+    structured_content["mediaAssets"] = normalized_media_assets
+    audit = structured_content.get("audit") if isinstance(structured_content.get("audit"), dict) else {}
+    assigned = sum(1 for asset in normalized_media_assets if isinstance(asset.get("selectedSectionIndex"), int))
+    unassigned = max(len(normalized_media_assets) - assigned, 0)
+    needs_review = any(not bool(asset.get("teacherReviewed")) for asset in normalized_media_assets)
+    image_summary = audit.get("imageAssignmentSummary") if isinstance(audit.get("imageAssignmentSummary"), dict) else {}
+    image_summary.update(
+        {
+            "assigned": assigned,
+            "unassigned": unassigned,
+            "reusedByCitation": int(image_summary.get("reusedByCitation") or 0),
+        }
+    )
+    audit["imageAssignmentSummary"] = image_summary
+    review_flags = [str(flag) for flag in audit.get("reviewFlags", []) if str(flag).strip()]
+    if unassigned > 0 and "image-unassigned" not in review_flags:
+        review_flags.append("image-unassigned")
+    if needs_review and "image-review-pending" not in review_flags:
+        review_flags.append("image-review-pending")
+    audit["reviewFlags"] = review_flags
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    audit["reviewRequired"] = quality_gate == "fail" or needs_review
+    structured_content["audit"] = audit
+
+
+def _block_text_for_apply(block: dict[str, Any]) -> str:
+    content = block.get("content")
+    if isinstance(content, dict):
+        return str(content.get("text") or "").strip()
+    if isinstance(content, str):
+        return content.strip()
+    return ""
+
+
+def _block_has_usable_content(block: dict[str, Any]) -> bool:
+    block_type = str(block.get("type") or "").strip().lower()
+    if block_type == "image":
+        content = block.get("content")
+        return isinstance(content, dict) and isinstance(content.get("url"), str) and bool(content.get("url").strip())
+    if block_type == "divider":
+        return False
+    return bool(_block_text_for_apply(block))
+
+
+def _prepare_section_for_apply(section_data: dict[str, Any], *, fallback_title: str) -> dict[str, Any]:
+    section_title = str(section_data.get("title") or fallback_title).strip()
+    section_description = str(section_data.get("description") or "").strip()
+    blocks = section_data.get("lessonBlocks")
+    if not isinstance(blocks, list):
+        blocks = section_data.get("blocks")
+    if not isinstance(blocks, list):
+        blocks = []
+
+    normalized_blocks: list[dict[str, Any]] = []
+    seen_text_blocks: set[tuple[str, str]] = set()
+    for idx, block in enumerate(blocks, start=1):
+        normalized_block = _normalize_extraction_block(block, idx)
+        block_type = str(normalized_block.get("type") or "text").strip().lower()
+        text = _block_text_for_apply(normalized_block)
+        if block_type == "text" and text and len(text) < VERY_SHORT_APPLY_TEXT_THRESHOLD:
+            continue
+        if block_type != "image":
+            if not text:
+                continue
+            key = (block_type, re.sub(r"\s+", " ", text).strip().lower())
+            if key in seen_text_blocks:
+                continue
+            seen_text_blocks.add(key)
+        elif not _block_has_usable_content(normalized_block):
+            continue
+        normalized_blocks.append(normalized_block)
+
+    if not section_title:
+        raise HTTPException(400, "Selected extraction section is missing a title.")
+    if not any(_block_has_usable_content(block) for block in normalized_blocks):
+        raise HTTPException(400, f'Section "{section_title}" has no usable lesson blocks to apply.')
+
+    return {
+        "title": section_title,
+        "description": section_description,
+        "lessonBlocks": normalized_blocks,
+        "assessmentDraft": _normalize_assessment_draft(
+            section_data.get("assessmentDraft"),
+            section_title=section_title,
+        ),
+    }
+
+
 def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
     if not isinstance(section, dict):
         fallback_title = f"Section {index + 1}"
@@ -2718,6 +2967,8 @@ def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
         "lessonBlocks": lesson_blocks,
         "assessmentDraft": normalized_draft,
         "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+        "graphKeywords": _normalize_string_list(section.get("graphKeywords")),
+        "figureReferences": _normalize_string_list(section.get("figureReferences")),
     }
 
 
@@ -2756,12 +3007,26 @@ def _normalize_structured_content(payload: Any) -> dict[str, Any]:
         for index, section in enumerate(raw_sections)
     ]
 
-    return {
+    raw_media_assets = payload.get("mediaAssets")
+    if not isinstance(raw_media_assets, list):
+        raw_media_assets = []
+    media_assets = []
+    for asset in raw_media_assets:
+        normalized_asset = _normalize_media_asset(asset)
+        if normalized_asset is not None:
+            media_assets.append(normalized_asset)
+    if not media_assets:
+        media_assets = _synthesize_media_assets_from_sections(sections)
+
+    structured_content = {
         "title": title,
         "description": description,
         "sections": sections,
         "audit": audit,
+        "mediaAssets": media_assets,
     }
+    _refresh_media_review_state(structured_content)
+    return structured_content
 
 
 # ---------------------------------------------------------------------------
@@ -3052,6 +3317,17 @@ async def update_extraction(
     else:
         raw_sections = existing_content.get("sections") or []
 
+    raw_media_assets: list[Any]
+    if body.media_assets is not None:
+        raw_media_assets = [
+            asset.model_dump(by_alias=True)
+            if hasattr(asset, "model_dump")
+            else dict(asset)
+            for asset in body.media_assets
+        ]
+    else:
+        raw_media_assets = existing_content.get("mediaAssets") or []
+
     structured_content = _normalize_structured_content(
         {
             "title": body.title if body.title is not None else existing_content.get("title"),
@@ -3062,6 +3338,7 @@ async def update_extraction(
             ),
             "sections": raw_sections,
             "audit": existing_content.get("audit") or {},
+            "mediaAssets": raw_media_assets,
         }
     )
 
@@ -3115,6 +3392,12 @@ async def apply_extraction(
         raise HTTPException(400, "This extraction has already been applied")
 
     content = _normalize_structured_content(extraction["structured_content"])
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    if quality_gate == "fail":
+        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
+    if bool(audit.get("reviewRequired")):
+        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
     all_sections = content.get("sections") or []
     if not all_sections:
         raise HTTPException(400, "No sections found in extraction result")
@@ -3134,6 +3417,17 @@ async def apply_extraction(
         sections_to_apply = [(all_sections[i], i) for i in selected_indices]
     else:
         sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
+
+    prepared_sections = [
+        (
+            _prepare_section_for_apply(
+                section_data,
+                fallback_title=f"Section {source_section_index + 1}",
+            ),
+            source_section_index,
+        )
+        for section_data, source_section_index in sections_to_apply
+    ]
 
     class_id = extraction["class_id"]
 
@@ -3203,7 +3497,7 @@ async def apply_extraction(
     allowed_feedback_levels = {"immediate", "standard", "detailed"}
 
     for section_offset, (section_data, source_section_index) in enumerate(
-        sections_to_apply,
+        prepared_sections,
         start=1,
     ):
         section_title = str(section_data.get("title") or f"Section {section_offset}").strip()
@@ -3254,8 +3548,6 @@ async def apply_extraction(
 
         blocks = section_data.get("lessonBlocks")
         if not isinstance(blocks, list):
-            blocks = section_data.get("blocks")
-        if not isinstance(blocks, list):
             blocks = []
 
         for idx, block in enumerate(blocks):
@@ -3295,10 +3587,7 @@ async def apply_extraction(
 
         created_lessons.append({"id": new_lesson["id"], "title": new_lesson["title"]})
 
-        assessment_draft = _normalize_assessment_draft(
-            section_data.get("assessmentDraft"),
-            section_title=section_title,
-        )
+        assessment_draft = section_data.get("assessmentDraft")
         if assessment_draft and isinstance(assessment_draft.get("questions"), list):
             questions = assessment_draft["questions"]
             if questions:

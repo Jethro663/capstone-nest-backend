@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, BarChart3, ClipboardCheck, PenSquare, Users } from 'lucide-react';
+import { ArrowLeft, PenSquare } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,6 +31,15 @@ function formatDate(value?: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'No due date';
   return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatAssessmentTypeLabel(value?: string) {
+  if (!value) return 'Assessment';
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
 }
 
 export default function TeacherAssessmentDetailPage() {
@@ -68,41 +77,9 @@ export default function TeacherAssessmentDetailPage() {
     void fetchData();
   }, [fetchData]);
 
-  const summary = submissions?.summary;
-
   const backHref = assessment?.classId
     ? `/dashboard/teacher/classes/${assessment.classId}?view=assignments`
     : '/dashboard/teacher/assessments';
-
-  const statItems = useMemo(
-    () => [
-      {
-        label: 'Students',
-        value: String(summary?.total ?? 0),
-        caption: 'Assigned learners',
-        icon: Users,
-      },
-      {
-        label: 'Completion',
-        value: `${stats?.completionRate ?? 0}%`,
-        caption: 'Finished attempts',
-        icon: ClipboardCheck,
-      },
-      {
-        label: 'Average Score',
-        value: `${stats?.averageScore ?? 0}%`,
-        caption: 'Current average',
-        icon: BarChart3,
-      },
-      {
-        label: 'Pending Review',
-        value: String(summary?.turnedIn ?? 0),
-        caption: 'Waiting for scoring',
-        icon: PenSquare,
-      },
-    ],
-    [stats?.averageScore, stats?.completionRate, summary?.total, summary?.turnedIn],
-  );
 
   if (loading) {
     return (
@@ -111,11 +88,6 @@ export default function TeacherAssessmentDetailPage() {
           <Skeleton className="h-7 w-44 rounded-full" />
           <Skeleton className="h-11 w-80 rounded-xl" />
           <Skeleton className="h-5 w-64 rounded-lg" />
-        </div>
-        <div className="teacher-assessment-detail__stats">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-24 rounded-2xl" />
-          ))}
         </div>
         <Skeleton className="h-12 w-96 rounded-xl" />
         <Skeleton className="h-[460px] rounded-2xl" />
@@ -146,7 +118,7 @@ export default function TeacherAssessmentDetailPage() {
           <h1>{assessment.title}</h1>
           <div className="teacher-assessment-detail__badges">
             <Badge variant="outline" className="teacher-assessment-detail__badge">
-              {assessment.type}
+              {formatAssessmentTypeLabel(assessment.type)}
             </Badge>
             {assessment.classRecordCategory ? (
               <Badge variant="outline" className="teacher-assessment-detail__badge">
@@ -186,19 +158,6 @@ export default function TeacherAssessmentDetailPage() {
           </Link>
         </div>
       </header>
-
-      <section className="teacher-assessment-detail__stats">
-        {statItems.map((item) => (
-          <article key={item.label} className="teacher-assessment-detail__stat">
-            <div>
-              <p>{item.label}</p>
-              <strong>{item.value}</strong>
-              <span>{item.caption}</span>
-            </div>
-            <item.icon className="h-5 w-5" />
-          </article>
-        ))}
-      </section>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="teacher-assessment-detail__tabs">
         <TabsList className="teacher-assessment-detail__tabs-list">

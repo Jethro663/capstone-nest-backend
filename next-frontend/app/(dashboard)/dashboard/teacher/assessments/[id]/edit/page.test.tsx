@@ -323,6 +323,36 @@ describe('AssessmentEditorPage', () => {
     expect(within(dialog).queryByText('Add at least one question')).not.toBeInTheDocument();
   });
 
+  it('simplifies advanced settings for file upload mode and fixes scoring to 100 points', async () => {
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /file upload assessment/i })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+
+    expect(screen.getByText('Score is always 100 for file upload assessments.')).toBeInTheDocument();
+    expect(screen.getByText('No rubric yet. Teachers will grade the latest submission out of 100.')).toBeInTheDocument();
+    expect(screen.queryByText('Time Limit (minutes)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Passing Score (%)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Max Attempts')).not.toBeInTheDocument();
+    expect(screen.queryByText('Randomize questions and options per student')).not.toBeInTheDocument();
+    expect(screen.queryByText('Enable per-question timer')).not.toBeInTheDocument();
+    expect(screen.queryByText('Strict no-return policy for previous questions')).not.toBeInTheDocument();
+
+    const classRecordHeading = screen.getByText('Class record setup');
+    const feedbackLabel = screen.getByText('Result Release');
+    expect(
+      Boolean(
+        classRecordHeading.compareDocumentPosition(feedbackLabel)
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+
+    expect(screen.getByLabelText(/total score 100 points/i)).toBeInTheDocument();
+    expect(screen.getByText('Close assessment when due date passes')).toBeInTheDocument();
+  });
+
   it('treats answer choices with attached images as filled', async () => {
     mockedAssessmentService.getById.mockResolvedValueOnce({
       success: true,

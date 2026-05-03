@@ -127,6 +127,36 @@ class ExtractionAssessmentDraftDto(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ExtractionMediaCandidateDto(BaseModel):
+    section_index: int = Field(alias="sectionIndex")
+    score: float
+    explicit_match: bool | None = Field(default=None, alias="explicitMatch")
+    score_breakdown: dict[str, float] | None = Field(default=None, alias="scoreBreakdown")
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionMediaAssetDto(BaseModel):
+    id: str
+    url: str
+    page_number: int | None = Field(default=None, alias="pageNumber")
+    caption: str | None = None
+    anchor_text: str | None = Field(default=None, alias="anchorText")
+    keywords: list[str] = Field(default_factory=list)
+    figure_references: list[str] = Field(default_factory=list, alias="figureReferences")
+    selected_section_index: int | None = Field(default=None, alias="selectedSectionIndex")
+    assignment_confidence: float | None = Field(default=None, alias="assignmentConfidence")
+    assignment_breakdown: dict[str, float] | None = Field(default=None, alias="assignmentBreakdown")
+    candidate_sections: list[ExtractionMediaCandidateDto] = Field(
+        default_factory=list,
+        alias="candidateSections",
+    )
+    teacher_reviewed: bool = Field(default=False, alias="teacherReviewed")
+    review_state: str | None = Field(default=None, alias="reviewState")
+
+    model_config = {"populate_by_name": True}
+
+
 class ExtractionSectionDto(BaseModel):
     title: str
     description: str | None = None
@@ -137,6 +167,8 @@ class ExtractionSectionDto(BaseModel):
         alias="assessmentDraft",
     )
     confidence: float | None = None
+    graph_keywords: list[str] = Field(default_factory=list, alias="graphKeywords")
+    figure_references: list[str] = Field(default_factory=list, alias="figureReferences")
 
     model_config = {"populate_by_name": True}
 
@@ -146,6 +178,10 @@ class UpdateExtractionRequest(BaseModel):
     description: str | None = None
     sections: list[ExtractionSectionDto] | None = None
     lessons: list[ExtractionLessonDto] | None = None
+    media_assets: list[ExtractionMediaAssetDto] | None = Field(
+        default=None,
+        alias="mediaAssets",
+    )
 
     model_config = {"populate_by_name": True}
 

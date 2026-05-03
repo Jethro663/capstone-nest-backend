@@ -63,7 +63,10 @@ type StudentClassTab =
   | 'grades'
   | 'calendar';
 type AssignmentCategory =
-  | 'all'
+  | 'upcoming'
+  | 'past_due'
+  | 'completed';
+type GradeCategory =
   | 'written_work'
   | 'performance_task'
   | 'quarterly_assessment'
@@ -81,13 +84,19 @@ type StudentClassGuideScreen =
 
 interface AssignmentRow {
   assessment: Assessment;
-  category: Exclude<AssignmentCategory, 'all'>;
+  category: AssignmentCategory;
+  href: string;
+  dueDate: Date | null;
+  latestSubmitted: AssessmentAttempt | null;
+  submittedAttempts: number;
+  isGraded: boolean;
+  isOutOfAttempts: boolean;
 }
 
 interface GradeRow {
   id: string;
   title: string;
-  category: Exclude<AssignmentCategory, 'all'>;
+  category: GradeCategory;
   categoryLabel: string;
   scoreText: string;
   percentText: string;
@@ -123,11 +132,9 @@ const TABS: Array<{ key: StudentClassTab; label: string; icon: typeof FolderOpen
 ];
 
 const ASSIGNMENT_FILTERS: Array<{ key: AssignmentCategory; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'written_work', label: 'Written Work' },
-  { key: 'performance_task', label: 'Performance Task' },
-  { key: 'quarterly_assessment', label: 'Quarterly Assessment' },
-  { key: 'discussion', label: 'Discussion' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'past_due', label: 'Past Due' },
+  { key: 'completed', label: 'Completed' },
 ];
 const MODULE_CARD_VIEW_STORAGE_KEY_PREFIX = 'nexora.student.class.modules.view';
 
@@ -210,21 +217,21 @@ const studentClassGuidePages: Array<{
   {
     title: 'Use assignments to find class work fast',
     description:
-      'The Assignments tab groups your class work in one place, with filters to help you focus on the kind of task you need.',
+      'The Assignments tab groups your class work by timing and completion, so you can quickly spot what is coming next, what is overdue, and what you already finished.',
     screen: 'assignments',
-    reminder: 'Best habit: read the due date and points before you press Take.',
+    reminder: 'Best habit: check the due status first, then open the assignment row itself.',
     steps: [
       {
-        action: 'Filter',
-        body: 'Use the filter chips like All, Written Work, Performance Task, Quarterly Assessment, or Discussion.',
+        action: 'Switch tabs',
+        body: 'Use Upcoming, Past Due, or Completed to focus on the right set of assignments first.',
       },
       {
         action: 'Read',
-        body: 'Each row shows the task title, type, due date, and total points.',
+        body: 'Each row shows the task title, due date, points, and small status tags like Graded or Out of Attempts.',
       },
       {
-        action: 'Take',
-        body: 'Press Take when you are ready to open that assessment.',
+        action: 'Open row',
+        body: 'Tap the assignment body itself when you are ready to open that assessment.',
       },
       {
         action: 'Watch out',
@@ -482,28 +489,25 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
       <div className="teacher-intervention-workspace__manual-shot student-class-guide-shot">
         <div className="student-class-guide-shell">
           <div className="student-class-guide-shell__filter-row">
-            <b>All</b>
-            <span>Written Work</span>
-            <span>Performance Task</span>
-            <span>Quarterly Assessment</span>
+            <b>Upcoming</b>
+            <span>Past Due</span>
+            <span>Completed</span>
           </div>
 
           <div className="student-class-guide-shell__assignment-list">
             <article>
               <div>
-                <small>Written Work</small>
+                <small>Out of Attempts</small>
                 <strong>Seatwork 1</strong>
                 <p>Due Apr 10, 2026 - 20 pts</p>
               </div>
-              <b>Take</b>
             </article>
             <article>
               <div>
-                <small>Performance Task</small>
+                <small>Graded</small>
                 <strong>Poster Activity</strong>
                 <p>Due Apr 12, 2026 - 40 pts</p>
               </div>
-              <b>Take</b>
             </article>
           </div>
 
@@ -516,10 +520,10 @@ function StudentClassGuideScreenshot({ screen }: { screen: StudentClassGuideScre
         </div>
 
         <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-filter">
-          Filters
+          Due tabs
         </em>
         <em className="teacher-intervention-workspace__manual-pin student-class-guide-pin is-student-class-guide-take">
-          Take button
+          Assignment row
         </em>
       </div>
     );
@@ -791,7 +795,7 @@ function getModuleGradient(gradientId?: string) {
   );
 }
 
-function resolveAssignmentCategory(assessment: Assessment): Exclude<AssignmentCategory, 'all'> {
+function resolveAssignmentCategory(assessment: Assessment): GradeCategory {
   const type = assessment.type.toLowerCase();
   const title = assessment.title.toLowerCase();
   const description = (assessment.description || '').toLowerCase();
@@ -807,7 +811,7 @@ function resolveAssignmentCategory(assessment: Assessment): Exclude<AssignmentCa
   return 'written_work';
 }
 
-function assignmentCategoryLabel(category: Exclude<AssignmentCategory, 'all'>) {
+function assignmentCategoryLabel(category: 'written_work' | 'performance_task' | 'quarterly_assessment' | 'discussion') {
   if (category === 'written_work') return 'Written Work';
   if (category === 'performance_task') return 'Performance Task';
   if (category === 'quarterly_assessment') return 'Quarterly Assessment';
@@ -887,6 +891,20 @@ function getLatestSubmittedAttempt(attempts: AssessmentAttempt[]) {
   })[0];
 }
 
+function getSubmittedAttemptCount(attempts: AssessmentAttempt[]) {
+  return attempts.filter((attempt) => attempt.isSubmitted).length;
+}
+
+function isAssessmentGraded(attempt: AssessmentAttempt | null) {
+  if (!attempt) return false;
+  return Boolean(
+    attempt.isReturned ||
+    attempt.returnedAt ||
+    typeof attempt.score === 'number' ||
+    typeof attempt.directScore === 'number',
+  );
+}
+
 function getScoreTone(percent: number) {
   if (percent >= 90) return 'outstanding';
   if (percent >= 80) return 'good';
@@ -931,7 +949,7 @@ export default function StudentClassDetailPage() {
   const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
-  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('upcoming');
   const [moduleCardView, setModuleCardView] = useState<ModuleCardView>('wide');
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
@@ -1200,13 +1218,60 @@ export default function StudentClassDetailPage() {
   );
 
   const assignmentRows = useMemo<AssignmentRow[]>(() => {
-    const rows = assessments.map((assessment) => ({
-      assessment,
-      category: resolveAssignmentCategory(assessment),
-    }));
-    if (assignmentFilter === 'all') return rows;
-    return rows.filter((entry) => entry.category === assignmentFilter);
-  }, [assessments, assignmentFilter]);
+    const now = new Date();
+    const rows = assessments.map((assessment) => {
+      const attempts = attemptsByAssessment[assessment.id] || [];
+      const latestSubmitted = getLatestSubmittedAttempt(attempts);
+      const submittedAttempts = getSubmittedAttemptCount(attempts);
+      const dueDate = parseDate(assessment.dueDate);
+      const closesWhenDue = assessment.closeWhenDue ?? true;
+      const isCompleted = Boolean(latestSubmitted);
+      const isPastDue = Boolean(
+        !isCompleted &&
+        closesWhenDue &&
+        dueDate &&
+        dueDate.getTime() < now.getTime(),
+      );
+      const isOutOfAttempts =
+        assessment.type === 'file_upload'
+          ? false
+          : submittedAttempts >= (assessment.maxAttempts ?? 1);
+
+      return {
+        assessment,
+        category: isCompleted ? 'completed' : isPastDue ? 'past_due' : 'upcoming',
+        href: `/dashboard/student/assessments/${assessment.id}?classId=${classId}`,
+        dueDate,
+        latestSubmitted,
+        submittedAttempts,
+        isGraded: isAssessmentGraded(latestSubmitted),
+        isOutOfAttempts,
+      } satisfies AssignmentRow;
+    });
+
+    const filteredRows = rows.filter((entry) => entry.category === assignmentFilter);
+    return filteredRows.sort((left, right) => {
+      if (assignmentFilter === 'completed') {
+        const leftTime = new Date(
+          left.latestSubmitted?.submittedAt ||
+            left.latestSubmitted?.updatedAt ||
+            left.latestSubmitted?.createdAt ||
+            0,
+        ).getTime();
+        const rightTime = new Date(
+          right.latestSubmitted?.submittedAt ||
+            right.latestSubmitted?.updatedAt ||
+            right.latestSubmitted?.createdAt ||
+            0,
+        ).getTime();
+        return rightTime - leftTime;
+      }
+
+      const leftTime = left.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightTime = right.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return assignmentFilter === 'past_due' ? rightTime - leftTime : leftTime - rightTime;
+    });
+  }, [assessments, assignmentFilter, attemptsByAssessment, classId]);
 
   const gradeRows = useMemo<GradeRow[]>(() => {
     return assessments
@@ -1555,29 +1620,28 @@ export default function StudentClassDetailPage() {
           {assignmentRows.length === 0 ? (
             <div className="teacher-class-workspace__empty">No assignments for this filter.</div>
           ) : (
-            <div className="student-class-stack">
-              {assignmentRows.map(({ assessment, category }) => (
-                <motion.article key={assessment.id} className="student-class-assignment-row" variants={staggerItem}>
-                  <div className="student-class-assignment-row__icon">
-                    <ClipboardList className="h-5 w-5" />
-                  </div>
-                  <div className="student-class-assignment-row__main">
-                    <div className="student-class-assignment-row__chips">
-                      <span data-type={category}>{assignmentCategoryLabel(category)}</span>
-                      <span data-status="published">Published</span>
+            <div key={assignmentFilter} className="student-class-stack">
+              {assignmentRows.map((row) => (
+                <Link
+                  key={row.assessment.id}
+                  href={row.href}
+                  className="student-class-assignment-row student-class-assignment-row__body"
+                >
+                    <div className="student-class-assignment-row__icon">
+                      <ClipboardList className="h-5 w-5" />
                     </div>
-                    <h3>{assessment.title}</h3>
-                    <p>
-                      Due {formatDateLong(parseDate(assessment.dueDate))} - {assessment.totalPoints ?? 0} pts
-                    </p>
-                  </div>
-                  <Link
-                    href={`/dashboard/student/assessments/${assessment.id}?classId=${classId}`}
-                    className="student-class-assignment-row__take"
-                  >
-                    Take
-                  </Link>
-                </motion.article>
+                    <div className="student-class-assignment-row__main">
+                      <div className="student-class-assignment-row__chips">
+                        {row.isGraded ? <span data-status="graded">Graded</span> : null}
+                        {row.isOutOfAttempts ? <span data-status="attempts">Out of Attempts</span> : null}
+                        {!row.isGraded && row.category === 'completed' ? <span data-status="submitted">Submitted</span> : null}
+                      </div>
+                      <h3>{row.assessment.title}</h3>
+                      <p>
+                        Due {formatDateLong(row.dueDate)} - {row.assessment.totalPoints ?? 0} pts
+                      </p>
+                    </div>
+                </Link>
               ))}
             </div>
           )}

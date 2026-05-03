@@ -85,6 +85,7 @@ STRUCTURE_SYSTEM_PROMPT = (
 )
 
 IMAGE_ASSIGNMENT_THRESHOLD = 0.75
+IMAGE_REVIEW_THRESHOLD = 0.85
 MICRO_FRAGMENT_CHAR_THRESHOLD = 250
 FIGURE_CUE_PATTERN = re.compile(
     r"\b(?:fig(?:ure)?|diagram|chart|graph|illustration|table|image)\b",
@@ -810,6 +811,7 @@ def _append_image_block_to_section(
     section: dict[str, Any],
     image: dict[str, Any],
     *,
+    media_asset_id: str,
     score: float,
     score_breakdown: dict[str, float],
     reused: bool,
@@ -840,6 +842,7 @@ def _append_image_block_to_section(
                 "width": image.get("width"),
                 "height": image.get("height"),
                 "imageId": image.get("id"),
+                "mediaAssetId": media_asset_id,
                 "assignmentMethod": "graph_weighted",
                 "assignmentConfidence": score,
                 "assignmentBreakdown": score_breakdown,
@@ -1100,6 +1103,7 @@ def _attach_images_to_sections(
             "reusedByCitation": 0,
             "warnings": [],
             "reviewFlags": [],
+            "mediaAssets": [],
         }
 
     warnings: list[str] = []
@@ -1108,6 +1112,7 @@ def _attach_images_to_sections(
     unassigned_count = 0
     reused_by_citation = 0
     section_count = max(len(sections), 1)
+    media_assets: list[dict[str, Any]] = []
 
     section_features: list[dict[str, Any]] = []
     for index, section in enumerate(sections):
@@ -1162,24 +1167,71 @@ def _attach_images_to_sections(
             )
 
         candidates.sort(key=lambda item: item["score"], reverse=True)
-        if not candidates:
-            unassigned_count += 1
-            continue
-
-        best = candidates[0]
         image_id = str(image.get("id") or f"image-{image_index + 1}")
-        if float(best["score"]) < IMAGE_ASSIGNMENT_THRESHOLD:
+        trimmed_candidates = candidates[:3]
+        best = trimmed_candidates[0] if trimmed_candidates else None
+        media_asset = {
+            "id": image_id,
+            "url": str(image.get("dataUrl") or "").strip(),
+            "pageNumber": image_page,
+            "caption": str(image.get("alt") or f"Figure from page {image_page or '?'}").strip(),
+            "anchorText": str(image.get("anchorText") or "").strip() or None,
+            "keywords": sorted(str(keyword).strip() for keyword in image_keywords if str(keyword).strip()),
+            "figureReferences": sorted(str(reference).strip() for reference in image_refs if str(reference).strip()),
+            "selectedSectionIndex": None,
+            "assignmentConfidence": round(float(best["score"]), 4) if best else None,
+            "assignmentBreakdown": dict(best["scoreBreakdown"]) if best else {},
+            "candidateSections": [
+                {
+                    "sectionIndex": int(candidate["sectionIndex"]),
+                    "score": round(float(candidate["score"]), 4),
+                    "explicitMatch": bool(candidate["explicitMatch"]),
+                    "scoreBreakdown": dict(candidate["scoreBreakdown"]),
+                }
+                for candidate in trimmed_candidates
+            ],
+            "teacherReviewed": False,
+            "reviewState": "needs_teacher_assignment",
+        }
+
+        if not best:
             unassigned_count += 1
             warnings.append(
-                f"Image {image_id} was not attached due to low confidence ({best['score']:.2f})."
+                f"Image {image_id} could not be matched to a section."
             )
-            review_flags.append(f"image-unassigned:{image_id}:{best['score']:.2f}")
+            review_flags.append(f"image-unassigned:{image_id}:0.00")
+            media_assets.append(media_asset)
             continue
 
+        best_score = float(best["score"])
+        if best_score < IMAGE_ASSIGNMENT_THRESHOLD:
+            unassigned_count += 1
+            media_asset["reviewState"] = "needs_teacher_assignment"
+            if trimmed_candidates and best_score >= 0.55:
+                warnings.append(
+                    f"Image {image_id} has a suggested section but needs teacher confirmation ({best_score:.2f})."
+                )
+                review_flags.append(f"image-suggested:{image_id}:{best_score:.2f}")
+            else:
+                warnings.append(
+                    f"Image {image_id} was not attached due to low confidence ({best_score:.2f})."
+                )
+                review_flags.append(f"image-unassigned:{image_id}:{best_score:.2f}")
+            media_assets.append(media_asset)
+            continue
+
+        media_asset["selectedSectionIndex"] = int(best["sectionIndex"])
+        media_asset["teacherReviewed"] = best_score >= IMAGE_REVIEW_THRESHOLD
+        media_asset["reviewState"] = (
+            "auto_assigned"
+            if best_score >= IMAGE_REVIEW_THRESHOLD
+            else "needs_teacher_review"
+        )
         if _append_image_block_to_section(
             sections[int(best["sectionIndex"])],
             image,
-            score=float(best["score"]),
+            media_asset_id=image_id,
+            score=best_score,
             score_breakdown=dict(best["scoreBreakdown"]),
             reused=False,
         ):
@@ -1194,6 +1246,7 @@ def _attach_images_to_sections(
                 if _append_image_block_to_section(
                     sections[int(second["sectionIndex"])],
                     image,
+                    media_asset_id=image_id,
                     score=float(second["score"]),
                     score_breakdown=dict(second["scoreBreakdown"]),
                     reused=True,
@@ -1203,6 +1256,9 @@ def _attach_images_to_sections(
                     warnings.append(
                         f"Image {image_id} was reused across two sections due to explicit figure citation."
                     )
+        if media_asset["reviewState"] == "needs_teacher_review":
+            review_flags.append(f"image-review-needed:{image_id}:{best_score:.2f}")
+        media_assets.append(media_asset)
 
     for section in sections:
         if section.get("assessmentDraft") is None:
@@ -1227,6 +1283,7 @@ def _attach_images_to_sections(
         "reusedByCitation": reused_by_citation,
         "warnings": warnings,
         "reviewFlags": review_flags,
+        "mediaAssets": media_assets,
     }
 
 
@@ -1482,6 +1539,7 @@ def _merge_structured_chunks(
         "title": merged_title,
         "description": merged_description,
         "sections": normalized_sections,
+        "mediaAssets": image_assignment.get("mediaAssets") or [],
         "audit": {
             "pipelineVersion": "2.0",
             "overallConfidence": overall_confidence,
@@ -1639,6 +1697,7 @@ async def run_extraction(
                 }
             )
             parsed["audit"] = audit
+            parsed["mediaAssets"] = image_assignment.get("mediaAssets") or []
             validation = validate_extraction_output(parsed)
             final_result = validation.sanitized_output or parsed
             response_time_ms = int((time.time() - start_time) * 1000)

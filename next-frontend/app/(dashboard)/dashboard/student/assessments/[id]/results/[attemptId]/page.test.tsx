@@ -63,7 +63,7 @@ describe('StudentAssessmentResultsPage', () => {
           },
         ],
       },
-    } as any);
+    } as Awaited<ReturnType<typeof assessmentService.getAttemptResults>>);
 
     mockedAiService.explainMistake.mockResolvedValue({
       data: {
@@ -78,13 +78,27 @@ describe('StudentAssessmentResultsPage', () => {
           answerGuardrail: 'Avoid guessing roots.',
         },
       },
-    } as any);
+    } as Awaited<ReturnType<typeof aiService.explainMistake>>);
 
-    mockedLxpService.submitEvaluation.mockResolvedValue({ data: { id: 'eval-1' } } as any);
+    mockedLxpService.submitEvaluation.mockResolvedValue(
+      { data: { id: 'eval-1' } } as Awaited<ReturnType<typeof lxpService.submitEvaluation>>,
+    );
   });
 
   it('opens rating modal after Ask Ja and submits ai mentor evaluation metadata', async () => {
     render(<StudentAssessmentResultsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Review' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Question Review')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /question 1/i }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /ask ja/i })).toBeInTheDocument();
@@ -117,5 +131,117 @@ describe('StudentAssessmentResultsPage', () => {
         }),
       );
     });
+  });
+
+  it('shows result release messaging and hides question review when only the score is available', async () => {
+    mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      data: {
+        score: 88,
+        passed: true,
+        isReturned: true,
+        attemptNumber: 2,
+        feedbackStatus: {
+          level: 'immediate',
+          unlocked: true,
+          message: 'You can see your score. Detailed feedback not available for immediate assessments.',
+        },
+        responses: [
+          {
+            questionId: 'question-1',
+            isCorrect: null,
+            pointsEarned: null,
+            question: {
+              id: 'question-1',
+              assessmentId: 'assessment-1',
+              type: 'multiple_choice',
+              content: 'Sample prompt',
+              points: 1,
+              order: 1,
+              options: [],
+            },
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof assessmentService.getAttemptResults>>);
+
+    render(<StudentAssessmentResultsPage />);
+
+    expect(await screen.findByText('Result Release')).toBeInTheDocument();
+    expect(screen.getAllByText(/Detailed feedback not available for immediate assessments/i)).toHaveLength(2);
+    expect(screen.getByText('Score only')).toBeInTheDocument();
+    expect(screen.queryByText('Question Review')).not.toBeInTheDocument();
+  });
+
+  it('renders the new results and next step structure for score-only results', async () => {
+    mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      data: {
+        score: 88,
+        passed: true,
+        isReturned: true,
+        attemptNumber: 2,
+        returnedAt: '2026-05-03T01:00:00.000Z',
+        feedbackStatus: {
+          level: 'immediate',
+          unlocked: true,
+          message: 'You can see your score. Detailed feedback not available for immediate assessments.',
+        },
+        assessment: {
+          id: 'assessment-1',
+          title: 'Practice Quiz',
+          type: 'quiz',
+          totalPoints: 10,
+        },
+        responses: [],
+      },
+    } as Awaited<ReturnType<typeof assessmentService.getAttemptResults>>);
+
+    render(<StudentAssessmentResultsPage />);
+
+    expect(await screen.findByText('What You Can See Now')).toBeInTheDocument();
+    expect(screen.getByText('Practice Quiz')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next Step' }));
+    expect(screen.getByRole('button', { name: /Go to Class Assignments/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Go to Class Assignments/i })).toBeInTheDocument();
+    expect(document.querySelector('.student-page')).not.toBeInTheDocument();
+    expect(screen.queryByText('Question Review')).not.toBeInTheDocument();
+  });
+
+  it('shows rubric and submitted file sections for file upload results', async () => {
+    mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      data: {
+        score: 92,
+        passed: true,
+        isReturned: true,
+        attemptNumber: 1,
+        teacherFeedback: 'Strong work overall.',
+        assessment: {
+          id: 'assessment-1',
+          title: 'Upload Task',
+          type: 'file_upload',
+          totalPoints: 100,
+          rubricCriteria: [
+            { id: 'criterion-1', title: 'Accuracy', points: 50 },
+          ],
+        },
+        rubricScores: [{ criterionId: 'criterion-1', pointsEarned: 46 }],
+        submittedFiles: [
+          {
+            id: 'file-1',
+            originalName: 'submission.pdf',
+            mimeType: 'application/pdf',
+            sizeBytes: 1024,
+            uploadedAt: '2026-05-03T01:00:00.000Z',
+          },
+        ],
+        responses: [],
+      },
+    } as Awaited<ReturnType<typeof assessmentService.getAttemptResults>>);
+
+    render(<StudentAssessmentResultsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Review' }));
+    expect(await screen.findByText('Rubric Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Your Submission')).toBeInTheDocument();
+    expect(screen.getByText('submission.pdf')).toBeInTheDocument();
   });
 });

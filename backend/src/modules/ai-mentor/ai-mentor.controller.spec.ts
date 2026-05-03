@@ -600,7 +600,27 @@ describe('AiMentorController', () => {
 
   describe('updateExtraction()', () => {
     it('should forward PATCH /extractions/:id with dto', async () => {
-      const dto = { structuredContent: { lessons: [] } };
+      const dto = {
+        title: 'Updated module',
+        sections: [
+          {
+            title: 'Section 1',
+            description: '',
+            lessonBlocks: [],
+            graphKeywords: ['cell'],
+            figureReferences: ['figure:1'],
+          },
+        ],
+        mediaAssets: [
+          {
+            id: 'image-1',
+            url: 'data:image/png;base64,ZmFrZQ==',
+            selectedSectionIndex: 0,
+            teacherReviewed: true,
+            candidateSections: [{ sectionIndex: 0, score: 0.88 }],
+          },
+        ],
+      };
       mockProxy.forward.mockResolvedValue({ updated: true });
 
       const result = await controller.updateExtraction(
@@ -647,7 +667,7 @@ describe('AiMentorController', () => {
 
   describe('applyExtraction()', () => {
     it('should forward POST /extractions/:id/apply with dto', async () => {
-      const dto = {};
+      const dto = { sectionIndices: [0] };
       mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
 
       const result = await controller.applyExtraction(

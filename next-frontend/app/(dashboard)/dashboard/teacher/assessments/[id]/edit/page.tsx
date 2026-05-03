@@ -67,7 +67,10 @@ import './assessment-editor.css';
 
 type RightTab = 'settings' | 'advanced' | 'rubric' | 'analytics';
 type Availability = 'given' | 'draft';
-type ShowResultMode = 'immediate' | 'scheduled';
+type ResultReleaseMode =
+  | 'score_immediately'
+  | 'full_after_delay'
+  | 'full_with_hints_after_delay';
 type AssessmentComposerSaveState = 'saved' | 'saving' | 'dirty' | 'error';
 type AssessmentSetupSectionId = 'basics' | 'content' | 'delivery' | 'placement' | 'review';
 type AssessmentSetupSeverity = 'required' | 'recommended';
@@ -100,6 +103,28 @@ const ASSESSMENT_TYPE_TABS: Array<{ value: AssessmentType; label: string }> = [
   { value: 'quiz', label: 'Question Assessment' },
   { value: 'file_upload', label: 'File Upload Assessment' },
 ];
+const DEFAULT_RESULT_RELEASE_DELAY_HOURS = 24;
+const RESULT_RELEASE_OPTIONS: Array<{
+  value: ResultReleaseMode;
+  title: string;
+  description: string;
+}> = [
+  {
+    value: 'score_immediately',
+    title: 'Score only right away',
+    description: 'Students can see their score as soon as they submit, but question-by-question review stays hidden.',
+  },
+  {
+    value: 'full_after_delay',
+    title: 'Full review after a delay',
+    description: 'Students can open the full answer review after the release delay has passed.',
+  },
+  {
+    value: 'full_with_hints_after_delay',
+    title: 'Full review with hints after a delay',
+    description: 'Students get guided study hints first, then the full answer review unlocks later.',
+  },
+] as const;
 
 const FILE_UPLOAD_TYPE_GROUPS = [
   {
@@ -139,6 +164,42 @@ const DEFAULT_TIME_LIMIT_MINUTES = 30;
 const MAX_TIME_LIMIT_MINUTES = 999;
 const MAX_ATTEMPTS = 99;
 const RUBRIC_TOTAL_POINTS = 100;
+
+function feedbackLevelToResultReleaseMode(level: FeedbackLevel): ResultReleaseMode {
+  if (level === 'detailed') return 'full_with_hints_after_delay';
+  if (level === 'standard') return 'full_after_delay';
+  return 'score_immediately';
+}
+
+function resultReleaseModeToFeedbackLevel(mode: ResultReleaseMode): FeedbackLevel {
+  if (mode === 'full_with_hints_after_delay') return 'detailed';
+  if (mode === 'full_after_delay') return 'standard';
+  return 'immediate';
+}
+
+function getResultReleaseSummary(
+  mode: ResultReleaseMode,
+  delayHours: number,
+  assessmentType: AssessmentType,
+) {
+  if (mode === 'score_immediately') {
+    return assessmentType === 'file_upload'
+      ? 'After you return the grade, students see their score right away. Question-by-question review stays hidden.'
+      : 'Students see their score immediately after submitting. Question-by-question review stays hidden.';
+  }
+
+  const delayLabel = `${Math.max(delayHours, 0)} hour${Math.max(delayHours, 0) === 1 ? '' : 's'}`;
+
+  if (mode === 'full_with_hints_after_delay') {
+    return assessmentType === 'file_upload'
+      ? `After you return the grade, students first see guided hints. The full review unlocks after ${delayLabel}.`
+      : `Students first see guided hints. The full review unlocks after ${delayLabel}.`;
+  }
+
+  return assessmentType === 'file_upload'
+    ? `After you return the grade, students can open the full review after ${delayLabel}.`
+    : `Students can open the full review after ${delayLabel}.`;
+}
 
 function toParamValue(input: string | string[] | undefined) {
   if (Array.isArray(input)) return input[0] || '';
@@ -558,6 +619,73 @@ function AssessmentEditorGuideShot({
   );
 }
 
+function ResultReleaseSettings({
+  mode,
+  delayHours,
+  assessmentType,
+  disabled,
+  onModeChange,
+  onDelayHoursChange,
+}: {
+  mode: ResultReleaseMode;
+  delayHours: number;
+  assessmentType: AssessmentType;
+  disabled: boolean;
+  onModeChange: (next: ResultReleaseMode) => void;
+  onDelayHoursChange: (next: number) => void;
+}) {
+  const delayVisible = mode !== 'score_immediately';
+
+  return (
+    <div className="grid gap-4">
+      <div className="grid gap-2">
+        <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+          Result Release
+        </label>
+        <div className="grid gap-2">
+          {RESULT_RELEASE_OPTIONS.map((option) => (
+            <label
+              key={option.value}
+              className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+            >
+              <input
+                type="radio"
+                checked={mode === option.value}
+                onChange={() => onModeChange(option.value)}
+                disabled={disabled}
+              />
+              <span className="grid gap-1">
+                <span className="font-semibold text-slate-900">{option.title}</span>
+                <span className="text-xs leading-relaxed text-slate-500">{option.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {delayVisible ? (
+        <div className="assessment-editor__field">
+          <label>Release Delay (hours)</label>
+          <Input
+            type="number"
+            min={0}
+            value={delayHours}
+            onChange={(event) => onDelayHoursChange(Math.max(0, Number(event.target.value) || 0))}
+            disabled={disabled}
+          />
+        </div>
+      ) : null}
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Students will see</p>
+        <p className="mt-1 text-sm text-slate-700">
+          {getResultReleaseSummary(mode, delayHours, assessmentType)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function AssessmentEditorPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -591,15 +719,14 @@ export default function AssessmentEditorPage() {
 
   const [rightTab, setRightTab] = useState<RightTab>('settings');
   const [availability, setAvailability] = useState<Availability>('draft');
-  const [showResultMode, setShowResultMode] = useState<ShowResultMode>('immediate');
+  const [resultReleaseMode, setResultReleaseMode] = useState<ResultReleaseMode>('score_immediately');
 
   const [assessmentType, setAssessmentType] = useState<AssessmentType>('quiz');
   const [passingScore, setPassingScore] = useState(DEFAULT_PASSING_SCORE);
   const [maxAttempts, setMaxAttempts] = useState<string>(String(DEFAULT_MAX_ATTEMPTS));
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<string>(String(DEFAULT_TIME_LIMIT_MINUTES));
   const [dueDate, setDueDate] = useState('');
-  const [feedbackLevel, setFeedbackLevel] = useState<FeedbackLevel>('immediate');
-  const [feedbackDelayHours, setFeedbackDelayHours] = useState(0);
+  const [feedbackDelayHours, setFeedbackDelayHours] = useState(DEFAULT_RESULT_RELEASE_DELAY_HOURS);
 
   const [category, setCategory] = useState<ClassRecordCategory>('written_work');
   const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
@@ -644,6 +771,7 @@ export default function AssessmentEditorPage() {
     () => questions.find((entry) => entry.id === selectedQuestionId) ?? null,
     [questions, selectedQuestionId],
   );
+  const feedbackLevel = resultReleaseModeToFeedbackLevel(resultReleaseMode);
 
   const fetchAssessment = useCallback(async () => {
     if (!assessmentId) return;
@@ -665,7 +793,9 @@ export default function AssessmentEditorPage() {
       setPreviewEnabled(isReadOnlyMode);
 
       setAvailability(data.isPublished ? 'given' : 'draft');
-      setShowResultMode(data.feedbackLevel === 'immediate' ? 'immediate' : 'scheduled');
+      setResultReleaseMode(
+        feedbackLevelToResultReleaseMode((data.feedbackLevel as FeedbackLevel) || 'immediate'),
+      );
 
       setAssessmentType((data.type as AssessmentType) || 'quiz');
       setPassingScore(normalizePassingScore(data.passingScore));
@@ -678,8 +808,9 @@ export default function AssessmentEditorPage() {
         ),
       );
       setDueDate(toDateInputValue(data.dueDate));
-      setFeedbackLevel((data.feedbackLevel as FeedbackLevel) || 'immediate');
-      setFeedbackDelayHours(data.feedbackDelayHours ?? 0);
+      setFeedbackDelayHours(
+        Math.max(0, data.feedbackDelayHours ?? DEFAULT_RESULT_RELEASE_DELAY_HOURS),
+      );
 
       setCategory(data.classRecordCategory || 'written_work');
       setQuarter((data.quarter as GradingPeriod) || '');
@@ -960,10 +1091,11 @@ export default function AssessmentEditorPage() {
     return () => observer.disconnect();
   }, [questions.length, previewEnabled, assessmentType]);
 
-  const totalPoints = useMemo(
+  const questionTotalPoints = useMemo(
     () => questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0),
     [questions],
   );
+  const totalPoints = assessmentType === 'file_upload' ? RUBRIC_TOTAL_POINTS : questionTotalPoints;
 
   const rubricTotalPoints = useMemo(
     () =>
@@ -1083,17 +1215,6 @@ export default function AssessmentEditorPage() {
       });
     }
 
-    if (feedbackLevel === 'immediate' && showResultMode === 'immediate') {
-      issues.push({
-        id: 'review-feedback-strategy',
-        title: 'Review how results are released',
-        description: 'Choose whether students see feedback immediately or after you release it on schedule.',
-        section: 'delivery',
-        severity: 'recommended',
-        actionLabel: 'Open delivery rules',
-      });
-    }
-
     if (!randomizeQuestions && !timedQuestionsEnabled && !strictMode) {
       issues.push({
         id: 'review-student-controls',
@@ -1161,14 +1282,12 @@ export default function AssessmentEditorPage() {
     category,
     description,
     dueDate,
-    feedbackLevel,
     fileUploadInstructions,
     placementMode,
     quarter,
     questions,
     randomizeQuestions,
     selectedSlotId,
-    showResultMode,
     strictMode,
     timedQuestionsEnabled,
     title,
@@ -1751,23 +1870,30 @@ export default function AssessmentEditorPage() {
         description: description.trim() || undefined,
         type: assessmentType,
         passingScore,
-        maxAttempts: toBoundedPositiveInteger(maxAttempts, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS),
-        timeLimitMinutes: toBoundedPositiveInteger(
-          timeLimitMinutes,
-          MAX_TIME_LIMIT_MINUTES,
-          DEFAULT_TIME_LIMIT_MINUTES,
-        ),
+        maxAttempts:
+          assessmentType === 'file_upload'
+            ? DEFAULT_MAX_ATTEMPTS
+            : toBoundedPositiveInteger(maxAttempts, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS),
+        timeLimitMinutes:
+          assessmentType === 'file_upload'
+            ? null
+            : toBoundedPositiveInteger(
+                timeLimitMinutes,
+                MAX_TIME_LIMIT_MINUTES,
+                DEFAULT_TIME_LIMIT_MINUTES,
+              ),
         dueDate: fromDateInputValue(dueDate),
         closeWhenDue,
-        randomizeQuestions,
-        timedQuestionsEnabled,
+        randomizeQuestions: assessmentType === 'file_upload' ? false : randomizeQuestions,
+        timedQuestionsEnabled: assessmentType === 'file_upload' ? false : timedQuestionsEnabled,
         questionTimeLimitSeconds:
-          timedQuestionsEnabled && questionTimeLimitSeconds
+          assessmentType !== 'file_upload' && timedQuestionsEnabled && questionTimeLimitSeconds
             ? Number(questionTimeLimitSeconds)
             : null,
-        strictMode,
+        strictMode: assessmentType === 'file_upload' ? false : strictMode,
         feedbackLevel,
-        feedbackDelayHours: feedbackLevel === 'immediate' ? 0 : feedbackDelayHours,
+        feedbackDelayHours:
+          resultReleaseMode === 'score_immediately' ? 0 : feedbackDelayHours,
         ...classRecordPlacementPayload,
         fileUploadInstructions:
           assessmentType === 'file_upload' ? fileUploadInstructions : undefined,
@@ -1906,8 +2032,8 @@ export default function AssessmentEditorPage() {
       id: 'review',
       title: 'Final review',
       description: 'Check readiness, preview the student flow, and save with confidence.',
-    },
-  ];
+  },
+];
 
   const setupSectionStatusMeta = (sectionId: AssessmentSetupSectionId) => {
     const issues = groupedSetupIssues[sectionId];
@@ -2168,6 +2294,105 @@ export default function AssessmentEditorPage() {
 
   const advancedContent = (
     <div className="space-y-5">
+      {assessmentType === 'file_upload' ? (
+        <section
+          ref={(node) => {
+            sectionRefs.current.placement = node;
+          }}
+          tabIndex={-1}
+          className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4 outline-none"
+          aria-label="Class record setup"
+        >
+          <div>
+            <p className="text-sm font-black text-slate-900">Class record setup</p>
+            <p className="text-sm text-slate-500">Choose where file upload scores should land before the assessment is published.</p>
+          </div>
+
+          <div className="assessment-editor__advanced-inline">
+            <div className="assessment-editor__field">
+              <label>Category</label>
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
+                disabled={isReadOnlyMode}
+              >
+                <option value="written_work">Written Work</option>
+                <option value="performance_task">Performance Task</option>
+                <option value="quarterly_assessment">Quarterly Assessment</option>
+              </select>
+            </div>
+            <div className="assessment-editor__field">
+              <label>Quarter</label>
+              <select
+                value={quarter}
+                onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
+                disabled={isReadOnlyMode}
+              >
+                <option value="">Select quarter</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="assessment-editor__placement-toggle">
+            <button
+              type="button"
+              data-active={placementMode === 'automatic'}
+              onClick={() => setPlacementMode('automatic')}
+              disabled={isReadOnlyMode}
+            >
+              Automatic slot
+            </button>
+            <button
+              type="button"
+              data-active={placementMode === 'manual'}
+              onClick={() => setPlacementMode('manual')}
+              disabled={isReadOnlyMode}
+            >
+              Manual slot
+            </button>
+          </div>
+
+          {!quarter ? (
+            <p className="assessment-editor__empty-small">
+              Pick a quarter to view available class record positions.
+            </p>
+          ) : slotOverviewLoading ? (
+            <p className="assessment-editor__empty-small">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              Loading slot overview...
+            </p>
+          ) : slotOverviewError ? (
+            <p className="assessment-editor__empty-small">{slotOverviewError}</p>
+          ) : selectedCategorySlots ? (
+            <div className="assessment-editor__slots-grid">
+              {(selectedCategorySlots?.slots ?? []).map((slot) => (
+                <button
+                  key={slot.itemId}
+                  type="button"
+                  className="assessment-editor__slot-card"
+                  data-active={selectedSlotId === slot.itemId}
+                  disabled={isReadOnlyMode || placementMode !== 'manual' || !slot.isSelectable}
+                  onClick={() => {
+                    if (placementMode !== 'manual' || !slot.isSelectable) return;
+                    setSelectedSlotId(slot.itemId);
+                  }}
+                >
+                  <strong>{slot.title}</strong>
+                  <span>HPS {slot.maxScore}</span>
+                  <small>Status: {slot.status.replace('_', ' ')}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="assessment-editor__empty-small">No slots found for selected category.</p>
+          )}
+        </section>
+      ) : null}
+
       <section
         ref={(node) => {
           sectionRefs.current.delivery = node;
@@ -2176,8 +2401,14 @@ export default function AssessmentEditorPage() {
         className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4 outline-none"
       >
         <div>
-          <p className="text-sm font-black text-slate-900">Delivery rules</p>
-          <p className="text-sm text-slate-500">Control timing, attempts, result visibility, and how strict the assessment should feel.</p>
+          <p className="text-sm font-black text-slate-900">
+            {assessmentType === 'file_upload' ? 'Submission and grading' : 'Delivery rules'}
+          </p>
+          <p className="text-sm text-slate-500">
+            {assessmentType === 'file_upload'
+              ? 'Keep file uploads simple: fixed scoring, due-date closure, result release, and teacher review flow.'
+              : 'Control timing, attempts, result visibility, and how strict the assessment should feel.'}
+          </p>
         </div>
 
         <div className="assessment-editor__field">
@@ -2189,64 +2420,78 @@ export default function AssessmentEditorPage() {
             disabled={isReadOnlyMode}
           />
         </div>
-        <div className="assessment-editor__field">
-          <label>Time Limit (minutes)</label>
-          <Input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={3}
-            value={timeLimitMinutes}
-            onChange={(event) =>
-              setTimeLimitMinutes(
-                sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_TIME_LIMIT_MINUTES),
-              )
-            }
-            onBlur={() =>
-              setTimeLimitMinutes((current) =>
-                finalizeBoundedPositiveIntegerInput(
-                  current,
-                  MAX_TIME_LIMIT_MINUTES,
-                  DEFAULT_TIME_LIMIT_MINUTES,
-                ),
-              )
-            }
-            disabled={isReadOnlyMode}
-          />
-        </div>
-        <div className="assessment-editor__field">
-          <label>Passing Score (%)</label>
-          <select
-            value={passingScore}
-            onChange={(event) => setPassingScore(normalizePassingScore(Number(event.target.value)))}
-            disabled={isReadOnlyMode}
-          >
-            {PASSING_SCORE_OPTIONS.map((score) => (
-              <option key={score} value={score}>
-                {score}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="assessment-editor__field">
-          <label>Max Attempts</label>
-          <Input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={2}
-            value={maxAttempts}
-            onChange={(event) =>
-              setMaxAttempts(sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_ATTEMPTS))
-            }
-            onBlur={() =>
-              setMaxAttempts((current) =>
-                finalizeBoundedPositiveIntegerInput(current, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS),
-              )
-            }
-            disabled={isReadOnlyMode}
-          />
-        </div>
+
+        {assessmentType === 'file_upload' ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Score is always 100 for file upload assessments.</p>
+            <p className="mt-1">
+              {rubricCriteria.length === 0
+                ? 'No rubric yet. Teachers will grade the latest submission out of 100.'
+                : `Rubric ready: ${rubricTotalPoints}/100 configured.`}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="assessment-editor__field">
+              <label>Time Limit (minutes)</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={3}
+                value={timeLimitMinutes}
+                onChange={(event) =>
+                  setTimeLimitMinutes(
+                    sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_TIME_LIMIT_MINUTES),
+                  )
+                }
+                onBlur={() =>
+                  setTimeLimitMinutes((current) =>
+                    finalizeBoundedPositiveIntegerInput(
+                      current,
+                      MAX_TIME_LIMIT_MINUTES,
+                      DEFAULT_TIME_LIMIT_MINUTES,
+                    ),
+                  )
+                }
+                disabled={isReadOnlyMode}
+              />
+            </div>
+            <div className="assessment-editor__field">
+              <label>Passing Score (%)</label>
+              <select
+                value={passingScore}
+                onChange={(event) => setPassingScore(normalizePassingScore(Number(event.target.value)))}
+                disabled={isReadOnlyMode}
+              >
+                {PASSING_SCORE_OPTIONS.map((score) => (
+                  <option key={score} value={score}>
+                    {score}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="assessment-editor__field">
+              <label>Max Attempts</label>
+              <Input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={2}
+                value={maxAttempts}
+                onChange={(event) =>
+                  setMaxAttempts(sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_ATTEMPTS))
+                }
+                onBlur={() =>
+                  setMaxAttempts((current) =>
+                    finalizeBoundedPositiveIntegerInput(current, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS),
+                  )
+                }
+                disabled={isReadOnlyMode}
+              />
+            </div>
+          </>
+        )}
 
         <label className="assessment-editor__checkbox-row">
           <input
@@ -2257,207 +2502,169 @@ export default function AssessmentEditorPage() {
           />
           Close assessment when due date passes
         </label>
-        <label className="assessment-editor__checkbox-row">
-          <input
-            type="checkbox"
-            checked={randomizeQuestions}
-            onChange={(event) => setRandomizeQuestions(event.target.checked)}
-            disabled={isReadOnlyMode}
-          />
-          Randomize questions and options per student
-        </label>
-        <label className="assessment-editor__checkbox-row">
-          <input
-            type="checkbox"
-            checked={timedQuestionsEnabled}
-            onChange={(event) => {
-              setTimedQuestionsEnabled(event.target.checked);
-              if (!event.target.checked) setQuestionTimeLimitSeconds('');
-            }}
-            disabled={isReadOnlyMode}
-          />
-          Enable per-question timer
-        </label>
-        {timedQuestionsEnabled ? (
-          <div className="assessment-editor__field">
-            <label>Question Time (seconds)</label>
-            <Input
-              type="number"
-              min={5}
-              value={questionTimeLimitSeconds}
-              onChange={(event) => setQuestionTimeLimitSeconds(event.target.value)}
-              disabled={isReadOnlyMode}
-            />
-          </div>
-        ) : null}
-        <label className="assessment-editor__checkbox-row">
-          <input
-            type="checkbox"
-            checked={strictMode}
-            onChange={(event) => setStrictMode(event.target.checked)}
-            disabled={isReadOnlyMode}
-          />
-          Strict no-return policy for previous questions
-        </label>
 
-        <div className="grid gap-4">
-          <div className="assessment-editor__field">
-            <label>Feedback Level</label>
-            <select
-              value={feedbackLevel}
-              onChange={(event) => {
-                const next = event.target.value as FeedbackLevel;
-                setFeedbackLevel(next);
-                setShowResultMode(next === 'immediate' ? 'immediate' : 'scheduled');
-              }}
-              disabled={isReadOnlyMode}
-            >
-              <option value="immediate">Immediate</option>
-              <option value="standard">Standard</option>
-              <option value="detailed">Detailed</option>
-            </select>
-          </div>
-
-          <div className="assessment-editor__field">
-            <label>Feedback Delay (hours)</label>
-            <Input
-              type="number"
-              min={0}
-              value={feedbackLevel === 'immediate' ? 0 : feedbackDelayHours}
-              onChange={(event) => setFeedbackDelayHours(Number(event.target.value) || 0)}
-              disabled={isReadOnlyMode || feedbackLevel === 'immediate'}
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-              Show Results
+        {assessmentType !== 'file_upload' ? (
+          <>
+            <label className="assessment-editor__checkbox-row">
+              <input
+                type="checkbox"
+                checked={randomizeQuestions}
+                onChange={(event) => setRandomizeQuestions(event.target.checked)}
+                disabled={isReadOnlyMode}
+              />
+              Randomize questions and options per student
             </label>
-            <div className="grid gap-2">
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  checked={showResultMode === 'immediate'}
-                  onChange={() => {
-                    setShowResultMode('immediate');
-                    setFeedbackLevel('immediate');
-                  }}
+            <label className="assessment-editor__checkbox-row">
+              <input
+                type="checkbox"
+                checked={timedQuestionsEnabled}
+                onChange={(event) => {
+                  setTimedQuestionsEnabled(event.target.checked);
+                  if (!event.target.checked) setQuestionTimeLimitSeconds('');
+                }}
+                disabled={isReadOnlyMode}
+              />
+              Enable per-question timer
+            </label>
+            {timedQuestionsEnabled ? (
+              <div className="assessment-editor__field">
+                <label>Question Time (seconds)</label>
+                <Input
+                  type="number"
+                  min={5}
+                  value={questionTimeLimitSeconds}
+                  onChange={(event) => setQuestionTimeLimitSeconds(event.target.value)}
                   disabled={isReadOnlyMode}
                 />
-                Immediately After Submit
-              </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <input
-                  type="radio"
-                  checked={showResultMode === 'scheduled'}
-                  onChange={() => {
-                    setShowResultMode('scheduled');
-                    if (feedbackLevel === 'immediate') setFeedbackLevel('standard');
-                  }}
-                  disabled={isReadOnlyMode}
-                />
-                Scheduled Release
-              </label>
+              </div>
+            ) : null}
+            <label className="assessment-editor__checkbox-row">
+              <input
+                type="checkbox"
+                checked={strictMode}
+                onChange={(event) => setStrictMode(event.target.checked)}
+                disabled={isReadOnlyMode}
+              />
+              Strict no-return policy for previous questions
+            </label>
+          </>
+        ) : null}
+
+        <ResultReleaseSettings
+          mode={resultReleaseMode}
+          delayHours={feedbackDelayHours}
+          assessmentType={assessmentType}
+          disabled={isReadOnlyMode}
+          onModeChange={(next) => {
+            setResultReleaseMode(next);
+            if (next === 'score_immediately') {
+              setFeedbackDelayHours(0);
+            } else if (feedbackDelayHours === 0) {
+              setFeedbackDelayHours(DEFAULT_RESULT_RELEASE_DELAY_HOURS);
+            }
+          }}
+          onDelayHoursChange={setFeedbackDelayHours}
+        />
+      </section>
+
+      {assessmentType !== 'file_upload' ? (
+        <section
+          ref={(node) => {
+            sectionRefs.current.placement = node;
+          }}
+          tabIndex={-1}
+          className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4 outline-none"
+          aria-label="Class record setup"
+        >
+          <div>
+            <p className="text-sm font-black text-slate-900">Class record setup</p>
+            <p className="text-sm text-slate-500">Choose where scores should land before the assessment is published.</p>
+          </div>
+
+          <div className="assessment-editor__advanced-inline">
+            <div className="assessment-editor__field">
+              <label>Category</label>
+              <select
+                value={category}
+                onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
+                disabled={isReadOnlyMode}
+              >
+                <option value="written_work">Written Work</option>
+                <option value="performance_task">Performance Task</option>
+                <option value="quarterly_assessment">Quarterly Assessment</option>
+              </select>
+            </div>
+            <div className="assessment-editor__field">
+              <label>Quarter</label>
+              <select
+                value={quarter}
+                onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
+                disabled={isReadOnlyMode}
+              >
+                <option value="">Select quarter</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section
-        ref={(node) => {
-          sectionRefs.current.placement = node;
-        }}
-        tabIndex={-1}
-        className="space-y-4 rounded-[1.5rem] border border-slate-200/80 bg-white p-4 outline-none"
-      >
-        <div>
-          <p className="text-sm font-black text-slate-900">Class record setup</p>
-          <p className="text-sm text-slate-500">Choose where scores should land before the assessment is published.</p>
-        </div>
-
-        <div className="assessment-editor__advanced-inline">
-          <div className="assessment-editor__field">
-            <label>Category</label>
-            <select
-              value={category}
-              onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
+          <div className="assessment-editor__placement-toggle">
+            <button
+              type="button"
+              data-active={placementMode === 'automatic'}
+              onClick={() => setPlacementMode('automatic')}
               disabled={isReadOnlyMode}
             >
-              <option value="written_work">Written Work</option>
-              <option value="performance_task">Performance Task</option>
-              <option value="quarterly_assessment">Quarterly Assessment</option>
-            </select>
-          </div>
-          <div className="assessment-editor__field">
-            <label>Quarter</label>
-            <select
-              value={quarter}
-              onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
+              Automatic slot
+            </button>
+            <button
+              type="button"
+              data-active={placementMode === 'manual'}
+              onClick={() => setPlacementMode('manual')}
               disabled={isReadOnlyMode}
             >
-              <option value="">Select quarter</option>
-              <option value="Q1">Q1</option>
-              <option value="Q2">Q2</option>
-              <option value="Q3">Q3</option>
-              <option value="Q4">Q4</option>
-            </select>
+              Manual slot
+            </button>
           </div>
-        </div>
 
-        <div className="assessment-editor__placement-toggle">
-          <button
-            type="button"
-            data-active={placementMode === 'automatic'}
-            onClick={() => setPlacementMode('automatic')}
-            disabled={isReadOnlyMode}
-          >
-            Automatic slot
-          </button>
-          <button
-            type="button"
-            data-active={placementMode === 'manual'}
-            onClick={() => setPlacementMode('manual')}
-            disabled={isReadOnlyMode}
-          >
-            Manual slot
-          </button>
-        </div>
-
-        {!quarter ? (
-          <p className="assessment-editor__empty-small">
-            Pick a quarter to view available class record positions.
-          </p>
-        ) : slotOverviewLoading ? (
-          <p className="assessment-editor__empty-small">
-            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-            Loading slot overview...
-          </p>
-        ) : slotOverviewError ? (
-          <p className="assessment-editor__empty-small">{slotOverviewError}</p>
-        ) : selectedCategorySlots ? (
-          <div className="assessment-editor__slots-grid">
-            {(selectedCategorySlots?.slots ?? []).map((slot) => (
-              <button
-                key={slot.itemId}
-                type="button"
-                className="assessment-editor__slot-card"
-                data-active={selectedSlotId === slot.itemId}
-                disabled={isReadOnlyMode || placementMode !== 'manual' || !slot.isSelectable}
-                onClick={() => {
-                  if (placementMode !== 'manual' || !slot.isSelectable) return;
-                  setSelectedSlotId(slot.itemId);
-                }}
-              >
-                <strong>{slot.title}</strong>
-                <span>HPS {slot.maxScore}</span>
-                <small>Status: {slot.status.replace('_', ' ')}</small>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="assessment-editor__empty-small">No slots found for selected category.</p>
-        )}
-      </section>
+          {!quarter ? (
+            <p className="assessment-editor__empty-small">
+              Pick a quarter to view available class record positions.
+            </p>
+          ) : slotOverviewLoading ? (
+            <p className="assessment-editor__empty-small">
+              <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+              Loading slot overview...
+            </p>
+          ) : slotOverviewError ? (
+            <p className="assessment-editor__empty-small">{slotOverviewError}</p>
+          ) : selectedCategorySlots ? (
+            <div className="assessment-editor__slots-grid">
+              {(selectedCategorySlots?.slots ?? []).map((slot) => (
+                <button
+                  key={slot.itemId}
+                  type="button"
+                  className="assessment-editor__slot-card"
+                  data-active={selectedSlotId === slot.itemId}
+                  disabled={isReadOnlyMode || placementMode !== 'manual' || !slot.isSelectable}
+                  onClick={() => {
+                    if (placementMode !== 'manual' || !slot.isSelectable) return;
+                    setSelectedSlotId(slot.itemId);
+                  }}
+                >
+                  <strong>{slot.title}</strong>
+                  <span>HPS {slot.maxScore}</span>
+                  <small>Status: {slot.status.replace('_', ' ')}</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="assessment-editor__empty-small">No slots found for selected category.</p>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 
@@ -3256,72 +3463,21 @@ export default function AssessmentEditorPage() {
               </div>
 
               <div className="assessment-editor__inline-card assessment-editor__inline-card--wide">
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,220px)_minmax(0,1fr)]">
-                  <div className="assessment-editor__field">
-                    <label>Feedback Level</label>
-                    <select
-                      value={feedbackLevel}
-                      onChange={(event) => {
-                        const next = event.target.value as FeedbackLevel;
-                        setFeedbackLevel(next);
-                        setShowResultMode(next === 'immediate' ? 'immediate' : 'scheduled');
-                      }}
-                      disabled={isReadOnlyMode}
-                    >
-                      <option value="immediate">Immediate</option>
-                      <option value="standard">Standard</option>
-                      <option value="detailed">Detailed</option>
-                    </select>
-                  </div>
-                  {feedbackLevel !== 'immediate' ? (
-                    <div className="assessment-editor__field">
-                      <label>Feedback Delay (hours)</label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={feedbackDelayHours}
-                        onChange={(event) => setFeedbackDelayHours(Number(event.target.value) || 0)}
-                        disabled={isReadOnlyMode}
-                      />
-                    </div>
-                  ) : (
-                    <div className="assessment-editor__field">
-                      <label>Feedback Delay (hours)</label>
-                      <Input type="number" value={0} disabled />
-                    </div>
-                  )}
-                  <div className="grid gap-2">
-                    <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                      Show Results
-                    </label>
-                    <div className="grid gap-2">
-                      <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                        <input
-                          type="radio"
-                          checked={showResultMode === 'immediate'}
-                          onChange={() => {
-                            setShowResultMode('immediate');
-                            setFeedbackLevel('immediate');
-                          }}
-                          disabled={isReadOnlyMode}
-                        />
-                        Immediately After Submit
-                      </label>
-                      <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                        <input
-                          type="radio"
-                          checked={showResultMode === 'scheduled'}
-                          onChange={() => {
-                            setShowResultMode('scheduled');
-                            if (feedbackLevel === 'immediate') setFeedbackLevel('standard');
-                          }}
-                          disabled={isReadOnlyMode}
-                        />
-                        Scheduled Release
-                      </label>
-                    </div>
-                  </div>
-                </div>
+                <ResultReleaseSettings
+                  mode={resultReleaseMode}
+                  delayHours={feedbackDelayHours}
+                  assessmentType={assessmentType}
+                  disabled={isReadOnlyMode}
+                  onModeChange={(next) => {
+                    setResultReleaseMode(next);
+                    if (next === 'score_immediately') {
+                      setFeedbackDelayHours(0);
+                    } else if (feedbackDelayHours === 0) {
+                      setFeedbackDelayHours(DEFAULT_RESULT_RELEASE_DELAY_HOURS);
+                    }
+                  }}
+                  onDelayHoursChange={setFeedbackDelayHours}
+                />
               </div>
             </div>
           </section>

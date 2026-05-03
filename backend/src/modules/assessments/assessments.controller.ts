@@ -530,6 +530,26 @@ export class AssessmentsController {
     };
   }
 
+  @Delete(':assessmentId/submission-files/:fileId')
+  @Roles(RoleName.Student)
+  async removeSubmissionFile(
+    @Param('assessmentId') assessmentId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+  ) {
+    const updated = await this.assessmentsService.removeStudentSubmissionFile(
+      assessmentId,
+      fileId,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Submission file removed successfully',
+      data: updated,
+    };
+  }
+
   /**
    * Download the teacher reference attachment for an assessment
    */
@@ -571,6 +591,33 @@ export class AssessmentsController {
     const file = await this.assessmentsService.getAttemptSubmissionDownload(
       attemptId,
       user,
+    );
+
+    const absolutePath = path.resolve(file.filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new BadRequestException('File not found on disk');
+    }
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.originalName}"`,
+    );
+    return res.sendFile(absolutePath);
+  }
+
+  @Get('attempts/:attemptId/submission-files/:fileId/download')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async downloadAttemptSubmissionAttachmentFile(
+    @Param('attemptId') attemptId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const file = await this.assessmentsService.getAttemptSubmissionDownload(
+      attemptId,
+      user,
+      fileId,
     );
 
     const absolutePath = path.resolve(file.filePath);
@@ -946,6 +993,44 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Grade returned to student successfully',
+      data: result,
+    };
+  }
+
+  @Post('attempts/:attemptId/unreturn')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async unreturnGrade(
+    @Param('attemptId') attemptId: string,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.assessmentsService.unreturnGrade(
+      attemptId,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Posted grade restored to pending review',
+      data: result,
+    };
+  }
+
+  @Post('attempts/bulk-return')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async bulkReturnGrades(
+    @Body() bulkReturnGradesDto: BulkReturnGradesDto,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.assessmentsService.bulkReturnGrades(
+      bulkReturnGradesDto,
+      user,
+    );
+
+    return {
+      success: true,
+      message: `${result.returned} grades returned to students`,
       data: result,
     };
   }

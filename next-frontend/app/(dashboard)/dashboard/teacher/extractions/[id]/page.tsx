@@ -20,7 +20,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
-import type { Extraction, ExtractionBlock, ExtractionSection, ExtractionStatus } from '@/types/extraction';
+import type {
+  Extraction,
+  ExtractionBlock,
+  ExtractionMediaAsset,
+  ExtractionSection,
+  ExtractionStatus,
+} from '@/types/extraction';
 
 const STATUS_VARIANT: Record<ExtractionStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   pending: 'outline',
@@ -102,6 +108,30 @@ function blockImageMeta(block: ExtractionBlock): { page: number | null; confiden
   };
 }
 
+function blockMediaAssetId(block: ExtractionBlock): string | null {
+  if (typeof block.metadata !== 'object' || !block.metadata) return null;
+  const mediaAssetId = (block.metadata as Record<string, unknown>).mediaAssetId;
+  return typeof mediaAssetId === 'string' && mediaAssetId.trim().length > 0 ? mediaAssetId : null;
+}
+
+function buildImageBlockFromAsset(asset: ExtractionMediaAsset, order: number): ExtractionBlock {
+  return {
+    type: 'image',
+    order,
+    content: {
+      url: asset.url,
+      caption: asset.caption || (asset.pageNumber ? `Figure from page ${asset.pageNumber}` : 'Extracted figure'),
+    },
+    metadata: {
+      mediaAssetId: asset.id,
+      pageNumber: asset.pageNumber,
+      assignmentConfidence: asset.assignmentConfidence,
+      assignmentBreakdown: asset.assignmentBreakdown || {},
+      teacherReviewed: asset.teacherReviewed ?? false,
+    },
+  };
+}
+
 function getBlockKey(sectionIndex: number, blockIndex: number): string {
   return `s${sectionIndex}-b${blockIndex}`;
 }
@@ -147,6 +177,7 @@ export default function ExtractionReviewPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editSections, setEditSections] = useState<ExtractionSection[]>([]);
+  const [editMediaAssets, setEditMediaAssets] = useState<ExtractionMediaAsset[]>([]);
   const [selectedSections, setSelectedSections] = useState<Set<number>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all');
@@ -172,9 +203,11 @@ export default function ExtractionReviewPage() {
   const hydrate = useCallback((value: Extraction | null) => {
     const structured = value?.structuredContent;
     const sections = structured?.sections ? JSON.parse(JSON.stringify(structured.sections)) as ExtractionSection[] : [];
+    const mediaAssets = structured?.mediaAssets ? JSON.parse(JSON.stringify(structured.mediaAssets)) as ExtractionMediaAsset[] : [];
     setEditTitle(structured?.title || '');
     setEditDescription(structured?.description || '');
     setEditSections(sections);
+    setEditMediaAssets(mediaAssets);
     setSelectedSections(new Set(sections.map((_, index) => index)));
     setSectionFilter('all');
     setSearchQuery('');
@@ -250,6 +283,14 @@ export default function ExtractionReviewPage() {
     [editSections, removedBlockKeys],
   );
 
+  const persistableMediaAssets = useMemo(
+    () => editMediaAssets.map((asset) => ({
+      ...asset,
+      candidateSections: (asset.candidateSections || []).slice(0, 3),
+    })),
+    [editMediaAssets],
+  );
+
   const sanitizedSaveSections = useMemo(
     () => persistableSections.map((section, sectionIndex) => ({
       title: String(section.title || `Section ${sectionIndex + 1}`),
@@ -263,6 +304,8 @@ export default function ExtractionReviewPage() {
       })),
       ...(section.assessmentDraft ? { assessmentDraft: section.assessmentDraft } : {}),
       ...(typeof section.confidence === 'number' && Number.isFinite(section.confidence) ? { confidence: section.confidence } : {}),
+      ...(section.graphKeywords?.length ? { graphKeywords: section.graphKeywords } : {}),
+      ...(section.figureReferences?.length ? { figureReferences: section.figureReferences } : {}),
     })),
     [persistableSections],
   );
@@ -367,6 +410,91 @@ export default function ExtractionReviewPage() {
     [reviewBySection],
   );
 
+  const unassignedMediaAssets = useMemo(
+    () => editMediaAssets.filter((asset) => asset.selectedSectionIndex === null || asset.selectedSectionIndex === undefined),
+    [editMediaAssets],
+  );
+
+  const pendingMediaReviewCount = useMemo(
+    () =>
+      editMediaAssets.filter(
+        (asset) => asset.selectedSectionIndex !== null && asset.selectedSectionIndex !== undefined && !asset.teacherReviewed,
+      ).length,
+    [editMediaAssets],
+  );
+
+  const applyBlockedReason = useMemo(() => {
+    if (dirty) return 'Save extraction changes before applying.';
+    if (extraction?.qualityGate === 'fail') return 'Extraction quality is too low to apply.';
+    if (unassignedMediaAssets.length > 0) return 'Assign all extracted images before applying.';
+    if (pendingMediaReviewCount > 0 || extraction?.reviewRequired) return 'Review image placements before applying.';
+    if (emptyAfterRemovalSectionCount > 0) return 'Restore or revise empty sections before applying.';
+    return null;
+  }, [dirty, emptyAfterRemovalSectionCount, extraction?.qualityGate, extraction?.reviewRequired, pendingMediaReviewCount, unassignedMediaAssets.length]);
+
+  const syncMediaAssetPlacement = useCallback((mediaAssetId: string, targetSectionIndex: number | null) => {
+    setEditSections((prev) => {
+      const nextSections = prev.map((section) => ({
+        ...section,
+        lessonBlocks: section.lessonBlocks.filter((block) => blockMediaAssetId(block) !== mediaAssetId),
+      }));
+      if (targetSectionIndex !== null && targetSectionIndex >= 0 && targetSectionIndex < nextSections.length) {
+        const asset = editMediaAssets.find((entry) => entry.id === mediaAssetId);
+        if (asset) {
+          const targetSection = nextSections[targetSectionIndex];
+          targetSection.lessonBlocks = [
+            ...targetSection.lessonBlocks,
+            buildImageBlockFromAsset({ ...asset, teacherReviewed: true, selectedSectionIndex: targetSectionIndex }, targetSection.lessonBlocks.length),
+          ];
+        }
+      }
+      return nextSections.map((section) => ({
+        ...section,
+        lessonBlocks: section.lessonBlocks.map((block, index) => ({ ...block, order: index + 1 })),
+      }));
+    });
+    setEditMediaAssets((prev) =>
+      prev.map((asset) =>
+        asset.id === mediaAssetId
+          ? {
+              ...asset,
+              selectedSectionIndex: targetSectionIndex,
+              teacherReviewed: targetSectionIndex !== null,
+              reviewState: targetSectionIndex !== null ? 'reviewed' : 'needs_teacher_assignment',
+            }
+          : asset,
+      ),
+    );
+    setDirty(true);
+  }, [editMediaAssets]);
+
+  const markMediaAssetReviewed = useCallback((mediaAssetId: string) => {
+    setEditMediaAssets((prev) =>
+      prev.map((asset) =>
+        asset.id === mediaAssetId
+          ? { ...asset, teacherReviewed: true, reviewState: 'reviewed' }
+          : asset,
+      ),
+    );
+    setEditSections((prev) =>
+      prev.map((section) => ({
+        ...section,
+        lessonBlocks: section.lessonBlocks.map((block) =>
+          blockMediaAssetId(block) === mediaAssetId
+            ? {
+                ...block,
+                metadata: {
+                  ...(block.metadata || {}),
+                  teacherReviewed: true,
+                },
+              }
+            : block,
+        ),
+      })),
+    );
+    setDirty(true);
+  }, []);
+
   const updateSection = (sectionIndex: number, patch: Partial<ExtractionSection>) => {
     setEditSections((prev) => {
       const copy = [...prev];
@@ -388,6 +516,8 @@ export default function ExtractionReviewPage() {
   };
 
   const removeBlock = useCallback((key: string) => {
+    const matched = allBlockReview.find((entry) => entry.key === key);
+    const mediaAssetId = matched ? blockMediaAssetId(matched.block) : null;
     setRemovedBlockKeys((prev) => {
       if (prev.has(key)) return prev;
       const next = new Set(prev);
@@ -396,8 +526,22 @@ export default function ExtractionReviewPage() {
     });
     setRemoveHistory((prev) => [...prev, key]);
     if (focusedBlockKey === key) setFocusedBlockKey(null);
+    if (mediaAssetId) {
+      setEditMediaAssets((prev) =>
+        prev.map((asset) =>
+          asset.id === mediaAssetId
+            ? {
+                ...asset,
+                selectedSectionIndex: null,
+                teacherReviewed: false,
+                reviewState: 'needs_teacher_assignment',
+              }
+            : asset,
+        ),
+      );
+    }
     setDirty(true);
-  }, [focusedBlockKey]);
+  }, [allBlockReview, focusedBlockKey]);
 
   const undoLastRemove = useCallback(() => {
     let restored: string | null = null;
@@ -413,13 +557,42 @@ export default function ExtractionReviewPage() {
       next.delete(restored as string);
       return next;
     });
+    const matched = allBlockReview.find((entry) => entry.key === restored);
+    const mediaAssetId = matched ? blockMediaAssetId(matched.block) : null;
+    if (matched && mediaAssetId) {
+      setEditMediaAssets((prev) =>
+        prev.map((asset) =>
+          asset.id === mediaAssetId
+            ? {
+                ...asset,
+                selectedSectionIndex: matched.sectionIndex,
+                teacherReviewed: true,
+                reviewState: 'reviewed',
+              }
+            : asset,
+        ),
+      );
+    }
     setDirty(true);
-  }, []);
+  }, [allBlockReview]);
 
   const restoreAllRemoved = () => {
     if (removedBlockKeys.size === 0) return;
     setRemovedBlockKeys(new Set());
     setRemoveHistory([]);
+    setEditMediaAssets((prev) =>
+      prev.map((asset) => {
+        const linkedEntry = allBlockReview.find((entry) => blockMediaAssetId(entry.block) === asset.id);
+        return linkedEntry
+          ? {
+              ...asset,
+              selectedSectionIndex: linkedEntry.sectionIndex,
+              teacherReviewed: true,
+              reviewState: 'reviewed',
+            }
+          : asset;
+      }),
+    );
     setDirty(true);
   };
 
@@ -466,6 +639,7 @@ export default function ExtractionReviewPage() {
         title: editTitle,
         description: editDescription,
         sections: sanitizedSaveSections,
+        mediaAssets: persistableMediaAssets,
       });
 
       // Compatibility retry for environments where AI service only accepts legacy lessons payload reliably.
@@ -474,6 +648,7 @@ export default function ExtractionReviewPage() {
           title: editTitle,
           description: editDescription,
           lessons: legacySaveLessons,
+          mediaAssets: persistableMediaAssets,
         });
       }
 
@@ -488,6 +663,7 @@ export default function ExtractionReviewPage() {
             title: editTitle,
             description: editDescription,
             lessons: legacySaveLessons,
+            mediaAssets: persistableMediaAssets,
           });
           setExtraction(fallback.data);
           hydrate(fallback.data);
@@ -686,7 +862,15 @@ export default function ExtractionReviewPage() {
               Back
             </Button>
             {dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}
-            {isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}
+            {isEditable && !isApplied ? (
+              <Button
+                onClick={() => setShowApplyDialog(true)}
+                disabled={selectedSections.size === 0 || Boolean(applyBlockedReason)}
+                title={applyBlockedReason || undefined}
+              >
+                Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})
+              </Button>
+            ) : null}
             {!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}
           </div>
         </div>
@@ -768,6 +952,8 @@ export default function ExtractionReviewPage() {
               <Badge variant="secondary">Remaining: {stats.remainingBlocks}</Badge>
               <Badge variant="outline">Removed: {stats.removedBlocks}</Badge>
               <Badge variant={stats.flaggedBlocks > 0 ? 'destructive' : 'secondary'}>Flagged: {stats.flaggedBlocks}</Badge>
+              <Badge variant={unassignedMediaAssets.length > 0 ? 'destructive' : 'secondary'}>Unassigned images: {unassignedMediaAssets.length}</Badge>
+              <Badge variant={pendingMediaReviewCount > 0 ? 'destructive' : 'secondary'}>Pending review: {pendingMediaReviewCount}</Badge>
               <Badge variant="outline">Active Section: {activeSectionIndex + 1}</Badge>
               <span className="text-[var(--teacher-text-muted)]"><ArrowUpDown className="mr-1 inline h-3 w-3" />Shortcuts: J/K, /, R, U</span>
             </div>
@@ -802,6 +988,50 @@ export default function ExtractionReviewPage() {
               ref={reviewPaneRef}
               className="review-scrollbar max-h-[calc(100vh-20rem)] overflow-y-auto rounded-[14px] border border-[#dbe4f0] bg-[#f8fafc] p-3"
             >
+              {unassignedMediaAssets.length > 0 ? (
+                <div className="mb-4 rounded-[10px] border border-[#e2e8f0] bg-white p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <strong className="text-sm">Unassigned images</strong>
+                    <Badge variant="destructive">{unassignedMediaAssets.length}</Badge>
+                  </div>
+                  <div className="space-y-2">
+                    {unassignedMediaAssets.map((asset) => (
+                      <div key={asset.id} className="flex flex-col gap-2 rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] p-2 md:flex-row md:items-center md:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <img src={asset.url} alt={asset.caption || 'Extracted visual'} className="h-14 w-20 rounded border border-[#cbd5e1] object-contain bg-white" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{asset.caption || 'Unassigned figure'}</p>
+                            <p className="text-xs text-[var(--teacher-text-muted)]">
+                              {asset.pageNumber ? `Page ${asset.pageNumber}` : 'Page unknown'}
+                              {typeof asset.assignmentConfidence === 'number' ? ` • ${Math.round(asset.assignmentConfidence * 100)}%` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-center gap-2 text-xs text-[var(--teacher-text-muted)]">
+                          <span>Move</span>
+                          <select
+                            aria-label={`Move ${asset.caption || 'Unassigned figure'}`}
+                            value={asset.selectedSectionIndex === null || asset.selectedSectionIndex === undefined ? '' : String(asset.selectedSectionIndex)}
+                            onChange={(event) => {
+                              const value = event.target.value === '' ? null : Number(event.target.value);
+                              syncMediaAssetPlacement(asset.id, value);
+                            }}
+                            className="h-8 rounded border border-[#cbd5e1] bg-white px-2 text-sm text-[#12284a]"
+                          >
+                            <option value="">Unassigned</option>
+                            {editSections.map((section, index) => (
+                              <option key={`unassigned-image-section-${asset.id}-${index}`} value={String(index)}>
+                                Section {index + 1}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {displayedSections.length === 0 ? (
                 <p className="rounded-md border border-dashed border-[#cbd5e1] bg-white p-4 text-sm text-[var(--teacher-text-muted)]">
                   No sections match the current filter.
@@ -868,6 +1098,34 @@ export default function ExtractionReviewPage() {
                               {blockImageCaption(entry.block) ? <span>{blockImageCaption(entry.block)}</span> : null}
                               {blockImageMeta(entry.block).page ? <Badge variant="secondary">Page {blockImageMeta(entry.block).page}</Badge> : null}
                               {blockImageMeta(entry.block).confidence !== null ? <Badge variant="outline">Confidence {Math.round((blockImageMeta(entry.block).confidence || 0) * 100)}%</Badge> : null}
+                              {canMutateBlocks && blockMediaAssetId(entry.block) ? (
+                                <label className="ml-auto flex items-center gap-2">
+                                  <span>Move</span>
+                                  <select
+                                    aria-label={`Move ${blockImageCaption(entry.block) || 'Extracted visual'}`}
+                                    value={String(entry.sectionIndex)}
+                                    onChange={(event) => {
+                                      syncMediaAssetPlacement(blockMediaAssetId(entry.block)!, Number(event.target.value));
+                                    }}
+                                    className="h-8 rounded border border-[#cbd5e1] bg-white px-2 text-sm text-[#12284a]"
+                                  >
+                                    {editSections.map((_sectionOption, index) => (
+                                      <option key={`move-image-${entry.key}-${index}`} value={String(index)}>
+                                        Section {index + 1}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                              ) : null}
+                              {canMutateBlocks && blockMediaAssetId(entry.block) ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => markMediaAssetReviewed(blockMediaAssetId(entry.block)!)}
+                                >
+                                  Review
+                                </Button>
+                              ) : null}
                             </div>
                           </div>
                         ) : (

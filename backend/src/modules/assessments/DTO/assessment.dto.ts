@@ -537,6 +537,15 @@ export class ReturnedRubricScoreDto {
   feedback?: string;
 }
 
+export class ManualResponseScoreDto {
+  @IsUUID('4')
+  questionId: string;
+
+  @IsInt()
+  @Min(0)
+  pointsEarned: number;
+}
+
 export class ReturnGradeDto {
   @IsOptional()
   @IsString()
@@ -553,6 +562,12 @@ export class ReturnGradeDto {
   @ValidateNested({ each: true })
   @Type(() => ReturnedRubricScoreDto)
   rubricScores?: ReturnedRubricScoreDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ManualResponseScoreDto)
+  manualResponseScores?: ManualResponseScoreDto[];
 }
 
 export class BulkReturnGradesDto {

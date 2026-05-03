@@ -99,6 +99,7 @@ const QUESTION_ASSESSMENT_TYPES = [
   { value: 'exam', label: 'Exam' },
   { value: 'activity', label: 'Activity' },
 ] as const;
+const FILE_UPLOAD_FIXED_SCORE = 100;
 
 function normalizeImageDisplayMode(value: unknown): ComposerImageDisplayMode {
   return value === 'expanded' ? 'expanded' : 'default';
@@ -511,7 +512,6 @@ export default function AdminTemplateAssessmentEditorPage() {
   const [title, setTitle] = useState('Untitled Assessment');
   const [description, setDescription] = useState('');
   const [assessmentType, setAssessmentType] = useState<string>('quiz');
-  const [totalPoints, setTotalPoints] = useState(0);
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [passingScore, setPassingScore] = useState(60);
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
@@ -584,10 +584,6 @@ export default function AdminTemplateAssessmentEditorPage() {
     if (nextType !== 'file_upload') {
       lastQuestionAssessmentTypeRef.current = nextType;
     }
-    setTotalPoints(
-      sourceAssessment.totalPoints ??
-        normalizedQuestions.reduce((sum, question) => sum + (Number(question.points) || 0), 0),
-    );
     setMaxAttempts(sourceAssessment.settings?.maxAttempts ?? 1);
     setPassingScore(sourceAssessment.settings?.passingScore ?? 60);
     setRandomizeQuestions(Boolean(sourceAssessment.settings?.randomizeQuestions));
@@ -621,6 +617,7 @@ export default function AdminTemplateAssessmentEditorPage() {
     () => questions.reduce((sum, question) => sum + (Number(question.points) || 0), 0),
     [questions],
   );
+  const totalScore = assessmentType === 'file_upload' ? FILE_UPLOAD_FIXED_SCORE : questionPointsTotal;
 
   const draftPayload = useMemo<ClassTemplateAssessment>(() => {
     const safeTitle = title.trim() || 'Untitled Assessment';
@@ -648,7 +645,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       title: safeTitle,
       description,
       type: assessmentType,
-      totalPoints: assessmentType === 'file_upload' ? totalPoints : questionPointsTotal,
+      totalPoints: assessmentType === 'file_upload' ? FILE_UPLOAD_FIXED_SCORE : questionPointsTotal,
       settings: {
         maxAttempts,
         passingScore,
@@ -673,7 +670,6 @@ export default function AdminTemplateAssessmentEditorPage() {
     questions,
     randomizeQuestions,
     title,
-    totalPoints,
   ]);
 
   const serializedDraft = useMemo(
@@ -682,7 +678,7 @@ export default function AdminTemplateAssessmentEditorPage() {
         title,
         description,
         assessmentType,
-        totalPoints,
+        totalScore,
         maxAttempts,
         passingScore,
         randomizeQuestions,
@@ -698,7 +694,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       questions,
       randomizeQuestions,
       title,
-      totalPoints,
+      totalScore,
     ],
   );
 
@@ -876,11 +872,6 @@ export default function AdminTemplateAssessmentEditorPage() {
       return;
     }
 
-    if (assessmentType === 'file_upload' && totalPoints < 1) {
-      toast.error('File upload assessments need valid total points');
-      return;
-    }
-
     try {
       if (assessmentType !== 'file_upload') {
         validateTemplateQuestions(questions);
@@ -925,7 +916,6 @@ export default function AdminTemplateAssessmentEditorPage() {
     }
     return { label: 'Saved', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
   })();
-  const totalScore = assessmentType === 'file_upload' ? totalPoints : questionPointsTotal;
   const templateSetupIssues = useMemo<TemplateSetupIssue[]>(() => {
     const issues: TemplateSetupIssue[] = [];
 
@@ -951,18 +941,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       });
     }
 
-    if (assessmentType === 'file_upload') {
-      if (totalPoints < 1) {
-        issues.push({
-          id: 'missing-total-points',
-          title: 'Set the total score',
-          description: 'File upload templates need at least 1 point before they are ready to save.',
-          section: 'settings',
-          severity: 'required',
-          actionLabel: 'Open settings',
-        });
-      }
-    } else {
+    if (assessmentType !== 'file_upload') {
       if (questions.length === 0) {
         issues.push({
           id: 'missing-questions',
@@ -988,7 +967,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       });
     }
 
-    if (maxAttempts < 1 || passingScore < 1) {
+    if (assessmentType !== 'file_upload' && (maxAttempts < 1 || passingScore < 1)) {
       issues.push({
         id: 'review-template-defaults',
         title: 'Review template defaults',
@@ -1011,7 +990,7 @@ export default function AdminTemplateAssessmentEditorPage() {
     }
 
     return issues;
-  }, [assessmentType, description, maxAttempts, passingScore, questions, title, totalPoints]);
+  }, [assessmentType, description, maxAttempts, passingScore, questions, title]);
   const requiredTemplateSetupIssues = templateSetupIssues.filter((issue) => issue.severity === 'required');
   const warningButtonLabel =
     templateSetupIssues.length > 0
@@ -1184,57 +1163,61 @@ export default function AdminTemplateAssessmentEditorPage() {
             </select>
           </div>
         ) : (
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-              Total points
-            </label>
-            <Input
-              type="number"
-              min={1}
-              value={totalPoints}
-              onChange={(event) => setTotalPoints(Number(event.target.value || 0))}
-              className="h-11 rounded-2xl border-slate-200 bg-slate-50"
-            />
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <p className="font-semibold text-slate-900">Score is always 100 for file upload assessments.</p>
+            <p className="mt-1">
+              Teachers grade the latest submission out of 100. If they add a rubric later in a live class,
+              it should still total 100.
+            </p>
           </div>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-              Max attempts
-            </label>
-            <Input
-              type="number"
-              min={1}
-              value={maxAttempts}
-              onChange={(event) => setMaxAttempts(Number(event.target.value || 1))}
-              className="h-11 rounded-2xl border-slate-200 bg-slate-50"
-            />
+        {assessmentType !== 'file_upload' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                Max attempts
+              </label>
+              <Input
+                type="number"
+                min={1}
+                value={maxAttempts}
+                onChange={(event) => setMaxAttempts(Number(event.target.value || 1))}
+                className="h-11 rounded-2xl border-slate-200 bg-slate-50"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                Passing score
+              </label>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={passingScore}
+                onChange={(event) => setPassingScore(Number(event.target.value || 0))}
+                className="h-11 rounded-2xl border-slate-200 bg-slate-50"
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-              Passing score
-            </label>
-            <Input
-              type="number"
-              min={0}
-              max={100}
-              value={passingScore}
-              onChange={(event) => setPassingScore(Number(event.target.value || 0))}
-              className="h-11 rounded-2xl border-slate-200 bg-slate-50"
-            />
-          </div>
-        </div>
+        ) : null}
 
         <div className="space-y-3 rounded-[1.4rem] border border-slate-200 bg-slate-50/60 px-4 py-4">
-          <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
-            <input
-              type="checkbox"
-              checked={randomizeQuestions}
-              onChange={(event) => setRandomizeQuestions(event.target.checked)}
-            />
-            Randomize questions
-          </label>
+          {assessmentType !== 'file_upload' ? (
+            <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={randomizeQuestions}
+                onChange={(event) => setRandomizeQuestions(event.target.checked)}
+              />
+              Randomize questions
+            </label>
+          ) : (
+            <p className="text-sm text-slate-600">
+              File upload templates keep only the due-date closure rule here. Timing, attempts, and grading details
+              are handled on the live class assessment.
+            </p>
+          )}
           <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
             <input
               type="checkbox"
@@ -1246,8 +1229,8 @@ export default function AdminTemplateAssessmentEditorPage() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Total: <strong>{assessmentType === 'file_upload' ? totalPoints : questionPointsTotal} points</strong>
-          {' '}across {questions.length} question{questions.length === 1 ? '' : 's'}
+          Total: <strong>{assessmentType === 'file_upload' ? FILE_UPLOAD_FIXED_SCORE : questionPointsTotal} points</strong>
+          {' '}across <strong>{assessmentType === 'file_upload' ? 'file upload mode' : `${questions.length} question${questions.length === 1 ? '' : 's'}`}</strong>
         </div>
 
         {assessmentType !== 'file_upload' ? (
@@ -1465,23 +1448,10 @@ export default function AdminTemplateAssessmentEditorPage() {
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                    Total points
-                  </label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={totalPoints}
-                    onChange={(event) => setTotalPoints(Number(event.target.value || 0))}
-                    className="h-11 rounded-2xl border-slate-200 bg-white"
-                  />
-                </div>
-
                 <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
                   <p className="font-semibold text-slate-900">Current defaults</p>
-                  <p className="mt-2">Max attempts: {maxAttempts}</p>
-                  <p>Passing score: {passingScore}%</p>
+                  <p className="mt-2">Score: 100 points</p>
+                  <p>Grading target: latest submission only</p>
                   <p>{closeWhenDue ? 'Closes when due' : 'Stays open until class rules change'}</p>
                 </div>
               </div>

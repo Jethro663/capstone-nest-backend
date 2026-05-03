@@ -115,7 +115,11 @@ class ExtractionPipelineTests(unittest.TestCase):
             image_blocks[0]["content"]["url"],
             "data:image/png;base64,ZmFrZQ==",
         )
+        self.assertEqual(image_blocks[0]["metadata"]["mediaAssetId"], "image-1")
         self.assertEqual(merged["audit"]["imageAssignmentSummary"]["assigned"], 1)
+        self.assertEqual(len(merged["mediaAssets"]), 1)
+        self.assertEqual(merged["mediaAssets"][0]["selectedSectionIndex"], 0)
+        self.assertEqual(merged["mediaAssets"][0]["candidateSections"][0]["sectionIndex"], 0)
 
     def test_low_confidence_image_assignment_stays_unassigned(self) -> None:
         merged = _merge_structured_chunks(
@@ -162,6 +166,14 @@ class ExtractionPipelineTests(unittest.TestCase):
         self.assertFalse(image_blocks)
         self.assertEqual(merged["audit"]["imageAssignmentSummary"]["unassigned"], 1)
         self.assertTrue(merged["audit"]["reviewFlags"])
+        self.assertEqual(len(merged["mediaAssets"]), 1)
+        self.assertIsNone(merged["mediaAssets"][0]["selectedSectionIndex"])
+        self.assertFalse(merged["mediaAssets"][0]["teacherReviewed"])
+        self.assertEqual(len(merged["mediaAssets"][0]["candidateSections"]), 1)
+        self.assertEqual(
+            merged["mediaAssets"][0]["reviewState"],
+            "needs_teacher_assignment",
+        )
 
     def test_image_reuse_requires_explicit_citation(self) -> None:
         sections = [

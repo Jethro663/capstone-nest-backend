@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
-import { eq, and, asc, desc, inArray, sql, sum } from 'drizzle-orm';
+import { eq, and, asc, desc, inArray, isNull, sql, sum } from 'drizzle-orm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
@@ -17,6 +17,7 @@ import {
   assessmentQuestionOptions,
   assessmentAttempts,
   assessmentResponses,
+  auditLogs,
   classRecords,
   classRecordCategories,
   classRecordItems,
@@ -99,6 +100,23 @@ type ReturnedRubricScore = {
   feedback?: string;
 };
 
+type SubmittedAttemptFile = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt?: Date | string | null;
+};
+
+type SubmissionTimelineEntry = {
+  id: string;
+  attemptId: string;
+  action: string;
+  createdAt: Date;
+  actorName: string | null;
+  metadata: Record<string, unknown> | null;
+};
+
 // pdf-parse ships CommonJS typings that do not expose a callable default import cleanly.
 const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
   text: string;
@@ -119,6 +137,104 @@ export class AssessmentsService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private normalizeSubmittedFiles(
+    raw: unknown,
+  ): SubmittedAttemptFile[] {
+    if (!Array.isArray(raw)) return [];
+
+    const normalized: SubmittedAttemptFile[] = [];
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue;
+      const candidate = entry as Record<string, unknown>;
+      const id = typeof candidate.id === 'string' ? candidate.id : null;
+      const originalName =
+        typeof candidate.originalName === 'string'
+          ? candidate.originalName
+          : null;
+      const mimeType =
+        typeof candidate.mimeType === 'string' ? candidate.mimeType : null;
+      const sizeBytes = Number(candidate.sizeBytes);
+
+      if (!id || !originalName || !mimeType || !Number.isFinite(sizeBytes)) {
+        continue;
+      }
+
+      normalized.push({
+        id,
+        originalName,
+        mimeType,
+        sizeBytes,
+        uploadedAt:
+          candidate.uploadedAt instanceof Date ||
+          typeof candidate.uploadedAt === 'string'
+            ? candidate.uploadedAt
+            : null,
+      });
+    }
+
+    return normalized;
+  }
+
+  private formatAuditActorName(actor?: {
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  } | null) {
+    if (!actor) return null;
+    const fullName = [actor.firstName, actor.lastName]
+      .map((value) => value?.trim())
+      .filter((value): value is string => Boolean(value))
+      .join(' ');
+    return fullName || actor.email?.trim() || null;
+  }
+
+  private getAttemptSubmittedFiles(
+    attempt: Partial<{
+      submittedFiles: unknown;
+      submittedFileId: string | null;
+      submittedFileOriginalName: string | null;
+      submittedFileMimeType: string | null;
+      submittedFileSizeBytes: number | null;
+      updatedAt: Date | string | null;
+      createdAt: Date | string | null;
+    }>,
+  ): SubmittedAttemptFile[] {
+    const normalized = this.normalizeSubmittedFiles(attempt.submittedFiles);
+    if (normalized.length > 0) {
+      return normalized;
+    }
+
+    if (!attempt.submittedFileId) {
+      return [];
+    }
+
+    return [
+      {
+        id: attempt.submittedFileId,
+        originalName: attempt.submittedFileOriginalName || 'Uploaded file',
+        mimeType:
+          attempt.submittedFileMimeType || 'application/octet-stream',
+        sizeBytes: attempt.submittedFileSizeBytes || 0,
+        uploadedAt: attempt.updatedAt || attempt.createdAt || null,
+      },
+    ];
+  }
+
+  private buildSubmittedFileSnapshot(
+    files: SubmittedAttemptFile[],
+  ) {
+    const latestFile = files[files.length - 1] ?? null;
+
+    return {
+      submittedFiles: files,
+      submittedFileId: latestFile?.id ?? null,
+      submittedFileOriginalName: latestFile?.originalName ?? null,
+      submittedFileMimeType: latestFile?.mimeType ?? null,
+      submittedFileSizeBytes: latestFile?.sizeBytes ?? null,
+    };
   }
 
   private async runAssessmentNotificationSideEffects(
@@ -1493,12 +1609,18 @@ export class AssessmentsService {
           ? new Date(createAssessmentDto.dueDate)
           : undefined,
         closeWhenDue: createAssessmentDto.closeWhenDue ?? true,
-        randomizeQuestions: createAssessmentDto.randomizeQuestions ?? false,
-        timedQuestionsEnabled:
-          createAssessmentDto.timedQuestionsEnabled ?? false,
-        questionTimeLimitSeconds:
-          createAssessmentDto.questionTimeLimitSeconds ?? null,
-        strictMode: createAssessmentDto.strictMode ?? false,
+        randomizeQuestions: isFileUpload
+          ? false
+          : (createAssessmentDto.randomizeQuestions ?? false),
+        timedQuestionsEnabled: isFileUpload
+          ? false
+          : (createAssessmentDto.timedQuestionsEnabled ?? false),
+        questionTimeLimitSeconds: isFileUpload
+          ? null
+          : (createAssessmentDto.questionTimeLimitSeconds ?? null),
+        strictMode: isFileUpload
+          ? false
+          : (createAssessmentDto.strictMode ?? false),
         fileUploadInstructions: isFileUpload
           ? this.sanitizeOptionalRichText(
               createAssessmentDto.fileUploadInstructions,
@@ -1530,7 +1652,9 @@ export class AssessmentsService {
         totalPoints: isFileUpload ? 100 : 0,
         passingScore: createAssessmentDto.passingScore,
         maxAttempts: createAssessmentDto.maxAttempts ?? 1,
-        timeLimitMinutes: createAssessmentDto.timeLimitMinutes ?? null,
+        timeLimitMinutes: isFileUpload
+          ? null
+          : (createAssessmentDto.timeLimitMinutes ?? null),
         isPublished: false,
         feedbackLevel: createAssessmentDto.feedbackLevel,
         feedbackDelayHours: createAssessmentDto.feedbackDelayHours,
@@ -1864,6 +1988,11 @@ export class AssessmentsService {
       updateData.allowedUploadExtensions = null;
       updateData.maxUploadSizeBytes = null;
     } else {
+      updateData.randomizeQuestions = false;
+      updateData.timedQuestionsEnabled = false;
+      updateData.questionTimeLimitSeconds = null;
+      updateData.strictMode = false;
+      updateData.timeLimitMinutes = null;
       if (updateData.allowedUploadMimeTypes === undefined) {
         updateData.allowedUploadMimeTypes = this.normalizeMimeTypes(
           existingAssessment.allowedUploadMimeTypes ?? undefined,
@@ -2551,7 +2680,8 @@ export class AssessmentsService {
     });
 
     const maxAttempts = assessment.maxAttempts ?? 1;
-    if (submittedAttempts.length >= maxAttempts) {
+    const enforceAttemptCap = assessment.type !== AssessmentType.FILE_UPLOAD;
+    if (enforceAttemptCap && submittedAttempts.length >= maxAttempts) {
       throw new ForbiddenException(
         `Maximum attempts reached (${maxAttempts}). You cannot retake this assessment.`,
       );
@@ -2832,13 +2962,13 @@ export class AssessmentsService {
       }
     }
 
-    if (
-      assessment.type === AssessmentType.FILE_UPLOAD &&
-      !attempt.submittedFileId
-    ) {
+    if (assessment.type === AssessmentType.FILE_UPLOAD) {
+      const submittedFiles = this.getAttemptSubmittedFiles(attempt);
+      if (submittedFiles.length === 0) {
       throw new BadRequestException(
         'Please upload a file before submitting this assessment',
       );
+    }
     }
 
     const submissionResponses =
@@ -2877,6 +3007,7 @@ export class AssessmentsService {
           assessmentId: submitAssessmentDto.assessmentId,
           classId: assessment.classId,
           studentId,
+          attemptNumber: attempt.attemptNumber,
           isFileUpload: true,
           score: null,
           passed: null,
@@ -3223,6 +3354,7 @@ export class AssessmentsService {
         classId: assessment.classId,
         studentId,
         submittedFileId: attempt.submittedFileId,
+        attemptNumber: attempt.attemptNumber,
       },
     });
 
@@ -3302,13 +3434,21 @@ export class AssessmentsService {
       })
       .returning();
 
+    const submittedFiles = [
+      ...this.getAttemptSubmittedFiles(attempt),
+      {
+        id: record.id,
+        originalName: record.originalName,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+        uploadedAt: record.uploadedAt,
+      },
+    ];
+
     await this.db
       .update(assessmentAttempts)
       .set({
-        submittedFileId: record.id,
-        submittedFileOriginalName: record.originalName,
-        submittedFileMimeType: record.mimeType,
-        submittedFileSizeBytes: record.sizeBytes,
+        ...this.buildSubmittedFileSnapshot(submittedFiles),
         updatedAt: new Date(),
       })
       .where(eq(assessmentAttempts.id, attempt.id));
@@ -3323,14 +3463,98 @@ export class AssessmentsService {
         classId: assessment.classId,
         studentId,
         fileId: record.id,
+        originalName: record.originalName,
         mimeType: record.mimeType,
         sizeBytes: record.sizeBytes,
+        attemptNumber: attempt.attemptNumber,
       },
     });
 
     return {
       attemptId: attempt.id,
       file: record,
+      files: submittedFiles,
+    };
+  }
+
+  async removeStudentSubmissionFile(
+    assessmentId: string,
+    fileId: string,
+    currentUser: any,
+  ) {
+    const studentId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!studentId || role !== 'student') {
+      throw new ForbiddenException(
+        'Only students can remove submission files',
+      );
+    }
+
+    const assessment = await this.getAssessmentById(assessmentId);
+    if (assessment.type !== AssessmentType.FILE_UPLOAD) {
+      throw new BadRequestException(
+        'This assessment does not accept file uploads',
+      );
+    }
+
+    await this.ensureStudentEnrolled(assessment.classId, studentId);
+
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: and(
+        eq(assessmentAttempts.assessmentId, assessmentId),
+        eq(assessmentAttempts.studentId, studentId),
+        eq(assessmentAttempts.isSubmitted, false),
+      ),
+      orderBy: (a, { desc }) => [desc(a.updatedAt)],
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('No active draft submission found');
+    }
+
+    const submittedFiles = this.getAttemptSubmittedFiles(attempt);
+    const removedFile = submittedFiles.find((entry) => entry.id === fileId) ?? null;
+    const nextSubmittedFiles = submittedFiles.filter(
+      (entry) => entry.id !== fileId,
+    );
+
+    if (nextSubmittedFiles.length === submittedFiles.length) {
+      throw new NotFoundException('Submitted file not found on this attempt');
+    }
+
+    await this.db
+      .update(assessmentAttempts)
+      .set({
+        ...this.buildSubmittedFileSnapshot(nextSubmittedFiles),
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentAttempts.id, attempt.id));
+
+    await this.db
+      .update(uploadedFiles)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(uploadedFiles.id, fileId), isNull(uploadedFiles.deletedAt)));
+
+    await this.auditService.log({
+      actorId: studentId,
+      action: 'assessment.submission.file_removed',
+      targetType: 'assessment_attempt',
+      targetId: attempt.id,
+      metadata: {
+        assessmentId,
+        classId: assessment.classId,
+        studentId,
+        fileId,
+        originalName: removedFile?.originalName ?? null,
+        remainingFileCount: nextSubmittedFiles.length,
+        attemptNumber: attempt.attemptNumber,
+      },
+    });
+
+    return {
+      attemptId: attempt.id,
+      files: nextSubmittedFiles,
     };
   }
 
@@ -3379,7 +3603,11 @@ export class AssessmentsService {
     return file;
   }
 
-  async getAttemptSubmissionDownload(attemptId: string, currentUser: any) {
+  async getAttemptSubmissionDownload(
+    attemptId: string,
+    currentUser: any,
+    fileId?: string,
+  ) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
 
@@ -3402,7 +3630,8 @@ export class AssessmentsService {
       throw new NotFoundException('Attempt not found');
     }
 
-    if (!attempt.submittedFileId) {
+    const submittedFiles = this.getAttemptSubmittedFiles(attempt);
+    if (submittedFiles.length === 0) {
       throw new NotFoundException('No submitted file found for this attempt');
     }
 
@@ -3414,12 +3643,22 @@ export class AssessmentsService {
       throw new ForbiddenException('You do not have access to this file');
     }
 
+    const targetFileId = fileId || submittedFiles[submittedFiles.length - 1]?.id;
     const file = await this.db.query.uploadedFiles.findFirst({
-      where: eq(uploadedFiles.id, attempt.submittedFileId),
+      where: and(
+        eq(uploadedFiles.id, targetFileId),
+        isNull(uploadedFiles.deletedAt),
+      ),
     });
 
     if (!file) {
       throw new NotFoundException('Submitted file no longer exists');
+    }
+
+    if (!submittedFiles.some((entry) => entry.id === file.id)) {
+      throw new ForbiddenException(
+        'You do not have access to this submitted file',
+      );
     }
 
     await this.auditService.log({
@@ -3502,19 +3741,29 @@ export class AssessmentsService {
     const normalizedUserRole =
       userRole ?? (role === 'student' ? 'student' : undefined);
 
-    let submittedFile: any = null;
-    if (attempt.submittedFileId) {
-      submittedFile = await this.db.query.uploadedFiles.findFirst({
-        where: eq(uploadedFiles.id, attempt.submittedFileId),
-        columns: {
-          id: true,
-          originalName: true,
-          mimeType: true,
-          sizeBytes: true,
-          uploadedAt: true,
-        },
-      });
-    }
+    const submittedFiles = this.getAttemptSubmittedFiles(attempt);
+    const submittedFileIds = submittedFiles.map((entry) => entry.id);
+    const uploadedSubmissionFiles =
+      submittedFileIds.length > 0
+        ? await this.db.query.uploadedFiles.findMany({
+            where: inArray(uploadedFiles.id, submittedFileIds),
+            columns: {
+              id: true,
+              originalName: true,
+              mimeType: true,
+              sizeBytes: true,
+              uploadedAt: true,
+            },
+          })
+        : [];
+    const uploadedSubmissionFileMap = new Map(
+      uploadedSubmissionFiles.map((file) => [file.id, file]),
+    );
+    const resolvedSubmittedFiles = submittedFiles
+      .map((entry) => uploadedSubmissionFileMap.get(entry.id) ?? null)
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+    const submittedFile =
+      resolvedSubmittedFiles[resolvedSubmittedFiles.length - 1] ?? null;
 
     // If student role and grade not returned yet, hide score details
     if (normalizedUserRole === 'student' && !attempt.isReturned) {
@@ -3549,6 +3798,7 @@ export class AssessmentsService {
           ),
         },
         submittedFile,
+        submittedFiles: resolvedSubmittedFiles,
       };
     }
 
@@ -3559,6 +3809,7 @@ export class AssessmentsService {
       filtered.returnedAt = attempt.returnedAt;
       filtered.teacherFeedback = attempt.teacherFeedback;
       filtered.submittedFile = submittedFile;
+      filtered.submittedFiles = resolvedSubmittedFiles;
       filtered.directScore = attempt.directScore;
       filtered.rubricScores = attempt.rubricScores ?? [];
       return filtered;
@@ -3570,6 +3821,7 @@ export class AssessmentsService {
       returnedAt: attempt.returnedAt,
       teacherFeedback: attempt.teacherFeedback,
       submittedFile,
+      submittedFiles: resolvedSubmittedFiles,
       directScore: attempt.directScore,
       rubricScores: attempt.rubricScores ?? [],
     };
@@ -4089,8 +4341,10 @@ export class AssessmentsService {
     });
 
     const submittedFileIds = attempts
-      .map((attempt) => attempt.submittedFileId)
-      .filter((fileId): fileId is string => Boolean(fileId));
+      .flatMap((attempt) =>
+        this.getAttemptSubmittedFiles(attempt).map((file) => file.id),
+      )
+      .filter((fileId, index, collection) => collection.indexOf(fileId) === index);
     const submittedFiles =
       submittedFileIds.length > 0
         ? await this.db.query.uploadedFiles.findMany({
@@ -4107,6 +4361,59 @@ export class AssessmentsService {
     const submittedFileMap = new Map(
       submittedFiles.map((file) => [file.id, file]),
     );
+    const relevantTimelineActions = [
+      'assessment.submission.file_uploaded',
+      'assessment.submission.file_removed',
+      'assessment.submission.submitted',
+      'assessment.submission.unsubmitted',
+      'assessment.submission.auto_submitted',
+      'assessment.grade.returned',
+      'assessment.grade.unreturned',
+    ];
+    const attemptTimelineEntries =
+      attempts.length > 0
+        ? await this.db.query.auditLogs.findMany({
+            where: and(
+              inArray(
+                auditLogs.targetId,
+                attempts.map((attempt) => attempt.id),
+              ),
+              inArray(auditLogs.action, relevantTimelineActions),
+            ),
+            with: {
+              actor: {
+                columns: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: [desc(auditLogs.createdAt)],
+          })
+        : [];
+    const attemptToStudentIdMap = new Map(
+      attempts.map((attempt) => [attempt.id, attempt.studentId]),
+    );
+    const timelineByStudentId = new Map<string, SubmissionTimelineEntry[]>();
+
+    for (const entry of attemptTimelineEntries) {
+      const studentId = attemptToStudentIdMap.get(entry.targetId);
+      if (!studentId) continue;
+      const bucket = timelineByStudentId.get(studentId) ?? [];
+      bucket.push({
+        id: entry.id,
+        attemptId: entry.targetId,
+        action: entry.action,
+        createdAt: entry.createdAt,
+        actorName: this.formatAuditActorName(entry.actor),
+        metadata:
+          entry.metadata && typeof entry.metadata === 'object'
+            ? (entry.metadata as Record<string, unknown>)
+            : null,
+      });
+      timelineByStudentId.set(studentId, bucket);
+    }
 
     // Map students to their submission status
     const submissions = enrolledStudents.map((student) => {
@@ -4141,18 +4448,29 @@ export class AssessmentsService {
         attempt: latestAttempt
           ? {
               ...mapAttemptSummary(latestAttempt),
-              submittedFile: latestAttempt.submittedFileId
-                ? (submittedFileMap.get(latestAttempt.submittedFileId) ?? null)
-                : null,
+              submittedFiles: this.getAttemptSubmittedFiles(latestAttempt)
+                .map((file) => submittedFileMap.get(file.id) ?? null)
+                .filter((file): file is NonNullable<typeof file> => Boolean(file)),
+              submittedFile:
+                this.getAttemptSubmittedFiles(latestAttempt)
+                  .map((file) => submittedFileMap.get(file.id) ?? null)
+                  .filter((file): file is NonNullable<typeof file> => Boolean(file))
+                  .at(-1) ?? null,
             }
           : null,
         attempts: studentAttempts.map((attempt) => ({
           ...mapAttemptSummary(attempt),
-          submittedFile: attempt.submittedFileId
-            ? (submittedFileMap.get(attempt.submittedFileId) ?? null)
-            : null,
+          submittedFiles: this.getAttemptSubmittedFiles(attempt)
+            .map((file) => submittedFileMap.get(file.id) ?? null)
+            .filter((file): file is NonNullable<typeof file> => Boolean(file)),
+          submittedFile:
+            this.getAttemptSubmittedFiles(attempt)
+              .map((file) => submittedFileMap.get(file.id) ?? null)
+              .filter((file): file is NonNullable<typeof file> => Boolean(file))
+              .at(-1) ?? null,
         })),
         totalAttempts: studentAttempts.length,
+        timeline: timelineByStudentId.get(student.studentId) ?? [],
       };
     });
 
@@ -4203,6 +4521,19 @@ export class AssessmentsService {
                 teacherId: true,
               },
             },
+            questions: {
+              columns: {
+                id: true,
+                points: true,
+              },
+            },
+          },
+        },
+        responses: {
+          columns: {
+            id: true,
+            questionId: true,
+            pointsEarned: true,
           },
         },
       },
@@ -4228,6 +4559,27 @@ export class AssessmentsService {
       throw new ForbiddenException(
         'You can only return grades for your own class assessments',
       );
+    }
+
+    if (attempt.assessment?.type === AssessmentType.FILE_UPLOAD) {
+      const latestSubmittedAttempt =
+        await this.db.query.assessmentAttempts.findFirst({
+          where: and(
+            eq(assessmentAttempts.assessmentId, attempt.assessmentId),
+            eq(assessmentAttempts.studentId, attempt.studentId),
+            eq(assessmentAttempts.isSubmitted, true),
+          ),
+          orderBy: (a, { desc }) => [desc(a.submittedAt), desc(a.updatedAt)],
+        });
+
+      if (
+        latestSubmittedAttempt &&
+        latestSubmittedAttempt.id !== attempt.id
+      ) {
+        throw new BadRequestException(
+          'Grades can only be returned for the latest file upload submission',
+        );
+      }
     }
 
     let score = attempt.score;
@@ -4322,6 +4674,89 @@ export class AssessmentsService {
           attempt.assessment.quarter ?? undefined,
         );
       }
+    } else if ((dto.manualResponseScores?.length ?? 0) > 0) {
+      const questionMap = new Map(
+        (attempt.assessment?.questions ?? []).map((question) => [
+          question.id,
+          question,
+        ]),
+      );
+      const responseMap = new Map(
+        (attempt.responses ?? []).map((response) => [response.questionId, response]),
+      );
+      const overrideMap = new Map(
+        dto.manualResponseScores?.map((responseScore) => [
+          responseScore.questionId,
+          responseScore.pointsEarned,
+        ]) ?? [],
+      );
+
+      for (const responseScore of dto.manualResponseScores ?? []) {
+        const question = questionMap.get(responseScore.questionId);
+        if (!question) {
+          throw new BadRequestException(
+            `Question "${responseScore.questionId}" does not belong to this assessment`,
+          );
+        }
+
+        if (!responseMap.has(responseScore.questionId)) {
+          throw new BadRequestException(
+            `Question "${responseScore.questionId}" was not recorded for this attempt`,
+          );
+        }
+
+        if (
+          responseScore.pointsEarned < 0 ||
+          responseScore.pointsEarned > question.points
+        ) {
+          throw new BadRequestException(
+            `Manual score for question "${responseScore.questionId}" must be between 0 and ${question.points}`,
+          );
+        }
+      }
+
+      await Promise.all(
+        (attempt.responses ?? []).map((response) => {
+          const nextPointsEarned =
+            overrideMap.get(response.questionId) ?? response.pointsEarned ?? 0;
+
+          return this.db
+            .update(assessmentResponses)
+            .set({
+              pointsEarned: nextPointsEarned,
+            })
+            .where(eq(assessmentResponses.id, response.id));
+        }),
+      );
+
+      const earnedPoints = (attempt.responses ?? []).reduce(
+        (total, response) =>
+          total +
+          (overrideMap.get(response.questionId) ?? response.pointsEarned ?? 0),
+        0,
+      );
+      const totalAssessmentPoints = Math.max(
+        attempt.assessment?.totalPoints ??
+          (attempt.assessment?.questions ?? []).reduce(
+            (sumPoints, question) => sumPoints + (question.points ?? 0),
+            0,
+          ),
+        1,
+      );
+
+      score = Math.round((earnedPoints / totalAssessmentPoints) * 100);
+      passed = score >= (attempt.assessment?.passingScore || 60);
+      directScore = null;
+      rubricScores = [];
+
+      this.emitSubmissionEvent(
+        attempt.assessmentId,
+        attempt.studentId,
+        earnedPoints,
+        totalAssessmentPoints,
+        attempt.assessment?.classRecordCategory ?? undefined,
+        attempt.assessment?.quarter ?? undefined,
+      );
     }
 
     const [updated] = await this.db
@@ -4347,8 +4782,101 @@ export class AssessmentsService {
         assessmentId: attempt.assessmentId,
         classId: attempt.assessment?.classId ?? null,
         studentId: attempt.studentId,
+        attemptNumber: attempt.attemptNumber,
         score: updated.score,
         passed: updated.passed,
+        manualResponseScores: dto.manualResponseScores ?? [],
+      },
+    });
+
+    return updated;
+  }
+
+  async unreturnGrade(attemptId: string, currentUser: any) {
+    const userId = this.getUserId(currentUser);
+    const role = this.getUserRole(currentUser);
+
+    if (!userId) {
+      throw new ForbiddenException('Invalid user context');
+    }
+
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.id, attemptId),
+      with: {
+        assessment: {
+          with: {
+            class: {
+              columns: {
+                teacherId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
+    }
+
+    if (!attempt.isSubmitted) {
+      throw new BadRequestException(
+        'Cannot undo a grade for an unsubmitted attempt',
+      );
+    }
+
+    if (!attempt.isReturned) {
+      throw new BadRequestException('This attempt has no posted grade to undo');
+    }
+
+    if (role === 'teacher' && attempt.assessment?.class?.teacherId !== userId) {
+      throw new ForbiddenException(
+        'You can only undo grades for your own class assessments',
+      );
+    }
+
+    if (attempt.assessment?.type === AssessmentType.FILE_UPLOAD) {
+      const latestSubmittedAttempt =
+        await this.db.query.assessmentAttempts.findFirst({
+          where: and(
+            eq(assessmentAttempts.assessmentId, attempt.assessmentId),
+            eq(assessmentAttempts.studentId, attempt.studentId),
+            eq(assessmentAttempts.isSubmitted, true),
+          ),
+          orderBy: (a, { desc: d }) => [d(a.submittedAt), d(a.updatedAt)],
+        });
+
+      if (
+        latestSubmittedAttempt &&
+        latestSubmittedAttempt.id !== attempt.id
+      ) {
+        throw new BadRequestException(
+          'Only the latest file upload submission can have its posted grade undone',
+        );
+      }
+    }
+
+    const [updated] = await this.db
+      .update(assessmentAttempts)
+      .set({
+        isReturned: false,
+        returnedAt: null,
+      })
+      .where(eq(assessmentAttempts.id, attemptId))
+      .returning();
+
+    await this.auditService.log({
+      actorId: userId,
+      action: 'assessment.grade.unreturned',
+      targetType: 'assessment_attempt',
+      targetId: attemptId,
+      metadata: {
+        assessmentId: attempt.assessmentId,
+        classId: attempt.assessment?.classId ?? null,
+        studentId: attempt.studentId,
+        attemptNumber: attempt.attemptNumber,
+        score: attempt.score,
+        passed: attempt.passed,
       },
     });
 
@@ -4407,6 +4935,30 @@ export class AssessmentsService {
       .returning();
 
     if (results.length > 0) {
+      const selectedAttemptMap = new Map(
+        selectedAttempts.map((attempt) => [attempt.id, attempt]),
+      );
+
+      for (const result of results) {
+        const sourceAttempt = selectedAttemptMap.get(result.id);
+        await this.auditService.log({
+          actorId: userId,
+          action: 'assessment.grade.returned',
+          targetType: 'assessment_attempt',
+          targetId: result.id,
+          metadata: {
+            assessmentId: result.assessmentId ?? sourceAttempt?.assessmentId,
+            classId: sourceAttempt?.assessment?.classId ?? null,
+            studentId: result.studentId ?? sourceAttempt?.studentId,
+            attemptNumber:
+              result.attemptNumber ?? sourceAttempt?.attemptNumber,
+            score: result.score ?? sourceAttempt?.score,
+            passed: result.passed ?? sourceAttempt?.passed,
+            bulk: true,
+          },
+        });
+      }
+
       await this.auditService.log({
         actorId: userId,
         action: 'assessment.grades.bulk_returned',
@@ -4589,6 +5141,24 @@ export class AssessmentsService {
         ),
       )
       .returning();
+
+    for (const result of results) {
+      await this.auditService.log({
+        actorId: userId,
+        action: 'assessment.grade.returned',
+        targetType: 'assessment_attempt',
+        targetId: result.id,
+        metadata: {
+          assessmentId: result.assessmentId,
+          classId: assessment.classId,
+          studentId: result.studentId,
+          attemptNumber: result.attemptNumber,
+          score: result.score,
+          passed: result.passed,
+          bulk: true,
+        },
+      });
+    }
 
     await this.auditService.log({
       actorId: userId,

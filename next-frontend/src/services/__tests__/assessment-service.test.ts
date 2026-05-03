@@ -130,4 +130,25 @@ describe('assessmentService', () => {
     expect(createObjectURL).toHaveBeenCalled();
     expect(open).toHaveBeenCalledWith('blob:url', '_blank', 'noopener,noreferrer');
   });
+
+  it('opens a specific submission attachment file when a file id is provided', async () => {
+    open.mockReturnValue({});
+    mockedApi.get.mockResolvedValue({
+      data: new Blob(['content']),
+      headers: {
+        'content-disposition': 'inline; filename="submission-2.pdf"',
+      },
+    });
+
+    await assessmentService.openAttemptSubmissionFile('attempt-1', 'submission-2.pdf', 'file-2');
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/assessments/attempts/attempt-1/submission-files/file-2/download',
+      {
+        responseType: 'blob',
+      },
+    );
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith('blob:url', '_blank', 'noopener,noreferrer');
+  });
 });

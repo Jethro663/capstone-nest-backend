@@ -32,7 +32,39 @@
 .teacher-class-workspace__hero-row {
   display: flex;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 0.9rem;
+  width: 100%;
+}
+
+.teacher-class-workspace__hero-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.teacher-class-workspace__hero-actions {
+  margin-left: auto;
+  margin-top: 0;
+}
+
+.teacher-class-help-button {
+  border: 1px solid rgba(178, 203, 236, 0.6) !important;
+  color: #deebff;
+  background: rgba(233, 241, 254, 0.16);
+  border-radius: 999px;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.teacher-class-help-button:hover,
+.teacher-class-help-button:focus-visible {
+  color: #f7fbff;
+  background: rgba(220, 232, 253, 0.32);
+  outline: none;
+  border-color: rgba(226, 236, 252, 0.9);
 }
 
 .teacher-class-workspace__hero-icon {
