@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -12,6 +12,7 @@ import {
   EyeOff,
   FileText,
   FolderOpen,
+  CircleHelp,
   GripVertical,
   Layers3,
   Lock,
@@ -143,6 +144,418 @@ const TAB_ITEMS: Array<{ key: ModuleTab; label: string; icon: typeof Layers3 }> 
   { key: 'locking', label: 'Locking', icon: Lock },
   { key: 'notes', label: 'Notes', icon: NotebookPen },
 ];
+
+const teacherModuleGuideDialogStyle = {
+  '--intervention-border': '#dbe2ec',
+  '--intervention-border-soft': '#edf1f6',
+  '--intervention-muted': '#637083',
+  '--intervention-strong': '#111827',
+  '--intervention-red': '#a32d2d',
+  '--intervention-red-soft': '#fcebeb',
+} as CSSProperties;
+
+type TeacherModuleGuideScreen = 'header' | 'sections' | 'blocks' | 'visibility' | 'locking' | 'notes';
+type GuidePinProps = {
+  children: string;
+  lineSide: 'left' | 'right';
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+const teacherModuleGuidePages: Array<{
+  title: string;
+  description: string;
+  screen: TeacherModuleGuideScreen;
+  reminder: string;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start from the module header',
+    description:
+      'The top section confirms module identity, visibility, lock state, and where this module sits in the class.',
+    screen: 'header',
+    reminder: 'Keep this header visible while jumping across sections and settings for this module.',
+    steps: [
+      {
+        action: 'Read',
+        body: 'Check the title, class relationship, lesson count, and schedule summary.',
+      },
+      {
+        action: 'Return',
+        body: 'Use Back to Class whenever you need to switch to another module quickly.',
+      },
+      {
+        action: 'Open help',
+        body: 'Tap this guide button anytime you need reminders about module workflow.',
+      },
+    ],
+  },
+  {
+    title: 'Build sections first',
+    description:
+      'Sections are containers for lessons, assessments, and resources. Start by creating clear learning blocks.',
+    screen: 'sections',
+    reminder: 'Core modules from templates may be locked by design; edit in template mode for deep structure changes.',
+    steps: [
+      {
+        action: 'Create',
+        body: 'Add a section title and save each unit of the module in order.',
+      },
+      {
+        action: 'Name clearly',
+        body: 'Use stable section names to match your teaching sequence.',
+      },
+      {
+        action: 'Order',
+        body: 'Drag the handle to reorder sections after the draft structure is in place.',
+      },
+    ],
+  },
+  {
+    title: 'Attach and manage module blocks',
+    description: 'Use Add Block on a section to attach lesson, assessment, or PDF blocks.',
+    screen: 'blocks',
+    reminder: 'Keep section blocks consistent: lessons, assessments, then references for a readable learner flow.',
+    steps: [
+      {
+        action: 'Add',
+        body: 'Click Add Block and choose Lesson, Assessment, or PDF.',
+      },
+      {
+        action: 'Verify',
+        body: 'Use Give and Hide controls to control what each block shows to students.',
+      },
+      {
+        action: 'Open',
+        body: 'Use View Content for quick read-only review of attached assessments and lessons.',
+      },
+    ],
+  },
+  {
+    title: 'Choose whether students can see this module',
+    description:
+      'Visibility controls determine whether students can open a module in their course path.',
+    screen: 'visibility',
+    reminder: 'Only use Unhidden once your first teaching cycle starts.',
+    steps: [
+      {
+        action: 'Hide',
+        body: 'Mark this module hidden while it is still in draft.',
+      },
+      {
+        action: 'Show',
+        body: 'Set visible when materials and items are ready to publish.',
+      },
+      {
+        action: 'Save',
+        body: 'The visibility toggle updates instantly after you choose the option.',
+      },
+    ],
+  },
+  {
+    title: 'Control release through locking',
+    description:
+      'Locking blocks student access without changing content visibility for teachers.',
+    screen: 'locking',
+    reminder: 'Use locking for staged release and readiness checks before assessments open.',
+    steps: [
+      {
+        action: 'Unlock',
+        body: 'Unlock to allow students to use module items from this tab.',
+      },
+      {
+        action: 'Lock',
+        body: 'Lock to pause access without deleting assignments or materials.',
+      },
+      {
+        action: 'Release core',
+        body: 'For template modules, release the default module only after template-level changes are done.',
+      },
+      {
+        action: 'Avoid confusion',
+        body: 'Changing lock state is immediate; make sure students have your intended sequence first.',
+        tone: 'caution',
+      },
+    ],
+  },
+  {
+    title: 'Use private module notes for pacing',
+    description: 'Notes help you keep reminders for this module without affecting learner-facing content.',
+    screen: 'notes',
+    reminder: 'Notes save your internal plan; students do not see this text.',
+    steps: [
+      {
+        action: 'Edit',
+        body: 'Write pacing cues, pacing targets, or reminders in rich text.',
+      },
+      {
+        action: 'Save',
+        body: 'Save your notes after edits so they are available on return.',
+      },
+      {
+        action: 'Protect',
+        body: 'Keep sensitive comments out because these notes are not learner-visible.',
+      },
+    ],
+  },
+];
+
+function GuidePin({ children, lineSide, lineWidth, style }: GuidePinProps) {
+  return (
+    <em
+      className="pointer-events-none absolute z-10 inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
+            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+        }
+      />
+    </em>
+  );
+}
+
+function TeacherModuleGuideScreenshot({ screen }: { screen: TeacherModuleGuideScreen }) {
+  if (screen === 'header') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module header screenshot"
+      >
+        <div className="absolute inset-x-0 top-0 flex h-8 items-center gap-1 border-b border-[#edf1f6] bg-white px-3">
+          <span className="h-2 w-2 rounded-full bg-[#f87171]" />
+          <span className="h-2 w-2 rounded-full bg-[#fbbf24]" />
+          <span className="h-2 w-2 rounded-full bg-[#34d399]" />
+        </div>
+        <div className="rounded-xl border border-[#1d3659] bg-[#10254a] p-4 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="text-[1.05rem] font-black leading-tight">Module 1: Foundations</h3>
+              <p className="mt-2 text-sm text-[#b6c8df]">Science 7 • Week 1 • 2 lessons • 1 assessment</p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#284269] bg-[#17345d]"
+              aria-label="Module help"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-2 rounded-lg border border-[#263e62] bg-[#17345d] px-2 py-1 text-xs">
+            Lesson count, assessment count, and schedule summary
+          </p>
+        </div>
+
+        <GuidePin lineSide="left" lineWidth="7rem" style={{ right: '1rem', top: '1.6rem' }}>
+          Module help
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1rem', top: '8.2rem' }}>
+          Back to Class
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '10rem' }}>
+          Visibility and lock status
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'sections') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module sections screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="flex items-center justify-between gap-2">
+            <strong className="text-lg font-black text-[#111827]">Sections</strong>
+            <span className="rounded-full border border-[#e8eff7] bg-[#f8fbfe] px-2 py-1 text-[0.72rem] font-black text-[#4f6694]">
+              1 section
+            </span>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <span className="h-10 flex-1 rounded-lg border border-[#d6deea] bg-[#f8fbfe] px-3 py-2 text-sm text-[#6f819f]">
+              Add section title
+            </span>
+            <button
+              type="button"
+              className="inline-flex h-10 min-w-20 items-center justify-center rounded-full bg-[#c9252d] px-3 text-sm font-black text-white"
+            >
+              Add Section
+            </button>
+          </div>
+          <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="flex items-center justify-between">
+              <strong className="text-sm font-black text-[#143155]">Section A: Warm-up</strong>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.56rem] font-black text-[#4a648a]">
+                2 items
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-[#60789a]">Drag by handle to reorder sections.</p>
+          </div>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.3rem" style={{ left: '1rem', top: '2.1rem' }}>
+          Sections tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ right: '0.7rem', top: '6.2rem' }}>
+          Add Section
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5.4rem" style={{ left: '1rem', top: '6.8rem' }}>
+          Section row and controls
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'blocks') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module blocks screenshot"
+      >
+        <div className="rounded-xl border border-[#d8d5cf] bg-white p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <strong className="text-sm font-black text-[#143155]">Section A: Warm-up</strong>
+            <button
+              type="button"
+              className="inline-flex h-8 min-w-24 items-center justify-center rounded-full bg-[#c9252d] px-3 py-1 text-xs font-black text-white"
+            >
+              Add Block
+            </button>
+          </div>
+          <div className="mt-2 rounded-lg border border-[#e2dad3] bg-[#fffdfa] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-black text-[#143155]">Lesson: Intro Activity</span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.58rem] font-black text-[#4a648a]">
+                Draft
+              </span>
+            </div>
+            <div className="mt-2 inline-flex items-center gap-2">
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Give
+              </span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Hide
+              </span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                View Content
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <GuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '1rem', top: '2.05rem' }}>
+          Add Block button
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '6.2rem' }}>
+          Lesson row
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.9rem" style={{ right: '1rem', top: '7.2rem' }}>
+          Give, Hide, View content
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'visibility') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module visibility screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <p className="mb-2 text-sm text-[#556986]">Visibility</p>
+          <div className="grid gap-2">
+            <span className="rounded-lg border border-[#95dbb0] bg-[#f1fbf4] px-3 py-2 text-sm font-black text-[#157845]">
+              Visible
+            </span>
+            <span className="rounded-lg border border-[#d8e2ef] bg-[#fffdfa] px-3 py-2 text-sm font-black text-[#4f688d]">
+              Hidden
+            </span>
+          </div>
+          <p className="mt-3 text-xs text-[#5f7698]">Default: Visible</p>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.6rem" style={{ left: '1rem', top: '1rem' }}>
+          Visibility tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '1rem', top: '5.8rem' }}>
+          Select visibility state
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'locking') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module locking screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <p className="mb-2 text-sm text-[#556986]">Locking</p>
+          <div className="grid gap-2">
+            <span className="rounded-lg border border-[#95dbb0] bg-[#f1fbf4] px-3 py-2 text-sm font-black text-[#157845]">
+              Unlocked
+            </span>
+            <span className="rounded-lg border border-[#f2dd9d] bg-[#fff7df] px-3 py-2 text-sm font-black text-[#8b6a00]">
+              Locked
+            </span>
+          </div>
+          <p className="mt-3 text-xs text-[#5f7698]">Default behavior: unlocked</p>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.8rem" style={{ left: '1rem', top: '1.1rem' }}>
+          Locking tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="5rem" style={{ left: '1rem', top: '6.1rem' }}>
+          Choose unlocked or locked
+        </GuidePin>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+      aria-label="module notes screenshot"
+    >
+      <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <strong className="text-sm font-black text-[#143155]">Module Notes</strong>
+          <span className="rounded-full border border-[#d8e2ef] bg-[#fffdfa] px-2 py-1 text-xs font-black text-[#4f688d]">
+            Private
+          </span>
+        </div>
+        <span className="block h-16 w-full rounded-lg border border-[#d4deed] bg-[#f9fbff] p-2 text-xs text-[#60789a]">
+          Write reminders here
+        </span>
+        <button
+          type="button"
+          className="mt-2 inline-flex h-10 min-w-28 items-center justify-center rounded-full bg-[#c9252d] px-3 py-1 text-sm font-black text-white"
+        >
+          Save Notes
+        </button>
+      </div>
+
+      <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '1.1rem' }}>
+        Private notes
+      </GuidePin>
+      <GuidePin lineSide="left" lineWidth="4.6rem" style={{ right: '1rem', top: '5.5rem' }}>
+        Save notes
+      </GuidePin>
+    </div>
+  );
+}
 
 function toParamValue(input: string | string[] | undefined) {
   if (Array.isArray(input)) return input[0] || '';
@@ -298,6 +711,8 @@ export default function TeacherModuleDetailPage() {
     lessonPoints: '0',
     file: null,
   });
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState('');
@@ -407,6 +822,8 @@ export default function TeacherModuleDetailPage() {
       : attachState.itemType === null
         ? false
         : false;
+
+  const activeGuidePage = teacherModuleGuidePages[helpPage] ?? teacherModuleGuidePages[0];
 
   useEffect(() => {
     if (!attachState.open) return;
@@ -913,6 +1330,17 @@ export default function TeacherModuleDetailPage() {
   return (
     <div className="teacher-module-detail">
       <header className="teacher-module-detail__hero">
+        <button
+          type="button"
+          className="teacher-module-detail__hero-help"
+          onClick={() => {
+            setHelpPage(0);
+            setHelpOpen(true);
+          }}
+          aria-label="Module help"
+        >
+          <CircleHelp className="h-4 w-4" />
+        </button>
         <Link href={`/dashboard/teacher/classes/${classId}`} className="teacher-module-detail__back">
           <ArrowLeft className="h-4 w-4" />
           Back to Class
@@ -1848,6 +2276,102 @@ export default function TeacherModuleDetailPage() {
             >
               {attachingItem ? 'Attaching...' : 'Add Block'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) {
+            setHelpPage(0);
+          }
+        }}
+      >
+        <DialogContent
+          className="teacher-intervention-workspace__manual-dialog"
+          style={teacherModuleGuideDialogStyle}
+        >
+          <DialogHeader>
+            <DialogTitle>Teacher guide: Module Workspace</DialogTitle>
+            <DialogDescription>
+              Read this guide one page at a time. Each screenshot points to the core controls for this module page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {teacherModuleGuidePages.length}</span>
+            <div>
+              {teacherModuleGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <TeacherModuleGuideScreenshot screen={activeGuidePage.screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Module workspace walkthrough</p>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+              <div className="route-guide-steps grid gap-3">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${step.action}-${step.body}`}
+                    className={`route-guide-step grid grid-cols-[1.9rem_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[#edf1f6] border-l-[3px] bg-white p-3 shadow-sm ${
+                      step.tone === 'caution' ? 'is-caution' : ''
+                    }`}
+                  >
+                    <span
+                      className={`route-guide-step__index inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white ${
+                        step.tone === 'caution' ? 'bg-[#b7791f]' : 'bg-[#a32d2d]'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <strong className="block text-sm font-black text-[#111827]">{step.action}</strong>
+                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <div className="teacher-intervention-workspace__manual-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                disabled={helpPage === 0}
+              >
+                Previous page
+              </Button>
+              {helpPage < teacherModuleGuidePages.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setHelpPage((current) => Math.min(current + 1, teacherModuleGuidePages.length - 1))
+                  }
+                >
+                  Next page
+                </Button>
+              ) : (
+                <Button type="button" onClick={() => setHelpOpen(false)}>
+                  Close guide
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

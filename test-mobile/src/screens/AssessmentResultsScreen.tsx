@@ -1,12 +1,215 @@
+import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
-import { Card, GradientHeader, Pill, Refreshable, ScreenScroll } from "../components/ui/primitives";
-import { peekAppError } from "../api/http";
+import { peekAppError, toAppError } from "../api/http";
 import { useAssessmentResult } from "../api/hooks";
+import { assessmentsApi } from "../api/services/assessments";
 import type { RootStackParamList } from "../navigation/types";
-import { colors, gradients } from "../theme/tokens";
+import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
+import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AssessmentResults">;
+type Tone = "blue" | "green" | "amber" | "red" | "purple";
+
+function resolveToneStyle(tone: Tone) {
+  return {
+    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    green: { backgroundColor: theme.greenSoft, color: theme.green },
+    amber: { backgroundColor: theme.amberSoft, color: theme.amber },
+    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
+  }[tone];
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes || bytes <= 0) return "Unknown size";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function isImageFile(file?: {
+  mimeType?: string | null;
+  originalName?: string | null;
+} | null) {
+  const mimeType = (file?.mimeType || "").toLowerCase();
+  if (mimeType.startsWith("image/")) {
+    return true;
+  }
+
+  const extension = (file?.originalName || "").split(".").pop()?.toLowerCase();
+  return ["png", "jpg", "jpeg", "webp", "gif", "bmp"].includes(extension || "");
+}
+
+function DarkPanel({ children }: { children: ReactNode }) {
+  return (
+    <View
+      style={{
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function ToneTag({ label, tone }: { label: string; tone: Tone }) {
+  const toneStyle = resolveToneStyle(tone);
+
+  return (
+    <View
+      style={{
+        borderRadius: 999,
+        backgroundColor: toneStyle.backgroundColor,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>{label}</Text>
+    </View>
+  );
+}
+
+function ActionButton({
+  label,
+  onPress,
+  variant = "primary",
+  disabled = false,
+  compact = false,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: "primary" | "secondary" | "ghost";
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  const primary = variant === "primary";
+  const ghost = variant === "ghost";
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        borderRadius: 12,
+        borderWidth: primary || ghost ? 0 : 1,
+        borderColor: ghost ? "transparent" : primary ? "transparent" : theme.border,
+        backgroundColor: disabled
+          ? theme.active
+          : primary
+            ? theme.red
+            : ghost
+              ? theme.active
+              : theme.surface,
+        paddingHorizontal: compact ? 12 : 14,
+        paddingVertical: compact ? 9 : 11,
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: compact ? 11 : 12,
+          fontWeight: "800",
+          color: disabled ? theme.muted : primary ? "#FFFFFF" : theme.text,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function MetricTile({
+  eyebrow,
+  value,
+  caption,
+  tone = "blue",
+}: {
+  eyebrow: string;
+  value: string;
+  caption: string;
+  tone?: Tone;
+}) {
+  const toneStyle = resolveToneStyle(tone);
+
+  return (
+    <View
+      style={{
+        minWidth: 130,
+        flex: 1,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.active,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>{eyebrow}</Text>
+      <Text style={{ marginTop: 8, fontSize: 24, lineHeight: 28, fontWeight: "900", color: toneStyle.color }}>
+        {value}
+      </Text>
+      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: "#BDBDBD" }}>{caption}</Text>
+    </View>
+  );
+}
+
+function FileRow({
+  file,
+  actions,
+}: {
+  file: {
+    id: string;
+    originalName?: string | null;
+    mimeType?: string | null;
+    sizeBytes?: number | null;
+  };
+  actions?: ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.active,
+        paddingHorizontal: 12,
+        paddingVertical: 11,
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <View
+          style={{
+            width: 34,
+            height: 34,
+            borderRadius: 9,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.blueSoft,
+          }}
+        >
+          <MaterialCommunityIcons name="paperclip" size={15} color="#6AABFF" />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
+            {file.originalName || "Attachment"}
+          </Text>
+          <Text numberOfLines={1} style={{ marginTop: 2, fontSize: 10, color: theme.muted }}>
+            {[formatFileSize(file.sizeBytes), file.mimeType || null].filter(Boolean).join(" • ")}
+          </Text>
+        </View>
+      </View>
+      {actions ? <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{actions}</View> : null}
+    </View>
+  );
+}
 
 function formatAnswer(response: {
   studentAnswer?: string;
@@ -29,7 +232,7 @@ function formatAnswer(response: {
   }
 
   if (response.studentAnswer?.trim()) {
-    return response.studentAnswer;
+    return stripRichText(response.studentAnswer);
   }
 
   return "No recorded response";
@@ -38,10 +241,17 @@ function formatAnswer(response: {
 export function AssessmentResultsScreen({ route, navigation }: Props) {
   const resultQuery = useAssessmentResult(route.params.attemptId);
   const result = resultQuery.data;
-  const resultAssessment = (result as { assessment?: { id?: string } } | undefined)?.assessment;
   const assessmentId =
     (route.params as { assessmentId?: string }).assessmentId ||
     result?.attempt?.assessmentId;
+  const [notice, setNotice] = useState("");
+  const [busyAction, setBusyAction] = useState("");
+
+  const submittedFiles = useMemo(
+    () => (result?.submittedFiles?.length ? result.submittedFiles : result?.submittedFile ? [result.submittedFile] : []),
+    [result?.submittedFile, result?.submittedFiles],
+  );
+  const isFileUploadAssessment = result?.assessment?.type === "file_upload";
 
   const openAssessment = () => {
     if (!assessmentId) {
@@ -58,8 +268,24 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
     navigation.navigate("AssessmentHistory", assessmentId ? { assessmentId } : undefined);
   };
 
+  const runFileAction = async (key: string, action: () => Promise<void>, successMessage?: string) => {
+    try {
+      setBusyAction(key);
+      setNotice("");
+      await action();
+      if (successMessage) {
+        setNotice(successMessage);
+      }
+    } catch (rawError) {
+      setNotice(toAppError(rawError).message);
+    } finally {
+      setBusyAction("");
+    }
+  };
+
   return (
     <ScreenScroll
+      backgroundColor={theme.bg}
       refreshControl={
         <Refreshable
           refreshing={resultQuery.isRefetching}
@@ -69,158 +295,280 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
         />
       }
     >
-      <GradientHeader
-        colors={gradients.progress}
-        eyebrow="Assessment Result"
-        title={result ? `Attempt #${result.attemptNumber ?? result.attempt?.attemptNumber ?? "?"}` : "Loading..."}
-      >
-        <Text style={{ marginTop: 12, color: "rgba(255,255,255,0.88)", fontSize: 12 }}>
-          Review your score, feedback, and next steps.
-        </Text>
-      </GradientHeader>
+      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.active,
+              }}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Assessment Result</Text>
+              <Text style={{ marginTop: 4, color: theme.text, fontSize: 28, fontWeight: "800" }}>
+                {result ? `Attempt #${result.attemptNumber ?? result.attempt?.attemptNumber ?? "?"}` : "Loading..."}
+              </Text>
+            </View>
+            {result ? (
+              <ToneTag
+                label={result.isReturned === false ? "Pending" : result.passed ? "Passed" : "Needs Work"}
+                tone={result.isReturned === false ? "amber" : result.passed ? "green" : "red"}
+              />
+            ) : null}
+          </View>
+        </View>
+      </View>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
         {resultQuery.error ? (
-          <Card>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+          <DarkPanel>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>
               Unable to load this attempt
             </Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
               {peekAppError(resultQuery.error).message}
             </Text>
-          </Card>
+          </DarkPanel>
+        ) : null}
+
+        {notice ? (
+          <DarkPanel>
+            <Text style={{ fontSize: 12, lineHeight: 18, color: theme.text }}>{notice}</Text>
+          </DarkPanel>
         ) : null}
 
         {!result ? (
-          <Card>
-            <Text style={{ color: colors.textSecondary }}>Loading attempt result...</Text>
-          </Card>
+          <DarkPanel>
+            <Text style={{ color: theme.muted }}>Loading attempt result...</Text>
+          </DarkPanel>
         ) : result.isReturned === false ? (
-          <Card>
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>Submission Status</Text>
-            <Text style={{ marginTop: 6, fontSize: 24, fontWeight: "900", color: colors.text }}>
-              Awaiting Teacher Review
-            </Text>
-            <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-              Your submission is recorded. Results and teacher feedback will appear here once they are returned.
-            </Text>
-            <View style={{ marginTop: 14, flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-              <Pressable
-                onPress={openAssessment}
-                style={{
-                  borderRadius: 16,
-                  backgroundColor: colors.text,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                }}
-              >
-                <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Back to Assessment</Text>
-              </Pressable>
-              <Pressable
-                onPress={openHistory}
-                style={{
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  backgroundColor: colors.white,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                }}
-              >
-                <Text style={{ color: colors.text, fontSize: 13, fontWeight: "800" }}>Open History</Text>
-              </Pressable>
-            </View>
-          </Card>
+          <>
+            <DarkPanel>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Submission Status</Text>
+              <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
+                Awaiting Teacher Review
+              </Text>
+              <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+                Your submission is recorded. Results and teacher feedback will appear here once they are returned.
+              </Text>
+              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <ActionButton label="Back to Assessment" onPress={openAssessment} />
+                {!isFileUploadAssessment ? (
+                  <ActionButton label="Open History" onPress={openHistory} variant="secondary" />
+                ) : null}
+              </View>
+            </DarkPanel>
+
+            {isFileUploadAssessment && submittedFiles.length > 0 ? (
+              <DarkPanel>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Your submission files</Text>
+                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>
+                  Review the files currently included in this upload.
+                </Text>
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  {submittedFiles.map((file) => (
+                    <FileRow
+                      key={file.id}
+                      file={file}
+                      actions={
+                        <>
+                          {isImageFile(file) ? (
+                            <ActionButton
+                              label="Open"
+                              compact
+                              variant="ghost"
+                              disabled={busyAction === `open-${file.id}`}
+                              onPress={() =>
+                                void runFileAction(
+                                  `open-${file.id}`,
+                                  () =>
+                                    assessmentsApi.openAttemptSubmissionAttachmentFile(
+                                      route.params.attemptId,
+                                      file.id,
+                                      file.originalName || "submission-file",
+                                    ).then(() => undefined),
+                                )
+                              }
+                            />
+                          ) : null}
+                          <ActionButton
+                            label="Download"
+                            compact
+                            variant="secondary"
+                            disabled={busyAction === `download-${file.id}`}
+                            onPress={() =>
+                              void runFileAction(
+                                `download-${file.id}`,
+                                () =>
+                                  assessmentsApi.downloadAttemptSubmissionAttachmentFile(
+                                    route.params.attemptId,
+                                    file.id,
+                                    file.originalName || "submission-file",
+                                  ).then(() => undefined),
+                                "Submission file saved to this device.",
+                              )
+                            }
+                          />
+                        </>
+                      }
+                    />
+                  ))}
+                </View>
+              </DarkPanel>
+            ) : null}
+          </>
         ) : (
           <>
-            <Card>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>Score</Text>
-              <Text style={{ marginTop: 4, fontSize: 32, fontWeight: "900", color: colors.text }}>
-                {Math.round(result.score ?? 0)}
+            <DarkPanel>
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted }}>Assessment Result</Text>
+              <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
+                {result.assessment?.title || "Assessment"}
               </Text>
-              <View style={{ marginTop: 10, flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                <Pill
-                  label={result.passed ? "Passed" : "Needs Review"}
-                  backgroundColor={result.passed ? colors.paleGreen : colors.paleRed}
-                  color={result.passed ? colors.green : colors.red}
+              <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+                Review your score, teacher feedback, and the files or answers attached to this attempt.
+              </Text>
+
+              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <MetricTile
+                  eyebrow="SCORE"
+                  value={`${Math.round(result.score ?? 0)}%`}
+                  caption={result.passed ? "You met the passing requirement." : "You still need improvement."}
+                  tone={result.passed ? "green" : "amber"}
                 />
-                <Pill
-                  label={result.isReturned ? "Returned" : "Recorded"}
-                  backgroundColor={colors.paleBlue}
-                  color={colors.blueDeep}
+                <MetricTile
+                  eyebrow="STATUS"
+                  value={result.passed ? "Pass" : "Review"}
+                  caption={result.isReturned ? "Teacher has already returned this attempt." : "Recorded in the system."}
+                  tone={result.passed ? "green" : "red"}
+                />
+                <MetricTile
+                  eyebrow="ATTEMPT"
+                  value={`#${result.attemptNumber ?? result.attempt?.attemptNumber ?? "?"}`}
+                  caption="This is the attempt number for the returned result."
+                  tone="purple"
                 />
               </View>
+
               {result.teacherFeedback ? (
-                <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
-                  Teacher feedback: {result.teacherFeedback}
+                <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+                  Teacher feedback: <Text style={{ color: theme.text }}>{result.teacherFeedback}</Text>
                 </Text>
               ) : null}
-              <View style={{ marginTop: 14, flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-                <Pressable
-                  onPress={openAssessment}
-                  style={{
-                    borderRadius: 16,
-                    backgroundColor: colors.text,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                  }}
-                >
-                  <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Back to Assessment</Text>
-                </Pressable>
-                <Pressable
-                  onPress={openHistory}
-                  style={{
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.white,
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                  }}
-                >
-                  <Text style={{ color: colors.text, fontSize: 13, fontWeight: "800" }}>Open History</Text>
-                </Pressable>
+
+              <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <ActionButton label="Back to Assessment" onPress={openAssessment} />
+                {!isFileUploadAssessment ? (
+                  <ActionButton label="Open History" onPress={openHistory} variant="secondary" />
+                ) : null}
               </View>
-            </Card>
+            </DarkPanel>
 
-            {result.responses.map((response, index) => {
-              const correctAnswer = response.question?.options
-                ?.filter((option) => option.isCorrect)
-                .map((option) => option.text)
-                .join(", ");
+            {isFileUploadAssessment ? (
+              <DarkPanel>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Submitted files</Text>
+                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>
+                  Files that were included when this upload was reviewed.
+                </Text>
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  {submittedFiles.length > 0 ? (
+                    submittedFiles.map((file) => (
+                      <FileRow
+                        key={file.id}
+                        file={file}
+                        actions={
+                          <>
+                            {isImageFile(file) ? (
+                              <ActionButton
+                                label="Open"
+                                compact
+                                variant="ghost"
+                                disabled={busyAction === `open-${file.id}`}
+                                onPress={() =>
+                                  void runFileAction(
+                                    `open-${file.id}`,
+                                    () =>
+                                      assessmentsApi.openAttemptSubmissionAttachmentFile(
+                                        route.params.attemptId,
+                                        file.id,
+                                        file.originalName || "submission-file",
+                                      ).then(() => undefined),
+                                  )
+                                }
+                              />
+                            ) : null}
+                            <ActionButton
+                              label="Download"
+                              compact
+                              variant="secondary"
+                              disabled={busyAction === `download-${file.id}`}
+                              onPress={() =>
+                                void runFileAction(
+                                  `download-${file.id}`,
+                                  () =>
+                                    assessmentsApi.downloadAttemptSubmissionAttachmentFile(
+                                      route.params.attemptId,
+                                      file.id,
+                                      file.originalName || "submission-file",
+                                    ).then(() => undefined),
+                                  "Submission file saved to this device.",
+                                )
+                              }
+                            />
+                          </>
+                        }
+                      />
+                    ))
+                  ) : (
+                    <Text style={{ fontSize: 12, lineHeight: 18, color: theme.muted }}>
+                      No submission files were attached to this result.
+                    </Text>
+                  )}
+                </View>
+              </DarkPanel>
+            ) : (
+              result.responses.map((response, index) => {
+                const correctAnswer = response.question?.options
+                  ?.filter((option) => option.isCorrect)
+                  .map((option) => option.text)
+                  .join(", ");
 
-              return (
-                <Card key={`${response.questionId}-${index}`}>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Question {index + 1}</Text>
-                  <Text style={{ marginTop: 6, fontSize: 14, fontWeight: "800", color: colors.text }}>
-                    {response.question?.content || "Question content unavailable"}
-                  </Text>
-                  <Text style={{ marginTop: 10, fontSize: 12, color: colors.textSecondary }}>
-                    Your answer: {formatAnswer(response)}
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: response.isCorrect ? colors.green : colors.red,
-                    }}
-                  >
-                    {response.isCorrect ? "Correct enough" : "Needs correction"}
-                  </Text>
-                  {!response.isCorrect && correctAnswer ? (
-                    <Text style={{ marginTop: 8, fontSize: 12, color: colors.textSecondary }}>
-                      Correct answer: {correctAnswer}
+                return (
+                  <DarkPanel key={`${response.questionId}-${index}`}>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <Text style={{ fontSize: 12, color: theme.muted }}>Question {index + 1}</Text>
+                      <ToneTag
+                        label={response.isCorrect ? "Correct enough" : "Needs correction"}
+                        tone={response.isCorrect ? "green" : "red"}
+                      />
+                    </View>
+                    <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, fontWeight: "800", color: theme.text }}>
+                      {stripRichText(response.question?.content || "Question content unavailable")}
                     </Text>
-                  ) : null}
-                  {response.question?.explanation ? (
-                    <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
-                      Explanation: {response.question.explanation}
+                    <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "#BDBDBD" }}>
+                      Your answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
                     </Text>
-                  ) : null}
-                </Card>
-              );
-            })}
+                    {!response.isCorrect && correctAnswer ? (
+                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+                        Correct answer: <Text style={{ color: theme.text }}>{correctAnswer}</Text>
+                      </Text>
+                    ) : null}
+                    {response.question?.explanation ? (
+                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+                        Explanation: <Text style={{ color: theme.text }}>{stripRichText(response.question.explanation)}</Text>
+                      </Text>
+                    ) : null}
+                  </DarkPanel>
+                );
+              })
+            )}
           </>
         )}
       </View>

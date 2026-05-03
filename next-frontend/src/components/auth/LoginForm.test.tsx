@@ -8,6 +8,7 @@ const loginActionMock = jest.fn();
 const validateCredentialsActionMock = jest.fn();
 const setUserMock = jest.fn();
 const toastSuccessMock = jest.fn();
+const usePublicSessionProbeMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -36,6 +37,10 @@ jest.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccessMock(...args),
   },
+}));
+
+jest.mock('@/hooks/usePublicSessionProbe', () => ({
+  usePublicSessionProbe: () => usePublicSessionProbeMock(),
 }));
 
 function createSearchParams(params: Record<string, string> = {}) {
@@ -127,5 +132,13 @@ describe('LoginForm', () => {
         password: '  Test@123 ',
       });
     });
+  });
+
+  it('uses a POST form target so credentials do not fall back into the URL', () => {
+    render(<LoginForm />);
+
+    const form = screen.getByRole('button', { name: /sign in/i }).closest('form');
+    expect(form).toHaveAttribute('method', 'post');
+    expect(form).toHaveAttribute('action', '/login');
   });
 });

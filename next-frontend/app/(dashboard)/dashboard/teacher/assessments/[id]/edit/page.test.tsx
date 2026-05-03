@@ -76,6 +76,7 @@ jest.mock('@/services/class-record-service', () => ({
 const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
 const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
+const LOCAL_DRAFT_KEY = 'teacher-assessment-editor-draft:assessment-1';
 
 function buildAssessment(overrides: Record<string, unknown> = {}) {
   return {
@@ -127,6 +128,7 @@ function buildAssessment(overrides: Record<string, unknown> = {}) {
 describe('AssessmentEditorPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
 
     mockedAssessmentService.getById.mockResolvedValue({
       success: true,
@@ -200,7 +202,7 @@ describe('AssessmentEditorPage', () => {
 
     expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+    fireEvent.click(screen.getByRole('button', { name: /assessment help/i }));
 
     expect(await screen.findByText('Teacher guide: Assessment Setup Workspace')).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 5')).toBeInTheDocument();
@@ -482,7 +484,6 @@ describe('AssessmentEditorPage', () => {
     fireEvent.change(updatedTitleInputs[2], { target: { value: 'Presentation' } });
     fireEvent.change(updatedPointsInputs[2], { target: { value: '1' } });
     expect(updatedPointsInputs[2]).toHaveValue('0');
-    });
   });
 
   it('reorders question cards with the move up and move down buttons', async () => {
@@ -534,3 +535,87 @@ describe('AssessmentEditorPage', () => {
     expect(articlesAfterMoveUp[0]).toHaveTextContent('First question');
     expect(articlesAfterMoveUp[1]).toHaveTextContent('Second question');
   });
+
+  it('writes a local draft snapshot while the teacher edits', async () => {
+    render(<AssessmentEditorPage />);
+
+    const titleInput = (await screen.findAllByDisplayValue('Fractions Checkpoint'))[0];
+    fireEvent.change(titleInput, { target: { value: 'Fractions Checkpoint Updated' } });
+
+    await waitFor(() => {
+      const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
+      expect(raw).not.toBeNull();
+      expect(JSON.parse(raw as string)).toMatchObject({
+        title: 'Fractions Checkpoint Updated',
+      });
+    });
+  });
+
+  it('restores an unsaved local draft after reload instead of dropping question work', async () => {
+    window.localStorage.setItem(
+      LOCAL_DRAFT_KEY,
+      JSON.stringify({
+        title: 'Recovered checkpoint',
+        description: '',
+        questions: [
+          {
+            id: 'temp-question-1',
+            type: 'multiple_choice',
+            content: 'Recovered unsaved question',
+            points: 5,
+            isRequired: true,
+            explanation: '',
+            imageUrl: '',
+            imageDisplayMode: 'default',
+            imageZoom: 100,
+            imagePositionX: 50,
+            imagePositionY: 50,
+            conceptTags: [],
+            fillBlankSmartCaseInsensitive: true,
+            fillBlankExperimentalSmartMatch: false,
+            options: [
+              { id: 'temp-option-1', text: 'Recovered option', isCorrect: true, order: 1 },
+              { id: 'temp-option-2', text: 'Other option', isCorrect: false, order: 2 },
+            ],
+          },
+        ],
+        selectedQuestionId: 'temp-question-1',
+        deletedQuestionIds: ['question-1'],
+        availability: 'draft',
+        resultReleaseMode: 'score_immediately',
+        assessmentType: 'quiz',
+        passingScore: 74,
+        maxAttempts: '1',
+        timeLimitMinutes: '30',
+        dueDate: '',
+        feedbackDelayHours: 0,
+        category: 'written_work',
+        quarter: '',
+        placementMode: 'automatic',
+        selectedSlotId: null,
+        closeWhenDue: false,
+        randomizeQuestions: false,
+        timedQuestionsEnabled: false,
+        questionTimeLimitSeconds: '',
+        strictMode: false,
+        fileUploadInstructions: '',
+        allowedUploadExtensions: ['pdf'],
+        allowedUploadMimeTypes: ['application/pdf'],
+        maxUploadSizeBytes: 10485760,
+        teacherAttachmentFile: null,
+        rubricCriteria: [],
+      }),
+    );
+
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Recovered checkpoint')).length).toBeGreaterThan(0);
+    expect(screen.getByText('Recovered unsaved question')).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        'Recovered unsaved assessment draft from this device',
+      );
+    });
+  });
+});

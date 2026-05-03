@@ -10,6 +10,7 @@ export const studentRouteManifest = {
   stack: [
     "ClassDetail",
     "ModuleDetail",
+    "Calendar",
     "Courses",
     "Lessons",
     "LessonDetail",

@@ -48,4 +48,19 @@ describe('resolvePostLoginDestination', () => {
       '/dashboard/admin',
     );
   });
+
+  it('rejects auth-route and malformed public return paths', () => {
+    expect(resolvePostLoginDestination('teacher', '/login?from=%2Fdashboard')).toBe(
+      '/dashboard/teacher/classes',
+    );
+    expect(resolvePostLoginDestination('teacher', '//evil.example')).toBe(
+      '/dashboard/teacher/classes',
+    );
+  });
+
+  it('preserves the complete-profile route when explicitly requested', () => {
+    expect(resolvePostLoginDestination('student', '/complete-profile')).toBe(
+      '/complete-profile',
+    );
+  });
 });

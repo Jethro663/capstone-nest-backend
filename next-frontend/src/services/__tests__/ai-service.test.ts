@@ -6,6 +6,7 @@ jest.mock('@/lib/api-client', () => ({
     post: jest.fn(),
     get: jest.fn(),
     delete: jest.fn(),
+    patch: jest.fn(),
   },
 }));
 
@@ -129,6 +130,122 @@ describe('aiService', () => {
       status: 'cancelled',
       progressPercent: 100,
     });
+  });
+
+  it('queues lesson plan generation jobs through the teacher job seam', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          jobId: 'job-lesson-1',
+          jobType: 'class_lesson_plan_generation',
+          status: 'pending',
+          progressPercent: 5,
+          statusMessage: 'Queued',
+        },
+      },
+    });
+
+    const result = await aiService.createLessonPlanJob({
+      classId: 'class-1',
+      anchorType: 'lesson',
+      anchorId: 'lesson-1',
+      teacherNote: 'Focus on weak decimal operations.',
+      header: {
+        instructionalFormat: 'Detailed Lesson Plan',
+      },
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/ai/teacher/lesson-plans/jobs',
+      expect.objectContaining({
+        classId: 'class-1',
+        anchorType: 'lesson',
+        anchorId: 'lesson-1',
+      }),
+    );
+    expect(result.data).toMatchObject({
+      jobId: 'job-lesson-1',
+      jobType: 'class_lesson_plan_generation',
+      status: 'pending',
+    });
+  });
+
+  it('normalizes class lesson plan result payloads', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          job: {
+            jobId: 'job-lesson-2',
+            jobType: 'class_lesson_plan_generation',
+            status: 'completed',
+            outputId: 'output-lesson-2',
+          },
+          result: {
+            outputId: 'output-lesson-2',
+            outputType: 'class_lesson_plan',
+            structuredOutput: {
+              classProfile: 'mixed',
+              header: {
+                lessonTitle: 'Fractions and Decimals',
+              },
+              procedures: {
+                review: ['Recall the previous fraction drill.'],
+                application: ['Solve paired board work.'],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const result = await aiService.getLessonPlanJobResult('job-lesson-2');
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/ai/teacher/jobs/job-lesson-2/result');
+    expect(result.data.job.jobType).toBe('class_lesson_plan_generation');
+    expect(result.data.result.outputType).toBe('class_lesson_plan');
+    expect(result.data.result.structuredOutput.header.lessonTitle).toBe(
+      'Fractions and Decimals',
+    );
+  });
+
+  it('saves edited lesson plan drafts', async () => {
+    mockedApi.patch.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          jobId: 'job-lesson-3',
+          jobType: 'class_lesson_plan_generation',
+          status: 'completed',
+          progressPercent: 100,
+          statusMessage: 'Draft saved',
+          outputId: 'output-lesson-3',
+        },
+      },
+    });
+
+    const result = await aiService.updateLessonPlanDraft('job-lesson-3', {
+      structuredOutput: {
+        classProfile: 'struggling',
+        header: {
+          lessonTitle: 'Whole Numbers',
+        },
+      },
+    });
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/ai/teacher/lesson-plans/jobs/job-lesson-3/draft',
+      {
+        structuredOutput: {
+          classProfile: 'struggling',
+          header: {
+            lessonTitle: 'Whole Numbers',
+          },
+        },
+      },
+    );
+    expect(result.data.statusMessage).toBe('Draft saved');
   });
 
   it('normalizes quiz job result payloads', async () => {

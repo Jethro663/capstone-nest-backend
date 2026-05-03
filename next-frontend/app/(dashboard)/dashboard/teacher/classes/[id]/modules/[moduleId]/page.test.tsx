@@ -644,4 +644,48 @@ describe('TeacherModuleDetailPage', () => {
     });
     expect(mockedFileService.upload).not.toHaveBeenCalled();
   });
+
+  it('opens the module guide and navigates through all pages', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('button', { name: /module help/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+
+    expect(await screen.findByText('Teacher guide: Module Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Start from the module header')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Build sections first')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 3 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Attach and manage module blocks')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 4 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Choose whether students can see this module')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Control release through locking')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 6 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Use private module notes for pacing')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Control release through locking')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Close guide')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Teacher guide: Module Workspace')).not.toBeInTheDocument();
+    });
+  });
 });

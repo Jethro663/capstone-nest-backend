@@ -3,9 +3,11 @@ import type {
   CreateDiscussionCommentDto,
   CreateDiscussionThreadDto,
   DiscussionComment,
+  DiscussionCommentReportReason,
   DiscussionCommentReactions,
   DiscussionThreadDetail,
   DiscussionThreadListResponse,
+  ReportDiscussionCommentDto,
   DiscussionThreadSummary,
   UpdateDiscussionThreadDto,
 } from '@/types/discussion';
@@ -115,6 +117,27 @@ export const discussionBoardService = {
   ): Promise<{ success: boolean; message: string; data: { id: string; deletedAt: string } }> {
     const { data } = await api.delete(
       `/classes/${classId}/discussion-threads/${threadId}/comments/${commentId}`,
+    );
+    return data;
+  },
+
+  async reportComment(
+    classId: string,
+    threadId: string,
+    commentId: string,
+    dto: ReportDiscussionCommentDto,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      commentId: string;
+      reportedAt: string;
+      reasonCode: DiscussionCommentReportReason;
+    };
+  }> {
+    const { data } = await api.post(
+      `/classes/${classId}/discussion-threads/${threadId}/comments/${commentId}/report`,
+      dto,
     );
     return data;
   },

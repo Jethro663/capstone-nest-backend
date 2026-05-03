@@ -21,6 +21,11 @@ export interface QuestionOption {
   text: string;
   isCorrect: boolean;
   order: number;
+  imageUrl?: string | null;
+  imageDisplayMode?: "default" | "expanded";
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
 }
 
 export interface AssessmentQuestion {
@@ -32,8 +37,22 @@ export interface AssessmentQuestion {
   order: number;
   isRequired?: boolean;
   explanation?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  imageDisplayMode?: "default" | "expanded";
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
   options?: QuestionOption[];
+}
+
+export interface AssessmentFileRecord {
+  id: string;
+  originalName?: string | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+  uploadedAt?: string | null;
+  inlineUrl?: string | null;
+  downloadUrl?: string | null;
 }
 
 export interface Assessment {
@@ -54,8 +73,11 @@ export interface Assessment {
   allowedUploadExtensions?: string[] | null;
   maxUploadSizeBytes?: number | null;
   teacherAttachmentFileId?: string | null;
+  teacherAttachmentFile?: AssessmentFileRecord | null;
   dueDate?: string;
   isPublished: boolean;
+  classRecordCategory?: string | null;
+  quarter?: string | null;
   questions?: AssessmentQuestion[];
 }
 
@@ -81,14 +103,8 @@ export interface AssessmentAttempt {
   submittedFileOriginalName?: string | null;
   submittedFileMimeType?: string | null;
   submittedFileSizeBytes?: number | null;
-  submittedFile?: {
-    id: string;
-    originalName?: string | null;
-    mimeType?: string | null;
-    sizeBytes?: number | null;
-    inlineUrl?: string | null;
-    downloadUrl?: string | null;
-  } | null;
+  submittedFile?: AssessmentFileRecord | null;
+  submittedFiles?: AssessmentFileRecord[] | null;
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;
@@ -128,6 +144,17 @@ export interface UploadedAssessmentFile {
   filePath?: string;
 }
 
+export interface UploadedAssessmentSubmission {
+  attemptId: string;
+  file: UploadedAssessmentFile;
+  files?: UploadedAssessmentFile[];
+}
+
+export interface RemovedAssessmentSubmissionFiles {
+  attemptId: string;
+  files: UploadedAssessmentFile[];
+}
+
 export interface AttemptResult {
   attempt: AssessmentAttempt;
   score: number;
@@ -135,6 +162,8 @@ export interface AttemptResult {
   isReturned: boolean;
   attemptNumber: number;
   teacherFeedback: string;
+  returnedAt?: string | null;
+  directScore?: number | null;
   responses: {
     questionId: string;
     studentAnswer?: string;
@@ -144,4 +173,47 @@ export interface AttemptResult {
     pointsEarned?: number;
     question?: AssessmentQuestion;
   }[];
+  submittedFile?: AssessmentFileRecord | null;
+  submittedFiles?: AssessmentFileRecord[] | null;
+  assessment?: {
+    id: string;
+    title?: string;
+    type?: string;
+    totalPoints?: number;
+    passingScore?: number;
+  };
+}
+
+export interface TeacherAssessmentSubmission {
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  status: "not_started" | "in_progress" | "turned_in" | "returned";
+  latestAttemptId?: string | null;
+  latestAttemptNumber?: number | null;
+  latestAttemptScore?: number | null;
+  latestAttemptSubmittedAt?: string | null;
+  latestAttemptReturnedAt?: string | null;
+  teacherFeedback?: string | null;
+  directScore?: number | null;
+  submittedFiles?: AssessmentFileRecord[] | null;
+  submittedFile?: AssessmentFileRecord | null;
+  timeline?: Array<{
+    type: string;
+    occurredAt: string;
+    summary?: string | null;
+  }> | null;
+}
+
+export interface TeacherAssessmentSubmissionSummary {
+  total: number;
+  notStarted: number;
+  inProgress: number;
+  turnedIn: number;
+  returned: number;
+}
+
+export interface TeacherAssessmentSubmissionsResponse {
+  submissions: TeacherAssessmentSubmission[];
+  summary: TeacherAssessmentSubmissionSummary;
 }

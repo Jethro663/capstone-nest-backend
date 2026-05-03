@@ -6,6 +6,7 @@ import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
 import { DashboardScreen } from "../screens/DashboardScreen";
+import { CalendarScreen } from "../screens/CalendarScreen";
 import { ClassDetailScreen } from "../screens/ClassDetailScreen";
 import { CoursesScreen } from "../screens/CoursesScreen";
 import { LessonsScreen as ClassesScreen } from "../screens/LessonsScreen";
@@ -24,6 +25,17 @@ import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { PerformanceScreen } from "../screens/PerformanceScreen";
 import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
+import { TeacherAnnouncementsScreen } from "../screens/TeacherAnnouncementsScreen";
+import { TeacherAssessmentDetailScreen } from "../screens/TeacherAssessmentDetailScreen";
+import { TeacherAssessmentReviewScreen } from "../screens/TeacherAssessmentReviewScreen";
+import { TeacherAssessmentsScreen } from "../screens/TeacherAssessmentsScreen";
+import { TeacherCalendarScreen } from "../screens/TeacherCalendarScreen";
+import { TeacherClassDetailScreen } from "../screens/TeacherClassDetailScreen";
+import { TeacherClassesScreen } from "../screens/TeacherClassesScreen";
+import { TeacherHomeScreen } from "../screens/TeacherHomeScreen";
+import { TeacherLessonDetailScreen } from "../screens/TeacherLessonDetailScreen";
+import { TeacherModuleDetailScreen } from "../screens/TeacherModuleDetailScreen";
+import { TeacherProfileScreen } from "../screens/TeacherProfileScreen";
 import { colors } from "../theme/tokens";
 import {
   studentStackRouteNames,
@@ -113,6 +125,10 @@ function LxpRouteScreen(props: NativeStackScreenProps<RootStackParamList, "LXP">
   );
 }
 
+function LessonsRouteScreen(props: NativeStackScreenProps<RootStackParamList, "Lessons">) {
+  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "lxp" } }} />;
+}
+
 function AiTutorRouteScreen(props: NativeStackScreenProps<RootStackParamList, "AiTutor">) {
   return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "ask", classId: props.route.params?.classId } }} />;
 }
@@ -129,11 +145,9 @@ const studentTabScreens = {
 const studentStackScreens = {
   ClassDetail: ClassDetailScreen,
   ModuleDetail: ModuleDetailScreen,
+  Calendar: CalendarScreen,
   Courses: CoursesScreen,
-  Lessons: createStackPlaceholderScreen<"Lessons">(
-    "Lessons",
-    "Parity route placeholder for the student lessons view.",
-  ),
+  Lessons: LessonsRouteScreen,
   LessonDetail: LessonDetailScreen,
   AssessmentDetail: AssessmentDetailScreen,
   AssessmentTake: AssessmentTakeScreen,
@@ -175,6 +189,8 @@ function renderStudentStackScreen(name: StudentStackRouteName) {
       return <RootStack.Screen key={name} name={name} component={studentStackScreens.ClassDetail} />;
     case "ModuleDetail":
       return <RootStack.Screen key={name} name={name} component={studentStackScreens.ModuleDetail} />;
+    case "Calendar":
+      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Calendar} />;
     case "Courses":
       return <RootStack.Screen key={name} name={name} component={studentStackScreens.Courses} />;
     case "Lessons":
@@ -338,7 +354,37 @@ function StudentNavigator() {
   );
 }
 
+function TeacherTabs() {
+  return (
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+      <Tab.Screen name="Home" component={TeacherHomeScreen} />
+      <Tab.Screen name="Classes" component={TeacherClassesScreen} />
+      <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
+      <Tab.Screen name="Announcements" component={TeacherAnnouncementsScreen} />
+      <Tab.Screen name="Profile" component={TeacherProfileScreen} />
+    </Tab.Navigator>
+  );
+}
+
+function TeacherNavigator() {
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="MainTabs" component={TeacherTabs} />
+      <RootStack.Screen name="TeacherClassDetail" component={TeacherClassDetailScreen} />
+      <RootStack.Screen name="TeacherModuleDetail" component={TeacherModuleDetailScreen} />
+      <RootStack.Screen name="TeacherLessonDetail" component={TeacherLessonDetailScreen} />
+      <RootStack.Screen name="TeacherAssessmentDetail" component={TeacherAssessmentDetailScreen} />
+      <RootStack.Screen name="TeacherAssessmentReview" component={TeacherAssessmentReviewScreen} />
+      <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
+    </RootStack.Navigator>
+  );
+}
+
 function RoleTabs({ role }: { role: "teacher" | "admin" }) {
+  if (role === "teacher") {
+    return <TeacherNavigator />;
+  }
+
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
       <Tab.Screen name="Home">{() => <RoleWorkspaceScreen role={role} section="overview" />}</Tab.Screen>

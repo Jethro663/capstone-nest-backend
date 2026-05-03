@@ -1,4 +1,8 @@
-import type { ReactNode, SVGProps } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  HTMLAttributes,
+  SVGProps,
+} from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentClassDetailPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
@@ -7,6 +11,7 @@ import { moduleService } from '@/services/module-service';
 import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
+import { discussionBoardService } from '@/services/discussion-board-service';
 
 let currentView = 'modules';
 
@@ -16,10 +21,22 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('framer-motion', () => ({
+  __esModule: true,
   motion: {
-    section: ({ children }: { children: ReactNode }) => <section>{children}</section>,
-    article: ({ children }: { children: ReactNode }) => <article>{children}</article>,
-    div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+    section: ({ children, ...props }: HTMLAttributes<HTMLElement>) => <section {...props}>{children}</section>,
+    article: ({ children, ...props }: HTMLAttributes<HTMLElement>) => <article {...props}>{children}</article>,
+    div: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+    button: (props: ButtonHTMLAttributes<HTMLButtonElement> & Record<string, unknown>) => {
+      const domProps = { ...props } as Record<string, unknown>;
+      delete domProps.children;
+      delete domProps.whileTap;
+      delete domProps.whileHover;
+      delete domProps.variants;
+      delete domProps.initial;
+      delete domProps.animate;
+      delete domProps.transition;
+      return <button {...(domProps as ButtonHTMLAttributes<HTMLButtonElement>)}>{props.children}</button>;
+    },
     circle: (props: SVGProps<SVGCircleElement>) => <circle {...props} />,
   },
 }));
@@ -60,18 +77,32 @@ jest.mock('@/services/school-event-service', () => ({
   },
 }));
 
+jest.mock('@/services/discussion-board-service', () => ({
+  discussionBoardService: {
+    listThreads: jest.fn(),
+    getThread: jest.fn(),
+    createComment: jest.fn(),
+    uploadCommentImage: jest.fn(),
+    deleteComment: jest.fn(),
+    setReaction: jest.fn(),
+    removeReaction: jest.fn(),
+  },
+}));
+
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockedClassService = classService as jest.Mocked<typeof classService>;
 const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
 const mockedAnnouncementService = announcementService as jest.Mocked<typeof announcementService>;
 const mockedSchoolEventService = schoolEventService as jest.Mocked<typeof schoolEventService>;
+const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<typeof discussionBoardService>;
 
 describe('StudentClassDetailPage module links', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     currentView = 'modules';
     mockedUseAuth.mockReturnValue({
+      role: 'student',
       user: { id: 'student-1', firstName: 'Jamie', lastName: 'Cruz' },
     } as ReturnType<typeof useAuth>);
 
@@ -82,7 +113,10 @@ describe('StudentClassDetailPage module links', () => {
         id: 'class-1',
         subjectName: 'Mathematics',
         subjectCode: 'MATH',
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
         schoolYear: '2025-2026',
+        isActive: true,
         section: { id: 'section-1', name: 'Rizal', gradeLevel: '10' },
         teacher: { id: 'teacher-1', firstName: 'Jamie', lastName: 'Cruz' },
         enrollments: [],
@@ -135,6 +169,70 @@ describe('StudentClassDetailPage module links', () => {
       message: 'ok',
       data: [],
     } as Awaited<ReturnType<typeof schoolEventService.getAll>>);
+    mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: { items: [], page: 1, limit: 50, total: 0 },
+    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+    mockedDiscussionBoardService.getThread.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'thread-1',
+        classId: 'class-1',
+        authorId: 'teacher-1',
+        title: 'Reminder',
+        bodyHtml: '<p>Reply here.</p>',
+        themeId: 'default',
+        commentLimitPerStudent: null,
+        allowComments: true,
+        isPinned: false,
+        status: 'published',
+        publishedAt: '2026-04-10T08:00:00.000Z',
+        closedAt: null,
+        createdAt: '2026-04-10T08:00:00.000Z',
+        updatedAt: '2026-04-10T08:00:00.000Z',
+        commentCount: 0,
+        attachments: [],
+        comments: [],
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.getThread>>);
+    mockedDiscussionBoardService.createComment.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'comment-created',
+        threadId: 'thread-1',
+        authorId: 'student-1',
+        bodyHtml: '<p>Hello</p>',
+        createdAt: '2026-04-10T09:00:00.000Z',
+        updatedAt: '2026-04-10T09:00:00.000Z',
+        canDelete: true,
+        reactions: { like: 0, heart: 0, wow: 0, total: 0, userReaction: null, reactors: [] },
+        attachments: [],
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.createComment>>);
+    mockedDiscussionBoardService.uploadCommentImage.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: { id: 'upload-1' },
+    } as Awaited<ReturnType<typeof discussionBoardService.uploadCommentImage>>);
+    mockedDiscussionBoardService.setReaction.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        commentId: 'comment-1',
+        reactions: { like: 1, heart: 0, wow: 0, total: 1, userReaction: 'like', reactors: [] },
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.setReaction>>);
+    mockedDiscussionBoardService.removeReaction.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        commentId: 'comment-1',
+        reactions: { like: 0, heart: 0, wow: 0, total: 0, userReaction: null, reactors: [] },
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.removeReaction>>);
   });
 
   it('routes module card open link to student module detail page', async () => {
@@ -438,8 +536,11 @@ describe('StudentClassDetailPage module links', () => {
         id: 'class-1',
         subjectName: 'Mathematics',
         subjectCode: 'MATH',
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
         schoolYear: '2025-2026',
         subjectGradeLevel: '10',
+        isActive: true,
         section: { id: 'section-1', name: 'Rizal', gradeLevel: '10' },
         teacher: { id: 'teacher-1', firstName: 'Jamie', lastName: 'Cruz' },
         enrollments: [
@@ -477,6 +578,263 @@ describe('StudentClassDetailPage module links', () => {
     expect(screen.getByText('Mia Villanueva')).toBeInTheDocument();
     expect(screen.getByText('student72@lms.local')).toBeInTheDocument();
     expect(screen.queryByText('Unnamed student')).not.toBeInTheDocument();
+  });
+
+  it('renders the discussion thread feed with attachments, reactions, and plain reply composer', async () => {
+    currentView = 'discussion';
+    mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        items: [
+          {
+            id: 'thread-1',
+            classId: 'class-1',
+            authorId: 'teacher-1',
+            title: 'Lab reflection',
+            bodyHtml: '<p>Share what surprised you in today&apos;s activity.</p>',
+            themeId: 'default',
+            commentLimitPerStudent: null,
+            allowComments: true,
+            isPinned: true,
+            status: 'published',
+            publishedAt: '2026-04-10T08:00:00.000Z',
+            closedAt: null,
+            createdAt: '2026-04-10T08:00:00.000Z',
+            updatedAt: '2026-04-10T08:00:00.000Z',
+            author: {
+              id: 'teacher-1',
+              firstName: 'Jamie',
+              lastName: 'Cruz',
+              profilePicture: '/api/profiles/images/teacher.png',
+            },
+            commentCount: 1,
+            attachments: [
+              {
+                id: 'thread-file-1',
+                type: 'image',
+                originalName: 'experiment.jpg',
+                mimeType: 'image/jpeg',
+                inlineUrl: '/api/files/experiment.jpg',
+              },
+            ],
+          },
+        ],
+        page: 1,
+        limit: 50,
+        total: 1,
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+
+    mockedDiscussionBoardService.getThread.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'thread-1',
+        classId: 'class-1',
+        authorId: 'teacher-1',
+        title: 'Lab reflection',
+        bodyHtml: '<p>Share what surprised you in today&apos;s activity.</p>',
+        themeId: 'default',
+        commentLimitPerStudent: null,
+        allowComments: true,
+        isPinned: true,
+        status: 'published',
+        publishedAt: '2026-04-10T08:00:00.000Z',
+        closedAt: null,
+        createdAt: '2026-04-10T08:00:00.000Z',
+        updatedAt: '2026-04-10T08:00:00.000Z',
+        author: {
+          id: 'teacher-1',
+          firstName: 'Jamie',
+          lastName: 'Cruz',
+          profilePicture: '/api/profiles/images/teacher.png',
+        },
+        commentCount: 1,
+        attachments: [
+          {
+            id: 'thread-file-1',
+            type: 'image',
+            originalName: 'experiment.jpg',
+            mimeType: 'image/jpeg',
+            inlineUrl: '/api/files/experiment.jpg',
+          },
+        ],
+        comments: [
+          {
+            id: 'comment-1',
+            threadId: 'thread-1',
+            authorId: 'student-1',
+            bodyHtml: '<p>I liked the volcano part.</p>',
+            createdAt: '2026-04-10T09:00:00.000Z',
+            updatedAt: '2026-04-10T09:00:00.000Z',
+            canDelete: true,
+            author: {
+              id: 'student-1',
+              firstName: 'Jamie',
+              lastName: 'Cruz',
+              profilePicture: '/api/profiles/images/student.png',
+            },
+            reactions: {
+              like: 0,
+              heart: 0,
+              wow: 0,
+              total: 0,
+              userReaction: null,
+              reactors: [],
+            },
+            attachments: [
+              {
+                id: 'comment-file-1',
+                type: 'image',
+                originalName: 'notes.png',
+                mimeType: 'image/png',
+                inlineUrl: '/api/files/notes.png',
+              },
+            ],
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.getThread>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Lab reflection')).toBeInTheDocument();
+    expect(screen.getByText('experiment.jpg')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Thread' }));
+
+    expect(await screen.findByText('Post a reply')).toBeInTheDocument();
+    expect(screen.getAllByText('Jamie Cruz').length).toBeGreaterThan(0);
+    expect(screen.getByText('notes.png')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Write your comment...')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Like reaction' }));
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.setReaction).toHaveBeenCalledWith(
+        'class-1',
+        'thread-1',
+        'comment-1',
+        'like',
+      );
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Write a respectful reply...'), {
+      target: { value: 'First line\nSecond line' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Post Comment/i }));
+
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.createComment).toHaveBeenCalledWith(
+        'class-1',
+        'thread-1',
+        expect.objectContaining({
+          bodyHtml: '<p>First line<br />Second line</p>',
+        }),
+      );
+    });
+  });
+
+  it('disables the reply composer when the student reached the thread comment limit', async () => {
+    currentView = 'discussion';
+    mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        items: [
+          {
+            id: 'thread-1',
+            classId: 'class-1',
+            authorId: 'teacher-1',
+            title: 'Quick check-in',
+            bodyHtml: '<p>Share one takeaway from the lesson.</p>',
+            themeId: 'default',
+            commentLimitPerStudent: 1,
+            allowComments: true,
+            isPinned: false,
+            status: 'published',
+            publishedAt: '2026-04-10T08:00:00.000Z',
+            closedAt: null,
+            createdAt: '2026-04-10T08:00:00.000Z',
+            updatedAt: '2026-04-10T08:00:00.000Z',
+            author: {
+              id: 'teacher-1',
+              firstName: 'Jamie',
+              lastName: 'Cruz',
+              profilePicture: '/api/profiles/images/teacher.png',
+            },
+            commentCount: 1,
+            attachments: [],
+          },
+        ],
+        page: 1,
+        limit: 50,
+        total: 1,
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+
+    mockedDiscussionBoardService.getThread.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'thread-1',
+        classId: 'class-1',
+        authorId: 'teacher-1',
+        title: 'Quick check-in',
+        bodyHtml: '<p>Share one takeaway from the lesson.</p>',
+        themeId: 'default',
+        commentLimitPerStudent: 1,
+        allowComments: true,
+        isPinned: false,
+        status: 'published',
+        publishedAt: '2026-04-10T08:00:00.000Z',
+        closedAt: null,
+        createdAt: '2026-04-10T08:00:00.000Z',
+        updatedAt: '2026-04-10T08:00:00.000Z',
+        commentCount: 1,
+        author: {
+          id: 'teacher-1',
+          firstName: 'Jamie',
+          lastName: 'Cruz',
+          profilePicture: '/api/profiles/images/teacher.png',
+        },
+        attachments: [],
+        comments: [
+          {
+            id: 'comment-1',
+            threadId: 'thread-1',
+            authorId: 'student-1',
+            bodyHtml: '<p>My answer is already posted.</p>',
+            createdAt: '2026-04-10T09:00:00.000Z',
+            updatedAt: '2026-04-10T09:00:00.000Z',
+            canDelete: true,
+            author: {
+              id: 'student-1',
+              firstName: 'Jamie',
+              lastName: 'Cruz',
+              profilePicture: '/api/profiles/images/student.png',
+            },
+            reactions: {
+              like: 0,
+              heart: 0,
+              wow: 0,
+              total: 0,
+              userReaction: null,
+              reactors: [],
+            },
+            attachments: [],
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.getThread>>);
+
+    render(<StudentClassDetailPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Thread' }));
+
+    expect(await screen.findByText('Comment limit reached')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Write a respectful reply...')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Post Comment/i })).toBeDisabled();
   });
 
   it('renders the grades tab as a compact gradebook table', async () => {

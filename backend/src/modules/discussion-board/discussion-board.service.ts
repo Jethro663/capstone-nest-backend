@@ -16,6 +16,8 @@ import {
   discussionThreadAttachments,
   discussionThreads,
   enrollments,
+  studentProfiles,
+  teacherProfiles,
   uploadedFiles,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
@@ -29,6 +31,7 @@ import {
 } from './DTO/discussion-thread.dto';
 import {
   CreateDiscussionCommentDto,
+  ReportDiscussionCommentDto,
   SetDiscussionReactionDto,
 } from './DTO/discussion-comment.dto';
 import { RoleName } from '../../common/constants/role.constants';
@@ -53,6 +56,24 @@ type ThreadAttachmentPayload = {
     mimeType: string;
     sizeBytes: string;
   } | null;
+};
+
+type DiscussionAuthorPayload = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+};
+
+type DiscussionEnrichedAuthor = DiscussionAuthorPayload & {
+  profilePicture: string | null;
+};
+
+type DiscussionReactionRow = {
+  commentId?: string;
+  userId: string;
+  reactionType: 'like' | 'heart' | 'wow';
+  user?: DiscussionAuthorPayload | null;
 };
 
 function stripHtml(input: string) {
@@ -81,6 +102,91 @@ export class DiscussionBoardService {
 
   private sanitizeCommentHtml(input: string): string {
     return sanitizeRichText(input);
+  }
+
+  private async getProfilePictureMap(userIds: string[]) {
+    const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+    if (uniqueUserIds.length === 0) {
+      return new Map<string, string | null>();
+    }
+
+    const [studentRows, teacherRows] = await Promise.all([
+      this.db
+        .select({
+          userId: studentProfiles.userId,
+          profilePicture: studentProfiles.profilePicture,
+        })
+        .from(studentProfiles)
+        .where(inArray(studentProfiles.userId, uniqueUserIds)),
+      this.db
+        .select({
+          userId: teacherProfiles.userId,
+          profilePicture: teacherProfiles.profilePicture,
+        })
+        .from(teacherProfiles)
+        .where(inArray(teacherProfiles.userId, uniqueUserIds)),
+    ]);
+
+    const map = new Map<string, string | null>();
+
+    for (const row of teacherRows) {
+      map.set(row.userId, row.profilePicture ?? null);
+    }
+
+    for (const row of studentRows) {
+      if (!map.has(row.userId) || !map.get(row.userId)) {
+        map.set(row.userId, row.profilePicture ?? null);
+      }
+    }
+
+    return map;
+  }
+
+  private withProfilePicture(
+    author: DiscussionAuthorPayload | undefined | null,
+    profilePictures: Map<string, string | null>,
+  ): DiscussionEnrichedAuthor | undefined {
+    if (!author) return undefined;
+
+    return {
+      ...author,
+      profilePicture: profilePictures.get(author.id) ?? null,
+    };
+  }
+
+  private buildReactionSummary(
+    reactions: DiscussionReactionRow[],
+    actorId: string,
+    profilePictures: Map<string, string | null>,
+  ) {
+    const counts = {
+      like: 0,
+      heart: 0,
+      wow: 0,
+    };
+
+    let userReaction: 'like' | 'heart' | 'wow' | null = null;
+    const reactors = reactions.map((reaction) => {
+      if (reaction.reactionType === 'like') counts.like += 1;
+      if (reaction.reactionType === 'heart') counts.heart += 1;
+      if (reaction.reactionType === 'wow') counts.wow += 1;
+      if (reaction.userId === actorId) {
+        userReaction = reaction.reactionType;
+      }
+
+      return {
+        userId: reaction.userId,
+        reactionType: reaction.reactionType,
+        user: this.withProfilePicture(reaction.user, profilePictures),
+      };
+    });
+
+    return {
+      ...counts,
+      total: counts.like + counts.heart + counts.wow,
+      userReaction,
+      reactors,
+    };
   }
 
   private assertTheme(themeId?: string) {
@@ -449,29 +555,23 @@ export class DiscussionBoardService {
         userId: true,
         reactionType: true,
       },
+      with: {
+        user: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [desc(discussionCommentReactions.createdAt)],
     });
+    const profilePictures = await this.getProfilePictureMap(
+      reactions.map((reaction) => reaction.userId),
+    );
 
-    const counts = {
-      like: 0,
-      heart: 0,
-      wow: 0,
-    };
-
-    let userReaction: 'like' | 'heart' | 'wow' | null = null;
-    for (const reaction of reactions) {
-      if (reaction.reactionType === 'like') counts.like += 1;
-      if (reaction.reactionType === 'heart') counts.heart += 1;
-      if (reaction.reactionType === 'wow') counts.wow += 1;
-      if (reaction.userId === actorId) {
-        userReaction = reaction.reactionType;
-      }
-    }
-
-    return {
-      ...counts,
-      total: counts.like + counts.heart + counts.wow,
-      userReaction,
-    };
+    return this.buildReactionSummary(reactions, actorId, profilePictures);
   }
 
   private async getThreadCommentPayload(
@@ -517,6 +617,7 @@ export class DiscussionBoardService {
     }
 
     const reactions = await this.getReactionSummary(comment.id, actorId);
+    const profilePictures = await this.getProfilePictureMap([comment.authorId]);
     return {
       id: comment.id,
       threadId: comment.threadId,
@@ -526,7 +627,7 @@ export class DiscussionBoardService {
       updatedAt: comment.updatedAt,
       canDelete:
         access.isAdmin || access.isTeacher || comment.authorId === actorId,
-      author: comment.author,
+      author: this.withProfilePicture(comment.author, profilePictures),
       reactions,
       attachments: comment.attachments.map((attachment) =>
         this.toCommentAttachmentResource(
@@ -622,6 +723,9 @@ export class DiscussionBoardService {
     const countByThreadId = new Map(
       commentCounts.map((entry) => [entry.threadId, Number(entry.total)]),
     );
+    const profilePictures = await this.getProfilePictureMap(
+      rows.map((thread) => thread.authorId),
+    );
 
     return {
       items: rows.map((thread) => ({
@@ -639,7 +743,7 @@ export class DiscussionBoardService {
         closedAt: thread.closedAt,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
-        author: thread.author,
+        author: this.withProfilePicture(thread.author, profilePictures),
         commentCount: countByThreadId.get(thread.id) ?? 0,
         attachments: thread.attachments.map((attachment) =>
           this.toThreadAttachmentResource(
@@ -709,8 +813,25 @@ export class DiscussionBoardService {
               userId: true,
               reactionType: true,
             },
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+            orderBy: [desc(discussionCommentReactions.createdAt)],
           })
         : [];
+
+    const profilePictures = await this.getProfilePictureMap([
+      thread.authorId,
+      ...comments.map((comment) => comment.authorId),
+      ...reactionRows.map((reaction) => reaction.userId),
+    ]);
 
     const reactionsByComment = new Map<
       string,
@@ -720,6 +841,11 @@ export class DiscussionBoardService {
         wow: number;
         total: number;
         userReaction: 'like' | 'heart' | 'wow' | null;
+        reactors: Array<{
+          userId: string;
+          reactionType: 'like' | 'heart' | 'wow';
+          user?: DiscussionEnrichedAuthor;
+        }>;
       }
     >();
 
@@ -730,19 +856,20 @@ export class DiscussionBoardService {
         wow: 0,
         total: 0,
         userReaction: null,
+        reactors: [],
       });
     }
 
-    for (const reaction of reactionRows) {
-      const bucket = reactionsByComment.get(reaction.commentId);
+    for (const commentId of commentIds) {
+      const bucket = reactionsByComment.get(commentId);
       if (!bucket) continue;
-      if (reaction.reactionType === 'like') bucket.like += 1;
-      if (reaction.reactionType === 'heart') bucket.heart += 1;
-      if (reaction.reactionType === 'wow') bucket.wow += 1;
-      bucket.total = bucket.like + bucket.heart + bucket.wow;
-      if (reaction.userId === actorId) {
-        bucket.userReaction = reaction.reactionType;
-      }
+      const commentReactions = reactionRows.filter(
+        (reaction) => reaction.commentId === commentId,
+      );
+      reactionsByComment.set(
+        commentId,
+        this.buildReactionSummary(commentReactions, actorId, profilePictures),
+      );
     }
 
     return {
@@ -760,7 +887,7 @@ export class DiscussionBoardService {
       closedAt: thread.closedAt,
       createdAt: thread.createdAt,
       updatedAt: thread.updatedAt,
-      author: thread.author,
+      author: this.withProfilePicture(thread.author, profilePictures),
       attachments: thread.attachments.map((attachment) =>
         this.toThreadAttachmentResource(
           classId,
@@ -777,13 +904,14 @@ export class DiscussionBoardService {
         updatedAt: comment.updatedAt,
         canDelete:
           access.isAdmin || access.isTeacher || comment.authorId === actorId,
-        author: comment.author,
+        author: this.withProfilePicture(comment.author, profilePictures),
         reactions: reactionsByComment.get(comment.id) ?? {
           like: 0,
           heart: 0,
           wow: 0,
           total: 0,
           userReaction: null,
+          reactors: [],
         },
         attachments: comment.attachments.map((attachment) =>
           this.toCommentAttachmentResource(
@@ -1328,6 +1456,68 @@ export class DiscussionBoardService {
     });
 
     return { id: comment.id, deletedAt: now };
+  }
+
+  async reportComment(
+    classId: string,
+    threadId: string,
+    commentId: string,
+    actorId: string,
+    roles: string[],
+    dto: ReportDiscussionCommentDto,
+  ) {
+    const { thread, access } = await this.getThreadOrThrow(
+      classId,
+      threadId,
+      actorId,
+      roles,
+    );
+
+    if (!access.isAdmin && !access.isTeacher) {
+      throw new ForbiddenException(
+        'Only teachers or admins can report discussion comments.',
+      );
+    }
+
+    const comment = await this.db.query.discussionComments.findFirst({
+      where: and(
+        eq(discussionComments.id, commentId),
+        eq(discussionComments.threadId, thread.id),
+        isNull(discussionComments.deletedAt),
+      ),
+      columns: {
+        id: true,
+        authorId: true,
+      },
+    });
+
+    if (!comment) {
+      throw new NotFoundException('Discussion comment not found.');
+    }
+
+    const reportedAt = new Date();
+    const notes = dto.notes?.trim() || null;
+
+    await this.auditService.log({
+      actorId,
+      action: 'discussion.comment.reported',
+      targetType: 'discussion_comment',
+      targetId: comment.id,
+      metadata: {
+        classId,
+        threadId: thread.id,
+        commentAuthorId: comment.authorId,
+        reasonCode: dto.reasonCode,
+        notes,
+        reportedAt: reportedAt.toISOString(),
+      },
+    });
+
+    return {
+      commentId: comment.id,
+      reasonCode: dto.reasonCode,
+      reportedAt,
+    };
   }
 
   async setCommentReaction(

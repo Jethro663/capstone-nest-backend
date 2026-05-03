@@ -1,0 +1,19 @@
+.teacher-lesson-editor__header {
+  position: relative;
+}
+
+.teacher-lesson-editor__header-help {
+  position: absolute;
+  top: 50%;
+  right: 0.8rem;
+  z-index: 5;
+  transform: translateY(-50%);
+}
+
+.teacher-lesson-editor__header-actions {
+  position: relative;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  padding-right: 4.1rem;
+}

@@ -40,3 +40,39 @@ export class SetDiscussionReactionDto {
   @IsIn(['like', 'heart', 'wow'])
   reactionType: 'like' | 'heart' | 'wow';
 }
+
+export class ReportDiscussionCommentDto {
+  @ApiPropertyOptional({
+    enum: [
+      'inappropriate',
+      'spam',
+      'off_topic',
+      'harassment',
+      'academic_dishonesty',
+    ],
+    example: 'inappropriate',
+  })
+  @IsString()
+  @IsIn([
+    'inappropriate',
+    'spam',
+    'off_topic',
+    'harassment',
+    'academic_dishonesty',
+  ])
+  reasonCode:
+    | 'inappropriate'
+    | 'spam'
+    | 'off_topic'
+    | 'harassment'
+    | 'academic_dishonesty';
+
+  @ApiPropertyOptional({
+    example: 'Contains personal attacks toward another learner.',
+    description: 'Optional moderator notes for audit trail follow-up.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
+}

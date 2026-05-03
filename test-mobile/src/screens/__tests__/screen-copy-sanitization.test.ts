@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 const SCREEN_FILES = [
   "AssessmentsScreen.tsx",
+  "CalendarScreen.tsx",
   "LessonsScreen.tsx",
   "LxpScreen.tsx",
   "ProfileScreen.tsx",

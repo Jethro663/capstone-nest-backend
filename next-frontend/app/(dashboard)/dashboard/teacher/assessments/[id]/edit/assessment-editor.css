@@ -8,6 +8,7 @@
 }
 
 .assessment-editor__header {
+  position: relative;
   min-height: 4rem;
   border-bottom: 1px solid #dce4ee;
   background: #fff;
@@ -1200,6 +1201,8 @@
   display: grid;
   justify-items: end;
   gap: 0.7rem;
+  position: relative;
+  padding-right: 4.1rem;
 }
 
 .assessment-editor__header-helper-group,

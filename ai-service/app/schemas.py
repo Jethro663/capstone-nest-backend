@@ -230,6 +230,36 @@ class GenerateQuizDraftRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class LessonPlanHeaderRequest(BaseModel):
+    instructional_format: str | None = Field(
+        default=None,
+        alias="instructionalFormat",
+    )
+    school_name: str | None = Field(default=None, alias="schoolName")
+    quarter: str | None = None
+    date: str | None = None
+    start_time: str | None = Field(default=None, alias="startTime")
+    end_time: str | None = Field(default=None, alias="endTime")
+
+    model_config = {"populate_by_name": True}
+
+
+class GenerateLessonPlanRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    anchor_type: str = Field(..., alias="anchorType")
+    anchor_id: str = Field(..., alias="anchorId")
+    teacher_note: str | None = Field(default=None, alias="teacherNote")
+    header: LessonPlanHeaderRequest | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class UpdateLessonPlanDraftRequest(BaseModel):
+    structured_output: dict[str, Any] = Field(..., alias="structuredOutput")
+
+    model_config = {"populate_by_name": True}
+
+
 class StudentTutorBootstrapRequest(BaseModel):
     class_id: str | None = Field(default=None, alias="classId")
 

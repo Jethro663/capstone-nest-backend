@@ -6,48 +6,48 @@
   },
   {
     "Id": "rId18",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
-    "Target": "footer2.xml"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "Target": "media/image5.png"
   },
   {
     "Id": "rId26",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image10.png"
+    "Target": "media/image12.png"
   },
   {
     "Id": "rId39",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image23.png"
+    "Target": "media/image25.png"
   },
   {
     "Id": "rId21",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image6.png"
+    "Target": "media/image7.png"
   },
   {
     "Id": "rId34",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image18.png"
+    "Target": "media/image20.png"
   },
   {
     "Id": "rId42",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image26.png"
+    "Target": "media/image28.png"
   },
   {
     "Id": "rId47",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image31.png"
+    "Target": "media/image33.png"
   },
   {
     "Id": "rId50",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image34.png"
+    "Target": "media/image36.png"
   },
   {
     "Id": "rId55",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image39.png"
+    "Target": "media/image41.png"
   },
   {
     "Id": "rId7",
@@ -61,13 +61,13 @@
   },
   {
     "Id": "rId16",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header",
-    "Target": "header1.xml"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
+    "Target": "footer1.xml"
   },
   {
     "Id": "rId29",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image13.png"
+    "Target": "media/image15.png"
   },
   {
     "Id": "rId11",
@@ -77,37 +77,37 @@
   {
     "Id": "rId24",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image8.png"
+    "Target": "media/image10.png"
   },
   {
     "Id": "rId32",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image16.png"
+    "Target": "media/image18.png"
   },
   {
     "Id": "rId37",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image21.png"
+    "Target": "media/image23.png"
   },
   {
     "Id": "rId40",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image24.png"
+    "Target": "media/image26.png"
   },
   {
     "Id": "rId45",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image29.png"
+    "Target": "media/image31.png"
   },
   {
     "Id": "rId53",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image37.png"
+    "Target": "media/image39.png"
   },
   {
     "Id": "rId58",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image42.png"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
+    "Target": "footer3.xml"
   },
   {
     "Id": "rId5",
@@ -115,14 +115,19 @@
     "Target": "../customXml/item5.xml"
   },
   {
-    "Id": "rId61",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable",
-    "Target": "fontTable.xml"
+    "Id": "rId19",
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "Target": "media/image6.png"
   },
   {
-    "Id": "rId19",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
-    "Target": "footer3.xml"
+    "Id": "rId4",
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
+    "Target": "../customXml/item4.xml"
+  },
+  {
+    "Id": "rId9",
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings",
+    "Target": "webSettings.xml"
   },
   {
     "Id": "rId14",
@@ -131,39 +136,38 @@
   },
   {
     "Id": "rId22",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-    "Target": "https://asana.com/resources/agile-methodology",
-    "TargetMode": "External"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+    "Target": "media/image8.png"
   },
   {
     "Id": "rId27",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image11.png"
+    "Target": "media/image13.png"
   },
   {
     "Id": "rId30",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image14.png"
+    "Target": "media/image16.png"
   },
   {
     "Id": "rId35",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image19.png"
+    "Target": "media/image21.png"
   },
   {
     "Id": "rId43",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image27.png"
+    "Target": "media/image29.png"
   },
   {
     "Id": "rId48",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image32.png"
+    "Target": "media/image34.png"
   },
   {
     "Id": "rId56",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image40.png"
+    "Target": "media/image42.png"
   },
   {
     "Id": "rId8",
@@ -173,7 +177,7 @@
   {
     "Id": "rId51",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image35.png"
+    "Target": "media/image37.png"
   },
   {
     "Id": "rId3",
@@ -188,52 +192,48 @@
   {
     "Id": "rId17",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
-    "Target": "footer1.xml"
+    "Target": "footer2.xml"
   },
   {
     "Id": "rId25",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image9.png"
+    "Target": "media/image11.png"
   },
   {
     "Id": "rId33",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image17.png"
+    "Target": "media/image19.png"
   },
   {
     "Id": "rId38",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image22.png"
+    "Target": "media/image24.png"
   },
   {
     "Id": "rId46",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image30.png"
+    "Target": "media/image32.png"
   },
   {
     "Id": "rId59",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image43.png"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable",
+    "Target": "fontTable.xml"
   },
   {
     "Id": "rId20",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image5.png"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+    "Target": "https://asana.com/resources/agile-methodology",
+    "TargetMode": "External"
   },
   {
     "Id": "rId41",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image25.png"
+    "Target": "media/image27.png"
   },
   {
     "Id": "rId54",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image38.png"
-  },
-  {
-    "Id": "rId62",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme",
-    "Target": "theme/theme1.xml"
+    "Target": "media/image40.png"
   },
   {
     "Id": "rId1",
@@ -253,27 +253,27 @@
   {
     "Id": "rId23",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image7.png"
+    "Target": "media/image9.png"
   },
   {
     "Id": "rId28",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image12.png"
+    "Target": "media/image14.png"
   },
   {
     "Id": "rId36",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image20.png"
+    "Target": "media/image22.png"
   },
   {
     "Id": "rId49",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image33.png"
+    "Target": "media/image35.png"
   },
   {
     "Id": "rId57",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image41.png"
+    "Target": "media/image43.png"
   },
   {
     "Id": "rId10",
@@ -283,31 +283,21 @@
   {
     "Id": "rId31",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image15.png"
+    "Target": "media/image17.png"
   },
   {
     "Id": "rId44",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image28.png"
+    "Target": "media/image30.png"
   },
   {
     "Id": "rId52",
     "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
-    "Target": "media/image36.png"
+    "Target": "media/image38.png"
   },
   {
     "Id": "rId60",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer",
-    "Target": "footer4.xml"
-  },
-  {
-    "Id": "rId4",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml",
-    "Target": "../customXml/item4.xml"
-  },
-  {
-    "Id": "rId9",
-    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings",
-    "Target": "webSettings.xml"
+    "Type": "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme",
+    "Target": "theme/theme1.xml"
   }
 ]

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import Cropper from 'react-easy-crop';
+import Image from 'next/image';
 import {
   useCallback,
   useEffect,
@@ -10,7 +11,6 @@ import {
   useState,
   type CSSProperties,
   type ChangeEvent,
-  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import type { Area, Point } from 'react-easy-crop';
@@ -23,19 +23,26 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
   ClipboardList,
+  Copy,
   Eye,
   FileSpreadsheet,
+  Flag,
   Grid2X2,
-  GripVertical,
+  Heart,
   LayoutPanelTop,
   CircleHelp,
   Megaphone,
   MessageSquare,
+  MoreHorizontal,
   Palette,
   Plus,
   Radar,
+  ShieldAlert,
   Sparkles,
+  ThumbsUp,
   Trash2,
   Users,
 } from 'lucide-react';
@@ -50,7 +57,15 @@ import { aiService } from '@/services/ai-service';
 import { classRecordService } from '@/services/class-record-service';
 import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
@@ -76,7 +91,12 @@ import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 import type { ClassRecord } from '@/types/class-record';
-import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
+import type {
+  DiscussionAuthor,
+  DiscussionCommentReportReason,
+  DiscussionThreadDetail,
+  DiscussionThreadSummary,
+} from '@/types/discussion';
 import type { Extraction } from '@/types/extraction';
 import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
 import type { ClassModule } from '@/types/module';
@@ -164,6 +184,8 @@ interface ModuleDeadlineCardItem {
   href: string;
   isUrgent: boolean;
 }
+
+type TeacherDiscussionComment = DiscussionThreadDetail['comments'][number];
 
 const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpen }> = [
   { key: 'modules', label: 'Modules', icon: BookOpen },
@@ -934,6 +956,218 @@ function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
   });
 }
 
+function getDiscussionAttachmentHref(
+  attachment:
+    | DiscussionThreadSummary['attachments'][number]
+    | DiscussionThreadDetail['comments'][number]['attachments'][number],
+) {
+  return attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || '#';
+}
+
+function isDiscussionImageAttachment(
+  attachment:
+    | DiscussionThreadSummary['attachments'][number]
+    | DiscussionThreadDetail['comments'][number]['attachments'][number],
+) {
+  return attachment.type === 'image' || Boolean(attachment.mimeType?.startsWith('image/'));
+}
+
+const DISCUSSION_REPORT_REASON_OPTIONS: Array<{
+  value: DiscussionCommentReportReason;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: 'inappropriate',
+    label: 'Inappropriate',
+    hint: 'Rude, explicit, or not suitable for class.',
+  },
+  {
+    value: 'harassment',
+    label: 'Harassment',
+    hint: 'Targets or attacks another learner directly.',
+  },
+  {
+    value: 'spam',
+    label: 'Spam',
+    hint: 'Repeated, irrelevant, or disruptive posting.',
+  },
+  {
+    value: 'off_topic',
+    label: 'Off-topic',
+    hint: 'Not related to the lesson or discussion prompt.',
+  },
+  {
+    value: 'academic_dishonesty',
+    label: 'Academic Dishonesty',
+    hint: 'Cheating, answer sharing, or suspicious misconduct.',
+  },
+];
+
+function stripDiscussionHtml(input?: string | null) {
+  return String(input ?? '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getDiscussionAuthorName(author?: DiscussionAuthor) {
+  const fullName = `${author?.firstName || ''} ${author?.lastName || ''}`.trim();
+  return fullName || author?.email || 'Unknown user';
+}
+
+function getDiscussionAuthorInitials(author?: DiscussionAuthor) {
+  const words = getDiscussionAuthorName(author)
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (words.length === 0) return 'NA';
+  return words.map((word) => word.charAt(0).toUpperCase()).join('');
+}
+
+function TeacherDiscussionAvatar({ author }: { author?: DiscussionAuthor }) {
+  const displayName = getDiscussionAuthorName(author);
+
+  return (
+    <Avatar className="teacher-discussion-avatar">
+      {author?.profilePicture ? (
+        <AvatarImage
+          src={author.profilePicture}
+          alt={displayName}
+          className="teacher-discussion-avatar__image"
+        />
+      ) : null}
+      <AvatarFallback className="teacher-discussion-avatar__fallback">
+        {getDiscussionAuthorInitials(author)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+function TeacherDiscussionReactionSummary({
+  comment,
+}: {
+  comment: TeacherDiscussionComment;
+}) {
+  const reactionItems = [
+    { key: 'like', label: 'Like', icon: ThumbsUp, count: comment.reactions.like },
+    { key: 'heart', label: 'Heart', icon: Heart, count: comment.reactions.heart },
+    { key: 'wow', label: 'Wow', icon: Sparkles, count: comment.reactions.wow },
+  ].filter((entry) => entry.count > 0);
+
+  if (reactionItems.length === 0) {
+    return (
+      <span className="teacher-discussion-comment__meta-pill">
+        <MessageSquare className="h-3.5 w-3.5" />
+        No reactions yet
+      </span>
+    );
+  }
+
+  return (
+    <>
+      {reactionItems.map((entry) => {
+        const Icon = entry.icon;
+        return (
+          <span key={entry.key} className="teacher-discussion-comment__meta-pill">
+            <Icon className="h-3.5 w-3.5" />
+            {entry.count} {entry.label.toLowerCase()}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+function TeacherDiscussionAttachmentGallery({
+  attachments,
+}: {
+  attachments: DiscussionThreadSummary['attachments'];
+}) {
+  if (attachments.length === 0) return null;
+
+  return (
+    <div className="teacher-discussion-media-grid">
+      {attachments.map((attachment) => {
+        const href = getDiscussionAttachmentHref(attachment);
+
+        return (
+          <a
+            key={attachment.id}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className={`teacher-discussion-media-card${
+              isDiscussionImageAttachment(attachment) && href !== '#'
+                ? ' is-image'
+                : ''
+            }`}
+          >
+            {isDiscussionImageAttachment(attachment) && href !== '#' ? (
+              <div className="teacher-discussion-media-card__image">
+                <Image
+                  src={href}
+                  alt={attachment.originalName || 'Thread attachment'}
+                  fill
+                  unoptimized
+                  sizes="160px"
+                />
+              </div>
+            ) : null}
+            <span>{attachment.originalName || attachment.linkLabel || 'Attachment'}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function TeacherSelectedDiscussionFilePreviews({ files }: { files: File[] }) {
+  const previewItems = useMemo(
+    () =>
+      files
+        .filter((file) => file.type.startsWith('image/'))
+        .map((file) => ({
+          key: `${file.name}-${file.size}-${file.lastModified}`,
+          name: file.name,
+          url: URL.createObjectURL(file),
+        })),
+    [files],
+  );
+
+  useEffect(
+    () => () => {
+      previewItems.forEach((item) => URL.revokeObjectURL(item.url));
+    },
+    [previewItems],
+  );
+
+  if (files.length === 0) return null;
+
+  return (
+    <div className="teacher-discussion-upload-preview">
+      {previewItems.map((item) => (
+        <div key={item.key} className="teacher-discussion-upload-preview__card">
+          <div className="teacher-discussion-upload-preview__image">
+            <Image src={item.url} alt={item.name} fill unoptimized sizes="96px" />
+          </div>
+          <span>{item.name}</span>
+        </div>
+      ))}
+      {files
+        .filter((file) => !file.type.startsWith('image/'))
+        .map((file) => (
+          <div
+            key={`${file.name}-${file.size}-${file.lastModified}`}
+            className="teacher-discussion-upload-preview__file"
+          >
+            <span>{file.name}</span>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 function normalizeModulePresentation(module: ClassModule): ModulePresentationDraft {
   const gradientId =
     MODULE_GRADIENT_OPTIONS.find((option) => option.id === module.gradientId)?.id ||
@@ -991,8 +1225,6 @@ export default function TeacherClassDetailPage() {
   const [calendarMonth, setCalendarMonth] = useState(() => getMonthStart(new Date()));
   const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState<string | null>(null);
   const [selectedModuleIds, setSelectedModuleIds] = useState<string[]>([]);
-  const [draggingModuleId, setDraggingModuleId] = useState<string | null>(null);
-  const [dropTargetModuleId, setDropTargetModuleId] = useState<string | null>(null);
   const [isReorderingModules, setIsReorderingModules] = useState(false);
   const [customizingModuleId, setCustomizingModuleId] = useState<string | null>(null);
   const [moduleDraft, setModuleDraft] = useState<ModulePresentationDraft>({
@@ -1034,6 +1266,12 @@ export default function TeacherClassDetailPage() {
   const [discussionAttachmentFiles, setDiscussionAttachmentFiles] = useState<File[]>([]);
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [busyDiscussionThreadId, setBusyDiscussionThreadId] = useState<string | null>(null);
+  const [busyDiscussionCommentId, setBusyDiscussionCommentId] = useState<string | null>(null);
+  const [reportDialogComment, setReportDialogComment] = useState<TeacherDiscussionComment | null>(null);
+  const [discussionReportReason, setDiscussionReportReason] =
+    useState<DiscussionCommentReportReason>('inappropriate');
+  const [discussionReportNotes, setDiscussionReportNotes] = useState('');
+  const [reportingDiscussionComment, setReportingDiscussionComment] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
 
@@ -1637,40 +1875,19 @@ export default function TeacherClassDetailPage() {
     }
   };
 
-  const handleModuleDragStart = (event: ReactDragEvent<HTMLButtonElement>, moduleId: string) => {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', moduleId);
-    setDraggingModuleId(moduleId);
-  };
+  const moveModuleOneStep = async (moduleId: string, direction: -1 | 1) => {
+    if (isReorderingModules) return;
 
-  const handleModuleDragOver = (event: ReactDragEvent<HTMLElement>, moduleId: string) => {
-    if (!draggingModuleId || draggingModuleId === moduleId) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    setDropTargetModuleId(moduleId);
-  };
+    const sourceIndex = modules.findIndex((module) => module.id === moduleId);
+    if (sourceIndex < 0) return;
 
-  const handleModuleDrop = async (event: ReactDragEvent<HTMLElement>, targetModuleId: string) => {
-    event.preventDefault();
-    const sourceModuleId = draggingModuleId || event.dataTransfer.getData('text/plain');
-    setDropTargetModuleId(null);
-    setDraggingModuleId(null);
-
-    if (!sourceModuleId || sourceModuleId === targetModuleId) return;
-
-    const sourceIndex = modules.findIndex((module) => module.id === sourceModuleId);
-    const targetIndex = modules.findIndex((module) => module.id === targetModuleId);
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+    const targetIndex = sourceIndex + direction;
+    if (targetIndex < 0 || targetIndex >= modules.length) return;
 
     const reordered = modules.slice();
     const [moved] = reordered.splice(sourceIndex, 1);
     reordered.splice(targetIndex, 0, moved);
     await applyModuleReorder(reordered);
-  };
-
-  const handleModuleDragEnd = () => {
-    setDraggingModuleId(null);
-    setDropTargetModuleId(null);
   };
 
   const performDeleteModule = async (moduleId: string) => {
@@ -2236,6 +2453,87 @@ export default function TeacherClassDetailPage() {
     }
   };
 
+  const performDeleteDiscussionComment = async (commentId: string) => {
+    if (!selectedDiscussionThread || busyDiscussionCommentId) return;
+    try {
+      setBusyDiscussionCommentId(commentId);
+      await discussionBoardService.deleteComment(
+        classId,
+        selectedDiscussionThread.id,
+        commentId,
+      );
+      await loadDiscussionThreadDetail(selectedDiscussionThread.id);
+      await loadDiscussionThreads();
+      toast.success('Comment removed from the discussion');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to remove comment'));
+    } finally {
+      setBusyDiscussionCommentId(null);
+    }
+  };
+
+  const handleDeleteDiscussionComment = (comment: TeacherDiscussionComment) => {
+    setConfirmation({
+      title: 'Delete Comment',
+      description: 'This reply will be removed from the thread for all students.',
+      confirmLabel: 'Delete Comment',
+      tone: 'danger',
+      details: (
+        <div className="teacher-discussion-confirmation-copy">
+          <strong>{getDiscussionAuthorName(comment.author)}</strong>
+          <p>{stripDiscussionHtml(comment.bodyHtml) || 'Image-only reply'}</p>
+        </div>
+      ),
+      onConfirm: () => performDeleteDiscussionComment(comment.id),
+    });
+  };
+
+  const handleOpenDiscussionReportDialog = (comment: TeacherDiscussionComment) => {
+    setReportDialogComment(comment);
+    setDiscussionReportReason('inappropriate');
+    setDiscussionReportNotes('');
+  };
+
+  const handleCopyDiscussionComment = async (comment: TeacherDiscussionComment) => {
+    const plainText = stripDiscussionHtml(comment.bodyHtml);
+    if (!plainText) {
+      toast.error('This reply only contains attachments');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(plainText);
+      toast.success('Reply text copied');
+    } catch {
+      toast.error('Failed to copy reply text');
+    }
+  };
+
+  const handleSubmitDiscussionCommentReport = async () => {
+    if (!selectedDiscussionThread || !reportDialogComment || reportingDiscussionComment) return;
+    try {
+      setReportingDiscussionComment(true);
+      await discussionBoardService.reportComment(
+        classId,
+        selectedDiscussionThread.id,
+        reportDialogComment.id,
+        {
+          reasonCode: discussionReportReason,
+          notes: discussionReportNotes.trim() || undefined,
+        },
+      );
+      toast.success(
+        `${getDiscussionAuthorName(reportDialogComment.author)} was flagged for moderator follow-up`,
+      );
+      setReportDialogComment(null);
+      setDiscussionReportNotes('');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to report comment'));
+    } finally {
+      setReportingDiscussionComment(false);
+    }
+  };
+
   const performRemoveStudent = async (enrollmentId: string, studentId: string) => {
     if (busyEnrollmentId) return;
     try {
@@ -2397,16 +2695,12 @@ export default function TeacherClassDetailPage() {
                 const imagePositionX = module.imagePositionX ?? 50;
                 const imagePositionY = module.imagePositionY ?? 50;
                 const imageScale = module.imageScale ?? 120;
-                return (
+                    return (
                   <article
                     key={module.id}
                     className="teacher-class-workspace__module-card"
                     data-tone={moduleTone(index)}
                     data-selected={isSelected}
-                    data-dragging={draggingModuleId === module.id}
-                    data-drop-target={dropTargetModuleId === module.id}
-                    onDragOver={(event) => handleModuleDragOver(event, module.id)}
-                    onDrop={(event) => void handleModuleDrop(event, module.id)}
                   >
                     <div className="teacher-class-workspace__module-leading">
                       {renderSelectionCheckbox({
@@ -2414,18 +2708,28 @@ export default function TeacherClassDetailPage() {
                         onChange: () => toggleModuleSelection(module.id),
                         ariaLabel: `Select ${module.title}`,
                       })}
-                      <button
-                        type="button"
-                        className="teacher-class-workspace__module-drag"
-                        draggable
-                        onDragStart={(event) => handleModuleDragStart(event, module.id)}
-                        onDragEnd={handleModuleDragEnd}
-                        disabled={isReorderingModules}
-                        aria-label={`Drag ${module.title} to reorder`}
-                        title="Drag to reorder"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </button>
+                      <div className="teacher-class-workspace__module-actions">
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__module-action teacher-class-workspace__module-action--design"
+                          onClick={() => void moveModuleOneStep(module.id, -1)}
+                          disabled={isReorderingModules || index === 0}
+                          aria-label={`Move ${module.title} up`}
+                          title="Move module up"
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__module-action teacher-class-workspace__module-action--design"
+                          onClick={() => void moveModuleOneStep(module.id, 1)}
+                          disabled={isReorderingModules || index === modules.length - 1}
+                          aria-label={`Move ${module.title} down`}
+                          title="Move module down"
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     <Link
                       href={`/dashboard/teacher/classes/${classId}/modules/${module.id}`}
@@ -2971,6 +3275,10 @@ export default function TeacherClassDetailPage() {
                     }
                   />
                 </div>
+                <p className="teacher-discussion-upload-note">
+                  Add images or PDFs here so students can open them directly from the thread.
+                </p>
+                <TeacherSelectedDiscussionFilePreviews files={discussionAttachmentFiles} />
                 <textarea
                   className="teacher-module-modal__textarea"
                   value={discussionLinksText}
@@ -3034,102 +3342,108 @@ export default function TeacherClassDetailPage() {
               </div>
             ) : null}
 
-            <div className="teacher-class-workspace__stack">
+            <div className="teacher-discussion-thread-list">
               {discussionThreads.map((thread) => (
                 <article
                   key={thread.id}
-                  className="teacher-class-workspace__announcement-card"
+                  className="teacher-discussion-thread-card"
                   data-pinned={thread.isPinned}
+                  data-active={selectedDiscussionThreadId === thread.id}
                 >
-                  <div>
-                    {thread.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
-                    <div className="teacher-class-workspace__assignment-tags">
-                      <span>{thread.status.toUpperCase()}</span>
-                      <span data-status={thread.allowComments ? 'published' : 'draft'}>
+                  <div className="teacher-discussion-thread-card__meta">
+                    <div className="teacher-discussion-thread-card__author">
+                      <TeacherDiscussionAvatar author={thread.author} />
+                      <div className="teacher-discussion-thread-card__identity">
+                        <strong>{getDiscussionAuthorName(thread.author)}</strong>
+                        <span>
+                          {formatRelativeTime(thread.publishedAt || thread.createdAt)} •{' '}
+                          {thread.commentCount} comment{thread.commentCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="teacher-discussion-thread-card__badges">
+                      {thread.isPinned ? (
+                        <span className="teacher-class-workspace__pin">Pinned</span>
+                      ) : null}
+                      <span className="teacher-discussion-thread-card__badge">
+                        {thread.status.toUpperCase()}
+                      </span>
+                      <span
+                        className="teacher-discussion-thread-card__badge"
+                        data-status={thread.allowComments ? 'published' : 'draft'}
+                      >
                         {thread.commentCount} comments
                       </span>
                     </div>
+                  </div>
+                  <div className="teacher-discussion-thread-card__body">
                     <h3>{thread.title}</h3>
                     <RichTextRenderer
                       html={thread.bodyHtml}
-                      className="teacher-class-workspace__announcement-rich"
+                      className="teacher-discussion-thread-card__rich"
                     />
-                    <small>
-                      {formatDateYmd(thread.publishedAt || thread.createdAt)} - Theme {thread.themeId}
-                    </small>
-                    {thread.attachments.length > 0 ? (
-                      <div className="teacher-class-workspace__assignment-actions">
-                        {thread.attachments.map((attachment) => (
-                          <a
-                            key={attachment.id}
-                            href={attachment.inlineUrl || attachment.linkUrl || '#'}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="teacher-class-workspace__outline"
-                          >
-                            {attachment.type === 'link'
-                              ? attachment.linkLabel || 'Link'
-                              : attachment.originalName || 'Attachment'}
-                          </a>
-                        ))}
-                      </div>
-                    ) : null}
+                    <TeacherDiscussionAttachmentGallery attachments={thread.attachments} />
                   </div>
-                  <div className="teacher-class-workspace__assignment-actions">
-                    <button
-                      type="button"
-                      className="teacher-class-workspace__outline"
-                      onClick={() => setSelectedDiscussionThreadId(thread.id)}
-                    >
-                      Open
-                    </button>
-                    {thread.status === 'draft' ? (
+                  <div className="teacher-discussion-thread-card__footer">
+                    <span className="teacher-discussion-thread-card__date">
+                      {formatDateYmd(thread.publishedAt || thread.createdAt)} • Theme {thread.themeId}
+                    </span>
+                    <div className="teacher-class-workspace__assignment-actions">
                       <button
                         type="button"
                         className="teacher-class-workspace__outline"
-                        disabled={busyDiscussionThreadId === thread.id}
-                        onClick={() =>
-                          void handleDiscussionThreadAction(thread.id, 'publish')
-                        }
+                        onClick={() => setSelectedDiscussionThreadId(thread.id)}
                       >
-                        Publish
+                        {selectedDiscussionThreadId === thread.id ? 'Viewing' : 'Open'}
                       </button>
-                    ) : null}
-                    {thread.status === 'published' ? (
+                      {thread.status === 'draft' ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          disabled={busyDiscussionThreadId === thread.id}
+                          onClick={() =>
+                            void handleDiscussionThreadAction(thread.id, 'publish')
+                          }
+                        >
+                          Publish
+                        </button>
+                      ) : null}
+                      {thread.status === 'published' ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          disabled={busyDiscussionThreadId === thread.id}
+                          onClick={() =>
+                            void handleDiscussionThreadAction(thread.id, 'close')
+                          }
+                        >
+                          Close
+                        </button>
+                      ) : null}
+                      {thread.status === 'closed' ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          disabled={busyDiscussionThreadId === thread.id}
+                          onClick={() =>
+                            void handleDiscussionThreadAction(thread.id, 'reopen')
+                          }
+                        >
+                          Reopen
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="teacher-class-workspace__outline"
-                        disabled={busyDiscussionThreadId === thread.id}
+                        className="teacher-class-workspace__ghost-icon"
                         onClick={() =>
-                          void handleDiscussionThreadAction(thread.id, 'close')
+                          void handleDiscussionThreadAction(thread.id, 'archive')
                         }
-                      >
-                        Close
-                      </button>
-                    ) : null}
-                    {thread.status === 'closed' ? (
-                      <button
-                        type="button"
-                        className="teacher-class-workspace__outline"
                         disabled={busyDiscussionThreadId === thread.id}
-                        onClick={() =>
-                          void handleDiscussionThreadAction(thread.id, 'reopen')
-                        }
+                        aria-label="Archive discussion thread"
                       >
-                        Reopen
+                        <Trash2 className="h-4 w-4" />
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="teacher-class-workspace__ghost-icon"
-                      onClick={() =>
-                        void handleDiscussionThreadAction(thread.id, 'archive')
-                      }
-                      disabled={busyDiscussionThreadId === thread.id}
-                      aria-label="Archive discussion thread"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    </div>
                   </div>
                 </article>
               ))}
@@ -3139,42 +3453,136 @@ export default function TeacherClassDetailPage() {
             </div>
 
             {selectedDiscussionThread ? (
-              <div className="teacher-class-workspace__panel teacher-class-workspace__panel--record">
-                <div className="teacher-class-workspace__panel-head">
+              <div className="teacher-discussion-focus">
+                <div className="teacher-class-workspace__panel-head teacher-discussion-focus__head">
                   <div>
                     <h2>{selectedDiscussionThread.title}</h2>
-                    <p>{selectedDiscussionThread.comments.length} comment{selectedDiscussionThread.comments.length === 1 ? '' : 's'}</p>
+                    <p>
+                      {selectedDiscussionThread.comments.length} comment
+                      {selectedDiscussionThread.comments.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="teacher-discussion-focus__moderator">
+                    <span className="teacher-discussion-focus__moderator-pill">
+                      <ShieldAlert className="h-3.5 w-3.5" />
+                      Moderator controls active
+                    </span>
+                    <button
+                      type="button"
+                      className="teacher-class-workspace__outline"
+                      onClick={() => setSelectedDiscussionThreadId(null)}
+                    >
+                      Close Thread View
+                    </button>
                   </div>
                 </div>
-                <div className="teacher-class-workspace__stack">
+
+                <article className="teacher-discussion-focus__post">
+                  <div className="teacher-discussion-comment__head">
+                    <TeacherDiscussionAvatar author={selectedDiscussionThread.author} />
+                    <div className="teacher-discussion-comment__identity">
+                      <strong>{getDiscussionAuthorName(selectedDiscussionThread.author)}</strong>
+                      <span>
+                        {formatRelativeTime(
+                          selectedDiscussionThread.publishedAt ||
+                            selectedDiscussionThread.createdAt,
+                        )}{' '}
+                        • {selectedDiscussionThread.allowComments ? 'Replies open' : 'Replies closed'}
+                      </span>
+                    </div>
+                    <div className="teacher-discussion-comment__meta">
+                      <span className="teacher-discussion-comment__meta-pill">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        Limit:{' '}
+                        {selectedDiscussionThread.commentLimitPerStudent || 'Open'}
+                      </span>
+                      <span className="teacher-discussion-comment__meta-pill">
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        {selectedDiscussionThread.status}
+                      </span>
+                    </div>
+                  </div>
+                  <RichTextRenderer
+                    html={selectedDiscussionThread.bodyHtml}
+                    className="teacher-discussion-focus__body"
+                  />
+                  <TeacherDiscussionAttachmentGallery
+                    attachments={selectedDiscussionThread.attachments}
+                  />
+                </article>
+
+                <div className="teacher-discussion-comment-stack">
                   {selectedDiscussionThread.comments.map((comment) => (
-                    <article key={comment.id} className="teacher-class-workspace__announcement-card">
-                      <div>
-                        <h3>
-                          {comment.author?.firstName} {comment.author?.lastName}
-                        </h3>
+                    <article key={comment.id} className="teacher-discussion-comment-card">
+                      <div className="teacher-discussion-comment__head">
+                        <TeacherDiscussionAvatar author={comment.author} />
+                        <div className="teacher-discussion-comment__identity">
+                          <strong>{getDiscussionAuthorName(comment.author)}</strong>
+                          <span>{formatRelativeTime(comment.createdAt)}</span>
+                        </div>
+                        <div className="teacher-discussion-comment__menu-wrap">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className="teacher-discussion-menu-button"
+                                aria-label="Open moderator controls"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="teacher-discussion-menu"
+                            >
+                              <DropdownMenuItem
+                                onSelect={(event) => {
+                                  event.preventDefault();
+                                  void handleCopyDiscussionComment(comment);
+                                }}
+                              >
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copy reply text
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onSelect={(event) => {
+                                  event.preventDefault();
+                                  handleOpenDiscussionReportDialog(comment);
+                                }}
+                              >
+                                <Flag className="mr-2 h-4 w-4" />
+                                Report for follow-up
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onSelect={(event) => {
+                                  event.preventDefault();
+                                  handleDeleteDiscussionComment(comment);
+                                }}
+                                className="text-[#b42318] focus:text-[#b42318]"
+                                disabled={busyDiscussionCommentId === comment.id}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete comment
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                      <div className="teacher-discussion-comment__body-wrap">
                         <RichTextRenderer
                           html={comment.bodyHtml || '<p>(Image-only comment)</p>'}
-                          className="teacher-class-workspace__announcement-rich"
+                          className="teacher-discussion-comment__body"
                         />
-                        {comment.attachments.length > 0 ? (
-                          <div className="teacher-class-workspace__assignment-actions">
-                            {comment.attachments.map((attachment) => (
-                              <a
-                                key={attachment.id}
-                                href={attachment.inlineUrl || '#'}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="teacher-class-workspace__outline"
-                              >
-                                {attachment.originalName || 'Image attachment'}
-                              </a>
-                            ))}
-                          </div>
-                        ) : null}
-                        <small>
-                          {comment.reactions.like} like - {comment.reactions.heart} heart - {comment.reactions.wow} wow
-                        </small>
+                        <TeacherDiscussionAttachmentGallery attachments={comment.attachments} />
+                      </div>
+                      <div className="teacher-discussion-comment__footer">
+                        <div className="teacher-discussion-comment__meta">
+                          <TeacherDiscussionReactionSummary comment={comment} />
+                        </div>
+                        <span className="teacher-discussion-comment__timestamp">
+                          {formatDateYmd(comment.createdAt)}
+                        </span>
                       </div>
                     </article>
                   ))}
@@ -3761,6 +4169,86 @@ export default function TeacherClassDetailPage() {
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(reportDialogComment)}
+        onOpenChange={(open) => {
+          if (!open && !reportingDiscussionComment) {
+            setReportDialogComment(null);
+            setDiscussionReportNotes('');
+          }
+        }}
+      >
+        <DialogContent className="teacher-discussion-report-dialog sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Report Comment</DialogTitle>
+            <DialogDescription>
+              Send this reply to the moderation audit trail for follow-up.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reportDialogComment ? (
+            <div className="teacher-discussion-report-dialog__body">
+              <div className="teacher-discussion-report-dialog__comment">
+                <TeacherDiscussionAvatar author={reportDialogComment.author} />
+                <div>
+                  <strong>{getDiscussionAuthorName(reportDialogComment.author)}</strong>
+                  <p>{stripDiscussionHtml(reportDialogComment.bodyHtml) || 'Image-only reply'}</p>
+                </div>
+              </div>
+
+              <div className="teacher-discussion-report-dialog__reasons">
+                {DISCUSSION_REPORT_REASON_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className="teacher-discussion-report-dialog__reason"
+                    data-active={discussionReportReason === option.value}
+                    onClick={() => setDiscussionReportReason(option.value)}
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+
+              <label className="teacher-discussion-report-dialog__notes">
+                <span>Moderator notes</span>
+                <textarea
+                  value={discussionReportNotes}
+                  onChange={(event) => setDiscussionReportNotes(event.target.value)}
+                  placeholder="Add extra context for admin or discipline follow-up..."
+                  rows={4}
+                  maxLength={500}
+                />
+                <small>{discussionReportNotes.trim().length}/500</small>
+              </label>
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setReportDialogComment(null);
+                setDiscussionReportNotes('');
+              }}
+              disabled={reportingDiscussionComment}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="teacher-class-workspace__solid"
+              onClick={() => void handleSubmitDiscussionCommentReport()}
+              disabled={reportingDiscussionComment || !reportDialogComment}
+            >
+              {reportingDiscussionComment ? 'Reporting...' : 'Report Comment'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -136,11 +136,11 @@
       ],
       [
         "Next.js",
-        "Next.js 19.2.3 is the primary web framework used to build the administrator, teacher, and student dashboards and responsive UI routing."
+        "Next.js 16.2.4 is the primary web framework used to build the administrator, teacher, and student dashboards and responsive UI routing."
       ],
       [
         "React",
-        "React 19 powers the component-based user interface; required for rendering dashboards, forms, class views, and AI-related user interactions."
+        "React 19.2.3 powers the component-based user interface; required for rendering dashboards, forms, class views, and AI-related user interactions."
       ],
       [
         "Tailwind CSS",
@@ -400,7 +400,7 @@
       ],
       [
         "Post-condition",
-        "First-time users successfully verify their account and change their password Returning users successfully log into the system.ssa The user is redirected to the correct dashboard based on role and platform."
+        "The user is successfully authenticated and redirected to the correct dashboard based on their role. Returning users successfully log into the system.ssa The user is redirected to the correct dashboard based on role and platform."
       ],
       [
         "Assumption",
@@ -573,7 +573,7 @@
       ],
       [
         "Successful Completion",
-        "Complete Assesment The student selects the Performance tab from the sidebar. The system initializes the performance interface.. The system retrieves the student’s performance records. The system processes the retrieved data The system displays the student’s performance information, including: Blended Average Current Status At-Risk Subjects (if any) Subject Overview Quarterly Trend Subject Breakdown The student reviews the displayed performance results."
+        "Access Performance Dashboard The student selects the Performance tab from the sidebar. The system initializes the performance interface. The system retrieves the student’s performance records. The system processes the retrieved data The system displays the student’s performance information, including: Blended Average Current Status At-Risk Subjects (if any) Subject Overview Quarterly Trend Subject Breakdown The student reviews the displayed performance results."
       ],
       [
         "Alternative",
@@ -610,7 +610,7 @@
       ],
       [
         "Successful Completion",
-        "Complete Assesment The student selects the LXP tab from the sidebar. The system initializes the LXP interface the system retrieves the student’s performance records. The system checks the student’s eligibility based on recorded performance results. The system verifies whether the student qualifies for LXP access. The system retrieves available remedial learning content. The system displays the student’s assigned learning path, previous lessons, previous assessments, and guided activities. The student selects a learning activity or lesson. The system opens the selected LXP content."
+        "Initialize LXP Access The student selects the LXP tab from the sidebar. The system initializes the LXP interface the system retrieves the student’s performance records. The system checks the student’s eligibility based on recorded performance results. The system verifies whether the student qualifies for LXP access. The system retrieves available remedial learning content. The system displays the student’s assigned learning path, previous lessons, previous assessments, and guided activities. The student selects a learning activity or lesson. The system opens the selected LXP content."
       ],
       [
         "Alternative",
@@ -647,7 +647,7 @@
       ],
       [
         "Successful Completion",
-        "Complete Assesment The student selects the AI Mentor from the sidebar. The system initializes the AI Mentor interface. The system retrieves relevant student learning data or selected subject context. The system displays the AI Mentor chat or assistance page. The student enters a question, topic, or requests help regarding a lesson or assessment. The system processes the student request. The AI Mentor generates an explanation, hints, or recommended activities. The system displays the AI Mentor response. The student reviews the provided assistance."
+        "Initiate AI Mentor Session The student selects the AI Mentor from the sidebar. The system initializes the AI Mentor interface. The system retrieves relevant student learning data or selected subject context. The system displays the AI Mentor chat or assistance page. The student enters a question, topic, or requests help regarding a lesson or assessment. The system processes the student request. The AI Mentor generates an explanation, hints, or recommended activities. The system displays the AI Mentor response. The student reviews the provided assistance."
       ],
       [
         "Alternative",
@@ -857,7 +857,7 @@
     "rows": [
       [
         "Use Case Name",
-        "Manage Class Lessons"
+        "Upload Learning Modules"
       ],
       [
         "Actor",
@@ -1560,7 +1560,7 @@
     "rows": [
       [
         "Use Case Name",
-        "Manage Sections"
+        "Manage School Calendar"
       ],
       [
         "Actor",
@@ -1905,7 +1905,7 @@
       ],
       [
         "Successful Completion",
-        "Update System Settings Successfully The administrator successfully logs in to the system. The administrator selects the Profile tab from the sidebar. The system displays profile information including: Account Details Password & Security Update Password Notifications Unread / Visible / View Notifications The administrator reviews the displayed profile information. The administrator may update account details, password, or notification preferences. The administrator confirms profile changes, if applicable. The system validates the submitted updates. The system stores the updated profile information. The system displays a success confirmation."
+        "Update Profile Successfully The administrator successfully logs in to the system. The administrator selects the Profile tab from the sidebar. The system displays profile information including: Account Details Password & Security Update Password Notifications Unread / Visible / View Notifications The administrator reviews the displayed profile information. The administrator may update account details, password, or notification preferences. The administrator confirms profile changes, if applicable. The system validates the submitted updates. The system stores the updated profile information. The system displays a success confirmation."
       ],
       [
         "Alternative",

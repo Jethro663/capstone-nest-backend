@@ -21,6 +21,11 @@ export interface Lesson {
   updatedAt?: string;
 }
 
+export interface BulkLessonDraftStateDto {
+  lessonIds: string[];
+  isDraft: boolean;
+}
+
 export interface LessonCompletion {
   lessonId: string;
   completed: boolean;

@@ -15,13 +15,20 @@ import {
   CircleHelp,
   ClipboardList,
   Clock3,
+  ExternalLink,
   FileSpreadsheet,
   FolderOpen,
   Grid2X2,
+  Heart,
   LayoutPanelTop,
   Megaphone,
   MessageSquare,
+  Paperclip,
   School,
+  SendHorizonal,
+  Sparkles,
+  ThumbsUp,
+  Trash2,
   Users,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -44,15 +51,23 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import './student-class-detail.css';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem, Enrollment } from '@/types/class';
 import type { ClassModule } from '@/types/module';
 import type { SchoolEvent } from '@/types/school-event';
-import type { DiscussionThreadDetail, DiscussionThreadSummary } from '@/types/discussion';
+import type {
+  DiscussionAttachmentResource,
+  DiscussionAuthor,
+  DiscussionCommentReactions,
+  DiscussionThreadDetail,
+  DiscussionThreadSummary,
+} from '@/types/discussion';
 import { getTeacherName } from '@/utils/helpers';
-import { normalizeRichText } from '@/lib/rich-text';
+import { normalizeRichText, plainTextToRichHtml } from '@/lib/rich-text';
 
 type StudentClassTab =
   | 'modules'
@@ -734,16 +749,6 @@ const RichTextRenderer = dynamic(
   },
 );
 
-const RichTextEditor = dynamic(
-  () =>
-    import('@/components/shared/rich-text/RichTextEditor').then(
-      (mod) => mod.RichTextEditor,
-    ),
-  {
-    loading: () => <Skeleton className="h-16 w-full rounded-xl" />,
-  },
-);
-
 function getClassId(raw: string | string[] | undefined) {
   if (!raw) return '';
   return Array.isArray(raw) ? raw[0] : raw;
@@ -841,6 +846,41 @@ function formatDateLong(value: Date | null) {
   return value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatDateTime(value: Date | null) {
+  if (!value) return '--';
+  return value.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatRelativeTime(value?: string | null) {
+  const date = parseDate(value);
+  if (!date) return 'Just now';
+
+  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60000);
+  const absMinutes = Math.abs(diffMinutes);
+  const formatter = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+  if (absMinutes < 60) {
+    return formatter.format(diffMinutes, 'minute');
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  if (Math.abs(diffHours) < 24) {
+    return formatter.format(diffHours, 'hour');
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  if (Math.abs(diffDays) < 7) {
+    return formatter.format(diffDays, 'day');
+  }
+
+  return formatDateLong(date);
+}
+
 function formatScoreNumber(value: number | null) {
   if (value === null) return '--';
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -925,10 +965,213 @@ function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
   });
 }
 
+function getDiscussionAuthorName(author?: DiscussionAuthor) {
+  const parts = [author?.firstName?.trim(), author?.lastName?.trim()].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : 'Class member';
+}
+
+function getDiscussionAuthorInitials(author?: DiscussionAuthor) {
+  const initials = [author?.firstName?.trim().charAt(0), author?.lastName?.trim().charAt(0)]
+    .filter(Boolean)
+    .join('')
+    .toUpperCase();
+  return initials || 'NX';
+}
+
+function getDiscussionAttachmentHref(attachment: DiscussionAttachmentResource) {
+  return attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || '#';
+}
+
+function isDiscussionImageAttachment(attachment: DiscussionAttachmentResource) {
+  return attachment.type === 'image' || Boolean(attachment.mimeType?.startsWith('image/'));
+}
+
+function formatAttachmentMeta(attachment: DiscussionAttachmentResource) {
+  if (attachment.type === 'link') return 'Shared link';
+  if (attachment.sizeBytes && attachment.sizeBytes > 0) {
+    const sizeKb = attachment.sizeBytes / 1024;
+    if (sizeKb < 1024) return `${Math.max(1, Math.round(sizeKb))} KB`;
+    return `${(sizeKb / 1024).toFixed(1)} MB`;
+  }
+  if (attachment.mimeType) return attachment.mimeType.replace(/^image\//, '').toUpperCase();
+  return 'Attachment';
+}
+
+function resolveDiscussionAuthorAvatar(
+  author: DiscussionAuthor | undefined,
+  classItem: ClassItem | null,
+  user?: { id?: string; profilePicture?: string | null } | null,
+) {
+  if (!author?.id) return null;
+  if (author.profilePicture) {
+    return author.profilePicture;
+  }
+  if (author.id === user?.id && user?.profilePicture) {
+    return user.profilePicture;
+  }
+  const matchedEnrollment = classItem?.enrollments?.find(
+    (entry) => entry.studentId === author.id || entry.student?.id === author.id,
+  );
+  return matchedEnrollment?.student?.profile?.profilePicture || null;
+}
+
+function DiscussionAvatar({
+  author,
+  classItem,
+  user,
+}: {
+  author?: DiscussionAuthor;
+  classItem: ClassItem | null;
+  user?: { id?: string; profilePicture?: string | null } | null;
+}) {
+  const displayName = getDiscussionAuthorName(author);
+  const avatarSrc = resolveDiscussionAuthorAvatar(author, classItem, user);
+
+  return (
+    <Avatar className="student-discussion-avatar">
+      {avatarSrc ? (
+        <AvatarImage
+          src={avatarSrc}
+          alt={displayName}
+          className="student-discussion-avatar__image"
+        />
+      ) : null}
+      <AvatarFallback className="student-discussion-avatar__fallback">
+        {getDiscussionAuthorInitials(author)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
+function DiscussionAttachmentList({
+  attachments,
+  compact = false,
+}: {
+  attachments: DiscussionAttachmentResource[];
+  compact?: boolean;
+}) {
+  if (attachments.length === 0) return null;
+
+  return (
+    <div className={`student-discussion-attachments${compact ? ' is-compact' : ''}`}>
+      {attachments.map((attachment) => {
+        const href = getDiscussionAttachmentHref(attachment);
+        const label =
+          attachment.type === 'link'
+            ? attachment.linkLabel || attachment.linkUrl || 'Shared link'
+            : attachment.originalName || 'Attachment';
+
+        return (
+          <a
+            key={attachment.id}
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            className={`student-discussion-attachment${
+              isDiscussionImageAttachment(attachment) ? ' student-discussion-attachment--image' : ''
+            }`}
+          >
+            {isDiscussionImageAttachment(attachment) && href !== '#' ? (
+              <div className="student-discussion-attachment__preview">
+                <Image
+                  src={href}
+                  alt={label}
+                  fill
+                  unoptimized
+                  sizes={compact ? '96px' : '(max-width: 768px) 100vw, 220px'}
+                />
+              </div>
+            ) : (
+              <span className="student-discussion-attachment__icon">
+                {attachment.type === 'link' ? (
+                  <ExternalLink className="h-4 w-4" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
+              </span>
+            )}
+            <span className="student-discussion-attachment__copy">
+              <strong>{label}</strong>
+              <small>{formatAttachmentMeta(attachment)}</small>
+            </span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function getReactionHoverState(
+  reactions: DiscussionCommentReactions,
+  reactionType: 'like' | 'heart' | 'wow',
+) {
+  const matching = reactions.reactors.filter(
+    (entry) => entry.reactionType === reactionType && entry.user,
+  );
+  return {
+    visible: matching.slice(0, 15),
+    overflow: Math.max(0, matching.length - 15),
+  };
+}
+
+function getDiscussionLimitState(
+  thread: DiscussionThreadDetail | null,
+  userId: string | undefined,
+  role: string | null,
+) {
+  if (!thread || role !== 'student' || !userId || !thread.commentLimitPerStudent) {
+    return null;
+  }
+
+  const used = thread.comments.filter((comment) => comment.authorId === userId).length;
+  const limit = thread.commentLimitPerStudent;
+
+  return {
+    limit,
+    used,
+    remaining: Math.max(limit - used, 0),
+    reached: used >= limit,
+  };
+}
+
+function LocalImagePreviewStrip({ files }: { files: File[] }) {
+  const previewItems = useMemo(
+    () =>
+      files.map((file) => ({
+        key: `${file.name}-${file.size}-${file.lastModified}`,
+        name: file.name,
+        url: URL.createObjectURL(file),
+      })),
+    [files],
+  );
+
+  useEffect(
+    () => () => {
+      previewItems.forEach((item) => URL.revokeObjectURL(item.url));
+    },
+    [previewItems],
+  );
+
+  if (previewItems.length === 0) return null;
+
+  return (
+    <div className="student-discussion-local-previews">
+      {previewItems.map((item) => (
+        <div key={item.key} className="student-discussion-local-preview">
+          <div className="student-discussion-local-preview__image">
+            <Image src={item.url} alt={item.name} fill unoptimized sizes="112px" />
+          </div>
+          <span>{item.name}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StudentClassDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
 
   const classId = getClassId(params.id as string | string[] | undefined);
   const currentTab = isStudentClassTab(searchParams.get('view'))
@@ -1128,7 +1371,10 @@ export default function StudentClassDetailPage() {
 
   const handleSubmitDiscussionComment = useCallback(async () => {
     if (!selectedDiscussionThread || discussionSubmitting) return;
-    const safeBody = normalizeRichText(discussionCommentBody).trim();
+    const limitState = getDiscussionLimitState(selectedDiscussionThread, user?.id, role);
+    if (limitState?.reached) return;
+    const plainBody = discussionCommentBody.trim();
+    const safeBody = plainBody ? plainTextToRichHtml(plainBody) : '';
     if (!safeBody && discussionCommentImages.length === 0) return;
 
     try {
@@ -1161,7 +1407,9 @@ export default function StudentClassDetailPage() {
     discussionSubmitting,
     loadDiscussionThreads,
     loadSelectedDiscussionThread,
+    role,
     selectedDiscussionThread,
+    user?.id,
   ]);
 
   const handleDeleteDiscussionComment = useCallback(
@@ -1386,6 +1634,10 @@ export default function StudentClassDetailPage() {
   }, [assessments, classItem?.subjectName, schoolEvents]);
 
   const classmateRows = useMemo(() => getEnrollmentRows(classItem), [classItem]);
+  const discussionLimitState = useMemo(
+    () => getDiscussionLimitState(selectedDiscussionThread, user?.id, role),
+    [role, selectedDiscussionThread, user?.id],
+  );
   const scheduleLabel = useMemo(() => formatScheduleLabel(classItem), [classItem]);
   const activeGuidePage = studentClassGuidePages[helpPage] ?? studentClassGuidePages[0];
 
@@ -1693,34 +1945,62 @@ export default function StudentClassDetailPage() {
         >
           <header className="student-class-panel__head">
             <h2>Discussion Board</h2>
-            <p>{discussionThreads.length} active thread{discussionThreads.length === 1 ? '' : 's'}</p>
+            <p>{discussionThreads.length} active thread{discussionThreads.length === 1 ? '' : 's'} you can jump into</p>
           </header>
 
           {discussionThreads.length === 0 ? (
             <div className="teacher-class-workspace__empty">No discussion threads yet.</div>
           ) : (
-            <div className="student-class-stack">
+            <div className="student-discussion-thread-list">
               {discussionThreads.map((thread) => (
                 <motion.article
                   key={thread.id}
-                  className="student-class-announcement-card"
+                  className="student-discussion-thread-card"
                   data-pinned={thread.isPinned}
+                  data-active={selectedDiscussionThreadId === thread.id}
                   variants={staggerItem}
                 >
-                  {thread.isPinned ? <span className="student-class-announcement-card__pin">Pinned</span> : null}
-                  <h3>{thread.title}</h3>
-                  <RichTextRenderer html={thread.bodyHtml} />
-                  <small>
-                    {thread.commentCount} comments • {thread.status}
-                  </small>
-                  <div className="student-class-assignment-row__chips">
-                    <button
-                      type="button"
-                      className="student-class-assignment-row__take"
-                      onClick={() => setSelectedDiscussionThreadId(thread.id)}
-                    >
-                      Open Thread
-                    </button>
+                  <div className="student-discussion-thread-card__meta">
+                    <div className="student-discussion-thread-card__author">
+                      <DiscussionAvatar author={thread.author} classItem={classItem} user={user} />
+                      <div className="student-discussion-comment__identity">
+                        <strong>{getDiscussionAuthorName(thread.author)}</strong>
+                        <span>
+                          {formatRelativeTime(thread.publishedAt || thread.createdAt)} •{' '}
+                          {thread.commentCount} comment{thread.commentCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="student-discussion-thread-card__badges">
+                      {thread.isPinned ? (
+                        <span className="student-class-announcement-card__pin">Pinned</span>
+                      ) : null}
+                      <span
+                        className="student-discussion-thread-card__badge"
+                        data-status={thread.status}
+                      >
+                        {thread.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="student-discussion-thread-card__content">
+                    <div>
+                      <h3>{thread.title}</h3>
+                      <RichTextRenderer
+                        html={thread.bodyHtml}
+                        className="student-discussion-thread-card__body"
+                      />
+                    </div>
+                    <div className="student-discussion-thread-card__footer">
+                      <DiscussionAttachmentList attachments={thread.attachments} compact />
+                      <button
+                        type="button"
+                        className="student-class-assignment-row__take"
+                        onClick={() => setSelectedDiscussionThreadId(thread.id)}
+                      >
+                        {selectedDiscussionThreadId === thread.id ? 'Viewing Thread' : 'Open Thread'}
+                      </button>
+                    </div>
                   </div>
                 </motion.article>
               ))}
@@ -1728,59 +2008,126 @@ export default function StudentClassDetailPage() {
           )}
 
           {selectedDiscussionThread ? (
-            <div className="student-class-panel">
-              <header className="student-class-panel__head">
-                <h2>{selectedDiscussionThread.title}</h2>
-                <p>{selectedDiscussionThread.comments.length} comment{selectedDiscussionThread.comments.length === 1 ? '' : 's'}</p>
+            <div className="student-discussion-focus">
+              <header className="student-class-panel__head student-discussion-focus__head">
+                <div>
+                  <h2>{selectedDiscussionThread.title}</h2>
+                  <p>
+                    {selectedDiscussionThread.comments.length} comment
+                    {selectedDiscussionThread.comments.length === 1 ? '' : 's'} in this thread
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="student-discussion-focus__close"
+                  onClick={() => setSelectedDiscussionThreadId(null)}
+                >
+                  Close Thread
+                </button>
               </header>
+              <article className="student-discussion-focus__post">
+                <div className="student-discussion-comment__head">
+                  <DiscussionAvatar
+                    author={selectedDiscussionThread.author}
+                    classItem={classItem}
+                    user={user}
+                  />
+                  <div className="student-discussion-comment__identity">
+                    <strong>{getDiscussionAuthorName(selectedDiscussionThread.author)}</strong>
+                    <span>
+                      {formatDateTime(
+                        parseDate(
+                          selectedDiscussionThread.publishedAt || selectedDiscussionThread.createdAt,
+                        ),
+                      )}{' '}
+                      • {selectedDiscussionThread.allowComments ? 'Open replies' : 'Replies closed'}
+                    </span>
+                  </div>
+                </div>
+                <RichTextRenderer
+                  html={selectedDiscussionThread.bodyHtml}
+                  className="student-discussion-focus__body"
+                />
+                <DiscussionAttachmentList attachments={selectedDiscussionThread.attachments} />
+              </article>
               <div className="student-class-stack">
                 {selectedDiscussionThread.comments.map((comment) => (
-                  <article key={comment.id} className="student-class-announcement-card">
-                    <h3>
-                      {comment.author?.firstName} {comment.author?.lastName}
-                    </h3>
-                    <RichTextRenderer html={comment.bodyHtml || '<p>(Image-only comment)</p>'} />
-                    {comment.attachments.length > 0 ? (
-                      <div className="student-class-assignment-row__chips">
-                        {comment.attachments.map((attachment) => (
-                          <a
-                            key={attachment.id}
-                            href={attachment.inlineUrl || '#'}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {attachment.originalName || 'Image'}
-                          </a>
-                        ))}
+                  <article key={comment.id} className="student-discussion-comment-card">
+                    <div className="student-discussion-comment__head">
+                      <DiscussionAvatar author={comment.author} classItem={classItem} user={user} />
+                      <div className="student-discussion-comment__identity">
+                        <strong>{getDiscussionAuthorName(comment.author)}</strong>
+                        <span title={formatDateTime(parseDate(comment.createdAt))}>
+                          {formatRelativeTime(comment.createdAt)}
+                        </span>
                       </div>
-                    ) : null}
-                    <div className="student-class-assignment-row__chips">
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'like')}
-                      >
-                        Like {comment.reactions.like}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'heart')}
-                      >
-                        Heart {comment.reactions.heart}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleToggleDiscussionReaction(comment.id, 'wow')}
-                      >
-                        Wow {comment.reactions.wow}
-                      </button>
                       {comment.canDelete ? (
                         <button
                           type="button"
+                          className="student-discussion-delete"
+                          aria-label="Delete comment"
                           onClick={() => void handleDeleteDiscussionComment(comment.id)}
                         >
+                          <Trash2 className="h-4 w-4" />
                           Delete
                         </button>
                       ) : null}
+                    </div>
+                    <RichTextRenderer
+                      html={comment.bodyHtml || '<p class="student-discussion-image-only">Photo reply</p>'}
+                      className="student-discussion-comment__body"
+                    />
+                    <DiscussionAttachmentList attachments={comment.attachments} />
+                    <div className="student-discussion-reactions">
+                      {([
+                        ['like', 'Like', ThumbsUp, comment.reactions.like],
+                        ['heart', 'Heart', Heart, comment.reactions.heart],
+                        ['wow', 'Wow', Sparkles, comment.reactions.wow],
+                      ] as const).map(([reactionType, label, Icon, count]) => {
+                        const hoverState = getReactionHoverState(comment.reactions, reactionType);
+
+                        return (
+                          <motion.button
+                            key={reactionType}
+                            type="button"
+                            className="student-discussion-reaction"
+                            data-active={comment.reactions.userReaction === reactionType}
+                            aria-label={`${label} reaction`}
+                            whileHover={{ y: -1 }}
+                            whileTap={{ scale: 0.94 }}
+                            onClick={() =>
+                              void handleToggleDiscussionReaction(comment.id, reactionType)
+                            }
+                          >
+                            <Icon className="h-4 w-4" />
+                            <span>{label}</span>
+                            <strong>{count}</strong>
+                            {hoverState.visible.length > 0 ? (
+                              <span className="student-discussion-reactor-popover" role="tooltip">
+                                <b>{label}</b>
+                                {hoverState.visible.map((reactor) => (
+                                  <span
+                                    key={`${reactionType}-${reactor.userId}`}
+                                    className="student-discussion-reactor-popover__row"
+                                  >
+                                    <DiscussionAvatar
+                                      author={reactor.user}
+                                      classItem={classItem}
+                                      user={user}
+                                    />
+                                    <em>{getDiscussionAuthorName(reactor.user)}</em>
+                                  </span>
+                                ))}
+                                {hoverState.overflow > 0 ? (
+                                  <span className="student-discussion-reactor-popover__more">
+                                    +{hoverState.overflow} others
+                                  </span>
+                                ) : null}
+                              </span>
+                            ) : null}
+                          </motion.button>
+                        );
+                      })}
                     </div>
                   </article>
                 ))}
@@ -1790,28 +2137,83 @@ export default function StudentClassDetailPage() {
               </div>
 
               {selectedDiscussionThread.status === 'published' && selectedDiscussionThread.allowComments ? (
-                <div className="teacher-class-workspace__announcement-form">
-                  <RichTextEditor
+                <div className="student-discussion-composer">
+                  <div className="student-discussion-composer__head">
+                    <div>
+                      <strong>Post a reply</strong>
+                      <p>Keep it clear, respectful, and related to the class topic.</p>
+                    </div>
+                    <span>
+                      {discussionCommentImages.length} image
+                      {discussionCommentImages.length === 1 ? '' : 's'} ready
+                    </span>
+                  </div>
+                  {discussionLimitState ? (
+                    <div
+                      className="student-discussion-limit-banner"
+                      data-blocked={discussionLimitState.reached}
+                    >
+                      <strong>
+                        {discussionLimitState.reached
+                          ? 'Comment limit reached'
+                          : `${discussionLimitState.remaining} repl${
+                              discussionLimitState.remaining === 1 ? 'y' : 'ies'
+                            } left`}
+                      </strong>
+                      <span>
+                        You used {discussionLimitState.used} of {discussionLimitState.limit} allowed
+                        replies for this thread.
+                      </span>
+                    </div>
+                  ) : null}
+                  <Textarea
+                    variant="student"
                     value={discussionCommentBody}
-                    onChange={setDiscussionCommentBody}
-                    placeholder="Write your comment..."
-                    minHeight={140}
+                    onChange={(event) => setDiscussionCommentBody(event.target.value)}
+                    placeholder="Write a respectful reply..."
+                    rows={5}
+                    className="student-discussion-composer__textarea"
+                    disabled={discussionLimitState?.reached}
                   />
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(event) =>
-                      setDiscussionCommentImages(Array.from(event.target.files || []))
-                    }
-                  />
-                  <div className="teacher-class-workspace__head-actions">
+                  <div className="student-discussion-composer__attachments">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      disabled={discussionLimitState?.reached}
+                      onChange={(event) =>
+                        setDiscussionCommentImages(Array.from(event.target.files || []))
+                      }
+                    />
+                    <LocalImagePreviewStrip files={discussionCommentImages} />
+                    {discussionCommentImages.length > 0 ? (
+                      <div className="student-discussion-composer__chips">
+                        {discussionCommentImages.map((file) => (
+                          <span key={`${file.name}-${file.size}`}>
+                            <Paperclip className="h-3.5 w-3.5" />
+                            {file.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="student-discussion-composer__actions">
+                    <span>
+                      {discussionCommentBody.trim()
+                        ? `${discussionCommentBody.trim().length} characters`
+                        : 'Text or image replies are allowed'}
+                    </span>
                     <button
                       type="button"
                       className="student-class-assignment-row__take"
                       onClick={() => void handleSubmitDiscussionComment()}
-                      disabled={discussionSubmitting}
+                      disabled={
+                        discussionSubmitting ||
+                        discussionLimitState?.reached ||
+                        (!discussionCommentBody.trim() && discussionCommentImages.length === 0)
+                      }
                     >
+                      <SendHorizonal className="h-4 w-4" />
                       {discussionSubmitting ? 'Posting...' : 'Post Comment'}
                     </button>
                   </div>

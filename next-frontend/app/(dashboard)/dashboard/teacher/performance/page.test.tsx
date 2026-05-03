@@ -43,6 +43,31 @@ jest.mock('@/services/performance-service', () => ({
   },
 }));
 
+jest.mock('@/services/module-service', () => ({
+  moduleService: {
+    getByClass: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/lesson-service', () => ({
+  lessonService: {
+    getByClass: jest.fn(),
+  },
+}));
+
+jest.mock('@/services/ai-service', () => ({
+  aiService: {
+    createLessonPlanJob: jest.fn(),
+    getTeacherJobStatus: jest.fn(),
+    getLessonPlanJobResult: jest.fn(),
+    updateLessonPlanDraft: jest.fn(),
+  },
+}));
+
+jest.mock('@/utils/lesson-plan-pdf', () => ({
+  downloadLessonPlanPdf: jest.fn(),
+}));
+
 const mockedClassService = classService as jest.Mocked<typeof classService>;
 const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 const mockedPerformanceService = performanceService as jest.Mocked<typeof performanceService>;
@@ -145,6 +170,8 @@ describe('TeacherPerformancePage', () => {
     expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /^Analyze$/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Analyze Whole Class/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: /Lesson Plan/i }));
+    expect(screen.getByRole('button', { name: /Generate Lesson Plan/i })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /Refresh/i }));
     await waitFor(() => {

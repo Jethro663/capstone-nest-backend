@@ -1,7 +1,11 @@
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
-import { Home, LayoutDashboard, MapPinned } from 'lucide-react';
+import { Home, LayoutDashboard, LogIn, MapPinned } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { usePublicSessionProbe } from '@/hooks/usePublicSessionProbe';
+import { useAuth } from '@/providers/AuthProvider';
 
 const RECOVERY_STEPS = [
   'Your account data is still safe.',
@@ -10,6 +14,10 @@ const RECOVERY_STEPS = [
 ];
 
 export default function NotFound() {
+  const { isAuthenticated } = useAuth();
+
+  usePublicSessionProbe();
+
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.18),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(251,191,36,0.18),_transparent_30%),linear-gradient(180deg,_#fff7f5_0%,_#fffdf8_52%,_#ffffff_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <section className="mx-auto grid w-full max-w-6xl gap-8 overflow-hidden rounded-[2rem] border border-rose-100/80 bg-white/90 p-6 shadow-[0_30px_80px_-48px_rgba(15,23,42,0.45)] backdrop-blur md:p-8 lg:grid-cols-[1.05fr_0.95fr] lg:p-10">
@@ -49,12 +57,21 @@ export default function NotFound() {
             </ul>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild size="lg" className="rounded-2xl px-6">
-                <Link href="/dashboard">
-                  <LayoutDashboard className="h-4 w-4" />
-                  Go to dashboard
-                </Link>
-              </Button>
+              {isAuthenticated ? (
+                <Button asChild size="lg" className="rounded-2xl px-6">
+                  <Link href="/dashboard">
+                    <LayoutDashboard className="h-4 w-4" />
+                    Go to dashboard
+                  </Link>
+                </Button>
+              ) : (
+                <Button asChild size="lg" className="rounded-2xl px-6">
+                  <Link href="/login">
+                    <LogIn className="h-4 w-4" />
+                    Back to sign in
+                  </Link>
+                </Button>
+              )}
               <Button asChild size="lg" variant="outline" className="rounded-2xl border-slate-300 bg-white px-6">
                 <Link href="/">
                   <Home className="h-4 w-4" />

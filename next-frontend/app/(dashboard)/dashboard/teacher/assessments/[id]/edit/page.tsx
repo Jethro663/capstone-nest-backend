@@ -2,6 +2,9 @@
 
 import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CSSProperties,
+} from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -75,6 +78,7 @@ type AssessmentComposerSaveState = 'saved' | 'saving' | 'dirty' | 'error';
 type AssessmentSetupSectionId = 'basics' | 'content' | 'delivery' | 'placement' | 'review';
 type AssessmentSetupSeverity = 'required' | 'recommended';
 type AssessmentGuideScreen = 'overview' | 'build' | 'delivery' | 'placement' | 'review';
+type AssessmentGuidePinDirection = 'left' | 'right';
 
 type AssessmentSetupIssue = {
   id: string;
@@ -93,11 +97,51 @@ type AssessmentGuidePage = {
   steps: Array<{
     action: string;
     body: string;
-    tone?: 'default' | 'caution' | 'success';
+  tone?: 'default' | 'caution' | 'success';
   }>;
 };
 
 type ComposerImageDisplayMode = 'default' | 'expanded';
+
+type AssessmentGuidePinProps = {
+  children: string;
+  lineSide: AssessmentGuidePinDirection;
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+type AssessmentEditorLocalDraft = {
+  title: string;
+  description: string;
+  questions: QuestionDraft[];
+  selectedQuestionId: string | null;
+  deletedQuestionIds: string[];
+  availability: Availability;
+  resultReleaseMode: ResultReleaseMode;
+  assessmentType: AssessmentType;
+  passingScore: number;
+  maxAttempts: string;
+  timeLimitMinutes: string;
+  dueDate: string;
+  feedbackDelayHours: number;
+  category: ClassRecordCategory;
+  quarter: GradingPeriod | '';
+  placementMode: AssessmentPlacementMode;
+  selectedSlotId: string | null;
+  closeWhenDue: boolean;
+  randomizeQuestions: boolean;
+  timedQuestionsEnabled: boolean;
+  questionTimeLimitSeconds: string;
+  strictMode: boolean;
+  fileUploadInstructions: string;
+  allowedUploadExtensions: string[];
+  allowedUploadMimeTypes: string[];
+  maxUploadSizeBytes: number;
+  teacherAttachmentFile: Assessment['teacherAttachmentFile'] | null;
+  rubricCriteria: RubricCriterion[];
+};
+
+const TEACHER_ASSESSMENT_DRAFT_STORAGE_PREFIX = 'teacher-assessment-editor-draft';
 
 const ASSESSMENT_TYPE_TABS: Array<{ value: AssessmentType; label: string }> = [
   { value: 'quiz', label: 'Question Assessment' },
@@ -175,6 +219,81 @@ function resultReleaseModeToFeedbackLevel(mode: ResultReleaseMode): FeedbackLeve
   if (mode === 'full_with_hints_after_delay') return 'detailed';
   if (mode === 'full_after_delay') return 'standard';
   return 'immediate';
+}
+
+function assessmentEditorDraftStorageKey(assessmentId: string) {
+  return `${TEACHER_ASSESSMENT_DRAFT_STORAGE_PREFIX}:${assessmentId}`;
+}
+
+function buildAssessmentEditorDraftFingerprint(draft: AssessmentEditorLocalDraft) {
+  return JSON.stringify({
+    title: draft.title,
+    description: draft.description,
+    questions: draft.questions,
+    availability: draft.availability,
+    assessmentType: draft.assessmentType,
+    passingScore: draft.passingScore,
+    maxAttempts: draft.maxAttempts,
+    timeLimitMinutes: draft.timeLimitMinutes,
+    dueDate: draft.dueDate,
+    feedbackLevel: resultReleaseModeToFeedbackLevel(draft.resultReleaseMode),
+    feedbackDelayHours: draft.feedbackDelayHours,
+    category: draft.category,
+    quarter: draft.quarter,
+    placementMode: draft.placementMode,
+    selectedSlotId: draft.selectedSlotId,
+    closeWhenDue: draft.closeWhenDue,
+    randomizeQuestions: draft.randomizeQuestions,
+    timedQuestionsEnabled: draft.timedQuestionsEnabled,
+    questionTimeLimitSeconds: draft.questionTimeLimitSeconds,
+    strictMode: draft.strictMode,
+    fileUploadInstructions: draft.fileUploadInstructions,
+    allowedUploadExtensions: draft.allowedUploadExtensions,
+    allowedUploadMimeTypes: draft.allowedUploadMimeTypes,
+    maxUploadSizeBytes: draft.maxUploadSizeBytes,
+    teacherAttachmentFileId: draft.teacherAttachmentFile?.id ?? null,
+    rubricCriteria: draft.rubricCriteria,
+  });
+}
+
+function isAssessmentEditorLocalDraft(value: unknown): value is AssessmentEditorLocalDraft {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as Partial<AssessmentEditorLocalDraft>;
+  return (
+    typeof maybe.title === 'string' &&
+    typeof maybe.description === 'string' &&
+    Array.isArray(maybe.questions) &&
+    Array.isArray(maybe.deletedQuestionIds) &&
+    typeof maybe.availability === 'string' &&
+    typeof maybe.resultReleaseMode === 'string' &&
+    typeof maybe.assessmentType === 'string'
+  );
+}
+
+function readAssessmentEditorLocalDraft(assessmentId: string): AssessmentEditorLocalDraft | null {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(assessmentEditorDraftStorageKey(assessmentId));
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return isAssessmentEditorLocalDraft(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeAssessmentEditorLocalDraft(assessmentId: string, draft: AssessmentEditorLocalDraft) {
+  if (typeof window === 'undefined') return;
+  const key = assessmentEditorDraftStorageKey(assessmentId);
+  const next = JSON.stringify(draft);
+  if (window.localStorage.getItem(key) === next) return;
+  window.localStorage.setItem(key, next);
+}
+
+function clearAssessmentEditorLocalDraft(assessmentId: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(assessmentEditorDraftStorageKey(assessmentId));
 }
 
 function getResultReleaseSummary(
@@ -453,7 +572,18 @@ function AssessmentEditorGuideShot({
   publishReady: boolean;
 }) {
   return (
-    <div className={`assessment-editor__guide-shot assessment-editor__guide-shot--${screen}`}>
+    <div className={`assessment-editor__guide-shot assessment-editor__guide-shot--${screen}`} style={{ position: 'relative' }}>
+      <AssessmentEditorGuidePin lineSide="right" lineWidth="5.1rem" style={{ right: '2.25rem', top: '2.25rem' }}>
+        {screen === 'overview'
+          ? 'Top summary panel'
+          : screen === 'build'
+            ? 'Question cards'
+            : screen === 'delivery'
+              ? 'Delivery controls'
+              : screen === 'placement'
+                ? 'Placement setup'
+                : 'Checklist preview'}
+      </AssessmentEditorGuidePin>
       <div className="assessment-editor__guide-window">
         <span />
         <span />
@@ -502,6 +632,15 @@ function AssessmentEditorGuideShot({
 
         {screen === 'overview' ? (
           <div className="assessment-editor__guide-scene assessment-editor__guide-scene--overview">
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="5.5rem" style={{ left: '0.95rem', top: '2.15rem' }}>
+              Title field
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="5.5rem" style={{ right: '2rem', top: '5.05rem' }}>
+              Warning + help
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="right" lineWidth="5.4rem" style={{ right: '0.85rem', top: '10.25rem' }}>
+              Save now
+            </AssessmentEditorGuidePin>
             <div className="assessment-editor__header-publish-group assessment-editor__guide-publish-shell">
               <span className="rounded-full border px-3 py-1 text-xs font-semibold border-emerald-200 bg-emerald-50 text-emerald-700">
                 Saved
@@ -533,6 +672,12 @@ function AssessmentEditorGuideShot({
 
         {screen === 'build' ? (
           <div className="assessment-editor__guide-scene assessment-editor__guide-scene--build">
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="4.6rem" style={{ left: '0.9rem', top: '2.6rem' }}>
+              Question card
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="right" lineWidth="5.5rem" style={{ right: '0.9rem', top: '6.45rem' }}>
+              Add question control
+            </AssessmentEditorGuidePin>
             <div className="assessment-editor__guide-question-card">
               <div className="assessment-editor__guide-question-head">
                 <span>Q1</span>
@@ -553,6 +698,15 @@ function AssessmentEditorGuideShot({
 
         {screen === 'delivery' ? (
           <div className="assessment-editor__guide-scene assessment-editor__guide-scene--delivery">
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="3.6rem" style={{ left: '0.85rem', top: '2.2rem' }}>
+              Due date
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="5.1rem" style={{ left: '0.85rem', top: '4.85rem' }}>
+              Attempts and time
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="right" lineWidth="4.6rem" style={{ right: '0.85rem', top: '7.15rem' }}>
+              Result settings
+            </AssessmentEditorGuidePin>
             <div className="assessment-editor__guide-form-grid">
               <div className="assessment-editor__guide-field">
                 <small>Due date</small>
@@ -581,6 +735,12 @@ function AssessmentEditorGuideShot({
 
         {screen === 'placement' ? (
           <div className="assessment-editor__guide-scene assessment-editor__guide-scene--placement">
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '0.85rem', top: '2.3rem' }}>
+              Class record category
+            </AssessmentEditorGuidePin>
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="4.6rem" style={{ left: '0.85rem', top: '4.95rem' }}>
+              Select slot mode
+            </AssessmentEditorGuidePin>
             <div className="assessment-editor__guide-form-grid">
               <div className="assessment-editor__guide-field">
                 <small>Category</small>
@@ -601,6 +761,9 @@ function AssessmentEditorGuideShot({
 
         {screen === 'review' ? (
           <div className="assessment-editor__guide-scene assessment-editor__guide-scene--review">
+            <AssessmentEditorGuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '0.85rem', top: '2.05rem' }}>
+              Open warning checklist
+            </AssessmentEditorGuidePin>
             <div className="assessment-editor__guide-checklist-preview">
               <div>
                 <strong>Assessment setup checklist</strong>
@@ -616,6 +779,36 @@ function AssessmentEditorGuideShot({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function AssessmentEditorGuidePin({
+  children,
+  lineSide,
+  lineWidth,
+  style,
+}: AssessmentGuidePinProps) {
+  return (
+    <span
+      className="pointer-events-none absolute inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: `calc(100% - 0.05rem)`, width: lineWidth }
+            : { right: `calc(100% - 0.05rem)`, width: lineWidth }
+        }
+      />
+      <span
+        className="sr-only"
+      >
+        {lineSide}
+      </span>
+    </span>
   );
 }
 
@@ -773,6 +966,105 @@ export default function AssessmentEditorPage() {
   );
   const feedbackLevel = resultReleaseModeToFeedbackLevel(resultReleaseMode);
 
+  const applyDraftSnapshot = useCallback((draft: AssessmentEditorLocalDraft) => {
+    const resolvedSelectedQuestionId =
+      draft.selectedQuestionId && draft.questions.some((question) => question.id === draft.selectedQuestionId)
+        ? draft.selectedQuestionId
+        : (draft.questions[0]?.id ?? null);
+
+    setTitle(draft.title);
+    setDescription(draft.description);
+    setQuestions(draft.questions);
+    setSelectedQuestionId(resolvedSelectedQuestionId);
+    setDeletedQuestionIds(draft.deletedQuestionIds);
+    setAvailability(draft.availability);
+    setResultReleaseMode(draft.resultReleaseMode);
+    setAssessmentType(draft.assessmentType);
+    setPassingScore(draft.passingScore);
+    setMaxAttempts(draft.maxAttempts);
+    setTimeLimitMinutes(draft.timeLimitMinutes);
+    setDueDate(draft.dueDate);
+    setFeedbackDelayHours(draft.feedbackDelayHours);
+    setCategory(draft.category);
+    setQuarter(draft.quarter);
+    setPlacementMode(draft.placementMode);
+    setSelectedSlotId(draft.selectedSlotId);
+    setCloseWhenDue(draft.closeWhenDue);
+    setRandomizeQuestions(draft.randomizeQuestions);
+    setTimedQuestionsEnabled(draft.timedQuestionsEnabled);
+    setQuestionTimeLimitSeconds(draft.questionTimeLimitSeconds);
+    setStrictMode(draft.strictMode);
+    setFileUploadInstructions(draft.fileUploadInstructions);
+    setAllowedUploadExtensions(draft.allowedUploadExtensions);
+    setAllowedUploadMimeTypes(draft.allowedUploadMimeTypes);
+    setMaxUploadSizeBytes(draft.maxUploadSizeBytes);
+    setTeacherAttachmentFile(draft.teacherAttachmentFile);
+    setRubricCriteria(draft.rubricCriteria);
+  }, []);
+
+  const draftSnapshot = useMemo<AssessmentEditorLocalDraft>(
+    () => ({
+      title,
+      description,
+      questions,
+      selectedQuestionId,
+      deletedQuestionIds,
+      availability,
+      resultReleaseMode,
+      assessmentType,
+      passingScore,
+      maxAttempts,
+      timeLimitMinutes,
+      dueDate,
+      feedbackDelayHours,
+      category,
+      quarter,
+      placementMode,
+      selectedSlotId,
+      closeWhenDue,
+      randomizeQuestions,
+      timedQuestionsEnabled,
+      questionTimeLimitSeconds,
+      strictMode,
+      fileUploadInstructions,
+      allowedUploadExtensions,
+      allowedUploadMimeTypes,
+      maxUploadSizeBytes,
+      teacherAttachmentFile,
+      rubricCriteria,
+    }),
+    [
+      allowedUploadExtensions,
+      allowedUploadMimeTypes,
+      assessmentType,
+      availability,
+      category,
+      closeWhenDue,
+      deletedQuestionIds,
+      description,
+      dueDate,
+      feedbackDelayHours,
+      fileUploadInstructions,
+      maxAttempts,
+      maxUploadSizeBytes,
+      passingScore,
+      placementMode,
+      quarter,
+      questionTimeLimitSeconds,
+      questions,
+      randomizeQuestions,
+      resultReleaseMode,
+      rubricCriteria,
+      selectedQuestionId,
+      selectedSlotId,
+      strictMode,
+      teacherAttachmentFile,
+      timedQuestionsEnabled,
+      timeLimitMinutes,
+      title,
+    ],
+  );
+
   const fetchAssessment = useCallback(async () => {
     if (!assessmentId) return;
     try {
@@ -782,78 +1074,81 @@ export default function AssessmentEditorPage() {
       const normalizedQuestions = (data.questions || [])
         .sort((a, b) => a.order - b.order)
         .map(normalizeQuestion);
-
-      setAssessment(data);
-      setTitle(data.title || '');
-      lastSavedTitleRef.current = data.title || '';
-      setDescription(data.description || '');
-      setQuestions(normalizedQuestions);
-      setSelectedQuestionId(normalizedQuestions[0]?.id || null);
-      setDeletedQuestionIds([]);
-      setPreviewEnabled(isReadOnlyMode);
-
-      setAvailability(data.isPublished ? 'given' : 'draft');
-      setResultReleaseMode(
-        feedbackLevelToResultReleaseMode((data.feedbackLevel as FeedbackLevel) || 'immediate'),
-      );
-
-      setAssessmentType((data.type as AssessmentType) || 'quiz');
-      setPassingScore(normalizePassingScore(data.passingScore));
-      setMaxAttempts(finalizeBoundedPositiveIntegerInput(data.maxAttempts, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS));
-      setTimeLimitMinutes(
-        finalizeBoundedPositiveIntegerInput(
+      const placement: AssessmentClassRecordPlacement | null | undefined = data.classRecordPlacement;
+      const serverSnapshot: AssessmentEditorLocalDraft = {
+        title: data.title || '',
+        description: data.description || '',
+        questions: normalizedQuestions,
+        selectedQuestionId: normalizedQuestions[0]?.id || null,
+        deletedQuestionIds: [],
+        availability: data.isPublished ? 'given' : 'draft',
+        resultReleaseMode: feedbackLevelToResultReleaseMode((data.feedbackLevel as FeedbackLevel) || 'immediate'),
+        assessmentType: (data.type as AssessmentType) || 'quiz',
+        passingScore: normalizePassingScore(data.passingScore),
+        maxAttempts: finalizeBoundedPositiveIntegerInput(data.maxAttempts, MAX_ATTEMPTS, DEFAULT_MAX_ATTEMPTS),
+        timeLimitMinutes: finalizeBoundedPositiveIntegerInput(
           data.timeLimitMinutes,
           MAX_TIME_LIMIT_MINUTES,
           DEFAULT_TIME_LIMIT_MINUTES,
         ),
-      );
-      setDueDate(toDateInputValue(data.dueDate));
-      setFeedbackDelayHours(
-        Math.max(0, data.feedbackDelayHours ?? DEFAULT_RESULT_RELEASE_DELAY_HOURS),
-      );
+        dueDate: toDateInputValue(data.dueDate),
+        feedbackDelayHours: Math.max(0, data.feedbackDelayHours ?? DEFAULT_RESULT_RELEASE_DELAY_HOURS),
+        category: data.classRecordCategory || 'written_work',
+        quarter: (data.quarter as GradingPeriod) || '',
+        placementMode: (placement?.placementMode as AssessmentPlacementMode) || 'automatic',
+        selectedSlotId: placement?.itemId ?? null,
+        closeWhenDue: data.closeWhenDue ?? false,
+        randomizeQuestions: data.randomizeQuestions ?? false,
+        timedQuestionsEnabled: data.timedQuestionsEnabled ?? false,
+        questionTimeLimitSeconds:
+          data.questionTimeLimitSeconds === null || data.questionTimeLimitSeconds === undefined
+            ? ''
+            : String(data.questionTimeLimitSeconds),
+        strictMode: data.strictMode ?? false,
+        fileUploadInstructions: data.fileUploadInstructions || '',
+        allowedUploadExtensions:
+          data.allowedUploadExtensions && data.allowedUploadExtensions.length > 0
+            ? data.allowedUploadExtensions
+            : getDefaultUploadExtensions(),
+        allowedUploadMimeTypes:
+          data.allowedUploadMimeTypes && data.allowedUploadMimeTypes.length > 0
+            ? data.allowedUploadMimeTypes
+            : getDefaultUploadMimeTypes(),
+        maxUploadSizeBytes: data.maxUploadSizeBytes ?? 100 * 1024 * 1024,
+        teacherAttachmentFile: data.teacherAttachmentFile || null,
+        rubricCriteria: data.rubricCriteria || [],
+      };
+      const serverFingerprint = buildAssessmentEditorDraftFingerprint(serverSnapshot);
+      const cachedDraft = !isReadOnlyMode ? readAssessmentEditorLocalDraft(assessmentId) : null;
+      const shouldRestoreCachedDraft =
+        cachedDraft !== null &&
+        buildAssessmentEditorDraftFingerprint(cachedDraft) !== serverFingerprint;
+      const nextDraft = shouldRestoreCachedDraft ? cachedDraft : serverSnapshot;
 
-      setCategory(data.classRecordCategory || 'written_work');
-      setQuarter((data.quarter as GradingPeriod) || '');
-      const placement: AssessmentClassRecordPlacement | null | undefined = data.classRecordPlacement;
-      setPlacementMode((placement?.placementMode as AssessmentPlacementMode) || 'automatic');
-      setSelectedSlotId(placement?.itemId ?? null);
-
-      setCloseWhenDue(data.closeWhenDue ?? false);
-      setRandomizeQuestions(data.randomizeQuestions ?? false);
-      setTimedQuestionsEnabled(data.timedQuestionsEnabled ?? false);
-      setQuestionTimeLimitSeconds(
-        data.questionTimeLimitSeconds === null || data.questionTimeLimitSeconds === undefined
-          ? ''
-          : String(data.questionTimeLimitSeconds),
-      );
-      setStrictMode(data.strictMode ?? false);
-
-      setFileUploadInstructions(data.fileUploadInstructions || '');
-      setAllowedUploadExtensions(
-        data.allowedUploadExtensions && data.allowedUploadExtensions.length > 0
-          ? data.allowedUploadExtensions
-          : getDefaultUploadExtensions(),
-      );
-      setAllowedUploadMimeTypes(
-        data.allowedUploadMimeTypes && data.allowedUploadMimeTypes.length > 0
-          ? data.allowedUploadMimeTypes
-          : getDefaultUploadMimeTypes(),
-      );
-      setMaxUploadSizeBytes(data.maxUploadSizeBytes ?? 100 * 1024 * 1024);
-      setTeacherAttachmentFile(data.teacherAttachmentFile || null);
-
-      setRubricCriteria(data.rubricCriteria || []);
+      setAssessment(data);
+      setPreviewEnabled(isReadOnlyMode);
+      applyDraftSnapshot(nextDraft);
+      lastSavedTitleRef.current = serverSnapshot.title;
+      lastSavedFingerprintRef.current = serverFingerprint;
       setAnalytics(null);
       setSlotOverview(null);
       setSlotOverviewError(null);
-      initializedDraftRef.current = false;
+      initializedDraftRef.current = true;
+
+      if (!shouldRestoreCachedDraft) {
+        clearAssessmentEditorLocalDraft(assessmentId);
+        setSaveState('saved');
+      } else {
+        setSaveState('dirty');
+        toast.success('Recovered unsaved assessment draft from this device');
+      }
     } catch {
       toast.error('Unable to load assessment');
       setAssessment(null);
     } finally {
       setLoading(false);
     }
-  }, [assessmentId, isReadOnlyMode]);
+  }, [applyDraftSnapshot, assessmentId, isReadOnlyMode]);
 
   useEffect(() => {
     void fetchAssessment();
@@ -923,63 +1218,8 @@ export default function AssessmentEditorPage() {
   }, [assessment?.classId, assessmentId, category, quarter]);
 
   const serializedDraft = useMemo(
-    () =>
-      JSON.stringify({
-        title,
-        description,
-        questions,
-        availability,
-        assessmentType,
-        passingScore,
-        maxAttempts,
-        timeLimitMinutes,
-        dueDate,
-        feedbackLevel,
-        feedbackDelayHours,
-        category,
-        quarter,
-        placementMode,
-        selectedSlotId,
-        closeWhenDue,
-        randomizeQuestions,
-        timedQuestionsEnabled,
-        questionTimeLimitSeconds,
-        strictMode,
-        fileUploadInstructions,
-        allowedUploadExtensions,
-        allowedUploadMimeTypes,
-        maxUploadSizeBytes,
-        teacherAttachmentFileId: teacherAttachmentFile?.id ?? null,
-        rubricCriteria,
-      }),
-    [
-      allowedUploadExtensions,
-      allowedUploadMimeTypes,
-      assessmentType,
-      availability,
-      category,
-      closeWhenDue,
-      description,
-      dueDate,
-      feedbackDelayHours,
-      feedbackLevel,
-      fileUploadInstructions,
-      maxAttempts,
-      maxUploadSizeBytes,
-      passingScore,
-      placementMode,
-      quarter,
-      questionTimeLimitSeconds,
-      questions,
-      randomizeQuestions,
-      rubricCriteria,
-      selectedSlotId,
-      strictMode,
-      teacherAttachmentFile,
-      timedQuestionsEnabled,
-      timeLimitMinutes,
-      title,
-    ],
+    () => buildAssessmentEditorDraftFingerprint(draftSnapshot),
+    [draftSnapshot],
   );
 
   useEffect(() => {
@@ -991,19 +1231,26 @@ export default function AssessmentEditorPage() {
   }, [title]);
 
   useEffect(() => {
-    if (loading) return;
-
-    if (!initializedDraftRef.current) {
-      initializedDraftRef.current = true;
-      lastSavedFingerprintRef.current = serializedDraft;
-      setSaveState('saved');
-      return;
-    }
+    if (loading || !initializedDraftRef.current) return;
 
     if (serializedDraft !== lastSavedFingerprintRef.current) {
       setSaveState((current) => (current === 'saving' ? current : 'dirty'));
+      return;
     }
+
+    setSaveState((current) => (current === 'saving' || current === 'error' ? current : 'saved'));
   }, [loading, serializedDraft]);
+
+  useEffect(() => {
+    if (loading || !assessmentId || isReadOnlyMode || !initializedDraftRef.current) return;
+
+    if (serializedDraft === lastSavedFingerprintRef.current) {
+      clearAssessmentEditorLocalDraft(assessmentId);
+      return;
+    }
+
+    writeAssessmentEditorLocalDraft(assessmentId, draftSnapshot);
+  }, [assessmentId, draftSnapshot, isReadOnlyMode, loading, serializedDraft]);
 
   const autoSaveTitle = useCallback(
     async (nextTitle: string) => {
@@ -1027,6 +1274,7 @@ export default function AssessmentEditorPage() {
           stripTitleFromSerializedDraft(lastSavedDraft) === stripTitleFromSerializedDraft(latestDraft)
         ) {
           lastSavedFingerprintRef.current = latestDraft;
+          clearAssessmentEditorLocalDraft(assessmentId);
           setSaveState('saved');
           return;
         }
@@ -1310,21 +1558,22 @@ export default function AssessmentEditorPage() {
     () => [
       {
         title: 'Start with the top-right controls',
-        description: 'Use the header first. The warning button shows missing setup items, and the question mark opens the guided walkthrough.',
+        description:
+          'Use this header first. The warning button shows setup blockers, and the question mark opens the guided walkthrough.',
         screen: 'overview',
-        reminder: 'Simple rule: check the warning button before publishing, and use the question mark when you need the setup flow explained.',
+        reminder: 'Open warning first, then use the question mark for the full setup walkthrough.',
         steps: [
           {
-            action: 'Name',
+            action: 'Check',
             body: 'Set the assessment title in the header so the activity is easy to recognize immediately.',
           },
           {
-            action: 'Open',
-            body: 'Use the warning button to read the current setup checklist in plain teacher language.',
+            action: 'Read',
+            body: 'Open the warning button to review required and recommended setup items.',
           },
           {
-            action: 'Guide',
-            body: 'Use the question-mark guide whenever you need the page flow explained step by step.',
+            action: 'Open',
+            body: 'Use this question-mark guide when you need the page flow explained step by step.',
             tone: 'caution',
           },
         ],
@@ -1421,7 +1670,7 @@ export default function AssessmentEditorPage() {
       toast.info('Switch to Question Assessment mode to add questions.');
       return;
     }
-    const question = createAssessmentComposerQuestion(type, questions.length + 1);
+    const question = createAssessmentComposerQuestion(type, 1);
     setQuestions((current) => {
       const insertAt = afterIndex === null ? current.length : Math.min(afterIndex + 1, current.length);
       const next = current.slice();
@@ -1914,9 +2163,6 @@ export default function AssessmentEditorPage() {
 
       toast.success('Assessment saved');
       await fetchAssessment();
-      lastSavedFingerprintRef.current = serializedDraft;
-      lastSavedTitleRef.current = title.trim();
-      setSaveState('saved');
     } catch (error: unknown) {
       const message =
         typeof error === 'object' &&
@@ -3151,7 +3397,7 @@ export default function AssessmentEditorPage() {
                 setHelpPage(0);
                 setHelpOpen(true);
               }}
-              aria-label="Module help"
+              aria-label="Assessment help"
             >
               <CircleHelp className="h-4 w-4" />
             </Button>
@@ -3227,7 +3473,7 @@ export default function AssessmentEditorPage() {
                     <span>{section.description}</span>
                     <small>
                       {status.label}
-                      {issueCount > 0 ? ` · ${issueCount} item${issueCount === 1 ? '' : 's'}` : ''}
+                      {issueCount > 0 ? ` (${issueCount} item${issueCount === 1 ? '' : 's'})` : ''}
                     </small>
                   </div>
                 </button>

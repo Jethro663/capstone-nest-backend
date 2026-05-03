@@ -1088,6 +1088,106 @@ describe('AiMentorController', () => {
     });
   });
 
+  describe('queueLessonPlanJob()', () => {
+    it('should forward POST /teacher/lesson-plans/jobs with dto and write an audit log', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        anchorType: 'lesson',
+        anchorId: 'lesson-1',
+        teacherNote: 'Focus on mixed readiness.',
+      };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+
+      const result = await controller.queueLessonPlanJob(
+        dto as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/teacher/lesson-plans/jobs',
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.lesson_plan.queued',
+          targetType: 'class',
+          targetId: CLASS_ID,
+          metadata: expect.objectContaining({
+            jobId: JOB_ID,
+            anchorType: 'lesson',
+            anchorId: 'lesson-1',
+          }),
+        }),
+      );
+      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+
+    it('should block lesson plan queue when teacher does not own class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.queueLessonPlanJob(
+          {
+            classId: CLASS_ID,
+            anchorType: 'module',
+            anchorId: 'module-1',
+          } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateLessonPlanDraft()', () => {
+    it('should forward PATCH /teacher/lesson-plans/jobs/:jobId/draft and audit the save', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+
+      const payload = {
+        structuredOutput: {
+          classProfile: 'mixed',
+          header: {
+            lessonTitle: 'Fractions',
+          },
+        },
+      };
+
+      const result = await controller.updateLessonPlanDraft(
+        JOB_ID,
+        payload as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'PATCH',
+        `/teacher/lesson-plans/jobs/${JOB_ID}/draft`,
+        TEACHER_USER,
+        payload,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.lesson_plan.draft_saved',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+    });
+  });
+
   describe('generateQuizDraft()', () => {
     it('should forward POST /teacher/quizzes/generate-draft with dto and write audit log', async () => {
       const dto = {

@@ -1,7 +1,7 @@
 import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { Lesson, LessonCompletion } from "../../types/lesson";
+import type { BulkLessonDraftStateDto, Lesson, LessonCompletion } from "../../types/lesson";
 
 export type LessonDetail = Lesson;
 export type LessonCompletionStatus = {
@@ -35,5 +35,18 @@ export const lessonsApi = {
       `/lessons/${lessonId}/completion-status`,
     );
     return unwrapEnvelope(response.data);
+  },
+
+  async publish(lessonId: string) {
+    const response = await apiClient.put<ApiEnvelope<Lesson>>(`/lessons/${lessonId}/publish`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async setDraftState(classId: string, payload: BulkLessonDraftStateDto) {
+    const response = await apiClient.put<ApiEnvelope<Lesson[]>>(
+      `/lessons/class/${classId}/bulk-status`,
+      payload,
+    );
+    return normalizeArray<Lesson>(unwrapEnvelope(response.data));
   },
 };

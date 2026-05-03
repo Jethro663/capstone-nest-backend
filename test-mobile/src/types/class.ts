@@ -32,4 +32,24 @@ export interface ClassItem {
       email?: string;
     };
   }>;
+  isHidden?: boolean;
+  cardBannerUrl?: string | null;
+  cardPreset?: string | null;
+}
+
+export type ClassVisibilityStatus = "all" | "active" | "inactive";
+
+export interface EnrollmentRecord {
+  id: string;
+  studentId?: string;
+  userId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  student?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    profilePicture?: string;
+  } | null;
 }

@@ -37,6 +37,11 @@ from .library_indexing_pipeline import (
 )
 from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
+from .lesson_plan_service import (
+    generate_class_lesson_plan,
+    save_lesson_plan_draft,
+    _normalize_lesson_plan_output,
+)
 from .quiz_generation_service import generate_quiz_draft
 from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
@@ -63,6 +68,7 @@ from .schemas import (
     DemoInterventionPlanRequest,
     ExtractRequest,
     GenerateQuizDraftRequest,
+    GenerateLessonPlanRequest,
     InterventionRecommendationRequest,
     MentorExplainRequest,
     RequestUser,
@@ -72,6 +78,7 @@ from .schemas import (
     JaPracticeGenerateRequest,
     JaAskResponseRequest,
     JaReviewGenerateRequest,
+    UpdateLessonPlanDraftRequest,
     UpdateExtractionRequest,
 )
 
@@ -539,6 +546,35 @@ def _normalize_intervention_structured_output(
     return normalized
 
 
+def _normalize_lesson_plan_structured_output(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    existing_header = normalized.get("header")
+    fallback_header = existing_header if isinstance(existing_header, dict) else {}
+    anchor_title = ""
+    if isinstance(existing_header, dict):
+        anchor_title = str(
+            existing_header.get("lessonTitle")
+            or existing_header.get("moduleTitle")
+            or "",
+        ).strip()
+    return _normalize_lesson_plan_output(
+        normalized,
+        fallback_header={
+            key: str(value)
+            for key, value in fallback_header.items()
+            if isinstance(key, str) and value is not None
+        },
+        class_profile=(
+            str(normalized.get("classProfile"))
+            if isinstance(normalized.get("classProfile"), str)
+            else None
+        ),
+        anchor_title=anchor_title or "the selected lesson",
+    )
+
+
 async def _create_ai_generation_job(
     db: AsyncSession,
     *,
@@ -969,6 +1005,102 @@ async def _run_intervention_generation_job(
                 errorMessage=str(exc),
             )
             logger.exception("[ai-job] Intervention generation %s failed", job_id)
+        finally:
+            AI_JOB_TASKS.pop(job_id, None)
+
+
+async def _run_lesson_plan_generation_job(
+    job_id: str,
+    body: GenerateLessonPlanRequest,
+    user: RequestUser,
+) -> None:
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="processing",
+                error_message=None,
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=12,
+                statusMessage="Reviewing class context",
+                retryState={"attempt": 0, "maxAttempts": 2},
+            )
+
+            async def _operation(attempt: int) -> dict[str, Any]:
+                await bg_db.rollback()
+                await _record_ai_job_runtime(
+                    bg_db,
+                    job_id=job_id,
+                    retryState={"attempt": attempt, "maxAttempts": 2},
+                )
+                return await generate_class_lesson_plan(
+                    bg_db,
+                    user,
+                    body,
+                    existing_job_id=job_id,
+                    progress_callback=lambda status_message, progress_percent: _record_ai_job_runtime(
+                        bg_db,
+                        job_id=job_id,
+                        statusMessage=status_message,
+                        progressPercent=progress_percent,
+                        retryState={"attempt": attempt, "maxAttempts": 2},
+                    ),
+                )
+
+            result = await _run_with_retries(
+                _operation,
+                max_attempts=2,
+                delay_seconds=1.0,
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Lesson plan ready",
+                resultSummary={
+                    "outputId": result.get("outputId"),
+                    "classProfile": result.get("classProfile"),
+                    "header": result.get("header"),
+                },
+            )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="cancelled",
+                error_message="Generation cancelled by teacher.",
+                output_status="cancelled",
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation cancelled",
+                errorMessage="Generation cancelled by teacher.",
+            )
+            logger.info("[ai-job] Lesson plan generation %s cancelled", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation failed",
+                errorMessage=str(exc),
+            )
+            logger.exception("[ai-job] Lesson plan generation %s failed", job_id)
         finally:
             AI_JOB_TASKS.pop(job_id, None)
 
@@ -4042,6 +4174,112 @@ async def queue_teacher_quiz_draft_job(
 
 
 # ---------------------------------------------------------------------------
+# POST /teacher/lesson-plans/jobs
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/lesson-plans/jobs", status_code=202)
+async def queue_teacher_lesson_plan_job(
+    body: GenerateLessonPlanRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    class_row = await db.execute(
+        sa_text(
+            """
+            SELECT c.id, c.teacher_id
+            FROM classes c
+            WHERE c.id = :classId
+            """
+        ),
+        {"classId": body.class_id},
+    )
+    class_info = class_row.mappings().first()
+    if not class_info:
+        raise HTTPException(404, "Class not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(class_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only generate lesson plans for your own classes")
+
+    job_id = await _create_ai_generation_job(
+        db,
+        job_type="class_lesson_plan_generation",
+        class_id=body.class_id,
+        teacher_id=user.id,
+        source_filters={
+            "anchorType": body.anchor_type,
+            "anchorId": body.anchor_id,
+            "teacherNote": body.teacher_note,
+            "header": body.header.model_dump(by_alias=True) if body.header else {},
+        },
+        max_attempts=2,
+    )
+
+    try:
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(_run_lesson_plan_generation_job(job_id, body, user))
+        AI_JOB_TASKS[job_id] = task
+    except RuntimeError as exc:
+        logger.exception("[ai-job] Failed to schedule lesson plan job %s: %s", job_id, exc)
+        raise HTTPException(500, "Failed to schedule lesson plan generation job") from exc
+
+    return {
+        "success": True,
+        "message": "Lesson plan generation job queued",
+        "data": {
+            "jobId": job_id,
+            "jobType": "class_lesson_plan_generation",
+            "status": "pending",
+            "progressPercent": 5,
+            "statusMessage": "Queued",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /teacher/lesson-plans/jobs/:id/draft
+# ---------------------------------------------------------------------------
+
+
+@app.patch("/teacher/lesson-plans/jobs/{job_id}/draft")
+async def update_teacher_lesson_plan_draft(
+    job_id: str,
+    body: UpdateLessonPlanDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await save_lesson_plan_draft(
+        db,
+        job_id=job_id,
+        user=user,
+        structured_output=body.structured_output,
+    )
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft saved",
+        resultSummary={
+            "outputId": result.get("outputId"),
+            "classProfile": result.get("structuredOutput", {}).get("classProfile"),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Lesson plan draft saved",
+        "data": {
+            "jobId": result["jobId"],
+            "jobType": result["jobType"],
+            "status": result["status"],
+            "progressPercent": 100,
+            "statusMessage": result["statusMessage"],
+            "outputId": result["outputId"],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /teacher/jobs/:id
 # ---------------------------------------------------------------------------
 
@@ -4093,6 +4331,8 @@ async def get_teacher_ai_job_result(
         result_data["assessmentId"] = assessment_id
     if job["output_type"] == "intervention_recommendation":
         result_data = _normalize_intervention_structured_output(result_data)
+    if job["output_type"] == "class_lesson_plan":
+        result_data = _normalize_lesson_plan_structured_output(result_data)
     if runtime and runtime.get("resultSummary"):
         result_data["runtime"] = runtime["resultSummary"]
 

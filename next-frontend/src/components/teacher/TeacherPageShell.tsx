@@ -57,11 +57,19 @@ const accentMap = {
 } as const;
 
 const headerMetricAccentMap = {
-  neutral: 'border-white/70 bg-white/70',
-  sky: 'border-[#bfdbfe] bg-[linear-gradient(135deg,rgba(219,234,254,0.95),rgba(255,255,255,0.9))]',
-  teal: 'border-[#bbf7d0] bg-[linear-gradient(135deg,rgba(220,252,231,0.95),rgba(255,255,255,0.9))]',
-  amber: 'border-[#fde68a] bg-[linear-gradient(135deg,rgba(254,243,199,0.95),rgba(255,255,255,0.92))]',
-  rose: 'border-[#fecdd3] bg-[linear-gradient(135deg,rgba(254,226,226,0.96),rgba(255,255,255,0.92))]',
+  neutral: 'border-[#e2e8f0]',
+  sky: 'border-[#bfdbfe]',
+  teal: 'border-[#bbf7d0]',
+  amber: 'border-[#fde68a]',
+  rose: 'border-[#fecdd3]',
+} as const;
+
+const headerMetricDotMap = {
+  neutral: 'bg-slate-300',
+  sky: 'bg-sky-500',
+  teal: 'bg-emerald-500',
+  amber: 'bg-amber-500',
+  rose: 'bg-rose-500',
 } as const;
 
 export function TeacherPageShell({
@@ -111,14 +119,20 @@ export function TeacherHeaderMetric({
   return (
     <div
       className={cn(
-        'min-w-[118px] max-w-[190px] rounded-[12px] border px-3 py-2.5 shadow-sm backdrop-blur',
+        'min-w-0 rounded-[10px] border bg-white px-3 py-2 shadow-none',
         headerMetricAccentMap[accent],
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
-        {label}
-      </p>
-      <p className="mt-1 text-[1.05rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]">
+      <div className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className={cn('h-1.5 w-1.5 shrink-0 rounded-full', headerMetricDotMap[accent])}
+        />
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">
+          {label}
+        </p>
+      </div>
+      <p className="mt-1.5 text-[1rem] font-semibold leading-none tracking-tight text-[var(--teacher-text-strong)]">
         {value}
       </p>
       {caption ? <p className="mt-1 text-[10px] leading-4 text-[var(--teacher-text-muted)]">{caption}</p> : null}

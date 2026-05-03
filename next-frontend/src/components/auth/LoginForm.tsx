@@ -15,6 +15,7 @@ import {
 } from '@/lib/input-policy';
 import { useAuth } from '@/providers/AuthProvider';
 import { resolvePostLoginDestination } from '@/lib/dashboard-route-access';
+import { usePublicSessionProbe } from '@/hooks/usePublicSessionProbe';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,8 @@ export function LoginForm() {
   const { isAuthenticated, loading: authLoading, role } = useAuth();
   const [serverError, setServerError] = useState('');
   const requestedPath = searchParams.get('from');
+
+  usePublicSessionProbe();
 
   // If already authenticated (e.g. page reload with valid cookie), skip login.
   useEffect(() => {
@@ -85,7 +88,12 @@ export function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="auth-form space-y-6">
+      <form
+        action="/login"
+        method="post"
+        onSubmit={handleSubmit(onSubmit)}
+        className="auth-form space-y-6"
+      >
       <div>
         <h2 className="auth-title">Welcome back</h2>
         <p className="auth-subtitle">Sign in to your Nexora account</p>

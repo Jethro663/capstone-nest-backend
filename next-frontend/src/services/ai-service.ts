@@ -6,6 +6,7 @@ import type {
   AiGenerationJobResult,
   GenerateQuizDraftDto,
   GenerateQuizDraftResponse,
+  GenerateLessonPlanDto,
   InterventionStructuredOutput,
   InterventionRecommendation,
   InterventionRecommendationDto,
@@ -13,6 +14,7 @@ import type {
   MentorExplainDto,
   MentorExplainResponse,
   IndexingSummary,
+  LessonPlanStructuredOutput,
   QuizDraftStructuredOutput,
   StudentTutorAnswerResponse,
   StudentTutorBootstrapResponse,
@@ -21,6 +23,7 @@ import type {
   StudentTutorSessionResponse,
   StudentTutorSessionStartResponse,
   UpdateClassAiPolicyDto,
+  UpdateLessonPlanDraftDto,
 } from '@/types/ai';
 
 type Envelope<T> = {
@@ -263,6 +266,13 @@ export const aiService = {
     return normalizeJobEnvelope(data);
   },
 
+  async createLessonPlanJob(
+    dto: GenerateLessonPlanDto,
+  ): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.post('/ai/teacher/lesson-plans/jobs', dto);
+    return normalizeJobEnvelope(data);
+  },
+
   async getTeacherJobStatus(jobId: string): Promise<Envelope<AiGenerationJob>> {
     const { data } = await api.get(`/ai/teacher/jobs/${jobId}`);
     return normalizeJobEnvelope(data);
@@ -305,6 +315,53 @@ export const aiService = {
         assessmentIds: [],
       },
     });
+  },
+
+  async getLessonPlanJobResult(
+    jobId: string,
+  ): Promise<Envelope<AiGenerationJobResult<LessonPlanStructuredOutput>>> {
+    const { data } = await api.get(`/ai/teacher/jobs/${jobId}/result`);
+    return normalizeJobResultEnvelope<LessonPlanStructuredOutput>(data, {
+      header: {},
+      classProfile: 'mixed',
+      evidenceSummary:
+        'AI lesson plan result is temporarily unavailable. Keep polling job status and retry shortly.',
+      objectives: [],
+      contentOrSubjectMatter: '',
+      learningResources: [],
+      procedures: {
+        review: [],
+        purpose: [],
+        examples: [],
+        guidedPractice: [],
+        mastery: [],
+        application: [],
+        generalization: [],
+        evaluation: [],
+        remediationOrEnrichment: [],
+      },
+      assessment: [],
+      remarks: '',
+      reflection: '',
+      assignmentOrHomeExtension: '',
+      differentiation: {
+        support: [],
+        core: [],
+        enrichment: [],
+      },
+      safeguards: [],
+    });
+  },
+
+  async updateLessonPlanDraft(
+    jobId: string,
+    dto: UpdateLessonPlanDraftDto,
+  ): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.patch(
+      `/ai/teacher/lesson-plans/jobs/${jobId}/draft`,
+      dto,
+    );
+    return normalizeJobEnvelope(data);
   },
 
   async reindexClass(classId: string): Promise<Envelope<IndexingSummary>> {

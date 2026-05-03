@@ -36,6 +36,10 @@ import {
   UpdateExtractionDto,
 } from './DTO/extract-module.dto';
 import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
+import {
+  GenerateLessonPlanDto,
+  UpdateLessonPlanDraftDto,
+} from './DTO/lesson-plan.dto';
 import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
 import { DemoInterventionPlanDto } from './DTO/demo-intervention-plan.dto';
 import { UpdateClassAiPolicyDto } from './DTO/class-ai-policy.dto';
@@ -2106,6 +2110,65 @@ export class AiMentorController {
         questionType: dto.questionType,
         assessmentType: dto.assessmentType,
       },
+    });
+    return result;
+  }
+
+  @Post('teacher/lesson-plans/jobs')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({
+    summary:
+      'Queue grounded AI lesson plan generation from a selected class module or lesson',
+  })
+  async queueLessonPlanJob(
+    @Body() dto: GenerateLessonPlanDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherClassAccess(dto.classId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      '/teacher/lesson-plans/jobs',
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.lesson_plan.queued',
+      targetType: 'class',
+      targetId: dto.classId,
+      metadata: {
+        jobId: this.extractStringField(result, 'jobId'),
+        anchorType: dto.anchorType,
+        anchorId: dto.anchorId,
+        noteProvided: Boolean(dto.teacherNote?.trim()),
+      },
+    });
+    return result;
+  }
+
+  @Patch('teacher/lesson-plans/jobs/:jobId/draft')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'Persist reviewed edits for a generated teacher lesson plan',
+  })
+  async updateLessonPlanDraft(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body() dto: UpdateLessonPlanDraftDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'PATCH',
+      `/teacher/lesson-plans/jobs/${jobId}/draft`,
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.lesson_plan.draft_saved',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
     });
     return result;
   }

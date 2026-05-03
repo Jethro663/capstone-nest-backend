@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -15,6 +15,7 @@ import {
 import { peekAppError } from "../api/http";
 import type { ClassDetailInitialTab, RootStackParamList } from "../navigation/types";
 import { assessmentsApi } from "../api/services/assessments";
+import { StudentDiscussionBoard } from "../components/student/StudentDiscussionBoard";
 import { useAuth } from "../providers/AuthProvider";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
@@ -475,6 +476,7 @@ export function StudentClassDetailContent({
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab ?? "modules");
   const [expandedModuleId, setExpandedModuleId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const discussionRefetchRef = useRef<() => Promise<unknown>>(() => Promise.resolve(undefined));
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -699,6 +701,10 @@ export function StudentClassDetailContent({
     setSheetOpen(false);
   }, [classId, initialTab]);
 
+  const registerDiscussionRefetch = useCallback((refetcher: () => Promise<unknown>) => {
+    discussionRefetchRef.current = refetcher;
+  }, []);
+
   const handleRefresh = () => {
     void Promise.all([
       classQuery.refetch(),
@@ -706,6 +712,7 @@ export function StudentClassDetailContent({
       lessonCompletionsQuery.refetch(),
       assessmentsQuery.refetch(),
       announcementsQuery.refetch(),
+      ...(activeTab === "discussion" ? [discussionRefetchRef.current()] : []),
       ...attemptQueries.map((query) => query.refetch()),
     ]);
   };
@@ -1221,13 +1228,7 @@ export function StudentClassDetailContent({
         ) : null}
 
         {activeTab === "discussion" ? (
-          <View>
-            <DarkSectionLabel title="Discussion Board" meta="0 posts" metaColor={theme.purple} />
-            <DarkEmptyPanel
-              title="Discussion board is not connected yet"
-              subtitle="The mobile shell matches the class-detail layout, but student discussion posts are not backed by a live mobile data source yet."
-            />
-          </View>
+          <StudentDiscussionBoard classId={classId} registerRefetch={registerDiscussionRefetch} />
         ) : null}
 
         {activeTab === "classmates" ? (
@@ -1453,7 +1454,21 @@ export function StudentClassDetailContent({
           <View>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 12 }}>
               <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{currentMonthLabel}</Text>
-              <View style={{ flexDirection: "row", gap: 6 }}>
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                <Pressable
+                  accessibilityLabel="Open full calendar"
+                  onPress={() => navigation.navigate("Calendar", { classId })}
+                  style={{
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.surface,
+                    paddingHorizontal: 10,
+                    paddingVertical: 7,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Open Full Calendar</Text>
+                </Pressable>
                 <Pressable
                   accessibilityLabel="Previous month"
                   onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}

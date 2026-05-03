@@ -1,14 +1,18 @@
 import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
+import { downloadProtectedFile, openLocalFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   Assessment,
   AssessmentAttempt,
   AttemptResult,
   OngoingAttemptResult,
+  RemovedAssessmentSubmissionFiles,
   SubmitAssessmentDto,
+  TeacherAssessmentSubmissionsResponse,
   UpdateAttemptProgressDto,
   UploadedAssessmentFile,
+  UploadedAssessmentSubmission,
 } from "../../types/assessment";
 import type {
   AssessmentHistoryQuery,
@@ -76,10 +80,17 @@ export const assessmentsApi = {
       type: file.type || "application/octet-stream",
     } as unknown as Blob);
 
-    const response = await apiClient.post<ApiEnvelope<UploadedAssessmentFile>>(
+    const response = await apiClient.post<ApiEnvelope<UploadedAssessmentSubmission>>(
       `/assessments/${assessmentId}/submission-file`,
       formData,
       { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async removeSubmissionFile(assessmentId: string, fileId: string) {
+    const response = await apiClient.delete<ApiEnvelope<RemovedAssessmentSubmissionFiles>>(
+      `/assessments/${assessmentId}/submission-files/${fileId}`,
     );
     return unwrapEnvelope(response.data);
   },
@@ -102,5 +113,101 @@ export const assessmentsApi = {
   async getAttemptResults(attemptId: string) {
     const response = await apiClient.get<ApiEnvelope<AttemptResult>>(`/assessments/attempts/${attemptId}/results`);
     return unwrapEnvelope(response.data);
+  },
+
+  async update(assessmentId: string, payload: Partial<Assessment>) {
+    const response = await apiClient.put<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async getTeacherSubmissions(assessmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherAssessmentSubmissionsResponse>>(
+      `/assessments/${assessmentId}/submissions`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async returnGrade(
+    attemptId: string,
+    payload: {
+      teacherFeedback?: string;
+      directScore?: number;
+    } = {},
+  ) {
+    const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(
+      `/assessments/attempts/${attemptId}/return`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async unreturnGrade(attemptId: string) {
+    const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(
+      `/assessments/attempts/${attemptId}/unreturn`,
+      {},
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async downloadTeacherAttachment(assessmentId: string, fallbackName = "teacher-attachment") {
+    return downloadProtectedFile({
+      pathname: `/assessments/${assessmentId}/teacher-attachment/download`,
+      fallbackName,
+      persistent: true,
+      openAfterDownload: true,
+    });
+  },
+
+  async openTeacherAttachment(assessmentId: string, fallbackName = "teacher-attachment") {
+    const download = await downloadProtectedFile({
+      pathname: `/assessments/${assessmentId}/teacher-attachment/download`,
+      fallbackName,
+    });
+    await openLocalFile(download.uri);
+    return download;
+  },
+
+  async downloadAttemptSubmissionFile(attemptId: string, fallbackName = "submission-file") {
+    return downloadProtectedFile({
+      pathname: `/assessments/attempts/${attemptId}/submission-file/download`,
+      fallbackName,
+      persistent: true,
+      openAfterDownload: true,
+    });
+  },
+
+  async openAttemptSubmissionFile(attemptId: string, fallbackName = "submission-file") {
+    const download = await downloadProtectedFile({
+      pathname: `/assessments/attempts/${attemptId}/submission-file/download`,
+      fallbackName,
+    });
+    await openLocalFile(download.uri);
+    return download;
+  },
+
+  async downloadAttemptSubmissionAttachmentFile(
+    attemptId: string,
+    fileId: string,
+    fallbackName = "submission-file",
+  ) {
+    return downloadProtectedFile({
+      pathname: `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`,
+      fallbackName,
+      persistent: true,
+      openAfterDownload: true,
+    });
+  },
+
+  async openAttemptSubmissionAttachmentFile(
+    attemptId: string,
+    fileId: string,
+    fallbackName = "submission-file",
+  ) {
+    const download = await downloadProtectedFile({
+      pathname: `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`,
+      fallbackName,
+    });
+    await openLocalFile(download.uri);
+    return download;
   },
 };

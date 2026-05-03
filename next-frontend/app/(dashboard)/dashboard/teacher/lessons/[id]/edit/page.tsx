@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
+  CSSProperties,
 } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -54,6 +55,7 @@ import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { normalizeRichText } from '@/lib/rich-text';
 import { toast } from 'sonner';
 import { TeacherSectionCard } from '@/components/teacher/TeacherPageShell';
+import './lesson-editor.css';
 import { classService } from '@/services/class-service';
 import type { Lesson, ContentBlock, CreateContentBlockDto } from '@/types/lesson';
 import type { LessonVersion } from '@/types/lesson';
@@ -76,6 +78,294 @@ type LessonBlockPaletteItem = {
   hint: string;
   icon: typeof PencilLine;
 };
+
+type LessonGuideScreen = 'header' | 'overview' | 'content' | 'publish';
+type LessonGuidePinDirection = 'left' | 'right';
+
+type LessonGuidePage = {
+  title: string;
+  description: string;
+  screen: LessonGuideScreen;
+  reminder: string;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'caution' | 'success';
+  }>;
+};
+
+type LessonGuidePinProps = {
+  children: string;
+  lineSide: LessonGuidePinDirection;
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+const LESSON_GUIDE_PAGES: Array<LessonGuidePage> = [
+  {
+    title: 'Start from the lesson header',
+    description:
+      'This header tells you which lesson you are editing, whether it is draft or live, and where to jump to the right tools.',
+    screen: 'header',
+    reminder: 'Use the top row first whenever you return from the list view.',
+    steps: [
+      {
+        action: 'Return',
+        body: 'Use Back to return to your class quickly if you need to check schedules or another lesson.',
+      },
+      {
+        action: 'Check',
+        body: 'Review the lesson title and status badge so your snapshot names stay clear.',
+      },
+      {
+        action: 'Open',
+        body: 'Open this guide whenever you need the page flow explained again.',
+      },
+    ],
+  },
+  {
+    title: 'Finish lesson details',
+    description:
+      'Keep the title and description current first so later snapshots and exports are easy to identify.',
+    screen: 'overview',
+    reminder: 'Save your lesson details often, especially after changing the title or description.',
+    steps: [
+      {
+        action: 'Edit',
+        body: 'Set the lesson title and description in the Overview tab before adding content.',
+      },
+      {
+        action: 'Review',
+        body: 'Use the block summary to keep text, media, checkpoints, files, and dividers balanced.',
+      },
+      {
+        action: 'Save',
+        body: 'Click Save changes to lock the details before moving to content.',
+        tone: 'success',
+      },
+    ],
+  },
+  {
+    title: 'Build your content flow',
+    description:
+      'Use the Content tab to add and reorder blocks, then edit one block at a time for focused work.',
+    screen: 'content',
+    reminder: 'The floating Add Block button is available when no modal is open.',
+    steps: [
+      {
+        action: 'Choose',
+        body: 'Add block types that match your lesson flow and student goals.',
+      },
+      {
+        action: 'Edit',
+        body: 'Click a block card body to open inline editing and keep focus where students need it.',
+      },
+      {
+        action: 'Reorder',
+        body: 'Use the up/down controls to reorder content safely before publishing.',
+      },
+    ],
+  },
+  {
+    title: 'Take snapshots before publish',
+    description:
+      'Create snapshots when you are ready, or restore an earlier version if a change needs revision.',
+    screen: 'publish',
+    reminder: 'Move versions only for deliberate checkpoints you want to keep.',
+    steps: [
+      {
+        action: 'Open',
+        body: 'Use the recovery menu to save a manual snapshot and review version history.',
+      },
+      {
+        action: 'Restore',
+        body: 'Pick a snapshot version and restore only when you are sure the previous draft is better.',
+        tone: 'caution',
+      },
+      {
+        action: 'Publish',
+        body: 'Switch between Draft and Move To Draft when you are ready to control student visibility.',
+        tone: 'success',
+      },
+    ],
+  },
+];
+
+function LessonEditorGuidePin({ children, lineSide, lineWidth, style }: LessonGuidePinProps) {
+  return (
+    <span
+      className="teacher-intervention-workspace__manual-pin pointer-events-none absolute inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
+            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+        }
+      />
+    </span>
+  );
+}
+
+function LessonEditorGuideShot({ screen }: { screen: LessonGuideScreen }) {
+  if (screen === 'header') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-10 shadow-inner"
+        aria-label="lesson header screenshot"
+      >
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#d2ddec] bg-white text-[0.66rem] font-black text-[#4f678a]">
+            &lt;
+          </span>
+          <span className="h-3 w-3 rounded-full bg-[#16a34a]" />
+        </div>
+        <div className="rounded-xl border border-[#1d3659] bg-[#10254a] p-4 text-white">
+          <div className="mb-2 text-[0.9rem] font-black leading-tight">Lesson 3: Intro to Equations</div>
+          <div className="mb-2 inline-flex h-7 items-center rounded-full bg-[#1f3f68] px-3 text-xs font-black text-[#bfdbfe]">
+            Published
+          </div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="inline-flex h-8 items-center justify-center rounded-full border border-[#284269] bg-[#17345d] px-3 text-xs font-black text-white"
+          >
+            Back
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#cfd8e6] bg-white text-[#3b4f71]"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#cfd8e6] bg-white text-[#3b4f71]"
+              aria-label="Lesson help"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <span className="h-8 w-8 rounded-full border border-[#d2ddec] bg-white" />
+          <span className="h-8 w-8 rounded-full border border-[#d2ddec] bg-white" />
+        </div>
+        <LessonEditorGuidePin lineSide="left" lineWidth="5.3rem" style={{ right: '0.85rem', top: '2.8rem' }}>
+          Back
+        </LessonEditorGuidePin>
+        <LessonEditorGuidePin lineSide="left" lineWidth="6rem" style={{ left: '0.95rem', top: '5.5rem' }}>
+          Lesson title and status
+        </LessonEditorGuidePin>
+        <LessonEditorGuidePin lineSide="left" lineWidth="5.1rem" style={{ right: '1rem', top: '2.45rem' }}>
+          Question-mark help
+        </LessonEditorGuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'overview') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-10 shadow-inner"
+        aria-label="lesson overview screenshot"
+      >
+        <div className="rounded-xl border border-[#d8e2ef] bg-white p-4">
+          <div className="mb-2 text-xs font-black text-[#4f678a]">Lesson Details</div>
+          <div className="mb-2 rounded-lg border border-[#dbe2ef] bg-[#f8fbff] p-3">
+            <div className="h-4 w-2/3 rounded bg-[#dce5f2] text-[0.66rem]" />
+            <div className="mt-2 h-20 rounded bg-[#f8fbfe] text-[0.66rem]" />
+          </div>
+          <div className="grid gap-2">
+            <span className="inline-flex h-8 items-center rounded-lg border border-[#dbe2ef] bg-[#f8fbfe] px-2 text-xs font-black text-[#4f678a]">
+              All detail changes saved.
+            </span>
+            <div className="rounded-lg border border-[#dbe2ef] bg-[#f8fbfe] p-2 text-xs text-[#4f678a]">
+              Block mix
+            </div>
+          </div>
+        </div>
+        <LessonEditorGuidePin lineSide="right" lineWidth="4.5rem" style={{ left: '0.95rem', top: '2.1rem' }}>
+          Overview details
+        </LessonEditorGuidePin>
+        <LessonEditorGuidePin lineSide="right" lineWidth="5rem" style={{ left: '0.95rem', top: '7.5rem' }}>
+          Save changes
+        </LessonEditorGuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'content') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-10 shadow-inner"
+        aria-label="lesson content screenshot"
+      >
+        <div className="mb-2 inline-flex rounded-lg border border-[#e4ebf5] bg-white px-2 py-1 text-xs font-black text-[#4b5f80]">
+          Content
+        </div>
+        <div className="rounded-xl border border-[#d8e2ef] bg-white p-4">
+          <div className="grid gap-2">
+            <span className="h-5 rounded bg-[#f8fafc] px-2 py-1 text-[0.7rem] font-black text-[#4f678a]">#1: Body paragraph</span>
+            <span className="h-5 rounded bg-[#f8fafc] px-2 py-1 text-[0.7rem] font-black text-[#4f678a]">#2: Checkpoint</span>
+            <div className="mt-1 flex justify-end">
+              <span className="inline-flex h-7 min-w-20 items-center justify-center rounded-full bg-[#c9252d] px-3 text-xs font-black text-white">
+                Add block
+              </span>
+            </div>
+          </div>
+        </div>
+        <LessonEditorGuidePin lineSide="left" lineWidth="4.7rem" style={{ right: '0.9rem', top: '2.2rem' }}>
+          Content tab
+        </LessonEditorGuidePin>
+        <LessonEditorGuidePin lineSide="left" lineWidth="5.5rem" style={{ right: '0.95rem', top: '4.4rem' }}>
+          Block cards
+        </LessonEditorGuidePin>
+        <LessonEditorGuidePin lineSide="right" lineWidth="4.2rem" style={{ left: '0.95rem', top: '9.6rem' }}>
+          Add block
+        </LessonEditorGuidePin>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-10 shadow-inner"
+      aria-label="lesson publish screenshot"
+    >
+      <div className="rounded-xl border border-[#d8e2ef] bg-white p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="inline-flex h-8 rounded-full border border-[#d2ddec] px-3 bg-[#f8fbfe] text-xs font-black text-[#4a638a]">
+            No snapshots yet
+          </span>
+          <span className="inline-flex h-8 min-w-28 items-center justify-center rounded-full bg-[#c9252d] px-3 text-xs font-black text-white">
+            Save Snapshot
+          </span>
+        </div>
+        <div className="rounded-lg border border-[#d8e2ef] bg-[#f8fbfe] p-3">
+          <div className="text-sm font-black text-[#143155]">Status: Draft</div>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <span className="inline-flex h-8 items-center rounded-full border border-[#d8e2ef] px-3 text-xs font-black text-[#4a638a]">
+            Move To Draft
+          </span>
+        </div>
+      </div>
+      <LessonEditorGuidePin lineSide="left" lineWidth="7rem" style={{ right: '0.95rem', top: '2rem' }}>
+        Snapshot menu
+      </LessonEditorGuidePin>
+      <LessonEditorGuidePin lineSide="left" lineWidth="6rem" style={{ right: '0.95rem', top: '8rem' }}>
+        Restore flow
+      </LessonEditorGuidePin>
+    </div>
+  );
+}
 
 const BLOCK_TYPES: ReadonlyArray<LessonBlockPaletteItem> = [
   {
@@ -198,6 +488,8 @@ export default function LessonEditorPage() {
   const [creatingVersion, setCreatingVersion] = useState(false);
   const [restoringVersion, setRestoringVersion] = useState(false);
   const [activeTab, setActiveTab] = useState<LessonEditorTab>('overview');
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -208,6 +500,10 @@ export default function LessonEditorPage() {
     description: '',
   });
   const [detailsDirty, setDetailsDirty] = useState(false);
+  const activeGuidePage = useMemo(
+    () => LESSON_GUIDE_PAGES[helpPage] ?? LESSON_GUIDE_PAGES[0],
+    [helpPage],
+  );
 
   const fetchData = useCallback(async () => {
     try {
@@ -559,7 +855,7 @@ export default function LessonEditorPage() {
       <div className={role === 'admin' ? 'theme-admin-bridge w-full min-w-0 space-y-6 pb-8' : 'w-full min-w-0 space-y-6 pb-8'}>
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as LessonEditorTab)} className="space-y-5">
           <div className="space-y-3">
-            <header className="rounded-[1.35rem] border border-[var(--teacher-outline)] bg-white px-5 py-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.22)]">
+        <header className="teacher-lesson-editor__header rounded-[1.35rem] border border-[var(--teacher-outline)] bg-white px-5 py-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.22)]">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
@@ -589,7 +885,7 @@ export default function LessonEditorPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 teacher-lesson-editor__header-actions">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -658,6 +954,20 @@ export default function LessonEditorPage() {
                   >
                       <Rocket className="h-4 w-4" />
                       {lesson.isDraft ? 'Publish Lesson' : 'Move To Draft'}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="teacher-button-outline h-9 w-9 rounded-xl teacher-lesson-editor__header-help"
+                    onClick={() => {
+                      setHelpPage(0);
+                      setHelpOpen(true);
+                    }}
+                    aria-label="Lesson help"
+                  >
+                    <CircleHelp className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
@@ -978,6 +1288,87 @@ export default function LessonEditorPage() {
             >
               Cancel
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) {
+            setHelpPage(0);
+          }
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog">
+          <DialogHeader>
+            <DialogTitle>Teacher guide: Lesson Editor Workspace</DialogTitle>
+            <DialogDescription>
+              Open one page at a time. Each example points to real controls in this lesson editor.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {LESSON_GUIDE_PAGES.length}</span>
+            <div>
+              {LESSON_GUIDE_PAGES.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <LessonEditorGuideShot screen={activeGuidePage.screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Lesson editor walkthrough</p>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+              <div className="route-guide-steps">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${step.action}-${step.body}`}
+                    className={`route-guide-step ${step.tone ? `is-${step.tone}` : ''}`}
+                  >
+                    <span className="route-guide-step__index">{index + 1}</span>
+                    <div>
+                      <strong>{step.action}</strong>
+                      <p>{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+              disabled={helpPage === 0}
+            >
+              Previous page
+            </Button>
+            {helpPage < LESSON_GUIDE_PAGES.length - 1 ? (
+              <Button
+                type="button"
+                onClick={() => setHelpPage((current) => Math.min(current + 1, LESSON_GUIDE_PAGES.length - 1))}
+              >
+                Next page
+              </Button>
+            ) : (
+              <Button type="button" onClick={() => setHelpOpen(false)}>
+                Close guide
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

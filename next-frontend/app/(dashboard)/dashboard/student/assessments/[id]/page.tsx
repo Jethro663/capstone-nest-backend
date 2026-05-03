@@ -142,10 +142,12 @@ export default function StudentAssessmentPage() {
   const submittedAttempts = getSubmittedAttempts(attempts);
   const latestSubmittedFileAttempt =
     assessment?.type === 'file_upload' ? getLatestSubmittedAttempt(attempts) : null;
+  const latestReturnedAttempt = getLatestReturnedAttempt(attempts);
   const hasDraftAttempt = attempts.some((attempt) => attempt.isSubmitted === false);
   const maxAttempts = assessment?.maxAttempts ?? 1;
   const attemptsRemaining = Math.max(0, maxAttempts - submittedAttempts.length);
-  const canStart = attemptsRemaining > 0;
+  const isAlreadyGraded = Boolean(latestReturnedAttempt?.isReturned);
+  const canStart = !isAlreadyGraded && attemptsRemaining > 0;
   const questionCount = assessment?.questions?.length ?? 0;
   const dueDateLabel = assessment?.dueDate ? `Due ${formatDate(assessment.dueDate)}` : 'No due date';
   const backHref = classId
@@ -153,6 +155,8 @@ export default function StudentAssessmentPage() {
     : '/dashboard/student';
   const primaryActionLabel = starting
     ? 'Starting...'
+    : isAlreadyGraded
+      ? 'Already graded'
     : submittedAttempts.length > 0
       ? `Retake (${attemptsRemaining} left)`
       : 'Start Assessment';
@@ -297,9 +301,16 @@ export default function StudentAssessmentPage() {
                       {primaryActionLabel}
                     </Button>
                   ) : (
-                    <Button disabled className="min-w-[10rem]">
-                      No attempts remaining
-                    </Button>
+                    <div className="flex flex-col items-start gap-2 lg:items-end">
+                      <Button disabled className="min-w-[10rem]">
+                        {isAlreadyGraded ? 'Already graded' : 'No attempts remaining'}
+                      </Button>
+                      {isAlreadyGraded ? (
+                        <p className="max-w-[16rem] text-right text-xs text-slate-500">
+                          Retakes are disabled once your teacher has returned a grade.
+                        </p>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               </div>
