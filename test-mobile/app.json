@@ -1,11 +1,12 @@
 {
   "expo": {
-    "name": "Nexora LMS Prototype",
+    "name": "Nexora Mobile",
     "slug": "nexora-lms-test-mobile",
     "version": "0.1.0",
     "orientation": "default",
     "scheme": "nexora-lms-test-mobile",
     "userInterfaceStyle": "light",
+    "icon": "./assets/ja/apk_logo.png",
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -15,6 +16,10 @@
     "android": {
       "package": "com.nexora.lms.mobile",
       "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/ja/apk_logo.png",
+        "backgroundColor": "#000000"
+      },
       "versionCode": 1
     },
     "plugins": [

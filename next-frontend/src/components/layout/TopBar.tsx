@@ -6,7 +6,7 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, Download, LogOut, Menu, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
@@ -237,33 +237,19 @@ export function TopBar({
         <div className="student-topbar-shell__actions">
           <a
             href={studentApkHref}
-            download
+            download="nexora-student-mobile.apk"
             className="student-topbar-shell__icon-button"
-            title="Download Android app (APK)"
-            aria-label="Download Android app APK"
+            title="Download Nexora Mobile for Android"
+            aria-label="Download Nexora Mobile for Android"
           >
             <span className="student-topbar-shell__apk-art" aria-hidden="true">
-              <span className="student-topbar-shell__apk-plate">
-                <Image
-                  src="/nexora-mark.svg"
-                  alt=""
-                  width={32}
-                  height={32}
-                  className="student-topbar-shell__apk-mark"
-                />
-              </span>
-              <span className="student-topbar-shell__apk-mascot-badge">
-                <Image
-                  src="/images/JA/ja_wave.png"
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="student-topbar-shell__apk-mascot"
-                />
-              </span>
-              <span className="student-topbar-shell__apk-download-badge">
-                <Download className="h-2.5 w-2.5" />
-              </span>
+              <Image
+                src="/images/ja/apk_logo.png"
+                alt=""
+                width={64}
+                height={64}
+                className="student-topbar-shell__apk-logo"
+              />
             </span>
           </a>
 
