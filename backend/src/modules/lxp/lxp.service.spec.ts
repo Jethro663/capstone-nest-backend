@@ -196,6 +196,43 @@ describe('LxpService', () => {
     );
   });
 
+  it('hides active intervention cases from student eligibility until assignments exist', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+    ]);
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-active',
+        isAtRisk: true,
+        blendedScore: '62',
+        thresholdApplied: '74',
+      },
+    ]);
+    mockDb.query.interventionCases.findMany.mockResolvedValueOnce([
+      {
+        id: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        openedAt: new Date('2026-02-01T00:00:00.000Z'),
+        closedAt: null,
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValueOnce([]);
+
+    const result = await service.getStudentEligibility('student-1');
+
+    expect(result.eligibleClasses).toEqual([]);
+    expect(result.paths).toEqual([]);
+  });
+
   it('loads a completed student playlist without creating default assignments', async () => {
     const ensureDefaultAssignmentsSpy = jest.spyOn(
       service as any,
@@ -215,6 +252,9 @@ describe('LxpService', () => {
         closedAt: new Date('2026-02-10T00:00:00.000Z'),
         createdAt: new Date('2026-02-01T00:00:00.000Z'),
       });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+    });
     mockDb.query.lxpProgress.findFirst.mockResolvedValue({
       studentId: 'student-1',
       classId: 'class-1',
@@ -282,6 +322,9 @@ describe('LxpService', () => {
         closedAt: new Date('2026-02-10T00:00:00.000Z'),
         createdAt: new Date('2026-02-01T00:00:00.000Z'),
       });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+    });
     mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
       blendedScore: '82',
       thresholdApplied: '74',
@@ -598,6 +641,9 @@ describe('LxpService', () => {
       closedAt: null,
       createdAt: new Date('2026-02-01T00:00:00.000Z'),
     });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-lesson',
+    });
     mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
       blendedScore: '68',
       thresholdApplied: '74',
@@ -749,6 +795,9 @@ describe('LxpService', () => {
       closedAt: null,
       createdAt: new Date('2026-02-01T00:00:00.000Z'),
     });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-assessment',
+    });
     mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
       blendedScore: '68',
       thresholdApplied: '74',
@@ -853,6 +902,64 @@ describe('LxpService', () => {
     await expect(
       service.getStudentPlaylist('student-1', 'class-1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('blocks playlist access when intervention is active but has no teacher-assigned path yet', async () => {
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce({
+        id: 'active-case-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'active',
+      })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'active-case-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'active',
+      });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.getStudentPlaylist('student-1', 'class-1'),
+    ).rejects.toThrow('Learners Path is only available after your teacher assigns checkpoints.');
+  });
+
+  it('blocks overview access when intervention is active but has no teacher-assigned path yet', async () => {
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce({
+        id: 'active-case-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'active',
+      })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'active-case-1',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'active',
+      });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue(null);
+    mockDb.query.performanceSnapshots.findFirst.mockResolvedValue({
+      isAtRisk: true,
+      blendedScore: '62',
+      thresholdApplied: '74',
+      lastComputedAt: new Date('2026-02-05T00:00:00.000Z'),
+    });
+
+    await expect(
+      service.getStudentOverview('student-1', 'class-1'),
+    ).rejects.toThrow('Learners Path is only available after your teacher assigns checkpoints.');
   });
 
   it('submits a system evaluation tied to the requesting user', async () => {
@@ -1365,6 +1472,8 @@ describe('LxpService', () => {
         }),
       }),
     );
+    expect((service as any).ensureDefaultAssignments).not.toHaveBeenCalled();
+    expect((service as any).getOrCreateProgress).not.toHaveBeenCalled();
   });
 
   it('writes audit metadata when performance status auto-resolves active intervention cases', async () => {

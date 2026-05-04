@@ -12,8 +12,12 @@ from sqlalchemy import bindparam, text as sa_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import ollama_client
-from .embedding_provider import embed_texts, embedding_to_vector_literal
+from .embedding_provider import (
+    embed_texts,
+    embedding_to_vector_literal,
+    get_embedding_model_label,
+    get_embedding_provider,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -876,12 +880,20 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
             "extractionChunks": 0,
             "questionChunks": 0,
             "lastIndexedAt": None,
+            "degraded": False,
+            "warnings": [],
+            "embeddingProvider": get_embedding_provider(),
+            "embeddingModel": get_embedding_model_label(),
         }
 
     lesson_chunk_count = len(build_lesson_chunks(lesson_rows))
     extraction_chunk_count = len(build_extraction_chunks(extraction_rows))
     question_chunk_count = len(build_question_chunks(question_rows))
     embeddings = await embed_texts([chunk.chunk_text for chunk in chunks])
+    embedding_model = get_embedding_model_label(embeddings)
+    embedding_provider = get_embedding_provider(embeddings)
+    embedding_degraded = bool(getattr(embeddings, "degraded", False))
+    embedding_warnings = list(getattr(embeddings, "warnings", []) or [])
     created = 0
 
     for chunk, embedding in zip(chunks, embeddings):
@@ -961,7 +973,7 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
             {
                 "chunkId": chunk_id,
                 "embedding": embedding_to_vector_literal(embedding),
-                "embeddingModel": "ollama:" + ollama_client.get_embedding_model_name(),
+                "embeddingModel": embedding_model,
             },
         )
         created += 1
@@ -975,4 +987,8 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
         "extractionChunks": extraction_chunk_count,
         "questionChunks": question_chunk_count,
         "lastIndexedAt": _to_iso_datetime(datetime.now(timezone.utc)),
+        "degraded": embedding_degraded,
+        "warnings": embedding_warnings,
+        "embeddingProvider": embedding_provider,
+        "embeddingModel": embedding_model,
     }

@@ -794,9 +794,15 @@ export default function TeacherAiDraftQuizPage() {
       setReindexing(true);
       const response = await aiService.reindexClass(classId);
       await fetchReadiness();
-      toast.success(
-        `Indexed ${response.data.chunksIndexed} class chunk(s) for quiz generation.`,
-      );
+      if (response.data.degraded) {
+        toast.success(
+          `Indexed with degraded retrieval (${response.data.chunksIndexed} class chunk(s)).`,
+        );
+      } else {
+        toast.success(
+          `Indexed ${response.data.chunksIndexed} class chunk(s) for quiz generation.`,
+        );
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to reindex class sources'));
     } finally {

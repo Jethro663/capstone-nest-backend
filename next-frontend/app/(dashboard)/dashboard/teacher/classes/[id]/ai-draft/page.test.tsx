@@ -384,6 +384,45 @@ describe('TeacherAiDraftQuizPage', () => {
     });
   });
 
+  it('shows degraded retrieval success when reindex falls back to degraded embeddings', async () => {
+    mockedAiService.reindexClass.mockResolvedValue({
+      data: {
+        classId: 'class-1',
+        chunksIndexed: 6,
+        lessonChunks: 4,
+        extractionChunks: 2,
+        questionChunks: 0,
+        degraded: true,
+        warnings: ['Embedding provider failed; using degraded deterministic vectors.'],
+        embeddingProvider: 'degraded',
+        embeddingModel: 'degraded:hash-embedding-v1',
+      },
+    } as any);
+    mockedAiService.getClassIndexStatus
+      .mockResolvedValueOnce({ data: buildIndexStatus() } as any)
+      .mockResolvedValueOnce({
+        data: buildIndexStatus({
+          chunksIndexed: 6,
+          lessonChunks: 4,
+          extractionChunks: 2,
+          isStale: false,
+          needsReindex: false,
+          reason: null,
+        }),
+      } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Reindex Sources');
+    fireEvent.click(screen.getByText('Reindex Sources'));
+
+    await waitFor(() => {
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        'Indexed with degraded retrieval (6 class chunk(s)).',
+      );
+    });
+  });
+
   it('moves through sources, setup, and generation tabs while allowing back navigation', async () => {
     mockedAiService.getClassIndexStatus.mockResolvedValue({
       data: buildIndexStatus({

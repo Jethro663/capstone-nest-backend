@@ -71,4 +71,34 @@ describe('HealthService', () => {
 
     process.env.npm_package_version = previousVersion;
   });
+
+  it('marks ai service degraded when embedding runtime is unavailable', async () => {
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: {
+          runtimeAvailable: true,
+          runtimeProvider: 'openrouter',
+          version: '1.0.0-test',
+          embeddingRuntime: {
+            ok: false,
+            provider: 'openrouter',
+            model: 'google/gemini-embedding-2-preview',
+            error: 'No successful provider responses',
+          },
+        },
+      }),
+    });
+
+    const service = new HealthService(mockDatabaseService, mockConfigService);
+    const readiness = await service.getReadiness();
+
+    expect(readiness.ready).toBe(true);
+    expect(readiness.dependencies.aiService).toMatchObject({
+      ok: true,
+      degraded: true,
+      runtimeProvider: 'openrouter',
+      message: 'AI service reachable but embedding runtime is degraded',
+    });
+  });
 });

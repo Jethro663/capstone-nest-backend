@@ -62,6 +62,10 @@ export interface IndexingSummary {
   extractionChunks?: number;
   questionChunks?: number;
   lastIndexedAt?: string | null;
+  degraded?: boolean;
+  warnings?: string[];
+  embeddingProvider?: string;
+  embeddingModel?: string;
 }
 
 export interface AiReadyLessonSource {

@@ -29,6 +29,7 @@ from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .database import AsyncSessionLocal, get_db
 from . import ollama_client
+from . import embedding_provider
 from .extraction_pipeline import run_extraction
 from .indexing_pipeline import get_class_index_status, reindex_class_content
 from .library_indexing_pipeline import (
@@ -88,6 +89,7 @@ logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
+_EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
@@ -1635,9 +1637,20 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     )
     AI_READY.set(1 if ready else 0)
     OLLAMA_AVAILABLE.set(1 if runtime_status["ollamaAvailable"] else 0)
+    embedding_runtime = await get_embedding_runtime_status()
+    upload_materialization = get_upload_materialization_status()
 
     return {
         "ready": ready,
+        "partialDegraded": bool(
+            ready
+            and (
+                not runtime_status["available"]
+                or not embedding_runtime["ok"]
+                or not upload_materialization["ok"]
+                or embedding_runtime.get("degraded")
+            )
+        ),
         "degradedMode": bool(ai_degraded_allowed and not runtime_status["available"]),
         "dependencies": {
             "database": database_status,
@@ -1658,11 +1671,66 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
             },
         },
         "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
+        "embeddingRuntime": embedding_runtime,
+        "uploadMaterialization": upload_materialization,
         "frameworks": {
             "llamaIndexAvailable": llamaindex_available(),
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def get_upload_materialization_status() -> dict[str, Any]:
+    upload_dir = os.path.abspath(settings.upload_dir)
+    local_ok = os.path.isdir(upload_dir)
+    backend_url = (settings.backend_internal_url or "").strip()
+    if local_ok:
+        mode = "local"
+        ok = True
+    elif backend_url:
+        mode = "backend-fetch"
+        ok = bool(settings.ai_service_shared_secret)
+    else:
+        mode = "unconfigured"
+        ok = False
+    return {
+        "mode": mode,
+        "ok": ok,
+        "uploadDir": upload_dir,
+        "backendInternalUrlConfigured": bool(backend_url),
+    }
+
+
+async def get_embedding_runtime_status() -> dict[str, Any]:
+    now = time.time()
+    cached = _EMBEDDING_RUNTIME_CACHE.get("status")
+    if cached is not None and now < float(_EMBEDDING_RUNTIME_CACHE.get("expires_at") or 0):
+        return cached
+
+    provider = embedding_provider.get_embedding_provider()
+    model = embedding_provider.get_embedding_model_label()
+    try:
+        embeddings = await embedding_provider.embed_texts(["nexora readiness"])
+        first = embeddings[0] if embeddings else []
+        status = {
+            "ok": bool(first) and len(first) == settings.embedding_dimensions,
+            "provider": embedding_provider.get_embedding_provider(embeddings),
+            "model": embedding_provider.get_embedding_model_label(embeddings),
+            "degraded": bool(getattr(embeddings, "degraded", False)),
+            "warnings": list(getattr(embeddings, "warnings", []) or []),
+        }
+    except Exception as exc:
+        status = {
+            "ok": False,
+            "provider": provider,
+            "model": model,
+            "degraded": False,
+            "error": str(exc),
+        }
+
+    _EMBEDDING_RUNTIME_CACHE["status"] = status
+    _EMBEDDING_RUNTIME_CACHE["expires_at"] = now + 60
+    return status
 
 
 def _extract_json_payload(raw: str) -> str:
@@ -2185,6 +2253,7 @@ async def student_tutor_answers(
 async def health():
     timestamp = datetime.now(timezone.utc).isoformat()
     status = await ollama_client.is_available()
+    embedding_runtime = await get_embedding_runtime_status()
     available_models = status["models"]
     OLLAMA_AVAILABLE.set(1 if status["ollamaAvailable"] else 0)
     return {
@@ -2202,7 +2271,9 @@ async def health():
             "configuredTextModel": ollama_client.get_text_model_name(),
             "configuredVisionModel": ollama_client.get_vision_model_name(),
             "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
-            "embeddingModelAvailable": bool(status["available"]),
+            "embeddingModelAvailable": bool(embedding_runtime["ok"]),
+            "embeddingRuntime": embedding_runtime,
+            "uploadMaterialization": get_upload_materialization_status(),
             "availableModels": available_models,
             "ollamaModels": status["ollamaModels"],
             "cloudAvailable": status["cloudAvailable"],
@@ -3205,10 +3276,6 @@ async def extract_module(
     is_admin = "admin" in user.roles
     if not is_admin and str(file["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only extract your own files")
-
-    file_path = await materialize_backend_upload(str(file["file_path"]))
-    if not file_path or not os.path.exists(file_path):
-        raise HTTPException(404, "Physical file not found on server")
 
     # Create extraction record
     initial_structured_content = {

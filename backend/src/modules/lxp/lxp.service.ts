@@ -899,13 +899,29 @@ export class LxpService {
       classId,
       'active',
     );
-    if (activeCase) return activeCase;
+    if (activeCase && (await this.caseHasAssignments(activeCase.id))) {
+      return activeCase;
+    }
 
-    return this.getStudentInterventionCaseByStatus(
+    const completedCase = await this.getStudentInterventionCaseByStatus(
       studentId,
       classId,
       'completed',
     );
+    if (completedCase && (await this.caseHasAssignments(completedCase.id))) {
+      return completedCase;
+    }
+
+    return null;
+  }
+
+  private async caseHasAssignments(caseId: string) {
+    const assignment = await this.db.query.interventionAssignments.findFirst({
+      where: eq(interventionAssignments.caseId, caseId),
+      columns: { id: true },
+    });
+
+    return Boolean(assignment?.id);
   }
 
   private async getOrCreateCaseForStudent(
@@ -1073,28 +1089,6 @@ export class LxpService {
     }
   }
 
-  private async notifyInterventionActivated(
-    studentId: string,
-    classId: string,
-  ) {
-    const cls = await this.db.query.classes.findFirst({
-      where: eq(classes.id, classId),
-      columns: { teacherId: true, subjectName: true, subjectCode: true },
-    });
-    if (!cls) return;
-
-    const notifications = [
-      {
-        userId: studentId,
-        type: 'grade_updated' as const,
-        title: 'Learners Path unlocked',
-        body: `Your Learners Path plan in ${cls.subjectName} (${cls.subjectCode}) is now active.`,
-      },
-    ];
-
-    await this.notificationsService.createBulk(notifications);
-  }
-
   async handlePerformanceStatusChanged(event: PerformanceStatusChangedEvent) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, event.classId),
@@ -1109,12 +1103,6 @@ export class LxpService {
         'performance_status_changed',
       );
 
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        event.classId,
-        event.studentId,
-      );
-      await this.getOrCreateProgress(event.studentId, event.classId);
       await this.notifyInterventionPending(event.studentId, event.classId);
 
       if (auditActorId) {
@@ -1299,6 +1287,7 @@ export class LxpService {
         if (!enrollment?.class) return null;
         const snapshot = snapshotByClass.get(entry.classId);
         const caseAssignments = assignmentsByCase.get(entry.id) ?? [];
+        if (caseAssignments.length === 0) return null;
         const total = caseAssignments.length;
         const completed = caseAssignments.filter((item) => item.isCompleted).length;
         const completionPercent =
@@ -1383,19 +1372,22 @@ export class LxpService {
           'Learners Path access is pending teacher approval.',
         );
       }
+      const activeCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'active',
+      );
+      if (activeCase) {
+        throw new ForbiddenException(
+          'Learners Path is only available after your teacher assigns checkpoints.',
+        );
+      }
       throw new ForbiddenException(
         'Learners Path is only available for active intervention students.',
       );
     }
 
     const isCompletedCase = interventionCase.status === 'completed';
-    if (!isCompletedCase) {
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        classId,
-        studentId,
-      );
-    }
     const progress = isCompletedCase
       ? await this.getProgressSnapshot(studentId, classId)
       : await this.getOrCreateProgress(studentId, classId);
@@ -1525,19 +1517,22 @@ export class LxpService {
           'Learners Path access is pending teacher approval.',
         );
       }
+      const activeCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'active',
+      );
+      if (activeCase) {
+        throw new ForbiddenException(
+          'Learners Path is only available after your teacher assigns checkpoints.',
+        );
+      }
       throw new ForbiddenException(
         'Learners Path is only available for active intervention students.',
       );
     }
 
     const isCompletedCase = interventionCase.status === 'completed';
-    if (!isCompletedCase) {
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        classId,
-        studentId,
-      );
-    }
     const progress = isCompletedCase
       ? await this.getProgressSnapshot(studentId, classId)
       : await this.getOrCreateProgress(studentId, classId);
@@ -3217,15 +3212,6 @@ export class LxpService {
         updatedAt: new Date(),
       })
       .where(eq(interventionCases.id, caseId));
-
-    await this.getOrCreateProgress(
-      interventionCase.studentId,
-      interventionCase.classId,
-    );
-    await this.notifyInterventionActivated(
-      interventionCase.studentId,
-      interventionCase.classId,
-    );
 
     await this.auditService.log({
       actorId: user.userId,
