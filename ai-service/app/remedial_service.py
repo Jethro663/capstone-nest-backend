@@ -201,6 +201,218 @@ async def _load_assessment_concept_map(
     return concept_map
 
 
+async def _load_assessment_question_bank(
+    db: AsyncSession,
+    assessment_id: str | None,
+) -> list[dict[str, Any]]:
+    if not assessment_id:
+        return []
+
+    question_rows = await db.execute(
+        sa_text(
+            """
+            SELECT
+              q.id AS question_id,
+              q.type,
+              q.content,
+              q.explanation,
+              q.concept_tags,
+              q."order" AS question_order,
+              o.id AS option_id,
+              o.text AS option_text,
+              o.is_correct,
+              o."order" AS option_order
+            FROM assessment_questions q
+            LEFT JOIN assessment_question_options o ON o.question_id = q.id
+            WHERE q.assessment_id = :assessmentId
+            ORDER BY q."order" ASC, o."order" ASC
+            """
+        ),
+        {"assessmentId": assessment_id},
+    )
+
+    supported_types = {"multiple_choice", "multiple_select", "true_false", "dropdown"}
+    questions_by_id: dict[str, dict[str, Any]] = {}
+    for row in question_rows.mappings():
+        question_id = str(row.get("question_id") or "")
+        question_type = str(row.get("type") or "")
+        if not question_id or question_type not in supported_types:
+            continue
+
+        existing = questions_by_id.setdefault(
+            question_id,
+            {
+                "id": question_id,
+                "type": question_type,
+                "content": _sanitize_plain_text(row.get("content"), max_length=220),
+                "explanation": _sanitize_plain_text(
+                    row.get("explanation"), max_length=220
+                ),
+                "concept_tags": _normalize_concept_labels(
+                    row.get("concept_tags"),
+                    fallback_text=row.get("content"),
+                ),
+                "options": [],
+            },
+        )
+
+        option_id = row.get("option_id")
+        option_text = _sanitize_plain_text(row.get("option_text"), max_length=120)
+        if option_id and option_text:
+            existing["options"].append(
+                {
+                    "id": str(option_id),
+                    "text": option_text,
+                    "isCorrect": bool(row.get("is_correct")),
+                }
+            )
+
+    return [
+        question
+        for question in questions_by_id.values()
+        if len(question["options"]) >= 2
+    ]
+
+
+def _build_generated_lesson_draft(
+    weak_concepts: list[str],
+    recommended_lessons: list[dict[str, Any]],
+    ai_summary: dict[str, Any],
+    note: str | None,
+) -> dict[str, Any] | None:
+    if not weak_concepts and not recommended_lessons:
+        return None
+
+    top_concepts = weak_concepts[:3]
+    source_titles = [
+        _sanitize_plain_text(item.get("title"), max_length=120)
+        for item in recommended_lessons[:3]
+    ]
+    clean_titles = [title for title in source_titles if title]
+    source_refs = [
+        {
+            "lessonId": item.get("lessonId"),
+            "chunkId": item.get("chunkId"),
+            "title": item.get("title"),
+            "reason": item.get("reason"),
+            "sourceReference": item.get("sourceReference"),
+        }
+        for item in recommended_lessons[:3]
+    ]
+    actions = [
+        _sanitize_plain_text(action, max_length=120)
+        for action in ai_summary.get("teacherActions", [])[:3]
+        if _sanitize_plain_text(action, max_length=120)
+    ]
+    lesson_body_parts = [
+        "## What You Need To Focus On",
+        "We will review one weak concept at a time in a simpler way.",
+        "",
+        "### Weak concepts",
+        *[f"- {concept}" for concept in top_concepts],
+        "",
+        "### Simple review guide",
+        "1. Read the idea slowly.",
+        "2. Look for the keyword or pattern in the question.",
+        "3. Compare your answer choices before you submit.",
+    ]
+
+    if actions:
+        lesson_body_parts.extend(["", "### Study steps", *[f"- {item}" for item in actions]])
+
+    if clean_titles:
+        lesson_body_parts.extend(
+            [
+                "",
+                "### Based on your class materials",
+                *[f"- {title}" for title in clean_titles],
+            ]
+        )
+
+    if note:
+        lesson_body_parts.extend(
+            [
+                "",
+                "### Teacher note",
+                _sanitize_plain_text(note, max_length=220),
+            ]
+        )
+
+    return {
+        "title": "Simplified remedial lesson",
+        "summary": (
+            f"Simplified review focusing on {', '.join(top_concepts[:2])}."
+            if top_concepts
+            else "Simplified review based on the recommended lesson evidence."
+        ),
+        "lessonBody": "\n".join(part for part in lesson_body_parts if part is not None),
+        "weakConcepts": top_concepts,
+        "sourceLessonIds": [
+            str(item.get("lessonId"))
+            for item in recommended_lessons[:3]
+            if item.get("lessonId")
+        ],
+        "sourceReferences": source_refs,
+    }
+
+
+def _build_generated_guided_assessment_draft(
+    weak_concepts: list[str],
+    recommended_assessments: list[dict[str, Any]],
+    source_questions: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    if not recommended_assessments or not source_questions:
+        return None
+
+    source_assessment = recommended_assessments[0]
+    guided_questions: list[dict[str, Any]] = []
+    for index, question in enumerate(source_questions[:5], start=1):
+        concept_tag = question.get("concept_tags", [])
+        concept_label = concept_tag[0] if concept_tag else (weak_concepts[0] if weak_concepts else None)
+        hint = (
+            f"Focus on {concept_label} before choosing your answer."
+            if concept_label
+            else "Review the key term and eliminate the weakest choices first."
+        )
+        explanation = question.get("explanation") or (
+            f"This item checks your understanding of {concept_label}."
+            if concept_label
+            else "This item checks one of your current weak concepts."
+        )
+        guided_questions.append(
+            {
+                "id": f"guided-{index}",
+                "type": question.get("type"),
+                "stem": question.get("content") or f"Guided question {index}",
+                "hint": _sanitize_plain_text(hint, max_length=180),
+                "explanation": _sanitize_plain_text(explanation, max_length=220),
+                "weakConceptTag": concept_label,
+                "sourceQuestionId": question.get("id"),
+                "options": question.get("options", []),
+            }
+        )
+
+    if not guided_questions:
+        return None
+
+    return {
+        "sourceAssessmentId": source_assessment.get("assessmentId"),
+        "title": f"Simplified guided assessment: {_sanitize_plain_text(source_assessment.get('title'), max_length=80) or 'Remedial check'}",
+        "description": "A guided remedial check with optional hints before answering and explanations after each response.",
+        "weakConcepts": weak_concepts[:4],
+        "formativeSummary": "Use the result to see which weak concepts improved and which still need review.",
+        "sourceReferences": [
+            {
+                "assessmentId": source_assessment.get("assessmentId"),
+                "title": source_assessment.get("title"),
+                "reason": source_assessment.get("reason"),
+                "evidence": source_assessment.get("evidence"),
+            }
+        ],
+        "questions": guided_questions,
+    }
+
+
 async def recommend_intervention_case(
     db: AsyncSession,
     user: RequestUser,
@@ -415,6 +627,10 @@ async def recommend_intervention_case(
         candidate for candidate in assessment_candidates if candidate["confidence"] <= 0.6
     ]
     recommended_assessments = (concept_aligned + fallback_candidates)[:2]
+    source_question_bank = await _load_assessment_question_bank(
+        db,
+        recommended_assessments[0]["assessmentId"] if recommended_assessments else None,
+    )
 
     lesson_evidence = "\n".join(
         f"- {item['title']}: {item['reason']}" for item in recommended_lessons
@@ -584,6 +800,17 @@ Recommended lesson evidence:
         "note": "AI recommendation based on weak concepts: "
         + ", ".join(weak_concepts[:3]),
     }
+    generated_lesson_draft = _build_generated_lesson_draft(
+        weak_concepts,
+        recommended_lessons,
+        ai_summary,
+        note,
+    )
+    generated_guided_assessment_draft = _build_generated_guided_assessment_draft(
+        weak_concepts,
+        recommended_assessments,
+        source_question_bank,
+    )
 
     structured_output = {
         "caseId": case_id,
@@ -593,6 +820,8 @@ Recommended lesson evidence:
         "aiSummary": ai_summary,
         "evidencePacket": evidence_packet,
         "suggestedAssignmentPayload": suggested_assignment_payload,
+        "generatedLessonDraft": generated_lesson_draft,
+        "generatedGuidedAssessmentDraft": generated_guided_assessment_draft,
         "note": note,
     }
     output_row = await db.execute(
@@ -656,4 +885,6 @@ Recommended lesson evidence:
         "aiSummary": ai_summary,
         "evidencePacket": evidence_packet,
         "suggestedAssignmentPayload": suggested_assignment_payload,
+        "generatedLessonDraft": generated_lesson_draft,
+        "generatedGuidedAssessmentDraft": generated_guided_assessment_draft,
     }

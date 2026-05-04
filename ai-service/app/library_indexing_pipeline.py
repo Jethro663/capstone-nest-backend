@@ -11,6 +11,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .content_sanitizer import sanitize_extracted_text
 from .embedding_provider import embed_texts, embedding_to_vector_literal
@@ -175,7 +176,12 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
     await db.commit()
 
     try:
-        resolved_path = _resolve_uploaded_path(str(file_row["file_path"]))
+        materialized_path = await materialize_backend_upload(str(file_row["file_path"]))
+        if not materialized_path:
+            raise FileNotFoundError(
+                f"File could not be materialized from backend storage: {file_row['file_path']}"
+            )
+        resolved_path = Path(materialized_path).resolve()
         if not resolved_path.exists():
             raise FileNotFoundError(f"File does not exist on disk: {resolved_path}")
 

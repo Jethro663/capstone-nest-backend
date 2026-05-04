@@ -571,6 +571,63 @@ export class AiMentorController {
       assessmentIds,
     };
 
+    const generatedLessonDraft =
+      payload.generatedLessonDraft &&
+      typeof payload.generatedLessonDraft === 'object'
+        ? (payload.generatedLessonDraft as Record<string, unknown>)
+        : null;
+    if (generatedLessonDraft) {
+      normalized.generatedLessonDraft = {
+        ...generatedLessonDraft,
+        weakConcepts: Array.isArray(generatedLessonDraft.weakConcepts)
+          ? generatedLessonDraft.weakConcepts.filter(
+              (value): value is string => typeof value === 'string',
+            )
+          : [],
+        sourceLessonIds: Array.isArray(generatedLessonDraft.sourceLessonIds)
+          ? generatedLessonDraft.sourceLessonIds.filter(
+              (value): value is string => typeof value === 'string',
+            )
+          : [],
+        sourceReferences: Array.isArray(generatedLessonDraft.sourceReferences)
+          ? generatedLessonDraft.sourceReferences.filter(
+              (value): value is Record<string, unknown> =>
+                typeof value === 'object' && value !== null,
+            )
+          : [],
+      };
+    }
+
+    const generatedGuidedAssessmentDraft =
+      payload.generatedGuidedAssessmentDraft &&
+      typeof payload.generatedGuidedAssessmentDraft === 'object'
+        ? (payload.generatedGuidedAssessmentDraft as Record<string, unknown>)
+        : null;
+    if (generatedGuidedAssessmentDraft) {
+      normalized.generatedGuidedAssessmentDraft = {
+        ...generatedGuidedAssessmentDraft,
+        weakConcepts: Array.isArray(generatedGuidedAssessmentDraft.weakConcepts)
+          ? generatedGuidedAssessmentDraft.weakConcepts.filter(
+              (value): value is string => typeof value === 'string',
+            )
+          : [],
+        sourceReferences: Array.isArray(
+          generatedGuidedAssessmentDraft.sourceReferences,
+        )
+          ? generatedGuidedAssessmentDraft.sourceReferences.filter(
+              (value): value is Record<string, unknown> =>
+                typeof value === 'object' && value !== null,
+            )
+          : [],
+        questions: Array.isArray(generatedGuidedAssessmentDraft.questions)
+          ? generatedGuidedAssessmentDraft.questions.filter(
+              (value): value is Record<string, unknown> =>
+                typeof value === 'object' && value !== null,
+            )
+          : [],
+      };
+    }
+
     return normalized;
   }
 

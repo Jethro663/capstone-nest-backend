@@ -85,7 +85,13 @@ function formatPercent(value: number | null | undefined) {
 }
 
 function getCheckpointTitle(checkpoint: LxpCheckpoint) {
-  return checkpoint.label || checkpoint.lesson?.title || checkpoint.assessment?.title;
+  return (
+    checkpoint.label ||
+    checkpoint.generatedLesson?.title ||
+    checkpoint.guidedAssessment?.title ||
+    checkpoint.lesson?.title ||
+    checkpoint.assessment?.title
+  );
 }
 
 function getTab(value: string | null): DetailTab {
@@ -129,14 +135,28 @@ function CheckpointCard({
   const router = useRouter();
   const title = getCheckpointTitle(checkpoint);
   const isReplay = checkpoint.type === 'assessment_retry';
+  const isGuidedAssessment = checkpoint.type === 'guided_assessment';
+  const isGeneratedLesson = checkpoint.type === 'generated_lesson_review';
   const lessonHref = buildLessonHref(classId, checkpoint.lesson?.id);
+  const generatedLessonHref = checkpoint.generatedLesson
+    ? `/dashboard/student/lxp/${encode(classId)}/generated-lessons/${encode(checkpoint.id)}`
+    : null;
+  const guidedAssessmentHref = checkpoint.guidedAssessment
+    ? `/dashboard/student/lxp/${encode(classId)}/guided-assessment/${encode(checkpoint.id)}`
+    : null;
   const jaHref = `/dashboard/student/ja?${new URLSearchParams({
     mode: 'review',
     classId,
     entry: 'lxp',
     returnTo: `/dashboard/student/lxp/${classId}?tab=replays`,
   }).toString()}`;
-  const primaryHref = isReplay ? jaHref : lessonHref;
+  const primaryHref = isReplay
+    ? jaHref
+    : isGuidedAssessment
+      ? guidedAssessmentHref
+      : isGeneratedLesson
+        ? generatedLessonHref
+        : lessonHref;
 
   const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
     if (!(target instanceof Element)) return false;
@@ -187,7 +207,7 @@ function CheckpointCard({
             <span>Status</span>
           </article>
           <article>
-            <strong>{isReplay ? 'Replay' : 'Step'}</strong>
+            <strong>{isGuidedAssessment ? 'Guided' : isReplay ? 'Replay' : 'Step'}</strong>
             <span>Type</span>
           </article>
         </div>
@@ -209,6 +229,20 @@ function CheckpointCard({
           >
             Open JA Hub
           </Link>
+        ) : isGuidedAssessment && guidedAssessmentHref ? (
+          <Link
+            href={guidedAssessmentHref}
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
+          >
+            Open Guided Assessment
+          </Link>
+        ) : isGeneratedLesson && generatedLessonHref ? (
+          <Link
+            href={generatedLessonHref}
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
+          >
+            Open Remedial Lesson
+          </Link>
         ) : lessonHref ? (
           <Link
             href={lessonHref}
@@ -217,7 +251,7 @@ function CheckpointCard({
             Open Lesson
           </Link>
         ) : null}
-        {!readOnly && !checkpoint.isCompleted && !isReplay ? (
+        {!readOnly && !checkpoint.isCompleted && !isReplay && !isGuidedAssessment ? (
           <Button
             type="button"
             size="sm"
@@ -286,7 +320,10 @@ export default function StudentLxpDetailExperience() {
     () => [...(playlist?.checkpoints ?? [])].sort((left, right) => left.order - right.order),
     [playlist?.checkpoints],
   );
-  const replays = checkpoints.filter((checkpoint) => checkpoint.type === 'assessment_retry');
+  const replays = checkpoints.filter(
+    (checkpoint) =>
+      checkpoint.type === 'assessment_retry' || checkpoint.type === 'guided_assessment',
+  );
   const steps = checkpoints;
   const progressPercent = clampPercent(
     overview?.progress.completionPercent ?? playlist?.progress.completionPercent,

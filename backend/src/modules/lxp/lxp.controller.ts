@@ -1,4 +1,5 @@
 import {
+  Patch,
   Body,
   Controller,
   Get,
@@ -12,12 +13,15 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import {
+  ApproveGeneratedArtifactsDto,
   AssignInterventionDto,
   ListTeacherEvaluationSummaryQueryDto,
   ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
+  SubmitGuidedAssessmentDto,
   SubmitSystemEvaluationDto,
   SubmitTeacherEvaluationDto,
+  UpdateGuidedAssessmentProgressDto,
 } from './dto/lxp.dto';
 import { LxpService } from './lxp.service';
 
@@ -63,6 +67,85 @@ export class LxpController {
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.lxpService.completeCheckpoint(
+      user.userId,
+      classId,
+      assignmentId,
+    );
+    return { success: true, data };
+  }
+
+  @Get('me/playlist/:classId/generated-lessons/:assignmentId')
+  @Roles(RoleName.Student)
+  async getGeneratedLesson(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getGeneratedLesson(
+      user.userId,
+      classId,
+      assignmentId,
+    );
+    return { success: true, data };
+  }
+
+  @Post('me/playlist/:classId/guided-assessments/:assignmentId/start')
+  @Roles(RoleName.Student)
+  async startGuidedAssessment(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.startGuidedAssessment(
+      user.userId,
+      classId,
+      assignmentId,
+    );
+    return { success: true, data };
+  }
+
+  @Patch('me/playlist/:classId/guided-assessments/:assignmentId/progress')
+  @Roles(RoleName.Student)
+  async updateGuidedAssessmentProgress(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @Body() dto: UpdateGuidedAssessmentProgressDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.updateGuidedAssessmentProgress(
+      user.userId,
+      classId,
+      assignmentId,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Post('me/playlist/:classId/guided-assessments/:assignmentId/submit')
+  @Roles(RoleName.Student)
+  async submitGuidedAssessment(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @Body() dto: SubmitGuidedAssessmentDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.submitGuidedAssessment(
+      user.userId,
+      classId,
+      assignmentId,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Get('me/playlist/:classId/guided-assessments/:assignmentId/result')
+  @Roles(RoleName.Student)
+  async getGuidedAssessmentResult(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getGuidedAssessmentResult(
       user.userId,
       classId,
       assignmentId,
@@ -192,6 +275,36 @@ export class LxpController {
     @Query() query?: ListSystemEvaluationsQueryDto,
   ) {
     const data = await this.lxpService.listSystemEvaluations(user, query);
+    return { success: true, data };
+  }
+
+  @Post('teacher/interventions/:caseId/generated-content/approve')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async approveGeneratedArtifacts(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: ApproveGeneratedArtifactsDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.approveGeneratedArtifacts(
+      caseId,
+      dto,
+      user,
+    );
+    return { success: true, data };
+  }
+
+  @Post('teacher/interventions/:caseId/generated-content/reject')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async rejectGeneratedArtifacts(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @Body() dto: ApproveGeneratedArtifactsDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.rejectGeneratedArtifacts(
+      caseId,
+      dto,
+      user,
+    );
     return { success: true, data };
   }
 

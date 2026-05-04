@@ -291,6 +291,38 @@ function normalizeStructuredOutput(
       recommendedLessons.map((lesson) => lesson.lessonId),
       recommendedAssessments.map((assessment) => assessment.assessmentId),
     ),
+    generatedLessonDraft:
+      payload?.generatedLessonDraft &&
+      typeof payload.generatedLessonDraft === 'object'
+        ? {
+            ...payload.generatedLessonDraft,
+            weakConcepts: Array.isArray(payload.generatedLessonDraft.weakConcepts)
+              ? payload.generatedLessonDraft.weakConcepts
+              : [],
+            sourceLessonIds: Array.isArray(payload.generatedLessonDraft.sourceLessonIds)
+              ? payload.generatedLessonDraft.sourceLessonIds
+              : [],
+            sourceReferences: Array.isArray(payload.generatedLessonDraft.sourceReferences)
+              ? payload.generatedLessonDraft.sourceReferences
+              : [],
+          }
+        : undefined,
+    generatedGuidedAssessmentDraft:
+      payload?.generatedGuidedAssessmentDraft &&
+      typeof payload.generatedGuidedAssessmentDraft === 'object'
+        ? {
+            ...payload.generatedGuidedAssessmentDraft,
+            weakConcepts: Array.isArray(payload.generatedGuidedAssessmentDraft.weakConcepts)
+              ? payload.generatedGuidedAssessmentDraft.weakConcepts
+              : [],
+            sourceReferences: Array.isArray(payload.generatedGuidedAssessmentDraft.sourceReferences)
+              ? payload.generatedGuidedAssessmentDraft.sourceReferences
+              : [],
+            questions: Array.isArray(payload.generatedGuidedAssessmentDraft.questions)
+              ? payload.generatedGuidedAssessmentDraft.questions
+              : [],
+          }
+        : undefined,
   };
 }
 
@@ -343,6 +375,11 @@ export default function TeacherInterventionWorkspacePage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('plan');
+  const [approvedGeneratedContent, setApprovedGeneratedContent] = useState<{
+    generatedLessonApproved: boolean;
+    guidedAssessmentApproved: boolean;
+  } | null>(null);
+  const [artifactActionLoading, setArtifactActionLoading] = useState(false);
   const statusFailuresRef = useRef(0);
   const activeClassId = classId || queueEntry?.classId || '';
   const interventionsRoute = useMemo(() => {
@@ -386,6 +423,7 @@ export default function TeacherInterventionWorkspacePage() {
         resultRes.data.result.structuredOutput,
       );
       setResult(structured);
+      setApprovedGeneratedContent(null);
       setStatusWarning(null);
       setLessonXp(
         Object.fromEntries(structured.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
@@ -502,6 +540,12 @@ export default function TeacherInterventionWorkspacePage() {
         if (['completed', 'approved'].includes(statusRes.data.status)) {
           window.clearInterval(interval);
           await loadInterventionJobResult(statusRes.data.jobId);
+        } else if (['failed', 'rejected'].includes(statusRes.data.status)) {
+          window.clearInterval(interval);
+          setStatusWarning(
+            statusRes.data.errorMessage?.trim() ||
+              'The latest AI plan attempt failed. No new AI-generated intervention path was produced.',
+          );
         }
       } catch (error) {
         statusFailuresRef.current += 1;
@@ -577,18 +621,36 @@ export default function TeacherInterventionWorkspacePage() {
     () => result?.recommendedAssessments ?? [],
     [result],
   );
+  const hasGeneratedLessonDraft = Boolean(result?.generatedLessonDraft);
+  const hasGeneratedGuidedAssessmentDraft = Boolean(result?.generatedGuidedAssessmentDraft);
+  const hasGeneratedDrafts = hasGeneratedLessonDraft || hasGeneratedGuidedAssessmentDraft;
+  const generatedLessonApproved =
+    !hasGeneratedLessonDraft || Boolean(approvedGeneratedContent?.generatedLessonApproved);
+  const guidedAssessmentApproved =
+    !hasGeneratedGuidedAssessmentDraft || Boolean(approvedGeneratedContent?.guidedAssessmentApproved);
+  const generatedDraftsApproved = generatedLessonApproved && guidedAssessmentApproved;
   const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
+  const latestPlanAttemptFailed = Boolean(
+    job && ['failed', 'rejected'].includes(job.status),
+  );
+  const failedPlanWithoutLoadedResult = latestPlanAttemptFailed && !result;
   const isCaseActive = queueEntry?.status === 'active';
   const assignDisabled =
     assigning ||
     !hasCaseContext ||
     !hasAssignableItems ||
     !isCaseActive ||
+    failedPlanWithoutLoadedResult ||
+    (hasGeneratedDrafts && !generatedDraftsApproved) ||
     hasStartedCheckpointProgress;
   const assignButtonLabel = assigning
     ? 'Assigning...'
     : hasStartedCheckpointProgress
       ? 'Progress already started'
+      : failedPlanWithoutLoadedResult
+        ? 'Latest AI plan failed'
+      : hasGeneratedDrafts && !generatedDraftsApproved
+        ? 'Approve generated content first'
       : hasUnstartedExistingInterventionPath
         ? 'Replace current path'
         : 'Assign suggested path';
@@ -730,6 +792,12 @@ export default function TeacherInterventionWorkspacePage() {
       }
       return;
     }
+    if (failedPlanWithoutLoadedResult) {
+      toast.error(
+        'The latest AI plan attempt failed. Generate a successful plan or build a manual fallback before assigning.',
+      );
+      return;
+    }
     if (!isCaseActive) {
       toast.error('Activate this intervention case first before assigning a plan.');
       return;
@@ -771,6 +839,43 @@ export default function TeacherInterventionWorkspacePage() {
       toast.error(getApiErrorMessage(error, 'Failed to assign intervention plan'));
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handleApproveGeneratedContent = async () => {
+    if (!result) return;
+    try {
+      setArtifactActionLoading(true);
+      const response = await lxpService.approveGeneratedArtifacts(caseId, {
+        generatedLessonDraft: result.generatedLessonDraft,
+        generatedGuidedAssessmentDraft: result.generatedGuidedAssessmentDraft,
+      });
+      setApprovedGeneratedContent({
+        generatedLessonApproved: Boolean(response.data.generatedLesson),
+        guidedAssessmentApproved: Boolean(response.data.guidedAssessment),
+      });
+      toast.success('Generated remedial content approved for assignment.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to approve generated remedial content'));
+    } finally {
+      setArtifactActionLoading(false);
+    }
+  };
+
+  const handleRejectGeneratedContent = async () => {
+    if (!result) return;
+    try {
+      setArtifactActionLoading(true);
+      await lxpService.rejectGeneratedArtifacts(caseId, {
+        generatedLessonDraft: result.generatedLessonDraft,
+        generatedGuidedAssessmentDraft: result.generatedGuidedAssessmentDraft,
+      });
+      setApprovedGeneratedContent(null);
+      toast.success('Generated remedial content rejected. You can regenerate the plan.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to reject generated remedial content'));
+    } finally {
+      setArtifactActionLoading(false);
     }
   };
 
@@ -863,6 +968,14 @@ export default function TeacherInterventionWorkspacePage() {
         <div className="teacher-intervention-workspace__notice is-warning">
           This student has already started this intervention path. You can generate guidance for review,
           but replacing the assigned path is blocked to preserve progress.
+        </div>
+      ) : null}
+      {failedPlanWithoutLoadedResult ? (
+        <div className="teacher-intervention-workspace__notice is-warning">
+          The latest AI intervention plan attempt failed, so no new AI-generated path was produced.
+          {hasExistingInterventionPath
+            ? ' Any assigned Learners Path shown here is an older path that remains active until you replace it with a valid plan.'
+            : ' Generate a valid plan or add manual fallback checkpoints before assigning anything new.'}
         </div>
       ) : null}
 
@@ -1124,13 +1237,32 @@ export default function TeacherInterventionWorkspacePage() {
               <p>Step 3</p>
               <h2>Clean Out & Assign</h2>
             </div>
-            <Button
-              variant="outline"
-              onClick={handleAssign}
-              disabled={assignDisabled}
-            >
-              {assignButtonLabel}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {hasGeneratedDrafts ? (
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleRejectGeneratedContent}
+                    disabled={artifactActionLoading}
+                  >
+                    {artifactActionLoading ? 'Saving...' : 'Reject generated content'}
+                  </Button>
+                  <Button
+                    onClick={handleApproveGeneratedContent}
+                    disabled={artifactActionLoading}
+                  >
+                    {artifactActionLoading ? 'Saving...' : 'Approve generated content'}
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                variant="outline"
+                onClick={handleAssign}
+                disabled={assignDisabled}
+              >
+                {assignButtonLabel}
+              </Button>
+            </div>
           </div>
 
           <div className="teacher-intervention-workspace__assign-grid">
@@ -1144,6 +1276,36 @@ export default function TeacherInterventionWorkspacePage() {
                 )}
               </div>
             </section>
+
+            {result?.generatedLessonDraft ? (
+              <section className="teacher-intervention-workspace__assign-block">
+                <h3>Generated remedial lesson preview</h3>
+                <p className="mb-3 text-sm text-[#5f6b84]">
+                  This simplified lesson is grounded on the recommended class lesson evidence and tailored to the student&apos;s weak concepts.
+                </p>
+                <div className="rounded-xl border border-[#eadde3] bg-[#fff9fb] p-4">
+                  <strong className="block text-base text-[#1f2937]">
+                    {result.generatedLessonDraft.title}
+                  </strong>
+                  <p className="mt-2 text-sm text-[#5f6b84]">
+                    {result.generatedLessonDraft.summary || 'No summary provided.'}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {result.generatedLessonDraft.weakConcepts.map((concept) => (
+                      <Badge key={concept} variant="outline">{concept}</Badge>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-lg bg-white p-3 text-sm leading-6 text-[#30415d]">
+                    <pre className="whitespace-pre-wrap font-sans">
+                      {result.generatedLessonDraft.lessonBody}
+                    </pre>
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#7a5160]">
+                    Approval status: {approvedGeneratedContent?.generatedLessonApproved ? 'Approved for assignment' : 'Waiting for teacher approval'}
+                  </p>
+                </div>
+              </section>
+            ) : null}
 
             <section className="teacher-intervention-workspace__assign-block">
               <h3>Recommended lesson review</h3>
@@ -1176,6 +1338,43 @@ export default function TeacherInterventionWorkspacePage() {
                 </div>
               ))}
             </section>
+
+            {result?.generatedGuidedAssessmentDraft ? (
+              <section className="teacher-intervention-workspace__assign-block">
+                <h3>Generated guided assessment preview</h3>
+                <p className="mb-3 text-sm text-[#5f6b84]">
+                  This LXP-only remedial assessment uses the failed class assessment as a basis, then adds optional hints and post-answer explanations.
+                </p>
+                <div className="rounded-xl border border-[#eadde3] bg-[#fff9fb] p-4">
+                  <strong className="block text-base text-[#1f2937]">
+                    {result.generatedGuidedAssessmentDraft.title}
+                  </strong>
+                  <p className="mt-2 text-sm text-[#5f6b84]">
+                    {result.generatedGuidedAssessmentDraft.description || 'No description provided.'}
+                  </p>
+                  <div className="mt-3 grid gap-3">
+                    {result.generatedGuidedAssessmentDraft.questions.slice(0, 3).map((question, index) => (
+                      <div key={question.id} className="rounded-lg border border-[#f0e5ea] bg-white p-3">
+                        <strong className="block text-sm text-[#1f2937]">
+                          Q{index + 1}. {question.stem}
+                        </strong>
+                        {question.hint ? (
+                          <p className="mt-2 text-xs font-medium text-[#7a5160]">
+                            Hint: {question.hint}
+                          </p>
+                        ) : null}
+                        <p className="mt-2 text-xs text-[#5f6b84]">
+                          Explanation: {question.explanation}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-xs font-medium text-[#7a5160]">
+                    Approval status: {approvedGeneratedContent?.guidedAssessmentApproved ? 'Approved for assignment' : 'Waiting for teacher approval'}
+                  </p>
+                </div>
+              </section>
+            ) : null}
 
             <section className="teacher-intervention-workspace__assign-block">
               <h3>Recommended assessment retry</h3>
@@ -1233,6 +1432,11 @@ export default function TeacherInterventionWorkspacePage() {
                   <p className="rounded-xl border border-[#f0d7df] bg-[#fff7f9] px-3 py-2 text-sm font-medium text-[#6a4f5b]">
                     Formative support only: intervention checkpoints support remediation and teacher reference. They do not automatically alter official class records.
                   </p>
+                  {hasGeneratedDrafts ? (
+                    <p className="rounded-xl border border-[#e4d8ff] bg-[#faf7ff] px-3 py-2 text-sm font-medium text-[#5e4b89]">
+                      Generated remedial content is teacher-reviewed and stays inside LXP. It does not create a new official LMS lesson or official assessment attempt.
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p className="teacher-intervention-workspace__empty">

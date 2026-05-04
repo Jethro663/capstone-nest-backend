@@ -134,6 +134,15 @@ function buildCompletedJob() {
   };
 }
 
+function buildFailedJob(message = 'Cloud embedding response did not contain a vector for each input.') {
+  return {
+    ...buildProcessingJob(),
+    status: 'failed' as const,
+    progressPercent: 100,
+    errorMessage: message,
+  };
+}
+
 function buildStructuredResult() {
   return {
     caseId: 'case-1',
@@ -623,6 +632,57 @@ describe('TeacherInterventionWorkspacePage', () => {
 
     fireEvent.click(assignButton);
     expect(mockedLxpService.assignIntervention).not.toHaveBeenCalled();
+  });
+
+  it('surfaces failed AI plan attempts without treating the existing path as a new generated plan', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [
+          buildQueueEntry('case-1', 'active', {
+            totalCheckpoints: 2,
+            completedCheckpoints: 0,
+            completionPercent: 0,
+          }),
+        ],
+      },
+    });
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildFailedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /generate plan/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /generate new ai plan/i }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Cloud embedding response did not contain a vector for each input.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/no new ai-generated path was produced/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/older path that remains active/i),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /clean out & assign/i }),
+    );
+    expect(
+      screen.getByRole('button', { name: /latest ai plan failed/i }),
+    ).toBeDisabled();
   });
 
   it('disables assignment when AI result has no assignable lessons or assessments', async () => {

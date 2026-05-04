@@ -285,6 +285,47 @@ export interface InterventionStructuredOutput {
   };
   evidencePacket?: InterventionRecommendation['evidencePacket'];
   suggestedAssignmentPayload: InterventionRecommendation['suggestedAssignmentPayload'];
+  generatedLessonDraft?: {
+    title: string;
+    summary?: string | null;
+    lessonBody: string;
+    weakConcepts: string[];
+    sourceLessonIds: string[];
+    sourceReferences: Array<{
+      lessonId?: string;
+      chunkId?: string;
+      title?: string;
+      sourceReference?: string;
+      selectionReason?: string;
+    }>;
+  } | null;
+  generatedGuidedAssessmentDraft?: {
+    sourceAssessmentId?: string | null;
+    title: string;
+    description?: string | null;
+    weakConcepts: string[];
+    formativeSummary?: string | null;
+    sourceReferences: Array<{
+      assessmentId?: string;
+      questionId?: string;
+      sourceReference?: string;
+      selectionReason?: string;
+    }>;
+    questions: Array<{
+      id: string;
+      type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+      stem: string;
+      explanation: string;
+      hint?: string | null;
+      weakConceptTag?: string | null;
+      sourceQuestionId?: string | null;
+      options: Array<{
+        id: string;
+        text: string;
+        isCorrect: boolean;
+      }>;
+    }>;
+  } | null;
   note?: string | null;
   runtime?: {
     outputId?: string;
