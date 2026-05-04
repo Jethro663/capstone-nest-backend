@@ -179,4 +179,39 @@ describe('TeacherPerformancePage', () => {
     });
     expect(mockedPerformanceService.createAnalysisJob).not.toHaveBeenCalled();
   });
+
+  it('renders a concept mastery heatmap when concept hotspots are available', async () => {
+    mockedPerformanceService.getClassDiagnostics.mockResolvedValueOnce({
+      data: {
+        classId: 'class-1',
+        threshold: 74,
+        lowestAssessments: [],
+        conceptHotspots: [
+          {
+            concept: 'fractions',
+            wrongCount: 6,
+            masteryScore: 41,
+            evidenceCount: 8,
+          },
+          {
+            concept: 'decimals',
+            wrongCount: 2,
+            masteryScore: 83,
+            evidenceCount: 5,
+          },
+        ],
+        studentCount: 12,
+        atRiskCount: 4,
+        insufficientEvidence: false,
+      },
+    } as Awaited<ReturnType<typeof performanceService.getClassDiagnostics>>);
+
+    render(<TeacherPerformancePage />);
+
+    expect(await screen.findByText(/Concept Mastery Heatmap/i)).toBeInTheDocument();
+    expect(screen.getByText('High mastery')).toBeInTheDocument();
+    expect(screen.getByText('Critical')).toBeInTheDocument();
+    expect(screen.getByText('Fractions')).toBeInTheDocument();
+    expect(screen.getByText('Decimals')).toBeInTheDocument();
+  });
 });

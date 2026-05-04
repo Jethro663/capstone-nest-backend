@@ -28,6 +28,7 @@ import type {
   StudentPerformanceReportRow,
   SystemUsageReport,
 } from '@/types/report';
+import { downloadReportPdf } from '@/utils/report-pdf';
 import type { ClassItem } from '@/types/class';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -126,7 +127,8 @@ export function ClassRecordReportsPage({
   const [loadingReports, setLoadingReports] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [studentMasterList, setStudentMasterList] = useState<StudentMasterListRow[]>([]);
   const [classEnrollment, setClassEnrollment] = useState<ClassEnrollmentRow[]>([]);
   const [studentPerformance, setStudentPerformance] = useState<StudentPerformanceReportRow[]>([]);
@@ -267,9 +269,9 @@ export function ClassRecordReportsPage({
     fetchReports();
   }, [fetchReports]);
 
-  const handleExport = async () => {
+  const handleExportCsv = async () => {
     try {
-      setExporting(true);
+      setExportingCsv(true);
       const blob = await reportService.exportCsv(activeTab, reportQuery);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -283,7 +285,45 @@ export function ClassRecordReportsPage({
     } catch {
       toast.error('Unable to export report');
     } finally {
-      setExporting(false);
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      setExportingPdf(true);
+      const selectedRecord =
+        records.find((record) => record.id === selectedRecordId) ?? null;
+      await downloadReportPdf({
+        tab: activeTab,
+        heading,
+        scopeLabel: isAdmin ? 'Admin Reports Hub' : 'Teacher Reports Hub',
+        filters: reportQuery,
+        classLabel: selectedClass
+          ? `${selectedClass.subjectName} (${selectedClass.subjectCode}) - ${selectedClass.section?.name ?? '--'}`
+          : null,
+        recordLabel: selectedRecord
+          ? `${selectedRecord.gradingPeriod} - ${selectedRecord.status}`
+          : null,
+        data: {
+          classRecord: {
+            average,
+            distribution,
+            interventions,
+          },
+          studentMasterList,
+          classEnrollment,
+          studentPerformance,
+          interventionParticipation,
+          assessmentSummary,
+          systemUsage,
+        },
+      });
+      toast.success('PDF report downloaded');
+    } catch {
+      toast.error('Unable to export PDF report');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -304,15 +344,26 @@ export function ClassRecordReportsPage({
 
   const shellBadge = isAdmin ? 'Admin Reports Hub' : 'Teacher Reports Hub';
   const shellActions = (
-    <Button
-      variant={isAdmin ? 'outline' : 'teacher'}
-      onClick={() => void handleExport()}
-      disabled={exporting}
-      className={isAdmin ? 'admin-button-outline rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
-    >
-      <Download className="h-4 w-4" />
-      {exporting ? 'Exporting...' : `Export ${reportTabs.find((tab) => tab.value === activeTab)?.label ?? 'Report'}`}
-    </Button>
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant={isAdmin ? 'outline' : 'teacherOutline'}
+        onClick={() => void handleExportCsv()}
+        disabled={exportingCsv || exportingPdf}
+        className={isAdmin ? 'admin-button-outline rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
+      >
+        <Download className="h-4 w-4" />
+        {exportingCsv ? 'Exporting CSV...' : 'Download CSV'}
+      </Button>
+      <Button
+        variant={isAdmin ? 'default' : 'teacher'}
+        onClick={() => void handleExportPdf()}
+        disabled={exportingCsv || exportingPdf}
+        className={isAdmin ? 'admin-button rounded-xl px-4 font-black' : 'rounded-2xl px-5'}
+      >
+        <Download className="h-4 w-4" />
+        {exportingPdf ? 'Exporting PDF...' : 'Download PDF'}
+      </Button>
+    </div>
   );
 
   const statCards = isAdmin ? (

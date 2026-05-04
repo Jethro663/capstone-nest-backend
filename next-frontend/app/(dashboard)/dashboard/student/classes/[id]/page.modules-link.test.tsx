@@ -6,6 +6,7 @@ import type {
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentClassDetailPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
+import { useNotifications } from '@/providers/NotificationProvider';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -43,6 +44,15 @@ jest.mock('framer-motion', () => ({
 
 jest.mock('@/providers/AuthProvider', () => ({
   useAuth: jest.fn(),
+}));
+
+const subscribeMock = jest.fn();
+let notificationSubscriber:
+  | ((notification: { type: string; referenceId?: string | null }) => void)
+  | null = null;
+
+jest.mock('@/providers/NotificationProvider', () => ({
+  useNotifications: jest.fn(),
 }));
 
 jest.mock('@/services/class-service', () => ({
@@ -90,6 +100,7 @@ jest.mock('@/services/discussion-board-service', () => ({
 }));
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockedUseNotifications = useNotifications as jest.MockedFunction<typeof useNotifications>;
 const mockedClassService = classService as jest.Mocked<typeof classService>;
 const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
@@ -101,10 +112,28 @@ describe('StudentClassDetailPage module links', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     currentView = 'modules';
+    notificationSubscriber = null;
+    subscribeMock.mockImplementation((handler) => {
+      notificationSubscriber = handler;
+      return () => {
+        if (notificationSubscriber === handler) {
+          notificationSubscriber = null;
+        }
+      };
+    });
     mockedUseAuth.mockReturnValue({
       role: 'student',
       user: { id: 'student-1', firstName: 'Jamie', lastName: 'Cruz' },
     } as ReturnType<typeof useAuth>);
+    mockedUseNotifications.mockReturnValue({
+      notifications: [],
+      unreadCount: 0,
+      loading: false,
+      fetchNotifications: jest.fn(),
+      markAsRead: jest.fn(),
+      markAllAsRead: jest.fn(),
+      subscribe: subscribeMock,
+    } as ReturnType<typeof useNotifications>);
 
     mockedClassService.getById.mockResolvedValue({
       success: true,
@@ -935,5 +964,77 @@ describe('StudentClassDetailPage module links', () => {
     expect(screen.getAllByText('Not graded').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('link', { name: 'View' })).toHaveLength(3);
     expect(screen.queryByText('Class Record Snapshot')).not.toBeInTheDocument();
+  });
+
+  it('refetches the open discussion thread when a matching realtime notification arrives', async () => {
+    currentView = 'discussion';
+    mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        items: [
+          {
+            id: 'thread-1',
+            classId: 'class-1',
+            authorId: 'teacher-1',
+            title: 'Reminder',
+            bodyHtml: '<p>Reply here.</p>',
+            themeId: 'default',
+            commentLimitPerStudent: null,
+            allowComments: true,
+            isPinned: false,
+            status: 'published',
+            publishedAt: '2026-04-10T08:00:00.000Z',
+            closedAt: null,
+            createdAt: '2026-04-10T08:00:00.000Z',
+            updatedAt: '2026-04-10T08:00:00.000Z',
+            commentCount: 0,
+            attachments: [],
+            author: {
+              id: 'teacher-1',
+              firstName: 'Jamie',
+              lastName: 'Cruz',
+              email: 'teacher@example.com',
+            },
+          },
+        ],
+        page: 1,
+        limit: 50,
+        total: 1,
+      },
+    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('Discussion Board')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: /open thread/i }));
+
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.getThread).toHaveBeenCalledWith(
+        'class-1',
+        'thread-1',
+      );
+    });
+
+    expect(subscribeMock).toHaveBeenCalled();
+    notificationSubscriber?.({
+      type: 'discussion_comment_posted',
+      referenceId: 'thread-other',
+    });
+
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.getThread).toHaveBeenCalledTimes(1);
+      expect(mockedDiscussionBoardService.listThreads).toHaveBeenCalledTimes(1);
+    });
+
+    notificationSubscriber?.({
+      type: 'discussion_comment_posted',
+      referenceId: 'thread-1',
+    });
+
+    await waitFor(() => {
+      expect(mockedDiscussionBoardService.getThread).toHaveBeenCalledTimes(2);
+      expect(mockedDiscussionBoardService.listThreads).toHaveBeenCalledTimes(2);
+    });
   });
 });

@@ -52,6 +52,26 @@ export function getProfileRoute(role: string | null | undefined): string {
   }
 }
 
+export function resolveUserProfilePicture(
+  user:
+    | Pick<User, 'profilePicture' | 'profile' | 'teacherProfile'>
+    | null
+    | undefined,
+): string | null {
+  const avatarSrc =
+    user?.profile?.profilePicture ??
+    user?.teacherProfile?.profilePicture ??
+    user?.profilePicture ??
+    null;
+
+  if (typeof avatarSrc !== 'string') {
+    return null;
+  }
+
+  const trimmedAvatarSrc = avatarSrc.trim();
+  return trimmedAvatarSrc.length > 0 ? trimmedAvatarSrc : null;
+}
+
 export function normalizeStudentProfile(
   profile: Partial<StudentProfile> | null | undefined,
 ): StudentProfile | null {

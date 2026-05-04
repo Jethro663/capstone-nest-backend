@@ -23,6 +23,7 @@ interface NotificationContextType {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  subscribe: (listener: (notification: Notification) => void) => () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
@@ -32,6 +33,7 @@ const NotificationContext = createContext<NotificationContextType>({
   fetchNotifications: async () => {},
   markAsRead: async () => {},
   markAllAsRead: async () => {},
+  subscribe: () => () => {},
 });
 
 export function useNotifications() {
@@ -45,6 +47,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const subscribersRef = useRef(new Set<(notification: Notification) => void>());
+
+  const subscribe = useCallback((listener: (notification: Notification) => void) => {
+    subscribersRef.current.add(listener);
+    return () => {
+      subscribersRef.current.delete(listener);
+    };
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -207,6 +217,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
       setNotifications((prev) => [newNotification, ...prev]);
       setUnreadCount((prev) => prev + 1);
+      subscribersRef.current.forEach((listener) => {
+        try {
+          listener(newNotification);
+        } catch {
+          // best-effort fanout for page-level listeners
+        }
+      });
       toast(payload.title, {
         description: payload.body,
         action: {
@@ -236,7 +253,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, loading, fetchNotifications, markAsRead, markAllAsRead }}
+      value={{
+        notifications,
+        unreadCount,
+        loading,
+        fetchNotifications,
+        markAsRead,
+        markAllAsRead,
+        subscribe,
+      }}
     >
       {children}
     </NotificationContext.Provider>

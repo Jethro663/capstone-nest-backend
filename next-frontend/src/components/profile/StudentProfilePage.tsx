@@ -29,6 +29,7 @@ import {
 } from '@/lib/input-policy';
 import { profileService } from '@/services/profile-service';
 import type { StudentProfile } from '@/types/profile';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -42,6 +43,7 @@ import {
   mergeUserWithStudentProfile,
   normalizePhilippinePhone,
   normalizeStudentProfile,
+  resolveUserProfilePicture,
 } from '@/utils/profile';
 import { cn } from '@/utils/cn';
 
@@ -279,6 +281,7 @@ export default function StudentProfilePage() {
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName ?? ''}`.trim()
     : user?.email ?? 'Student';
+  const avatarSrc = form.profilePicture || resolveUserProfilePicture(user);
   const roleLine = form.gradeLevel ? `Student - Grade ${form.gradeLevel}` : 'Student';
 
   const missingRequiredFields = getMissingStudentProfileFields({
@@ -479,7 +482,10 @@ export default function StudentProfilePage() {
               <CardContent className="space-y-5 px-6 py-6 md:px-7">
                 <div className="student-profile-identity-row">
                   <div className="student-profile-identity-main">
-                    <div className="student-profile-avatar">{initials}</div>
+                    <Avatar className="student-profile-avatar">
+                      {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                      <AvatarFallback className="student-profile-avatar">{initials}</AvatarFallback>
+                    </Avatar>
                     <div className="space-y-0.5">
                       <div className="student-profile-name-row">
                         <p className="student-profile-name">{displayName}</p>

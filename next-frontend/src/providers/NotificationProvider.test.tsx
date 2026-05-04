@@ -1,7 +1,8 @@
-import { render, waitFor } from '@testing-library/react';
+import { act, render, waitFor } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from './NotificationProvider';
 import { getTrackedExtractionNotificationStorageKey } from '@/lib/extraction-notification-tracker';
 import { toast } from 'sonner';
+import { useEffect, useState } from 'react';
 
 const useAuthMock = jest.fn();
 const pushMock = jest.fn();
@@ -12,6 +13,7 @@ const getExtractionStatusMock = jest.fn();
 const ioMock = jest.fn();
 const socketOnMock = jest.fn();
 const socketDisconnectMock = jest.fn();
+const socketListeners = new Map<string, (...args: any[]) => void>();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -48,15 +50,28 @@ jest.mock('socket.io-client', () => ({
 }));
 
 jest.mock('sonner', () => ({
-  toast: {
+  toast: Object.assign(jest.fn(), {
     success: jest.fn(),
     error: jest.fn(),
-  },
+  }),
 }));
 
 function NotificationProbe() {
   const { unreadCount } = useNotifications();
   return <div data-testid="unread-count">{unreadCount}</div>;
+}
+
+function NotificationSubscriberProbe() {
+  const { subscribe } = useNotifications();
+  const [titles, setTitles] = useState<string[]>([]);
+
+  useEffect(() => {
+    return subscribe((notification) => {
+      setTitles((current) => [...current, notification.title]);
+    });
+  }, [subscribe]);
+
+  return <div data-testid="subscription-events">{titles.join('|')}</div>;
 }
 
 describe('NotificationProvider', () => {
@@ -66,6 +81,10 @@ describe('NotificationProvider', () => {
     window.localStorage.clear();
     socketOnMock.mockReturnValue(undefined);
     socketDisconnectMock.mockReturnValue(undefined);
+    socketListeners.clear();
+    socketOnMock.mockImplementation((eventName: string, handler: (...args: any[]) => void) => {
+      socketListeners.set(eventName, handler);
+    });
     ioMock.mockReturnValue({
       on: socketOnMock,
       disconnect: socketDisconnectMock,
@@ -175,5 +194,50 @@ describe('NotificationProvider', () => {
         description: expect.stringContaining('Quarter 1 Module.pdf'),
       }));
     });
+  });
+
+  it('allows feature pages to subscribe to incoming notifications and unsubscribe cleanly', async () => {
+    const { unmount } = render(
+      <NotificationProvider>
+        <NotificationSubscriberProbe />
+      </NotificationProvider>,
+    );
+
+    await waitFor(() => {
+      expect(ioMock).toHaveBeenCalledTimes(1);
+      expect(socketListeners.has('notification.new')).toBe(true);
+    });
+
+    act(() => {
+      socketListeners.get('notification.new')?.({
+        id: 'notif-1',
+        type: 'discussion_comment_posted',
+        title: 'Thread updated',
+        body: 'A new reply arrived.',
+        referenceId: 'thread-1',
+        createdAt: '2026-05-04T00:00:00.000Z',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-testid="subscription-events"]')?.textContent,
+      ).toContain('Thread updated');
+    });
+
+    unmount();
+
+    act(() => {
+      socketListeners.get('notification.new')?.({
+        id: 'notif-2',
+        type: 'discussion_comment_posted',
+        title: 'Should not append',
+        body: 'This should not reach an unmounted subscriber.',
+        referenceId: 'thread-1',
+        createdAt: '2026-05-04T00:01:00.000Z',
+      });
+    });
+
+    expect(socketDisconnectMock).toHaveBeenCalled();
   });
 });

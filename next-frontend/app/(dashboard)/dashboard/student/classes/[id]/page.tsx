@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/providers/AuthProvider';
+import { useDiscussionRealtimeRefresh } from '@/hooks/use-discussion-realtime-refresh';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { assessmentService } from '@/services/assessment-service';
@@ -915,6 +916,7 @@ function getEnrollmentRows(classItem: ClassItem | null) {
       id: enrollment.id,
       fullName,
       email: enrollment.student?.email?.trim() || '--',
+      profilePicture: enrollment.student?.profile?.profilePicture ?? null,
       section: sectionLabel,
       initials: initials || 'NA',
     };
@@ -1368,6 +1370,13 @@ export default function StudentClassDetailPage() {
     }
     void loadSelectedDiscussionThread(selectedDiscussionThreadId);
   }, [loadSelectedDiscussionThread, selectedDiscussionThreadId]);
+
+  useDiscussionRealtimeRefresh({
+    enabled: currentTab === 'discussion',
+    selectedThreadId: selectedDiscussionThreadId,
+    refreshThreads: loadDiscussionThreads,
+    refreshThread: loadSelectedDiscussionThread,
+  });
 
   const handleSubmitDiscussionComment = useCallback(async () => {
     if (!selectedDiscussionThread || discussionSubmitting) return;
@@ -2249,7 +2258,14 @@ export default function StudentClassDetailPage() {
                   <tr key={row.id}>
                     <td>
                       <div className="student-class-student-cell">
-                        <span>{row.initials}</span>
+                        <Avatar className="student-class-student-cell__avatar">
+                          {row.profilePicture ? (
+                            <AvatarImage src={row.profilePicture} alt={row.fullName} />
+                          ) : null}
+                          <AvatarFallback className="student-class-student-cell__avatar-fallback">
+                            {row.initials}
+                          </AvatarFallback>
+                        </Avatar>
                         <strong>{row.fullName}</strong>
                       </div>
                     </td>

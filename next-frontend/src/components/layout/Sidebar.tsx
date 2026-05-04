@@ -33,8 +33,9 @@ import {
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
 import { logoutAction } from '@/lib/auth-actions';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { getProfileRoute } from '@/utils/profile';
+import { getProfileRoute, resolveUserProfilePicture } from '@/utils/profile';
 import { lxpService } from '@/services/lxp-service';
 import {
   normalizeDashboardRole,
@@ -423,6 +424,7 @@ export function Sidebar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ""}`.toUpperCase()
     : "U";
+  const avatarSrc = resolveUserProfilePicture(user);
   const [teacherPendingInterventionCount, setTeacherPendingInterventionCount] =
     useState(0);
   const activeCategoryIds = useMemo(
@@ -758,7 +760,10 @@ export function Sidebar({
           <div className="admin-sidebar__section-divider" />
           <div className="admin-sidebar__footer">
             <div className="admin-sidebar__profile">
-              <div className="admin-sidebar__avatar">{initials}</div>
+              <Avatar className="admin-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="admin-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">
                   {displayName}
@@ -783,7 +788,10 @@ export function Sidebar({
           <div className="teacher-sidebar__section-divider" />
           <div className="teacher-sidebar__footer">
             <div className="teacher-sidebar__profile">
-              <div className="teacher-sidebar__avatar">{initials}</div>
+              <Avatar className="teacher-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="teacher-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">
                   {displayName}
@@ -806,7 +814,10 @@ export function Sidebar({
           <div className="student-sidebar__section-divider" />
           <div className="student-sidebar__footer">
             <div className="student-sidebar__profile">
-              <div className="student-sidebar__avatar">{initials}</div>
+              <Avatar className="student-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="student-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">
                   {displayName}

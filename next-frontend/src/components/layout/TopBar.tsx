@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { logoutAction } from '@/lib/auth-actions';
-import { getProfileRoute } from '@/utils/profile';
+import { getProfileRoute, resolveUserProfilePicture } from '@/utils/profile';
 import {
   normalizeDashboardRole,
   type DashboardRole,
@@ -53,10 +53,7 @@ export function TopBar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'U';
-  const avatarSrc =
-    user?.profile?.profilePicture ??
-    user?.teacherProfile?.profilePicture ??
-    user?.profilePicture;
+  const avatarSrc = resolveUserProfilePicture(user);
   const profileHref = getProfileRoute(effectiveRole);
   const notificationsLabel =
     unreadCount > 0

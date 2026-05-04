@@ -156,6 +156,35 @@ function formatConceptLabel(rawConcept: string): string {
     .join(' ');
 }
 
+function classifyMasteryBand(score: number) {
+  if (score >= 85) {
+    return {
+      label: 'High mastery',
+      tone: 'bg-emerald-500/18 border-emerald-300/45 text-emerald-50',
+      fill: 'linear-gradient(180deg, rgba(16,185,129,0.9), rgba(5,150,105,0.72))',
+    };
+  }
+  if (score >= 70) {
+    return {
+      label: 'Watch',
+      tone: 'bg-amber-500/18 border-amber-300/40 text-amber-50',
+      fill: 'linear-gradient(180deg, rgba(245,158,11,0.9), rgba(217,119,6,0.72))',
+    };
+  }
+  if (score >= 55) {
+    return {
+      label: 'Needs reteach',
+      tone: 'bg-orange-500/18 border-orange-300/40 text-orange-50',
+      fill: 'linear-gradient(180deg, rgba(249,115,22,0.9), rgba(234,88,12,0.72))',
+    };
+  }
+  return {
+    label: 'Critical',
+    tone: 'bg-rose-500/18 border-rose-300/40 text-rose-50',
+    fill: 'linear-gradient(180deg, rgba(244,63,94,0.95), rgba(190,24,93,0.78))',
+  };
+}
+
 function formatAnalysisStatus(status: string): string {
   return status[0].toUpperCase() + status.slice(1);
 }
@@ -1644,16 +1673,68 @@ export default function TeacherPerformancePage() {
                       )}
                     </div>
                     <div>
-                      <p className="font-semibold text-[var(--teacher-text-strong)]">Concepts Needing Reteach</p>
+                      <p className="font-semibold text-[var(--teacher-text-strong)]">Concept Mastery Heatmap</p>
                       {(diagnostics?.conceptHotspots.length ?? 0) === 0 ? (
                         <p className="text-[var(--teacher-text-muted)]">No concept focus areas yet.</p>
                       ) : (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {diagnostics?.conceptHotspots.slice(0, 4).map((concept) => (
-                            <Badge key={concept.concept} variant="outline">
-                              {formatConceptLabel(concept.concept)}
-                            </Badge>
-                          ))}
+                        <div className="mt-3 space-y-3">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {[
+                              'High mastery',
+                              'Watch',
+                              'Needs reteach',
+                              'Critical',
+                            ].map((label) => (
+                              <div
+                                key={label}
+                                className="rounded-xl border border-white/12 bg-white/6 px-3 py-2 text-xs font-semibold text-[var(--teacher-text-strong)]"
+                              >
+                                {label}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {diagnostics?.conceptHotspots.slice(0, 6).map((concept) => {
+                              const masteryScore = Number(concept.masteryScore ?? 0);
+                              const band = classifyMasteryBand(masteryScore);
+                              const normalized = Math.max(8, Math.min(100, masteryScore));
+                              return (
+                                <div
+                                  key={concept.concept}
+                                  className="rounded-[16px] border border-white/10 bg-white/7 p-3"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="font-semibold text-[var(--teacher-text-strong)]">
+                                        {formatConceptLabel(concept.concept)}
+                                      </p>
+                                      <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
+                                        {concept.wrongCount} misses across {concept.evidenceCount} evidence points
+                                      </p>
+                                    </div>
+                                    <Badge className={`${band.tone} border`}>
+                                      {band.label}
+                                    </Badge>
+                                  </div>
+                                  <div className="mt-3">
+                                    <div className="h-3 overflow-hidden rounded-full bg-white/10">
+                                      <div
+                                        className="h-full rounded-full"
+                                        style={{
+                                          width: `${normalized}%`,
+                                          background: band.fill,
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between text-xs text-[var(--teacher-text-muted)]">
+                                      <span>{masteryScore.toFixed(1)}% mastery</span>
+                                      <span>{concept.evidenceCount} samples</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>

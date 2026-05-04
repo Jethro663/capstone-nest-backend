@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ProfilePageFrame } from '@/components/profile/ProfilePageFrame';
 import { ProfileSecurityCard } from '@/components/profile/ProfileSecurityCard';
+import { resolveUserProfilePicture } from '@/utils/profile';
 import { cn } from '@/utils/cn';
 
 interface RoleProfilePageProps {
@@ -24,6 +25,7 @@ export function RoleProfilePage({
 }: RoleProfilePageProps) {
   const { user } = useAuth();
   const initials = user?.firstName ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase() : roleLabel[0];
+  const avatarSrc = resolveUserProfilePicture(user);
   const isTeacher = appearance === 'teacher';
   const isAdmin = appearance === 'admin';
   const frameAppearance = isTeacher ? 'teacher' : isAdmin ? 'admin' : 'student';
@@ -35,6 +37,7 @@ export function RoleProfilePage({
       title={title}
       subtitle={subtitle}
       initials={initials}
+      avatarSrc={avatarSrc ?? undefined}
       appearance={frameAppearance}
       left={
         <div className="space-y-6">

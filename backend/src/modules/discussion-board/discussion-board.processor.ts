@@ -103,34 +103,51 @@ export class DiscussionBoardProcessor extends WorkerHost {
   }
 
   private async handleCommentCreated(job: Job<CommentCreatedJobData>) {
-    const { threadId, threadTitle, commenterId, classTeacherId } = job.data;
-    if (!classTeacherId || classTeacherId === commenterId) {
-      return;
-    }
+    const { classId, threadId, threadTitle, commenterId, classTeacherId } = job.data;
+    const enrolledRows = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.classId, classId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { studentId: true },
+    });
 
-    const inserted = await this.notificationsService.createBulkDeduped([
-      {
+    const inputs = enrolledRows
+      .filter((row) => row.studentId !== commenterId)
+      .map((row) => ({
+        userId: row.studentId,
+        type: 'discussion_comment_posted' as const,
+        referenceId: threadId,
+        title: `New replies in "${threadTitle}"`,
+        body: 'A new comment was posted in this discussion thread.',
+      }));
+
+    if (classTeacherId && classTeacherId !== commenterId) {
+      inputs.unshift({
         userId: classTeacherId,
         type: 'discussion_comment_posted',
         referenceId: threadId,
         title: `New replies in "${threadTitle}"`,
         body: 'A student posted a new comment in your discussion thread.',
-      },
-    ]);
+      });
+    }
+
+    const inserted = await this.notificationsService.createBulkDeduped(inputs);
 
     if (inserted.length === 0) {
       return;
     }
 
     const now = new Date();
-    const entry = inserted[0];
-    this.notificationsGateway.emitToUser(entry.userId, {
-      id: `${threadId}:discussion-comment`,
-      type: entry.type,
-      title: entry.title,
-      body: entry.body,
-      referenceId: entry.referenceId,
-      createdAt: now,
-    });
+    for (const entry of inserted) {
+      this.notificationsGateway.emitToUser(entry.userId, {
+        id: `${threadId}:discussion-comment:${entry.userId}`,
+        type: entry.type,
+        title: entry.title,
+        body: entry.body,
+        referenceId: entry.referenceId,
+        createdAt: now,
+      });
+    }
   }
 }

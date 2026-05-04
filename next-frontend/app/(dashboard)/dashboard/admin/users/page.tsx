@@ -8,6 +8,7 @@ import {
   userService,
 } from '@/services/user-service';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig, type ConfirmationTone } from '@/components/shared/ConfirmationDialog';
@@ -19,6 +20,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import type { User } from '@/types/user';
 import { getRoleName } from '@/utils/helpers';
+import { resolveUserProfilePicture } from '@/utils/profile';
 
 type StatusTab = 'active' | 'pending' | 'suspended' | 'deleted';
 type RoleFilter = 'all' | 'student' | 'teacher' | 'admin';
@@ -576,6 +578,7 @@ export default function UserManagementPage() {
                     const isSelf = currentUser?.id === entry.id;
                     const isSelected = selectedUserIds.includes(entry.id);
                     const profilePath = `/dashboard/admin/users/${entry.id}`;
+                    const avatarSrc = resolveUserProfilePicture(entry);
 
                     return (
                       <TableRow
@@ -598,7 +601,17 @@ export default function UserManagementPage() {
                           onClick={() => router.push(profilePath)}
                         >
                           <div className="flex items-center gap-3 text-left">
-                            <span className="admin-avatar-chip">{getInitials(entry)}</span>
+                            <Avatar className="admin-avatar-chip">
+                              {avatarSrc ? (
+                                <AvatarImage
+                                  src={avatarSrc}
+                                  alt={`${entry.firstName} ${entry.lastName}`.trim() || entry.email}
+                                />
+                              ) : null}
+                              <AvatarFallback className="admin-avatar-chip">
+                                {getInitials(entry)}
+                              </AvatarFallback>
+                            </Avatar>
                             <span className="font-semibold text-[var(--admin-text-strong)]">
                               {entry.firstName} {entry.lastName}
                               {isSelf ? <span className="ml-2 text-xs font-bold text-[#9aaed0]">(You)</span> : null}

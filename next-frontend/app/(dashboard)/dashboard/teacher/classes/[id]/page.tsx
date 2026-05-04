@@ -47,6 +47,7 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useDiscussionRealtimeRefresh } from '@/hooks/use-discussion-realtime-refresh';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { announcementService } from '@/services/announcement-service';
@@ -162,6 +163,7 @@ interface StudentRow {
   enrollmentId: string;
   studentId: string;
   initials: string;
+  profilePicture?: string | null;
   fullName: string;
   email: string;
   lrn: string;
@@ -1444,6 +1446,13 @@ export default function TeacherClassDetailPage() {
     void loadDiscussionThreadDetail(selectedDiscussionThreadId);
   }, [loadDiscussionThreadDetail, selectedDiscussionThreadId]);
 
+  useDiscussionRealtimeRefresh({
+    enabled: activeTab === 'discussion',
+    selectedThreadId: selectedDiscussionThreadId,
+    refreshThreads: loadDiscussionThreads,
+    refreshThread: loadDiscussionThreadDetail,
+  });
+
   const refreshAiDraftJobs = useCallback(async () => {
     if (!isClassIdValid) {
       setAiDraftJobs([]);
@@ -1588,6 +1597,7 @@ export default function TeacherClassDetailPage() {
         enrollmentId: enrollment.id,
         studentId: enrollment.studentId,
         initials: safeInitials(firstName, lastName),
+        profilePicture: enrollment.student?.profile?.profilePicture ?? null,
         fullName,
         email: enrollment.student?.email || '--',
         lrn,
@@ -3723,7 +3733,14 @@ export default function TeacherClassDetailPage() {
                           className="teacher-class-workspace__row-link"
                         >
                           <div className="teacher-class-workspace__student-cell">
-                            <span className="teacher-class-workspace__avatar">{student.initials}</span>
+                            <Avatar className="teacher-class-workspace__avatar">
+                              {student.profilePicture ? (
+                                <AvatarImage src={student.profilePicture} alt={student.fullName} />
+                              ) : null}
+                              <AvatarFallback className="bg-[#f6d9db] text-[0.74rem] font-bold text-[#e70012]">
+                                {student.initials}
+                              </AvatarFallback>
+                            </Avatar>
                             <strong>{student.fullName}</strong>
                           </div>
                         </Link>

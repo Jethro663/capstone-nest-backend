@@ -1395,9 +1395,12 @@
   gap: 0.56rem;
 }
 
-.student-class-student-cell span {
+.student-class-student-cell__avatar {
   width: 2.05rem;
   height: 2.05rem;
+}
+
+.student-class-student-cell__avatar-fallback {
   border-radius: 999px;
   background: linear-gradient(135deg, #3b78f4, #305cd6);
   color: #fff;

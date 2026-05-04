@@ -26,6 +26,7 @@ import {
 } from '@/lib/input-policy';
 import { teacherProfileService } from '@/services/teacher-profile-service';
 import type { TeacherProfile } from '@/types/profile';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { CardContent } from '@/components/ui/card';
 import {
@@ -44,6 +45,7 @@ import {
   mergeUserWithTeacherProfile,
   normalizePhilippinePhone,
   normalizeTeacherProfile,
+  resolveUserProfilePicture,
 } from '@/utils/profile';
 import { cn } from '@/utils/cn';
 
@@ -198,6 +200,7 @@ export default function TeacherProfilePage() {
   const displayName = user?.firstName
     ? `${user.firstName} ${user.lastName ?? ''}`.trim()
     : user?.email ?? 'Teacher';
+  const avatarSrc = form.profilePicture || resolveUserProfilePicture(user);
   const departmentLine = form.department || 'Pending school record';
   const roleLine = `Teacher | ${departmentLine}`;
   const editableMissingFields = getMissingTeacherEditableFields({
@@ -418,9 +421,12 @@ export default function TeacherProfilePage() {
                 <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_340px]">
                   <div className="space-y-4">
                     <div className="flex items-center gap-4">
-                      <div className="inline-flex h-[68px] w-[68px] items-center justify-center rounded-[1.15rem] bg-[#ef0018] text-[2.1rem] font-bold leading-none text-white">
-                        {initials}
-                      </div>
+                      <Avatar className="h-[68px] w-[68px] rounded-[1.15rem]">
+                        {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                        <AvatarFallback className="rounded-[1.15rem] bg-[#ef0018] text-[2.1rem] font-bold leading-none text-white">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="space-y-0.5">
                         <p className="text-[2rem] font-semibold leading-none tracking-tight text-[#0d2345] lg:text-[2.15rem]">
                           {displayName}
@@ -435,9 +441,12 @@ export default function TeacherProfilePage() {
 
                   <div className="rounded-[1.2rem] border border-[#d7e1ef] bg-[#f8fbff] p-4">
                     <div className="flex items-center gap-3">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-[0.95rem] bg-[#ef0018] text-base font-bold text-white">
-                        {initials}
-                      </div>
+                      <Avatar className="h-12 w-12 rounded-[0.95rem]">
+                        {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                        <AvatarFallback className="rounded-[0.95rem] bg-[#ef0018] text-base font-bold text-white">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="space-y-0.5">
                         <p className="text-sm font-semibold text-[#12315c]">
                           {form.profilePicture ? 'Picture uploaded' : 'No custom picture uploaded yet'}
