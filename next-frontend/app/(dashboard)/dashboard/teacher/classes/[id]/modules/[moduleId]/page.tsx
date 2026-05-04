@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -11,6 +11,8 @@ import {
   Eye,
   EyeOff,
   FileText,
+  FolderOpen,
+  CircleHelp,
   GripVertical,
   Layers3,
   Lock,
@@ -19,6 +21,7 @@ import {
   Save,
   Trash2,
   Unlock,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
@@ -47,6 +50,79 @@ type ModuleTab = 'sections' | 'visibility' | 'locking' | 'notes';
 type AssessmentAttachMode = 'create-new' | 'attach-existing';
 type FileAttachSource = 'upload' | 'library';
 
+const ATTACH_BLOCK_OPTIONS: Array<{
+  type: ModuleItemType;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+  tone: 'lesson' | 'assessment' | 'file';
+}> = [
+  {
+    type: 'lesson',
+    label: 'Lesson',
+    description: 'Attach lesson content already created in this class.',
+    icon: BookOpen,
+    tone: 'lesson',
+  },
+  {
+    type: 'assessment',
+    label: 'Assessment',
+    description: 'Attach assessment content and control student release with Give.',
+    icon: ClipboardList,
+    tone: 'assessment',
+  },
+  {
+    type: 'file',
+    label: 'PDF',
+    description: 'Upload a PDF resource block for this section.',
+    icon: FileText,
+    tone: 'file',
+  },
+];
+
+const FILE_ATTACH_SOURCE_OPTIONS: Array<{
+  value: FileAttachSource;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+  tone: 'upload' | 'library';
+}> = [
+  {
+    value: 'upload',
+    label: 'Upload New PDF',
+    description: 'Upload a fresh PDF file for this module block.',
+    icon: Upload,
+    tone: 'upload',
+  },
+  {
+    value: 'library',
+    label: 'Choose from Library',
+    description: 'Attach an existing General Module or My Library file.',
+    icon: FolderOpen,
+    tone: 'library',
+  },
+];
+
+const ASSESSMENT_ATTACH_MODE_OPTIONS: Array<{
+  value: AssessmentAttachMode;
+  label: string;
+  description: string;
+  icon: typeof BookOpen;
+}> = [
+  {
+    value: 'create-new',
+    label: 'Create New Assessment',
+    description: 'Start with a blank assessment and open the editor.',
+    icon: ClipboardList,
+  },
+  {
+    value: 'attach-existing',
+    label: 'Attach Existing Assessment',
+    description: 'Reuse an assessment already created for this class.',
+    icon: FolderOpen,
+  },
+];
+
 type AttachState = {
   open: boolean;
   sectionId: string;
@@ -68,6 +144,418 @@ const TAB_ITEMS: Array<{ key: ModuleTab; label: string; icon: typeof Layers3 }> 
   { key: 'locking', label: 'Locking', icon: Lock },
   { key: 'notes', label: 'Notes', icon: NotebookPen },
 ];
+
+const teacherModuleGuideDialogStyle = {
+  '--intervention-border': '#dbe2ec',
+  '--intervention-border-soft': '#edf1f6',
+  '--intervention-muted': '#637083',
+  '--intervention-strong': '#111827',
+  '--intervention-red': '#a32d2d',
+  '--intervention-red-soft': '#fcebeb',
+} as CSSProperties;
+
+type TeacherModuleGuideScreen = 'header' | 'sections' | 'blocks' | 'visibility' | 'locking' | 'notes';
+type GuidePinProps = {
+  children: string;
+  lineSide: 'left' | 'right';
+  lineWidth: string;
+  style: CSSProperties;
+};
+
+const teacherModuleGuidePages: Array<{
+  title: string;
+  description: string;
+  screen: TeacherModuleGuideScreen;
+  reminder: string;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start from the module header',
+    description:
+      'The top section confirms module identity, visibility, lock state, and where this module sits in the class.',
+    screen: 'header',
+    reminder: 'Keep this header visible while jumping across sections and settings for this module.',
+    steps: [
+      {
+        action: 'Read',
+        body: 'Check the title, class relationship, lesson count, and schedule summary.',
+      },
+      {
+        action: 'Return',
+        body: 'Use Back to Class whenever you need to switch to another module quickly.',
+      },
+      {
+        action: 'Open help',
+        body: 'Tap this guide button anytime you need reminders about module workflow.',
+      },
+    ],
+  },
+  {
+    title: 'Build sections first',
+    description:
+      'Sections are containers for lessons, assessments, and resources. Start by creating clear learning blocks.',
+    screen: 'sections',
+    reminder: 'Template modules keep their copied structure, but teachers can still control student release and readiness here.',
+    steps: [
+      {
+        action: 'Create',
+        body: 'Add a section title and save each unit of the module in order.',
+      },
+      {
+        action: 'Name clearly',
+        body: 'Use stable section names to match your teaching sequence.',
+      },
+      {
+        action: 'Order',
+        body: 'Drag the handle to reorder sections after the draft structure is in place.',
+      },
+    ],
+  },
+  {
+    title: 'Attach and manage module blocks',
+    description: 'Use Add Block on a section to attach lesson, assessment, or PDF blocks.',
+    screen: 'blocks',
+    reminder: 'Keep section blocks consistent: lessons, assessments, then references for a readable learner flow.',
+    steps: [
+      {
+        action: 'Add',
+        body: 'Click Add Block and choose Lesson, Assessment, or PDF.',
+      },
+      {
+        action: 'Verify',
+        body: 'Use Give and Hide controls to control what each block shows to students.',
+      },
+      {
+        action: 'Open',
+        body: 'Use View Content to open the attached lesson or assessment workflow from this module.',
+      },
+    ],
+  },
+  {
+    title: 'Choose whether students can see this module',
+    description:
+      'Visibility controls determine whether students can open a module in their course path.',
+    screen: 'visibility',
+    reminder: 'Only use Unhidden once your first teaching cycle starts.',
+    steps: [
+      {
+        action: 'Hide',
+        body: 'Mark this module hidden while it is still in draft.',
+      },
+      {
+        action: 'Show',
+        body: 'Set visible when materials and items are ready to publish.',
+      },
+      {
+        action: 'Save',
+        body: 'The visibility toggle updates instantly after you choose the option.',
+      },
+    ],
+  },
+  {
+    title: 'Control release through locking',
+    description:
+      'Locking blocks student access without changing content visibility for teachers.',
+    screen: 'locking',
+    reminder: 'Use locking for staged release and readiness checks before assessments open.',
+    steps: [
+      {
+        action: 'Unlock',
+        body: 'Unlock to allow students to use module items from this tab.',
+      },
+      {
+        action: 'Lock',
+        body: 'Lock to pause access without deleting assignments or materials.',
+      },
+      {
+        action: 'Unlock or lock',
+        body: 'Template modules can still be opened or locked for students without changing the copied structure.',
+      },
+      {
+        action: 'Avoid confusion',
+        body: 'Changing lock state is immediate; make sure students have your intended sequence first.',
+        tone: 'caution',
+      },
+    ],
+  },
+  {
+    title: 'Use private module notes for pacing',
+    description: 'Notes help you keep reminders for this module without affecting learner-facing content.',
+    screen: 'notes',
+    reminder: 'Notes save your internal plan; students do not see this text.',
+    steps: [
+      {
+        action: 'Edit',
+        body: 'Write pacing cues, pacing targets, or reminders in rich text.',
+      },
+      {
+        action: 'Save',
+        body: 'Save your notes after edits so they are available on return.',
+      },
+      {
+        action: 'Protect',
+        body: 'Keep sensitive comments out because these notes are not learner-visible.',
+      },
+    ],
+  },
+];
+
+function GuidePin({ children, lineSide, lineWidth, style }: GuidePinProps) {
+  return (
+    <em
+      className="pointer-events-none absolute z-10 inline-flex items-center gap-1.5 rounded-full border border-[#7f1d1d] bg-white px-2.5 py-1 text-[0.62rem] font-black not-italic leading-none text-[#7f1d1d] shadow-[0_0.5rem_1rem_rgba(127,29,29,0.1)]"
+      style={style}
+    >
+      <span className="h-[0.42rem] w-[0.42rem] rounded-full bg-[#a32d2d]" />
+      <span>{children}</span>
+      <span
+        className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
+        style={
+          lineSide === 'right'
+            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
+            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+        }
+      />
+    </em>
+  );
+}
+
+function TeacherModuleGuideScreenshot({ screen }: { screen: TeacherModuleGuideScreen }) {
+  if (screen === 'header') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module header screenshot"
+      >
+        <div className="absolute inset-x-0 top-0 flex h-8 items-center gap-1 border-b border-[#edf1f6] bg-white px-3">
+          <span className="h-2 w-2 rounded-full bg-[#f87171]" />
+          <span className="h-2 w-2 rounded-full bg-[#fbbf24]" />
+          <span className="h-2 w-2 rounded-full bg-[#34d399]" />
+        </div>
+        <div className="rounded-xl border border-[#1d3659] bg-[#10254a] p-4 text-white">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="text-[1.05rem] font-black leading-tight">Module 1: Foundations</h3>
+              <p className="mt-2 text-sm text-[#b6c8df]">Science 7 • Week 1 • 2 lessons • 1 assessment</p>
+            </div>
+            <button
+              type="button"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#284269] bg-[#17345d]"
+              aria-label="Module help"
+            >
+              <CircleHelp className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="mt-2 rounded-lg border border-[#263e62] bg-[#17345d] px-2 py-1 text-xs">
+            Lesson count, assessment count, and schedule summary
+          </p>
+        </div>
+
+        <GuidePin lineSide="left" lineWidth="7rem" style={{ right: '1rem', top: '1.6rem' }}>
+          Module help
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1rem', top: '8.2rem' }}>
+          Back to Class
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '10rem' }}>
+          Visibility and lock status
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'sections') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module sections screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <div className="flex items-center justify-between gap-2">
+            <strong className="text-lg font-black text-[#111827]">Sections</strong>
+            <span className="rounded-full border border-[#e8eff7] bg-[#f8fbfe] px-2 py-1 text-[0.72rem] font-black text-[#4f6694]">
+              1 section
+            </span>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <span className="h-10 flex-1 rounded-lg border border-[#d6deea] bg-[#f8fbfe] px-3 py-2 text-sm text-[#6f819f]">
+              Add section title
+            </span>
+            <button
+              type="button"
+              className="inline-flex h-10 min-w-20 items-center justify-center rounded-full bg-[#c9252d] px-3 text-sm font-black text-white"
+            >
+              Add Section
+            </button>
+          </div>
+          <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
+            <div className="flex items-center justify-between">
+              <strong className="text-sm font-black text-[#143155]">Section A: Warm-up</strong>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.56rem] font-black text-[#4a648a]">
+                2 items
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-[#60789a]">Drag by handle to reorder sections.</p>
+          </div>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.3rem" style={{ left: '1rem', top: '2.1rem' }}>
+          Sections tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="6rem" style={{ right: '0.7rem', top: '6.2rem' }}>
+          Add Section
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5.4rem" style={{ left: '1rem', top: '6.8rem' }}>
+          Section row and controls
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'blocks') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module blocks screenshot"
+      >
+        <div className="rounded-xl border border-[#d8d5cf] bg-white p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <strong className="text-sm font-black text-[#143155]">Section A: Warm-up</strong>
+            <button
+              type="button"
+              className="inline-flex h-8 min-w-24 items-center justify-center rounded-full bg-[#c9252d] px-3 py-1 text-xs font-black text-white"
+            >
+              Add Block
+            </button>
+          </div>
+          <div className="mt-2 rounded-lg border border-[#e2dad3] bg-[#fffdfa] p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-black text-[#143155]">Lesson: Intro Activity</span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.58rem] font-black text-[#4a648a]">
+                Draft
+              </span>
+            </div>
+            <div className="mt-2 inline-flex items-center gap-2">
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Give
+              </span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                Hide
+              </span>
+              <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
+                View Content
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <GuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '1rem', top: '2.05rem' }}>
+          Add Block button
+        </GuidePin>
+        <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '6.2rem' }}>
+          Lesson row
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.9rem" style={{ right: '1rem', top: '7.2rem' }}>
+          Give, Hide, View content
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'visibility') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module visibility screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <p className="mb-2 text-sm text-[#556986]">Visibility</p>
+          <div className="grid gap-2">
+            <span className="rounded-lg border border-[#95dbb0] bg-[#f1fbf4] px-3 py-2 text-sm font-black text-[#157845]">
+              Visible
+            </span>
+            <span className="rounded-lg border border-[#d8e2ef] bg-[#fffdfa] px-3 py-2 text-sm font-black text-[#4f688d]">
+              Hidden
+            </span>
+          </div>
+          <p className="mt-3 text-xs text-[#5f7698]">Default: Visible</p>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.6rem" style={{ left: '1rem', top: '1rem' }}>
+          Visibility tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="4.8rem" style={{ left: '1rem', top: '5.8rem' }}>
+          Select visibility state
+        </GuidePin>
+      </div>
+    );
+  }
+
+  if (screen === 'locking') {
+    return (
+      <div
+        className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+        aria-label="module locking screenshot"
+      >
+        <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+          <p className="mb-2 text-sm text-[#556986]">Locking</p>
+          <div className="grid gap-2">
+            <span className="rounded-lg border border-[#95dbb0] bg-[#f1fbf4] px-3 py-2 text-sm font-black text-[#157845]">
+              Unlocked
+            </span>
+            <span className="rounded-lg border border-[#f2dd9d] bg-[#fff7df] px-3 py-2 text-sm font-black text-[#8b6a00]">
+              Locked
+            </span>
+          </div>
+          <p className="mt-3 text-xs text-[#5f7698]">Default behavior: unlocked</p>
+        </div>
+
+        <GuidePin lineSide="right" lineWidth="4.8rem" style={{ left: '1rem', top: '1.1rem' }}>
+          Locking tab
+        </GuidePin>
+        <GuidePin lineSide="left" lineWidth="5rem" style={{ left: '1rem', top: '6.1rem' }}>
+          Choose unlocked or locked
+        </GuidePin>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
+      aria-label="module notes screenshot"
+    >
+      <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <strong className="text-sm font-black text-[#143155]">Module Notes</strong>
+          <span className="rounded-full border border-[#d8e2ef] bg-[#fffdfa] px-2 py-1 text-xs font-black text-[#4f688d]">
+            Private
+          </span>
+        </div>
+        <span className="block h-16 w-full rounded-lg border border-[#d4deed] bg-[#f9fbff] p-2 text-xs text-[#60789a]">
+          Write reminders here
+        </span>
+        <button
+          type="button"
+          className="mt-2 inline-flex h-10 min-w-28 items-center justify-center rounded-full bg-[#c9252d] px-3 py-1 text-sm font-black text-white"
+        >
+          Save Notes
+        </button>
+      </div>
+
+      <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '1.1rem' }}>
+        Private notes
+      </GuidePin>
+      <GuidePin lineSide="left" lineWidth="4.6rem" style={{ right: '1rem', top: '5.5rem' }}>
+        Save notes
+      </GuidePin>
+    </div>
+  );
+}
 
 function toParamValue(input: string | string[] | undefined) {
   if (Array.isArray(input)) return input[0] || '';
@@ -177,6 +665,10 @@ function itemMeta(item: ModuleItem) {
     : 'Lesson';
 }
 
+function isDraftAssessmentItem(item: ModuleItem) {
+  return item.itemType === 'assessment' && !item.assessment?.isPublished;
+}
+
 function getItemEditorHref(item: ModuleItem, classId: string, moduleId: string) {
   if (item.itemType === 'lesson' && item.lessonId) {
     return `/dashboard/teacher/lessons/${item.lessonId}/edit`;
@@ -198,9 +690,7 @@ export default function TeacherModuleDetailPage() {
   const moduleId = toParamValue(params.moduleId);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
-  const [classModules, setClassModules] = useState<ClassModule[]>([]);
   const [module, setModule] = useState<ClassModule | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [activeTab, setActiveTab] = useState<ModuleTab>('sections');
   const [loading, setLoading] = useState(true);
@@ -221,6 +711,8 @@ export default function TeacherModuleDetailPage() {
     lessonPoints: '0',
     file: null,
   });
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState('');
@@ -240,10 +732,9 @@ export default function TeacherModuleDetailPage() {
 
     try {
       setLoading(true);
-      const [classResponse, modulesResponse, lessonResponse, assessmentResponse] = await Promise.all([
+      const [classResponse, modulesResponse, assessmentResponse] = await Promise.all([
         classService.getById(classId),
         moduleService.getByClass(classId),
-        lessonService.getByClass(classId),
         assessmentService.getByClass(classId),
       ]);
 
@@ -255,9 +746,7 @@ export default function TeacherModuleDetailPage() {
         normalizedModules.find((entry) => entry.id === moduleId) || null;
 
       setClassItem(resolvedClass);
-      setClassModules(normalizedModules);
       setModule(currentModule);
-      setLessons(lessonResponse.data || []);
       setAssessments(assessmentResponse.data || []);
       setNotesDraft(currentModule?.teacherNotes || '');
       setExpandedSections((current) => {
@@ -270,9 +759,7 @@ export default function TeacherModuleDetailPage() {
       });
     } catch {
       setClassItem(null);
-      setClassModules([]);
       setModule(null);
-      setLessons([]);
       setAssessments([]);
       toast.error('Unable to load module details');
     } finally {
@@ -336,6 +823,8 @@ export default function TeacherModuleDetailPage() {
         ? false
         : false;
 
+  const activeGuidePage = teacherModuleGuidePages[helpPage] ?? teacherModuleGuidePages[0];
+
   useEffect(() => {
     if (!attachState.open) return;
     if (
@@ -362,22 +851,6 @@ export default function TeacherModuleDetailPage() {
     0,
   );
 
-  const attachedLessonIdsAcrossClass = useMemo(() => {
-    return new Set(
-      classModules.flatMap((entry) =>
-        entry.sections.flatMap((section) =>
-          section.items
-            .filter((item) => item.itemType === 'lesson' && Boolean(item.lessonId))
-            .map((item) => item.lessonId as string),
-        ),
-      ),
-    );
-  }, [classModules]);
-
-  const legacyLessons = useMemo(() => {
-    return lessons.filter((lesson) => !attachedLessonIdsAcrossClass.has(lesson.id));
-  }, [attachedLessonIdsAcrossClass, lessons]);
-
   const assessmentCount = sectionList.reduce(
     (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
     0,
@@ -402,18 +875,22 @@ export default function TeacherModuleDetailPage() {
     }
   };
 
-  const handleReleaseCoreModule = async (isVisible: boolean) => {
+  const handleReleaseCoreModule = async (patch: { isVisible?: boolean; isLocked?: boolean }) => {
     if (!module || updatingModule) return;
 
     const previous = module;
-    const next = { ...module, isVisible };
+    const next = { ...module, ...patch };
     setModule(next);
 
     try {
       setUpdatingModule(true);
-      const response = await moduleService.releaseCoreModule(module.id, { isVisible });
+      const response = await moduleService.releaseCoreModule(module.id, patch);
       setModule(response.data);
-      toast.success(isVisible ? 'Default module released to students' : 'Default module hidden from students');
+      if (patch.isLocked !== undefined) {
+        toast.success(patch.isLocked ? 'Default module locked' : 'Default module unlocked');
+      } else {
+        toast.success(patch.isVisible ? 'Default module released to students' : 'Default module hidden from students');
+      }
     } catch {
       setModule(previous);
       toast.error('Unable to update default module release');
@@ -671,7 +1148,7 @@ export default function TeacherModuleDetailPage() {
 
     if (item.itemType === 'assessment' && item.assessmentId) {
       router.push(
-        `/dashboard/teacher/assessments/${item.assessmentId}/edit?mode=view&classId=${classId}&moduleId=${moduleId}`,
+        `/dashboard/teacher/assessments/${item.assessmentId}/edit?classId=${classId}&moduleId=${moduleId}`,
       );
       return;
     }
@@ -688,22 +1165,6 @@ export default function TeacherModuleDetailPage() {
         await moduleService.detachItem(itemId);
         await fetchData();
         toast.success('Item removed');
-      },
-    });
-  };
-
-  const confirmDeleteLegacyLesson = (lesson: Lesson) => {
-    setConfirmation({
-      title: 'Delete legacy lesson?',
-      description:
-        'This lesson is not attached to any module and will be permanently deleted.',
-      tone: 'danger',
-      confirmLabel: 'Delete Lesson',
-      details: 'This action cannot be undone.',
-      onConfirm: async () => {
-        await lessonService.delete(lesson.id);
-        await fetchData();
-        toast.success('Legacy lesson deleted');
       },
     });
   };
@@ -873,6 +1334,17 @@ export default function TeacherModuleDetailPage() {
   return (
     <div className="teacher-module-detail">
       <header className="teacher-module-detail__hero">
+        <button
+          type="button"
+          className="teacher-module-detail__hero-help"
+          onClick={() => {
+            setHelpPage(0);
+            setHelpOpen(true);
+          }}
+          aria-label="Module help"
+        >
+          <CircleHelp className="h-4 w-4" />
+        </button>
         <Link href={`/dashboard/teacher/classes/${classId}`} className="teacher-module-detail__back">
           <ArrowLeft className="h-4 w-4" />
           Back to Class
@@ -1175,7 +1647,7 @@ export default function TeacherModuleDetailPage() {
                                         <input
                                           type="checkbox"
                                           checked={item.isGiven}
-                                          disabled={pending}
+                                          disabled={pending || isDraftAssessmentItem(item)}
                                           onChange={(event) =>
                                             void handleReleaseCoreItem(section.id, item.id, { isGiven: event.target.checked })
                                           }
@@ -1213,7 +1685,7 @@ export default function TeacherModuleDetailPage() {
                                         <input
                                           type="checkbox"
                                           checked={item.isGiven}
-                                          disabled={pending}
+                                          disabled={pending || isDraftAssessmentItem(item)}
                                           onChange={(event) =>
                                             void handleUpdateItem(section.id, item.id, { isGiven: event.target.checked })
                                           }
@@ -1266,8 +1738,9 @@ export default function TeacherModuleDetailPage() {
                     ) : (
                       <button
                         type="button"
-                        className="teacher-module-detail__outline"
+                        className="teacher-module-detail__outline teacher-module-detail__section-add-cta"
                         data-priority="section-add"
+                        aria-label="Add Block"
                         onClick={() =>
                           setAttachState({
                             open: true,
@@ -1280,8 +1753,13 @@ export default function TeacherModuleDetailPage() {
                           })
                         }
                       >
-                        <Plus className="h-4 w-4" />
-                        Add Block
+                        <span className="teacher-module-detail__section-add-icon" aria-hidden="true">
+                          <Plus className="h-4 w-4" />
+                        </span>
+                        <span className="teacher-module-detail__section-add-copy">
+                          <span>Add Block</span>
+                          <small aria-hidden="true">Lesson, assessment, or PDF</small>
+                        </span>
                       </button>
                     )}
                   </footer>
@@ -1289,62 +1767,6 @@ export default function TeacherModuleDetailPage() {
               );
             })}
 
-            <article className="teacher-module-detail__section-card">
-              <header className="teacher-module-detail__section-card-head">
-                <div className="teacher-module-detail__section-main">
-                  <h3>Legacy Lessons (Not In Modules)</h3>
-                  <span>{legacyLessons.length} lessons</span>
-                </div>
-              </header>
-              <div className="teacher-module-detail__items">
-                {legacyLessons.length === 0 ? (
-                  <div className="teacher-module-detail__empty">
-                    No legacy lessons found. All class lessons are attached to modules.
-                  </div>
-                ) : (
-                  legacyLessons.map((lesson) => (
-                    <div key={lesson.id} className="teacher-module-detail__item-row">
-                      <div className="teacher-module-detail__item-main">
-                        <div className="teacher-module-detail__item-icon">
-                          <BookOpen className="h-4 w-4" />
-                        </div>
-                        <div className="teacher-module-detail__item-copy">
-                          <div className="teacher-module-detail__chips">
-                            <span data-kind="lesson">lesson</span>
-                            <span data-kind={lesson.isDraft ? 'draft' : 'published'}>
-                              {lesson.isDraft ? 'Draft' : 'Published'}
-                            </span>
-                          </div>
-                          <h4>{lesson.title}</h4>
-                          <p>Legacy lesson not attached to any module section.</p>
-                        </div>
-                      </div>
-                      <div className="teacher-module-detail__item-controls">
-                        <ActionTooltip label="Open lesson editor">
-                          <Link
-                            href={`/dashboard/teacher/lessons/${lesson.id}/edit`}
-                            className="teacher-module-detail__ghost"
-                            aria-label="Open legacy lesson editor"
-                          >
-                            <NotebookPen className="h-4 w-4" />
-                          </Link>
-                        </ActionTooltip>
-                        <ActionTooltip label="Delete legacy lesson">
-                          <button
-                            type="button"
-                            className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                            onClick={() => confirmDeleteLegacyLesson(lesson)}
-                            aria-label="Delete legacy lesson"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </ActionTooltip>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </article>
           </div>
         ) : null}
         {activeTab === 'visibility' ? (
@@ -1362,7 +1784,7 @@ export default function TeacherModuleDetailPage() {
                 data-active={module.isVisible}
                 onClick={() =>
                   void (isCoreModule
-                    ? handleReleaseCoreModule(true)
+                    ? handleReleaseCoreModule({ isVisible: true })
                     : runModulePatch({ isVisible: true }))
                 }
                 disabled={updatingModule}
@@ -1373,7 +1795,7 @@ export default function TeacherModuleDetailPage() {
                   <h3>{isCoreModule ? 'Release Module' : 'Visible'}</h3>
                   <p>
                     {isCoreModule
-                      ? 'Students can see this default module and access its locked template content.'
+                      ? 'Students can see this default module and access its current template content.'
                       : 'Students can see this module and access its content.'}
                   </p>
                 </div>
@@ -1385,7 +1807,7 @@ export default function TeacherModuleDetailPage() {
                 data-active={!module.isVisible}
                 onClick={() =>
                   void (isCoreModule
-                    ? handleReleaseCoreModule(false)
+                    ? handleReleaseCoreModule({ isVisible: false })
                     : runModulePatch({ isVisible: false }))
                 }
                 disabled={updatingModule}
@@ -1414,10 +1836,40 @@ export default function TeacherModuleDetailPage() {
             {isCoreModule ? (
               <>
                 <p className="teacher-module-detail__lead">
-                  Default modules remain locked and immutable in the class. Change the template if the structure needs to evolve.
+                  Template modules keep their copied structure, but you can still lock or unlock student access here.
                 </p>
                 <div className="teacher-module-detail__tip" data-tone="warning">
-                  <strong>Default module:</strong> Locking is enforced by the template copy. Only student visibility can be changed here.
+                  <strong>Default module:</strong> Locking here changes student access only. Edit the template itself if the structure needs to change.
+                </div>
+                <div className="teacher-module-detail__choice-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={!module.isLocked}
+                    onClick={() => void handleReleaseCoreModule({ isLocked: false })}
+                    disabled={updatingModule}
+                  >
+                    <Unlock className="h-5 w-5" />
+                    <div>
+                      <h3>Unlocked</h3>
+                      <p>Students can open this template module once it is visible and its items are given.</p>
+                    </div>
+                    {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={module.isLocked}
+                    onClick={() => void handleReleaseCoreModule({ isLocked: true })}
+                    disabled={updatingModule}
+                  >
+                    <Lock className="h-5 w-5" />
+                    <div>
+                      <h3>Locked</h3>
+                      <p>Students can still see the module shell, but they cannot open its content yet.</p>
+                    </div>
+                    {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
+                  </button>
                 </div>
               </>
             ) : (
@@ -1610,26 +2062,7 @@ export default function TeacherModuleDetailPage() {
           </DialogHeader>
           <div className="teacher-module-detail__attach-modal-body">
             <div className="teacher-module-detail__attach-type-grid">
-              {([
-                {
-                  type: 'lesson' as const,
-                  label: 'Lesson',
-                  description: 'Attach lesson content already created in this class.',
-                  icon: BookOpen,
-                },
-                {
-                  type: 'assessment' as const,
-                  label: 'Assessment',
-                  description: 'Attach assessment content and control student release with Give.',
-                  icon: ClipboardList,
-                },
-                {
-                  type: 'file' as const,
-                  label: 'PDF',
-                  description: 'Upload a PDF resource block for this section.',
-                  icon: FileText,
-                },
-              ]).map((option) => {
+              {ATTACH_BLOCK_OPTIONS.map((option) => {
                 const Icon = option.icon;
                 return (
                   <button
@@ -1637,6 +2070,7 @@ export default function TeacherModuleDetailPage() {
                     type="button"
                     className="teacher-module-detail__attach-type"
                     data-active={attachState.itemType === option.type}
+                    data-tone={option.tone}
                     onClick={() =>
                       setAttachState((current) => ({
                         ...current,
@@ -1648,10 +2082,14 @@ export default function TeacherModuleDetailPage() {
                       }))
                     }
                   >
-                    <Icon className="h-4 w-4" />
-                    <div>
+                    <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="teacher-module-detail__attach-type-copy">
                       <strong>{option.label}</strong>
-                      <p>{option.description}</p>
+                      <span className="teacher-module-detail__attach-type-description">
+                        {option.description}
+                      </span>
                     </div>
                   </button>
                 );
@@ -1661,35 +2099,39 @@ export default function TeacherModuleDetailPage() {
             {attachState.itemType === 'file' ? (
               <div className="teacher-module-detail__attach-field">
                 <div className="teacher-module-detail__attach-type-grid">
-                  <button
-                    type="button"
-                    className="teacher-module-detail__attach-type"
-                    data-active={attachSource === 'upload'}
-                    onClick={() => {
-                      setAttachSource('upload');
-                      setAttachState((current) => ({ ...current, itemId: '', file: null }));
-                    }}
-                  >
-                    <div>
-                      <strong>Upload New PDF</strong>
-                      <p>Upload a fresh PDF file for this module block.</p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    className="teacher-module-detail__attach-type"
-                    data-active={attachSource === 'library'}
-                    onClick={() => {
-                      setAttachSource('library');
-                      setAttachState((current) => ({ ...current, file: null }));
-                      setLibraryPickerOpen(true);
-                    }}
-                  >
-                    <div>
-                      <strong>Choose from Library</strong>
-                      <p>Attach an existing General Module or My Library file.</p>
-                    </div>
-                  </button>
+                  {FILE_ATTACH_SOURCE_OPTIONS.map((option) => {
+                    const Icon = option.icon;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className="teacher-module-detail__attach-type"
+                        data-active={attachSource === option.value}
+                        data-tone={option.tone}
+                        onClick={() => {
+                          setAttachSource(option.value);
+                          setAttachState((current) => ({
+                            ...current,
+                            itemId: option.value === 'upload' ? '' : current.itemId,
+                            file: null,
+                          }));
+                          if (option.value === 'library') {
+                            setLibraryPickerOpen(true);
+                          }
+                        }}
+                      >
+                        <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div className="teacher-module-detail__attach-type-copy">
+                          <strong>{option.label}</strong>
+                          <span className="teacher-module-detail__attach-type-description">
+                            {option.description}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {attachSource === 'upload' ? (
@@ -1764,40 +2206,35 @@ export default function TeacherModuleDetailPage() {
                 {attachState.itemType === 'assessment' ? (
                   <>
                     <div className="teacher-module-detail__attach-type-grid">
-                      <button
-                        type="button"
-                        className="teacher-module-detail__attach-type"
-                        data-active={attachState.assessmentMode === 'create-new'}
-                        onClick={() =>
-                          setAttachState((current) => ({
-                            ...current,
-                            assessmentMode: 'create-new',
-                            itemId: '',
-                          }))
-                        }
-                      >
-                        <div>
-                          <strong>Create New Assessment</strong>
-                          <p>Start with a blank assessment and open the editor.</p>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        className="teacher-module-detail__attach-type"
-                        data-active={attachState.assessmentMode === 'attach-existing'}
-                        onClick={() =>
-                          setAttachState((current) => ({
-                            ...current,
-                            assessmentMode: 'attach-existing',
-                            itemId: '',
-                          }))
-                        }
-                      >
-                        <div>
-                          <strong>Attach Existing Assessment</strong>
-                          <p>Reuse an assessment already created for this class.</p>
-                        </div>
-                      </button>
+                      {ASSESSMENT_ATTACH_MODE_OPTIONS.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="teacher-module-detail__attach-type"
+                            data-active={attachState.assessmentMode === option.value}
+                            data-tone="assessment"
+                            onClick={() =>
+                              setAttachState((current) => ({
+                                ...current,
+                                assessmentMode: option.value,
+                                itemId: '',
+                              }))
+                            }
+                          >
+                            <span className="teacher-module-detail__attach-type-icon" aria-hidden="true">
+                              <Icon className="h-4 w-4" />
+                            </span>
+                            <div className="teacher-module-detail__attach-type-copy">
+                              <strong>{option.label}</strong>
+                              <span className="teacher-module-detail__attach-type-description">
+                                {option.description}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
 
                     {attachState.assessmentMode === 'create-new' ? (
@@ -1873,6 +2310,102 @@ export default function TeacherModuleDetailPage() {
             >
               {attachingItem ? 'Attaching...' : 'Add Block'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (open) {
+            setHelpPage(0);
+          }
+        }}
+      >
+        <DialogContent
+          className="teacher-intervention-workspace__manual-dialog"
+          style={teacherModuleGuideDialogStyle}
+        >
+          <DialogHeader>
+            <DialogTitle>Teacher guide: Module Workspace</DialogTitle>
+            <DialogDescription>
+              Read this guide one page at a time. Each screenshot points to the core controls for this module page.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
+            <span>Page {helpPage + 1} of {teacherModuleGuidePages.length}</span>
+            <div>
+              {teacherModuleGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <TeacherModuleGuideScreenshot screen={activeGuidePage.screen} />
+            <section className="teacher-intervention-workspace__manual-copy">
+              <p className="teacher-intervention-workspace__manual-kicker">Module workspace walkthrough</p>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+              <div className="route-guide-steps grid gap-3">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${step.action}-${step.body}`}
+                    className={`route-guide-step grid grid-cols-[1.9rem_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[#edf1f6] border-l-[3px] bg-white p-3 shadow-sm ${
+                      step.tone === 'caution' ? 'is-caution' : ''
+                    }`}
+                  >
+                    <span
+                      className={`route-guide-step__index inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white ${
+                        step.tone === 'caution' ? 'bg-[#b7791f]' : 'bg-[#a32d2d]'
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <div>
+                      <strong className="block text-sm font-black text-[#111827]">{step.action}</strong>
+                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</p>
+            </section>
+          </div>
+
+          <DialogFooter>
+            <div className="teacher-intervention-workspace__manual-actions">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                disabled={helpPage === 0}
+              >
+                Previous page
+              </Button>
+              {helpPage < teacherModuleGuidePages.length - 1 ? (
+                <Button
+                  type="button"
+                  onClick={() =>
+                    setHelpPage((current) => Math.min(current + 1, teacherModuleGuidePages.length - 1))
+                  }
+                >
+                  Next page
+                </Button>
+              ) : (
+                <Button type="button" onClick={() => setHelpOpen(false)}>
+                  Close guide
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

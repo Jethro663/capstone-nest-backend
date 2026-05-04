@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   BookOpenCheck,
@@ -148,6 +148,7 @@ export function TeacherClassRecordWorkbook({
   emptyMessage = 'No class record yet. Generate a quarter to start building the class record.',
 }: TeacherClassRecordWorkbookProps) {
   const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
+  const [selectedSyncItemId, setSelectedSyncItemId] = useState<string>('');
   const {
     classRecords,
     selectedRecord,
@@ -205,6 +206,32 @@ export function TeacherClassRecordWorkbook({
       average,
     };
   }, [spreadsheet]);
+
+  const syncableItems = useMemo(() => {
+    if (!spreadsheet) {
+      return [];
+    }
+
+    return [...spreadsheet.categories.flatMap((category) => category.items)]
+      .filter((item) => item.assessmentId)
+      .slice(0, 4);
+  }, [spreadsheet]);
+
+  useEffect(() => {
+    if (!syncableItems.length) {
+      setSelectedSyncItemId('');
+      return;
+    }
+
+    if (!selectedSyncItemId || !syncableItems.some((item) => item.id === selectedSyncItemId)) {
+      setSelectedSyncItemId(syncableItems[0].id);
+    }
+  }, [selectedSyncItemId, syncableItems]);
+
+  const selectedSyncItem = syncableItems.find((item) => item.id === selectedSyncItemId) || null;
+  const syncingItem = syncingItemId ? syncableItems.find((item) => item.id === syncingItemId) : null;
+  const syncDisabled =
+    syncingItemId !== null || !selectedRecord || selectedRecord.status !== 'draft' || !selectedSyncItem;
 
   const workbookData = useMemo(() => {
     if (!spreadsheet) {
@@ -997,29 +1024,38 @@ export function TeacherClassRecordWorkbook({
                       For Intervention: {stats.interventions}
                     </Badge>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {[...spreadsheet.categories.flatMap((category) => category.items)]
-                      .filter((item) => item.assessmentId)
-                      .slice(0, 4)
-                      .map((item) => (
-                        <Button
-                          key={item.id}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void syncItem(item.id)}
-                          disabled={syncingItemId === item.id || selectedRecord.status !== 'draft'}
-                          className="gap-2 rounded-full"
-                        >
-                          <RefreshCcw
-                            className={cn(
-                              'h-3.5 w-3.5',
-                              syncingItemId === item.id && 'animate-spin',
-                            )}
-                          />
-                          {syncingItemId === item.id ? `Syncing ${item.title}` : `Sync ${item.title}`}
-                        </Button>
-                      ))}
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2">
+                    <label htmlFor="class-record-sync-item" className="sr-only">
+                      Sync assessment
+                    </label>
+                    <select
+                      id="class-record-sync-item"
+                      value={selectedSyncItemId}
+                      onChange={(event) => setSelectedSyncItemId(event.target.value)}
+                      disabled={syncDisabled}
+                      className="h-8 min-w-48 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm"
+                    >
+                      {syncableItems.length === 0 ? (
+                        <option value="">No linked assessments</option>
+                      ) : (
+                        syncableItems.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.title}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => selectedSyncItem ? void syncItem(selectedSyncItem.id) : undefined}
+                      disabled={syncDisabled}
+                      className="gap-2 rounded-full"
+                    >
+                      <RefreshCcw className={cn('h-3.5 w-3.5', syncingItem && 'animate-spin')} />
+                      {syncingItem ? `Syncing ${syncingItem.title}` : 'Sync'}
+                    </Button>
                   </div>
                 </div>
               </div>

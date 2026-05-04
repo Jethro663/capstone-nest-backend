@@ -148,6 +148,13 @@
       "when": 1776000000000,
       "tag": "0020_admin_analytics_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1777687200000,
+      "tag": "0077_add_assessment_image_metadata",
+      "breakpoints": true
     }
   ]
 }

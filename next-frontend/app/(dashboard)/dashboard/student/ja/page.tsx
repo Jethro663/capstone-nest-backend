@@ -17,7 +17,7 @@ interface StudentJaPageProps {
       };
 }
 
-type JaMode = 'practice' | 'ask' | 'review';
+type JaMode = 'ask' | 'review';
 type JaEntry = 'sidebar' | 'class' | 'lxp' | 'lesson' | 'assessment';
 
 function readSingle(value: string | string[] | undefined): string | undefined {
@@ -27,7 +27,7 @@ function readSingle(value: string | string[] | undefined): string | undefined {
 
 function readMode(value: string | string[] | undefined): JaMode | undefined {
   const mode = readSingle(value);
-  if (mode === 'practice' || mode === 'ask' || mode === 'review') return mode;
+  if (mode === 'ask' || mode === 'review') return mode;
   return undefined;
 }
 
@@ -51,13 +51,11 @@ export default async function StudentJaPage({
   const resolvedSearchParams = await searchParams;
 
   return (
-    <div className="ja-page-shell">
-      <StudentJaWorkspace
-        initialMode={readMode(resolvedSearchParams?.mode)}
-        initialClassId={readSingle(resolvedSearchParams?.classId)}
-        initialEntry={readEntry(resolvedSearchParams?.entry)}
-        returnTo={readSingle(resolvedSearchParams?.returnTo)}
-      />
-    </div>
+    <StudentJaWorkspace
+      initialMode={readMode(resolvedSearchParams?.mode)}
+      initialClassId={readSingle(resolvedSearchParams?.classId)}
+      initialEntry={readEntry(resolvedSearchParams?.entry)}
+      returnTo={readSingle(resolvedSearchParams?.returnTo)}
+    />
   );
 }

@@ -270,6 +270,15 @@ export const classes = pgTable(
     cardPreset: text('card_preset').notNull().default('aurora'),
     cardBannerUrl: text('card_banner_url'),
     schoolYear: text('school_year').notNull(),
+    writtenWorkGradingWeight: integer(
+      'written_work_grading_weight',
+    ).notNull().default(30),
+    performanceTaskGradingWeight: integer(
+      'performance_task_grading_weight',
+    ).notNull().default(50),
+    quarterlyAssessmentGradingWeight: integer(
+      'quarterly_assessment_grading_weight',
+    ).notNull().default(20),
 
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -576,6 +585,7 @@ export const assessmentQuestions = pgTable(
     isRequired: boolean('is_required').default(true),
     explanation: text('explanation'),
     imageUrl: text('image_url'),
+    metadata: json('metadata'),
     conceptTags: json('concept_tags'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -596,8 +606,10 @@ export const assessmentQuestionOptions = pgTable(
       .notNull()
       .references(() => assessmentQuestions.id, { onDelete: 'cascade' }),
     text: text('text').notNull(),
+    imageUrl: text('image_url'),
     isCorrect: boolean('is_correct').default(false),
     order: integer('order').notNull().default(0),
+    metadata: json('metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
@@ -636,6 +648,7 @@ export const assessmentAttempts = pgTable(
     teacherFeedback: text('teacher_feedback'),
     rubricScores: json('rubric_scores'),
     directScore: integer('direct_score'),
+    submittedFiles: json('submitted_files'),
     submittedFileId: uuid('submitted_file_id'),
     submittedFileOriginalName: text('submitted_file_original_name'),
     submittedFileMimeType: varchar('submitted_file_mime_type', {

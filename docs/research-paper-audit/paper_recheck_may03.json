@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-05-03T13:07:29.876206",
+  "docx": "C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms\\RESEARCH_PAPER_RECHECK_MAY03.docx",
+  "markdown": "C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms\\paper_recheck_may03.md",
+  "source_docx": "C:\\Users\\jethr\\Downloads\\May03-CHAPTER-1-4.docx",
+  "readiness_score": 71,
+  "panel_risk": "Medium",
+  "finding_counts": {
+    "Major": 4,
+    "Moderate": 3
+  }
+}

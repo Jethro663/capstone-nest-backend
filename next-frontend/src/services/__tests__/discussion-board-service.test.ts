@@ -49,6 +49,33 @@ describe('discussionBoardService', () => {
     );
   });
 
+  it('posts moderation report payload to the correct comment route', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'reported',
+        data: {
+          commentId: 'comment-1',
+          reportedAt: '2026-05-04T10:00:00.000Z',
+          reasonCode: 'inappropriate',
+        },
+      },
+    });
+
+    await discussionBoardService.reportComment('class-1', 'thread-1', 'comment-1', {
+      reasonCode: 'inappropriate',
+      notes: 'Personal attack toward a classmate.',
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/classes/class-1/discussion-threads/thread-1/comments/comment-1/report',
+      {
+        reasonCode: 'inappropriate',
+        notes: 'Personal attack toward a classmate.',
+      },
+    );
+  });
+
   it('posts multipart form-data for thread attachment uploads', async () => {
     mockedApi.post.mockResolvedValue({
       data: { success: true, message: 'uploaded', data: { id: 'file-1' } },

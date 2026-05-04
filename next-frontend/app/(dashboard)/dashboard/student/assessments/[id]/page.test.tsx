@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import StudentAssessmentPage from './page';
 import { assessmentService } from '@/services/assessment-service';
 
@@ -109,5 +109,64 @@ describe('StudentAssessmentPage', () => {
     await waitFor(() => {
       expect(replace).toHaveBeenCalledWith('/dashboard/student/assessments/assessment-1/take');
     });
+  });
+
+  it('uses the neutral assessment shell instead of the older student-page theme wrapper', async () => {
+    mockedAssessmentService.getStudentAttempts.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      count: 0,
+      data: [],
+    });
+
+    const { container } = render(<StudentAssessmentPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('File Upload Assessment')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('File Upload')).toBeInTheDocument();
+    expect(container.firstChild).toHaveClass('mx-auto');
+    expect(container.firstChild).not.toHaveClass('student-page');
+  });
+
+  it('disables retakes when the student already has a returned grade', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'assessment-1',
+        title: 'Objective Quiz',
+        classId: 'class-1',
+        type: 'quiz',
+        isPublished: true,
+        maxAttempts: 3,
+        questions: [],
+      },
+    });
+    mockedAssessmentService.getStudentAttempts.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      count: 1,
+      data: [
+        {
+          id: 'attempt-returned',
+          assessmentId: 'assessment-1',
+          studentId: 'student-1',
+          isSubmitted: true,
+          isReturned: true,
+          score: 92,
+          passed: true,
+          submittedAt: '2026-03-22T10:00:00.000Z',
+          createdAt: '2026-03-22T09:00:00.000Z',
+        },
+      ],
+    });
+
+    render(<StudentAssessmentPage />);
+
+    const button = await screen.findByRole('button', { name: /already graded/i });
+    expect(button).toBeDisabled();
+    expect(screen.getByText(/retakes are disabled once your teacher has returned a grade/i)).toBeInTheDocument();
   });
 });

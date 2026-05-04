@@ -3,9 +3,14 @@
 ## Local Backend Target
 
 - Emulator API URL: `http://10.0.2.2:3000/api`
+- Release API URL: `https://capstone-backend-v2-production.up.railway.app/api`
 - Start the backend locally before running the app.
 - Seeded student smoke account: `jethrojosephfida@gmail.com` / `Test@123`
 - Mobile calls the Nest backend only. JA and AI features must go through backend `/ai/student/ja/*` routes.
+- Optional QA-only release seed envs:
+  - `EXPO_PUBLIC_LOGIN_SEED_EMAIL`
+  - `EXPO_PUBLIC_LOGIN_SEED_PASSWORD`
+  - `EXPO_PUBLIC_LOGIN_SEED_AUTO_LOGIN=true`
 
 ## Emulator Smoke
 
@@ -35,4 +40,4 @@ Install the downloaded APK:
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r path\to\nexora-preview.apk
 ```
 
-For a deployed backend, override `EXPO_PUBLIC_API_URL` in the EAS profile before building.
+Release builds now default to the Railway backend above. Override `EXPO_PUBLIC_API_URL` only when you intentionally need a different hosted environment.

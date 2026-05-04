@@ -1,8 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+} from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Layers3, Shield, FileQuestion, Search, Undo2, RotateCcw, Trash2, ArrowUpDown } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Layers3,
+  NotebookPen,
+  PencilLine,
+  Shield,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { extractionService } from '@/services/extraction-service';
 import {
@@ -10,6 +24,7 @@ import {
   TeacherPageShell,
   TeacherSectionCard,
 } from '@/components/teacher/TeacherPageShell';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -17,10 +32,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
-import type { Extraction, ExtractionBlock, ExtractionSection, ExtractionStatus } from '@/types/extraction';
+import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { LessonBlockTeacherEditor, LessonBlockTeacherPreview } from '@/features/lesson-blocks/LessonBlockTeacherEditor';
+import type { ContentBlock } from '@/types/lesson';
+import type {
+  Extraction,
+  ExtractionBlock,
+  ExtractionMediaAsset,
+  ExtractionSection,
+  ExtractionStatus,
+} from '@/types/extraction';
+import { cn } from '@/utils/cn';
+import '../../lessons/[id]/edit/lesson-editor.css';
 
 const STATUS_VARIANT: Record<ExtractionStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   pending: 'outline',
@@ -28,35 +54,6 @@ const STATUS_VARIANT: Record<ExtractionStatus, 'default' | 'secondary' | 'destru
   completed: 'default',
   applied: 'default',
   failed: 'destructive',
-};
-
-const BLOCK_LABEL: Record<string, string> = {
-  text: 'Text',
-  image: 'Image',
-  video: 'Video',
-  question: 'Question',
-  file: 'File',
-  divider: 'Divider',
-};
-
-const POLLING_FAILURE_THRESHOLD = 3;
-const LOW_CONFIDENCE_THRESHOLD = 0.6;
-const VERY_SHORT_THRESHOLD = 30;
-
-type ReviewCue = 'no-content' | 'very-short' | 'duplicate' | 'low-confidence';
-type SectionFilter = 'all' | number;
-
-type BlockReviewMeta = {
-  key: string;
-  sectionIndex: number;
-  blockIndex: number;
-  block: ExtractionBlock;
-  text: string;
-  normalizedText: string;
-  confidence: number | null;
-  hasContent: boolean;
-  cues: ReviewCue[];
-  matchesSearch: boolean;
 };
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -72,62 +69,34 @@ function getErrorMessage(error: unknown, fallback: string): string {
 function blockText(block: ExtractionBlock): string {
   if (typeof block.content === 'string') return block.content;
   if (block.content && typeof block.content === 'object') {
+    const html = (block.content as Record<string, unknown>).html;
+    if (typeof html === 'string' && html.trim().length > 0) return html;
     const text = (block.content as Record<string, unknown>).text;
     return typeof text === 'string' ? text : '';
   }
   return '';
 }
 
-function blockImageUrl(block: ExtractionBlock): string | null {
-  if (block.type !== 'image' || typeof block.content !== 'object' || !block.content) return null;
-  const url = (block.content as Record<string, unknown>).url;
-  return typeof url === 'string' && url.length > 0 ? url : null;
-}
-
-function blockImageCaption(block: ExtractionBlock): string | null {
-  if (block.type !== 'image' || typeof block.content !== 'object' || !block.content) return null;
-  const caption = (block.content as Record<string, unknown>).caption;
-  if (typeof caption === 'string' && caption.trim().length > 0) return caption;
-  const alt = (block.content as Record<string, unknown>).alt;
-  return typeof alt === 'string' && alt.trim().length > 0 ? alt : null;
-}
-
-function blockImageMeta(block: ExtractionBlock): { page: number | null; confidence: number | null } {
-  if (typeof block.metadata !== 'object' || !block.metadata) return { page: null, confidence: null };
-  const page = (block.metadata as Record<string, unknown>).pageNumber;
-  const confidence = (block.metadata as Record<string, unknown>).assignmentConfidence;
+function toLessonBlock(
+  block: ExtractionBlock,
+  sectionIndex: number,
+  blockIndex: number,
+): ContentBlock {
   return {
-    page: typeof page === 'number' && Number.isFinite(page) ? page : null,
-    confidence: typeof confidence === 'number' && Number.isFinite(confidence) ? confidence : null,
+    id: `section-${sectionIndex}-block-${blockIndex}`,
+    lessonId: `extraction-section-${sectionIndex}`,
+    type: block.type,
+    order: block.order,
+    content: block.content,
+    metadata: block.metadata,
   };
 }
 
-function getBlockKey(sectionIndex: number, blockIndex: number): string {
-  return `s${sectionIndex}-b${blockIndex}`;
-}
-
-function normalizeForDuplicate(text: string): string {
-  return text.replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-function isTextInputTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tagName = target.tagName.toLowerCase();
-  if (tagName === 'input' || tagName === 'textarea' || target.isContentEditable) return true;
-  return Boolean(target.closest('input, textarea, [contenteditable="true"]'));
-}
-
-function getBlockConfidence(block: ExtractionBlock): number | null {
-  if (!block.metadata || typeof block.metadata !== 'object') return null;
-  const candidate = (block.metadata as Record<string, unknown>).assignmentConfidence
-    ?? (block.metadata as Record<string, unknown>).confidence;
-  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : null;
-}
-
-function toSerializableBlockContent(content: ExtractionBlock['content']): Record<string, unknown> | string {
-  if (typeof content === 'string') return { text: content };
-  if (content && typeof content === 'object') return content;
-  return { text: '' };
+function isNestedInteractiveTarget(
+  event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>,
+) {
+  const target = event.target;
+  return target instanceof HTMLElement && Boolean(target.closest('button, input, textarea, select, a, [role="button"]'));
 }
 
 export default function ExtractionReviewPage() {
@@ -143,25 +112,17 @@ export default function ExtractionReviewPage() {
   const [applying, setApplying] = useState(false);
   const [showApplyDialog, setShowApplyDialog] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
-
+  const [activeTab, setActiveTab] = useState('overview');
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editSections, setEditSections] = useState<ExtractionSection[]>([]);
+  const [hiddenMediaAssets, setHiddenMediaAssets] = useState<ExtractionMediaAsset[]>([]);
   const [selectedSections, setSelectedSections] = useState<Set<number>>(new Set());
   const [dirty, setDirty] = useState(false);
-  const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeSectionIndex, setActiveSectionIndex] = useState(0);
-  const [focusedBlockKey, setFocusedBlockKey] = useState<string | null>(null);
-  const [removedBlockKeys, setRemovedBlockKeys] = useState<Set<string>>(new Set());
-  const [removeHistory, setRemoveHistory] = useState<string[]>([]);
+  const [editingBlockKey, setEditingBlockKey] = useState<string | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingFailuresRef = useRef(0);
-  const reviewPaneRef = useRef<HTMLDivElement | null>(null);
-  const searchRef = useRef<HTMLInputElement | null>(null);
-  const sectionRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const blockRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -172,16 +133,13 @@ export default function ExtractionReviewPage() {
   const hydrate = useCallback((value: Extraction | null) => {
     const structured = value?.structuredContent;
     const sections = structured?.sections ? JSON.parse(JSON.stringify(structured.sections)) as ExtractionSection[] : [];
+    const mediaAssets = structured?.mediaAssets ? JSON.parse(JSON.stringify(structured.mediaAssets)) as ExtractionMediaAsset[] : [];
     setEditTitle(structured?.title || '');
     setEditDescription(structured?.description || '');
     setEditSections(sections);
+    setHiddenMediaAssets(mediaAssets);
     setSelectedSections(new Set(sections.map((_, index) => index)));
-    setSectionFilter('all');
-    setSearchQuery('');
-    setActiveSectionIndex(0);
-    setFocusedBlockKey(null);
-    setRemovedBlockKeys(new Set());
-    setRemoveHistory([]);
+    setEditingBlockKey(null);
     setDirty(false);
   }, []);
 
@@ -215,7 +173,14 @@ export default function ExtractionReviewPage() {
         pollingFailuresRef.current = 0;
         setExtraction((prev) =>
           prev
-            ? { ...prev, extractionStatus: statusRes.data.status as ExtractionStatus, progressPercent: statusRes.data.progressPercent, totalChunks: statusRes.data.totalChunks, processedChunks: statusRes.data.processedChunks, modelUsed: statusRes.data.modelUsed }
+            ? {
+                ...prev,
+                extractionStatus: statusRes.data.status as ExtractionStatus,
+                progressPercent: statusRes.data.progressPercent,
+                totalChunks: statusRes.data.totalChunks,
+                processedChunks: statusRes.data.processedChunks,
+                modelUsed: statusRes.data.modelUsed,
+              }
             : prev,
         );
         if (!['pending', 'processing'].includes(statusRes.data.status)) {
@@ -228,7 +193,7 @@ export default function ExtractionReviewPage() {
         }
       } catch (error: unknown) {
         pollingFailuresRef.current += 1;
-        if (pollingFailuresRef.current >= POLLING_FAILURE_THRESHOLD) {
+        if (pollingFailuresRef.current >= 3) {
           stopPolling();
           const warning = getErrorMessage(error, 'Live extraction updates are temporarily unavailable.');
           setPollingWarning(warning);
@@ -240,739 +205,684 @@ export default function ExtractionReviewPage() {
 
   const isEditable = extraction?.extractionStatus === 'completed';
   const isApplied = extraction?.extractionStatus === 'applied' || Boolean(extraction?.isApplied);
-  const canMutateBlocks = Boolean(isEditable && !isApplied);
+  const canMutate = Boolean(isEditable && !isApplied);
 
-  const persistableSections = useMemo(
-    () => editSections.map((section, sectionIndex) => ({
-      ...section,
-      lessonBlocks: section.lessonBlocks.filter((_, blockIndex) => !removedBlockKeys.has(getBlockKey(sectionIndex, blockIndex))),
-    })),
-    [editSections, removedBlockKeys],
-  );
-
-  const sanitizedSaveSections = useMemo(
-    () => persistableSections.map((section, sectionIndex) => ({
-      title: String(section.title || `Section ${sectionIndex + 1}`),
-      description: String(section.description || ''),
-      order: Number.isFinite(section.order) ? section.order : sectionIndex + 1,
-      lessonBlocks: (section.lessonBlocks || []).map((block, blockIndex) => ({
-        type: block.type,
-        order: Number.isFinite(block.order) ? block.order : blockIndex + 1,
-        content: toSerializableBlockContent(block.content),
-        ...(block.metadata && typeof block.metadata === 'object' ? { metadata: block.metadata } : {}),
+  const visibleSections = useMemo(
+    () =>
+      editSections.map((section) => ({
+        ...section,
+        visibleBlocks: section.lessonBlocks
+          .map((block, originalIndex) => ({ block, originalIndex }))
+          .filter((entry) => entry.block.type !== 'image'),
       })),
-      ...(section.assessmentDraft ? { assessmentDraft: section.assessmentDraft } : {}),
-      ...(typeof section.confidence === 'number' && Number.isFinite(section.confidence) ? { confidence: section.confidence } : {}),
-    })),
-    [persistableSections],
+    [editSections],
   );
 
-  const legacySaveLessons = useMemo(
-    () => sanitizedSaveSections.map((section, sectionIndex) => ({
-      title: section.title,
-      description: section.description,
-      order: Number.isFinite(section.order) ? section.order : sectionIndex + 1,
-      blocks: section.lessonBlocks,
-    })),
-    [sanitizedSaveSections],
+  const sectionCount = visibleSections.length;
+  const questionCount = useMemo(
+    () =>
+      visibleSections.reduce(
+        (total, section) => total + (section.assessmentDraft?.questions?.length || 0),
+        0,
+      ),
+    [visibleSections],
+  );
+  const hiddenMediaCount = hiddenMediaAssets.length;
+  const reviewNotes = extraction?.repairNotes || [];
+  const coherenceWarnings = extraction?.structuredContent?.audit?.coherenceWarnings || [];
+  const requestedSectionCount = extraction?.structuredContent?.audit?.requestedSectionCount;
+  const finalSectionCount = extraction?.structuredContent?.audit?.finalSectionCount;
+  const sectionCountAdjustmentReason =
+    extraction?.structuredContent?.audit?.sectionCountAdjustmentReason || null;
+  const hiddenLegacyMediaNotice = hiddenMediaCount > 0
+    ? `${hiddenMediaCount} legacy media item${hiddenMediaCount === 1 ? '' : 's'} remain stored but hidden in text-first mode.`
+    : null;
+
+  const applyBlockedReason = useMemo(() => {
+    if (dirty) return 'Save extraction changes before applying.';
+    if (selectedSections.size === 0) return 'Select at least one section to apply.';
+    if (extraction?.qualityGate === 'fail') return 'Extraction quality is too low to apply.';
+    if (extraction?.reviewRequired) return 'Teacher review is still required before apply.';
+    return null;
+  }, [dirty, extraction?.qualityGate, extraction?.reviewRequired, selectedSections.size]);
+
+  const summaryItems: Array<{
+    key: string;
+    label: string;
+    value: string;
+    caption: string;
+    Icon: typeof Shield;
+  }> = [
+    {
+      key: 'status',
+      label: 'Status',
+      value: extraction?.extractionStatus || 'loading',
+      caption: extraction?.modelUsed ? `Model ${extraction.modelUsed}` : 'Model pending',
+      Icon: Shield,
+    },
+    {
+      key: 'sections',
+      label: 'Sections',
+      value: String(sectionCount),
+      caption: `${selectedSections.size} selected`,
+      Icon: Layers3,
+    },
+    {
+      key: 'questions',
+      label: 'Questions',
+      value: String(questionCount),
+      caption: extraction?.reviewRequired ? 'Review before apply' : 'Ready to apply',
+      Icon: NotebookPen,
+    },
+  ];
+
+  const headerSummary = (
+    <div className="flex w-full flex-col gap-3">
+      <div
+        className="grid min-w-[min(42rem,80vw)] gap-2 sm:grid-cols-3"
+        data-testid="extraction-header-summary"
+      >
+        {summaryItems.map(({ key, label, value, caption, Icon }) => (
+          <div
+            key={key}
+            className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]"
+          >
+            <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <Badge variant={STATUS_VARIANT[extraction?.extractionStatus || 'pending']}>{value}</Badge>
+              <span className="text-xs text-white/70">{caption}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.back()}
+          className="teacher-button-outline rounded-xl border-white/20 bg-white/10 text-[#12284a] hover:bg-white/20 hover:text-white"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <Button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={!canMutate || !dirty || saving}
+          className="teacher-button-solid rounded-xl font-black"
+        >
+          <PencilLine className="h-4 w-4" />
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => setShowApplyDialog(true)}
+          disabled={!canMutate || Boolean(applyBlockedReason)}
+          className="teacher-button-solid rounded-xl font-black"
+          aria-label="Apply Extraction"
+        >
+          Apply Extraction
+        </Button>
+      </div>
+    </div>
   );
 
-  const allBlockReview = useMemo(() => {
-    const duplicateCount = new Map<string, number>();
-    const entries: Omit<BlockReviewMeta, 'cues' | 'matchesSearch'>[] = [];
-
-    editSections.forEach((section, sectionIndex) => {
-      section.lessonBlocks.forEach((block, blockIndex) => {
-        const key = getBlockKey(sectionIndex, blockIndex);
-        const text = block.type === 'image'
-          ? `${blockImageCaption(block) || ''} ${(blockImageUrl(block) || '').trim()}`
-          : blockText(block);
-        const normalizedText = normalizeForDuplicate(text);
-        const confidence = getBlockConfidence(block);
-        const hasContent = block.type === 'image'
-          ? Boolean(blockImageUrl(block) || blockImageCaption(block))
-          : text.trim().length > 0;
-
-        if (!removedBlockKeys.has(key) && normalizedText.length > 0) {
-          duplicateCount.set(normalizedText, (duplicateCount.get(normalizedText) || 0) + 1);
-        }
-
-        entries.push({
-          key,
-          sectionIndex,
-          blockIndex,
-          block,
-          text,
-          normalizedText,
-          confidence,
-          hasContent,
-        });
-      });
-    });
-
-    const normalizedQuery = normalizeForDuplicate(searchQuery);
-    return entries.map((entry) => {
-      const cues: ReviewCue[] = [];
-      if (!entry.hasContent) cues.push('no-content');
-      if (entry.block.type !== 'image' && entry.text.trim().length > 0 && entry.text.trim().length < VERY_SHORT_THRESHOLD) cues.push('very-short');
-      if (entry.normalizedText.length > 0 && (duplicateCount.get(entry.normalizedText) || 0) > 1) cues.push('duplicate');
-      if (entry.confidence !== null && entry.confidence < LOW_CONFIDENCE_THRESHOLD) cues.push('low-confidence');
-
-      const searchable = `${entry.text} ${entry.block.type}`.toLowerCase();
-      const matchesSearch = normalizedQuery.length === 0
-        ? true
-        : searchable.includes(normalizedQuery);
-
-      return { ...entry, cues, matchesSearch };
-    });
-  }, [editSections, removedBlockKeys, searchQuery]);
-
-  const reviewBySection = useMemo(() => {
-    return editSections.map((section, sectionIndex) => {
-      const allBlocks = allBlockReview.filter((entry) => entry.sectionIndex === sectionIndex);
-      const removedCount = allBlocks.filter((entry) => removedBlockKeys.has(entry.key)).length;
-      const filteredBlocks = allBlocks.filter((entry) => !removedBlockKeys.has(entry.key) && entry.matchesSearch);
-      const flaggedCount = filteredBlocks.filter((entry) => entry.cues.length > 0).length;
-      const totalRemaining = allBlocks.length - removedCount;
-      return {
-        section,
-        sectionIndex,
-        filteredBlocks,
-        removedCount,
-        flaggedCount,
-        totalRemaining,
-      };
-    });
-  }, [allBlockReview, editSections, removedBlockKeys]);
-
-  const displayedSections = useMemo(() => {
-    if (sectionFilter === 'all') return reviewBySection;
-    return reviewBySection.filter((entry) => entry.sectionIndex === sectionFilter);
-  }, [reviewBySection, sectionFilter]);
-
-  const stats = useMemo(() => {
-    const remainingBlocks = reviewBySection.reduce((sum, section) => sum + section.totalRemaining, 0);
-    const removedBlocks = removedBlockKeys.size;
-    const flaggedBlocks = reviewBySection.reduce((sum, section) => sum + section.flaggedCount, 0);
-    return { remainingBlocks, removedBlocks, flaggedBlocks };
-  }, [reviewBySection, removedBlockKeys]);
-
-  const flaggedVisibleBlocks = useMemo(
-    () => displayedSections.flatMap((section) => section.filteredBlocks).filter((block) => block.cues.length > 0),
-    [displayedSections],
-  );
-
-  const emptyAfterRemovalSectionCount = useMemo(
-    () => reviewBySection.filter((section) => section.totalRemaining === 0).length,
-    [reviewBySection],
-  );
-
-  const updateSection = (sectionIndex: number, patch: Partial<ExtractionSection>) => {
-    setEditSections((prev) => {
-      const copy = [...prev];
-      copy[sectionIndex] = { ...copy[sectionIndex], ...patch };
-      return copy;
-    });
-    setDirty(true);
-  };
-
-  const updateBlock = (sectionIndex: number, blockIndex: number, patch: Partial<ExtractionBlock>) => {
-    setEditSections((prev) => {
-      const copy = [...prev];
-      const blocks = [...copy[sectionIndex].lessonBlocks];
-      blocks[blockIndex] = { ...blocks[blockIndex], ...patch };
-      copy[sectionIndex] = { ...copy[sectionIndex], lessonBlocks: blocks };
-      return copy;
-    });
-    setDirty(true);
-  };
-
-  const removeBlock = useCallback((key: string) => {
-    setRemovedBlockKeys((prev) => {
-      if (prev.has(key)) return prev;
-      const next = new Set(prev);
-      next.add(key);
-      return next;
-    });
-    setRemoveHistory((prev) => [...prev, key]);
-    if (focusedBlockKey === key) setFocusedBlockKey(null);
-    setDirty(true);
-  }, [focusedBlockKey]);
-
-  const undoLastRemove = useCallback(() => {
-    let restored: string | null = null;
-    setRemoveHistory((prev) => {
-      if (prev.length === 0) return prev;
-      restored = prev[prev.length - 1];
-      return prev.slice(0, -1);
-    });
-
-    if (!restored) return;
-    setRemovedBlockKeys((prev) => {
-      const next = new Set(prev);
-      next.delete(restored as string);
-      return next;
-    });
-    setDirty(true);
-  }, []);
-
-  const restoreAllRemoved = () => {
-    if (removedBlockKeys.size === 0) return;
-    setRemovedBlockKeys(new Set());
-    setRemoveHistory([]);
-    setDirty(true);
-  };
-
-  const jumpToSection = useCallback((targetSectionIndex: number) => {
-    if (targetSectionIndex < 0 || targetSectionIndex >= editSections.length) return;
-    setActiveSectionIndex(targetSectionIndex);
-    if (sectionFilter === 'all') {
-      const element = sectionRefs.current[targetSectionIndex];
-      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
-    }
-    setSectionFilter(targetSectionIndex);
-    const pane = reviewPaneRef.current;
-    if (pane) pane.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [editSections.length, sectionFilter]);
-
-  const navigateSection = useCallback((direction: -1 | 1) => {
-    const next = Math.max(0, Math.min(editSections.length - 1, activeSectionIndex + direction));
-    jumpToSection(next);
-  }, [activeSectionIndex, editSections.length, jumpToSection]);
-
-  const jumpToNextFlagged = useCallback(() => {
-    if (flaggedVisibleBlocks.length === 0) return;
-    const currentIndex = focusedBlockKey
-      ? flaggedVisibleBlocks.findIndex((entry) => entry.key === focusedBlockKey)
-      : -1;
-    const nextIndex = currentIndex >= 0 && currentIndex < flaggedVisibleBlocks.length - 1 ? currentIndex + 1 : 0;
-    const target = flaggedVisibleBlocks[nextIndex];
-    if (!target) return;
-    setFocusedBlockKey(target.key);
-    const element = blockRefs.current[target.key];
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      element.focus();
-    }
-    setActiveSectionIndex(target.sectionIndex);
-    if (sectionFilter !== 'all' && sectionFilter !== target.sectionIndex) setSectionFilter(target.sectionIndex);
-  }, [flaggedVisibleBlocks, focusedBlockKey, sectionFilter]);
-
-  const handleSave = async () => {
-    setSaving(true);
+  async function handleSave() {
+    if (!extraction) return;
     try {
-      let response = await extractionService.update(extractionId, {
+      setSaving(true);
+      const response = await extractionService.update(extraction.id, {
         title: editTitle,
         description: editDescription,
-        sections: sanitizedSaveSections,
+        sections: editSections,
+        mediaAssets: hiddenMediaAssets,
       });
-
-      // Compatibility retry for environments where AI service only accepts legacy lessons payload reliably.
-      if (!response?.data?.structuredContent?.sections && legacySaveLessons.length > 0) {
-        response = await extractionService.update(extractionId, {
-          title: editTitle,
-          description: editDescription,
-          lessons: legacySaveLessons,
-        });
-      }
-
       setExtraction(response.data);
       hydrate(response.data);
       toast.success('Extraction changes saved');
     } catch (error: unknown) {
-      const statusCode = (error as { response?: { status?: number } })?.response?.status;
-      if (statusCode && statusCode >= 500) {
-        try {
-          const fallback = await extractionService.update(extractionId, {
-            title: editTitle,
-            description: editDescription,
-            lessons: legacySaveLessons,
-          });
-          setExtraction(fallback.data);
-          hydrate(fallback.data);
-          toast.success('Extraction changes saved');
-          return;
-        } catch {
-          // Surface the original error below.
-        }
-      }
       toast.error(getErrorMessage(error, 'Failed to save extraction changes'));
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  const handleApply = async () => {
-    setApplying(true);
+  async function handleApply() {
+    if (!extraction || applyBlockedReason) return;
     try {
-      const sorted = Array.from(selectedSections).sort((a, b) => a - b);
-      const sectionIndices = sorted.length === editSections.length ? undefined : sorted;
-      const response = await extractionService.apply(extractionId, { sectionIndices });
-      toast.success(response.message || 'Extraction applied');
+      setApplying(true);
+      await extractionService.apply(extraction.id, {
+        sectionIndices: Array.from(selectedSections).sort((left, right) => left - right),
+      });
+      toast.success('Extraction applied successfully');
       setShowApplyDialog(false);
-      const full = await extractionService.getById(extractionId);
-      setExtraction(full.data);
-      hydrate(full.data);
+      await fetchExtraction();
     } catch (error: unknown) {
       toast.error(getErrorMessage(error, 'Failed to apply extraction'));
     } finally {
       setApplying(false);
     }
-  };
+  }
 
-  const handleDelete = () => {
-    setConfirmation({
-      title: 'Delete extraction review?',
-      description: 'This removes the extraction and all review edits.',
-      confirmLabel: 'Delete Extraction',
-      tone: 'danger',
-      onConfirm: async () => {
-        try {
-          await extractionService.delete(extractionId);
-          toast.success('Extraction deleted');
-          router.back();
-        } catch (error: unknown) {
-          toast.error(getErrorMessage(error, 'Failed to delete extraction'));
-        }
-      },
-    });
-  };
+  function updateSection(sectionIndex: number, patch: Partial<ExtractionSection>) {
+    setEditSections((current) =>
+      current.map((section, index) =>
+        index === sectionIndex ? { ...section, ...patch } : section,
+      ),
+    );
+    setDirty(true);
+  }
 
-  useEffect(() => {
-    const pane = reviewPaneRef.current;
-    if (!pane) return;
-    if (sectionFilter !== 'all') {
-      if (typeof sectionFilter === 'number') setActiveSectionIndex(sectionFilter);
-      return;
-    }
+  function updateBlock(sectionIndex: number, blockIndex: number, patch: Partial<ExtractionBlock>) {
+    setEditSections((current) =>
+      current.map((section, currentSectionIndex) => {
+        if (currentSectionIndex !== sectionIndex) return section;
+        return {
+          ...section,
+          lessonBlocks: section.lessonBlocks.map((block, currentBlockIndex) =>
+            currentBlockIndex === blockIndex ? { ...block, ...patch } : block,
+          ),
+        };
+      }),
+    );
+    setDirty(true);
+  }
 
-    const onScroll = () => {
-      const paneTop = pane.getBoundingClientRect().top;
-      let bestIndex = activeSectionIndex;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      for (const section of reviewBySection) {
-        const element = sectionRefs.current[section.sectionIndex];
-        if (!element) continue;
-        const distance = Math.abs(element.getBoundingClientRect().top - paneTop - 24);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestIndex = section.sectionIndex;
-        }
-      }
-      setActiveSectionIndex(bestIndex);
-    };
+  function moveBlock(sectionIndex: number, blockIndex: number, direction: 'up' | 'down') {
+    setEditSections((current) =>
+      current.map((section, currentSectionIndex) => {
+        if (currentSectionIndex !== sectionIndex) return section;
+        const lessonBlocks = section.lessonBlocks.slice();
+        const nextIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
+        if (nextIndex < 0 || nextIndex >= lessonBlocks.length) return section;
+        const [moved] = lessonBlocks.splice(blockIndex, 1);
+        lessonBlocks.splice(nextIndex, 0, moved);
+        return {
+          ...section,
+          lessonBlocks: lessonBlocks.map((block, index) => ({ ...block, order: index })),
+        };
+      }),
+    );
+    setDirty(true);
+  }
 
-    pane.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    return () => pane.removeEventListener('scroll', onScroll);
-  }, [activeSectionIndex, reviewBySection, sectionFilter]);
+  function removeBlock(sectionIndex: number, blockIndex: number) {
+    setEditSections((current) =>
+      current.map((section, currentSectionIndex) => {
+        if (currentSectionIndex !== sectionIndex) return section;
+        return {
+          ...section,
+          lessonBlocks: section.lessonBlocks
+            .filter((_, currentBlockIndex) => currentBlockIndex !== blockIndex)
+            .map((block, index) => ({ ...block, order: index })),
+        };
+      }),
+    );
+    setDirty(true);
+    setEditingBlockKey(null);
+  }
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isTextInputTarget(event.target)) return;
-      if (event.defaultPrevented) return;
-
-      const key = event.key.toLowerCase();
-      if (key === '/') {
-        event.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
-        return;
-      }
-      if (key === 'j') {
-        event.preventDefault();
-        navigateSection(1);
-        return;
-      }
-      if (key === 'k') {
-        event.preventDefault();
-        navigateSection(-1);
-        return;
-      }
-      if (key === 'r' && canMutateBlocks && focusedBlockKey) {
-        event.preventDefault();
-        removeBlock(focusedBlockKey);
-        return;
-      }
-      if (key === 'u' && canMutateBlocks) {
-        event.preventDefault();
-        undoLastRemove();
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [canMutateBlocks, focusedBlockKey, navigateSection, removeBlock, undoLastRemove]);
-
-  if (loading) return <div className="space-y-4"><Skeleton className="h-12 w-80" /><Skeleton className="h-80 w-full" /></div>;
-
-  if (loadError) {
+  if (loading) {
     return (
-      <TeacherPageShell badge="AI Extraction" title="Extraction Review" description="Review extracted content before apply.">
+      <TeacherPageShell
+        badge="AI Extraction Review"
+        title="Loading Extraction"
+        description="Text-first extraction review that follows the teacher lesson editor flow."
+      >
+        <TeacherSectionCard title="Loading extraction" description="Preparing the extraction workspace.">
+          <div className="space-y-3">
+            <Skeleton className="h-12 w-full rounded-2xl" />
+            <Skeleton className="h-56 w-full rounded-2xl" />
+          </div>
+        </TeacherSectionCard>
+      </TeacherPageShell>
+    );
+  }
+
+  if (loadError || !extraction) {
+    return (
+      <TeacherPageShell
+        badge="AI Extraction Review"
+        title="Extraction Workspace"
+        description="Text-first extraction review that follows the teacher lesson editor flow."
+        actions={(
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            className="teacher-button-outline rounded-xl text-[#12284a]"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+        )}
+      >
         <TeacherEmptyState
           title="Extraction unavailable"
-          description={loadError}
+          description={loadError || 'The extraction could not be loaded.'}
           action={(
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="outline" onClick={() => router.back()}>
-                Back
-              </Button>
-              <Button onClick={fetchExtraction}>Retry</Button>
-            </div>
+            <Button type="button" onClick={() => void fetchExtraction()} className="teacher-button-solid rounded-xl font-black">
+              Retry
+            </Button>
           )}
         />
       </TeacherPageShell>
     );
   }
 
-  if (!extraction) return null;
-
-  const draftQuestionCount = editSections.reduce(
-    (sum, section) => sum + (section.assessmentDraft?.questions?.length || 0),
-    0,
-  );
-
   return (
     <TeacherPageShell
       badge="AI Extraction Review"
-      title="Extraction Review"
-      description="Module-first review for sections, lesson blocks, and section assessments."
-      actions={(
-        <div className="flex w-full flex-col gap-3">
-          <div
-            data-testid="extraction-header-summary"
-            className="grid min-w-[min(42rem,80vw)] gap-2 sm:grid-cols-3"
-          >
-            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
-                <Shield className="h-3.5 w-3.5" />
-                Status
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>
-                <span className="text-xs text-white/70">
-                  {extraction.modelUsed ? `Model: ${extraction.modelUsed}` : 'Model pending'}
-                </span>
-              </div>
-            </div>
-            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
-                <Layers3 className="h-3.5 w-3.5" />
-                Sections
-              </div>
-              <div className="mt-1 flex items-end gap-2">
-                <strong className="text-2xl leading-none">{editSections.length}</strong>
-                <span className="text-xs text-white/70">{selectedSections.size} selected</span>
-              </div>
-            </div>
-            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-white shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/70">
-                <FileQuestion className="h-3.5 w-3.5" />
-                Draft Questions
-              </div>
-              <div className="mt-1 flex items-end gap-2">
-                <strong className="text-2xl leading-none">{draftQuestionCount}</strong>
-                <span className="text-xs text-white/70">Optional assessments</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              variant="outline"
-              className="border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff] hover:text-[#12284a]"
-              onClick={() => router.back()}
-            >
-              Back
-            </Button>
-            {dirty && isEditable && !isApplied ? <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</Button> : null}
-            {isEditable && !isApplied ? <Button onClick={() => setShowApplyDialog(true)} disabled={selectedSections.size === 0}>Apply ({selectedSections.size} section{selectedSections.size === 1 ? '' : 's'})</Button> : null}
-            {!isApplied ? <Button variant="destructive" size="sm" onClick={handleDelete}>Delete</Button> : <Badge>Applied</Badge>}
-          </div>
-        </div>
-      )}
+      title="Extraction Workspace"
+      description="Text-first extraction review that follows the teacher lesson editor flow."
+      actions={headerSummary}
     >
-      {['pending', 'processing'].includes(extraction.extractionStatus) ? (
-        <TeacherSectionCard title="Extraction Progress" description="AI is converting the PDF into sections.">
-          <div className="rounded-[14px] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
-            <div className="mb-2 flex items-center justify-between text-sm"><span>Processing</span><span>{extraction.progressPercent}%</span></div>
-            <Progress value={extraction.progressPercent} />
-          </div>
+      {pollingWarning ? (
+        <TeacherSectionCard title="Live updates paused" description={pollingWarning}>
+          <p className="text-sm text-[var(--teacher-text-muted)]">
+            The extraction record is still available. Use Refresh or return later to check the latest status.
+          </p>
         </TeacherSectionCard>
       ) : null}
 
-      {pollingWarning ? <TeacherSectionCard title="Polling Warning" description="Live status polling stopped."><p className="text-sm text-yellow-700">{pollingWarning}</p></TeacherSectionCard> : null}
-
-      <TeacherSectionCard title="Module Details" description="Applied extraction creates one hidden and locked module by default.">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div><Label>Module Title</Label><Input value={editTitle} onChange={(event) => { setEditTitle(event.target.value); setDirty(true); }} disabled={!isEditable || isApplied} /></div>
-          <div><Label>Module Description</Label><Textarea value={editDescription} onChange={(event) => { setEditDescription(event.target.value); setDirty(true); }} disabled={!isEditable || isApplied} rows={2} /></div>
-        </div>
-      </TeacherSectionCard>
-
-      <TeacherSectionCard title={`Sections (${editSections.length})`} description="Focused review workspace with quick travel and in-session block removals.">
-        <div className="space-y-4">
-          <div className="sticky top-2 z-10 rounded-[14px] border border-[#dbe4f0] bg-white/95 p-3 backdrop-blur">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Label htmlFor="section-filter" className="text-xs uppercase tracking-wide text-[var(--teacher-text-muted)]">Section View</Label>
-                <select
-                  id="section-filter"
-                  value={sectionFilter === 'all' ? 'all' : String(sectionFilter)}
-                  onChange={(event) => {
-                    const value = event.target.value === 'all' ? 'all' : Number(event.target.value);
-                    setSectionFilter(value);
-                    if (value !== 'all') setActiveSectionIndex(value);
-                  }}
-                  className="h-9 rounded-md border border-[#cbd5e1] bg-white px-3 text-sm"
-                >
-                  <option value="all">All sections</option>
-                  {editSections.map((section, index) => (
-                    <option key={`section-option-${index}`} value={String(index)}>
-                      Section {index + 1}: {section.title || 'Untitled'}
-                    </option>
-                  ))}
-                </select>
-                <Button variant="outline" size="sm" onClick={() => navigateSection(-1)} disabled={activeSectionIndex <= 0}>Prev (K)</Button>
-                <Button variant="outline" size="sm" onClick={() => navigateSection(1)} disabled={activeSectionIndex >= editSections.length - 1}>Next (J)</Button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative min-w-[220px] flex-1 lg:w-[280px] lg:flex-none">
-                  <Search className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-[var(--teacher-text-muted)]" />
-                  <Input
-                    ref={searchRef}
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search blocks (/)"
-                    className="pl-8"
-                  />
-                </div>
-                <Button variant="outline" size="sm" onClick={jumpToNextFlagged} disabled={flaggedVisibleBlocks.length === 0}>Next Flagged</Button>
-                {canMutateBlocks ? (
-                  <>
-                    <Button variant="outline" size="sm" onClick={undoLastRemove} disabled={removeHistory.length === 0}>
-                      <Undo2 className="mr-1 h-4 w-4" />
-                      Undo (U)
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={restoreAllRemoved} disabled={removedBlockKeys.size === 0}>
-                      <RotateCcw className="mr-1 h-4 w-4" />
-                      Restore All
-                    </Button>
-                  </>
-                ) : null}
-              </div>
+      {['pending', 'processing'].includes(extraction.extractionStatus) ? (
+        <TeacherSectionCard
+          title="Extraction in progress"
+          description="This text-first extraction is still building sections and cleanup notes."
+        >
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={STATUS_VARIANT[extraction.extractionStatus]}>{extraction.extractionStatus}</Badge>
+              <span className="text-sm text-[var(--teacher-text-muted)]">
+                {extraction.processedChunks} / {extraction.totalChunks ?? '?'} chunk(s) processed
+              </span>
             </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-              <Badge variant="secondary">Remaining: {stats.remainingBlocks}</Badge>
-              <Badge variant="outline">Removed: {stats.removedBlocks}</Badge>
-              <Badge variant={stats.flaggedBlocks > 0 ? 'destructive' : 'secondary'}>Flagged: {stats.flaggedBlocks}</Badge>
-              <Badge variant="outline">Active Section: {activeSectionIndex + 1}</Badge>
-              <span className="text-[var(--teacher-text-muted)]"><ArrowUpDown className="mr-1 inline h-3 w-3" />Shortcuts: J/K, /, R, U</span>
-            </div>
-
-            <div className="mt-3">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--teacher-text-muted)]">Quick Travel</p>
-              <div className="flex gap-1 overflow-x-auto pb-1">
-                {reviewBySection.map((sectionEntry) => (
-                  <button
-                    key={`mini-map-inline-${sectionEntry.sectionIndex}`}
-                    type="button"
-                    onClick={() => {
-                      setSectionFilter(sectionFilter === 'all' ? 'all' : sectionEntry.sectionIndex);
-                      jumpToSection(sectionEntry.sectionIndex);
-                    }}
-                    className={`shrink-0 rounded-md border px-2 py-1 text-left text-[11px] transition ${activeSectionIndex === sectionEntry.sectionIndex ? 'border-sky-400 bg-sky-50' : 'border-[#e2e8f0] hover:border-sky-300'}`}
-                  >
-                    <div className="flex items-center gap-1">
-                      <span>S{sectionEntry.sectionIndex + 1}</span>
-                      <span className="text-[10px] text-[var(--teacher-text-muted)]">{sectionEntry.totalRemaining}</span>
-                      {sectionEntry.flaggedCount > 0 ? <span className="rounded bg-red-100 px-1 text-[10px] text-red-700">{sectionEntry.flaggedCount}F</span> : null}
-                      {sectionEntry.removedCount > 0 ? <span className="rounded bg-slate-100 px-1 text-[10px] text-slate-700">{sectionEntry.removedCount}R</span> : null}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Progress value={extraction.progressPercent} />
           </div>
+        </TeacherSectionCard>
+      ) : (
+        <div className="space-y-5">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-5">
+            <TabsList className="grid h-auto w-fit grid-cols-2 rounded-[1.1rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-1">
+              <TabsTrigger
+                value="overview"
+                className="flex min-h-[50px] min-w-[154px] items-center justify-start gap-2 rounded-[0.9rem] px-4 py-3 text-left text-sm font-black data-[state=active]:bg-white data-[state=active]:text-[var(--teacher-text-strong)] data-[state=active]:shadow-none"
+              >
+                <Layers3 className="h-4 w-4" />
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="content"
+                className="flex min-h-[50px] min-w-[154px] items-center justify-start gap-2 rounded-[0.9rem] px-4 py-3 text-left text-sm font-black data-[state=active]:bg-white data-[state=active]:text-[var(--teacher-text-strong)] data-[state=active]:shadow-none"
+              >
+                <NotebookPen className="h-4 w-4" />
+                Content
+              </TabsTrigger>
+            </TabsList>
 
-          <div className="relative">
-            <div
-              ref={reviewPaneRef}
-              className="review-scrollbar max-h-[calc(100vh-20rem)] overflow-y-auto rounded-[14px] border border-[#dbe4f0] bg-[#f8fafc] p-3"
-            >
-              {displayedSections.length === 0 ? (
-                <p className="rounded-md border border-dashed border-[#cbd5e1] bg-white p-4 text-sm text-[var(--teacher-text-muted)]">
-                  No sections match the current filter.
-                </p>
-              ) : null}
-
-              {displayedSections.map(({ section, sectionIndex, filteredBlocks, flaggedCount, removedCount, totalRemaining }) => (
-                <div
-                  key={`${section.title}-${sectionIndex}`}
-                  ref={(node) => { sectionRefs.current[sectionIndex] = node; }}
-                  className="mb-4 rounded-[14px] border border-[#e2e8f0] bg-white p-4"
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {isEditable && !isApplied ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedSections.has(sectionIndex)}
-                          onChange={() => setSelectedSections((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(sectionIndex)) next.delete(sectionIndex);
-                            else next.add(sectionIndex);
-                            return next;
-                          })}
-                          className="h-4 w-4"
-                        />
-                      ) : null}
-                      <Badge variant="outline">Section {sectionIndex + 1}</Badge>
-                      {flaggedCount > 0 ? <Badge variant="destructive">{flaggedCount} flagged</Badge> : <Badge variant="secondary">Clean</Badge>}
-                      {removedCount > 0 ? <Badge variant="outline">{removedCount} removed</Badge> : null}
+            <TabsContent value="overview" className="mt-0">
+              <TeacherSectionCard
+                title="Extraction Details"
+                description="Review the module title, context, and cleanup notes before moving into the content blocks."
+                className="rounded-[1.55rem]"
+                contentClassName="p-5 md:p-6"
+              >
+                <div className="grid gap-5">
+                  {extraction.reviewRequired ? (
+                    <div className="rounded-[1.2rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                      Teacher review is still required before apply.
                     </div>
-                    <span className="text-xs text-[var(--teacher-text-muted)]">{totalRemaining} remaining block{totalRemaining === 1 ? '' : 's'}</span>
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <Input value={section.title} onChange={(event) => updateSection(sectionIndex, { title: event.target.value })} disabled={!isEditable || isApplied} />
-                    <Textarea value={section.description || ''} onChange={(event) => updateSection(sectionIndex, { description: event.target.value })} disabled={!isEditable || isApplied} rows={2} />
-                  </div>
-                  {totalRemaining === 0 ? <p className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 px-3 py-2 text-xs text-yellow-800">This section has zero remaining lesson blocks after removals.</p> : null}
-                  <div className="mt-3 space-y-3">
-                    {filteredBlocks.length === 0 ? <p className="rounded-md border border-dashed border-[#cbd5e1] bg-[var(--student-surface-soft)] p-3 text-xs text-[var(--teacher-text-muted)]">No blocks match the current search/filter in this section.</p> : null}
+                  ) : null}
+                  {extraction.qualityGate === 'fail' ? (
+                    <div className="rounded-[1.2rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                      Extraction quality is too low to apply. Rerun or revise the text before continuing.
+                    </div>
+                  ) : null}
 
-                    {filteredBlocks.map((entry) => (
-                      <div
-                        key={entry.key}
-                        ref={(node) => { blockRefs.current[entry.key] = node; }}
-                        tabIndex={0}
-                        onFocus={() => setFocusedBlockKey(entry.key)}
-                        className={`rounded-[10px] border bg-[var(--student-surface-soft)] p-3 outline-none transition ${focusedBlockKey === entry.key ? 'border-sky-400 ring-2 ring-sky-100' : 'border-[#e2e8f0]'}`}
-                      >
-                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline">{BLOCK_LABEL[entry.block.type] || entry.block.type}</Badge>
-                            {entry.cues.includes('no-content') ? <Badge variant="destructive">No content</Badge> : null}
-                            {entry.cues.includes('very-short') ? <Badge variant="outline">Very short</Badge> : null}
-                            {entry.cues.includes('duplicate') ? <Badge variant="outline">Duplicate</Badge> : null}
-                            {entry.cues.includes('low-confidence') ? <Badge variant="secondary">Low confidence</Badge> : null}
-                          </div>
-                          {canMutateBlocks ? <Button variant="ghost" size="sm" onClick={() => removeBlock(entry.key)}><Trash2 className="mr-1 h-4 w-4" />Remove (R)</Button> : null}
-                        </div>
-                        {entry.block.type === 'image' ? (
-                          <div className="rounded-md border border-[#cbd5e1] bg-white p-2">
-                            {blockImageUrl(entry.block) ? <img src={blockImageUrl(entry.block) || ''} alt="Extracted visual" className="mb-2 max-h-56 w-full rounded-md border border-[#cbd5e1] object-contain bg-white" /> : null}
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--teacher-text-muted)]">
-                              {blockImageCaption(entry.block) ? <span>{blockImageCaption(entry.block)}</span> : null}
-                              {blockImageMeta(entry.block).page ? <Badge variant="secondary">Page {blockImageMeta(entry.block).page}</Badge> : null}
-                              {blockImageMeta(entry.block).confidence !== null ? <Badge variant="outline">Confidence {Math.round((blockImageMeta(entry.block).confidence || 0) * 100)}%</Badge> : null}
-                            </div>
-                          </div>
-                        ) : (
-                          <Textarea value={blockText(entry.block)} onChange={(event) => updateBlock(entry.sectionIndex, entry.blockIndex, { content: { text: event.target.value } })} disabled={!isEditable || isApplied} rows={entry.block.type === 'divider' ? 1 : 3} className="font-mono text-sm" />
-                        )}
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Title</Label>
+                    <Input
+                      value={editTitle}
+                      onChange={(event) => {
+                        setEditTitle(event.target.value);
+                        setDirty(true);
+                      }}
+                      className="teacher-input h-12 rounded-2xl"
+                      disabled={!canMutate}
+                    />
                   </div>
-                  <div className="mt-3 rounded-[10px] border border-[#e2e8f0] bg-white p-3">
-                    <div className="mb-2 flex items-center justify-between"><span className="text-sm font-semibold">Assessment Draft</span>{isEditable && !isApplied && !section.assessmentDraft ? <Button variant="outline" size="sm" onClick={() => updateSection(sectionIndex, { assessmentDraft: { title: `${section.title} Checkpoint`, description: '', type: 'quiz', passingScore: 60, feedbackLevel: 'standard', questions: [] } })}>Add Draft</Button> : null}</div>
-                    {!section.assessmentDraft ? (
-                      <p className="text-xs text-[var(--teacher-text-muted)]">
-                        No draft assessment for this section.
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Description</Label>
+                    <RichTextEditor
+                      value={editDescription}
+                      onChange={(value) => {
+                        setEditDescription(value);
+                        setDirty(true);
+                      }}
+                      minHeight={240}
+                      placeholder="Write the module overview, goals, and the learning context teachers should keep."
+                    />
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">Quality gate</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--teacher-text-strong)]">{extraction.qualityGate || 'pending'}</p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">Coherence</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--teacher-text-strong)]">
+                        {typeof extraction.structuredContent?.audit?.coherenceScore === 'number'
+                          ? `${Math.round((extraction.structuredContent.audit.coherenceScore || 0) * 100)}%`
+                          : '--'}
                       </p>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          value={section.assessmentDraft.title || ''}
-                          onChange={(event) =>
-                            updateSection(sectionIndex, {
-                              assessmentDraft: { ...section.assessmentDraft!, title: event.target.value },
-                            })
-                          }
-                          disabled={!isEditable || isApplied}
-                        />
-                        <Textarea
-                          value={section.assessmentDraft.description || ''}
-                          onChange={(event) =>
-                            updateSection(sectionIndex, {
-                              assessmentDraft: {
-                                ...section.assessmentDraft!,
-                                description: event.target.value,
-                              },
-                            })
-                          }
-                          disabled={!isEditable || isApplied}
-                          rows={2}
-                        />
-                        <p className="text-xs text-[var(--teacher-text-muted)]">
-                          Questions: {section.assessmentDraft.questions?.length || 0}
-                        </p>
-                        <div className="space-y-1">
-                          {section.assessmentDraft.questions?.slice(0, 3).map((question, questionIndex) => (
-                            <div
-                              key={`${sectionIndex}-question-${questionIndex}`}
-                              className="flex items-center justify-between rounded-md border border-[#e2e8f0] bg-[var(--student-surface-soft)] px-2 py-1 text-xs"
-                            >
-                              <span className="min-w-0 flex-1 pr-2">
-                                <RichTextRenderer html={question.content || '<p>No question content.</p>'} />
-                              </span>
-                              {question.imageUrl ? <Badge variant="outline">Image linked</Badge> : <Badge variant="secondary">No image</Badge>}
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">Requested sections</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--teacher-text-strong)]">
+                        {typeof requestedSectionCount === 'number' ? requestedSectionCount : '--'}
+                      </p>
+                    </div>
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-3">
+                      <p className="text-[11px] font-black uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">Final sections</p>
+                      <p className="mt-2 text-lg font-semibold text-[var(--teacher-text-strong)]">
+                        {typeof finalSectionCount === 'number' ? finalSectionCount : visibleSections.length}
+                      </p>
+                      {sectionCountAdjustmentReason ? (
+                        <p className="mt-2 text-xs text-[var(--teacher-text-muted)]">{sectionCountAdjustmentReason}</p>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {reviewNotes.length > 0 ? (
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-[var(--teacher-accent)]" />
+                        <p className="text-sm font-black text-[var(--teacher-text-strong)]">Repair notes</p>
                       </div>
-                    )}
+                      <div className="mt-3 space-y-2">
+                        {reviewNotes.map((note) => (
+                          <div
+                            key={note}
+                            className="rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-2 text-sm text-[var(--teacher-text-strong)]"
+                          >
+                            {note}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {coherenceWarnings.length > 0 ? (
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-4">
+                      <p className="text-sm font-black text-[var(--teacher-text-strong)]">Coherence warnings</p>
+                      <div className="mt-3 space-y-2">
+                        {coherenceWarnings.map((warning) => (
+                          <div
+                            key={warning}
+                            className="rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-2 text-sm text-[var(--teacher-text-strong)]"
+                          >
+                            {warning}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {hiddenLegacyMediaNotice ? (
+                    <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-3 text-sm text-[var(--teacher-text-muted)]">
+                      {hiddenLegacyMediaNotice}
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.2rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-3">
+                    <p className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                      {saving ? 'Saving extraction changes...' : dirty ? 'Unsaved changes. Save before apply.' : 'All extraction changes saved.'}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </TeacherSectionCard>
+            </TabsContent>
 
+            <TabsContent value="content" className="mt-0">
+              <TeacherSectionCard
+                title={`Content Blocks (${visibleSections.reduce((total, section) => total + section.visibleBlocks.length, 0)})`}
+                description="Review one section at a time. Click a block card to edit it in place and keep the page focused."
+                className="rounded-[1.55rem]"
+              >
+                <div className="space-y-4">
+                  {visibleSections.map((section, sectionIndex) => (
+                    <div
+                      key={`section-${sectionIndex}`}
+                      className="rounded-[1.45rem] border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] p-4"
+                    >
+                      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {canMutate ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedSections.has(sectionIndex)}
+                              onChange={() => {
+                                setSelectedSections((current) => {
+                                  const next = new Set(current);
+                                  if (next.has(sectionIndex)) next.delete(sectionIndex);
+                                  else next.add(sectionIndex);
+                                  return next;
+                                });
+                              }}
+                              className="h-4 w-4"
+                            />
+                          ) : null}
+                          <Badge variant="outline">Section {sectionIndex + 1}</Badge>
+                          {section.confidence !== null && section.confidence !== undefined ? (
+                            <Badge variant="secondary">{Math.round(section.confidence * 100)}% confidence</Badge>
+                          ) : null}
+                        </div>
+                        <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                          {section.visibleBlocks.length} visible block{section.visibleBlocks.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)]">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Section title</Label>
+                          <Input
+                            value={section.title}
+                            onChange={(event) => updateSection(sectionIndex, { title: event.target.value })}
+                            className="teacher-input h-12 rounded-2xl"
+                            disabled={!canMutate}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Section description</Label>
+                          <Textarea
+                            value={section.description || ''}
+                            onChange={(event) => updateSection(sectionIndex, { description: event.target.value })}
+                            className="teacher-input min-h-[88px] rounded-2xl"
+                            disabled={!canMutate}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        {section.visibleBlocks.length === 0 ? (
+                          <div className="rounded-[1.2rem] border border-dashed border-[var(--teacher-outline)] bg-white/60 px-4 py-5 text-sm text-[var(--teacher-text-muted)]">
+                            No visible text blocks remain in this section.
+                          </div>
+                        ) : null}
+
+                        {section.visibleBlocks.map(({ block, originalIndex }, blockIndex) => {
+                          const blockKey = `section-${sectionIndex}-block-${originalIndex}`;
+                          const lessonBlock = toLessonBlock(block, sectionIndex, originalIndex);
+                          const isEditing = editingBlockKey === blockKey;
+                          const canClickToEdit = canMutate && block.type !== 'divider' && !isEditing;
+                          const canMoveUp = originalIndex > 0;
+                          const canMoveDown = originalIndex < editSections[sectionIndex].lessonBlocks.length - 1;
+
+                          return (
+                            <div key={blockKey} className="group space-y-2">
+                              <Card
+                                role={canClickToEdit ? 'button' : undefined}
+                                tabIndex={canClickToEdit ? 0 : undefined}
+                                aria-label={canClickToEdit ? `Edit ${block.type} block ${blockIndex + 1}` : undefined}
+                                onClick={(event) => {
+                                  if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                                  setEditingBlockKey(blockKey);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (!canClickToEdit || isNestedInteractiveTarget(event)) return;
+                                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                                  event.preventDefault();
+                                  setEditingBlockKey(blockKey);
+                                }}
+                                className={cn(
+                                  'overflow-hidden rounded-[1.45rem] border bg-white shadow-[0_18px_44px_-36px_rgba(15,23,42,0.24)]',
+                                  'border-[var(--teacher-outline)]',
+                                  canClickToEdit
+                                    ? 'cursor-pointer transition hover:border-[var(--teacher-accent)]/28 hover:shadow-[0_24px_48px_-36px_rgba(15,23,42,0.28)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--teacher-accent)]/30 focus-visible:ring-offset-2'
+                                    : '',
+                                )}
+                              >
+                                <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
+                                  <div className="flex flex-1 items-start gap-4">
+                                    <div className="flex min-w-[62px] flex-col items-center gap-2 rounded-2xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-3 text-xs font-black text-[var(--teacher-text-muted)]">
+                                      <span>#{blockIndex + 1}</span>
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-50 text-rose-700">
+                                          {block.type}
+                                        </Badge>
+                                        <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                                          {isEditing ? 'Editing in place' : block.type === 'divider' ? 'Section divider' : 'Click block to edit'}
+                                        </span>
+                                      </div>
+                                      {isEditing ? (
+                                        <LessonBlockTeacherEditor
+                                          block={lessonBlock}
+                                          classId={extraction.classId}
+                                          onSave={(patch) => {
+                                            updateBlock(sectionIndex, originalIndex, {
+                                              content: patch.content,
+                                              metadata: patch.metadata,
+                                            });
+                                            setEditingBlockKey(null);
+                                          }}
+                                          onCancel={() => setEditingBlockKey(null)}
+                                        />
+                                      ) : (
+                                        <LessonBlockTeacherPreview block={lessonBlock} />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {!isEditing ? (
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="rounded-xl border-[var(--teacher-outline)] bg-white font-black text-[var(--teacher-text-strong)] hover:bg-[var(--teacher-surface-soft)]"
+                                        onClick={() => setEditingBlockKey(blockKey)}
+                                        disabled={!canMutate || block.type === 'divider'}
+                                      >
+                                        <PencilLine className="mr-1 h-3.5 w-3.5" />
+                                        Edit
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="rounded-xl border-[var(--teacher-outline)] bg-white text-[var(--teacher-text-muted)] hover:bg-[var(--teacher-surface-soft)]"
+                                      aria-label={`Move block ${blockIndex + 1} up`}
+                                      disabled={!canMutate || !canMoveUp}
+                                      onClick={() => moveBlock(sectionIndex, originalIndex, 'up')}
+                                    >
+                                      <ChevronUp className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      className="rounded-xl border-[var(--teacher-outline)] bg-white text-[var(--teacher-text-muted)] hover:bg-[var(--teacher-surface-soft)]"
+                                      aria-label={`Move block ${blockIndex + 1} down`}
+                                      disabled={!canMutate || !canMoveDown}
+                                      onClick={() => moveBlock(sectionIndex, originalIndex, 'down')}
+                                    >
+                                      <ChevronDown className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl border-rose-200 bg-white font-black text-rose-600 hover:bg-rose-50"
+                                      onClick={() => removeBlock(sectionIndex, originalIndex)}
+                                      disabled={!canMutate}
+                                    >
+                                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {section.assessmentDraft ? (
+                        <div className="mt-4 rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-black text-[var(--teacher-text-strong)]">Assessment Draft</p>
+                            <Badge variant="secondary">
+                              {section.assessmentDraft.questions?.length || 0} question{(section.assessmentDraft.questions?.length || 0) === 1 ? '' : 's'}
+                            </Badge>
+                          </div>
+                          <p className="mt-2 text-sm text-[var(--teacher-text-muted)]">
+                            {section.assessmentDraft.title || `${section.title} Checkpoint`}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </TeacherSectionCard>
+            </TabsContent>
+          </Tabs>
         </div>
-      </TeacherSectionCard>
+      )}
 
       <Dialog open={showApplyDialog} onOpenChange={setShowApplyDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Apply Extraction</DialogTitle>
             <DialogDescription>
-              This creates one hidden+locked module with <strong>{selectedSections.size}</strong> section(s) as draft lessons and optional draft assessments.
+              This will apply {selectedSections.size} selected section{selectedSections.size === 1 ? '' : 's'} as draft lesson content.
             </DialogDescription>
           </DialogHeader>
-          {dirty ? <p className="text-sm text-yellow-700">Unsaved edits are not included unless you save first.</p> : null}
-          {removedBlockKeys.size > 0 ? <p className="text-sm text-[var(--teacher-text-muted)]">{removedBlockKeys.size} block(s) are marked removed and will only be applied after Save.</p> : null}
-          {emptyAfterRemovalSectionCount > 0 ? <p className="text-sm text-yellow-700">{emptyAfterRemovalSectionCount} section(s) currently have zero remaining lesson blocks.</p> : null}
+          {applyBlockedReason ? (
+            <p className="text-sm text-amber-700">{applyBlockedReason}</p>
+          ) : (
+            <p className="text-sm text-[var(--teacher-text-muted)]">
+              Continue only after you are satisfied with the extracted structure and cleanup notes.
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowApplyDialog(false)}>Cancel</Button>
-            <Button onClick={handleApply} disabled={applying}>{applying ? 'Applying...' : 'Confirm & Apply'}</Button>
+            <Button type="button" variant="outline" onClick={() => setShowApplyDialog(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void handleApply()} disabled={Boolean(applyBlockedReason) || applying}>
+              {applying ? 'Applying...' : 'Confirm & Apply'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
-      <style jsx>{`
-        .review-scrollbar {
-          scrollbar-width: thin;
-          scrollbar-color: #94a3b8 #e2e8f0;
-        }
-        .review-scrollbar::-webkit-scrollbar {
-          width: 10px;
-        }
-        .review-scrollbar::-webkit-scrollbar-track {
-          background: #e2e8f0;
-          border-radius: 8px;
-        }
-        .review-scrollbar::-webkit-scrollbar-thumb {
-          background: #94a3b8;
-          border-radius: 8px;
-          border: 2px solid #e2e8f0;
-        }
-        .review-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
-        }
-      `}</style>
     </TeacherPageShell>
   );
 }

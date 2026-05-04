@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
@@ -250,13 +250,13 @@ describe('AuthService', () => {
       );
     });
 
-    it('should return silently (no exception) when email does not exist', async () => {
+    it('should throw when email does not exist and skip OTP dispatch', async () => {
       mockUsersService.findByEmail.mockResolvedValue(null);
 
       // Must NOT throw — prevents account enumeration
       await expect(
         service.requestPasswordReset('nobody@example.com'),
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow(NotFoundException);
 
       expect(mockOtpService.createAndSendOTP).not.toHaveBeenCalled();
     });

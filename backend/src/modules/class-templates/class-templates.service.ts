@@ -81,11 +81,20 @@ type CanonicalTemplateAssessment = {
     isRequired: boolean;
     explanation: string | null;
     imageUrl: string | null;
+    imageDisplayMode: 'default' | 'expanded';
+    imageZoom: number;
+    imagePositionX: number;
+    imagePositionY: number;
     options: Array<{
       id: string;
       text: string;
       isCorrect: boolean;
       order: number;
+      imageUrl: string | null;
+      imageDisplayMode: 'default' | 'expanded';
+      imageZoom: number;
+      imagePositionX: number;
+      imagePositionY: number;
     }>;
   }>;
 };
@@ -165,6 +174,40 @@ export class ClassTemplatesService {
     }
     seen.add(next);
     return next;
+  }
+
+  private normalizeImageDisplayMode(value: unknown): 'default' | 'expanded' {
+    return value === 'expanded' ? 'expanded' : 'default';
+  }
+
+  private normalizeImageZoom(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 100;
+    return Math.min(Math.max(parsed, 50), 200);
+  }
+
+  private normalizeImagePosition(value: unknown) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return 50;
+    return Math.min(Math.max(parsed, 0), 100);
+  }
+
+  private buildImageMetadata(
+    existing: Record<string, unknown> | null | undefined,
+    imageUrl?: unknown,
+    imageDisplayMode?: unknown,
+    imageZoom?: unknown,
+    imagePositionX?: unknown,
+    imagePositionY?: unknown,
+  ) {
+    return {
+      ...(existing && typeof existing === 'object' ? existing : {}),
+      ...(typeof imageUrl === 'string' ? { imageUrl } : {}),
+      imageDisplayMode: this.normalizeImageDisplayMode(imageDisplayMode),
+      imageZoom: this.normalizeImageZoom(imageZoom),
+      imagePositionX: this.normalizeImagePosition(imagePositionX),
+      imagePositionY: this.normalizeImagePosition(imagePositionY),
+    };
   }
 
   private normalizeModuleItemIdentifiers(
@@ -307,11 +350,24 @@ export class ClassTemplatesService {
           ? sanitizeRichTextHtml(question.explanation)
           : null,
         imageUrl: question.imageUrl ?? null,
+        imageDisplayMode: this.normalizeImageDisplayMode(
+          question.imageDisplayMode,
+        ),
+        imageZoom: this.normalizeImageZoom(question.imageZoom),
+        imagePositionX: this.normalizeImagePosition(question.imagePositionX),
+        imagePositionY: this.normalizeImagePosition(question.imagePositionY),
         options: (question.options ?? []).map((option, optionIndex) => ({
           id: this.coerceOptionalUuid(option.id) ?? randomUUID(),
           text: option.text ?? '',
           isCorrect: option.isCorrect ?? false,
           order: option.order ?? optionIndex + 1,
+          imageUrl: option.imageUrl ?? null,
+          imageDisplayMode: this.normalizeImageDisplayMode(
+            option.imageDisplayMode,
+          ),
+          imageZoom: this.normalizeImageZoom(option.imageZoom),
+          imagePositionX: this.normalizeImagePosition(option.imagePositionX),
+          imagePositionY: this.normalizeImagePosition(option.imagePositionY),
         })),
       })),
     }));
@@ -496,16 +552,21 @@ export class ClassTemplatesService {
           content: question.content,
           points: question.points,
           order: question.order,
-          isRequired: question.isRequired,
-          explanation: question.explanation,
-          imageUrl: question.imageUrl,
-          options: question.options.map((option) => ({
-            id: option.id,
-            text: option.text,
-            isCorrect: option.isCorrect,
-            order: option.order,
-          })),
+        isRequired: question.isRequired,
+        explanation: question.explanation,
+        imageUrl: question.imageUrl,
+        imageDisplayMode: question.imageDisplayMode,
+        imageZoom: question.imageZoom,
+        options: question.options.map((option) => ({
+          id: option.id,
+          text: option.text,
+          isCorrect: option.isCorrect,
+          order: option.order,
+          imageUrl: option.imageUrl,
+          imageDisplayMode: option.imageDisplayMode,
+          imageZoom: option.imageZoom,
         })),
+      })),
       })),
     );
 
@@ -803,11 +864,40 @@ export class ClassTemplatesService {
         isRequired: question.isRequired,
         explanation: question.explanation,
         imageUrl: question.imageUrl,
+        imageDisplayMode: this.normalizeImageDisplayMode(
+          (question.metadata as JsonRecord | undefined)?.imageDisplayMode,
+        ),
+        imageZoom: this.normalizeImageZoom(
+          (question.metadata as JsonRecord | undefined)?.imageZoom,
+        ),
+        imagePositionX: this.normalizeImagePosition(
+          (question.metadata as JsonRecord | undefined)?.imagePositionX,
+        ),
+        imagePositionY: this.normalizeImagePosition(
+          (question.metadata as JsonRecord | undefined)?.imagePositionY,
+        ),
         options: (optionsByQuestion.get(question.id) ?? []).map((option) => ({
           id: option.id,
           text: option.text,
           isCorrect: option.isCorrect,
           order: option.order,
+          imageUrl:
+            typeof (option.metadata as JsonRecord | undefined)?.imageUrl ===
+            'string'
+              ? ((option.metadata as JsonRecord).imageUrl as string)
+              : null,
+          imageDisplayMode: this.normalizeImageDisplayMode(
+            (option.metadata as JsonRecord | undefined)?.imageDisplayMode,
+          ),
+          imageZoom: this.normalizeImageZoom(
+            (option.metadata as JsonRecord | undefined)?.imageZoom,
+          ),
+          imagePositionX: this.normalizeImagePosition(
+            (option.metadata as JsonRecord | undefined)?.imagePositionX,
+          ),
+          imagePositionY: this.normalizeImagePosition(
+            (option.metadata as JsonRecord | undefined)?.imagePositionY,
+          ),
         })),
       });
     }
@@ -962,28 +1052,42 @@ export class ClassTemplatesService {
                 templateAssessmentId: assessment.id,
                 type: question.type,
                 content: question.content,
-                points: question.points,
-                order: question.order,
-                isRequired: question.isRequired,
-                explanation: question.explanation,
-                imageUrl: question.imageUrl,
-                metadata: {},
+              points: question.points,
+              order: question.order,
+              isRequired: question.isRequired,
+              explanation: question.explanation,
+              imageUrl: question.imageUrl,
+              metadata: this.buildImageMetadata(
+                undefined,
+                undefined,
+                question.imageDisplayMode,
+                question.imageZoom,
+                question.imagePositionX,
+                question.imagePositionY,
+              ),
+            })),
+          );
+
+          for (const question of assessment.questions) {
+            if (question.options.length === 0) continue;
+            await tx.insert(classTemplateAssessmentQuestionOptions).values(
+              question.options.map((option) => ({
+                id: option.id,
+                templateAssessmentQuestionId: question.id,
+                text: option.text,
+                isCorrect: option.isCorrect,
+                order: option.order,
+                metadata: this.buildImageMetadata(
+                  undefined,
+                  option.imageUrl,
+                  option.imageDisplayMode,
+                  option.imageZoom,
+                  option.imagePositionX,
+                  option.imagePositionY,
+                ),
               })),
             );
-
-            for (const question of assessment.questions) {
-              if (question.options.length === 0) continue;
-              await tx.insert(classTemplateAssessmentQuestionOptions).values(
-                question.options.map((option) => ({
-                  id: option.id,
-                  templateAssessmentQuestionId: question.id,
-                  text: option.text,
-                  isCorrect: option.isCorrect,
-                  order: option.order,
-                  metadata: {},
-                })),
-              );
-            }
+          }
           }
         }
       }
@@ -1265,11 +1369,39 @@ export class ClassTemplatesService {
             isRequired: this.coerceBoolean(question.isRequired, true),
             explanation: this.coerceString(question.explanation, ''),
             imageUrl: this.coerceString(question.imageUrl, ''),
+            imageDisplayMode: this.normalizeImageDisplayMode(
+              (question.metadata as JsonRecord | undefined)?.imageDisplayMode,
+            ),
+            imageZoom: this.normalizeImageZoom(
+              (question.metadata as JsonRecord | undefined)?.imageZoom,
+            ),
+            imagePositionX: this.normalizeImagePosition(
+              (question.metadata as JsonRecord | undefined)?.imagePositionX,
+            ),
+            imagePositionY: this.normalizeImagePosition(
+              (question.metadata as JsonRecord | undefined)?.imagePositionY,
+            ),
             options: (question.options ?? []).map((option: any) => ({
               id: option.id,
               text: this.coerceString(option.text),
               isCorrect: this.coerceBoolean(option.isCorrect, false),
               order: this.coerceNumber(option.order, 0),
+              imageUrl: this.coerceString(
+                (option.metadata as JsonRecord | undefined)?.imageUrl,
+                '',
+              ),
+              imageDisplayMode: this.normalizeImageDisplayMode(
+                (option.metadata as JsonRecord | undefined)?.imageDisplayMode,
+              ),
+              imageZoom: this.normalizeImageZoom(
+                (option.metadata as JsonRecord | undefined)?.imageZoom,
+              ),
+              imagePositionX: this.normalizeImagePosition(
+                (option.metadata as JsonRecord | undefined)?.imagePositionX,
+              ),
+              imagePositionY: this.normalizeImagePosition(
+                (option.metadata as JsonRecord | undefined)?.imagePositionY,
+              ),
             })),
           })),
         })),
@@ -1363,11 +1495,31 @@ export class ClassTemplatesService {
             isRequired: question.isRequired ?? true,
             explanation: question.explanation ?? null,
             imageUrl: question.imageUrl ?? null,
+            imageDisplayMode: this.normalizeImageDisplayMode(
+              (question as Record<string, unknown>).imageDisplayMode,
+            ),
+            imageZoom: this.normalizeImageZoom(
+              (question as Record<string, unknown>).imageZoom,
+            ),
+            imagePositionX: this.normalizeImagePosition(
+              (question as Record<string, unknown>).imagePositionX,
+            ),
+            imagePositionY: this.normalizeImagePosition(
+              (question as Record<string, unknown>).imagePositionY,
+            ),
             options: (question.options ?? []).map((option: any) => ({
               id: option.id,
               text: option.text ?? '',
               isCorrect: option.isCorrect ?? false,
               order: option.order ?? 0,
+              imageUrl:
+                typeof option.imageUrl === 'string' ? option.imageUrl : null,
+              imageDisplayMode: this.normalizeImageDisplayMode(
+                option.imageDisplayMode,
+              ),
+              imageZoom: this.normalizeImageZoom(option.imageZoom),
+              imagePositionX: this.normalizeImagePosition(option.imagePositionX),
+              imagePositionY: this.normalizeImagePosition(option.imagePositionY),
             })),
           })),
         })),
@@ -1588,7 +1740,14 @@ export class ClassTemplatesService {
               isRequired: question.isRequired,
               explanation: question.explanation ?? null,
               imageUrl: question.imageUrl ?? null,
-              metadata: {},
+              metadata: this.buildImageMetadata(
+                undefined,
+                undefined,
+                question.imageDisplayMode,
+                question.imageZoom,
+                question.imagePositionX,
+                question.imagePositionY,
+              ),
             })),
           );
 
@@ -1601,7 +1760,14 @@ export class ClassTemplatesService {
                 text: option.text,
                 isCorrect: option.isCorrect,
                 order: option.order,
-                metadata: {},
+                metadata: this.buildImageMetadata(
+                  undefined,
+                  option.imageUrl,
+                  option.imageDisplayMode,
+                  option.imageZoom,
+                  option.imagePositionX,
+                  option.imagePositionY,
+                ),
               })),
             );
           }

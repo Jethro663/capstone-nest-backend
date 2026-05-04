@@ -8,9 +8,12 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-
-const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
-const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
+import {
+  ADDRESS_REGEX,
+  PERSON_NAME_REGEX,
+  PH_MOBILE_REGEX,
+  trimValue,
+} from '../../../common/validation/input-policy';
 
 export class UpdateProfileDto {
   @ApiProperty({ example: 'Juan', required: false })
@@ -28,7 +31,11 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(30)
-  @Transform(({ value }: { value: string }) => value?.trim())
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Middle name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value: string }) => trimValue(value))
   middleName?: string;
 
   @ApiProperty({ example: 'Dela Cruz', required: false })
@@ -80,12 +87,22 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   @MaxLength(180)
+  @Matches(ADDRESS_REGEX, {
+    message:
+      'Address may only contain letters, numbers, spaces, commas, periods, number signs, apostrophes, hyphens, and slashes',
+  })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   address?: string;
 
   @ApiProperty({ example: 'Dela Cruz', required: false })
   @IsOptional()
   @IsString()
   @MaxLength(80)
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Guardian name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   familyName?: string;
 
   @ApiProperty({

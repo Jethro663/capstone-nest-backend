@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { HTMLAttributes } from 'react';
 import { TeacherClassRecordWorkbook } from './TeacherClassRecordWorkbook';
 import type { TeacherClassRecordState } from '@/hooks/use-teacher-class-record';
@@ -60,6 +60,7 @@ function createState(): TeacherClassRecordState {
               title: 'WW1',
               hps: 20,
               order: 1,
+              assessmentId: 'assessment-1',
             },
           ],
         },
@@ -74,6 +75,7 @@ function createState(): TeacherClassRecordState {
               title: 'PT1',
               hps: 30,
               order: 1,
+              assessmentId: 'assessment-2',
             },
           ],
         },
@@ -88,6 +90,7 @@ function createState(): TeacherClassRecordState {
               title: 'QA1',
               hps: 50,
               order: 1,
+              assessmentId: 'assessment-3',
             },
           ],
         },
@@ -206,5 +209,19 @@ describe('TeacherClassRecordWorkbook', () => {
     expect(screen.getByText('Lopez, Ben')).toBeInTheDocument();
     expect(screen.getByText('Removed')).toBeInTheDocument();
     expect(screen.getByText('Finalize Quarter')).toBeInTheDocument();
+  });
+
+  it('offers a sync selector and sync action in one click flow', () => {
+    const state = createState();
+    render(<TeacherClassRecordWorkbook state={state} />);
+
+    expect(screen.getByRole('combobox')).toHaveValue('item-1');
+    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled();
+
+    const syncDropdown = screen.getByLabelText('Sync assessment');
+    fireEvent.change(syncDropdown, { target: { value: 'item-2' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sync' }));
+    expect(state.syncItem).toHaveBeenCalledWith('item-2');
   });
 });

@@ -320,14 +320,14 @@ export class AuthController {
   @ApiOperation({ summary: 'Request a password reset OTP' })
   @ApiResponse({
     status: 200,
-    description: 'If an account exists, a reset code was sent',
+    description: 'Reset code sent',
   })
+  @ApiResponse({ status: 404, description: 'Account does not exist' })
   async forgotPassword(@Body() dto: ForgotPasswordDto) {
     await this.authService.requestPasswordReset(dto.email);
     return {
       success: true,
-      message:
-        'If an account with that email exists, a reset code has been sent.',
+      message: 'Reset code sent successfully.',
     };
   }
 

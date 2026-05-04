@@ -142,14 +142,14 @@ describe('mobile screen flow helpers', () => {
   });
 
   it('keeps all student web parity routes reachable in mobile', () => {
-    expect(studentParityRouteInventory).toHaveLength(19);
+    expect(studentParityRouteInventory).toHaveLength(20);
   });
 
   it('declares the support route inventory separately from parity routes', () => {
     expect(studentSupportRouteInventory.map((entry) => entry.name)).toEqual(studentSupportRouteNames);
   });
 
-  it('resolves dev login seed only in development with complete credentials', () => {
+  it('resolves login seed in development and only allows non-dev seeds when explicitly enabled', () => {
     expect(
       resolveDevLoginSeed({
         isDev: true,
@@ -171,6 +171,20 @@ describe('mobile screen flow helpers', () => {
         autoLogin: true,
       }),
     ).toBeNull();
+
+    expect(
+      resolveDevLoginSeed({
+        isDev: false,
+        allowNonDevSeed: true,
+        email: ' seed@student.local ',
+        password: 'Student123!',
+        autoLogin: '1',
+      }),
+    ).toEqual({
+      email: 'seed@student.local',
+      password: 'Student123!',
+      autoLogin: true,
+    });
 
     expect(
       resolveDevLoginSeed({

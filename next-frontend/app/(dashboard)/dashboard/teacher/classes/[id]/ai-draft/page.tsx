@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Bot,
   CheckCircle2,
   Clock3,
@@ -24,6 +26,10 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogConfig,
+} from '@/components/shared/ConfirmationDialog';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
@@ -236,6 +242,8 @@ export default function TeacherAiDraftQuizPage() {
   const [reindexing, setReindexing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [readinessLoading, setReadinessLoading] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<ConfirmationDialogConfig | null>(null);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -403,7 +411,6 @@ export default function TeacherAiDraftQuizPage() {
       } catch (error) {
         if (!cancelled) {
           setIndexStatus(buildUnavailableIndexStatus(classId));
-          toast.error(getApiErrorMessage(error, 'Failed to load AI source readiness'));
         }
       }
     };
@@ -600,10 +607,16 @@ export default function TeacherAiDraftQuizPage() {
   const readinessUnavailable = Boolean(
     indexStatus?.reason?.includes('AI source readiness is temporarily unavailable'),
   );
+  const generationReady = Boolean(
+    indexStatus &&
+      indexStatus.chunksIndexed > 0 &&
+      !indexStatus.needsReindex &&
+      !readinessUnavailable,
+  );
   const canGenerate =
     !submitting &&
     !hasRunningJob &&
-    !readinessUnavailable &&
+    generationReady &&
     hasAnySource &&
     isQuestionCountValid &&
     (useAllSourcesWhenNoneSelected || hasManualSelection);
@@ -791,18 +804,10 @@ export default function TeacherAiDraftQuizPage() {
     }
   };
 
-  const handleDeleteDraft = async () => {
+  const runDeleteDraft = useCallback(async () => {
     const targetJobId = displayJob?.jobId ?? null;
     if (!targetJobId && !assessmentId) {
       toast.error('No draft or AI job is selected to remove.');
-      return;
-    }
-    const confirmed = window.confirm(
-      assessmentId
-        ? 'Delete this AI draft assessment and remove its AI job history from this workspace?'
-        : 'Cancel this AI generation job and remove it from this workspace?',
-    );
-    if (!confirmed) {
       return;
     }
 
@@ -833,6 +838,101 @@ export default function TeacherAiDraftQuizPage() {
     } finally {
       setDeleting(false);
     }
+  }, [
+    assessmentId,
+    classId,
+    displayJob?.jobId,
+    fetchReadiness,
+    refreshCurrentJob,
+    syncTrackedJobs,
+  ]);
+
+  const handleDeleteDraft = () => {
+    const targetJobId = displayJob?.jobId ?? null;
+    if (!targetJobId && !assessmentId) {
+      toast.error('No draft or AI job is selected to remove.');
+      return;
+    }
+
+    setDeleteDialog({
+      title: assessmentId ? 'Delete AI draft assessment?' : 'Remove AI draft job?',
+      description: assessmentId
+        ? 'This removes the draft assessment and clears the linked AI job from this workspace.'
+        : 'This cancels the selected AI generation job and removes it from this workspace.',
+      confirmLabel: assessmentId ? 'Delete draft' : 'Remove job',
+      cancelLabel: 'Keep draft',
+      tone: 'danger',
+      onConfirm: runDeleteDraft,
+    });
+  };
+
+  const persistQuizDraft = useCallback(
+    async (
+      nextDraft: QuizDraftStructuredOutput,
+      previousDraft: QuizDraftStructuredOutput,
+    ) => {
+      if (!currentJobId) {
+        return;
+      }
+      try {
+        setSavingDraft(true);
+        await aiService.updateQuizDraft(currentJobId, {
+          structuredOutput: nextDraft,
+        });
+      } catch (error) {
+        setResult(previousDraft);
+        toast.error(getApiErrorMessage(error, 'Failed to save quiz draft edits'));
+      } finally {
+        setSavingDraft(false);
+      }
+    },
+    [currentJobId],
+  );
+
+  const updatePreviewDraft = useCallback(
+    (updater: (draft: QuizDraftStructuredOutput) => QuizDraftStructuredOutput | null) => {
+      setResult((current) => {
+        if (!current) {
+          return current;
+        }
+        const nextDraft = updater(current);
+        if (!nextDraft) {
+          return current;
+        }
+        void persistQuizDraft(nextDraft, current);
+        return nextDraft;
+      });
+    },
+    [persistQuizDraft],
+  );
+
+  const handleRemoveQuestion = (questionIndex: number) => {
+    updatePreviewDraft((draft) => {
+      const nextQuestions = draft.questions.filter((_, index) => index !== questionIndex);
+      if (nextQuestions.length === draft.questions.length) {
+        return null;
+      }
+      return {
+        ...draft,
+        questions: nextQuestions,
+      };
+    });
+  };
+
+  const handleMoveQuestion = (questionIndex: number, direction: -1 | 1) => {
+    updatePreviewDraft((draft) => {
+      const targetIndex = questionIndex + direction;
+      if (targetIndex < 0 || targetIndex >= draft.questions.length) {
+        return null;
+      }
+      const nextQuestions = [...draft.questions];
+      const [moved] = nextQuestions.splice(questionIndex, 1);
+      nextQuestions.splice(targetIndex, 0, moved);
+      return {
+        ...draft,
+        questions: nextQuestions,
+      };
+    });
   };
 
   if (loading) {
@@ -905,7 +1005,7 @@ export default function TeacherAiDraftQuizPage() {
             <Button
               type="button"
               className="teacher-ai-draft__danger"
-              onClick={() => void handleDeleteDraft()}
+              onClick={handleDeleteDraft}
               disabled={!canDeleteCurrentDraft || deleting}
             >
               {deleting ? (
@@ -1272,7 +1372,9 @@ export default function TeacherAiDraftQuizPage() {
                   : readinessUnavailable
                     ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
                   : hasAnySource
-                    ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
+                    ? generationReady
+                      ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
+                      : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
                     : 'No source lessons or extractions are available for this class yet.'}
               </p>
             ) : null}
@@ -1490,6 +1592,16 @@ export default function TeacherAiDraftQuizPage() {
                 ))}
               </div>
 
+              <div className="teacher-ai-draft__preview-toolbar">
+                <p>
+                  Remove or reorder questions here, then open the full editor for deeper
+                  content changes.
+                </p>
+                <Badge variant={savingDraft ? 'outline' : 'secondary'}>
+                  {savingDraft ? 'Saving draft…' : 'Teacher controls ready'}
+                </Badge>
+              </div>
+
               <div className="teacher-ai-draft__question-list">
                 {result.questions.map((question, index) => (
                   <article
@@ -1501,7 +1613,35 @@ export default function TeacherAiDraftQuizPage() {
                         <span>Question {index + 1}</span>
                         <Badge variant="outline">{question.type}</Badge>
                       </div>
-                      <ArrowRight className="h-4 w-4" />
+                      <div className="teacher-ai-draft__question-actions">
+                        <Button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => handleMoveQuestion(index, -1)}
+                          disabled={savingDraft || index === 0}
+                          aria-label={`Move question ${index + 1} up`}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => handleMoveQuestion(index, 1)}
+                          disabled={savingDraft || index === result.questions.length - 1}
+                          aria-label={`Move question ${index + 1} down`}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          className="teacher-ai-draft__danger teacher-ai-draft__danger--question"
+                          onClick={() => handleRemoveQuestion(index)}
+                          disabled={savingDraft || result.questions.length <= 1}
+                          aria-label={`Remove question ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     <RichTextRenderer
                       html={question.content || '<p>Untitled question</p>'}
@@ -1556,6 +1696,10 @@ export default function TeacherAiDraftQuizPage() {
           </div>
         </section>
       </div>
+      <ConfirmationDialog
+        config={deleteDialog}
+        onClose={() => setDeleteDialog(null)}
+      />
     </div>
   );
 }

@@ -19,7 +19,7 @@ function buildMockDb() {
     query: {
       classes: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn() },
-      classModules: { findMany: jest.fn() },
+      classModules: { findMany: jest.fn(), findFirst: jest.fn() },
       uploadedFiles: { findMany: jest.fn(), findFirst: jest.fn() },
       lessonCompletions: { findMany: jest.fn() },
       assessmentAttempts: { findMany: jest.fn() },
@@ -233,6 +233,100 @@ describe('ContentModulesService', () => {
     expect(lockedModule?.completed).toBe(false);
   });
 
+  it('creates modules hidden and locked by default while honoring explicit create flags', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.classModules.findFirst
+      .mockResolvedValueOnce({
+        id: MODULE_ID,
+        classId: CLASS_ID,
+        title: 'New module',
+        description: null,
+        order: 1,
+        isVisible: false,
+        isLocked: true,
+        sections: [],
+        gradingScaleEntries: [],
+      })
+      .mockResolvedValueOnce({
+        id: 'module-explicit',
+        classId: CLASS_ID,
+        title: 'Explicit module',
+        description: null,
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        sections: [],
+        gradingScaleEntries: [],
+      });
+    mockSelectWhere(db, [{ maxOrder: 0 }]);
+    mockSelectWhere(db, [{ maxOrder: 0 }]);
+
+    const insertModuleReturningDefault = jest
+      .fn()
+      .mockResolvedValue([{ id: MODULE_ID }]);
+    const insertModuleValuesDefault = jest
+      .fn()
+      .mockReturnValue({ returning: insertModuleReturningDefault });
+    const insertSectionValuesDefault = jest.fn().mockResolvedValue(undefined);
+
+    const insertModuleReturningExplicit = jest
+      .fn()
+      .mockResolvedValue([{ id: 'module-explicit' }]);
+    const insertModuleValuesExplicit = jest
+      .fn()
+      .mockReturnValue({ returning: insertModuleReturningExplicit });
+    const insertSectionValuesExplicit = jest.fn().mockResolvedValue(undefined);
+
+    db.insert
+      .mockReturnValueOnce({ values: insertModuleValuesDefault })
+      .mockReturnValueOnce({ values: insertSectionValuesDefault })
+      .mockReturnValueOnce({ values: insertModuleValuesExplicit })
+      .mockReturnValueOnce({ values: insertSectionValuesExplicit });
+
+    await service.createModule(
+      {
+        classId: CLASS_ID,
+        title: 'New module',
+      },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(insertModuleValuesDefault).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classId: CLASS_ID,
+        title: 'New module',
+        order: 1,
+        isVisible: false,
+        isLocked: true,
+      }),
+    );
+
+    await service.createModule(
+      {
+        classId: CLASS_ID,
+        title: 'Explicit module',
+        isVisible: true,
+        isLocked: false,
+      },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(insertModuleValuesExplicit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        classId: CLASS_ID,
+        title: 'Explicit module',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+      }),
+    );
+  });
+
   it('persists lesson points on attach via metadata', async () => {
     db.query.moduleSections.findFirst.mockResolvedValue({
       id: SECTION_ID,
@@ -303,6 +397,52 @@ describe('ContentModulesService', () => {
         metadata: expect.objectContaining({ points: 25, note: 'existing' }),
       }),
     );
+  });
+
+  it('allows teachers to unlock a core template module through the release endpoint', async () => {
+    db.query.classModules.findFirst
+      .mockResolvedValueOnce({
+        id: MODULE_ID,
+        classId: CLASS_ID,
+        isCoreTemplateAsset: true,
+      })
+      .mockResolvedValueOnce({
+        id: MODULE_ID,
+        classId: CLASS_ID,
+        title: 'Default module',
+        description: null,
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        isCoreTemplateAsset: true,
+        sections: [],
+        gradingScaleEntries: [],
+      });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+
+    const returning = jest
+      .fn()
+      .mockResolvedValue([{ id: MODULE_ID, classId: CLASS_ID, isVisible: true, isLocked: false }]);
+    const where = jest.fn().mockReturnValue({ returning });
+    const set = jest.fn().mockReturnValue({ where });
+    db.update.mockReturnValueOnce({ set });
+
+    const result = await service.releaseCoreModule(
+      MODULE_ID,
+      { isLocked: false },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isLocked: false,
+      }),
+    );
+    expect(result.isLocked).toBe(false);
   });
 
   it('allows students to download a teacher-private file when it is attached to an accessible module item', async () => {

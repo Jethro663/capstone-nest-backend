@@ -10,9 +10,17 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { assessments, classes, lessons, users } from './base.schema';
+import {
+  assessments,
+  classes,
+  gradingPeriodEnum,
+  lessons,
+  questionTypeEnum,
+  users,
+} from './base.schema';
 
 export const interventionCaseStatusEnum = pgEnum('intervention_case_status', [
   'pending',
@@ -24,6 +32,18 @@ export const interventionCaseStatusEnum = pgEnum('intervention_case_status', [
 export const lxpAssignmentTypeEnum = pgEnum('lxp_assignment_type', [
   'lesson_review',
   'assessment_retry',
+  'generated_lesson_review',
+  'guided_assessment',
+]);
+
+export const lxpGeneratedArtifactStatusEnum = pgEnum(
+  'lxp_generated_artifact_status',
+  ['draft', 'approved', 'rejected'],
+);
+
+export const lxpGuidedAttemptStatusEnum = pgEnum('lxp_guided_attempt_status', [
+  'in_progress',
+  'submitted',
 ]);
 
 export const systemEvaluationTargetEnum = pgEnum('system_evaluation_target', [
@@ -33,6 +53,17 @@ export const systemEvaluationTargetEnum = pgEnum('system_evaluation_target', [
   'intervention',
   'overall',
 ]);
+
+export const teacherEvaluationTypeEnum = pgEnum('teacher_evaluation_type', [
+  'teacher_class',
+  'ja_hub',
+  'learners_path',
+]);
+
+export const teacherEvaluationWindowStatusEnum = pgEnum(
+  'teacher_evaluation_window_status',
+  ['active', 'closed'],
+);
 
 export const aiPolicySourceScopeEnum = pgEnum('ai_policy_source_scope', [
   'recommended_only',
@@ -93,6 +124,8 @@ export const interventionAssignments = pgTable(
     assessmentId: uuid('assessment_id').references(() => assessments.id, {
       onDelete: 'set null',
     }),
+    generatedRemedialLessonId: uuid('generated_remedial_lesson_id'),
+    generatedGuidedAssessmentId: uuid('generated_guided_assessment_id'),
     checkpointLabel: text('checkpoint_label').notNull(),
     orderIndex: integer('order_index').notNull().default(0),
     isCompleted: boolean('is_completed').notNull().default(false),
@@ -113,6 +146,140 @@ export const interventionAssignments = pgTable(
     lessonIdx: index('intervention_assignments_lesson_idx').on(table.lessonId),
     assessmentIdx: index('intervention_assignments_assessment_idx').on(
       table.assessmentId,
+    ),
+    generatedLessonIdx: index(
+      'intervention_assignments_generated_lesson_idx',
+    ).on(table.generatedRemedialLessonId),
+    generatedAssessmentIdx: index(
+      'intervention_assignments_generated_assessment_idx',
+    ).on(table.generatedGuidedAssessmentId),
+  }),
+);
+
+export const generatedRemedialLessons = pgTable(
+  'lxp_generated_remedial_lessons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => interventionCases.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    approvalStatus: lxpGeneratedArtifactStatusEnum('approval_status')
+      .notNull()
+      .default('draft'),
+    title: text('title').notNull(),
+    summary: text('summary'),
+    lessonBody: text('lesson_body').notNull(),
+    weakConcepts: json('weak_concepts').notNull(),
+    sourceLessonIds: json('source_lesson_ids').notNull(),
+    sourceReferences: json('source_references').notNull(),
+    approvedBy: uuid('approved_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approved_at'),
+    rejectedAt: timestamp('rejected_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    caseIdx: index('lxp_generated_remedial_lessons_case_idx').on(table.caseId),
+    classIdx: index('lxp_generated_remedial_lessons_class_idx').on(table.classId),
+    studentIdx: index('lxp_generated_remedial_lessons_student_idx').on(table.studentId),
+    statusIdx: index('lxp_generated_remedial_lessons_status_idx').on(table.approvalStatus),
+  }),
+);
+
+export const generatedGuidedAssessments = pgTable(
+  'lxp_generated_guided_assessments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => interventionCases.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    approvalStatus: lxpGeneratedArtifactStatusEnum('approval_status')
+      .notNull()
+      .default('draft'),
+    sourceAssessmentId: uuid('source_assessment_id').references(
+      () => assessments.id,
+      { onDelete: 'set null' },
+    ),
+    title: text('title').notNull(),
+    description: text('description'),
+    weakConcepts: json('weak_concepts').notNull(),
+    sourceReferences: json('source_references').notNull(),
+    questions: json('questions').notNull(),
+    formativeSummary: text('formative_summary'),
+    approvedBy: uuid('approved_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    approvedAt: timestamp('approved_at'),
+    rejectedAt: timestamp('rejected_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    caseIdx: index('lxp_generated_guided_assessments_case_idx').on(table.caseId),
+    classIdx: index('lxp_generated_guided_assessments_class_idx').on(table.classId),
+    studentIdx: index('lxp_generated_guided_assessments_student_idx').on(table.studentId),
+    statusIdx: index('lxp_generated_guided_assessments_status_idx').on(table.approvalStatus),
+  }),
+);
+
+export const generatedGuidedAssessmentAttempts = pgTable(
+  'lxp_generated_guided_assessment_attempts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    guidedAssessmentId: uuid('guided_assessment_id')
+      .notNull()
+      .references(() => generatedGuidedAssessments.id, { onDelete: 'cascade' }),
+    caseId: uuid('case_id')
+      .notNull()
+      .references(() => interventionCases.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    assignmentId: uuid('assignment_id')
+      .notNull()
+      .references(() => interventionAssignments.id, { onDelete: 'cascade' }),
+    status: lxpGuidedAttemptStatusEnum('status').notNull().default('in_progress'),
+    currentQuestionIndex: integer('current_question_index').notNull().default(0),
+    responses: json('responses').notNull().default([]),
+    hintUsage: json('hint_usage').notNull().default([]),
+    score: integer('score'),
+    totalQuestions: integer('total_questions').notNull().default(0),
+    correctCount: integer('correct_count').notNull().default(0),
+    formativeSummary: json('formative_summary'),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    submittedAt: timestamp('submitted_at'),
+    lastActivityAt: timestamp('last_activity_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    guidedAssessmentIdx: index('lxp_generated_guided_attempts_guided_assessment_idx').on(
+      table.guidedAssessmentId,
+    ),
+    caseStudentIdx: index('lxp_generated_guided_attempts_case_student_idx').on(
+      table.caseId,
+      table.studentId,
+    ),
+    assignmentIdx: uniqueIndex('lxp_generated_guided_attempts_assignment_unique').on(
+      table.assignmentId,
+      table.studentId,
     ),
   }),
 );
@@ -190,6 +357,97 @@ export const classAiPolicies = pgTable(
   }),
 );
 
+export const teacherEvaluationWindows = pgTable(
+  'teacher_evaluation_windows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    schoolYear: text('school_year').notNull(),
+    gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
+    evaluationType: teacherEvaluationTypeEnum('evaluation_type').notNull(),
+    status: teacherEvaluationWindowStatusEnum('status')
+      .notNull()
+      .default('active'),
+    eligibleCount: integer('eligible_count').notNull().default(0),
+    opensAt: timestamp('opens_at').notNull().defaultNow(),
+    closesAt: timestamp('closes_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    classPeriodTypeUnique: uniqueIndex(
+      'teacher_evaluation_windows_class_period_type_unique',
+    ).on(
+      table.classId,
+      table.schoolYear,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+    teacherIdx: index('teacher_evaluation_windows_teacher_idx').on(
+      table.teacherId,
+    ),
+    classIdx: index('teacher_evaluation_windows_class_idx').on(table.classId),
+    periodTypeIdx: index('teacher_evaluation_windows_period_type_idx').on(
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+  }),
+);
+
+export const teacherEvaluationSubmissions = pgTable(
+  'teacher_evaluation_submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    windowId: uuid('window_id')
+      .notNull()
+      .references(() => teacherEvaluationWindows.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    schoolYear: text('school_year').notNull(),
+    gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
+    evaluationType: teacherEvaluationTypeEnum('evaluation_type').notNull(),
+    ratingsJson: json('ratings_json').notNull(),
+    comment: text('comment'),
+    submittedAt: timestamp('submitted_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    studentScopeUnique: uniqueIndex(
+      'teacher_evaluation_submissions_student_scope_unique',
+    ).on(
+      table.studentId,
+      table.classId,
+      table.schoolYear,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+    windowIdx: index('teacher_evaluation_submissions_window_idx').on(
+      table.windowId,
+    ),
+    teacherIdx: index('teacher_evaluation_submissions_teacher_idx').on(
+      table.teacherId,
+    ),
+    classPeriodIdx: index('teacher_evaluation_submissions_class_period_idx').on(
+      table.classId,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+  }),
+);
+
 export const interventionCasesRelations = relations(
   interventionCases,
   ({ one, many }) => ({
@@ -202,6 +460,8 @@ export const interventionCasesRelations = relations(
       references: [users.id],
     }),
     assignments: many(interventionAssignments),
+    generatedLessons: many(generatedRemedialLessons),
+    generatedAssessments: many(generatedGuidedAssessments),
   }),
 );
 
@@ -219,6 +479,83 @@ export const interventionAssignmentsRelations = relations(
     assessment: one(assessments, {
       fields: [interventionAssignments.assessmentId],
       references: [assessments.id],
+    }),
+    generatedRemedialLesson: one(generatedRemedialLessons, {
+      fields: [interventionAssignments.generatedRemedialLessonId],
+      references: [generatedRemedialLessons.id],
+    }),
+    generatedGuidedAssessment: one(generatedGuidedAssessments, {
+      fields: [interventionAssignments.generatedGuidedAssessmentId],
+      references: [generatedGuidedAssessments.id],
+    }),
+  }),
+);
+
+export const generatedRemedialLessonsRelations = relations(
+  generatedRemedialLessons,
+  ({ one, many }) => ({
+    interventionCase: one(interventionCases, {
+      fields: [generatedRemedialLessons.caseId],
+      references: [interventionCases.id],
+    }),
+    class: one(classes, {
+      fields: [generatedRemedialLessons.classId],
+      references: [classes.id],
+    }),
+    student: one(users, {
+      fields: [generatedRemedialLessons.studentId],
+      references: [users.id],
+    }),
+    assignments: many(interventionAssignments),
+  }),
+);
+
+export const generatedGuidedAssessmentsRelations = relations(
+  generatedGuidedAssessments,
+  ({ one, many }) => ({
+    interventionCase: one(interventionCases, {
+      fields: [generatedGuidedAssessments.caseId],
+      references: [interventionCases.id],
+    }),
+    class: one(classes, {
+      fields: [generatedGuidedAssessments.classId],
+      references: [classes.id],
+    }),
+    student: one(users, {
+      fields: [generatedGuidedAssessments.studentId],
+      references: [users.id],
+    }),
+    sourceAssessment: one(assessments, {
+      fields: [generatedGuidedAssessments.sourceAssessmentId],
+      references: [assessments.id],
+    }),
+    assignments: many(interventionAssignments),
+    attempts: many(generatedGuidedAssessmentAttempts),
+  }),
+);
+
+export const generatedGuidedAssessmentAttemptsRelations = relations(
+  generatedGuidedAssessmentAttempts,
+  ({ one }) => ({
+    guidedAssessment: one(generatedGuidedAssessments, {
+      fields: [generatedGuidedAssessmentAttempts.guidedAssessmentId],
+      references: [generatedGuidedAssessments.id],
+    }),
+    interventionCase: one(interventionCases, {
+      fields: [generatedGuidedAssessmentAttempts.caseId],
+      references: [interventionCases.id],
+    }),
+    class: one(classes, {
+      fields: [generatedGuidedAssessmentAttempts.classId],
+      references: [classes.id],
+    }),
+    student: one(users, {
+      fields: [generatedGuidedAssessmentAttempts.studentId],
+      references: [users.id],
+    }),
+    assignment: one(interventionAssignments, {
+      fields: [generatedGuidedAssessmentAttempts.assignmentId],
+      references: [interventionAssignments.id],
     }),
   }),
 );
@@ -253,6 +590,43 @@ export const classAiPoliciesRelations = relations(
     }),
     updatedByUser: one(users, {
       fields: [classAiPolicies.updatedBy],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const teacherEvaluationWindowsRelations = relations(
+  teacherEvaluationWindows,
+  ({ one, many }) => ({
+    class: one(classes, {
+      fields: [teacherEvaluationWindows.classId],
+      references: [classes.id],
+    }),
+    teacher: one(users, {
+      fields: [teacherEvaluationWindows.teacherId],
+      references: [users.id],
+    }),
+    submissions: many(teacherEvaluationSubmissions),
+  }),
+);
+
+export const teacherEvaluationSubmissionsRelations = relations(
+  teacherEvaluationSubmissions,
+  ({ one }) => ({
+    window: one(teacherEvaluationWindows, {
+      fields: [teacherEvaluationSubmissions.windowId],
+      references: [teacherEvaluationWindows.id],
+    }),
+    class: one(classes, {
+      fields: [teacherEvaluationSubmissions.classId],
+      references: [classes.id],
+    }),
+    teacher: one(users, {
+      fields: [teacherEvaluationSubmissions.teacherId],
+      references: [users.id],
+    }),
+    student: one(users, {
+      fields: [teacherEvaluationSubmissions.studentId],
       references: [users.id],
     }),
   }),

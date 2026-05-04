@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLxpDetailExperience from './StudentLxpDetailExperience';
 import { lxpService } from '@/services/lxp-service';
+import { healthService } from '@/services/health-service';
 
 const push = jest.fn();
 const replace = jest.fn();
@@ -29,7 +30,14 @@ jest.mock('@/services/lxp-service', () => ({
   },
 }));
 
+jest.mock('@/services/health-service', () => ({
+  healthService: {
+    getReadiness: jest.fn(),
+  },
+}));
+
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
+const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 
 const overviewResponse = {
   data: {
@@ -136,6 +144,15 @@ describe('StudentLxpDetailExperience', () => {
     jest.clearAllMocks();
     routeClassId = 'class-active';
     searchParamsState.tab = null;
+    mockedHealthService.getReadiness.mockResolvedValue({
+      ready: true,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: true },
+      },
+    });
     mockedLxpService.getOverview.mockResolvedValue(overviewResponse as never);
     mockedLxpService.getPlaylist.mockResolvedValue(activePlaylistResponse as never);
     mockedLxpService.completeCheckpoint.mockResolvedValue(activePlaylistResponse as never);
@@ -145,12 +162,12 @@ describe('StudentLxpDetailExperience', () => {
     render(<StudentLxpDetailExperience />);
 
     expect(await screen.findByText('Mathematics 7')).toBeInTheDocument();
-    expect(screen.getByText('Assigned Steps')).toBeInTheDocument();
-    expect(screen.getByText('Replays')).toBeInTheDocument();
-    expect(screen.getByText('Case File')).toBeInTheDocument();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Guided Review' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Assessment Retry Support' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Why This Path Opened' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Progress & Support Status' })).toBeInTheDocument();
     expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Assigned Steps' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guided Review' })).toBeInTheDocument();
   });
 
   it('routes assessment replays to the standalone JA page', async () => {
@@ -241,5 +258,49 @@ describe('StudentLxpDetailExperience', () => {
       expect(screen.queryByRole('button', { name: 'Mark Complete' })).not.toBeInTheDocument();
     });
     expect(screen.getByText('Read-only history')).toBeInTheDocument();
+  });
+
+  it('shows an AI outage banner but keeps lessons and replay handoff links available', async () => {
+    searchParamsState.tab = 'replays';
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: false,
+      timestamp: '2026-04-30T00:00:00.000Z',
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: {
+          ok: false,
+          message: 'connect ECONNREFUSED',
+        },
+      },
+    });
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
+    const jaLink = await screen.findByRole('link', { name: 'Open JA Hub' });
+    expect(jaLink).toHaveAttribute(
+      'href',
+      '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
+    );
+  });
+
+  it('explains why the path opened', async () => {
+    searchParamsState.tab = 'case';
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByRole('heading', { name: 'Why This Path Opened' })).toBeInTheDocument();
+    expect(screen.getByText(/this support path opened because your class performance dropped below the threshold/i)).toBeInTheDocument();
+    expect(screen.getByText('Current score')).toBeInTheDocument();
+  });
+
+  it('explains how assessment retry support should be used', async () => {
+    searchParamsState.tab = 'replays';
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByRole('heading', { name: 'Assessment Retry Support' })).toBeInTheDocument();
+    expect(screen.getByText(/complete guided review first, then open ja for the assessment retry/i)).toBeInTheDocument();
+    expect(screen.getByText(/guided support, not a new official summative attempt/i)).toBeInTheDocument();
   });
 });

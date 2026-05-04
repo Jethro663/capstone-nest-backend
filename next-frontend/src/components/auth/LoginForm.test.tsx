@@ -8,6 +8,7 @@ const loginActionMock = jest.fn();
 const validateCredentialsActionMock = jest.fn();
 const setUserMock = jest.fn();
 const toastSuccessMock = jest.fn();
+const usePublicSessionProbeMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -36,6 +37,10 @@ jest.mock('sonner', () => ({
   toast: {
     success: (...args: unknown[]) => toastSuccessMock(...args),
   },
+}));
+
+jest.mock('@/hooks/usePublicSessionProbe', () => ({
+  usePublicSessionProbe: () => usePublicSessionProbeMock(),
 }));
 
 function createSearchParams(params: Record<string, string> = {}) {
@@ -103,5 +108,37 @@ describe('LoginForm', () => {
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith('/dashboard/notifications');
     });
+  });
+
+  it('normalizes login email while preserving password whitespace', async () => {
+    loginActionMock.mockResolvedValue({
+      success: false,
+      message: 'Invalid email or password',
+    });
+
+    render(<LoginForm />);
+
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: '  Alex.User+1 @Example.COM🙂  ' },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: '  Test@123 ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+
+    await waitFor(() => {
+      expect(loginActionMock).toHaveBeenCalledWith({
+        email: 'alex.user+1@example.com',
+        password: '  Test@123 ',
+      });
+    });
+  });
+
+  it('uses a POST form target so credentials do not fall back into the URL', () => {
+    render(<LoginForm />);
+
+    const form = screen.getByRole('button', { name: /sign in/i }).closest('form');
+    expect(form).toHaveAttribute('method', 'post');
+    expect(form).toHaveAttribute('action', '/login');
   });
 });

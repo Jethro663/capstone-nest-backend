@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  sanitizeRoomLabelInput,
+  sanitizeSectionNameInput,
+} from '@/lib/input-policy';
 import type { User } from '@/types/user';
 
 const SELECT_CLS =
@@ -58,8 +62,8 @@ export default function SectionForm({
     if (!form.name.trim()) return;
     await onSubmit({
       ...form,
-      name: form.name.trim(),
-      roomNumber: form.roomNumber.trim(),
+      name: sanitizeSectionNameInput(form.name, 100),
+      roomNumber: sanitizeRoomLabelInput(form.roomNumber, 50),
     });
   };
 
@@ -78,8 +82,14 @@ export default function SectionForm({
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Section Name</Label>
         <Input
           value={form.name}
-          onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              name: sanitizeSectionNameInput(event.target.value, 100),
+            }))
+          }
           placeholder="e.g. Kamia"
+          maxLength={100}
           className="admin-input h-10 rounded-xl"
         />
       </div>
@@ -143,8 +153,14 @@ export default function SectionForm({
           <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Room</Label>
           <Input
             value={form.roomNumber}
-            onChange={(event) => setForm((current) => ({ ...current, roomNumber: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                roomNumber: sanitizeRoomLabelInput(event.target.value, 50),
+              }))
+            }
             placeholder="e.g. 201"
+            maxLength={50}
             className="admin-input h-10 rounded-xl"
           />
         </div>

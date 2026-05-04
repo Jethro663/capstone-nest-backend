@@ -1,44 +1,50 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import type { AuthSession } from "../types/auth";
 import { AUTH_STORAGE_KEYS } from "./config";
 
-export async function persistAccessToken(token: string | null) {
-  if (!token) {
-    await SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.accessToken);
-    return;
+async function setStoredValue(key: string, value: string | null) {
+  const secureOperation = value === null
+    ? SecureStore.deleteItemAsync(key)
+    : SecureStore.setItemAsync(key, value);
+  const asyncOperation = value === null
+    ? AsyncStorage.removeItem(key)
+    : AsyncStorage.setItem(key, value);
+
+  await Promise.all([secureOperation, asyncOperation]);
+}
+
+async function getStoredValue(key: string) {
+  const secureValue = await SecureStore.getItemAsync(key);
+  if (secureValue) {
+    return secureValue;
   }
 
-  await SecureStore.setItemAsync(AUTH_STORAGE_KEYS.accessToken, token);
+  return AsyncStorage.getItem(key);
+}
+
+export async function persistAccessToken(token: string | null) {
+  await setStoredValue(AUTH_STORAGE_KEYS.accessToken, token);
 }
 
 export async function readAccessToken() {
-  return SecureStore.getItemAsync(AUTH_STORAGE_KEYS.accessToken);
+  return getStoredValue(AUTH_STORAGE_KEYS.accessToken);
 }
 
 export async function persistRefreshToken(token: string | null) {
-  if (!token) {
-    await SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.refreshToken);
-    return;
-  }
-
-  await SecureStore.setItemAsync(AUTH_STORAGE_KEYS.refreshToken, token);
+  await setStoredValue(AUTH_STORAGE_KEYS.refreshToken, token);
 }
 
 export async function readRefreshToken() {
-  return SecureStore.getItemAsync(AUTH_STORAGE_KEYS.refreshToken);
+  return getStoredValue(AUTH_STORAGE_KEYS.refreshToken);
 }
 
 export async function writeSessionSnapshot(session: AuthSession | null) {
-  if (!session) {
-    await SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.session);
-    return;
-  }
-
-  await SecureStore.setItemAsync(AUTH_STORAGE_KEYS.session, JSON.stringify(session));
+  await setStoredValue(AUTH_STORAGE_KEYS.session, session ? JSON.stringify(session) : null);
 }
 
 export async function readSessionSnapshot(): Promise<AuthSession | null> {
-  const value = await SecureStore.getItemAsync(AUTH_STORAGE_KEYS.session);
+  const value = await getStoredValue(AUTH_STORAGE_KEYS.session);
   if (!value) return null;
 
   try {
@@ -50,8 +56,8 @@ export async function readSessionSnapshot(): Promise<AuthSession | null> {
 
 export async function clearSecureSession() {
   await Promise.all([
-    SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.accessToken),
-    SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.refreshToken),
-    SecureStore.deleteItemAsync(AUTH_STORAGE_KEYS.session),
+    setStoredValue(AUTH_STORAGE_KEYS.accessToken, null),
+    setStoredValue(AUTH_STORAGE_KEYS.refreshToken, null),
+    setStoredValue(AUTH_STORAGE_KEYS.session, null),
   ]);
 }

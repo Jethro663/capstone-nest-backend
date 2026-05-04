@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   BookTemplate,
   ChevronDown,
   Eye,
+  FileCheck2,
+  FileUp,
   Filter,
   Plus,
   Search,
@@ -38,6 +40,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { classTemplateService } from '@/services/class-template-service';
 import type {
   ClassTemplate,
+  EngineImportValidationResult,
   ClassTemplateStatus,
 } from '@/types/class-template';
 
@@ -94,6 +97,32 @@ function getSortLabel(sortBy: TemplateSort) {
   return SORT_OPTIONS.find((option) => option.value === sortBy)?.label ?? 'Recently updated';
 }
 
+function deriveSubjectNameFromCode(subjectCode: string) {
+  const normalized = subjectCode.trim().toUpperCase();
+
+  if (normalized.startsWith('MATH')) return 'Mathematics';
+  if (normalized.startsWith('SCI')) return 'Science';
+  if (normalized.startsWith('ENG')) return 'English';
+  if (normalized.startsWith('FIL')) return 'Fili';
+  if (normalized.startsWith('AP')) return 'Araling Panlipunan';
+  if (normalized.startsWith('TLE')) return 'TLE';
+  if (normalized.startsWith('MAPEH')) return 'MAPEH';
+  if (normalized.startsWith('ESP')) return 'Values';
+
+  return normalized || 'Mathematics';
+}
+
+function buildImportedTemplateClassHref(template: Pick<ClassTemplate, 'id' | 'subjectCode' | 'subjectGradeLevel'>) {
+  const params = new URLSearchParams({
+    templateId: template.id,
+    subjectName: deriveSubjectNameFromCode(template.subjectCode),
+    subjectCode: template.subjectCode,
+    subjectGradeLevel: template.subjectGradeLevel,
+  });
+
+  return `/dashboard/admin/classes/new?${params.toString()}`;
+}
+
 export default function ClassTemplatesPage() {
   const router = useRouter();
   const [templates, setTemplates] = useState<ClassTemplate[]>([]);
@@ -110,6 +139,11 @@ export default function ClassTemplatesPage() {
   const [gradeFilter, setGradeFilter] = useState('all');
   const [sortBy, setSortBy] = useState<TemplateSort>('updated-desc');
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [engineManifest, setEngineManifest] = useState('');
+  const [engineValidation, setEngineValidation] = useState<EngineImportValidationResult | null>(null);
+  const [validatingEngine, setValidatingEngine] = useState(false);
+  const [importingEngine, setImportingEngine] = useState(false);
+  const manifestFileRef = useRef<HTMLInputElement | null>(null);
 
   const fetchTemplates = useCallback(async (mode: 'initial' | 'table') => {
     try {
@@ -155,6 +189,69 @@ export default function ClassTemplatesPage() {
       toast.error('Failed to create template');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleValidateEngine = async () => {
+    const manifest = engineManifest.trim();
+    if (!manifest) {
+      toast.error('Paste or load a template manifest first');
+      return;
+    }
+
+    try {
+      setValidatingEngine(true);
+      const response = await classTemplateService.validateEngineImport(manifest);
+      setEngineValidation(response.data);
+      if (response.data.valid) {
+        toast.success('Template manifest is valid');
+      } else {
+        toast.error('Template manifest has validation errors');
+      }
+    } catch {
+      toast.error('Failed to validate template manifest');
+    } finally {
+      setValidatingEngine(false);
+    }
+  };
+
+  const handleImportEngine = async () => {
+    const manifest = engineManifest.trim();
+    if (!manifest) {
+      toast.error('Paste or load a template manifest first');
+      return;
+    }
+
+    if (engineValidation && !engineValidation.valid) {
+      toast.error('Fix validation errors before import');
+      return;
+    }
+
+    try {
+      setImportingEngine(true);
+      const response = await classTemplateService.importEngine(manifest);
+      toast.success('Template imported. Continue class setup.');
+      router.push(buildImportedTemplateClassHref(response.data.template));
+    } catch {
+      toast.error('Failed to import template manifest');
+    } finally {
+      setImportingEngine(false);
+    }
+  };
+
+  const handleManifestFileLoad = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      setEngineManifest(text);
+      setEngineValidation(null);
+      toast.success('Manifest loaded');
+    } catch {
+      toast.error('Unable to read manifest file');
+    } finally {
+      event.target.value = '';
     }
   };
 
@@ -387,74 +484,148 @@ export default function ClassTemplatesPage() {
     >
       <AdminSectionCard
         title="Create Template"
-        description="Create a new subject template and jump directly into its workspace."
+        description="Create a new subject template or import a template manifest and continue straight into class setup."
         density="compact"
       >
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[15rem] flex-1">
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Template Name
-            </label>
-            <Input
-              data-testid="create-template-name-input"
-              className="admin-input"
-              placeholder="Quarter 1 Mathematics Template"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  void handleCreate();
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[15rem] flex-1">
+              <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
+                Template Name
+              </label>
+              <Input
+                data-testid="create-template-name-input"
+                className="admin-input"
+                placeholder="Quarter 1 Mathematics Template"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void handleCreate();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="relative min-w-[13rem]">
+              <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
+                Subject
+              </label>
+              <select
+                className="admin-select min-w-[13rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
+                value={subjectCode}
+                onChange={(event) => setSubjectCode(event.target.value)}
+              >
+                {SUBJECTS.map((subject) => (
+                  <option key={subject.code} value={subject.code}>
+                    {subject.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
+            </div>
+
+            <div className="relative min-w-[9rem]">
+              <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
+                Grade
+              </label>
+              <select
+                className="admin-select min-w-[9rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
+                value={subjectGradeLevel}
+                onChange={(event) => setSubjectGradeLevel(event.target.value)}
+              >
+                {['7', '8', '9', '10'].map((grade) => (
+                  <option key={grade} value={grade}>
+                    Grade {grade}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
+            </div>
+
+            <Button
+              data-testid="create-template-button"
+              className="admin-button-solid rounded-[1rem] px-4 font-bold"
+              disabled={creating}
+              onClick={() => void handleCreate()}
+            >
+              <Plus className="h-4 w-4" />
+              {creating ? 'Creating...' : 'Create Template'}
+            </Button>
+          </div>
+
+          <div className="space-y-3 rounded-[1.2rem] border border-[var(--admin-outline)] bg-[#fbfcff] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="admin-button-outline h-10 rounded-[1rem] px-4 font-bold"
+                onClick={() => manifestFileRef.current?.click()}
+              >
+                <FileUp className="h-4 w-4" />
+                Load YAML File
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="admin-button-outline h-10 rounded-[1rem] px-4 font-bold"
+                onClick={() => void handleValidateEngine()}
+                disabled={validatingEngine}
+              >
+                <FileCheck2 className="h-4 w-4" />
+                {validatingEngine ? 'Validating...' : 'Validate Import'}
+              </Button>
+              <Button
+                type="button"
+                className="h-10 rounded-[1rem] bg-[#f20d1b] px-4 font-bold text-white hover:bg-[#d70b17]"
+                onClick={() => void handleImportEngine()}
+                disabled={importingEngine}
+              >
+                {importingEngine ? 'Importing...' : 'Import Template'}
+              </Button>
+            </div>
+
+            <input
+              ref={manifestFileRef}
+              type="file"
+              accept=".yaml,.yml,text/yaml,text/x-yaml"
+              className="hidden"
+              onChange={(event) => void handleManifestFileLoad(event)}
+            />
+            <textarea
+              value={engineManifest}
+              onChange={(event) => {
+                setEngineManifest(event.target.value);
+                if (engineValidation) {
+                  setEngineValidation(null);
                 }
               }}
+              placeholder="Paste template YAML manifest here..."
+              className="min-h-[180px] w-full rounded-[1rem] border border-[var(--admin-outline)] bg-white p-3 text-xs leading-6 text-[var(--admin-text-strong)] outline-none transition focus:border-[#6e7cc8]"
             />
+            {engineValidation ? (
+              <div className="space-y-1 text-xs">
+                <p className="font-bold text-[var(--admin-text-strong)]">
+                  Validation: {engineValidation.valid ? 'Valid' : 'Invalid'}
+                </p>
+                <p className="text-[var(--admin-text-muted)]">
+                  Modules {engineValidation.summary.modules} | Lessons {engineValidation.summary.lessons} | Assessments{' '}
+                  {engineValidation.summary.assessments} | Chunks {engineValidation.summary.chunks}
+                </p>
+                {engineValidation.errors.length > 0 ? (
+                  <p className="text-red-600">
+                    {engineValidation.errors.length} error(s): {engineValidation.errors[0]?.message}
+                  </p>
+                ) : null}
+                {engineValidation.warnings.length > 0 ? (
+                  <p className="text-amber-700">
+                    {engineValidation.warnings.length} warning(s): {engineValidation.warnings[0]?.message}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-
-          <div className="relative min-w-[13rem]">
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Subject
-            </label>
-            <select
-              className="admin-select min-w-[13rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
-              value={subjectCode}
-              onChange={(event) => setSubjectCode(event.target.value)}
-            >
-              {SUBJECTS.map((subject) => (
-                <option key={subject.code} value={subject.code}>
-                  {subject.label} ({subject.code})
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
-          </div>
-
-          <div className="relative min-w-[9rem]">
-            <label className="mb-1 block text-xs font-bold text-[var(--admin-text-muted)]">
-              Grade
-            </label>
-            <select
-              className="admin-select min-w-[9rem] appearance-none rounded-[1rem] py-2 pl-3 pr-10 text-sm font-semibold text-[#6f83a3]"
-              value={subjectGradeLevel}
-              onChange={(event) => setSubjectGradeLevel(event.target.value)}
-            >
-              {['7', '8', '9', '10'].map((grade) => (
-                <option key={grade} value={grade}>
-                  Grade {grade}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-[2.45rem] h-4 w-4 text-[#8ea0bc]" />
-          </div>
-
-          <Button
-            data-testid="create-template-button"
-            className="admin-button-solid rounded-[1rem] px-4 font-bold"
-            disabled={creating}
-            onClick={() => void handleCreate()}
-          >
-            <Plus className="h-4 w-4" />
-            {creating ? 'Creating...' : 'Create Template'}
-          </Button>
         </div>
       </AdminSectionCard>
 

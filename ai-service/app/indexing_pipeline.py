@@ -289,10 +289,10 @@ def build_extraction_chunks(rows: list[dict[str, Any]]) -> list[IndexChunk]:
                             "sourceReference": (
                                 f"extraction:{row['id']} | section:{section_index} | chunk:{idx}"
                             ),
-                            "subjectName": row["subject_name"],
-                            "subjectCode": row["subject_code"],
-                            "gradeLevel": row["grade_level"],
-                            "isApplied": row["is_applied"],
+                            "subjectName": row.get("subject_name") or "Unknown subject",
+                            "subjectCode": row.get("subject_code") or "Unknown code",
+                            "gradeLevel": row.get("grade_level"),
+                            "isApplied": bool(row.get("is_applied")),
                             "extractionAudit": structured.get("audit") or {},
                         },
                     )

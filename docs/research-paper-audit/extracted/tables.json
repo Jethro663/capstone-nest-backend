@@ -1,0 +1,2472 @@
+[
+  {
+    "index": 0,
+    "rows": [
+      [
+        "Feature/Domain",
+        "Learning Management System (LMS)",
+        "Learning Experience Platform (LXP)"
+      ],
+      [
+        "Primary Focus",
+        "Administrative control, compliance, formal training [1].",
+        "Learner experience, personalization, engagement [2]."
+      ],
+      [
+        "Locus of Control",
+        "Top-down; administrators and educators dictate content and pacing [3].",
+        "Bottom-up; learners direct their own pathways based on recommendations [4]."
+      ],
+      [
+        "Content Delivery",
+        "Linear, structured courses, mandatory modules, fixed syllabi [5].",
+        "Adaptive, multi-format (microlearning, videos, podcasts), Artificial Intelligence (AI)-curated [6]."
+      ],
+      [
+        "Data Analytics",
+        "Completion rates, assessment scores, compliance tracking [7].",
+        "Fostering intrinsic motivation, agile upskilling, and closing specific competency gaps [8]."
+      ],
+      [
+        "Primary Strength",
+        "Structured delivery of standardized curriculum and official record-keeping [3].",
+        "Fostering intrinsic motivation, agile upskilling, and closing specific competency gaps [9]."
+      ]
+    ]
+  },
+  {
+    "index": 1,
+    "rows": [
+      [
+        "System Name",
+        "Core Learning Management System (LMS) Functionality (Class/Grade Management)",
+        "Learning Experience Platform (LXP) Integration",
+        "Automated Content Extraction via LLM",
+        "Automated Intervention Thresholds (<74%)",
+        "Artificial Intelligence (AI) NPC Mentor Integration"
+      ],
+      [
+        "Cypher Learning",
+        "Yes",
+        "Yes",
+        "Yes",
+        "No",
+        "No"
+      ],
+      [
+        "SchoolAI",
+        "Partial",
+        "Yes",
+        "No",
+        "Partial",
+        "Partial"
+      ],
+      [
+        "Lummio",
+        "No",
+        "No",
+        "Partial",
+        "No",
+        "No"
+      ],
+      [
+        "ALEKS",
+        "Yes",
+        "No",
+        "Yes",
+        "No",
+        "No"
+      ],
+      [
+        "DepEd DLMS",
+        "Yes",
+        "No",
+        "No",
+        "No",
+        "Partial"
+      ],
+      [
+        "Vidyalaya LMS",
+        "Yes",
+        "No",
+        "No",
+        "No",
+        "No"
+      ],
+      [
+        "Nexora (Proposed)",
+        "Yes",
+        "Yes",
+        "Yes",
+        "Yes",
+        "Yes"
+      ]
+    ]
+  },
+  {
+    "index": 2,
+    "rows": [
+      [
+        "Software",
+        "Specification"
+      ],
+      [
+        "Operating System",
+        "Windows 10/11 64-bit with WSL 2 enabled for Linux-compatible command-line tooling and container support."
+      ],
+      [
+        "Mobile Application",
+        "Mobile Application"
+      ],
+      [
+        "Android Studio",
+        "Android Studio is recommended for Android emulator-based testing of the mobile application, especially when validating student-facing screens, authentication, assessments, lessons, LXP access, and profile workflows."
+      ],
+      [
+        "Expo Go / Expo CLI",
+        "Tooling required for running and testing the mobile application built with Expo SDK 54 and React Native on physical Android devices."
+      ],
+      [
+        "Web Application",
+        "Web Application"
+      ],
+      [
+        "Web Browser",
+        "A modern Chromium-based browser (Chrome, Edge) or Firefox required for accessing the web application, testing responsive behavior, and opening Swagger API documentation."
+      ],
+      [
+        "Next.js",
+        "Next.js 16.2.4 is the primary web framework used to build the administrator, teacher, and student dashboards and responsive UI routing."
+      ],
+      [
+        "React",
+        "React 19.2.3 powers the component-based user interface; required for rendering dashboards, forms, class views, and AI-related user interactions."
+      ],
+      [
+        "Tailwind CSS",
+        "Used in the web frontend for utility-based styling, layout control, and consistent interface presentation across all dashboard pages."
+      ],
+      [
+        "NestJS",
+        "NestJS 11 is the primary backend framework for managing REST APIs, role enforcement, assessments, LXP logic, and AI service integration."
+      ],
+      [
+        "PostgreSQL with pgvector",
+        "Serves as the main relational database for user records and performance logs; includes pgvector for AI-assisted search and indexing."
+      ],
+      [
+        "pgAdmin 4",
+        "Recommended for database inspection, schema verification, and monitoring the PostgreSQL database and intervention data."
+      ],
+      [
+        "Drizzle ORM",
+        "Used as the database access and schema management layer to support strongly typed database interaction and migrations."
+      ],
+      [
+        "Swagger UI",
+        "Included in the backend for API documentation and endpoint verification during technical validation."
+      ],
+      [
+        "Socket IO",
+        "Used for real-time notifications between the backend and connected web clients to improve dashboard responsiveness."
+      ],
+      [
+        "JWT Authentication Stack",
+        "Uses JSON Web Tokens with Passport and NestJS guards to secure authenticated API access across all user workflows."
+      ],
+      [
+        "FastAPI",
+        "Used by the separate Python AI microservice that handles JAKIPIR mentor chat, PDF extraction, and remedial support generation."
+      ],
+      [
+        "Ollama",
+        "The local model-serving runtime used by the AI service, employing qwen2.5:3b for text and gemma3:4b for document-oriented reasoning."
+      ]
+    ]
+  },
+  {
+    "index": 3,
+    "rows": [
+      [
+        "Hardware",
+        "Specification"
+      ],
+      [
+        "Personal Computer / Development Workstation",
+        "64-bit Intel Core i5/AMD Ryzen 5, 16 GB RAM, and 512 GB SSD to run Docker, AI services, and mobile emulators."
+      ],
+      [
+        "Teacher/Admin Client",
+        "Dual-core 2.0 GHz processor, 8 GB RAM, and a stable broadband connection for web-based dashboard access."
+      ],
+      [
+        "Student Smartphone",
+        "Android 10 or higher, 4 GB RAM, and 64 GB internal storage to run the Expo-based mobile student module."
+      ],
+      [
+        "Core LMS Server",
+        "4 vCPU, 16 GB RAM, and 200 GB SSD (Ubuntu Server 22.04 LTS) for hosting the main LMS functionality without AI inference."
+      ],
+      [
+        "AI-Capable Server",
+        "8 vCPU, 32 GB RAM, and an NVIDIA GPU (e.g., RTX 4060 Ti 16 GB) for real-time chat and document extraction performance."
+      ],
+      [
+        "AI-Capable Server (Fallback)",
+        "12 vCPU, 48 GB RAM, and fast SSD storage."
+      ],
+      [
+        "Network Infrastructure",
+        "Stable broadband (at least 5 MBPS) and standard business-grade router."
+      ]
+    ]
+  },
+  {
+    "index": 4,
+    "rows": [
+      [
+        "Agile Phase",
+        "Strategic Activities",
+        "Documentation and Deliverables"
+      ],
+      [
+        "Project Planning",
+        "Defining the system vision. Establishing the 74% mastery threshold logic Prioritizing features for initial deployment",
+        "Project Concept Paper Resource Allocation Matrix Initial Scope Document"
+      ],
+      [
+        "Requirements Definition",
+        "Finalizing functional modules for AI extraction Defining Intelligent Tutoring System parameters Establishing hardware baselines for local AI inference",
+        "Functional Requirements Document Software Requirements Specification (SRS)"
+      ],
+      [
+        "Software Design",
+        "Architecting the multi-tier structure Designing React Native mobile UI wireframes Creating Next.js web dashboard prototypes",
+        "Architectural Diagrams Wireframes High-Fidelity UI Prototypes"
+      ],
+      [
+        "Project Development",
+        "Coding the NestJS backend Integrating Ollama runtimes Implementing pgvector for RAG pipelines",
+        "Functional Modules Beta Source Code Source Code Repository"
+      ],
+      [
+        "Integration Testing",
+        "Validating microservice communication Testing LXP gating triggers Performing unit and integration tests",
+        "Unit Test Results Integration Test Reports System Evaluation Data"
+      ],
+      [
+        "Operation & Maintenance",
+        "Deploying containerized services Faculty training on AI dashboards Establishing remedial monitoring protocols",
+        "Technical Deployment Guide User Manual Training Turnover Report"
+      ]
+    ]
+  },
+  {
+    "index": 5,
+    "rows": [
+      [
+        "Functional Requirement ID",
+        "Function",
+        "Description"
+      ],
+      [
+        "FR ID #1",
+        "Secure Role-Based Authentication",
+        "This module must allow users to securely access their respective portals based on assigned roles. Input: Username Encrypted Password Output: Role-specific landing page (Admin/Teacher/Student)"
+      ],
+      [
+        "FR ID #2",
+        "AI Module Extraction",
+        "This module utilizes a FastAPI microservice to parse and structure DepEd electronic Self-Learning Modules. Input: Unstructured DepEd PDF e-SLMs Output: Structured JSON containing key concepts, formulas, and quiz items"
+      ],
+      [
+        "FR ID #3",
+        "Mastery Gating Configuration",
+        "This module allows the system to automate the triage process by setting a performance floor for remediation. Input: Performance Threshold (Score < 0.74) Output: Active LXP access triggers for struggling students"
+      ],
+      [
+        "FR ID #4",
+        "Real-time Performance Monitoring",
+        "This module provides visual data analysis to help teachers identify learning gaps across classes. Input: Student Assessment Data from PostgreSQL Output: Dynamic heatmaps and competency gap visualizations"
+      ],
+      [
+        "FR ID #5",
+        "AI Mentor Oversight",
+        "This module enables administrators and teachers to monitor the pedagogical soundess of AI interactions. Input: Chat session logs RAG feedback metrics Output: Audit trail and intervention effectiveness reports"
+      ]
+    ]
+  },
+  {
+    "index": 6,
+    "rows": [
+      [
+        "Functional Requirement ID",
+        "Function",
+        "Description"
+      ],
+      [
+        "FR ID #1",
+        "Learning Workspace Access",
+        "This module provides students with a personalized view of their current academic requirements. Input: User authentication tokens via JWT Output: Personalized dashboard with active courses and lessons"
+      ],
+      [
+        "FR ID #2",
+        "Summative Assessment Flow",
+        "This module facilitates the evaluation of student knowledge to determine if the mastery threshold is met. Input: Student answers Submission files Output: Immediate raw score and performance summary"
+      ],
+      [
+        "FR ID #3",
+        "LXP Remedial Access",
+        "This module provides a non-linear path for recovery once a student is flagged as \"At-Risk.\" Input: System-triggered eligibility status Output: Unlocked LXP playlist and AI Mentor chat access"
+      ],
+      [
+        "FR ID #4",
+        "AI Tutor (JAKIPIR) Interaction",
+        "This module delivers curriculum-grounded hints and adaptive explanations using a local RAG pipeline. Input: Natural language queries and doubts Output: Adaptive hints, concept explanations, and remedial paths"
+      ],
+      [
+        "FR ID #5",
+        "Progress Visualization",
+        "This module encourages student self-regulation through real-time feedback on their learning status. Input: Activity completion Micro-quiz scores Output: Real-time progress bar and competency mastery status"
+      ]
+    ]
+  },
+  {
+    "index": 7,
+    "rows": [
+      [
+        "Quality Dimension",
+        "Specific Requirement Description",
+        "Measurable Metric / Threshold"
+      ],
+      [
+        "Performance Efficiency",
+        "The system must process AI mentor queries with minimal delays to maintain conversational flow. Backend services must prioritize sub-second response times for non-AI tasks.",
+        "AI response latency < 3 seconds for 95% of requests"
+      ],
+      [
+        "Reliability",
+        "The platform must ensure consistent access to core LMS and LXP services. The system must be capable of recovering data in the event of an interruption.",
+        "99.9% uptime for core remedial pathways during school hours"
+      ],
+      [
+        "Usability",
+        "The mobile interface must be accessible to students with varying levels of technical proficiency. The system must provide a clear layout and simple, understandable system flow.",
+        "85% success rate on navigation tasks in pilot testing"
+      ],
+      [
+        "Scalability",
+        "The backend must handle simultaneous requests from multiple classes without performance degradation. The database must support an increasing number of tenants and academic records.",
+        "Support for up to 500 concurrent active sessions"
+      ],
+      [
+        "Portability",
+        "The mobile application must be compatible with the low-cost hardware prevalent in the local student population. The web system must be accessible across major modern web browsers.",
+        "Functional on Android OS 10.0+ with 4GB RAM"
+      ],
+      [
+        "Security",
+        "Student academic records and AI chat logs must be protected from unauthorized access. The system must utilize encrypted transmission protocols for all sensitive data.",
+        "AES-256 encryption for data at rest and TLS for transmission"
+      ]
+    ]
+  },
+  {
+    "index": 8,
+    "rows": [
+      [
+        "Use Case Name",
+        "Login"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow authorized users to access the Nexora LMS + LXP system. For first-time users, the system requires verification using an OTP and temporary password provided after the administrator registers their email. After verification, the user must change their password before accessing the system. Returning users can log in using their registered email and updated password."
+      ],
+      [
+        "Successful Completion",
+        "Access Login Page The user opens the Nexora system through the website or mobile application.The system loads the landing page. The System Loads the Login page. Login Method Selection: Option A: First-Time Login The administrator registers the user’s email account in the system. The system sends an OTP and temporary password to the registered email. The user enters their registered email address The user enters the OTP and temporary password The user clicks or taps the Login button. The system validates the OTP and temporary password. The system requires the user to create a new password. The user enters and confirms the new password. The system updates the user’s password. The system authenticates the user account. The system retrieves the user’s assigned role. The system redirects the user to the appropriate dashboard. Option B: Manual Login The user enters their registered email address. The user enters their updated password. The user clicks or taps the Login button. The system validates the entered credentials. The system authenticates the user account. The system retrieves the user’s assigned role. The system creates a secure login session. The system redirects the user to the appropriate dashboard. Role Redirection: If the user is an Administrator, the system redirects to the Admin Dashboard on the web portal. If the user is a Teacher, the system redirects to the Teacher Dashboard or Teacher mobile interface.The system retrieves user information. If the user is a Student, the system redirects to the Student Dashboard or Student mobile interface."
+      ],
+      [
+        "Alternative",
+        "Invalid OTP or Temporary Password The user enters an incorrect OTP or temporary password. The system detects invalid first-time login credentials. The system displays an error message. The user retries the first-time login process. Invalid Email or Password The user enters an incorrect email or password. The system detects invalid login credentials. The system displays an error message. The user retries the login process. Suspended Account The system detects that the user account is suspended The system denies access to the account. The system displays an account status message. Network or Server Error The system fails to connect to the server. The system displays a connection or server error message. The user retries once the connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The user must have an existing account created by the administrator."
+      ],
+      [
+        "Post-condition",
+        "The user is successfully authenticated and redirected to the correct dashboard based on their role. Returning users successfully log into the system.ssa The user is redirected to the correct dashboard based on role and platform."
+      ],
+      [
+        "Assumption",
+        "The server infrastructure is operational, and the user's email is already registered in the database."
+      ]
+    ]
+  },
+  {
+    "index": 9,
+    "rows": [
+      [
+        "Use Case Name",
+        "Dashboard"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to access the dashboard page and view a summary of current learning activities, pending tasks, recent lessons, schedules, and overall course progress within the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Access Dashboard The student successfully logs in to the system The system redirects the student to the Dashboard page. The system retrieves the student’s active classes and learning data. The system fetches the following information from the database: Continue Learning section My Courses shortcut Calendar and day schedule Recent lessons Pending tasks Progress bars for sections or subjects The system processes and organizes the retrieved data. The system displays the dashboard with updated summary information."
+      ],
+      [
+        "Alternative",
+        "Internet Connection Error The system cannot connect to the internet or server. The dashboard content cannot be updated. The student may retry No Available Data The system retrieves data but finds no records for a specific dashboard section. The system displays default messages such as “No pending tasks,” “No recent lessons,” or “No schedule available."
+      ],
+      [
+        "Pre-condition",
+        "The student must be successfully logged into the system."
+      ],
+      [
+        "Post-condition",
+        "The dashboard is successfully displayed with updated summary information.ssa The student can navigate to other student modules."
+      ],
+      [
+        "Assumption",
+        "The database contains active enrollment records and recent activity logs for the student."
+      ]
+    ]
+  },
+  {
+    "index": 10,
+    "rows": [
+      [
+        "Use Case Name",
+        "My Courses"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to access and view all enrolled courses or classes. It enables the student to open subjects, continue learning, access modules, tasks, announcements, grades, and other class-related features."
+      ],
+      [
+        "Successful Completion",
+        "Display Enrolled Classes The student selects the My Courses menu or tab from the dashboard. The system initializes the My Courses interface. The system sends a request to retrieve the student’s enrolled courses. The system fetches course information from the database. The system processes and organizes the retrieved data. The system processes and organizes the retrieved data. The system displays the list of enrolled courses or classes The student may use search or filters to locate a specific course. The student selects a course to open. The system redirects the student to the selected course page."
+      ],
+      [
+        "Alternative",
+        "No Enrolled Courses The system retrieves data but finds no enrolled courses. The system displays a message such as “No enrolled courses available. Connection Error The system cannot connect to the server or internet. The student may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The student must be successfully logged into the system."
+      ],
+      [
+        "Post-condition",
+        "The enrolled courses are successfully displayed.ssa The student may access a selected course and its features."
+      ],
+      [
+        "Assumption",
+        "The administrator has completed the section assignment and roster population for the student."
+      ]
+    ]
+  },
+  {
+    "index": 11,
+    "rows": [
+      [
+        "Use Case Name",
+        "View Modules"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to access learning modules, lessons, and uploaded instructional materials from a selected course for study and course completion."
+      ],
+      [
+        "Successful Completion",
+        "Display Learning Modules The student opens the My Courses page. The student selects a course or class. The system opens the selected course page. The system initializes the Modules interface. The system sends a request to retrieve available learning modules. The system fetches module data from the database. The system processes and organizes the retrieved modules. The system displays the list of lessons, files, or learning materials. The student selects a module to open. The system displays the selected module content."
+      ],
+      [
+        "Alternative",
+        "No Modules Available The system finds no uploaded modules for the selected course. The system displays a message such as “No modules available.”. Connection Error The system cannot connect to the server or internet. The student may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The student must be successfully logged into the system."
+      ],
+      [
+        "Post-condition",
+        "The learning modules are successfully displayed.ssa The student may study or continue the selected lesson."
+      ],
+      [
+        "Assumption",
+        "The teacher has toggled the visibility of the module to \"Published\" in the web portal."
+      ]
+    ]
+  },
+  {
+    "index": 12,
+    "rows": [
+      [
+        "Use Case Name",
+        "View and Complete Assessments"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to access assigned assessments such as quizzes, written work, performance tasks, and quarterly assessments, then answer and submit them through the system."
+      ],
+      [
+        "Successful Completion",
+        "Complete Assesment The student opens the My Courses page. The student selects a course or class. The system opens the selected course page. The student selects the Assignments section. The system displays the available categories: All, Written Work, Performance Task, Quarterly Assessment, Discussion. The student selects a preferred category. The system retrieves assignments under the selected category. The system displays the available activities. The student selects an assignment. The system displays instructions, questions, due date, and submission requirements. The student answers questions or uploads required files. The student selects Submit. The system validates and records the submission. The system displays a successful submission message"
+      ],
+      [
+        "Alternative",
+        "No Assignments Available The system finds no available assignments for the selected course. The system displays a message such as “No assessments available.”. Late or Closed Assessment The student selects an assessment beyond the allowed deadline. The system denies submission access. The system displays a closed or overdue notice. Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be successfully logged into the system."
+      ],
+      [
+        "Post-condition",
+        "The student must be successfully logged in, enrolled in the selected course, and have an available assessment. The student’s responses are stored in the system."
+      ],
+      [
+        "Assumption",
+        "The assessment has been successfully published, and the student has remaining attempts."
+      ]
+    ]
+  },
+  {
+    "index": 13,
+    "rows": [
+      [
+        "Use Case Name",
+        "Track Performance"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to monitor academic performance, view progress summaries, identify at-risk subjects, and track learning trends based on assessment results and recorded grades."
+      ],
+      [
+        "Successful Completion",
+        "Access Performance Dashboard The student selects the Performance tab from the sidebar. The system initializes the performance interface. The system retrieves the student’s performance records. The system processes the retrieved data The system displays the student’s performance information, including: Blended Average Current Status At-Risk Subjects (if any) Subject Overview Quarterly Trend Subject Breakdown The student reviews the displayed performance results."
+      ],
+      [
+        "Alternative",
+        "No Performance Records Available The system finds no available performance records. The system displays a message such as “No performance data available”. Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be logged in and must have recorded grades or assessment data"
+      ],
+      [
+        "Post-condition",
+        "The student successfully views performance information. The student becomes aware of current academic progress."
+      ],
+      [
+        "Assumption",
+        "The system has processed at least one summative assessment score for the student."
+      ]
+    ]
+  },
+  {
+    "index": 14,
+    "rows": [
+      [
+        "Use Case Name",
+        "Access LXP"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow eligible students to access the Learning Experience Platform (LXP) for remedial learning, review previous lessons, complete guided activities, and improve academic performance."
+      ],
+      [
+        "Successful Completion",
+        "Initialize LXP Access The student selects the LXP tab from the sidebar. The system initializes the LXP interface the system retrieves the student’s performance records. The system checks the student’s eligibility based on recorded performance results. The system verifies whether the student qualifies for LXP access. The system retrieves available remedial learning content. The system displays the student’s assigned learning path, previous lessons, previous assessments, and guided activities. The student selects a learning activity or lesson. The system opens the selected LXP content."
+      ],
+      [
+        "Alternative",
+        "Not Eligible for Access The system determines that the student does not meet the required criteria for LXP access. The system displays a message such as “You are currently not eligible for LXP access.” No Available LXP Content The system verifies eligibility but finds no available remedial content. The system displays a message such as “No learning activities available.” Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be logged in and have an active account"
+      ],
+      [
+        "Post-condition",
+        "The student successfully accesses the Learning Experience Platform. The student may begin remedial learning activities."
+      ],
+      [
+        "Assumption",
+        "The student’s most recent score was below the 74% mastery threshold."
+      ]
+    ]
+  },
+  {
+    "index": 15,
+    "rows": [
+      [
+        "Use Case Name",
+        "AI Mentor"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to interact with the AI Mentor for learning support, receive explanations, step-by-step guidance, feedback on mistakes, and recommended remedial activities."
+      ],
+      [
+        "Successful Completion",
+        "Initiate AI Mentor Session The student selects the AI Mentor from the sidebar. The system initializes the AI Mentor interface. The system retrieves relevant student learning data or selected subject context. The system displays the AI Mentor chat or assistance page. The student enters a question, topic, or requests help regarding a lesson or assessment. The system processes the student request. The AI Mentor generates an explanation, hints, or recommended activities. The system displays the AI Mentor response. The student reviews the provided assistance."
+      ],
+      [
+        "Alternative",
+        "No Response Generated The system is unable to generate a response. The system displays a message such as “Unable to process request. Please try again.” Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be logged in and have an active account"
+      ],
+      [
+        "Post-condition",
+        "The student successfully receives AI-generated assistance. The student gains guidance for learning improvement."
+      ],
+      [
+        "Assumption",
+        "The AI microservice and Ollama runtime are active and have indexed the relevant PDF module."
+      ]
+    ]
+  },
+  {
+    "index": 16,
+    "rows": [
+      [
+        "Use Case Name",
+        "Student Profile"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to view personal information, enrollment records, assessment history, security details, and other profile-related information in the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Display Student Profile Information The student selects the Profile tab from the sidebar. The system initializes the Profile interface. The system retrieves the student’s profile records. The system displays the student’s profile information, including: Student Identity Emergency Contact Security Transcript Subject Enrollment Assessment History and Scores The student reviews the displayed profile information."
+      ],
+      [
+        "Alternative",
+        "Incomplete Profile Information The system detects missing or incomplete profile details. The system displays the available information and may indicate missing fields. Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be logged in and have an active account"
+      ],
+      [
+        "Post-condition",
+        "The student successfully views profile information. The student is informed of personal, academic, and assessment-related records."
+      ],
+      [
+        "Assumption",
+        "The system allows editing of non-academic fields only."
+      ]
+    ]
+  },
+  {
+    "index": 17,
+    "rows": [
+      [
+        "Use Case Name",
+        "Discussion Board"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the student to access teacher-created discussion threads, read posted topics, and participate by submitting replies or comments within the class discussion board."
+      ],
+      [
+        "Successful Completion",
+        "Participate in Discussion Thread The student opens the My Courses tab from the sidebar. The student selects a course or class. The system opens the selected course page. The student selects the Discussion Board section. The system retrieves available discussion threads. The system displays teacher-created discussion topics and existing replies. The student selects a discussion thread. The system opens the selected thread. The student reads the discussion content. The student enters a reply or comment. The student submits the response. The system validates and records the submitted reply. The system displays the new response within the thread."
+      ],
+      [
+        "Alternative",
+        "No Discussion Threads Available The system finds no available discussion topics. The system displays a message such as “No discussion threads available”. Connection Error The system cannot connect to the server or internet. The student may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The student must be logged in and enrolled in the selected course."
+      ],
+      [
+        "Post-condition",
+        "The student successfully participates in the discussion thread. The submitted response is stored and visible within the discussion board."
+      ],
+      [
+        "Assumption",
+        "The administrator has verified and locked the academic records for the student."
+      ]
+    ]
+  },
+  {
+    "index": 18,
+    "rows": [
+      [
+        "Use Case Name",
+        "Logout"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow authorized users to securely end the current session and exit the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "End User Session The user selects the Profile tab and find Logout select Logout from the sidebar The system requests logout confirmation. The user confirms the logout action. The system terminates the active session. The system clears stored login credentials, tokens, or session data. The system redirects the user to the Login page."
+      ],
+      [
+        "Alternative",
+        "Logout Cancelled The user selects logout but cancels the confirmation. The system keeps the current session active. Connection Error The system cannot connect to the server or internet. The user may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The user must be currently logged in to the system"
+      ],
+      [
+        "Post-condition",
+        "The user session is successfully ended. The user is returned to the Login page."
+      ],
+      [
+        "Assumption",
+        "The user is currently in an active, authenticated session."
+      ]
+    ]
+  },
+  {
+    "index": 19,
+    "rows": [
+      [
+        "Use Case Name",
+        "View My Classes"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to access the My Classes page immediately after login, view assigned classes, monitor schedules and upcoming events, and open a selected class for managing lessons, assessments, students, announcements, and records. It serves as the main landing page for the teacher portal."
+      ],
+      [
+        "Successful Completion",
+        "Display My Classes Information The teacher successfully logs in to the Nexora LMS + LXP system. The system redirects the teacher to the My Classes page. The system initializes the My Classes interface. The system sends a request to retrieve the teacher’s assigned classes The system fetches the following information from the database: Assigned Classes Real Time Calendar Upcoming Events Notice Search and Filter Options The system processes and organizes the retrieved data. The system displays the list of assigned classes. The teacher may use search or filters to locate a specific class. The teacher selects a class from the list. The system opens the selected class page. The teacher may access lessons, assignments, students, announcements, records, and class calendar."
+      ],
+      [
+        "Alternative",
+        "No Assigned Classes The system finds no classes assigned to the teacher. The system displays a message such as “No classes assigned”. Connection Error The system cannot connect to the server or internet. The teacher may retry after connection is restored."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be successfully logged in and have an active teacher account."
+      ],
+      [
+        "Post-condition",
+        "The My Classes page is successfully displayed. The teacher may open a selected class and manage class activities."
+      ],
+      [
+        "Assumption",
+        "The administrator has mapped the teacher to specific sections in the \"Section Management\" module."
+      ]
+    ]
+  },
+  {
+    "index": 20,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Class Lessons"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to access a selected class and manage lesson content, modules, and instructional materials for student learning."
+      ],
+      [
+        "Successful Completion",
+        "Access Class Lessons The teacher opens the My Classes page. The teacher selects an assigned class by clicking View Lessons or Open Class The system opens the selected class workspace. The system displays available class management sections including: Modules Assignments AI Draft Quiz Workspace Extraction Announcements Discussion Board Class Record Students Calendar The teacher selects a desired section to manage class activities."
+      ],
+      [
+        "Alternative",
+        "No Available Class Data The system opens the class but finds no modules, students, or activities yet. The system displays empty sections or setup prompts. Connection Error The system cannot connect to the server or internet. The system fails to load class workspace data. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "Teacher must be logged in and assigned to the selected class."
+      ],
+      [
+        "Post-condition",
+        "Teacher successfully accesses class workspace tools."
+      ],
+      [
+        "Assumption",
+        "The teacher has instructional authority over the selected course."
+      ]
+    ]
+  },
+  {
+    "index": 21,
+    "rows": [
+      [
+        "Use Case Name",
+        "Upload Learning Modules"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to upload learning modules, documents, and instructional files to a selected class for student access."
+      ],
+      [
+        "Successful Completion",
+        "Upload Modules Successfully The teacher opens the Class Workspace of a selected class. The teacher selects the Modules section. The system displays existing modules and module options. The teacher selects Add Modules. The system opens the file upload interface. The teacher selects or uploads a document or learning file. The teacher enters required module details. The teacher confirms the upload action. The system validates the file and submitted details. The system stores the uploaded module. The system displays the new module in the class module list."
+      ],
+      [
+        "Alternative",
+        "Invalid File Format The uploaded file type is not supported. The system rejects the upload. The system displays an invalid file format message. Connection Error The system cannot connect to the server or internet. The upload fails. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The module is successfully uploaded and stored. Students may access the uploaded learning material."
+      ],
+      [
+        "Assumption",
+        "The PDF files follow standard formatting for optimal layout-aware extraction."
+      ]
+    ]
+  },
+  {
+    "index": 22,
+    "rows": [
+      [
+        "Use Case Name",
+        "Create and Manage Assignments"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to create, edit, organize, and manage class assignments such as written work, performance tasks, quarterly assessments, and discussion activities."
+      ],
+      [
+        "Successful Completion",
+        "Create or Manage Assignment Successfully The teacher opens the Class Workspace of a selected class. The teacher selects the Assignments section. The system displays available assignment categories including All: Written Work Performance Task Quarterly Assignments Discussion Drafts The teacher selects Add New Assignment or chooses an existing assignment to manage. The system opens the assignment management interface. The teacher selects the assignment type or question format, if applicable. The teacher enters assignment details such as title, instructions, due date, and settings. The teacher adds questions, file upload requirements, or activity content. The teacher confirms save or publish action. The system validates the submitted data. The system stores the assignment information. The system displays the updated assignment list."
+      ],
+      [
+        "Alternative",
+        "Incomplete Required Fields The teacher submits the assignment with missing required details. The system rejects the submission. The system displays validation messages. Save as a Draft The teacher chooses to save unfinished work as draft The system stores the assignment under Drafts Connection Error The system cannot connect to the server or internet. The system fails to save the assignment. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The assignment is successfully created or updated. Students may access the published assignment when available."
+      ],
+      [
+        "Assumption",
+        "The teacher understands the grading weights (Written Work vs. Performance Task)."
+      ]
+    ]
+  },
+  {
+    "index": 23,
+    "rows": [
+      [
+        "Use Case Name",
+        "Discussion Board"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to create discussion threads, post topics, and manage classroom discussions for student participation within the selected class."
+      ],
+      [
+        "Successful Completion",
+        "Manage Discussion Board Successfully The teacher opens the Class Workspace of a selected class. The teacher selects the Discussion Board section. The system retrieves existing discussion threads. The system displays available discussion topics and replies. The teacher selects Add New Thread or chooses an existing thread to manage. The system opens the discussion management interface. The teacher enters the discussion title, topic, or instructions. The teacher confirms the posting action. The system validates the submitted discussion data. The system stores the new thread or updates the selected discussion. The system displays the updated discussion board. The teacher may review student replies or moderate discussion activity."
+      ],
+      [
+        "Alternative",
+        "Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The discussion board is successfully updated. Students may participate in the created or managed thread."
+      ],
+      [
+        "Assumption",
+        "The teacher and students are connected via Socket.IO for real-time updates."
+      ]
+    ]
+  },
+  {
+    "index": 24,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Class Records"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to access class records, review student grades, identify passed students, and monitor students requiring intervention."
+      ],
+      [
+        "Successful Completion",
+        "Display Class Records The teacher opens the Class Workspace of a selected class. The teacher selects the Class Record section. The system retrieves student academic records for the class. The system processes and organizes the retrieved data. The system displays class record information including: Student Grade Records Passed Students Students for Intervention The teacher reviews the displayed records. The teacher may update grades or monitor student standing."
+      ],
+      [
+        "Alternative",
+        "No Records Available The system finds no available records for the selected class. The system displays a message such as “No class records available.” Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views class records. The teacher may use records for grading and intervention monitoring."
+      ],
+      [
+        "Assumption",
+        "The system has successfully aggregated all assessment results for the section."
+      ]
+    ]
+  },
+  {
+    "index": 25,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Class Roster"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to view students enrolled in a selected class and manage the class roster by adding students when permitted."
+      ],
+      [
+        "Successful Completion",
+        "Manage Class Student List The teacher opens the Class Workspace of a selected class. The teacher selects the Students section. The system retrieves the current class roster. The system processes and displays the list of enrolled students. The teacher reviews the displayed student list. The teacher selects Add Students to Class, if needed. The system displays available eligible students. The teacher selects one or more students to add. The system validates the selected students. The system updates the class roster successfully. The system displays the updated student list."
+      ],
+      [
+        "Alternative",
+        "No Students Enrolled The system finds no currently enrolled students in the class. The system displays a message such as “No students enrolled”. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views or updates the class roster. The updated roster is stored in the system."
+      ],
+      [
+        "Assumption",
+        "The student accounts already exist in the institutional masterlist."
+      ]
+    ]
+  },
+  {
+    "index": 26,
+    "rows": [
+      [
+        "Use Case Name",
+        "AI Draft Quiz Workspace"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to use the AI Draft Quiz Workspace to generate draft quiz content, create assessment questions, and prepare assignments based on selected lesson materials or prompts."
+      ],
+      [
+        "Successful Completion",
+        "Generate Draft Quiz Content The teacher opens the Class Workspace of a selected class. The teacher selects the Assignments section or AI Draft Quiz Workspace shortcut. The system opens the AI Draft Quiz Workspace interface. The system displays available tools including: Generation Controls Source Selection Extraction Live Jobs Recent Jobs The teacher selects lesson materials, uploaded files, or enters a prompt as source content. The teacher configures quiz generation settings. The teacher starts the AI generation process. The system processes the request and generates draft quiz questions. The system displays the generated draft content. The teacher reviews, edits, saves, or transfers the draft into an assignment."
+      ],
+      [
+        "Alternative",
+        "No Source Content Provided The teacher starts generation without selecting source material or entering a prompt. The system displays a validation message. Generation Failed The AI service cannot complete the request. The system displays an error message. The teacher may retry generation. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "Draft quiz content is successfully generated. The teacher may use the generated content for assessments."
+      ],
+      [
+        "Assumption",
+        "The LLM has sufficient context from the extracted module data."
+      ]
+    ]
+  },
+  {
+    "index": 27,
+    "rows": [
+      [
+        "Use Case Name",
+        "AI Extraction"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to upload PDF or document files and use AI Extraction to analyze, extract, and convert learning content for class use."
+      ],
+      [
+        "Successful Completion",
+        "Extract Learning Content Successfully The teacher opens the Class Workspace of a selected class. The teacher selects the Extraction section. The system opens the AI Extraction interface. The system prompts the teacher to upload or drop PDF/document files. The teacher selects or uploads the source file. The system validates the uploaded file. The teacher starts the extraction process. The system analyzes the uploaded content using AI Extraction. The system retrieves extracted text or structured learning content. The system displays the extracted results. The teacher reviews and uses the extracted content for modules or assessments."
+      ],
+      [
+        "Alternative",
+        "Invalid File Format The uploaded file is unsupported or corrupted. The system rejects the file upload The system displays an error message. Extraction Failed The system cannot complete the extraction process. The system displays an error message. The teacher may retry using another file. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "Learning content is successfully extracted. The teacher may use extracted content for teaching materials."
+      ],
+      [
+        "Assumption",
+        "The FastAPI microservice is connected to the Ollama vision model (gemma3)."
+      ]
+    ]
+  },
+  {
+    "index": 28,
+    "rows": [
+      [
+        "Use Case Name",
+        "Class Announcement"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to create and publish announcements for students in a selected class regarding schedules, reminders, updates, or class activities."
+      ],
+      [
+        "Successful Completion",
+        "Post Announcement Successfully The teacher opens the Class Workspace of a selected class. The teacher selects the Announcement section. The system retrieves existing class announcements. The system displays the announcement page. The teacher selects Add New Announcement. The system opens the announcement creation form. The teacher enters the announcement title, message, or details. The teacher confirms the posting action. The system validates the submitted announcement data. The system stores the announcement successfully. The system displays the updated class announcement list. Students in the selected class may view the posted announcement."
+      ],
+      [
+        "Alternative",
+        "No Existing Announcements The system finds no existing announcements. The system displays an empty announcement page. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in and have access to the selected class workspace."
+      ],
+      [
+        "Post-condition",
+        "The announcement is successfully posted. Students may view the new announcement."
+      ],
+      [
+        "Assumption",
+        "The system supports broadcast delivery to all enrolled students in the section."
+      ]
+    ]
+  },
+  {
+    "index": 29,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Student Interventions"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to monitor students requiring intervention, review active cases, and manage remedial actions based on academic performance results."
+      ],
+      [
+        "Successful Completion",
+        "Access Intervention Records The teacher selects the Interventions tab or section. The system initializes the intervention management interface. The system retrieves intervention-related student records. The system processes the retrieved data. The system displays intervention information including: Active Cases Completed Cases Priority Queue Queue Snapshot Intervention Outcomes Top XP / XP Leaderboard The teacher selects a student intervention case. The system displays the selected student’s intervention details. The teacher may review progress or update intervention status."
+      ],
+      [
+        "Alternative",
+        "No Intervation Cases Available The system finds no active intervention cases. The system displays a message such as “No intervention records available”. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views intervention records. The teacher may monitor students needing remediation."
+      ],
+      [
+        "Assumption",
+        "The system has identified students who scored below 74%"
+      ]
+    ]
+  },
+  {
+    "index": 30,
+    "rows": [
+      [
+        "Use Case Name",
+        "Track Student Performance"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to monitor class academic performance, identify at-risk students, review class averages, and analyze learning progress based on recorded grades and assessment results."
+      ],
+      [
+        "Successful Completion",
+        "Display Performance Information The teacher selects the Performance tab or section. The system initializes the performance interface. The system retrieves class performance records. The system processes the retrieved data. The system displays performance information including: Total Students Passing Students At-Risk Students Class Average Risk Readiness Score Diagnostics Recent Performance Logs AI Learning Gap Analysis The teacher reviews the displayed performance results The teacher may use the information to plan interventions or improve instruction."
+      ],
+      [
+        "Alternative",
+        "No Performance Data Available The system finds no available performance records. The system displays a message such as “No performance data available”. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views class performance information. The teacher may identify learning gaps and students needing support."
+      ],
+      [
+        "Assumption",
+        "The performance logs represent data from both LMS and LXP activities."
+      ]
+    ]
+  },
+  {
+    "index": 31,
+    "rows": [
+      [
+        "Use Case Name",
+        "Generate Reports"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to generate, view, and export academic reports related to class performance, grades, student lists, and class records."
+      ],
+      [
+        "Successful Completion",
+        "Display or Export Report The teacher selects the Reports tab or section. The system initializes the reports interface. The system retrieves available report categories. The system displays report options including: Average Class Grade Passing Rate Highest Grade At-Risk Students Student Master List Student Performance Class Record The teacher selects a preferred report type. The system retrieves and processes report data. The system displays the generated report."
+      ],
+      [
+        "Alternative",
+        "No Report Data Available The system finds no available data for the selected report. The system displays a message such as “No report data available”. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views or exports the selected report."
+      ],
+      [
+        "Assumption",
+        "The system can format data into institutional-standard PDF or Excel layouts."
+      ]
+    ]
+  },
+  {
+    "index": 32,
+    "rows": [
+      [
+        "Use Case Name",
+        "Teacher Profile"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to view and manage profile information, account security, additional teacher details, coverage information, and notifications."
+      ],
+      [
+        "Successful Completion",
+        "Display Teacher Profile Information The teacher selects the Profile tab or section. The system initializes the profile interface. The system retrieves the teacher’s account and profile records. The system displays profile information including: Profile Details Password & Security Additional Teacher Details Coverage Snapshot Notifications The teacher reviews the displayed profile information. The teacher may update profile or security details."
+      ],
+      [
+        "Alternative",
+        "Incomplete Profile Information The system detects missing teacher profile details. The system displays available information and indicates incomplete fields. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views profile information. Updated profile or security details are saved, if changes were made."
+      ],
+      [
+        "Assumption",
+        "The teacher has an active, non-suspended institutional account."
+      ]
+    ]
+  },
+  {
+    "index": 33,
+    "rows": [
+      [
+        "Use Case Name",
+        "My Section"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to access assigned section information, view section schedules, and review the student roster for the selected section."
+      ],
+      [
+        "Successful Completion",
+        "Display Section Information The teacher selects the My Section tab from sidebar. The system initializes the My Section interface. The system retrieves the teacher’s assigned section records. The system processes the retrieved data. The system displays section information including: Assigned Section Section Schedule Student Roster The teacher reviews the displayed section details. The teacher may open the section for additional viewing."
+      ],
+      [
+        "Alternative",
+        "No Assigned Section The system finds no assigned section for the teacher. The system displays a message such as “No section assigned.” Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views section information."
+      ],
+      [
+        "Assumption",
+        "The teacher is the designated adviser for the selected section."
+      ]
+    ]
+  },
+  {
+    "index": 34,
+    "rows": [
+      [
+        "Use Case Name",
+        "Nexora Library"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to organize, upload, search, and access instructional files and folders stored in the Nexora Library."
+      ],
+      [
+        "Successful Completion",
+        "Access Library Resources The teacher selects the Nexora Library tab. The system initializes the library interface. The system retrieves available folders and uploaded files. The system displays file library contents. The teacher may create folders, upload files, search resources, or filter contents. The teacher selects a file or folder for use."
+      ],
+      [
+        "Alternative",
+        "No Files Available The library contains no uploaded files. The system displays an empty library message. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Teacher successfully accesses library resources."
+      ],
+      [
+        "Assumption",
+        "The library contains approved instructional materials for junior high school."
+      ]
+    ]
+  },
+  {
+    "index": 35,
+    "rows": [
+      [
+        "Use Case Name",
+        "View Evaluations"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the teacher to view evaluation results, feedback responses, and summary scores related to teaching content delivery and student engagement."
+      ],
+      [
+        "Successful Completion",
+        "Display Evaluation Results The teacher selects the Evaluations tab or section. The system initializes the evaluations interface. The system retrieves available evaluation records and responses. The system processes the retrieved data. The system displays evaluation information including: Responses Content Score Delivery Score Engagement Score Evaluation Responses The teacher reviews the displayed evaluation results and feedback."
+      ],
+      [
+        "Alternative",
+        "No Evaluation Data Available The system finds no available evaluation records. The system displays a message such as “No evaluation data available”. Connection Error The system cannot connect to the server or internet. The teacher may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The teacher must be logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The teacher successfully views evaluation results and feedback information."
+      ],
+      [
+        "Assumption",
+        "The admin dashboard aggregates data from all tenants and sections."
+      ]
+    ]
+  },
+  {
+    "index": 36,
+    "rows": [
+      [
+        "Use Case Name",
+        "Dashboard"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to access the dashboard and view summary information about users, system status, academic insights, and quick access to major administrative modules of the Nexora LMS + LXP system. It serves as the main entry point for the admin portal."
+      ],
+      [
+        "Successful Completion",
+        "Display Dashboard Information The administrator successfully logs in to the system. The system redirects the administrator to the Admin Dashboard page. The system initializes the dashboard interface. The system retrieves administrative summary data The system displays dashboard information including: Total Users User Mix Quick Routes System Health Concept Mastery Snapshots Performance Transition The administrator reviews the displayed summary information. The administrator may select a shortcut to navigate to another module."
+      ],
+      [
+        "Alternative",
+        "No Available Data Available The system retrieves data but finds no records for one or more dashboard sections. The system displays default or empty values. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The dashboard is successfully displayed. The administrator may proceed to other admin modules."
+      ],
+      [
+        "Assumption",
+        "The system has monitoring hooks into all backend services."
+      ]
+    ]
+  },
+  {
+    "index": 37,
+    "rows": [
+      [
+        "Use Case Name",
+        "System Diagnostics"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to monitor the operational status of core system services, dependencies, and infrastructure components to ensure stable performance of the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Display Dashboard Information The administrator successfully logs in to the system. The administrator selects the Diagnostics tab or section. The system initializes the diagnostics interface. The system retrieves current system health and service status data. The system processes the retrieved diagnostic records. The system displays diagnostic information including: API Process PostgreSQL Database Redis Cache AI Service Environment Variables Database Pool Redis Connection AI Service Status The administrator reviews the displayed system status results. The administrator may use the information for troubleshooting or maintenance."
+      ],
+      [
+        "Alternative",
+        "Service Unavailable One or more monitored services fail to respond. The system displays warning or offline status indicators. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Diagnostic information is successfully displayed. The administrator may identify system issues requiring action."
+      ],
+      [
+        "Assumption",
+        "The system has monitoring hooks into all backend services."
+      ]
+    ]
+  },
+  {
+    "index": 38,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Users"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to create user accounts, view the account directory, search users, export user records, and manage account statuses within the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Manage User Accounts Successfully The administrator successfully logs in to the system. The administrator selects the Users tab from sidebar. The system initializes the user management interface. The system retrieves existing user account records. The system displays user management tools including: Create User Account Directory Search Users Export Users Status Filters (Active, Pending, Suspended, Deleted) The administrator selects Create User or an existing user account to manage. The system opens the selected user management function. The administrator enters or updates required user details, if applicable. The administrator confirms the action. The system validates the submitted data. The system stores the changes and updates the user directory."
+      ],
+      [
+        "Alternative",
+        "Incomplete Required Fields The administrator submits missing required account details. The system rejects the request and displays validation messages. Duplicate User Record The administrator creates an account using an existing unique record The system prevents duplicate account creation Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "User records are successfully updated. The account directory reflects the latest changes."
+      ],
+      [
+        "Assumption",
+        "The user directory is populated, and the database connection is stable."
+      ]
+    ]
+  },
+  {
+    "index": 39,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage Sections"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to create, view, edit, search, and archive academic sections, as well as review section rosters and schedules."
+      ],
+      [
+        "Successful Completion",
+        "Manage Sections Successfully The administrator successfully logs in to the system. The administrator selects the Section tab from sidebar. The system initializes the section management interface. The system retrieves existing sectionrecords. The system displays section management tools including: Create Section Section Directory Search Sections Active / Archived Status View Roster Edit Section Archive Section The administrator selects Create Section or an existing section to manage. The system opens the selected section management function. The administrator enters or updates section details, if applicable. The administrator confirms the action. The system validates the submitted data. The system stores the changes and updates the section directory."
+      ],
+      [
+        "Alternative",
+        "Incomplete Required Fields The administrator submits missing required section details. The system rejects the request and displays validation messages. Duplicate Section Record The administrator creates a section using an existing unique record The system prevents duplicate section creation Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Section records are successfully updated. The section directory reflects the latest changes."
+      ],
+      [
+        "Assumption",
+        "Grade levels 7–10 are correctly defined in the system schema."
+      ]
+    ]
+  },
+  {
+    "index": 40,
+    "rows": [
+      [
+        "Use Case Name",
+        "Manage School Calendar"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to create, view, and manage school events and academic schedules through the system calendar."
+      ],
+      [
+        "Successful Completion",
+        "Manage Calendar Successfully The administrator successfully logs in to the system. The administrator selects the Calendar tab from the sidebar. The system initializes the calendar interface. The system retrieves existing school events and schedule records. The system displays calendar tools including: Create School Event School Event Timeline The administrator selects Create School Event or an existing event to manage. The system opens the calendar event form. The administrator enters or updates event details such as title, date, time, and description. The administrator confirms the action. The system validates the submitted event data. The system stores the event and updates the school calendar."
+      ],
+      [
+        "Alternative",
+        "Incomplete Required Fields The administrator submits missing required event details. The system rejects the request and displays validation messages. Schedule Confict The submitted event overlaps with an existing schedule. The system displays a warning or conflict notice. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Calendar records are successfully updated. School events are visible in the system calendar."
+      ],
+      [
+        "Assumption",
+        "The current academic year/quarter is active in system settings."
+      ]
+    ]
+  },
+  {
+    "index": 41,
+    "rows": [
+      [
+        "Use Case Name",
+        "Nexora Library"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to upload, search, filter, and manage instructional files and learning resources stored in the Nexora Library."
+      ],
+      [
+        "Successful Completion",
+        "Manage Library Resources Successfully The administrator successfully logs in to the system. The administrator selects the Nexora Library tab from the sidebar. The system initializes the library management interface. The system retrieves existing files and stored resources. The system displays library tools including: Upload Files Search Grade / Subject Filters File Library Directory The administrator selects Upload Files or an existing resource to manage. The system opens the selected library function. The administrator uploads files, searches records, or applies filters. The system validates the submitted request. The system stores updates and refreshes the file library."
+      ],
+      [
+        "Alternative",
+        "Invalid File Format The administrator uploads an unsupported or corrupted file. The system rejects the upload and displays an error message. No Library Records Found The search or filter returns no matching files. The system displays an empty results message. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Library resources are successfully updated or displayed. The Nexora Library reflects the latest changes."
+      ],
+      [
+        "Assumption",
+        "The file storage infrastructure has sufficient capacity for PDF modules."
+      ]
+    ]
+  },
+  {
+    "index": 42,
+    "rows": [
+      [
+        "Use Case Name",
+        "Import Rosters"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to import student or class roster data using CSV or Excel files for faster enrollment and record management."
+      ],
+      [
+        "Successful Completion",
+        "Import Roster Successfully The administrator successfully logs in to the system. The administrator selects the Roster Import tab from the sidebar. The system initializes the roster import interface. The system displays import tools including: Upload CSV Upload Excel Pending Import Rows The administrator selects a CSV or Excel file to upload. The system validates the selected file format. The system reads and processes the uploaded roster data. The system displays pending import rows for review. The administrator reviews the detected records. The administrator confirms the import action. The system stores valid records and updates the database. The system displays the import results summary."
+      ],
+      [
+        "Alternative",
+        "Invalid File Format The uploaded file is unsupported, corrupted, or unreadable. The system rejects the upload and displays an error message. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Valid roster records are successfully imported. Student or class records reflect the latest imported data."
+      ],
+      [
+        "Assumption",
+        "The uploaded file matches the specific headers required by the NestJS validator."
+      ]
+    ]
+  },
+  {
+    "index": 43,
+    "rows": [
+      [
+        "Use Case Name",
+        "Reports"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to generate, view, filter, and export system reports related to class records, enrollment, performance, interventions, assessments, and system usage."
+      ],
+      [
+        "Successful Completion",
+        "Display or Export Reports The administrator successfully logs in to the system. The administrator selects the Reports tab from the sidebar. The system initializes the reports interface. The system retrieves available report categories and report windows. The system displays report tools including: Export Class Records Classes Connected Available Grading Periods Class Average Intervention Queue Filters and Export Controls The administrator selects a report category. The administrator applies filters such as grading period, class, section, or report type. The system retrieves and processes the requested report data. The system displays the generated report. The administrator may export, print, or download the report."
+      ],
+      [
+        "Alternative",
+        "No Report Data Available The selected report has no available records. The system displays a message such as “No report data available”. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The administrator successfully views or exports the selected report."
+      ],
+      [
+        "Assumption",
+        "Sufficient assessment data exists to calculate school-wide averages."
+      ]
+    ]
+  },
+  {
+    "index": 44,
+    "rows": [
+      [
+        "Use Case Name",
+        "Evaluation"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to review system evaluation results, user feedback responses, satisfaction scores, usability scores, and detailed comments for continuous improvement of the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Display Evaluation Results The administrator successfully logs in to the system. The administrator selects the Evaluations tab from the sidebar. The system retrieves available evaluation records and responses. The system processes the retrieved data. The system displays evaluation information including: Responses Average Satisfaction Average Usability Detailed Feedback Evaluation Filters Evaluation Results The administrator reviews the displayed evaluation results and feedback. The administrator may apply filters to analyze specific evaluation records."
+      ],
+      [
+        "Alternative",
+        "No Evaluation Data Available The system finds no available evaluation records. The system displays a message such as “No evaluation data available”. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The administrator successfully views evaluation results and feedback information."
+      ],
+      [
+        "Assumption",
+        "Student/teacher evaluation data has been submitted for the period."
+      ]
+    ]
+  },
+  {
+    "index": 45,
+    "rows": [
+      [
+        "Use Case Name",
+        "Announcement"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to create, publish, manage, and monitor announcements for selected classes or the general school bulletin board."
+      ],
+      [
+        "Successful Completion",
+        "Manage Announcement Successfully The administrator successfully logs in to the system. The administrator selects the Announcement tab from the sidebar. The system initializes the announcements interface. The system retrieves existing announcements and posting records. The system displays announcement tools including: Select Class Classes Number Visible Posts Pinned Posts Posting Flow Admin Bulletin Board The administrator selects Create Announcement or an existing announcement to manage. The system opens the announcement form. The administrator enters announcement details such as title, message, target audience, or selected class. The administrator confirms the posting action. The system validates the submitted data. The system stores the announcement and updates the announcement list."
+      ],
+      [
+        "Alternative",
+        "Incomplete Announcement Details The administrator submits missing required fields. The system rejects the request and displays validation messages No Target Audience Selected The administrator submits a targeted announcement without selecting recipients or class. The system prompts for a valid target selection. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "Announcements are successfully updated or published. Users may view newly posted announcements."
+      ],
+      [
+        "Assumption",
+        "The Socket.IO gateway is active for real-time broadcast across all portals."
+      ]
+    ]
+  },
+  {
+    "index": 46,
+    "rows": [
+      [
+        "Use Case Name",
+        "AI Chatbot"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to interact with the AI Chatbot for assistance, information retrieval, and administrative support within the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Use AI Chatbot Successfully The administrator successfully logs in to the system. The administrator selects the AI Chatbot tab from the sidebar. The system displays chat options including New Chat and previous conversations, if available. The administrator starts a new chat or opens an existing conversation. The administrator enters a question, request, or command. The system processes the request using the AI service. The system generates and displays a chatbot response. The administrator may continue the conversation or start another chat."
+      ],
+      [
+        "Alternative",
+        "AI Service Unavailable The AI service fails to respond or is offline. The system displays an unavailable message. The administrator may retry later Connection Error The system cannot connect to the server or internet. The adminstrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The administrator successfully receives chatbot assistance. Chat history may be saved for future access."
+      ],
+      [
+        "Assumption",
+        "The Python FastAPI microservice is reachable by the NestJS backend."
+      ]
+    ]
+  },
+  {
+    "index": 47,
+    "rows": [
+      [
+        "Use Case Name",
+        "Audit Trail"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to review system activity logs and audit records for monitoring user actions, security events, and administrative changes within the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Display Audit Trail Records The administrator successfully logs in to the system. The administrator selects the Audit Trail tab from the sidebar. The system initializes the audit trail interface. The system retrieves available activity log records. The system processes the retrieved audit data. The system displays activity logs including user actions, timestamps, and affected modules. The administrator reviews the displayed audit records. The administrator may search, filter, or inspect specific log entries, if available."
+      ],
+      [
+        "Alternative",
+        "Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The administrator successfully views audit trail records."
+      ],
+      [
+        "Assumption",
+        "The audit_logs table contains records of all role-based mutations."
+      ]
+    ]
+  },
+  {
+    "index": 48,
+    "rows": [
+      [
+        "Use Case Name",
+        "System Settings"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to configure and maintain core academic system settings such as active school year, active quarter, and academic state of the Nexora LMS + LXP system."
+      ],
+      [
+        "Successful Completion",
+        "Update System Settings Successfully The administrator successfully logs in to the system. The administrator selects the System Settings tab from the sidebar. The system initializes the system settings interface. The system retrieves current configuration values. The system displays settings options including: Active School Year Active Quarter Academic State The administrator reviews the current settings. The administrator updates one or more configuration values. The administrator confirms the changes. The system validates the submitted settings. The system stores the updated configuration. The system displays a success confirmation."
+      ],
+      [
+        "Alternative",
+        "No Changes Made The administrator exits without modifying any settings. The system retains the current configuration. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "System settings are successfully updated. The new configuration becomes active in the system"
+      ],
+      [
+        "Assumption",
+        "Changes to global settings affect all active user sessions."
+      ]
+    ]
+  },
+  {
+    "index": 49,
+    "rows": [
+      [
+        "Use Case Name",
+        "Profile"
+      ],
+      [
+        "Actor",
+        ""
+      ],
+      [
+        "Description",
+        "To allow the administrator to view and manage account details, password and security settings, notifications, and personal profile information."
+      ],
+      [
+        "Successful Completion",
+        "Update Profile Successfully The administrator successfully logs in to the system. The administrator selects the Profile tab from the sidebar. The system displays profile information including: Account Details Password & Security Update Password Notifications Unread / Visible / View Notifications The administrator reviews the displayed profile information. The administrator may update account details, password, or notification preferences. The administrator confirms profile changes, if applicable. The system validates the submitted updates. The system stores the updated profile information. The system displays a success confirmation."
+      ],
+      [
+        "Alternative",
+        "Incorrect Current Password The administrator enters an incorrect current password during password update. The system denies the password change request The system displays an error message. Connection Error The system cannot connect to the server or internet. The administrator may retry or refresh the page."
+      ],
+      [
+        "Pre-condition",
+        "The administrator must be successfully logged in to the system."
+      ],
+      [
+        "Post-condition",
+        "The administrator successfully views or updates profile information. Account changes are saved in the system."
+      ],
+      [
+        "Assumption",
+        "The administrator maintains highest level security hygiene for the account."
+      ]
+    ]
+  },
+  {
+    "index": 50,
+    "rows": [
+      [
+        "Mobile Login and Multi-Factor (OTP) Verification",
+        "Mobile Login and Multi-Factor (OTP) Verification"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 51,
+    "rows": [
+      [
+        "Mobile Forgot Password and Account Recovery",
+        "Mobile Forgot Password and Account Recovery"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 52,
+    "rows": [
+      [
+        "View Dashboard and \"Continue Learning",
+        "View Dashboard and \"Continue Learning"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 53,
+    "rows": [
+      [
+        "View Modules and Time-Based Engagement Tracking",
+        "View Modules and Time-Based Engagement Tracking"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 54,
+    "rows": [
+      [
+        "Summative Assessment Submission",
+        "Summative Assessment Submission"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 55,
+    "rows": [
+      [
+        "LXP Remedial Access and 74% Mastery Threshold Gating",
+        "LXP Remedial Access and 74% Mastery Threshold Gating"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 56,
+    "rows": [
+      [
+        "RAG-Based Interaction with JAKIPIR AI Mentor",
+        "RAG-Based Interaction with JAKIPIR AI Mentor"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 57,
+    "rows": [
+      [
+        "View Performance Analytics and Quarterly Trends",
+        "View Performance Analytics and Quarterly Trends"
+      ],
+      [
+        "Students",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 58,
+    "rows": [
+      [
+        "Mobile Profile Management (Data Persistence)",
+        "Mobile Profile Management (Data Persistence)"
+      ],
+      [
+        "Students",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 59,
+    "rows": [
+      [
+        "Web Login and Dashboard Navigation",
+        "Web Login and Dashboard Navigation"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 60,
+    "rows": [
+      [
+        "Web Course Browsing and Filtering",
+        "Web Course Browsing and Filtering"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 61,
+    "rows": [
+      [
+        "Assessment Taking with Out-of-Focus Warning Logic",
+        "Assessment Taking with Out-of-Focus Warning Logic"
+      ],
+      [
+        "Students",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 62,
+    "rows": [
+      [
+        "Discussion Board Participation and Thread Replies",
+        "Discussion Board Participation and Thread Replies"
+      ],
+      [
+        "Students",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 63,
+    "rows": [
+      [
+        "Web Profile Detail Locking",
+        "Web Profile Detail Locking"
+      ],
+      [
+        "Student",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 64,
+    "rows": [
+      [
+        "Managing Classes and Instructional Materials",
+        "Managing Classes and Instructional Materials"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 65,
+    "rows": [
+      [
+        "AI PDF Extraction and Layout-Aware Section Application",
+        "AI PDF Extraction and Layout-Aware Section Application"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 66,
+    "rows": [
+      [
+        "AI Quiz Drafting and Assessment Studio Workspace",
+        "AI Quiz Drafting and Assessment Studio Workspace"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 67,
+    "rows": [
+      [
+        "Asynchronous AI Job Monitoring and Status Updates",
+        "Asynchronous AI Job Monitoring and Status Updates"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 68,
+    "rows": [
+      [
+        "Process Flow of Class Record Synchronization and Spreadsheet Management",
+        "Process Flow of Class Record Synchronization and Spreadsheet Management"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 69,
+    "rows": [
+      [
+        "Student Intervention Triage and Outcome Tracking",
+        "Student Intervention Triage and Outcome Tracking"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 70,
+    "rows": [
+      [
+        "Gap Analysis and Competency Heatmap Generation",
+        "Gap Analysis and Competency Heatmap Generation"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 71,
+    "rows": [
+      [
+        "Academic Report Generation and Data Export",
+        "Academic Report Generation and Data Export"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 72,
+    "rows": [
+      [
+        "Creating Class Announcements and Discussion Threads",
+        "Creating Class Announcements and Discussion Threads"
+      ],
+      [
+        "Teacher",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 73,
+    "rows": [
+      [
+        "Admin Dashboard Overview and Quick Route Navigation",
+        "Admin Dashboard Overview and Quick Route Navigation"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 74,
+    "rows": [
+      [
+        "User Lifecycle Management (Create, Suspend, Purge)",
+        "User Lifecycle Management (Create, Suspend, Purge)"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 75,
+    "rows": [
+      [
+        "Admin-Triggered User Password Reset",
+        "Admin-Triggered User Password Reset"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 76,
+    "rows": [
+      [
+        "Section Creation and Roster Management",
+        "Section Creation and Roster Management"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 77,
+    "rows": [
+      [
+        "Bulk Roster Import (CSV/Excel) and Validation Logic",
+        "Bulk Roster Import (CSV/Excel) and Validation Logic"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 78,
+    "rows": [
+      [
+        "School Calendar and Event Timeline Management",
+        "School Calendar and Event Timeline Management"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 79,
+    "rows": [
+      [
+        "System Diagnostics and Dependency Health Checks",
+        "System Diagnostics and Dependency Health Checks"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 80,
+    "rows": [
+      [
+        "Audit Trail Review and Security Log Filtering",
+        "Audit Trail Review and Security Log Filtering"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 81,
+    "rows": [
+      [
+        "Academic State Transition (Year/Quarter Updates)",
+        "Academic State Transition (Year/Quarter Updates)"
+      ],
+      [
+        "Admin",
+        "System"
+      ],
+      [
+        "",
+        ""
+      ]
+    ]
+  }
+]

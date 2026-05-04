@@ -22,6 +22,11 @@ export interface ClassItem {
   cardBannerUrl?: string | null;
   isActive: boolean;
   isHidden?: boolean;
+  gradingProfile?: {
+    writtenWork: number;
+    performanceTask: number;
+    quarterlyAssessment: number;
+  };
   schedules?: ClassSchedule[];
   enrollments?: Enrollment[];
   createdAt?: string;
@@ -43,6 +48,11 @@ export interface CreateClassDto {
   cardBannerUrl?: string | null;
   templateId?: string;
   schedules: { days: ScheduleDay[]; startTime: string; endTime: string }[];
+  gradingProfile: {
+    writtenWork: number;
+    performanceTask: number;
+    quarterlyAssessment: number;
+  };
 }
 
 export type ClassVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';

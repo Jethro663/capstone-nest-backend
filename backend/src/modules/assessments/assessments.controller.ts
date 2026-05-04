@@ -50,6 +50,7 @@ const ALLOWED_IMAGE_MIMES = [
   'image/gif',
   'image/webp',
 ];
+const ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
 const ALLOWED_ASSESSMENT_FILE_MIMES = [
   'application/pdf',
   'application/msword',
@@ -73,6 +74,17 @@ const ALLOWED_ASSESSMENT_FILE_MIMES = [
 ];
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+
+function isAllowedImageUpload(file: {
+  originalname: string;
+  mimetype: string;
+}) {
+  const extension = path.extname(file.originalname).toLowerCase();
+  return (
+    ALLOWED_IMAGE_MIMES.includes(file.mimetype) &&
+    ALLOWED_IMAGE_EXTENSIONS.includes(extension)
+  );
+}
 
 @ApiTags('Assessments')
 @ApiBearerAuth('token')
@@ -319,12 +331,12 @@ export class AssessmentsController {
       }),
       limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
       fileFilter: (_req, file, cb) => {
-        if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
+        if (isAllowedImageUpload(file)) {
           cb(null, true);
         } else {
           cb(
             new BadRequestException(
-              'Only JPEG, PNG, GIF and WebP images are allowed',
+              'Only JPG, PNG, GIF, and WEBP image files are allowed',
             ),
             false,
           );
@@ -347,6 +359,55 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Image uploaded successfully',
+      data: { imageUrl },
+    };
+  }
+
+  @Post('options/:id/image')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          fs.mkdirSync(IMAGE_UPLOAD_DEST, { recursive: true });
+          cb(null, IMAGE_UPLOAD_DEST);
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `${uuidv4()}_${Date.now()}${ext}`);
+        },
+      }),
+      limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        if (isAllowedImageUpload(file)) {
+          cb(null, true);
+        } else {
+          cb(
+            new BadRequestException(
+              'Only JPG, PNG, GIF, and WEBP image files are allowed',
+            ),
+            false,
+          );
+        }
+      },
+    }),
+  )
+  async uploadOptionImage(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required');
+    }
+
+    const imageUrl = `/api/assessments/questions/images/${file.filename}`;
+    await this.assessmentsService.updateQuestionOptionImage(id, imageUrl, user);
+
+    return {
+      success: true,
+      message: 'Option image uploaded successfully',
       data: { imageUrl },
     };
   }
@@ -469,6 +530,26 @@ export class AssessmentsController {
     };
   }
 
+  @Delete(':assessmentId/submission-files/:fileId')
+  @Roles(RoleName.Student)
+  async removeSubmissionFile(
+    @Param('assessmentId') assessmentId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+  ) {
+    const updated = await this.assessmentsService.removeStudentSubmissionFile(
+      assessmentId,
+      fileId,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Submission file removed successfully',
+      data: updated,
+    };
+  }
+
   /**
    * Download the teacher reference attachment for an assessment
    */
@@ -510,6 +591,33 @@ export class AssessmentsController {
     const file = await this.assessmentsService.getAttemptSubmissionDownload(
       attemptId,
       user,
+    );
+
+    const absolutePath = path.resolve(file.filePath);
+    if (!fs.existsSync(absolutePath)) {
+      throw new BadRequestException('File not found on disk');
+    }
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.originalName}"`,
+    );
+    return res.sendFile(absolutePath);
+  }
+
+  @Get('attempts/:attemptId/submission-files/:fileId/download')
+  @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
+  async downloadAttemptSubmissionAttachmentFile(
+    @Param('attemptId') attemptId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: any,
+    @Res() res: Response,
+  ) {
+    const file = await this.assessmentsService.getAttemptSubmissionDownload(
+      attemptId,
+      user,
+      fileId,
     );
 
     const absolutePath = path.resolve(file.filePath);
@@ -885,6 +993,44 @@ export class AssessmentsController {
     return {
       success: true,
       message: 'Grade returned to student successfully',
+      data: result,
+    };
+  }
+
+  @Post('attempts/:attemptId/unreturn')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async unreturnGrade(
+    @Param('attemptId') attemptId: string,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.assessmentsService.unreturnGrade(
+      attemptId,
+      user,
+    );
+
+    return {
+      success: true,
+      message: 'Posted grade restored to pending review',
+      data: result,
+    };
+  }
+
+  @Post('attempts/bulk-return')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  @HttpCode(HttpStatus.OK)
+  async bulkReturnGrades(
+    @Body() bulkReturnGradesDto: BulkReturnGradesDto,
+    @CurrentUser() user: any,
+  ) {
+    const result = await this.assessmentsService.bulkReturnGrades(
+      bulkReturnGradesDto,
+      user,
+    );
+
+    return {
+      success: true,
+      message: `${result.returned} grades returned to students`,
       data: result,
     };
   }

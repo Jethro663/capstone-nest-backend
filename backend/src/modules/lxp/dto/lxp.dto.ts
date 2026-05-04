@@ -1,7 +1,9 @@
 import {
+  IsBoolean,
   IsArray,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,10 +13,18 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { systemEvaluationTargetEnum } from '../../../drizzle/schema';
+import {
+  gradingPeriodEnum,
+  systemEvaluationTargetEnum,
+  teacherEvaluationTypeEnum,
+} from '../../../drizzle/schema';
 
 const systemTargets = systemEvaluationTargetEnum.enumValues;
 export type SystemEvaluationTarget = (typeof systemTargets)[number];
+const teacherEvaluationTypes = teacherEvaluationTypeEnum.enumValues;
+export type TeacherEvaluationType = (typeof teacherEvaluationTypes)[number];
+const gradingPeriods = gradingPeriodEnum.enumValues;
+export type TeacherEvaluationGradingPeriod = (typeof gradingPeriods)[number];
 const aiSessionTypes = [
   'mentor_chat',
   'mistake_explanation',
@@ -82,6 +92,155 @@ export class ResolveInterventionDto {
   @IsOptional()
   @IsString()
   note?: string;
+}
+
+export class GeneratedLessonDraftDto {
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  summary?: string | null;
+
+  @IsString()
+  lessonBody: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  weakConcepts: string[];
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  sourceLessonIds: string[];
+
+  @IsArray()
+  sourceReferences: Record<string, unknown>[];
+}
+
+export class GuidedQuestionOptionDto {
+  @IsString()
+  id: string;
+
+  @IsString()
+  text: string;
+
+  @IsBoolean()
+  isCorrect: boolean;
+}
+
+export class GeneratedGuidedQuestionDto {
+  @IsString()
+  id: string;
+
+  @IsIn(['multiple_choice', 'multiple_select', 'true_false', 'dropdown'])
+  type: string;
+
+  @IsString()
+  stem: string;
+
+  @IsString()
+  explanation: string;
+
+  @IsOptional()
+  @IsString()
+  hint?: string | null;
+
+  @IsOptional()
+  @IsString()
+  weakConceptTag?: string | null;
+
+  @IsOptional()
+  @IsString()
+  sourceQuestionId?: string | null;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GuidedQuestionOptionDto)
+  options: GuidedQuestionOptionDto[];
+}
+
+export class GeneratedGuidedAssessmentDraftDto {
+  @IsOptional()
+  @IsUUID('4')
+  sourceAssessmentId?: string | null;
+
+  @IsString()
+  title: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string | null;
+
+  @IsArray()
+  @IsString({ each: true })
+  weakConcepts: string[];
+
+  @IsOptional()
+  @IsString()
+  formativeSummary?: string | null;
+
+  @IsArray()
+  sourceReferences: Record<string, unknown>[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GeneratedGuidedQuestionDto)
+  questions: GeneratedGuidedQuestionDto[];
+}
+
+export class ApproveGeneratedArtifactsDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GeneratedLessonDraftDto)
+  generatedLessonDraft?: GeneratedLessonDraftDto | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GeneratedGuidedAssessmentDraftDto)
+  generatedGuidedAssessmentDraft?: GeneratedGuidedAssessmentDraftDto | null;
+}
+
+export class GuidedAssessmentProgressResponseDto {
+  @IsString()
+  questionId: string;
+
+  @IsOptional()
+  answer?: string | string[];
+
+  @IsOptional()
+  isCorrect?: boolean;
+
+  @IsOptional()
+  explanationShown?: boolean;
+}
+
+export class UpdateGuidedAssessmentProgressDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  currentQuestionIndex?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GuidedAssessmentProgressResponseDto)
+  responses?: GuidedAssessmentProgressResponseDto[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  hintedQuestionIds?: string[];
+}
+
+export class SubmitGuidedAssessmentDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GuidedAssessmentProgressResponseDto)
+  responses: GuidedAssessmentProgressResponseDto[];
+
+  @IsArray()
+  @IsString({ each: true })
+  hintedQuestionIds: string[];
 }
 
 export class AiEvaluationContextDto {
@@ -159,4 +318,36 @@ export class ListSystemEvaluationsQueryDto {
   @IsString()
   @MaxLength(64)
   aiSourceFlow?: string;
+}
+
+export class SubmitTeacherEvaluationDto {
+  @IsUUID('4')
+  classId: string;
+
+  @IsIn(gradingPeriods)
+  gradingPeriod: TeacherEvaluationGradingPeriod;
+
+  @IsIn(teacherEvaluationTypes)
+  evaluationType: TeacherEvaluationType;
+
+  @IsObject()
+  ratings: Record<string, number>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  comment?: string;
+}
+
+export class ListTeacherEvaluationSummaryQueryDto {
+  @IsIn(teacherEvaluationTypes)
+  evaluationType: TeacherEvaluationType;
+
+  @IsOptional()
+  @IsUUID('4')
+  classId?: string;
+
+  @IsOptional()
+  @IsIn(gradingPeriods)
+  gradingPeriod?: TeacherEvaluationGradingPeriod;
 }

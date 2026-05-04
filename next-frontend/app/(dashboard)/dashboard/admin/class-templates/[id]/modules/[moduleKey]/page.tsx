@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -20,6 +21,7 @@ import {
   Unlock,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ActionTooltip } from '@/components/shared/ActionTooltip';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -67,6 +69,11 @@ type AssessmentPickerState = {
   selectedAssessmentKey: string;
 };
 
+type DraggingItem = {
+  sectionIndex: number;
+  itemIndex: number;
+} | null;
+
 const TAB_ITEMS: Array<{ key: TemplateModuleTab; label: string; icon: typeof Layers3 }> = [
   { key: 'sections', label: 'Sections', icon: Layers3 },
   { key: 'visibility', label: 'Visibility', icon: Eye },
@@ -76,6 +83,14 @@ const TAB_ITEMS: Array<{ key: TemplateModuleTab; label: string; icon: typeof Lay
 
 function normalizeTemplateRichText(value: string | undefined) {
   return normalizeRichText(value || '');
+}
+
+function moveEntry<T>(list: T[], fromIndex: number, toIndex: number) {
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  if (!moved) return list;
+  next.splice(toIndex, 0, moved);
+  return next;
 }
 
 function getPlainTextLength(html: string) {
@@ -247,6 +262,27 @@ function itemMetaForTemplate(item: ClassTemplateModuleItem) {
   return (item.metadata?.fileUrl as string | undefined) || 'PDF Resource';
 }
 
+function getTemplateItemEditorHref(
+  item: ClassTemplateModuleItem,
+  templateId: string,
+  moduleIndex: number,
+  sectionIndex: number,
+  itemIndex: number,
+  assessments: ClassTemplateAssessment[],
+) {
+  if (item.itemType === 'lesson') {
+    return `/dashboard/admin/class-templates/${templateId}/lessons/${buildLessonItemKey(moduleIndex, sectionIndex, itemIndex)}/edit`;
+  }
+
+  if (item.itemType === 'assessment') {
+    const linkedRouteKey = assessmentRouteKeyForItem(item, assessments);
+    if (!linkedRouteKey) return null;
+    return `/dashboard/admin/class-templates/${templateId}/assessments/${linkedRouteKey}/edit`;
+  }
+
+  return null;
+}
+
 export default function AdminTemplateModuleWorkspacePage() {
   const params = useParams<{ id: string; moduleKey: string }>();
   const router = useRouter();
@@ -266,6 +302,8 @@ export default function AdminTemplateModuleWorkspacePage() {
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [uploadingFileBlockKey, setUploadingFileBlockKey] = useState<string | null>(null);
   const [visibilityConfirmOpen, setVisibilityConfirmOpen] = useState(false);
+  const [draggingSectionIndex, setDraggingSectionIndex] = useState<number | null>(null);
+  const [draggingItem, setDraggingItem] = useState<DraggingItem>(null);
   const [assessmentPickerState, setAssessmentPickerState] = useState<AssessmentPickerState>({
     open: false,
     sectionIndex: -1,
@@ -456,7 +494,84 @@ export default function AdminTemplateModuleWorkspacePage() {
     setModules((current) =>
       updateTemplateModuleByIndex(current, moduleIndex, (moduleEntry) => ({
         ...moduleEntry,
-        sections: (moduleEntry.sections ?? []).filter((_, idx) => idx !== sectionIndex),
+        sections: (moduleEntry.sections ?? [])
+          .filter((_, idx) => idx !== sectionIndex)
+          .map((sectionEntry, index) => ({
+            ...sectionEntry,
+            order: index + 1,
+          })),
+      })),
+    );
+  };
+
+  const handleReorderSections = (targetSectionIndex: number) => {
+    if (
+      moduleIndex < 0 ||
+      !modules[moduleIndex] ||
+      draggingSectionIndex === null ||
+      draggingSectionIndex === targetSectionIndex
+    ) {
+      return;
+    }
+
+    setModules((current) =>
+      updateTemplateModuleByIndex(current, moduleIndex, (moduleEntry) => ({
+        ...moduleEntry,
+        sections: moveEntry(moduleEntry.sections ?? [], draggingSectionIndex, targetSectionIndex).map(
+          (sectionEntry, index) => ({
+            ...sectionEntry,
+            order: index + 1,
+          }),
+        ),
+      })),
+    );
+    setDraggingSectionIndex(null);
+  };
+
+  const handleReorderItems = (sectionIndex: number, targetItemIndex: number) => {
+    if (
+      moduleIndex < 0 ||
+      !modules[moduleIndex] ||
+      !draggingItem ||
+      draggingItem.sectionIndex !== sectionIndex ||
+      draggingItem.itemIndex === targetItemIndex
+    ) {
+      return;
+    }
+
+    setModules((current) =>
+      updateTemplateSectionByIndex(current, moduleIndex, sectionIndex, (sectionEntry) => ({
+        ...sectionEntry,
+        items: moveEntry(sectionEntry.items ?? [], draggingItem.itemIndex, targetItemIndex).map(
+          (itemEntry, index) => ({
+            ...itemEntry,
+            order: index + 1,
+          }),
+        ),
+      })),
+    );
+    setDraggingItem(null);
+  };
+
+  const handleUpdateItem = (
+    sectionIndex: number,
+    itemIndex: number,
+    patch: { isRequired?: boolean; points?: number },
+  ) => {
+    if (moduleIndex < 0 || !modules[moduleIndex]) return;
+
+    setModules((current) =>
+      updateTemplateItemByIndex(current, moduleIndex, sectionIndex, itemIndex, (itemEntry) => ({
+        ...itemEntry,
+        ...patch,
+        ...(patch.points !== undefined
+          ? {
+              metadata: {
+                ...(itemEntry.metadata ?? {}),
+                points: patch.points,
+              },
+            }
+          : {}),
       })),
     );
   };
@@ -586,7 +701,12 @@ export default function AdminTemplateModuleWorkspacePage() {
     setModules((current) =>
       updateTemplateSectionByIndex(current, moduleIndex, sectionIndex, (sectionEntry) => ({
         ...sectionEntry,
-        items: (sectionEntry.items ?? []).filter((_, idx) => idx !== itemIndex),
+        items: (sectionEntry.items ?? [])
+          .filter((_, idx) => idx !== itemIndex)
+          .map((itemEntry, index) => ({
+            ...itemEntry,
+            order: index + 1,
+          })),
       })),
     );
   };
@@ -839,11 +959,26 @@ export default function AdminTemplateModuleWorkspacePage() {
             </div>
 
             {(activeModule.sections ?? []).map((section, sectionIndex) => (
-              <article key={`${section.id ?? 'new'}-${sectionIndex}`} className="teacher-module-detail__section-card">
+              <article
+                key={`${section.id ?? 'new'}-${sectionIndex}`}
+                className="teacher-module-detail__section-card"
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => handleReorderSections(sectionIndex)}
+                data-dragging={draggingSectionIndex === sectionIndex}
+              >
                 <header className="teacher-module-detail__section-card-head">
-                  <span className="teacher-module-detail__drag-handle" aria-hidden="true">
-                    <GripVertical className="h-4 w-4" />
-                  </span>
+                  <ActionTooltip label="Drag to reorder section">
+                    <button
+                      type="button"
+                      className="teacher-module-detail__drag-handle"
+                      draggable
+                      onDragStart={() => setDraggingSectionIndex(sectionIndex)}
+                      onDragEnd={() => setDraggingSectionIndex(null)}
+                      aria-label="Reorder section"
+                    >
+                      <GripVertical className="h-4 w-4" />
+                    </button>
+                  </ActionTooltip>
                   <div className="teacher-module-detail__section-main">
                     <input
                       type="text"
@@ -909,63 +1044,120 @@ export default function AdminTemplateModuleWorkspacePage() {
                                 ? 'file'
                                 : 'published';
                           const itemMeta = itemMetaForTemplate(item);
-                          const lessonEditorPath =
-                            item.itemType === 'lesson'
-                              ? `/dashboard/admin/class-templates/${templateId}/lessons/${buildLessonItemKey(moduleIndex, sectionIndex, itemIndex)}/edit`
-                              : '';
+                          const itemEditorHref = getTemplateItemEditorHref(
+                            item,
+                            templateId,
+                            moduleIndex,
+                            sectionIndex,
+                            itemIndex,
+                            assessments,
+                          );
                           const fileInputId = `general-library-upload-${sectionIndex}-${itemIndex}`;
                           const fileBlockKey = `${sectionIndex}-${itemIndex}`;
                           const isUploadingThisBlock = uploadingFileBlockKey === fileBlockKey;
+                          const lessonPointsValue = String(
+                            item.points ??
+                              Number(
+                                (item.metadata as Record<string, unknown> | null)?.points ?? 0,
+                              ),
+                          );
 
                           return (
                             <div
                               key={`${item.id ?? 'new'}-${itemIndex}`}
-                              className={`teacher-module-detail__item-row ${item.itemType === 'lesson' ? 'cursor-pointer' : ''}`}
-                              onClick={() => {
-                                if (item.itemType !== 'lesson') return;
-                                router.push(lessonEditorPath);
-                              }}
-                              onKeyDown={(event) => {
-                                if (item.itemType !== 'lesson') return;
-                                if (event.key !== 'Enter' && event.key !== ' ') return;
-                                event.preventDefault();
-                                router.push(lessonEditorPath);
-                              }}
-                              role={item.itemType === 'lesson' ? 'button' : undefined}
-                              tabIndex={item.itemType === 'lesson' ? 0 : undefined}
-                              aria-label={item.itemType === 'lesson' ? 'Open lesson studio' : undefined}
+                              className="teacher-module-detail__item-row"
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={() => handleReorderItems(sectionIndex, itemIndex)}
                             >
-                              <span className="teacher-module-detail__drag-handle" aria-hidden="true">
-                                <GripVertical className="h-4 w-4" />
-                              </span>
-                              <div
-                                className={`teacher-module-detail__item-main ${
-                                  item.itemType === 'lesson' ? '' : 'teacher-module-detail__item-main--disabled'
-                                }`}
-                              >
-                                <div className="teacher-module-detail__item-icon">
-                                  <ItemIcon className="h-4 w-4" />
-                                </div>
-                                <div className="teacher-module-detail__item-copy">
-                                  <div className="teacher-module-detail__chips">
-                                    <span data-kind={item.itemType}>{item.itemType}</span>
-                                    <span data-kind={itemStatusKind}>{itemStatus}</span>
+                              <ActionTooltip label="Drag to reorder item">
+                                <button
+                                  type="button"
+                                  className="teacher-module-detail__drag-handle"
+                                  draggable
+                                  onDragStart={() => setDraggingItem({ sectionIndex, itemIndex })}
+                                  onDragEnd={() => setDraggingItem(null)}
+                                  aria-label="Reorder item"
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </button>
+                              </ActionTooltip>
+                              {itemEditorHref ? (
+                                <Link
+                                  href={itemEditorHref}
+                                  className="teacher-module-detail__item-main"
+                                  aria-label={`Open ${item.itemType} editor`}
+                                >
+                                  <div className="teacher-module-detail__item-icon">
+                                    <ItemIcon className="h-4 w-4" />
                                   </div>
-                                  <h4>{itemTitle}</h4>
-                                  <p>{itemMeta}</p>
+                                  <div className="teacher-module-detail__item-copy">
+                                    <div className="teacher-module-detail__chips">
+                                      <span data-kind={item.itemType}>{item.itemType}</span>
+                                      <span data-kind={itemStatusKind}>{itemStatus}</span>
+                                    </div>
+                                    <h4>{itemTitle}</h4>
+                                    <p>{itemMeta}</p>
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className="teacher-module-detail__item-main teacher-module-detail__item-main--disabled">
+                                  <div className="teacher-module-detail__item-icon">
+                                    <ItemIcon className="h-4 w-4" />
+                                  </div>
+                                  <div className="teacher-module-detail__item-copy">
+                                    <div className="teacher-module-detail__chips">
+                                      <span data-kind={item.itemType}>{item.itemType}</span>
+                                      <span data-kind={itemStatusKind}>{itemStatus}</span>
+                                    </div>
+                                    <h4>{itemTitle}</h4>
+                                    <p>{itemMeta}</p>
+                                  </div>
                                 </div>
-                              </div>
+                              )}
                               <div className="flex flex-wrap items-center justify-end gap-2">
+                                <label className="teacher-module-detail__control-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(item.isRequired)}
+                                    onChange={(event) =>
+                                      handleUpdateItem(sectionIndex, itemIndex, {
+                                        isRequired: event.target.checked,
+                                      })
+                                    }
+                                  />
+                                  Required
+                                </label>
+
+                                {item.itemType === 'lesson' ? (
+                                  <label className="teacher-module-detail__points-field">
+                                    Points
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={10000}
+                                      value={lessonPointsValue}
+                                      onChange={(event) =>
+                                        handleUpdateItem(sectionIndex, itemIndex, {
+                                          points: Math.max(
+                                            0,
+                                            Number.parseInt(event.target.value || '0', 10) || 0,
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  </label>
+                                ) : null}
+
                                 {item.itemType === 'assessment' ? (
                                   <>
-                                    {linkedRouteKey ? (
+                                    {itemEditorHref ? (
                                       <Button
                                         type="button"
                                         variant="outline"
                                         className="admin-button-outline h-8 rounded-lg px-3 text-xs font-bold"
                                         onClick={(event) => {
                                           event.stopPropagation();
-                                          router.push(`/dashboard/admin/class-templates/${templateId}/assessments/${linkedRouteKey}/edit`);
+                                          router.push(itemEditorHref);
                                         }}
                                       >
                                         Open Assessment Studio
@@ -1008,17 +1200,19 @@ export default function AdminTemplateModuleWorkspacePage() {
                                   </>
                                 ) : null}
 
-                                <button
-                                  type="button"
-                                  className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    removeModuleBlock(sectionIndex, itemIndex);
-                                  }}
-                                  aria-label="Delete block"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
+                                <ActionTooltip label="Remove item from section">
+                                  <button
+                                    type="button"
+                                    className="teacher-module-detail__ghost teacher-module-detail__ghost--danger"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      removeModuleBlock(sectionIndex, itemIndex);
+                                    }}
+                                    aria-label="Delete block"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </ActionTooltip>
                               </div>
                             </div>
                           );

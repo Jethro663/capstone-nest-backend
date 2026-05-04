@@ -16,6 +16,7 @@ import type {
   OngoingAttemptResult,
   OngoingAttemptSummary,
   UpdateAttemptProgressDto,
+  ManualResponseScore,
   RubricCriterion,
   RubricScore,
 } from '@/types/assessment';
@@ -134,6 +135,16 @@ export const assessmentService = {
     return data;
   },
 
+  /** POST /assessments/options/:id/image — Upload question option image */
+  async uploadOptionImage(optionId: string, file: File): Promise<{ success: boolean; message: string; data: { imageUrl: string } }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    const { data } = await api.post(`/assessments/options/${optionId}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
   /** POST /assessments/:assessmentId/teacher-attachment — Upload teacher reference file */
   async uploadTeacherAttachment(
     assessmentId: string,
@@ -177,6 +188,13 @@ export const assessmentService = {
         sizeBytes: number;
         uploadedAt: string;
       };
+      files?: Array<{
+        id: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+        uploadedAt?: string;
+      }>;
     };
   }> {
     const formData = new FormData();
@@ -187,6 +205,29 @@ export const assessmentService = {
       {
         headers: { 'Content-Type': 'multipart/form-data' },
       },
+    );
+    return data;
+  },
+
+  async removeSubmissionFile(
+    assessmentId: string,
+    fileId: string,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      attemptId: string;
+      files: Array<{
+        id: string;
+        originalName: string;
+        mimeType: string;
+        sizeBytes: number;
+        uploadedAt?: string;
+      }>;
+    };
+  }> {
+    const { data } = await api.delete(
+      `/assessments/${assessmentId}/submission-files/${fileId}`,
     );
     return data;
   },
@@ -207,8 +248,30 @@ export const assessmentService = {
     triggerBrowserDownload(response.data, filename);
   },
 
-  async getAttemptSubmissionFileBlob(attemptId: string, fallbackName = 'submission-file') {
-    const response = await api.get(`/assessments/attempts/${attemptId}/submission-file/download`, {
+  async downloadAttemptSubmissionAttachmentFile(
+    attemptId: string,
+    fileId: string,
+    fallbackName = 'submission-file',
+  ) {
+    const response = await api.get(
+      `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`,
+      {
+        responseType: 'blob',
+      },
+    );
+    const filename = getDownloadFilename(response.headers['content-disposition'], fallbackName);
+    triggerBrowserDownload(response.data, filename);
+  },
+
+  async getAttemptSubmissionFileBlob(
+    attemptId: string,
+    fallbackName = 'submission-file',
+    fileId?: string,
+  ) {
+    const endpoint = fileId
+      ? `/assessments/attempts/${attemptId}/submission-files/${fileId}/download`
+      : `/assessments/attempts/${attemptId}/submission-file/download`;
+    const response = await api.get(endpoint, {
       responseType: 'blob',
     });
     return {
@@ -217,8 +280,12 @@ export const assessmentService = {
     };
   },
 
-  async openAttemptSubmissionFile(attemptId: string, fallbackName = 'submission-file') {
-    const { blob } = await this.getAttemptSubmissionFileBlob(attemptId, fallbackName);
+  async openAttemptSubmissionFile(
+    attemptId: string,
+    fallbackName = 'submission-file',
+    fileId?: string,
+  ) {
+    const { blob } = await this.getAttemptSubmissionFileBlob(attemptId, fallbackName, fileId);
     openBlobInNewTab(blob);
   },
 
@@ -340,12 +407,14 @@ export const assessmentService = {
       teacherFeedback?: string;
       directScore?: number;
       rubricScores?: RubricScore[];
+      manualResponseScores?: ManualResponseScore[];
     } = {},
   ): Promise<{ success: boolean; message: string }> {
     const { data } = await api.post(`/assessments/attempts/${attemptId}/return`, {
       teacherFeedback: payload.teacherFeedback || undefined,
       directScore: payload.directScore,
       rubricScores: payload.rubricScores,
+      manualResponseScores: payload.manualResponseScores,
     });
     return data;
   },
@@ -359,6 +428,33 @@ export const assessmentService = {
   },
 
   /** GET /assessments/:assessmentId/question-analytics — Teacher, Admin */
+  async unreturnGrade(
+    attemptId: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const { data } = await api.post(`/assessments/attempts/${attemptId}/unreturn`);
+    return data;
+  },
+
+  async bulkReturnGrades(
+    payload: {
+      attemptIds: string[];
+      teacherFeedback?: string;
+    },
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: {
+      returned: number;
+      attemptIds: string[];
+    };
+  }> {
+    const { data } = await api.post(`/assessments/attempts/bulk-return`, {
+      attemptIds: payload.attemptIds,
+      teacherFeedback: payload.teacherFeedback || undefined,
+    });
+    return data;
+  },
+
   async getQuestionAnalytics(assessmentId: string): Promise<{ success: boolean; message: string; data: QuestionAnalyticsResponse }> {
     const { data } = await api.get(`/assessments/${assessmentId}/question-analytics`);
     return data;

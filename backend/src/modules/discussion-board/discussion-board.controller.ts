@@ -37,6 +37,7 @@ import {
 } from './DTO/discussion-thread.dto';
 import {
   CreateDiscussionCommentDto,
+  ReportDiscussionCommentDto,
   SetDiscussionReactionDto,
 } from './DTO/discussion-comment.dto';
 
@@ -401,6 +402,31 @@ export class DiscussionBoardController {
     return {
       success: true,
       message: 'Discussion comment deleted.',
+      data,
+    };
+  }
+
+  @Post(':threadId/comments/:commentId/report')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async reportComment(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() dto: ReportDiscussionCommentDto,
+  ) {
+    const data = await this.discussionBoardService.reportComment(
+      classId,
+      threadId,
+      commentId,
+      user.userId,
+      user.roles,
+      dto,
+    );
+
+    return {
+      success: true,
+      message: 'Discussion comment reported for moderation follow-up.',
       data,
     };
   }

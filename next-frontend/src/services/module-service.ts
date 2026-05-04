@@ -43,7 +43,7 @@ export const moduleService = {
 
   async releaseCoreModule(
     moduleId: string,
-    dto: { isVisible?: boolean },
+    dto: { isVisible?: boolean; isLocked?: boolean },
   ): Promise<{ success: boolean; message: string; data: ClassModule }> {
     const { data } = await api.patch(`/modules/${moduleId}/core-release`, dto);
     return data;

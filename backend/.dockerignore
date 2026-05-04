@@ -11,5 +11,7 @@ test
 *.spec.ts
 *.test.ts
 uploads
+logs
+*.log
 .prettierrc
 eslint.config.mjs

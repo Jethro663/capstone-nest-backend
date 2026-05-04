@@ -113,6 +113,12 @@ const CLASS_ASSESSMENT_TYPES = new Set([
   'file_upload',
 ] as const);
 
+const DEFAULT_GRADING_PROFILE = {
+  writtenWork: 30,
+  performanceTask: 50,
+  quarterlyAssessment: 20,
+} as const;
+
 @Injectable()
 export class ClassesService {
   constructor(
@@ -257,6 +263,40 @@ export class ClassesService {
     ];
   }
 
+  private toClientClassProfile(classRecord: {
+    writtenWorkGradingWeight?: number | null;
+    performanceTaskGradingWeight?: number | null;
+    quarterlyAssessmentGradingWeight?: number | null;
+  }) {
+    return {
+      writtenWork: Number(
+        classRecord.writtenWorkGradingWeight ?? DEFAULT_GRADING_PROFILE.writtenWork,
+      ),
+      performanceTask: Number(
+        classRecord.performanceTaskGradingWeight ??
+          DEFAULT_GRADING_PROFILE.performanceTask,
+      ),
+      quarterlyAssessment: Number(
+        classRecord.quarterlyAssessmentGradingWeight ??
+          DEFAULT_GRADING_PROFILE.quarterlyAssessment,
+      ),
+    };
+  }
+
+  private withClientGradingProfile<
+    T extends {
+      id: string;
+      writtenWorkGradingWeight?: number | null;
+      performanceTaskGradingWeight?: number | null;
+      quarterlyAssessmentGradingWeight?: number | null;
+    },
+  >(classRecord: T) {
+    return {
+      ...classRecord,
+      gradingProfile: this.toClientClassProfile(classRecord),
+    };
+  }
+
   private ensureTeacherCanAccessClass(
     classRecord: { teacherId: string | null },
     requesterId?: string,
@@ -364,7 +404,7 @@ export class ClassesService {
 
     return {
       data: classList.map((c) => ({
-        ...c,
+        ...this.withClientGradingProfile(c),
         schedules: (c.schedules ?? []).map(toCalendarSlot),
       })),
       total: Number(totalRow?.total ?? 0),
@@ -458,10 +498,10 @@ export class ClassesService {
       }
     }
 
-    return {
+    return this.withClientGradingProfile({
       ...classRecord,
       schedules: (classRecord.schedules ?? []).map(toCalendarSlot),
-    };
+    });
   }
 
   /**
@@ -559,6 +599,12 @@ export class ClassesService {
         room: createClassDto.room.trim(),
         cardPreset: createClassDto.cardPreset ?? 'aurora',
         cardBannerUrl: createClassDto.cardBannerUrl ?? null,
+        writtenWorkGradingWeight:
+          createClassDto.gradingProfile?.writtenWork ?? 30,
+        performanceTaskGradingWeight:
+          createClassDto.gradingProfile?.performanceTask ?? 50,
+        quarterlyAssessmentGradingWeight:
+          createClassDto.gradingProfile?.quarterlyAssessment ?? 20,
       };
 
       const [newClass] = await tx
@@ -821,6 +867,11 @@ export class ClassesService {
         const normalizedQuestionExplanation = templateQuestion.explanation
           ? sanitizeRichTextHtml(templateQuestion.explanation)
           : null;
+        const templateQuestionMetadata =
+          templateQuestion.metadata &&
+          typeof templateQuestion.metadata === 'object'
+            ? (templateQuestion.metadata as Record<string, unknown>)
+            : {};
         const [question] = await database
           .insert(assessmentQuestions)
           .values({
@@ -832,6 +883,19 @@ export class ClassesService {
             isRequired: templateQuestion.isRequired ?? true,
             explanation: normalizedQuestionExplanation,
             imageUrl: templateQuestion.imageUrl ?? null,
+            metadata: {
+              imageDisplayMode:
+                templateQuestionMetadata.imageDisplayMode === 'expanded'
+                  ? 'expanded'
+                  : 'default',
+              imageZoom:
+                typeof templateQuestionMetadata.imageZoom === 'number'
+                  ? Math.min(
+                      Math.max(templateQuestionMetadata.imageZoom, 50),
+                      200,
+                    )
+                  : 100,
+            },
           })
           .returning();
 
@@ -840,12 +904,32 @@ export class ClassesService {
           : [];
         if (options.length > 0) {
           await database.insert(assessmentQuestionOptions).values(
-            options.map((option: any, optionIndex: number) => ({
-              questionId: question.id,
-              text: option.text ?? '',
-              isCorrect: option.isCorrect ?? false,
-              order: option.order ?? optionIndex + 1,
-            })),
+            options.map((option: any, optionIndex: number) => {
+              const optionMetadata =
+                option.metadata && typeof option.metadata === 'object'
+                  ? (option.metadata as Record<string, unknown>)
+                  : {};
+              return {
+                questionId: question.id,
+                text: option.text ?? '',
+                imageUrl:
+                  typeof optionMetadata.imageUrl === 'string'
+                    ? optionMetadata.imageUrl
+                    : null,
+                isCorrect: option.isCorrect ?? false,
+                order: option.order ?? optionIndex + 1,
+                metadata: {
+                  imageDisplayMode:
+                    optionMetadata.imageDisplayMode === 'expanded'
+                      ? 'expanded'
+                      : 'default',
+                  imageZoom:
+                    typeof optionMetadata.imageZoom === 'number'
+                      ? Math.min(Math.max(optionMetadata.imageZoom, 50), 200)
+                      : 100,
+                },
+              };
+            }),
           );
         }
       }
@@ -1578,7 +1662,7 @@ export class ClassesService {
     });
 
     const normalizedClassList = classList.map((c) => ({
-      ...c,
+      ...this.withClientGradingProfile(c),
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
 
@@ -1615,7 +1699,7 @@ export class ClassesService {
     });
 
     return classList.map((c) => ({
-      ...c,
+      ...this.withClientGradingProfile(c),
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
   }
@@ -1640,7 +1724,7 @@ export class ClassesService {
       orderBy: (classes, { asc }) => [asc(classes.createdAt)],
     });
 
-    return classList;
+    return classList.map((c) => this.withClientGradingProfile(c));
   }
 
   /**
@@ -1730,7 +1814,7 @@ export class ClassesService {
     });
 
     const normalizedClassList = classList.map((c) => ({
-      ...c,
+      ...this.withClientGradingProfile(c),
       schedules: (c.schedules ?? []).map(toCalendarSlot),
     }));
 

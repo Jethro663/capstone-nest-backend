@@ -10,13 +10,20 @@
 
 import { clearAccessToken, setAccessToken } from './api-client';
 import * as authService from './auth-service';
+import { clearStudentAnnouncementBoardDismissal } from './student-announcement-board';
 import type { UpdateProfileDto } from '@/types/profile';
 
 type ActionErrorResult = {
   success: false;
   message: string;
   errors?: unknown;
+  status?: number;
 };
+
+type ActionSuccessResult<T extends object = {}> = {
+  success: true;
+  message?: string;
+} & T;
 
 function toActionError(
   error: unknown,
@@ -31,6 +38,8 @@ function toActionError(
           ? errorRecord.message
           : fallbackMessage,
       errors: errorRecord.errors,
+      status:
+        typeof errorRecord.status === 'number' ? errorRecord.status : undefined,
     };
   }
 
@@ -75,6 +84,7 @@ export async function logoutAction(reason?: string) {
   }
 
   clearAccessToken();
+  clearStudentAnnouncementBoardDismissal();
   const target = reason
     ? `/login?reason=${encodeURIComponent(reason)}`
     : '/login';
@@ -89,6 +99,7 @@ export async function logoutAllAction(reason?: string) {
   }
 
   clearAccessToken();
+  clearStudentAnnouncementBoardDismissal();
   const target = reason
     ? `/login?reason=${encodeURIComponent(reason)}`
     : '/login';
@@ -143,7 +154,9 @@ export async function resendOTPAction(email: string) {
   }
 }
 
-export async function forgotPasswordAction(email: string) {
+export async function forgotPasswordAction(
+  email: string,
+): Promise<ActionErrorResult | ActionSuccessResult> {
   try {
     const response = await authService.forgotPassword(email);
     if (!response.success) {
@@ -159,8 +172,7 @@ export async function forgotPasswordAction(email: string) {
 export async function resetPasswordAction(formData: {
   email: string;
   code: string;
-  password: string;
-  confirmPassword: string;
+  newPassword: string;
 }) {
   try {
     const response = await authService.resetPassword(formData);

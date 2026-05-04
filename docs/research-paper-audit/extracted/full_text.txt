@@ -1,0 +1,705 @@
+
+Nexora: A Learning Management With Learning Experience Platform Features for Targeted Student Intervention for Gat Andres Bonifacio High School
+
+A Capstone Project
+Submitted to the Faculty of the School of Information Technology
+National University – Mall of Asia
+
+
+In Partial Fulfillment of the Requirements for the Degree
+Bachelor of Science in Information Technology
+
+By:
+
+JETHRO JOSEPH V. DIDA
+MARC DUSTIN R. DIZON
+ANGELO MIGUEL C. JACOB
+RAPHAEL V. MERCADO
+
+Cheryl Lou R. Tinaan
+MARCH 2026
+
+Table of Contents
+
+LIST OF FIGURES
+Figure 1: System Architecture	37
+Figure 2. The Agile Development	41
+Figure 3: Use Case Diagram for Nexora Web Application	50
+Figure 4: Use Case Diagram for Nexora Mobile Application	51
+Figure 5: Functional Decomposition Diagram of the Admin Portal	98
+Figure 6: Functional Decomposition Diagram of the Teacher Portal	99
+Figure 7: Functional Decomposition Diagram of the Student Portal	100
+Figure 8: Mobile Login & OTP Verification	102
+Figure 9: Process Flow of Mobile Forgot Password and Account Recovery	104
+Figure 10: Process Flow of View Dashboard and "Continue Learning" Logic	105
+Figure 11: Process Flow of View Modules and Time-Based Engagement Tracking	106
+Figure 12: Process Flow of Taking Assessments and Summative Submission	107
+Figure 13: Process Flow of LXP Remedial Access and 74% Mastery Threshold Gating	108
+Figure 14: Process Flow of RAG-Based Interaction with JAKIPIR AI Mentor	109
+Figure 15: Process Flow of View Performance Analytics and Quarterly Trends	110
+Figure 16: Process Flow of Mobile Profile Management and Data Persistence	111
+Figure 17: Process Flow of Web Login and Dashboard Navigation	112
+Figure 18: Process Flow of Web Course Browsing and Filtering	113
+Figure 19: Process Flow of Assessment Taking with Out-of-Focus Warning Logic	114
+Figure 20: Process Flow of Discussion Board Participation and Thread Replies	115
+Figure 21: Process Flow of Web Profile Detail Locking	116
+Figure 22: Process Flow of Managing Classes and Instructional Materials	117
+Figure 23: Process Flow of AI PDF Extraction and Layout-Aware Section Application	118
+Figure 24: Process Flow of AI Quiz Drafting and Assessment Studio Workspace	119
+Figure 25: Process Flow of Asynchronous AI Job Monitoring and Status Updates	120
+Figure 26: Process Flow of Class Record Synchronization and Spreadsheet Management	121
+Figure 27: Process Flow of Student Intervention Triage and Outcome Tracking	122
+Figure 28: Process Flow of Learning Gap Analysis and Competency Heatmap Generation	123
+Figure 29: Process Flow of Academic Report Generation and Data Export	124
+Figure 30: Process Flow of Creating Class Announcements and Discussion Threads	125
+Figure 31: Process Flow of Admin Dashboard Overview and Quick Route Navigation	126
+Figure 32: Process Flow of User Lifecycle Management (Create, Suspend, Purge)	127
+Figure 33: Process Flow of Admin-Triggered User Password Reset	128
+Figure 34: Process Flow of Section Creation and Roster Management	129
+Figure 35: Process Flow of Bulk Roster Import (CSV/Excel) and Validation Logic	130
+Figure 36: Process Flow of School Calendar and Event Timeline Management	131
+Figure 37: Process Flow of System Diagnostics and Dependency Health Checks	132
+Figure 38: Process Flow of Audit Trail Review and Security Log Filtering	133
+Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)	134
+
+
+
+
+
+LIST OF TABLES
+Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)	14
+Table 2: Gap Analysis Table of Related System Applications	26
+Table 3: Software Requirements	31
+Table 4: Hardware Specifications	33
+Table 5: Agile Development Phases, Activities, and List of Deliverables	41
+Table 6: Functional Requirements for Analysis (Administrators and Teachers)	43
+Table 7: Functional Requirements for Analysis (Students)	45
+Table 8: Technical and Operational Constraints	47
+Table 9: Use Case Narratives of Login	52
+Table 10: Use Case Narratives of Dashboard	54
+Table 11: Use Case Narratives of My Courses	55
+Table 12: Use Case Narratives of View Modules (Mobile & Web)	56
+Table 13: Use Case Narratives of View and Complete Assessments	57
+Table 14: Use Case Narratives of Track Performance	58
+Table 15: Use Case Narratives of Access LXP	59
+Table 16: Use Case Narratives of AI Mentor	61
+Table 17: Use Case Narratives of Student Profile	62
+Table 18: Use Case Narratives of Security and Verification	63
+Table 19: Use Case Narratives of Logout	64
+Table 20: Use Case Narratives of View My Classes	65
+Table 21: Use Case Narratives of Manage Class Lessons	66
+Table 22: Use Case Narratives of Upload Learning Modules	67
+Table 23: Use Case Narratives of Create and Manage Assignments	68
+Table 24: Use Case Narratives of Discussion Board (Teacher)	69
+Table 25: Use Case Narratives of Manage Class Record	70
+Table 26: Use Case Narratives of Manage Class Roster	71
+Table 27: Use Case Narratives of AI Draft Quiz Workspace	72
+Table 28: Use Case Narratives of AI Extraction	73
+Table 29: Use Case Narratives of Class Announcement	75
+Table 30: Use Case Narratives of Student Interventions	76
+Table 31: Use Case Narratives of Track Student Performance	77
+Table 32: Use Case Narratives of Generate Reports	78
+Table 33: Use Case Narratives of Manage Teacher Profile	79
+Table 34: Use Case Narratives of View My Section	79
+Table 35: Use Case Narratives of Nexora Library	81
+Table 36: Use Case Narratives of View Evaluations	81
+Table 37: Use Case Narratives of Dashboard (Admin)	82
+Table 38: Use Case Narratives of System Diagnostics	83
+Table 39: Use Case Narratives of Manage Users	85
+Table 40: Use Case Narratives of Manage Sections	86
+Table 41: Use Case Narratives of Manage School Calendar	87
+Table 42: Use Case Narratives of Nexora Library (Administrator)	88
+Table 43: Use Case Narratives of Import Rosters	89
+Table 44: Use Case Narratives of Reports (Administrator)	90
+Table 45: Use Case Narratives of Evaluations (Administrator)	91
+Table 46: Use Case Narratives of Announcement (Administrator)	93
+Table 47: Use Case Narratives of AI Chatbot (Administrator)	94
+Table 48: Use Case Narratives of Audit Trail	95
+Table 49: Use Case Narratives of System Settings	96
+Table 50: Use Case Narratives of Profile (Administrator)	97
+
+
+CHAPTER I 
+INTRODUCTION
+The landscape of modern education is undergoing a massive digital transformation by transitioning from traditional classroom environments to highly augmented digital ecosystems. Central to this evolution is the Learning Management System which has become a fundamental tool for educational institutions worldwide to facilitate lesson delivery, manage class rosters, and administer student assessments [1]. The basic architecture of a Learning Management System is heavily geared toward administrative control, structured content distribution, and rigorous compliance tracking [2]. In these environments, management and educators dictate exactly what content is delivered, the sequence of consumption, and the pacing of the overall course [3]. While the Learning Management System is exceptionally efficient at managing the logistical aspects of education and maintaining official academic records, the rigid top-down approach often fails to address the individualized cognitive needs of diverse student populations [4]. The global pandemic served as a catalyst for educational technology by forcing a rapid and often unplanned transition to remote and blended learning environments [1]. While this accelerated the adoption of basic Learning Management Systems including Moodle and Google Classroom to ensure instructional continuity and address skepticism toward online learning [2], it also exposed profound inequalities in how these systems handle diverse learning paces [3].
+When institutions hastily implemented digital solutions, the focus was primarily on content delivery rather than cognitive scaffolding [1]. Consequently, students who lacked strong self-regulation skills or prerequisite knowledge found themselves rapidly falling behind and facing learning gaps that are exceptionally difficult to close once they occur [4]. The traditional Learning Management System is excellent at tracking completion but inherently lacks the diagnostic capability to identify the specific root causes of a student misunderstanding, which often renders standard online learning isolating for struggling learners [5].
+For these students, the traditional Learning Management System often functions merely as a repository of static information rather than an active tool for academic recovery, leading to disengagement and compounded learning loss.
+To address the inherent limitations of the traditional Learning Management System, the educational technology sector has seen the rise of the Learning Experience Platform. Unlike a Learning Management System, a Learning Experience Platform operates on a bottom-up learner centric paradigm that emphasizes extreme personalization, self-directed learning, and continuous skill growth [5]. A Learning Experience Platform utilizes advanced algorithms to curate diverse multi format digital resources including microlearning modules, podcasts, and interactive videos, tailoring the educational journey to a student specific goals and historical engagement patterns [2]. Research indicates that organizations and institutions deploying personalized experience driven platforms achieve thirty-five to fifty percent higher course completion rates and up to sixty percent greater learner engagement compared to traditional compliance focused Learning Management System environments [3]. Experimental studies further validate that targeted behavioral interventions through a Learning Experience Platform can extend daily average learning durations by forty-one-point five percent and significantly increase voluntary reading volumes, which positively correlates with overall academic performance [4].
+The integration of Artificial Intelligence into these educational platforms represents a profound leap in capability, effectively bridging the gap between mass instruction and individualized support. Artificial Intelligence driven systems provide predictive analytics, enabling educators to anticipate academic risks early and deliver just in time support without disrupting core classroom instruction [1]. One of the most significant breakthroughs is the application of Large Language Models and Natural Language Processing to automate the generation of instructional materials. Traditional Natural Language Processing methods for extracting concepts from educational documents required resource intensive manual labor [3]. However, modern Large Language Models demonstrate advanced reasoning capabilities, utilizing techniques including Named Entity Recognition and Relation Extraction to automatically parse unstructured text including standard PDF modules into structured machine-readable instructional data [3].
+ This allows the system to autonomously generate summaries, key points, quizzes, and personalized remedial paths, drastically reducing the instructional design burden on educators [4].
+Beyond content generation, Artificial Intelligence serves as an active pedagogical agent through the deployment of the Intelligent Tutoring System. An Intelligent Tutoring System functions as a continuous twenty-four seven learning companion that adapts in real time to a student learning speed and specific knowledge gaps, providing immediate, judgment-free feedback [1]. Studies evaluating AI tutors in secondary education have demonstrated that students utilizing these systems achieve significantly higher learning gains in less time compared to traditional in-class active learning, with the median learning gains for AI-tutored students more than doubling those of control groups [2]. A highly nuanced subset of this technology is the integration of an anthropomorphic Non-Player Character (NPC) mentor. Engaging students emotionally and cognitively remains a pervasive challenge in secondary education, with interactive, persona-driven AI serving as a powerful mechanism to rebuild motivation [3]. Studies on the "Uncanny Valley" hypothesis in education reveal that a moderate degree of anthropomorphism in AI tutors enhances emotional engagement and generates high levels of learner trust, provided the AI is carefully designed to balance relatability with clear artificiality to avoid psychological discomfort [4].
+The pedagogical logic for deploying these AI interventions relies heavily on Mastery Learning, an instructional philosophy positing that students must achieve a high level of competence in prerequisite knowledge before advancing [1]. Digital systems operationalize this through algorithms like Bayesian Knowledge Tracing (BKT), which estimate a student's knowledge state and enforce mastery criteria [2]. While highly technical subjects may demand a 95 percent mastery threshold, practical applications in generalized secondary education frequently employ a  74% threshold to differentiate between basic comprehension and critical learning gaps [3]. Gating access to remedial interventions based on this threshold ensures that intensive, AI-driven support is aggressively targeted toward students who are fundamentally failing, preventing high-performing students from being subjected to redundant exercises [1].
+In the Philippines, the Department of Education (DepEd) has actively pursued educational modernization through the Digital Rise Program, leading to the nationwide deployment of the DepEd Learning Management System (DLMS) [1]. Built to accommodate millions of learners, the DLMS serves as the primary repository for Electronic Self-Learning Modules (e-SLMs) and synchronous blended learning [2]. While the DLMS has successfully maintained instructional continuity and improved basic communication skills during crisis periods, [3] it remains a traditional, rigid LMS. It currently lacks the built-in, automated LXP features, personalized AI mentoring, and dynamic threshold-based remediation required to actively intervene when a student fails to comprehend an e-SLM [13].
+Despite these technological advancements, a significant implementation gap currently exists in Philippine public secondary education. A comprehensive report by the ASEAN Foundation indicates that 83 percent of Filipino students actively utilize generative AI tools for educational purposes, yet only 42 percent of educators use these tools for their own tasks [1]. This profound generational and technological divide means that student AI usage is frequently driven by convenience rather than a strong technical understanding of responsible use [8]. Furthermore, students are integrating these technologies faster than curricula can adapt, leading to uncritical use and challenges for metacognitive engagement. [9] Fewer than half of educators express strong confidence in institutional AI policies, leaving schools without unified frameworks to harness AI safely and effectively [12].
+ At Gat Andres Bonifacio High School, the challenges of delivering timely academic interventions are magnified by these technological limitations. Overcrowded classrooms and severe time constraints make the manual delivery of individualized remedial instruction nearly impossible [1]. While educators can identify struggling students through standard assessments, the absence of an integrated and automated intervention platform severely hampers consistent recovery efforts [3].
+Therefore, the development of Nexora, which is a hybrid web and mobile platform combining robust Learning Management System administration with targeted Artificial Intelligence driven Learning Experience Platform remediation, is proposed to resolve this crisis. By automating module extraction and deploying an Artificial Intelligence Non-Player Character mentor strictly for students scoring below the mastery threshold, Nexora aims to systematically close competency gaps while profoundly reducing the unsustainable workload placed on local educators. By integrating these disparate technological advancements into a single architecture, the Nexora platform seeks to redefine the standard for digital remediation in the Philippines. The system prioritizes the automated extraction of core competencies from standard Department of Education materials, ensuring that the transition to a Learning Experience Platform is seamless and requires minimal manual input from teachers.
+Through the deployment of an Artificial Intelligence Non-Player Character mentor, the platform provides a psychologically safe and engaging environment where students can master difficult concepts at their own pace [12]. Ultimately, the successful implementation of this hybrid model at Gat Andres Bonifacio High School could provide a scalable blueprint for other public institutions facing similar resource constraints and high student to teacher ratios.
+1.1 PROJECT CONTEXT
+The persistent challenge in modern secondary education is not merely the delivery of instruction but the equitable provision of timely and individualized remediation for students who fail to grasp core competencies. While Learning Management Systems have been widely adopted to streamline the distribution of curriculum and manage administrative workflows, a critical review of existing literature reveals a profound gap in their capacity to support personalized academic interventions [1]. Traditional Learning Management System platforms operate as static repositories because they excel at compliance tracking and grade logging but inherently lack the agile and adaptive mechanisms required to diagnose granular learning gaps and autonomously deploy customized recovery paths. Consequently, when a student struggles, the burden of intervention falls entirely on the classroom teacher who must manually analyze the data, curate alternative materials, and monitor the student progress offline. This process is highly unsustainable in public school environments where student-to-teacher ratios are high and resources are limited.
+This technological gap is starkly evident within the Philippine K-12 educational landscape. In response to severe learning losses, DepEd introduced national remediation initiatives such as "Catch-Up Fridays," designed specifically to address foundational deficits in reading and mathematics [1]. However, empirical studies evaluating these programs highlight critical operational gaps at the local level. Researchers have documented that execution is severely hampered by insufficient targeted learning materials, inconsistent scheduling, and extreme educator fatigue [3]. Furthermore, a significant pedagogical gap exists regarding teacher specialization in remediation. Studies reveal that up to 75.3 percent of teachers assigned to handle remedial instruction are General Education specialists, with only 10.1 percent possessing specialized training in complex subjects like Mathematics [2]. Because effective remediation in technical subjects requires strong domain-specific knowledge to accurately diagnose and correct student misconceptions, placing this burden on unspecialized, overworked teachers severely degrades the quality of the intervention [14].
+While the official DepEd Learning Management System (DLMS) provides excellent nationwide scalability for distributing Electronic Self-Learning Modules (e-SLMs), it fundamentally lacks the automated Learning Experience Platform (LXP) features necessary to support these struggling learners dynamically [1]. The DepEd Learning Management System (DLMS) does not possess the architecture to automatically trigger remedial pathways based on performance thresholds, nor does it integrate AI to adapt to individual student pacing [1]. Conversely, while isolated AI tutoring applications and commercial LXP systems excel at student engagement and personalized learning, [7] a structural gap exists as these platforms operate entirely outside the localized, highly structured curriculum and official grading frameworks required by Philippine public high schools. Additionally, despite 83 percent of Filipino students actively utilizing generative AI for schoolwork, there is a pronounced systemic gap in institutional readiness; schools lack the integrated platforms required to channel this AI usage into pedagogically sound, structured, and ethically monitored remedial environments [9].
+Nexora is specifically engineered to bridge these critical gaps for Gat Andres Bonifacio High School. By fusing Learning Management System (LMS) and Learning Experience Platform (LXP) functionalities into a single, cohesive ecosystem, Nexora addresses the fragmentation between official curriculum management and self-directed intervention [6]. To solve the severe shortage of targeted learning materials and alleviate the workload on unspecialized teachers, Nexora leverages Large Language Models (LLMs) to automatically extract core concepts, quizzes, and instructional formulas directly from uploaded, unstructured DepEd PDF modules [2]. This ensures that high-quality, relevant remedial content is always available without requiring manual authoring.
+Furthermore, to address the pedagogical gap in delivering specialized support, Nexora deploys an anthropomorphic AI Non-Player Character (NPC) mentor [1]. This Intelligent Tutoring System (ITS) acts as a 24/7 tutor that explains mistakes, provides hints, and guides struggling students through complex topics, effectively compensating for the lack of domain-specific remedial teachers [2]. Crucially, to prevent the gamified Learning Experience Platform (LXP) environment from becoming a general distraction, Nexora introduces an automated, algorithmic triage system based on Mastery Learning principles [3]. The platform restricts Learning Experience Platform (LXP) access exclusively to students who score below a  74% performance threshold on standard Learning Management System (LMS) assessments [9].
+
+1.2 PURPOSE AND DESCRIPTION
+The primary purpose of this project is to design and develop Nexora, a highly integrated web and mobile-based Learning Management System featuring embedded Learning Experience Platform components, specifically engineered to automate and deliver targeted academic intervention for high school students at Gat Andres Bonifacio High School. Nexora aims to provide a comprehensive, unified digital ecosystem where educators can seamlessly manage official classes, lesson distributions, and standardized assessments, while simultaneously providing an autonomous, personalized remediation environment for students who demonstrate quantifiable learning difficulties.
+What makes Nexora unique and highly relevant is its architectural solution to the critical gaps in public education: the seamless bridging of rigid curriculum compliance with agile, AI-driven intervention. The platform operates on a dynamic gating mechanism. Access to the highly engaging Learning Experience Platform (LXP) component is strictly limited to students who fail to achieve a defined mastery threshold (e.g., scoring below 74% on an assessment). This ensures that Learning Experience Platform (LXP) functions purely as a focused recovery tool rather than a general-purpose distraction. To resolve the massive burden of manual content creation on teachers, Nexora features automated instructional extraction. By leveraging advanced Large Language Models, the system digests upload unstructured learning modules (PDFs) and autonomously generates structured remedial formulas, quizzes, and summaries.
+Furthermore, the system integrates an anthropomorphic Artificial Intelligence Non-Player Character (AI NPC) mentor within Learning Experience Platform (LXP). This intelligent tutor assists struggling learners by identifying their specific points of failure, explaining complex concepts in an adaptable, judgment-free manner, and recommending specific remedial exercises based on their performance data.
+The target beneficiaries of this system are multi-fold. Students benefit directly from immediate, structured academic support tailored to their specific cognitive gaps, allowing them to rebuild confidence and achieve mastery without the stigma of falling behind their peers. Teachers benefit from intuitive, automated tools that handle the heavy lifting of diagnostic analysis and remedial content generation, drastically reducing their administrative burden and allowing them to focus on high-value, face-to-face instruction.
+
+
+
+
+
+
+1.3 OBJECTIVES
+General Objective
+	To design and develop Nexora, a web and mobile-based Learning Management System integrated with a Learning Experience Platform that supports all subjects and grade levels at Gat Andres Bonifacio High School, providing automated, targeted learning interventions for selected students, alleviating teacher workload through AI-driven content extraction.
+Specific Objectives
+To develop a comprehensive LMS that enables teachers and administrators to manage classes, students, and assessments, featuring the integration of Large Language Models (LLMs) and Natural Language Processing (NLP).
+To integrate an LXP within the LMS that acts as a targeted intervention environment, dynamically restricting access only to students demonstrating learning gaps by enforcing a strict 74% mastery threshold.
+To design and implement an anthropomorphic AI Non-Player Character (NPC) mentor functioning as an Intelligent Tutoring System (ITS) that assists struggling students by explaining mistakes, providing adaptive hints, and recommending remedial activities, compensating for the lack of specialized remedial educators.
+To implement automated performance tracking and data analytics within the LMS to provide teachers with real-time insights into student competency gaps.
+To evaluate the proposed system based on standard software metrics including functionality, reliability, usability, and portability.
+To establish and maintain strict data security, ethical AI usage guidelines, and privacy protocols within the platform to address the lack of institutional AI frameworks and protect sensitive student academic records.
+
+
+
+
+
+1.4 SCOPE AND DELIMITATION
+SCOPE
+The Nexora system is designed to support Grades 7, 8, 9, and 10 and subjects at Gat Andres Bonifacio High School through a responsive web and mobile-accessible application.
+The system features core Learning Management System (LMS) functionalities, allowing teachers to create classes, upload lesson materials, administer assessments, and manage student rosters.
+The platform includes a built-in Learning Experience Platform (LXP) designed exclusively for targeted academic intervention.
+Access to the LXP environment is dynamically gated; it is accessible only to students who score below a defined 74% performance threshold on their LMS assessments.
+The system incorporates Artificial Intelligence (AI) and Large Language Models (LLMs) to automatically extract text and generate structured instructional formulas, key points, and quizzes from uploaded PDF learning modules using Named Entity Recognition (NER) and Relation Extraction (RE).
+An AI Non-Player Character (NPC) mentor (Intelligent Tutoring System) is integrated into the LXP to interact with struggling students, explain errors, provide hints, and guide them through remedial paths.
+Teachers are provided with an administrative dashboard within the LMS to seamlessly monitor, track, and override LXP activities and student intervention progress.
+A comprehensive system evaluation will be conducted assessing functionality, reliability, usability, and portability based on user feedback from selected students and faculty.
+DELIMITATION
+The system is designed to augment, not replace, traditional classroom instruction, teacher decision-making, or face-to-face pedagogy.
+The platform excludes the full automation of official DepEd grading systems and does not replace the school's primary registrar or official master grading portal.
+The LXP module functions strictly as a remedial intervention tool and is explicitly not intended for general, unrestricted use by high-performing students who surpass the mastery threshold.
+Integration of remedial intervention scores back into the official LMS grade book is optional and intended primarily for teacher reference and formative assessment, rather than summative grading.
+The system does not include advanced predictive analytics for predicting long-term high school dropout rates or large-scale AI model training from scratch (it utilizes existing Application Programming Interfaces (APIs)).
+Deployment, testing, and implementation of the system beyond the specific localized context of Gat Andres Bonifacio High School are outside the scope of this study.
+The system requires an active internet connection; offline functionality and synchronization are excluded.
+Direct integration with third-party commercial content providers or external social media platforms is excluded.
+
+
+
+
+
+CHAPTER 2
+REVIEW OF RELATED LITERATURE AND SYSTEMS
+This chapter provides a critical overview of previous research, empirical studies, and existing technological frameworks relevant to the development of integrated educational platforms. The review conveys the established knowledge concerning Learning Management Systems (LMS), Learning Experience Platforms (LXP), the integration of Artificial Intelligence (AI) in education, and the pedagogical principles of targeted academic interventions. By critically discussing both foreign and local literature, this chapter establishes the theoretical and technological framework for the present study. Furthermore, a detailed comparative analysis of related systems highlights current technological gaps, providing robust justification for the development of Nexora. This integrated Learning Management System and Learning Experience Platform is designed to facilitate automated and targeted remediation assisted by Artificial Intelligence for public high school students at Gat Andres Bonifacio High School.
+2.1 RELATED LITERATURE/STUDIES
+The transition from traditional, analog classroom instruction to digitally augmented pedagogical environments has necessitated a critical evaluation of how educational technology serves diverse learner profiles. The following subsections synthesize global and local studies to construct a comprehensive understanding of the technological mechanisms required to support struggling students without overburdening educators.
+The Evolution and Paradigms of Learning Management Systems (LMS)
+Historically, the Learning Management System (LMS) has functioned as the primary digital infrastructure for educational institutions. The fundamental architecture of a traditional Learning Management System (LMS) is designed around administrative control, hierarchical content distribution, and strict compliance tracking [1]. Within this framework, management and educational administrators determine precisely what content is delivered, the sequence in which it is consumed, and the pacing of the course [2].  Traditional Learning Management System (LMS) environments are characterized by catalogue management, centralized content storage, and monitoring of course completions against rigidly established learning outcomes [3]. While highly effective for standardized delivery and regulatory training including compliance courses or mandatory organizational onboarding, traditional Learning Management System environments are inherently rigid [1]. These systems dictate a top-down instructional path where learning is mandatory and structurally inflexible [2]. Research indicates that while Learning Management System platforms excel in formal training and generating reports on completion rates, scores, and the duration of content engagement, they frequently fail to generate intrinsic learner motivation or adapt to individual cognitive deficits [3].
+For struggling students, the Learning Management System often becomes a repository of frustration. When a student fails to grasp a concept within the structured Learning Management System, the system typically offers no alternative but to force the student to repeat the exact same linear module, which often exacerbates disengagement and cognitive overload [5].
+Learning Experience Platforms (LXP): Learner-Centric Paradigms and Engagement
+In response to the limitations of traditional Learning Management System (LMS) architectures, the Learning Experience Platform (LXP) emerged as a paradigm shift toward learner-centric, self-directed education. Unlike the closed syllabus approach of a Learning Management System (LMS), a Learning Experience Platform (LXP) operates on principles of extreme personalization, utilizing artificial intelligence and machine learning algorithms to curate and recommend multi-format resources tailored to a learner's specific goals, skill gaps, and historical engagement patterns [4]. The pedagogical philosophy underpinning the Learning Experience Platform (LXP) is the facilitation of autonomous learning. Learning Experience Platform (LXP) fosters this autonomy by incorporating microlearning, social collaboration, and gamification, thereby shifting the locus of control from the system administrator directly to the learner [1]. By analyzing data on learners' interactions, Learning Experience Platform (LXP) provides a flexible approach to education that mimics popular content consumption algorithms, actively suggesting relevant videos, podcasts, articles, and interactive modules [9].
+The empirical impacts of Learning Experience Platform (LXP)s on learner engagement and performance are substantial. Research comparing the two systems indicates that Learning Experience Platform (LXP)s generate significantly higher intrinsic motivation. Organizations deploying personalized, experience-driven platforms report 35 to 50 percent higher course completion rates and up to 74% greater learner engagement compared to traditional, compliance-focused Learning Management System (LMS) environments [1]. Furthermore, experimental studies examining the impact of personalized learning experience platforms on student performance demonstrate that targeted behavioral interventions through a Learning Experience Platform (LXP) can extend daily average learning durations by 41.5 percent and increase voluntary literature reading volumes by 48.3 percent [2]. Correlation analyses in these studies show that the duration of self-directed learning within a Learning Experience Platform (LXP) has a significant positive correlation with overall academic performance, validating the platform's mechanism for promoting deep, sustained learning [11].
+Table 1: Architectural and Functional Comparison: Learning Management System (LMS) vs. Learning Experience Platform (LXP)
+Table 1 synthesizes the fundamental functional and philosophical differences between traditional Learning Management Systems and Learning Experience Platforms, based on the reviewed literature.
+In the context of formal K-12 and secondary education, the complete abandonment of the Learning Management System (LMS) in favor of a Learning Experience Platform (LXP) is pedagogically and administratively unsound. Public school systems require rigorous adherence to standardized curricula, official grading frameworks, and structured lesson delivery that only a Learning Management System (LMS) can reliably provide [1]. However, the rising demand for equitable, personalized student support necessitates the integration of Learning Experience Platform (LXP) features. Consequently, contemporary educational literature strongly advocates for a blended Learning Management System (LMS) and Learning Experience Platform (LXP) architecture [16]. A hybrid system leverages the Learning Management System (LMS) for foundational, synchronous instruction, official assessments, and classroom management, while deploying the Learning Experience Platform (LXP) as an agile, supplementary environment specifically tailored for intervention [1]. This dual approach is particularly efficacious for targeted academic remediation.
+When a student fails an assessment within the structured Learning Management System (LMS), a blended platform can automatically shunt the student into a restricted Learning Experience Platform (LXP) environment. This transition reframes the recovery process, allowing the system to deploy adaptive difficulty, diverse media formats, and personalized pacing to close the specific competency gap without disrupting the progression of the broader class [2]. Integrating these platforms ensures equitable access to adaptive tools, promoting self-directed learning interventions that maintain instructional structure while fostering autonomy [3].
+Artificial Intelligence in Education: From Automation to Adaptive Interventions
+The integration of Artificial Intelligence into educational technology represents a profound leap in the capabilities of learning management systems. For decades, adaptive education was bottlenecked by the impossibility of manually creating enough bespoke content to cater to every individual student learning profile. Artificial Intelligence fundamentally resolves this scalability issue by providing real time data analysis, predictive analytics, and automated content generation [12].
+A recent systematic review of twenty-seven peer reviewed studies analyzed the integration of Artificial Intelligence powered Application Programming Interfaces in education [2]. Predictive analytics allow educational platforms to anticipate academic risks early, enabling educators to provide just in time support across subjects without disrupting core instruction [1]. Artificial Intelligence driven adaptive interventions continuously monitor student interactions, identifying granular competency gaps through performance analysis. Once a gap is detected, Artificial Intelligence delivers tailored content specifically designed to address the misunderstanding [2]. Studies report that the implementation of Artificial Intelligence driven adaptive feedback systems yields significant improvements in student comprehension and academic achievement [3]. However, the rapid adoption of Artificial Intelligence also raises critical challenges. While students are embracing generative Artificial Intelligence at unprecedented rates, institutional readiness lags significantly [1]. A large-scale national survey involving over fifteen thousand students revealed an implementation gap where student practices are evolving faster than pedagogical frameworks, leading to uncritical use and challenges in metacognitive engagement [2]. Furthermore, integrating Artificial Intelligence into Kindergarten to Grade 12 environments requires navigating complex privacy regulations and ensuring that Artificial Intelligence tools augment rather than replace teacher capabilities [3]. Effective Artificial Intelligence implementation must focus on handling routine tasks, such as grading and content recommendation, thereby freeing educators to focus on high value instructional mentoring and relationship building [5].
+Generative Artificial Intelligence (AI) and Large Language Models (LLMs) for Automated Content Extraction
+A persistent challenge in operating adaptive learning environments is the sheer volume of structured instructional data required. Generative Artificial Intelligence (AI), specifically Large Language Models (LLMs), addresses this by automating the creation and extraction of learning materials from unstructured sources [1]. Large Language Models (LLMs) perform self-supervised learning on large-scale corpora to obtain the statistical laws of language, enabling them to comprehend natural language, extract complex information, and generate high-quality text content [2]. Recent computational research emphasizes the efficacy of utilizing Large Language Models (LLMs) to parse unstructured educational documents, such as PDF modules and presentation slides, to generate structured instructional data [1]. Traditional Natural Language Processing (NLP) methods for concept extraction required resource-intensive manual annotation and precise dataset preparation, which failed to minimize labor for educators [5].
+Modern Large Language Models (LLMs), however, demonstrate advanced zero-shot and few-shot reasoning capabilities to automatically identify key concepts, generate summaries, and map competency relationships directly from course descriptions and syllabi [1]. The automated extraction process typically involves complex document chunking methodologies. To navigate token limits and prevent the model from losing critical context, documents are segmented into optimized chunks (e.g., 1000-token blocks) [9]. Following chunking, systems employ multi-step prompting techniques for Named Entity Recognition (NER) to isolate instructional variables, key terms, and learning objectives [2].
+Finally, relation extraction (RE) prompts retrieve key details and structure the outputs into machine-readable formats, such as JSON schemas, for downstream integration into the Learning Management System (LMS) database [3]. Empirical evaluations of this multi-step LLM extraction process show that models like GPT-3.5 and GPT-4o achieve remarkably high accuracy, precision, and F1 scores in educational content scenarios, outperforming traditional approaches [3]. In the context of instructional design, AI-driven Automated Learning Management Systems (autoLMS) utilize these extraction protocols to digest uploaded course materials and autonomously output customized resources, including summaries, key points, lecture notes, quizzes, and automated instructional formulas [1]. This capability is critical for secondary education ecosystems where teachers manage large class sizes and lack the temporal bandwidth to manually design individualized remedial paths [13]. By automating the extraction of core competencies from standard learning modules, Artificial Intelligence (AI) empowers the Learning Management System (LMS) to dynamically assemble targeted micro-lessons that directly address a student's demonstrated points of failure, effectively bridging the gap between static curriculum and adaptive remediation [7].
+Intelligent Tutoring Systems (ITS) and Anthropomorphic AI Mentors
+Beyond automated content generation, Artificial Intelligence serves as an active agent in the learning process through Intelligent Tutoring Systems and adaptive feedback mechanisms. Artificial Intelligence tutors function as continuous, twenty-four seven learning companions, utilizing machine learning and natural language processing to track hundreds of data points per session [1]. These systems adapt in real time to a student learning speed, presentation preferences, and knowledge gaps [2]. For example, an Artificial Intelligence tutor might recognize that a student struggles with abstract algebraic equations and dynamically shift to providing visual models or step by step simulations tailored to the student personal interests [9].
+Empirical evidence strongly supports the efficacy of Artificial Intelligence tutors in secondary education. Studies demonstrate that students utilizing Artificial Intelligence tutors achieve significantly higher learning gains compared to those receiving traditional in class active learning [1]. In rigorous quantitative assessments, the median learning gains for students in Artificial Intelligence tutored groups were over double those of control groups, with statistical analyses revealing highly significant differences [14]. Furthermore, students report feeling significantly more engaged and motivated during Artificial Intelligence assisted sessions [2]. The efficacy of Artificial Intelligence tutors is particularly pronounced among students with lower baseline knowledge and stronger self-regulation skills, suggesting that Artificial Intelligence integration thrives when students can strategically combine independent study with targeted, machine guided support [3].
+A highly nuanced subset of Artificial Intelligence tutoring involves the deployment of anthropomorphic non-Player Character mentors. As student engagement remains a pervasive challenge, with studies indicating up to 72 percent of secondary students exhibiting low behavioral engagement and 70 percent exhibiting low cognitive engagement, interactive, persona driven Artificial Intelligence serves as a powerful mechanism to rebuild emotional investment [10]. However, the design and implementation of Artificial Intelligence mentors are subject to the psychological phenomenon known as the Uncanny Valley hypothesis [2].
+A comprehensive mixed methods study investigating the impact of anthropomorphic features in Artificial Intelligence tutoring systems on learner trust utilized an eight-item questionnaire and exploratory factor analysis to identify two key dimensions: competence and trustworthiness and emotional engagement [1]. The results confirmed an inverted U relationship between anthropomorphism and student trust. A moderate degree of human like relatability enhances emotional engagement and generates the highest levels of trust, but excessive realism induces psychological discomfort, skepticism, and a reduction in learning motivation [7]. The study also identified a gender effect, where female students reported greater trust in high anthropomorphism conditions compared to male students [1]. Furthermore, student interactions with Artificial Intelligence mentors are heavily influenced by pre-existing technological biases. A binary logistic and multiple linear regression analysis of college students evaluating Artificial Intelligence generated mentorship revealed that prior exposure to tools like ChatGPT predicted greater accuracy in identifying Artificial Intelligence responses and more favorable ratings of the Artificial Intelligence helpfulness [1].
+Conversely, students who viewed human mentorship as exclusively effective were less likely to seek support from Artificial Intelligence perceived responses, indicating that pre-existing biases shape engagement more than the actual content provided by the Artificial Intelligence [1]. Therefore, an effective Artificial Intelligence Non-Player Character mentor must be carefully engineered to balance pedagogical authority with an approachable, clearly artificial persona to maximize targeted intervention outcomes without causing psychological dissonance [8].
+Mastery Learning Frameworks and Performance Thresholds in Remedial Education
+The pedagogical foundation for gating access to remedial Learning Experience Platform environments within a blended system relies entirely on the principles of Mastery Learning. Originally introduced in the 1960s by educational psychologists, mastery learning posits that students must achieve a predefined, high level of competence in prerequisite knowledge before they are permitted to advance to subsequent, more complex material [1]. Unlike traditional, time-based educational models that push entire cohorts forward regardless of individual comprehension, mastery models utilize continuous formative assessments to identify specific competency levels [2]. If a student fails to meet the required threshold, they do not advance. Instead, they are diverted into corrective activities, peer tutoring, small group discussions, or specialized digital remediation until mastery is unequivocally demonstrated [3].
+Mastery learning has been empirically proven to be a highly powerful instructional method, yielding moderate to large effect sizes ranging from 0.50 to 0.58 across all levels of education [1]. Determining the precise threshold for mastery, however, is a subject of extensive educational data mining research. Systems employing Bayesian Knowledge Tracing, which is a standard algorithm used in intelligent tutoring systems to model student knowledge, frequently analyze student performance to set binary indicators of mastery [2].
+While some highly rigorous technical subjects demand a 90 to 95 percent mastery criterion, and recent Bayesian Knowledge Tracing (BKT) research suggests that pushing thresholds to 0.98 can yield additional benefits for future learning retention, [11] practical implementations in generalized secondary education frequently utilize a 74 percent threshold to differentiate between basic comprehension and critical learning gaps. [4] Research highlights that in large public education systems, particularly in the United States and developing nations, approximately 40 to 60 percent of first-year college students require some form of remediation in core subjects like mathematics and reading [3].
+ In secondary environments, establishing a 74 percent performance threshold ensures that intervention resources are aggressively targeted toward students who are fundamentally failing to grasp the material, rather than forcing high-performing students through redundant, demotivating exercises [1]. This threshold acts as an automated triage mechanism. By configuring the Learning Management System (LMS) to monitor assessment scores, the system can seamlessly shift students scoring below the 74% metric into specialized, AI-guided Learning Experience Platform (LXP) remediation environments. This ensures that the time-intensive process of relearning foundational concepts is restricted to those who genuinely require it, thereby optimizing instructional efficiency and preventing long-term academic stagnation [2].
+The Philippine Educational Technology Landscape: Initiatives and Systemic Challenges
+The integration of advanced Learning Management System and Artificial Intelligence features must be critically contextualized within the unique socio economic and infrastructural challenges of the Philippine educational system. Over recent years, the Department of Education has actively pursued technological modernization, fundamentally accelerated by the disruptions of the global pandemic [1]. Central to this modernization is the Digital Rise Program, an educational framework designed to anchor the infrastructure, software, and capacity building of both learners and teachers in technology [2]. The Digital Rise Program comprises three core components. The first is Digital Literacy, which updates the Kindergarten to Grade 12 curriculum to include productivity tools, basic programming, and multimedia design. The second is ICT Assisted Teaching, which aims to provide educators with necessary equipment like laptops and smart TVs. The third is ICT Assisted Learning for Learners, which grants student access to synchronous blended learning [12]. A cornerstone of this final component is the Department of Education Learning Management System [1]. Built upon an open-source Moodle framework, this system is engineered for national scalability [1]. It serves as the primary platform for conducting online classes, administering national tests, and distributing Electronic Self Learning Modules, alongside DepEd TV and Radio episodes [2].
+Local empirical studies confirm that the utilization of Learning Management System platforms during and after the pandemic significantly improved academic performance, maintained instructional continuity, and fostered a favorable perception of distance learning among Philippine secondary school students [3]. Researchers emphasize that Learning Management System utilization positively affected communication skills and critical thinking, with recommendations strongly urging the institutionalization of the Learning Management System in public secondary schools [4].
+Despite these structural advancements, there is a pronounced disparity in Artificial Intelligence (AI) readiness and digital literacy between Philippine students and educators. A comprehensive 2026 report by the ASEAN Foundation indicated that the Philippines ranks among the early adopters of Artificial Intelligence (AI) in Southeast Asia, with 83 percent of Filipino students utilizing generative Artificial Intelligence (AI) models (such as ChatGPT) for educational purposes, primarily for writing tasks and information retrieval [1]. In stark contrast, only 42 percent of teachers use Artificial Intelligence (AI) for their own tasks, and only 73 percent of educators utilize generative Artificial Intelligence (AI) models for teaching [9]. This generational gap in technology adoption means that high student usage is frequently driven by convenience rather than a strong technical understanding of responsible Artificial Intelligence (AI) use [11]. Furthermore, the report found that fewer than half of educators express strong confidence in institutional AI policies, and only half of the schools provide adequate training or clear usage guidelines [15]. The lack of a unified national framework for Artificial Intelligence (AI) in basic education has left teachers struggling to adapt their instructional strategies to a rapidly changing digital landscape [2].
+Remedial Instruction Difficulties in Philippine Public Secondary Schools
+The technological disparities mentioned above heavily compound the pedagogical challenges of providing effective remedial instruction in Philippine public high schools. Institutions like Gat Andres Bonifacio High School frequently contend with overcrowded classrooms, severe teacher workloads, and a lack of specialized learning resources [1].
+ In response to pandemic-related learning loss, DepEd introduced "Catch-Up Fridays," a nationwide initiative dedicated to addressing academic gaps in reading and mathematics [2]. However, studies evaluating the implementation of such remedial programs reveal profound operational difficulties. An investigation into Catch-Up Fridays at a public senior high school in Los Baños, utilizing surveys and semi-structured interviews with 121 students and 15 teachers, uncovered that while the program's objectives are sound, execution is severely hampered. Students reported insufficient learning materials, inconsistent scheduling, and restricted access to technology, while teachers highlighted heavy workloads, lack of training, and unclear policy directives [1]. Similarly, a study at Bolo Norte High School on remedial reading for Grade 7 students found that while intervention significantly improved reading comprehension (shifting scores from "Emerging" to "Developing," p < 0.000), the post-test scores still fell short of intended outcomes, necessitating continuous, structural extension services [8].
+Furthermore, researchers have identified a critical mismatch in teacher specializations concerning remedial instruction. A 2024 study analyzing the demographic profiles of teachers providing remediation revealed that 75.3 percent were General Education specialists, while only 10.1 percent possessed specialized training in Mathematics [1]. Given that subjects like mathematics require strong content knowledge and effective pedagogical strategies to diagnose specific student misconceptions, assigning unspecialized teachers to remediation efforts severely degrades the quality of interventions [7]. In rural and underserved areas, where professional development opportunities are scarce, this lack of domain-specific expertise makes the manual diagnosis of learning gaps and the design of individualized remedial paths nearly impossible [15].
+2.2 RELATED SYSTEMS
+2.2.1 Foreign Systems
+Cypher Learning Learning Management System (LMS)
+Cypher Learning is a prominent cloud-based platform that heavily integrates artificial intelligence to bridge the functional gap between a traditional Learning Management System (LMS) and a modern Learning Experience Platform (LXP) [1]. Its standout feature is Artificial Intelligence (AI) 360, a suite powered by Microsoft Copilot that allows educators to automatically generate course content, gamification elements, and competency mappings from existing PDFs and videos [2]. Crucially, Cypher Learning employs robust adaptive learning mechanics utilizing threshold rules [3]. Educators can set minimum achievement thresholds; if a student's performance falls below a defined parameter (e.g., 50 percent), the system's smart recommendation engine automatically triggers targeted interventions. These automated actions include hiding advanced content, revealing simpler remedial modules, sending personalized notifications, or enrolling the student in specific micro-classes without requiring manual teacher input [3]. Cypher Learning validates the technical feasibility of automating remedial pathways based on specific performance thresholds and utilizing Artificial Intelligence (AI) for content extraction.
+SchoolAI
+SchoolAI represents a highly targeted approach to integrating generative Artificial Intelligence directly into student interactions, focusing almost exclusively on personalized tutoring rather than broad administrative management. The platform centers around Artificial Intelligence tutors referred to as Spaces which adapt in real time to a student learning pace, preferences, and knowledge gaps [1]. The Artificial Intelligence acts as a twenty-four seven learning companion that provides immediate feedback, explains complex concepts using interactive visual models, and maintains a judgment free environment for struggling learners [2]. Furthermore, SchoolAI provides educators with real time dashboards detailing exactly which concepts are challenging individual students, drastically reducing administrative oversight and allowing teachers to step in only for critical moments of instruction [4].
+Lummio
+Lummio is a comprehensive learning management system specifically designed to track district-wide student outcomes, manage coursework, and streamline administrative workflows [1]. Its primary strength lies in its ability to aggregate data across multiple educational locations, monitor real-time attendance, and track broad academic progress to identify systemic learning gaps [1]. By centralizing communication, interactive assessments, and grading tools into a single platform, Lummio significantly reduces the administrative burden on educators, allowing program coordinators to focus on direct student support [2]. Lummio’s robust data tracking and progress monitoring features serve as an excellent model for the administrative and teacher-facing oversight interfaces required in a high school Learning Management System (LMS).
+ALEKS (Assessment and Learning in Knowledge Spaces)
+While primarily a mathematical tutoring system rather than a general-purpose Learning Management System (LMS), ALEKS exemplifies the rigorous application of mastery thresholds and artificial intelligence. It utilizes Artificial Intelligence (AI) to map a student's precise knowledge state and strictly gates progression based on demonstrated competence [10]. Research on systems like ALEKS proves that dynamically adjusting mastery thresholds based on content difficulty and student retention rates significantly improves learning efficiency [7]. Its algorithmic approach to identifying the exact prerequisites a student is lacking informs the logic required for routing students to targeted remedial content.
+2.2.2 Local Systems
+DepEd Learning Management System (DLMS)
+The DepEd Learning Management System (DLMS) is the official, localized system utilized by the Philippine Department of Education. Built on an open-source Moodle framework, the DepEd Learning Management System (DLMS) is engineered for massive scalability to accommodate millions of K-12 learners nationwide [14]. It primarily functions as a repository and delivery mechanism for Electronic Self-Learning Modules (e-SLMs), DepEd TV, and DepEd Radio episodes [2]. While highly effective for centralized content distribution and asynchronous blended learning during crisis periods, the DepEd Learning Management System (DLMS) is fundamentally a traditional, rigid Learning Management System (LMS). It lacks built-in, automated Learning Experience Platform (LXP) features, personalized Artificial Intelligence (AI) mentoring, or dynamic threshold-based remediation [12]. Consequently, when a student struggles with an e-SLM within the DepEd Learning Management System (DLMS), teachers must manually intervene, review the data, and design a custom remedial path offline.
+
+
+Vidyalaya Learning Management System (LMS) and Rex Education Schoology
+Private sector adaptations in the Philippines, such as Rex Education’s deployment of Schoology and Vidyalaya Learning Management System (LMS), provide customizable, performance-focused learning solutions [1]. These platforms bridge traditional Learning Management System (LMS) functionality with modern learning experiences through advanced reporting and learner-centric features. However, their primary market focus leans heavily toward institutional compliance, continuous corporate learning, and generalized distance education rather than targeted, automated high school academic remediation utilizing generative Artificial Intelligence (AI) [11]. While successful in combining structured paths with digital engagement, they do not offer the specific Artificial Intelligence (AI) NPC mentorship or automated module extraction required to alleviate public school teacher workloads.
+2.2.3 Comparative Gap Analysis of Related Systems
+Table 2: Gap Analysis Table of Related System Applications
+Table 2 details a comprehensive comparative analysis of the systems against the specific functionalities proposed for the present study. This analysis isolates the technological gaps that Nexora intends to fill within the educational technology landscape.
+As demonstrated in Table 2, while various platforms excel in isolated domains including Cypher Learning automated content generation or SchoolAI highly interactive Artificial Intelligence tutoring, no single existing platform synthesizes all these features into a unified ecosystem optimized for the specific constraints of the Philippine public school system.
+Specifically, Cypher Learning provides excellent adaptive thresholds but lacks a dedicated, anthropomorphic Artificial Intelligence (AI) NPC mentor designed to build emotional engagement with struggling secondary students [13]. SchoolAI provides superior Artificial Intelligence (AI) mentorship but lacks the comprehensive, school-wide Learning Management System (LMS) infrastructure required to manage official grade books, master class lists, and standardized DepEd modules. Conversely, the official DepEd DLMS provides the necessary local scale and curriculum alignment but is entirely devoid of automated remediation, Artificial Intelligence (AI) extraction, and Learning Experience Platform (LXP) engagement tools, leaving the burden of intervention entirely on the overworked classroom teacher [2].
+
+
+2.3 SYNTHESIS
+The review of literature and related systems underscores a critical paradigm shift in educational technology: the necessary transition from passive content management systems to active, personalized learning intervention platforms. While traditional Learning Management Systems (LMS) have successfully digitized administrative tasks, course scheduling, and formal content delivery, they inherently fail to address the individualized cognitive needs of struggling learners. To support these students using a traditional Learning Management System (LMS) requires, unsustainable manual input from educators who must diagnose gaps, create alternative materials, and monitor individual progress offline. Conversely, isolated Learning Experience Platforms (LXPs) and intelligent Artificial Intelligence (AI) tutoring applications provide excellent engagement, adaptive pacing, and personalization, but they often operate completely outside the rigorous, structured curriculum management and grading frameworks required by formal public educational institutions. The primary justification for the present study lies in the unaddressed technological intersection of these platforms, particularly within the localized, highly constrained context of Philippine public secondary education.
+At Gat Andres Bonifacio High School, educators manage exceptionally large class sizes and face severe instructional time constraints, making the manual delivery of individualized remedial instruction nearly impossible. National educational initiatives, such as DepEd’s Catch-Up Fridays, highlight a desperate, systemic need for remediation in core competencies like reading and mathematics. However, current literature explicitly proves that these efforts are bottlenecked by a lack of specialized teachers, insufficient targeted learning materials, and extreme educator fatigue. Furthermore, while the existing DepEd DLMS is highly scalable and effective for module distribution, it simply does not possess the technological architecture to autonomously support these remedial initiatives or harness the generative Artificial Intelligence (AI) tools that students are already using independently.
+The proposed system, Nexora, is designed specifically to eliminate this gap by engineering a unified, hybrid Learning Management System (LMS)- Learning Experience Platform (LXP) environment tailored for the public high school ecosystem. This project is not a duplication of existing commercial software; it is a highly specific, context-aware architectural solution. By enforcing an automated 74% performance threshold on standard assessments within the Learning Management System (LMS), Nexora utilizes data-driven triage to ensure that the gamified Learning Experience Platform (LXP) environment functions strictly as a targeted intervention tool. This prevents the Learning Experience Platform (LXP) from becoming a general-purpose distraction and ensures that remediation resources are directed exclusively at students who demonstrate quantifiable learning gaps. This algorithmic routing is firmly supported by the established pedagogical principles of Mastery Learning and Bayesian Knowledge Tracing, which validate that immediate, targeted remediation prevents compounding academic failure.
+Furthermore, Nexora resolves the material shortage and teacher workload dilemma through the integration of Large Language Model (LLM) automated content extraction. By allowing the system to ingest standard, unstructured DepEd PDF modules and autonomously extract key concepts, instructional formulas, and remedial exercises, the platform entirely removes the burden of manual content creation from the general education teacher who may lack domain-specific expertise.
+
+
+
+
+
+
+
+
+
+
+
+CHAPTER 3
+In this chapter, the researchers present a detailed exposition of the technological framework and technical development strategies employed in the Nexora project. This section identifies the hardware, software, and networking requirements necessary for the platform's operation and provides an in-depth description of the system architecture. By bridging traditional Learning Management System (LMS) administration with AI-driven Learning Experience Platform (LXP) interventions, the following technical documentation serves as the blueprint for the system’s implementation at Gat Andres Bonifacio High School.
+TECHNICAL BACKGROUND
+3.1 DETAILS OF THE TECHNOLOGY TO BE USED
+The development of Nexora utilizes a modern, containerized stack designed for scalability and local AI inference. Unlike traditional educational platforms that rely on manual administrative triggers, Nexora integrates event-driven processing and vector databases to support personalized academic recovery.
+Overview of Current and Proposed Technologies
+The current educational landscape in Philippine public schools primarily relies on the DepEd Learning Management System (DLMS), a Moodle-based framework used for content distribution. While effective for mass delivery, it lacks automated intervention triggers and AI-driven mentoring [14]. Nexora proposes a shift toward a hybrid LMS-LXP architecture. This transition is supported by the "Digital Rise Program" framework, which emphasizes ICT-assisted learning. The proposed system utilizes Artificial Intelligence (AI) and Large Language Models (LLMs) to automate content extraction from standard PDF modules, thereby alleviating the heavy instructional design burden on local educators [12].
+
+
+SOFTWARE
+Table 3: Software Requirements
+Table 3 details the software stack required for the development and deployment of the Nexora ecosystem, spanning the frontend, backend, and AI service layers.
+Mobile Application Development
+The student-facing mobile module is developed using Expo SDK 54 and React Native, providing a high-performance, cross-platform interface for accessing lessons and assessments. Android Studio is utilized for emulator-based testing, ensuring that the interface remains responsive across various Android versions, particularly for critical workflows like the JAKIPIR mentor chat and LXP remedial activities. For the visual design of the AI NPC mentor and the overall User Interface (UI), Adobe Illustrator is employed to maintain high-fidelity assets that enhance student engagement.
+Web System and Backend Architecture
+The web system serves as the primary administrative hub for teachers and school administrators. The frontend is built using Next.js 16.2.4 and React 19.2.3, which facilitate a responsive, component-based dashboard for managing class rosters and monitoring student progress in real-time. Tailwind CSS is used to ensure that the dashboard remains accessible across multiple device types.
+The backend core is powered by NestJS 11, which handles the complex logic of role-based access control (RBAC), JSON Web Token (JWT) authentication, and the event-driven listeners that trigger remediation when a student scores below 74%. To manage background tasks such as notification dispatches and retrieval jobs without affecting system performance, the researchers utilize Redis and BullMQ.
+
+
+Data Management and AI Microservices
+Nexora utilizes PostgreSQL as its primary relational database to maintain official academic records, while the pgvector extension allows the system to store and query AI-ready embeddings for the retrieval of remedial content. The Drizzle ORM is implemented to provide a strongly typed interface for database migrations and interactions.
+The AI-driven features, including the JAKIPIR mentor and the automated PDF extraction pipeline, are managed by a separate FastAPI microservice. This service leverages Ollama for local model inference, hosting the qwen2.5:3b model for conversational tutoring and the gemma3:4b vision model for processing unstructured DepEd PDF modules. This ensures that, with an optional cloud fallback pathway, the system stays online during high usage while providing immediate, adaptive feedback to struggling learners.
+Technical Validation and Monitoring
+During the development and testing phases, Swagger UI is integrated into the backend to allow for the rigorous validation of API endpoints. To ensure system reliability during classroom use, the platform incorporates an observability stack consisting of OpenTelemetry, Prometheus, and Loki, which provides real-time metrics and diagnostic logging.
+HARDWARE
+Table 4: Hardware Specifications
+Table 4 outlines the hardware baseline required for developers to build the system and for schools to implement the platform effectively.
+Description of Hardware Requirements
+The workstation used for development requires at least 16 GB of RAM to run containerized environments through Docker and local AI model serving via Ollama. For Students, the recommended hardware is a smartphone running Android 10 or higher with at least 4 GB of RAM to ensure the Expo application remains responsive during interactive LXP activities. To support the AI Support Layer, the system requires a specialized AI-Capable Server equipped with an NVIDIA GPU for real-time document extraction and conversational tutoring through the JAKIPIR NPC mentor.
+PEOPLEWARE
+The success of Nexora depends on a structured collaboration between technical personnel and the educational community.
+System Developer: Responsible for engineering the NestJS backend and Next.js frontend, ensuring the event-driven LXP triggers function correctly.
+AI Engineer: Focuses on the FastAPI service, optimizing Ollama model prompts for the JAKIPIR mentor and PDF extraction accuracy.
+System Analyst: Oversees the mastery threshold logic (74%) and ensures the architecture aligns with pedagogical needs.
+Target Users (Students): High school learners who utilize the mobile app for lessons and the AI-driven LXP for remediation.
+Target Users (Teachers/Admins): Educators who manage rosters, upload PDF modules for AI extraction, and monitor student progress.
+NETWORKS
+The Nexora ecosystem relies on a secure network to facilitate API communication and real-time notifications.
+Wi-Fi / Wired Connection: For effective implementation, a network speed of at least 5 MBPS is recommended to ensure that instructional videos play smoothly, and the AI mentor can provide immediate feedback.
+Mobile Data: For remote access, the application is optimized for synchronization over stable mobile data connections to allow students to receive announcements and view performance updates.
+Project Manager
+ The person in charge of regulating the advancement of the investigation. This person generally maintains the prerequisites given before the given due date and is responsible for guaranteeing that everything is in its legitimate place.
+
+3.2 PROJECT TECHNICAL DESCRIPTION
+Nexora follows a multi-tier client-server architecture designed to decouple administrative workflows from intensive AI processing. The system is engineered to function as a "Unified LMS-LXP Ecosystem," where the LMS handles formal structure and the LXP handles adaptive recovery.
+Special Software and AI Pipelines
+Nexora integrates specialized AI workflows that distinguish it from standard platforms. The PDF Extraction & RAG Pipeline utilizes FastAPI to ingest unstructured DepEd PDF modules, store key concepts as vectors in PostgreSQL pgvector, and autonomously generate quizzes. The JAKIPIR AI Mentor acts as an Intelligent Tutoring System (ITS), utilizing Retrieval-Augmented Generation (RAG) to provide hints strictly based on the specific module the student is currently failing.
+Special Hardware: The AI Support Layer
+The processing of LLMs requires specialized hardware. Nexora utilizes an AI-Capable Server equipped with an NVIDIA GPU (16 GB VRAM) to run the Ollama runtime locally. This ensures that student data remains private within the school’s network while maintaining high-speed response times for real-time mentoring.
+
+Figure 1: System Architecture
+As illustrated in Figure 1 (Nexora System Architecture), the platform is structured into four distinct layers that operate in a unified loop. The Web System and Service Layer acts as the central command, hosting the NestJS Backend Core which manages user roles, rosters, and official grade books. This core is connected to the Mobile Application via an authenticated API, allowing students to engage with lessons on-the-go.
+PROJECT MODULES
+Mobile Application Modules (Student Workspace)
+Following Figure 1, the mobile module is the primary gateway for learners, designed for high accessibility.
+Authentication and Account Access: Handles secure login, password resets, and email verification.
+Student Learning Workspace: Includes the Dashboard, Course Details, Lesson Details, and Announcements, allowing students to review e-SLMs and synchronized blended materials.
+Assessment and Intervention Access: This module contains the Assessment Flow and Results. If a student scores below 74%, the LXP Remedial Access is dynamically unlocked.
+Web System Modules (Admin and Teacher Hub)
+The web system provides the administrative rigor and oversight required by school management.
+Web Client Entry Points: Provides role-specific dashboards for Administrators, Teachers, and Students to access notifications and chat views.
+NextJS Backend Core: Manages the technical heart of the system, including RBAC (Role-Based Access Control), roster imports, and performance tracking.
+LMS to LXP Event-Driven Processing: This module "listens" for assessment submissions. If a failure is detected, it utilizes BullMQ and Redis to execute queued remedial jobs and Socket IO to push live notifications to teachers.
+AI Integration Gateway: Teachers use this module to manage the AI Mentor, initiate RAG Indexing, and perform the Extraction Review and Apply Flow for uploaded modules.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+CHAPTER 4
+METHODOLOGY, RESULTS AND DISCUSSION
+	The development of the Nexora system represents a fundamental shift in the pedagogical and technological framework of Gat Andres Bonifacio High School. By synthesizing the administrative rigor of a Learning Management System (LMS) with the personalized, adaptive capabilities of a Learning Experience Platform (LXP), Nexora addresses the systemic failures of traditional digital repositories. The following report provides an exhaustive requirements analysis and a detailed structural design for the platform, adhering to the rigorous documentation standards required for institutional deployment and academic validation.
+4.1 REQUIREMENTS ANALYSIS AND DOCUMENTATION
+The requirements analysis for Nexora is grounded in a dual-methodological framework that recognizes the complexity of the Philippine public school system. This phase ensures that every technical feature is mapped directly to a pedagogical need, particularly the demand for automated remedial instruction.
+Project Design Methodology
+The development of the Nexora system utilizes a combination of descriptive and developmental research methods to ensure both practical utility and technical robustness. The descriptive method is employed to evaluate the baseline readiness and instructional challenges at Gat Andres Bonifacio High School, identifying critical bottlenecks such as the 75.3 percent of teachers who are generalists providing specialized remedial instruction without domain-specific training. By documenting these conditions, the analysis establishes the necessity for an automated Artificial Intelligence (AI) intervention system.
+Simultaneously, the developmental method provides a structured approach to the systematic creation, testing, and evaluation of the software artifact. This method ensures that the final product meets the criteria of internal consistency and pedagogical effectiveness, particularly in the deployment of the 74% mastery threshold gating mechanism. The developmental process follows the Agile Model, which facilitates iterative refinements based on stakeholder feedback, ensuring that the system evolves in response to the actual needs of students and educators in a public-school setting.
+
+Source: https://asana.com/resources/agile-methodology
+Figure 2. The Agile Development
+The Agile Lifecycle
+	The Nexora project utilizes the Agile Development Model to manage the complexity of its hybrid architecture. This model prioritizes flexibility and continuous improvement, allowing the system to integrate emerging large language model (LLM) capabilities during the development cycle. The lifecycle is partitioned into six core phases, each delivering specific technical outputs.
+Table 5: Agile Development Phases, Activities, and List of Deliverables
+In the Planning phase, the researchers identified that traditional Moodle-based systems like the DepEd Learning Management System (DLMS) are insufficient for targeted intervention because they lack automated triage triggers. The Inception and Requirements phases focused on translating these gaps into specific technical requirements, such as the requirement for local model serving via Ollama to ensure data privacy and mitigate the costs associated with external API calls.
+Web Application Functional Requirements for Administrators and Educators
+The web platform functions as the central management hub for the school’s academic data and AI processing pipelines.
+Functional requirements define the core actions and tasks the Nexora system must perform to bridge the gap between curriculum delivery and personalized remediation. These are categorized by actor role and system layer.
+Table 6: Functional Requirements for Analysis (Administrators and Teachers)
+The AI Module Extraction (FR-ID#2) is a critical innovation. Using a separate FastAPI microservice, the system parses uploaded PDF documents. It utilizes a gemma3:4b vision and document reasoning model to interpret complex instructional formulas and diagrams, which are then structured using Named Entity Recognition (NER) into machine-readable instructional data. This directly addresses the educator fatigue reported in programs like "Catch-Up Fridays," where the lack of tailored materials often results in ineffective remediation.
+Mobile Application Functional Requirements for Student Learners
+The mobile workspace is designed to be the primary interface for students, facilitating continuous learning both inside and outside the classroom.
+Table 7: Functional Requirements for Analysis (Students)
+The AI Tutor interaction (FR-ID#4) utilizes a qwen2.5:3b model hosted on the local Ollama runtime. The interaction is strictly grounded in the specific module the student is failing through a Retrieval-Augmented Generation (RAG) pipeline. When a student asks a question, the system queries the pgvector store for the most relevant chunks of the original DepEd module, ensuring the AI provides accurate, curriculum-aligned assistance rather than generic responses.
+Non-Functional Requirements and System Quality Attributes
+Non-functional requirements specify the quality attributes and constraints under which the Nexora system must operate. These are mapped against the ISO/IEC 25010 framework to ensure institutional-grade performance.
+Table 8: Technical and Operational Constraints
+Pedagogical and Contextual Requirements
+Beyond technical metrics, Nexora must adhere to specific pedagogical requirements dictated by the Philippine educational landscape. Although internet connectivity is a documented challenge in public schools, the platform is designed to operate efficiently within these constraints while requiring an active connection for all features. In accordance with the system's technical delimitation, offline functionality and local data synchronization are excluded to ensure the integrity of real-time performance tracking and AI-driven interventions.
+Furthermore, the "Uncanny Valley" requirement specifies that the AI NPC mentor must be designed with a moderate degree of anthropomorphism. Excessive realism in educational AI has been shown to induce psychological discomfort and skepticism among secondary students. The design therefore utilizes stylized, 2D illustrative assets for the JAKIPIR mentor, creating a "psychologically safe" environment that fosters learner trust and motivation without causing dissonance.
+4.2 DESIGN OF SOFTWARE, SYSTEMS, PRODUCT, AND/OR PROCESSES
+USE CASE DIAGRAM
+
+
+Figure 3: Use Case Diagram for Nexora Web Application
+	Figure 3 depicts the web use case diagram depicts a centralized instructional and administrative hub. It illustrates the high-level interactions between Administrators and Teachers with backend services, emphasizing automated content generation (AI Extraction) and class-wide performance analytics. For students, the diagram showcases high-fidelity study tools, including the discussion board and assessment workspace with proctoring logic, all hosted within a desktop-optimized browser environment.
+
+Figure 4: Use Case Diagram for Nexora Mobile Application
+	Figure 4 illustrates the mobile use case diagram illustrates an agile learning extension focused specifically on the student journey. It prioritizes instructional continuity through "Continue Learning" logic and provides restricted access to the LXP environment for remediation. The diagram features the JAKIPIR AI Mentor as a primary actor for students, emphasizing mobile-first accessibility and immediate feedback. Notably, the mobile scope is student-centric, as teacher and admin mobile workflows are currently unsupported in the repository build.
+Table 9: Use Case Narratives of Login
+
+Table 10: Use Case Narratives of Dashboard
+
+Table 11: Use Case Narratives of My Courses
+
+Table 12: Use Case Narratives of View Modules (Mobile & Web)
+
+Table 13: Use Case Narratives of View and Complete Assessments
+
+Table 14: Use Case Narratives of Track Performance
+
+Table 15: Use Case Narratives of Access LXP
+
+
+
+
+
+
+
+Table 16: Use Case Narratives of AI Mentor
+
+
+Table 17: Use Case Narratives of Student Profile
+
+
+Table 18: Use Case Narratives of Security and Verification
+
+Table 19: Use Case Narratives of Logout
+
+
+
+
+
+
+Table 20: Use Case Narratives of View My Classes
+
+Table 21: Use Case Narratives of Manage Class Lessons
+
+Table 22: Use Case Narratives of Upload Learning Modules
+
+Table 23: Use Case Narratives of Create and Manage Assignments
+
+Table 24: Use Case Narratives of Discussion Board (Teacher)
+
+Table 25: Use Case Narratives of Manage Class Record
+
+Table 26: Use Case Narratives of Manage Class Roster
+
+Table 27: Use Case Narratives of AI Draft Quiz Workspace
+
+Table 28: Use Case Narratives of AI Extraction
+
+
+
+Table 29: Use Case Narratives of Class Announcement
+
+Table 30: Use Case Narratives of Student Interventions
+
+Table 31: Use Case Narratives of Track Student Performance
+Table 32: Use Case Narratives of Generate Reports
+
+
+Table 33: Use Case Narratives of Manage Teacher Profile
+
+Table 34: Use Case Narratives of View My Section
+
+
+
+
+
+Table 35: Use Case Narratives of Nexora Library
+
+Table 36: Use Case Narratives of View Evaluations
+
+Table 37: Use Case Narratives of Dashboard (Admin)
+
+Table 38: Use Case Narratives of System Diagnostics
+
+
+
+
+
+
+Table 39: Use Case Narratives of Manage Users
+
+Table 40: Use Case Narratives of Manage Sections
+
+Table 41: Use Case Narratives of Manage School Calendar
+
+Table 42: Use Case Narratives of Nexora Library (Administrator)
+
+Table 43: Use Case Narratives of Import Rosters
+
+Table 44: Use Case Narratives of Reports (Administrator)
+
+Table 45: Use Case Narratives of Evaluations (Administrator)
+
+
+
+
+
+
+Table 46: Use Case Narratives of Announcement (Administrator)
+
+Table 47: Use Case Narratives of AI Chatbot (Administrator)
+
+Table 48: Use Case Narratives of Audit Trail
+
+Table 49: Use Case Narratives of System Settings
+
+
+Table 50: Use Case Narratives of Profile (Administrator)
+FUNCTIONAL DECOMPOSITION DIAGRAM
+The Functional Decomposition Diagram (FDD) represents a hierarchical breakdown of the Nexora system into its core functional modules and sub-features. This structure ensures that complex administrative and pedagogical objectives are divided into manageable components for systematic development [9].
+
+Figure 5: Functional Decomposition Diagram of the Admin Portal
+The Admin Portal FDD illustrates the system-wide oversight and health monitoring modules required for school management. It decomposes the portal into critical modules including Admin Dashboard (for total user and active class snapshots), System Diagnostics (for monitoring AI services and database pools), and User Management (for role-based account directories). Additionally, it includes Academic Logistics and System Configuration to ensure the platform stays synchronized with the physical school calendar and section rosters.
+
+Figure 6: Functional Decomposition Diagram of the Teacher Portal
+ The Teacher Portal FDD presents the instructional management framework, emphasizing the "Teacher as Validator" role. It breaks down the system into the My Classes Hub for primary lesson delivery and the AI Support Workspace, which facilitates automated PDF content extraction and AI-assisted quiz drafting. The diagram also details the Intervention Module, which prioritizes struggling students and tracks the final outcomes of AI-led remedial sessions.
+
+
+Figure 7: Functional Decomposition Diagram of the Student Portal
+ The Student Portal FDD outlines the personalized learning journey and the mastery-gated recovery path. The hierarchy is organized around the Learning Dashboard for pending tasks and the LXP Remedial Workspace, which provides the student with adaptive playlists and access to the AI Tutoring (JAKIPIR) system. It also includes Performance Tracking to provide students with metacognitive insights into their quarterly academic trends and assessment history.
+SYSTEM FLOWCHART/FRAMEWORK
+The system flowchart presents the overall workflow of the Nexora Hybrid Educational Ecosystem, showing the sequence of processes including secure role-based authentication, automated AI content extraction from Department of Education (DepEd) PDF modules, mastery-gated summative assessments, and personalized remedial interventions. It illustrates how administrators, teachers, and students interact with the unified platform and how academic data flows across the NestJS backend core and the FastAPI AI microservice, ensuring that pedagogical pathways are logically connected and aligned with Mastery Learning principles. This visual representation helps simplify complex event-driven workflows and supports better system analysis for academic recovery at Gat Andres Bonifacio High School.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Mobile Application Flows (Student)
+Figure 8: Mobile Login & OTP Verification
+	Figure 8 illustrates the process by which a student accesses the Nexora mobile application using their registered credentials. It begins when the student opens the application and inputs their email and password, followed by system-performed credential validation. If it is the user’s first login, the system triggers a multi-factor verification flow requiring a One-Time Password (OTP) and a mandatory password update; otherwise, the user is directly authenticated and redirected to the dashboard. This diagram clearly shows the interaction between the student and the system through defined actions and decision points, ensuring a secure and structured entry into the ecosystem.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 9: Process Flow of Mobile Forgot Password and Account Recovery
+Figure 9 represents the account recovery process for students who have lost access to their credentials. It begins when the student selects the "Forgot Password" option and enters their registered email address, prompting the system to validate the record in the database. If the email exists, the system generates and sends a secure reset link to the user; otherwise, an error message is displayed for retry. This process ensures a structured and secure method for updating credentials and returning the student to the login interface.
+Figure 10: Process Flow of View Dashboard and "Continue Learning" Logic
+Figure 10 highlights the intelligent navigation within the student's mobile dashboard designed to facilitate instructional continuity. Upon successful authentication, the system fetches the student’s progress data to identify the last lesson or assessment accessed and renders a dynamic "Continue Learning" card. The student can click this card to be immediately redirected to their current point in the curriculum, ensuring a seamless transition between study sessions. This diagram visualizes how the system leverages historical engagement patterns to streamline the learner's journey.
+
+Figure 11: Process Flow of View Modules and Time-Based Engagement Tracking
+Figure 11 illustrates the interaction between the student and the learning modules; The system tracks the duration of assessment attempts in the database to monitor how long a student interacts with a module. This ensures that engagement is quantified before a student proceeds to assessments, rather than simply marking a module as complete upon opening.
+Figure 12: Process Flow of Taking Assessments and Summative Submission
+Figure 12 details the workflow for completing and submitting academic assessments through the mobile interface. It begins when the student selects an assignment and fetches the corresponding question set, followed by the input of answers or file uploads. Upon submission, the system performs an immediate calculation of the raw score and records the attempt in the PostgreSQL database. This diagram shows the direct feedback loop between the student's submission and the generation of their performance summary.
+
+Figure 13: Process Flow of LXP Remedial Access and 74% Mastery Threshold Gating
+Figure 13 visualizes the critical "logical spine" of the Nexora system: the automated triage of struggling students. After an assessment is submitted, the system compares the calculated score against a defined 74% mastery threshold. If the score falls below this floor, the system triggers an "At-Risk" state, unlocks the Learning Experience Platform (LXP) sidebar, and notifies the teacher; if the threshold is met, the student continues the standard linear path. This diagram highlights the dynamic state changes that govern access to remedial resources.
+
+Figure 14: Process Flow of RAG-Based Interaction with JAKIPIR AI Mentor
+Figure 14 illustrates the sophisticated retrieval-augmented generation (RAG) pipeline used during student interactions with the JAKIPIR AI Mentor. When a student inputs a natural language query regarding a concept failure, the FastAPI microservice performs a vector similarity search in the pgvector database to retrieve relevant chunks of the original DepEd PDF. The system then synthesizes an adaptive hint that provides instructional guidance without giving the direct answer. This flow ensures that AI support is strictly grounded in authorized class materials to prevent hallucinations and maintain academic integrity.
+Figure 15: Process Flow of View Performance Analytics and Quarterly Trends
+Figure 15 represents the process by which students monitor their own academic growth through the performance tab. The system aggregates all recorded assessment scores and computes a blended average to render visual quarterly trend charts and identify specific learning gaps. This diagram shows how the system transforms raw data into metacognitive insights, allowing students to visualize which competencies require additional focus through the LXP.
+
+Figure 16: Process Flow of Mobile Profile Management and Data Persistence
+Figure 16 details the profile management workflow on the mobile side, emphasizing the lack of detail-locking as identified in QA testing. It begins when the student accesses their profile to modify personal information or upload an avatar, followed by a system validation of the mobile number format. Once saved, the updated information is synchronized with the NestJS backend and reflected across the web portal. This diagram visualizes the data persistence loop between the mobile client and the centralized database.
+Web Application Flows (Student)
+Figure 17: Process Flow of Web Login and Dashboard Navigation
+Figure 17 illustrates the web-based authentication process for students, highlighting the loading of the dashboard shell and role-based notifications. It begins with the submission of credentials and follows with the system fetching relevant academic tasks and grid components for display. This diagram shows how the web portal initializes the student's workspace, providing a centralized view of announcements and quick navigation links.
+Figure 18: Process Flow of Web Course Browsing and Filtering
+Figure 18 describes the interaction through which students browse and filter their enrolled courses on the web portal. It begins when the user accesses the "My Courses" section, triggering a backend fetch of the enrollment list. The student can then apply subject or grade filters to execute a search, with the system rendering the filtered course cards in real-time. This flow ensures that students can efficiently manage and locate materials across multiple subjects.
+
+
+
+Figure 19: Process Flow of Assessment Taking with Out-of-Focus Warning Logic
+Figure 19 details the proctoring logic embedded within the web assessment interface to prevent unauthorized tab-switching. During an active quiz, the system employs a browser focus listener to detect if the user navigates away from the assessment page. If focus is lost, the system triggers a warning; if three warnings are reached, the system automatically submits the quiz and locks the attempt. This diagram highlights the technical measures taken to maintain assessment security in a web environment.
+Figure 20: Process Flow of Discussion Board Participation and Thread Replies
+Figure 20 represents the social learning workflow within the web application’s discussion board. It begins when a student selects a class and opens a specific discussion thread to input text or attachments. Upon submission, the system utilizes Socket.IO to broadcast the update to all connected classmates and refreshes the comment feed. This process ensures real-time collaboration and engagement within the instructional workspace.
+Figure 21: Process Flow of Web Profile Detail Locking
+Figure 21 illustrates the profile management process on the web; The web profile management system features a 'Profile Completion Lock' mechanism. Once a student's personal and enrollment details have been verified, the system toggles a locked state to prevent unauthorized changes to official school records, ensuring the long-term integrity of the academic database
+
+
+Web Application Flows (Teacher)
+Figure 22: Process Flow of Managing Classes and Instructional Materials
+Figure 22 describes how teachers manage their assigned classes and structure their instructional hierarchy. It begins at the teacher dashboard, where the educator selects a class to create modules and add lessons or assessments. The teacher can then toggle the visibility of these items, with the system updating the student feed accordingly. This diagram clearly shows the teacher's administrative control over the digital classroom environment.
+
+
+
+Figure 23: Process Flow of AI PDF Extraction and Layout-Aware Section Application
+Figure 23 illustrates the AI-driven content generation pipeline that alleviates teacher workload. It begins when the teacher uploads an unstructured DepEd PDF module, which is then processed by the FastAPI microservice using layout-aware segmentation. The AI extraction pipeline utilizes a gemma3:4b vision model to parse unstructured PDF modules into structured instructional data. This process follows a 'Teacher-in-the-Loop' architecture, where the system generates draft lessons and quizzes that the educator must review and approve before they are published to the class
+Figure 24: Process Flow of AI Quiz Drafting and Assessment Studio Workspace
+Figure 24 details the interaction between the teacher and the LLM-powered quiz generation tool. The teacher selects a source module and sets generation parameters, prompting the LLM to create a draft question set. The teacher then reviews and edits the AI-generated draft in the Assessment Studio before finalizing and publishing it to the students. This process highlights how AI serves as a "co-pilot" for instructional design rather than a replacement for teacher oversight.
+
+Figure 25: Process Flow of Asynchronous AI Job Monitoring and Status Updates
+Figure 25 represents the technical management of intensive AI tasks using background processing. When a teacher initiates a PDF extraction or quiz generation job, the system adds the task to a BullMQ queue managed by Redis. The system then provides real-time progress updates via Socket.IO, ensuring the teacher is notified as soon as the AI job is completed. This flow visualizes how Nexora maintains platform responsiveness during high-compute activities.
+Figure 26: Process Flow of Class Record Synchronization and Spreadsheet Management
+Figure 26 illustrates the process of aggregating student performance data into a centralized class record. The system fetches and synchronizes assessment scores to generate a dynamic spreadsheet view, where the teacher can calculate final averages and lock the records for the quarter. This diagram highlights the interaction between assessment submission events and the official administrative gradebook.
+
+
+Figure 27: Process Flow of Student Intervention Triage and Outcome Tracking
+Figure 27 represents the teacher-facing intervention workflow triggered by student failures. When the system detects an at-risk student (via the 74% threshold check), it adds the student to the teacher's Intervention Queue. The teacher can then assign targeted remedial tasks through the LXP and monitor progress until the learning objective is met. This flow ensures that remediation is tracked and resolved systematically.
+
+Figure 28: Process Flow of Learning Gap Analysis and Competency Heatmap Generation
+Figure 28 details the visual analytics pipeline used to identify instructional weaknesses across a section. The system fetches assessment logs and groups them by competency ID to render a color-coded heatmap of mastery levels. Teachers can use this insight to adjust their face-to-face instruction or export the data for institutional reports. This diagram shows how the system bridges raw grading with pedagogical strategy.
+
+
+
+Figure 29: Process Flow of Academic Report Generation and Data Export
+Figure 29 illustrates the workflow for generating and exporting institutional records. It begins when the teacher selects a report type (e.g., passing rate or masterlist) and sets the relevant parameters. The system then initiates backend aggregation and formats the data into PDF or CSV files for download. This process ensures that educators can fulfill administrative reporting requirements with minimal manual input.
+
+
+
+
+
+Figure 30: Process Flow of Creating Class Announcements and Discussion Threads
+Figure 30 describes how teachers communicate updates and urgent notifications to their students. The platform facilitates communication through real-time web notifications and in-app announcement updates. These alerts ensure that students receive immediate feedback on assessment results and class announcements while active within the ecosystem
+
+
+
+
+Web Application Flows (Administrator)
+Figure 31: Process Flow of Admin Dashboard Overview and Quick Route Navigation
+Figure 31 illustrates the centralized system oversight provided to the administrator. Upon login, the system fetches global metrics, including total user mix and active classes, and displays a snapshot of dependency health. This dashboard serves as the primary gateway for the administrator to navigate toward more specialized modules using quick-access routes.
+
+
+Figure 32: Process Flow of User Lifecycle Management (Create, Suspend, Purge)
+Figure 32 represents the administrative management of user accounts across the platform. It begins with the search or filtering of the user directory, followed by the selection of a specific action such as account suspension, reactivation, or a hard purge from the PostgreSQL database. This process ensures that the administrator can maintain institutional security by controlling access tokens and data persistence.
+Figure 33: Process Flow of Admin-Triggered User Password Reset
+Figure 33 highlights the manual override process for user account recovery. The administrator can trigger a reset for any user, prompting the system to generate temporary credentials and send them via automated email. This action is simultaneously logged in the audit trail to ensure administrative accountability and security monitoring.
+
+Figure 34: Process Flow of Section Creation and Roster Management
+Figure 34 illustrates the logistics of structuring the school year within the platform. The administrator inputs section details, assigns a teacher as the adviser, and populates the roster by selecting students from the masterlist. The system then validates enrollment counts to ensure sections do not exceed capacity before updating the institutional directory.
+
+
+
+
+
+
+Figure 35: Process Flow of Bulk Roster Import (CSV/Excel) and Validation Logic
+Figure 35 details the technical pipeline for handling large-scale data ingestion. It begins with the upload of a CSV or Excel file, where the system parses headers and performs row-level validation. If errors are found, the system reports them to the administrator; if valid, the system commits a bulk batch write to the database. This flow ensures that school enrollment can be managed efficiently without manual record entry.
+
+
+Figure 36: Process Flow of School Calendar and Event Timeline Management
+Figure 36 represents the school-wide scheduling process where the administrator creates and publishes events. The system validates the start and end dates and synchronizes the event with all teacher and student calendars. This process ensures that academic timelines are visible and consistent across all user portals.
+
+
+
+
+
+
+Figure 37: Process Flow of System Diagnostics and Dependency Health Checks
+Figure 37 illustrates the infrastructure monitoring capabilities of the platform. The administrator's diagnostic dashboard provides real-time monitoring of the system's core dependencies. This includes health checks for the PostgreSQL database, the Redis cache for background jobs, and the FastAPI-powered AI service to ensure the stability of the remedial ecosystem
+
+
+
+
+
+Figure 38: Process Flow of Audit Trail Review and Security Log Filtering
+Figure 38 details the security monitoring workflow for administrators. The system queries the action logs based on selected date ranges or actors and renders a chronological list of activities. This diagram highlights how the administrator can audit system changes and review security events to maintain institutional data integrity.
+
+
+
+
+
+Figure 39: Process Flow of Academic State Transition (Year/Quarter Updates)
+Figure 39 represents the critical transition between academic periods. It begins when the administrator requests a state change, prompting the system to preview the impact on enrollments and archive past records. After a secure confirmation, the system initializes the new school year or quarter, locking previous grades to ensure record-keeping accuracy.
+
+
+
+
+
+
+References
+[1] Lummio, “How a learning management system can improve District-Wide student outcomes,” Lummio, Nov. 14, 2024. https://lummio.com/how-a-learning-management-system-can-improve-district-wide-student-outcomes/
+[2] D. Ashcraft, “AI-Powered LMS for Schools: Adaptive Learning Architecture Guide,” Of Ash and Fire, Mar. 09, 2026. https://www.ofashandfire.com/blog/ai-powered-lms-schools-adaptive-learning
+[3] B. Chahal, “How to implement an engaging, personalized learning strategy using the right blended LMS and LXP,” eLearning Industry, Dec. 17, 2024. https://elearningindustry.com/how-to-implement-an-engaging-personalized-learning-strategy-using-the-right-blended-lms-and-lxp
+[4] R. A. Nyaaba, E. K. Attipoe, D. K. Anhwere, A.-G. Sayibu, and A. O. Darko, “Comparative analysis of student performance using learning Management systems (LMS) and traditional teaching methods in academic tasks: a case study of the University of Cape Coast (UCC),” Creative Education, vol. 16, no. 01, pp. 103–134, Jan. 2025, doi: 10.4236/ce.2025.161007.
+[5] A. B. Padis and O.-D. C. Ruth, “Navigating the hurdles: Implementation challenges of Catch-Up Fridays through the lenses of teachers and students,” SHILAP Revista De Lepidopterología, Oct. 2025, doi: 10.71514/jssal/2025.231.
+[6] M. A. Llego, “DePED Learning Management System (LMS) and Electronic Self-Learning Modules (e-SLMS),” TeacherPH, Jul. 03, 2020. https://www.teacherph.com/deped-learning-management-system-lms-electronic-self-learning-modules/
+[7] I. Ikhsan, K. Hartanti, and F. L. Lopo, “Strategies for Implementing AI in LMS to improve the effectiveness and personalization of Digital Learning,” the Journal of Academic Science., vol. 2, no. 3, pp. 944–953, Mar. 2025, doi: 10.59613/qp3e7d30.
+[8] Teach Up, “Everything you need to know about LXP (Learning eXperience Platforms),” Teach Up, Jan. 16, 2026. https://teachup.com/en-eu/all-about-lxp-learning-experience-platforms
+[9] N. Rana, “8 Most impactful LXP features that will transform your learning strategy in 2026 | Careervira.com,” Careervira, Jan. 10, 2026. https://www.careervira.com/enterprise/advice/learn-advice/lxp-features
+[10] Kajal, “Understanding the impact of PAL on learning outcomes in India: Insights for CSR, NGOs, and schools,” iDream Education, Jan. 02, 2026. https://www.idreameducation.org/blog/impact-of-pal-on-learning/
+[11] H. M. Qadir, R. A. Khan, M. Rasool, M. Sohaib, M. A. Shah, and M. J. Hasan, “An adaptive feedback system for the improvement of learners,” Scientific Reports, vol. 15, no. 1, p. 17242, May 2025, doi: 10.1038/s41598-025-01429-w.
+[12] CYPHER Learning, “How to close learning gaps with the help of an intelligent learning platform,” May 10, 2022. https://www.cypherlearning.com/blog/k-20/how-to-close-learning-gaps-with-the-help-of-an-intelligent-learning-platform
+[13] “AI Tutors: Paving the path to personalized learning in high schools | SchoolAI.” https://schoolai.com/blog/ai-tutors-paving-the-path-to-personalized-learning-in-high-schools
+[14] “DepEd highlights Digital Rise Program as key player in addressing challenges in education quality,” Department of Education, May 10, 2022. https://www.deped.gov.ph/2022/05/10/deped-highlights-digital-rise-program-as-key-player-in-addressing-challenges-in-education-quality/
+[15] “AI ready ASEAN - ASEAN Foundation,” ASEAN Foundation. https://aseanfoundation.org/programme/ai_ready_asean/
+[16] A. M. Mananggolo, “Teachers’ challenges and practices on conducting remedial class in mathematics,” Psychology and Education: A Multidisciplinary Journal, vol. 37, no. 7, pp. 844–867, 2025. https://scimatic.org/storage/journals/11/pdfs/5208.pdf
+[17] L. I. B. Abergos, J. R. M. Dela Cruz, J. C. Lasala, S. N. Prado, P. K. M. Tapar, D. C. B. Cañeza, and D. M. Ocampo, “Effectiveness of remedial reading to struggling readers of Grade 7 students,” SHS Web of Conferences, vol. 182, p. 01004, 2024, presented at the 5th Annual Conference on Education and Social Sciences (ACcESS 2023). https://doi.org/10.1051/shsconf/202418201004

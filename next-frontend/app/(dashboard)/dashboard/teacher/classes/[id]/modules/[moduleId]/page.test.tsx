@@ -317,7 +317,7 @@ describe('TeacherModuleDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
   });
 
-  it('routes core default assessment content to the read-only editor shell', async () => {
+  it('routes core default assessment content to the teacher editor so release controls stay available', async () => {
     mockedModuleService.getByClass.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -375,10 +375,66 @@ describe('TeacherModuleDetailPage', () => {
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        '/dashboard/teacher/assessments/assessment-existing/edit?mode=view&classId=class-1&moduleId=module-1',
+        '/dashboard/teacher/assessments/assessment-existing/edit?classId=class-1&moduleId=module-1',
       );
     });
     expect(mockedAssessmentService.getById).not.toHaveBeenCalled();
+  });
+
+  it('allows unlocking a default module from the locking tab', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+    mockedModuleService.releaseCoreModule.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'module-1',
+        classId: 'class-1',
+        title: 'Default Module',
+        description: 'Locked from template',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        isCoreTemplateAsset: true,
+        teacherNotes: '',
+        sections: [],
+        gradingScaleEntries: [],
+      } as never,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'Locking' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Unlocked Students can open this template module once it is visible and its items are given\./i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockedModuleService.releaseCoreModule).toHaveBeenCalledWith('module-1', {
+        isLocked: false,
+      });
+    });
   });
 
   it('routes core default lesson content to the teacher read-only reader', async () => {
@@ -560,13 +616,20 @@ describe('TeacherModuleDetailPage', () => {
     expect(submitButton).not.toBeDisabled();
   });
 
-  it('shows orphan legacy lessons and deletes them from the cleanup section', async () => {
+  it('disables Give for attached draft assessments', async () => {
     mockedModuleService.getByClass.mockResolvedValueOnce({
       success: true,
       message: 'ok',
       data: [
         {
-          ...createModulePayload()[0],
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Module 1',
+          description: 'Desc',
+          order: 1,
+          isVisible: true,
+          isLocked: false,
+          teacherNotes: '',
           sections: [
             {
               id: 'section-1',
@@ -578,45 +641,34 @@ describe('TeacherModuleDetailPage', () => {
                 {
                   id: 'item-1',
                   moduleSectionId: 'section-1',
-                  itemType: 'lesson',
-                  lessonId: 'lesson-attached',
+                  itemType: 'assessment',
+                  assessmentId: 'assessment-existing',
                   order: 1,
                   isVisible: true,
-                  isRequired: false,
-                  isGiven: true,
+                  isRequired: true,
+                  isGiven: false,
+                  assessment: {
+                    id: 'assessment-existing',
+                    classId: 'class-1',
+                    title: 'Draft Quiz',
+                    type: 'quiz',
+                    totalPoints: 10,
+                    isPublished: false,
+                  },
                 },
               ],
             },
           ],
+          gradingScaleEntries: [],
         },
       ] as never,
       count: 1,
     });
-    mockedLessonService.getByClass.mockResolvedValueOnce({
-      success: true,
-      message: 'ok',
-      data: [
-        { id: 'lesson-attached', classId: 'class-1', title: 'Attached lesson', isDraft: true },
-        { id: 'lesson-orphan', classId: 'class-1', title: 'Orphan lesson', isDraft: true },
-      ] as never,
-      count: 2,
-      total: 2,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
-    } as never);
 
     render(<TeacherModuleDetailPage />);
 
-    expect(await screen.findByText('Legacy Lessons (Not In Modules)')).toBeInTheDocument();
-    expect(screen.getByText('Orphan lesson')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete legacy lesson' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm Action' }));
-
-    await waitFor(() => {
-      expect(mockedLessonService.delete).toHaveBeenCalledWith('lesson-orphan');
-    });
+    await screen.findByText('Draft Quiz');
+    expect(screen.getByRole('checkbox', { name: 'Give' })).toBeDisabled();
   });
 
   it('attaches an existing library file instead of uploading a new pdf', async () => {
@@ -647,5 +699,49 @@ describe('TeacherModuleDetailPage', () => {
       );
     });
     expect(mockedFileService.upload).not.toHaveBeenCalled();
+  });
+
+  it('opens the module guide and navigates through all pages', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('button', { name: /module help/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /module help/i }));
+
+    expect(await screen.findByText('Teacher guide: Module Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Page 1 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Start from the module header')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 2 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Build sections first')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 3 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Attach and manage module blocks')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 4 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Choose whether students can see this module')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Control release through locking')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Page 6 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Use private module notes for pacing')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(screen.getByText('Page 5 of 6')).toBeInTheDocument();
+    expect(screen.getByText('Control release through locking')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Close guide')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Teacher guide: Module Workspace')).not.toBeInTheDocument();
+    });
   });
 });

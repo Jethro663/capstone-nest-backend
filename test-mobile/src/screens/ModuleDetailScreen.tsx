@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { PropsWithChildren } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -6,6 +6,7 @@ import { Pressable, Text, View } from "react-native";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { peekAppError } from "../api/http";
 import { useClassDetail, useModuleDetail } from "../api/hooks";
+import { modulesApi } from "../api/services/modules";
 import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import type { ModuleItem } from "../types/module";
@@ -104,12 +105,13 @@ function DarkSectionLabel({ title, meta, metaColor = theme.red }: { title: strin
   );
 }
 
-function ToneTag({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "red" }) {
+function ToneTag({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "red" | "purple" }) {
   const toneStyle = {
     blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
     red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    purple: { backgroundColor: theme.purpleSoft, color: "#C4B0FF" },
   }[tone];
 
   return (
@@ -121,6 +123,8 @@ function ToneTag({ label, tone }: { label: string; tone: "blue" | "green" | "amb
 
 export function ModuleDetailScreen({ route, navigation }: Props) {
   const { classId, moduleId } = route.params;
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [fileActionError, setFileActionError] = useState<string | null>(null);
   const classQuery = useClassDetail(classId);
   const moduleQuery = useModuleDetail(classId, moduleId);
 
@@ -154,6 +158,18 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
     void Promise.all([classQuery.refetch(), moduleQuery.refetch()]);
   };
 
+  const runFileAction = async (actionKey: string, action: () => Promise<unknown>) => {
+    try {
+      setBusyAction(actionKey);
+      setFileActionError(null);
+      await action();
+    } catch (error) {
+      setFileActionError(peekAppError(error).message);
+    } finally {
+      setBusyAction((current) => (current === actionKey ? null : current));
+    }
+  };
+
   const openItem = (item: ModuleContentItem) => {
     if (item.itemType === "lesson" && item.lessonId) {
       navigation.navigate("LessonDetail", { lessonId: item.lessonId, classId });
@@ -161,6 +177,12 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
     }
     if (item.itemType === "assessment" && item.assessmentId) {
       navigation.navigate("AssessmentDetail", { assessmentId: item.assessmentId, classId });
+      return;
+    }
+    if (item.itemType === "file") {
+      void runFileAction(`open-${item.id}`, () =>
+        modulesApi.openAttachedFile(item.id, item.file?.originalName || "module-attachment"),
+      );
     }
   };
 
@@ -265,6 +287,13 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
         </DarkPanel>
       ) : null}
 
+      {fileActionError ? (
+        <DarkPanel>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Attachment action unavailable</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{fileActionError}</Text>
+        </DarkPanel>
+      ) : null}
+
       <DarkPanel style={{ overflow: "hidden", paddingHorizontal: 0, paddingVertical: 0 }}>
         <View
           style={{
@@ -329,14 +358,17 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
             {section.items.map((item, itemIndex) => {
               const isLesson = item.itemType === "lesson";
               const isAssessment = item.itemType === "assessment";
+              const isFile = item.itemType === "file";
               const iconName = isLesson ? "book-open-page-variant-outline" : isAssessment ? "clipboard-text-outline" : "file-document-outline";
               const iconColor = isLesson ? theme.blue : isAssessment ? theme.amber : theme.purple;
               const iconBg = isLesson ? theme.blueSoft : isAssessment ? theme.amberSoft : theme.purpleSoft;
 
+              const cardActionable = isLesson || isAssessment;
+
               return (
                 <Pressable
                   key={item.id}
-                  disabled={!item.lessonId && !item.assessmentId}
+                  disabled={!cardActionable}
                   onPress={() => openItem(item)}
                   style={{
                     marginHorizontal: 16,
@@ -347,7 +379,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
                     backgroundColor: theme.surface,
                     paddingHorizontal: 14,
                     paddingVertical: 12,
-                    opacity: !item.lessonId && !item.assessmentId ? 0.7 : 1,
+                    opacity: cardActionable || isFile ? 1 : 0.7,
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 11 }}>
@@ -367,13 +399,58 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
                       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5, marginBottom: 4 }}>
                         {item.isRequired ? <ToneTag label="Required" tone="red" /> : null}
                         {item.completed ? <ToneTag label="Done" tone="green" /> : null}
+                        {isFile ? <ToneTag label="Reference file" tone="purple" /> : null}
                       </View>
                       <Text numberOfLines={2} style={{ fontSize: 13, lineHeight: 17, fontWeight: "600", color: theme.text }}>
                         {getItemTitle(item)}
                       </Text>
                       <Text style={{ marginTop: 2, fontSize: 11, color: theme.muted }}>{getItemMeta(item)}</Text>
+                      {isFile ? (
+                        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                          <Pressable
+                            accessibilityLabel={`Open ${item.file?.originalName || "reference file"}`}
+                            onPress={() =>
+                              void runFileAction(`open-${item.id}`, () =>
+                                modulesApi.openAttachedFile(item.id, item.file?.originalName || "module-attachment"),
+                              )
+                            }
+                            disabled={busyAction === `open-${item.id}`}
+                            style={{
+                              borderRadius: 999,
+                              backgroundColor: theme.blueSoft,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.blue }}>
+                              {busyAction === `open-${item.id}` ? "Opening..." : "Open"}
+                            </Text>
+                          </Pressable>
+                          <Pressable
+                            accessibilityLabel={`Download ${item.file?.originalName || "reference file"}`}
+                            onPress={() =>
+                              void runFileAction(`download-${item.id}`, () =>
+                                modulesApi.downloadAttachedFile(item.id, item.file?.originalName || "module-attachment"),
+                              )
+                            }
+                            disabled={busyAction === `download-${item.id}`}
+                            style={{
+                              borderRadius: 999,
+                              borderWidth: 1,
+                              borderColor: theme.border,
+                              backgroundColor: theme.surface,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                            }}
+                          >
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>
+                              {busyAction === `download-${item.id}` ? "Downloading..." : "Download"}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      ) : null}
                     </View>
-                    <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} />
+                    <MaterialCommunityIcons name={isFile ? "download" : "chevron-right"} size={16} color={theme.dim} />
                   </View>
                 </Pressable>
               );

@@ -3,9 +3,10 @@ export type {
   StudentSupportRouteName,
 } from "./student-route-manifest";
 
-export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "calendar";
+export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "discussion" | "calendar";
 export type JaPanel = "practice" | "ask" | "review" | "lxp";
 export type LxpMobileTab = "paths" | "steps" | "replays" | "case" | "overview";
+export type TeacherClassDetailTab = "modules" | "assessments" | "announcements" | "calendar" | "students";
 
 export type JaRouteParams = {
   panel?: JaPanel;
@@ -19,6 +20,7 @@ export type RootStackParamList = {
   ClassWorkspace: { classId: string };
   ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab };
   ModuleDetail: { classId: string; moduleId: string };
+  Calendar: { classId?: string } | undefined;
   Courses: undefined;
   Lessons: undefined;
   LessonDetail: { lessonId: string; classId?: string };
@@ -31,6 +33,12 @@ export type RootStackParamList = {
   Performance: undefined;
   Transcript: undefined;
   AiTutor: { classId?: string } | undefined;
+  TeacherClassDetail: { classId: string; initialTab?: TeacherClassDetailTab };
+  TeacherModuleDetail: { classId: string; moduleId: string };
+  TeacherLessonDetail: { lessonId: string; classId?: string };
+  TeacherAssessmentDetail: { assessmentId: string; classId?: string };
+  TeacherAssessmentReview: { attemptId: string; assessmentId?: string; classId?: string };
+  TeacherCalendar: { classId?: string } | undefined;
 };
 
 export type MainTabParamList = {
@@ -49,4 +57,8 @@ export type MainTabParamList = {
 
 export type AuthStackParamList = {
   Login: undefined;
+  VerifyEmail: { email: string; flow?: "activation" | "verification" };
+  ForgotPassword: undefined;
+  ResetPassword: { email?: string; code?: string } | undefined;
+  SetInitialPassword: { email: string };
 };

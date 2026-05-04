@@ -19,12 +19,12 @@ export function StudentSectionHeader({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-start justify-between gap-3', className)}>
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-[var(--student-text-strong)]">{title}</h2>
+    <div className={cn('flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
+      <div className="min-w-0">
+        <h2 className="text-xl font-bold tracking-tight text-[var(--student-text-strong)] [overflow-wrap:anywhere]">{title}</h2>
         {subtitle && <p className="mt-1 text-sm student-muted-text">{subtitle}</p>}
       </div>
-      {action}
+      {action ? <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">{action}</div> : null}
     </div>
   );
 }
@@ -111,7 +111,7 @@ export function StudentActionCard({
 }) {
   return (
     <Card className={cn('student-card student-card-hover', className)}>
-      <CardContent className="p-4">{children}</CardContent>
+      <CardContent className="min-w-0 p-4 sm:p-5">{children}</CardContent>
     </Card>
   );
 }

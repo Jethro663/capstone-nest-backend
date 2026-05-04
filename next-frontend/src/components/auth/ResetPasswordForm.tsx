@@ -42,8 +42,7 @@ export function ResetPasswordForm() {
     const result = await resetPasswordAction({
       email: data.email,
       code: data.code,
-      password: data.newPassword,
-      confirmPassword: data.confirmPassword,
+      newPassword: data.newPassword,
     });
     if (!result.success) {
       setServerError(result.message || 'Password reset failed');

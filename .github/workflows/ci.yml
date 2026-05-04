@@ -10,6 +10,7 @@ on:
       - ".github/workflows/ci.yml"
   push:
     branches:
+      - developement
       - main
     paths:
       - "backend/**"

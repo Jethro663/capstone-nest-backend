@@ -53,6 +53,8 @@ export default function EditClassPage() {
   }, [classItem?.schoolYear, schoolYears]);
 
   const initialValues = useMemo<ClassFormValues>(() => {
+    const defaultProfile = createEmptyClassForm(defaultSchoolYear).gradingProfile;
+
     if (!classItem) return createEmptyClassForm(defaultSchoolYear);
 
     return {
@@ -63,6 +65,7 @@ export default function EditClassPage() {
       teacherId: classItem.teacherId || '',
       schoolYear: classItem.schoolYear || defaultSchoolYear,
       room: classItem.room || '',
+      gradingProfile: classItem.gradingProfile || defaultProfile,
       schedules: mapSchedules(classItem.schedules),
     };
   }, [classItem, defaultSchoolYear]);

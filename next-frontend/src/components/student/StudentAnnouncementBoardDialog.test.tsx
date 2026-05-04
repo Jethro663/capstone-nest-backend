@@ -6,7 +6,7 @@ describe('StudentAnnouncementBoardDialog', () => {
     sessionStorage.clear();
   });
 
-  it('opens with LMS dos and donts and no next button when there are no upcoming events', async () => {
+  it('opens with the JA reminder form and no next button when there are no upcoming events', async () => {
     render(
       <StudentAnnouncementBoardDialog
         events={[]}
@@ -17,6 +17,10 @@ describe('StudentAnnouncementBoardDialog', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('LMS reminders')).toBeInTheDocument();
+    expect(screen.getByText('Before you continue')).toBeInTheDocument();
+    expect(
+      screen.getByText('Check due dates before starting assessments.'),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
   });
 
@@ -44,5 +48,6 @@ describe('StudentAnnouncementBoardDialog', () => {
 
     expect(screen.getByText('School Fest')).toBeInTheDocument();
     expect(screen.getByText('Visit the covered court after class.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
   });
 });

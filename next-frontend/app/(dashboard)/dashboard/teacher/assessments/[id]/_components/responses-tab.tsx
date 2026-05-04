@@ -38,6 +38,7 @@ function formatTime(seconds: number): string {
 }
 
 export function ResponsesTab({ assessment, stats, analytics, submissions }: ResponsesTabProps) {
+  const isFileUpload = assessment.type === 'file_upload';
   const totalStudents = submissions?.summary?.total ?? 0;
   const submittedStudents = (submissions?.summary?.turnedIn ?? 0) + (submissions?.summary?.returned ?? 0);
   const completionRate = totalStudents > 0
@@ -67,13 +68,15 @@ export function ResponsesTab({ assessment, stats, analytics, submissions }: Resp
           {
             label: 'Pass Rate',
             value: `${stats?.passRate ?? 0}%`,
-            sub: `Passing: ${assessment.passingScore ?? 60}%`,
+            sub: isFileUpload ? 'Latest submission grading' : `Passing: ${assessment.passingScore ?? 60}%`,
             gradient: 'from-violet-500 to-violet-600',
           },
           {
             label: 'Avg Time',
             value: stats?.averageTimeSeconds ? formatTime(stats.averageTimeSeconds) : '—',
-            sub: assessment.timeLimitMinutes ? `Limit: ${assessment.timeLimitMinutes}m` : 'No time limit',
+            sub: isFileUpload
+              ? (assessment.closeWhenDue ? 'Closes when due date passes' : 'Stays open until closed')
+              : assessment.timeLimitMinutes ? `Limit: ${assessment.timeLimitMinutes}m` : 'No time limit',
             gradient: 'from-amber-500 to-amber-600',
           },
         ].map((card, i) => (

@@ -100,6 +100,15 @@ export function getStudentAssessmentAvailability(params: {
     };
   }
 
+  if (assessment.type === 'file_upload') {
+    return {
+      canStart: true,
+      blockedReason: null,
+      isPastDue: false,
+      hasAttemptsRemaining: true,
+    };
+  }
+
   const maxAttempts = assessment.maxAttempts ?? 1;
   const hasAttemptsRemaining = submittedAttemptCount < maxAttempts;
   if (!hasAttemptsRemaining) {

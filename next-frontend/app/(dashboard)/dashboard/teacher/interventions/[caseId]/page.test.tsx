@@ -134,6 +134,15 @@ function buildCompletedJob() {
   };
 }
 
+function buildFailedJob(message = 'Cloud embedding response did not contain a vector for each input.') {
+  return {
+    ...buildProcessingJob(),
+    status: 'failed' as const,
+    progressPercent: 100,
+    errorMessage: message,
+  };
+}
+
 function buildStructuredResult() {
   return {
     caseId: 'case-1',
@@ -308,6 +317,50 @@ describe('TeacherInterventionWorkspacePage', () => {
         }),
       );
     });
+  });
+
+  it('surfaces intervention basis and formative-only review guidance in the workspace', async () => {
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildCompletedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+    mockedAiService.getInterventionJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'remedial_plan_generation',
+          status: 'completed',
+          outputId: 'output-1',
+        },
+        result: {
+          outputId: 'output-1',
+          outputType: 'intervention_plan',
+          structuredOutput: buildStructuredResult(),
+        },
+      },
+    } as Awaited<ReturnType<typeof aiService.getInterventionJobResult>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Plan Creator' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Intervention Basis')).toBeInTheDocument();
+    expect(screen.getAllByText(/grounded on class-scoped materials/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Practice lessons then a quick quiz.')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Weakness detected')).toBeInTheDocument();
+    expect(screen.getByText('Recommended lesson review')).toBeInTheDocument();
+    expect(screen.getByText('Recommended assessment retry')).toBeInTheDocument();
+    expect(screen.getByText('Teacher review before assignment')).toBeInTheDocument();
+    expect(
+      screen.getByText(/do not automatically alter official class records/i),
+    ).toBeInTheDocument();
   });
 
   it('opens the helper instructions from the question mark button', async () => {
@@ -579,6 +632,57 @@ describe('TeacherInterventionWorkspacePage', () => {
 
     fireEvent.click(assignButton);
     expect(mockedLxpService.assignIntervention).not.toHaveBeenCalled();
+  });
+
+  it('surfaces failed AI plan attempts without treating the existing path as a new generated plan', async () => {
+    mockedLxpService.getTeacherQueue.mockResolvedValue({
+      data: {
+        queue: [
+          buildQueueEntry('case-1', 'active', {
+            totalCheckpoints: 2,
+            completedCheckpoints: 0,
+            completionPercent: 0,
+          }),
+        ],
+      },
+    });
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildFailedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /generate plan/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /generate new ai plan/i }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          'Cloud embedding response did not contain a vector for each input.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/no new ai-generated path was produced/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/older path that remains active/i),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /clean out & assign/i }),
+    );
+    expect(
+      screen.getByRole('button', { name: /latest ai plan failed/i }),
+    ).toBeDisabled();
   });
 
   it('disables assignment when AI result has no assignable lessons or assessments', async () => {

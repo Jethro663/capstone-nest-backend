@@ -291,7 +291,7 @@ describe('AiMentorController', () => {
 
   describe('extractModule()', () => {
     it('should forward POST /extract with dto and user', async () => {
-      const dto = { fileId: 'file-uuid-1' };
+      const dto = { fileId: 'file-uuid-1', targetSectionCount: 4 };
       mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
 
       const result = await controller.extractModule(dto, TEACHER_USER);
@@ -600,7 +600,27 @@ describe('AiMentorController', () => {
 
   describe('updateExtraction()', () => {
     it('should forward PATCH /extractions/:id with dto', async () => {
-      const dto = { structuredContent: { lessons: [] } };
+      const dto = {
+        title: 'Updated module',
+        sections: [
+          {
+            title: 'Section 1',
+            description: '',
+            lessonBlocks: [],
+            graphKeywords: ['cell'],
+            figureReferences: ['figure:1'],
+          },
+        ],
+        mediaAssets: [
+          {
+            id: 'image-1',
+            url: 'data:image/png;base64,ZmFrZQ==',
+            selectedSectionIndex: 0,
+            teacherReviewed: true,
+            candidateSections: [{ sectionIndex: 0, score: 0.88 }],
+          },
+        ],
+      };
       mockProxy.forward.mockResolvedValue({ updated: true });
 
       const result = await controller.updateExtraction(
@@ -647,7 +667,7 @@ describe('AiMentorController', () => {
 
   describe('applyExtraction()', () => {
     it('should forward POST /extractions/:id/apply with dto', async () => {
-      const dto = {};
+      const dto = { sectionIndices: [0] };
       mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
 
       const result = await controller.applyExtraction(
@@ -1065,6 +1085,152 @@ describe('AiMentorController', () => {
         controller.queueQuizDraftJob(dto as any, TEACHER_USER),
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queueLessonPlanJob()', () => {
+    it('should forward POST /teacher/lesson-plans/jobs with dto and write an audit log', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        anchorType: 'lesson',
+        anchorId: 'lesson-1',
+        teacherNote: 'Focus on mixed readiness.',
+      };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+
+      const result = await controller.queueLessonPlanJob(
+        dto as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        '/teacher/lesson-plans/jobs',
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.lesson_plan.queued',
+          targetType: 'class',
+          targetId: CLASS_ID,
+          metadata: expect.objectContaining({
+            jobId: JOB_ID,
+            anchorType: 'lesson',
+            anchorId: 'lesson-1',
+          }),
+        }),
+      );
+      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+    });
+
+    it('should block lesson plan queue when teacher does not own class', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'other-teacher',
+      });
+
+      await expect(
+        controller.queueLessonPlanJob(
+          {
+            classId: CLASS_ID,
+            anchorType: 'module',
+            anchorId: 'module-1',
+          } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow('You do not have access to this class.');
+      expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateLessonPlanDraft()', () => {
+    it('should forward PATCH /teacher/lesson-plans/jobs/:jobId/draft and audit the save', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+
+      const payload = {
+        structuredOutput: {
+          classProfile: 'mixed',
+          header: {
+            lessonTitle: 'Fractions',
+          },
+        },
+      };
+
+      const result = await controller.updateLessonPlanDraft(
+        JOB_ID,
+        payload as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'PATCH',
+        `/teacher/lesson-plans/jobs/${JOB_ID}/draft`,
+        TEACHER_USER,
+        payload,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.lesson_plan.draft_saved',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+    });
+  });
+
+  describe('updateQuizDraft()', () => {
+    it('should forward PATCH /teacher/quizzes/jobs/:jobId/draft and audit the save', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+
+      const payload = {
+        structuredOutput: {
+          title: 'Fractions AI Draft',
+          questions: [
+            {
+              type: 'multiple_choice',
+              content: '<p>What is one half of 10?</p>',
+            },
+          ],
+        },
+      };
+
+      const result = await controller.updateQuizDraft(
+        JOB_ID,
+        payload as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'PATCH',
+        `/teacher/quizzes/jobs/${JOB_ID}/draft`,
+        TEACHER_USER,
+        payload,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.saved',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
     });
   });
 

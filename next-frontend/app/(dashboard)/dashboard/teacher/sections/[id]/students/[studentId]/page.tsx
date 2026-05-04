@@ -108,7 +108,14 @@ export default function TeacherSectionStudentProfilePage() {
           Back to Section Roster
         </Link>
         <div className="teacher-student-profile__hero-row">
-          <div className="teacher-student-profile__hero-avatar">{initials}</div>
+          <Avatar className="teacher-student-profile__hero-avatar">
+            {profile?.profilePicture ? (
+              <AvatarImage src={profile.profilePicture} alt={studentName} />
+            ) : null}
+            <AvatarFallback className="rounded-[1rem] bg-[#e70012] text-[1.4rem] font-extrabold text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
           <div>
             <h1>{studentName}</h1>
             <p>{profileData.sectionInfo.name}</p>

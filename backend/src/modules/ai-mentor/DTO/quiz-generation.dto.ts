@@ -2,6 +2,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -118,4 +119,13 @@ export class GenerateQuizDraftDto {
   @IsOptional()
   @IsEnum(Quarter)
   quarter?: Quarter;
+}
+
+export class UpdateQuizDraftDto {
+  @ApiProperty({
+    description: 'Reviewed structured quiz draft payload to persist',
+    type: Object,
+  })
+  @IsObject()
+  structuredOutput: Record<string, unknown>;
 }

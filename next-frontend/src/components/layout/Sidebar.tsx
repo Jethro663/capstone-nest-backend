@@ -28,12 +28,14 @@ import {
   Library,
   Upload,
   CalendarDays,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAuth } from '@/providers/AuthProvider';
 import { logoutAction } from '@/lib/auth-actions';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { getProfileRoute } from '@/utils/profile';
+import { getProfileRoute, resolveUserProfilePicture } from '@/utils/profile';
 import { lxpService } from '@/services/lxp-service';
 import {
   normalizeDashboardRole,
@@ -44,6 +46,12 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+}
+
+interface NavCategory {
+  id: string;
+  label: string;
+  items: NavItem[];
 }
 
 const studentNav: NavItem[] = [
@@ -59,6 +67,16 @@ const studentNav: NavItem[] = [
     label: "Announcements",
     href: "/dashboard/student/announcements",
     icon: Megaphone,
+  },
+  {
+    label: "Evaluations",
+    href: "/dashboard/student/evaluations",
+    icon: ClipboardCheck,
+  },
+  {
+    label: "Calendar",
+    href: "/dashboard/student/calendar",
+    icon: CalendarDays,
   },
   { label: "Profile", href: "/dashboard/student/profile", icon: User },
 ];
@@ -102,6 +120,109 @@ const teacherNav: NavItem[] = [
   { label: "Profile", href: "/dashboard/teacher/profile", icon: User },
 ];
 
+const studentNavCategories: NavCategory[] = [
+  {
+    id: 'learning',
+    label: 'Learning',
+    items: [
+      { label: "Dashboard", href: "/dashboard/student", icon: LayoutDashboard },
+      { label: "My Courses", href: "/dashboard/student/courses", icon: BookOpen },
+      { label: "JA Hub", href: "/dashboard/student/ja", icon: Bot },
+      {
+        label: "Learners Path",
+        href: "/dashboard/student/lxp",
+        icon: ClipboardList,
+      },
+    ],
+  },
+  {
+    id: 'updates',
+    label: 'Updates',
+    items: [
+      {
+        label: "Announcements",
+        href: "/dashboard/student/announcements",
+        icon: Megaphone,
+      },
+      {
+        label: "Evaluations",
+        href: "/dashboard/student/evaluations",
+        icon: ClipboardCheck,
+      },
+      {
+        label: "Calendar",
+        href: "/dashboard/student/calendar",
+        icon: CalendarDays,
+      },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    items: [{ label: "Profile", href: "/dashboard/student/profile", icon: User }],
+  },
+];
+
+const teacherNavCategories: NavCategory[] = [
+  {
+    id: 'teaching',
+    label: 'Teaching',
+    items: [
+      { label: "My Classes", href: "/dashboard/teacher/classes", icon: BookOpen },
+      { label: "My Sections", href: "/dashboard/teacher/sections", icon: Users },
+      { label: "Calendar", href: "/dashboard/teacher/calendar", icon: Activity },
+    ],
+  },
+  {
+    id: 'content-records',
+    label: 'Content & Records',
+    items: [
+      {
+        label: "Nexora Library",
+        href: "/dashboard/teacher/library",
+        icon: FolderOpen,
+      },
+      {
+        label: "Class Record",
+        href: "/dashboard/teacher/class-record",
+        icon: ClipboardList,
+      },
+      {
+        label: "Announcements",
+        href: "/dashboard/teacher/announcements",
+        icon: Megaphone,
+      },
+    ],
+  },
+  {
+    id: 'insights-support',
+    label: 'Insights & Support',
+    items: [
+      { label: "Reports", href: "/dashboard/teacher/reports", icon: BarChart3 },
+      {
+        label: "Interventions",
+        href: "/dashboard/teacher/interventions",
+        icon: Users,
+      },
+      {
+        label: "Performance",
+        href: "/dashboard/teacher/performance",
+        icon: BarChart3,
+      },
+      {
+        label: "Evaluations",
+        href: "/dashboard/teacher/evaluations",
+        icon: Settings,
+      },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    items: [{ label: "Profile", href: "/dashboard/teacher/profile", icon: User }],
+  },
+];
+
 const adminNav: NavItem[] = [
   { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
   {
@@ -140,6 +261,74 @@ const adminNav: NavItem[] = [
   { label: "Profile", href: "/dashboard/admin/profile", icon: CircleUserRound },
 ];
 
+const adminNavCategories: NavCategory[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    items: [
+      { label: "Dashboard", href: "/dashboard/admin", icon: LayoutDashboard },
+      {
+        label: "Diagnostics",
+        href: "/dashboard/admin/diagnostics",
+        icon: Activity,
+      },
+    ],
+  },
+  {
+    id: 'school-setup',
+    label: 'School Setup',
+    items: [
+      { label: "Users", href: "/dashboard/admin/users", icon: Users },
+      { label: "Sections", href: "/dashboard/admin/sections", icon: Layers3 },
+      { label: "Classes", href: "/dashboard/admin/classes", icon: BookOpen },
+      { label: "Calendar", href: "/dashboard/admin/calendar", icon: CalendarDays },
+      {
+        label: "Roster Import",
+        href: "/dashboard/admin/roster-import",
+        icon: Upload,
+      },
+    ],
+  },
+  {
+    id: 'content-comms',
+    label: 'Content & Comms',
+    items: [
+      { label: "Nexora Library", href: "/dashboard/admin/library", icon: Library },
+      {
+        label: "Announcements",
+        href: "/dashboard/admin/announcements",
+        icon: Megaphone,
+      },
+    ],
+  },
+  {
+    id: 'insights',
+    label: 'Insights & AI',
+    items: [
+      { label: "Reports", href: "/dashboard/admin/reports", icon: BarChart3 },
+      {
+        label: "Evaluations",
+        href: "/dashboard/admin/evaluations",
+        icon: ClipboardCheck,
+      },
+      { label: "AI Chatbot", href: "/dashboard/admin/chatbot", icon: Bot },
+      { label: "Audit Trail", href: "/dashboard/admin/audit", icon: History },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    items: [
+      {
+        label: "System Settings",
+        href: "/dashboard/admin/system-settings",
+        icon: Settings,
+      },
+      { label: "Profile", href: "/dashboard/admin/profile", icon: CircleUserRound },
+    ],
+  },
+];
+
 function getNavItems(role: string | null): NavItem[] {
   switch (role) {
     case 'teacher':
@@ -148,6 +337,19 @@ function getNavItems(role: string | null): NavItem[] {
       return adminNav;
     default:
       return studentNav;
+  }
+}
+
+function getNavCategories(role: string | null): NavCategory[] | null {
+  switch (role) {
+    case 'teacher':
+      return teacherNavCategories;
+    case 'admin':
+      return adminNavCategories;
+    case 'student':
+      return studentNavCategories;
+    default:
+      return null;
   }
 }
 
@@ -211,6 +413,18 @@ export function Sidebar({
       ),
     [effectiveRole],
   );
+  const navCategories = useMemo(
+    () =>
+      getNavCategories(effectiveRole)?.map((category) => ({
+        ...category,
+        items: category.items.map((item) =>
+          item.label === 'Profile'
+            ? { ...item, href: getProfileRoute(effectiveRole) }
+            : item,
+        ),
+      })) ?? null,
+    [effectiveRole],
+  );
   const isStudentShell = effectiveRole === "student";
   const isTeacherShell = effectiveRole === "teacher";
   const isAdminShell = effectiveRole === "admin";
@@ -220,8 +434,130 @@ export function Sidebar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ""}`.toUpperCase()
     : "U";
+  const avatarSrc = resolveUserProfilePicture(user);
   const [teacherPendingInterventionCount, setTeacherPendingInterventionCount] =
     useState(0);
+  const activeCategoryIds = useMemo(
+    () =>
+      navCategories
+        ?.filter((category) =>
+          category.items.some((item) => isNavItemActive(pathname, item.href)),
+        )
+        .map((category) => category.id) ?? [],
+    [navCategories, pathname],
+  );
+  const [openCategoryIds, setOpenCategoryIds] = useState<string[]>(
+    () => activeCategoryIds,
+  );
+  const renderNavItem = (item: NavItem) => {
+    const active = isNavItemActive(pathname, item.href);
+
+    return (
+      <button
+        key={item.href}
+        type="button"
+        onClick={() => {
+          router.push(item.href);
+          onClose?.();
+        }}
+        className={cn(
+          "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          active
+            ? isStudentShell
+              ? "student-sidebar__item student-sidebar__item--active"
+              : isTeacherShell
+                ? "teacher-sidebar__item teacher-sidebar__item--active"
+                : isAdminShell
+                  ? "admin-sidebar__item admin-sidebar__item--active"
+                  : "bg-primary/10 text-primary"
+            : isStudentShell
+              ? "student-sidebar__item"
+              : isTeacherShell
+                ? "teacher-sidebar__item"
+                : isAdminShell
+                  ? "admin-sidebar__item"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
+      >
+        <item.icon
+          className={cn(
+            "h-4 w-4",
+            isAdminShell && "admin-sidebar__item-icon",
+            isTeacherShell && "teacher-sidebar__item-icon",
+            isStudentShell && "student-sidebar__item-icon",
+          )}
+        />
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{item.label}</span>
+          {isTeacherShell &&
+          item.href === "/dashboard/teacher/interventions" &&
+          teacherPendingInterventionCount > 0 ? (
+            <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+              {teacherPendingInterventionCount > 99
+                ? "99+"
+                : teacherPendingInterventionCount}
+            </span>
+          ) : null}
+        </span>
+      </button>
+    );
+  };
+  const renderCategory = (category: NavCategory) => {
+    const isOpen = openCategoryIds.includes(category.id);
+    const isCategoryActive = category.items.some((item) =>
+      isNavItemActive(pathname, item.href),
+    );
+
+    return (
+      <div className="sidebar__category admin-sidebar__category grid gap-1" key={category.id}>
+        <button
+          type="button"
+          className={cn(
+            'sidebar__category-trigger admin-sidebar__category-trigger flex w-full items-center justify-between gap-2 rounded-xl border border-transparent px-3 py-2 text-left text-[0.68rem] font-black uppercase tracking-[0.12em] transition-colors',
+            isAdminShell &&
+              'text-[var(--admin-sidebar-text)] hover:border-white/10 hover:bg-white/5 hover:text-[var(--admin-sidebar-text-strong)]',
+            !isAdminShell &&
+              'text-[#8ea0bc] hover:border-white/10 hover:bg-white/5 hover:text-[#d8e4f6]',
+            isOpen &&
+              'admin-sidebar__category-trigger--open border-white/10 bg-white/5',
+            isOpen &&
+              (isAdminShell
+                ? 'text-[var(--admin-sidebar-text-strong)]'
+                : 'text-[#d8e4f6]'),
+            isCategoryActive &&
+              'admin-sidebar__category-trigger--active',
+            isCategoryActive &&
+              (isAdminShell
+                ? 'text-[var(--admin-sidebar-text-strong)]'
+                : 'text-white'),
+          )}
+          aria-expanded={isOpen}
+          onClick={() =>
+            setOpenCategoryIds((current) =>
+              current.includes(category.id)
+                ? current.filter((id) => id !== category.id)
+                : [...current, category.id],
+            )
+          }
+        >
+          <span>{category.label}</span>
+          <ChevronDown
+            className={cn(
+              'admin-sidebar__category-chevron h-3.5 w-3.5 shrink-0 transition-transform',
+              isOpen && 'rotate-180',
+            )}
+          />
+        </button>
+
+        {isOpen ? (
+          <div className="admin-sidebar__category-items grid gap-1 pl-1">
+            {category.items.map(renderNavItem)}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   const teacherPendingCountCacheKey = user?.id
     ? `nexora.teacherPendingInterventionCount:${user.id}`
     : null;
@@ -424,58 +760,9 @@ export function Sidebar({
           isTeacherShell && "teacher-sidebar__nav",
         )}
       >
-        {items.map((item) => {
-          const active = isNavItemActive(pathname, item.href);
-          return (
-            <button
-              key={item.href}
-              type="button"
-              onClick={() => {
-                router.push(item.href);
-                onClose?.();
-              }}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                active
-                  ? isStudentShell
-                    ? "student-sidebar__item student-sidebar__item--active"
-                    : isTeacherShell
-                      ? "teacher-sidebar__item teacher-sidebar__item--active"
-                      : isAdminShell
-                        ? "admin-sidebar__item admin-sidebar__item--active"
-                        : "bg-primary/10 text-primary"
-                  : isStudentShell
-                    ? "student-sidebar__item"
-                    : isTeacherShell
-                      ? "teacher-sidebar__item"
-                      : isAdminShell
-                        ? "admin-sidebar__item"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <item.icon
-                className={cn(
-                  "h-4 w-4",
-                  isAdminShell && "admin-sidebar__item-icon",
-                  isTeacherShell && "teacher-sidebar__item-icon",
-                  isStudentShell && "student-sidebar__item-icon",
-                )}
-              />
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate">{item.label}</span>
-                {isTeacherShell &&
-                item.href === "/dashboard/teacher/interventions" &&
-                teacherPendingInterventionCount > 0 ? (
-                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
-                    {teacherPendingInterventionCount > 99
-                      ? "99+"
-                      : teacherPendingInterventionCount}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
+        {navCategories
+          ? navCategories.map(renderCategory)
+          : items.map(renderNavItem)}
       </nav>
 
       {isAdminShell ? (
@@ -483,7 +770,10 @@ export function Sidebar({
           <div className="admin-sidebar__section-divider" />
           <div className="admin-sidebar__footer">
             <div className="admin-sidebar__profile">
-              <div className="admin-sidebar__avatar">{initials}</div>
+              <Avatar className="admin-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="admin-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-[var(--admin-sidebar-text-strong)]">
                   {displayName}
@@ -508,7 +798,10 @@ export function Sidebar({
           <div className="teacher-sidebar__section-divider" />
           <div className="teacher-sidebar__footer">
             <div className="teacher-sidebar__profile">
-              <div className="teacher-sidebar__avatar">{initials}</div>
+              <Avatar className="teacher-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="teacher-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">
                   {displayName}
@@ -531,7 +824,10 @@ export function Sidebar({
           <div className="student-sidebar__section-divider" />
           <div className="student-sidebar__footer">
             <div className="student-sidebar__profile">
-              <div className="student-sidebar__avatar">{initials}</div>
+              <Avatar className="student-sidebar__avatar">
+                {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
+                <AvatarFallback className="student-sidebar__avatar">{initials}</AvatarFallback>
+              </Avatar>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">
                   {displayName}

@@ -73,6 +73,27 @@ describe('DiscussionBoardProcessor', () => {
   });
 
   it('skips teacher notification when commenter is the teacher', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      { studentId: 'student-1' },
+      { studentId: 'student-2' },
+    ]);
+    mockNotificationsService.createBulkDeduped.mockResolvedValue([
+      {
+        userId: 'student-1',
+        type: 'discussion_comment_posted',
+        title: 'New replies in "Open Forum"',
+        body: 'A new comment was posted in this discussion thread.',
+        referenceId: 'thread-1',
+      },
+      {
+        userId: 'student-2',
+        type: 'discussion_comment_posted',
+        title: 'New replies in "Open Forum"',
+        body: 'A new comment was posted in this discussion thread.',
+        referenceId: 'thread-1',
+      },
+    ]);
+
     await processor.process({
       name: 'comment-created',
       data: {
@@ -85,17 +106,47 @@ describe('DiscussionBoardProcessor', () => {
       },
     } as any);
 
-    expect(mockNotificationsService.createBulkDeduped).not.toHaveBeenCalled();
-    expect(mockNotificationsGateway.emitToUser).not.toHaveBeenCalled();
+    expect(mockNotificationsService.createBulkDeduped).toHaveBeenCalledWith([
+      expect.objectContaining({
+        userId: 'student-1',
+        type: 'discussion_comment_posted',
+        referenceId: 'thread-1',
+      }),
+      expect.objectContaining({
+        userId: 'student-2',
+        type: 'discussion_comment_posted',
+        referenceId: 'thread-1',
+      }),
+    ]);
+    expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledTimes(2);
   });
 
-  it('notifies teacher when a student comments', async () => {
+  it('notifies teacher and classmates when a student comments', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      { studentId: 'student-1' },
+      { studentId: 'student-2' },
+      { studentId: 'student-3' },
+    ]);
     mockNotificationsService.createBulkDeduped.mockResolvedValue([
       {
         userId: 'teacher-1',
         type: 'discussion_comment_posted',
         title: 'New replies in "Open Forum"',
         body: 'A student posted a new comment in your discussion thread.',
+        referenceId: 'thread-1',
+      },
+      {
+        userId: 'student-2',
+        type: 'discussion_comment_posted',
+        title: 'New replies in "Open Forum"',
+        body: 'A new comment was posted in this discussion thread.',
+        referenceId: 'thread-1',
+      },
+      {
+        userId: 'student-3',
+        type: 'discussion_comment_posted',
+        title: 'New replies in "Open Forum"',
+        body: 'A new comment was posted in this discussion thread.',
         referenceId: 'thread-1',
       },
     ]);
@@ -118,7 +169,17 @@ describe('DiscussionBoardProcessor', () => {
         type: 'discussion_comment_posted',
         referenceId: 'thread-1',
       }),
+      expect.objectContaining({
+        userId: 'student-2',
+        type: 'discussion_comment_posted',
+        referenceId: 'thread-1',
+      }),
+      expect.objectContaining({
+        userId: 'student-3',
+        type: 'discussion_comment_posted',
+        referenceId: 'thread-1',
+      }),
     ]);
-    expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledTimes(1);
+    expect(mockNotificationsGateway.emitToUser).toHaveBeenCalledTimes(3);
   });
 });

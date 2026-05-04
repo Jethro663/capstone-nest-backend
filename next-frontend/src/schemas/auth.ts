@@ -1,11 +1,17 @@
 import { z } from 'zod';
+import { isPasswordInputSafe } from '@/lib/input-policy';
 
 export const loginSchema = z.object({
   email: z
     .string()
     .min(1, 'Email is required')
     .email('Please enter a valid email'),
-  password: z.string().min(1, 'Password is required'),
+  password: z
+    .string()
+    .min(1, 'Password is required')
+    .refine(isPasswordInputSafe, {
+      message: 'Password contains unsupported control characters',
+    }),
 });
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
@@ -20,6 +26,9 @@ export const passwordStrengthChecks = [
 const strongPassword = z
   .string()
   .min(8, 'Password must be at least 8 characters')
+  .refine(isPasswordInputSafe, {
+    message: 'Password contains unsupported control characters',
+  })
   .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
   .regex(/[a-z]/, 'Must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Must contain at least one number')

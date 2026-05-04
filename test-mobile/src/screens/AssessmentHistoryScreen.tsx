@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View } from "react-native";
-import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SearchField, SectionTitle } from "../components/ui/primitives";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { peekAppError } from "../api/http";
 import { useAssessmentHistory } from "../api/hooks";
 import type { RootStackParamList } from "../navigation/types";
-import { colors, gradients } from "../theme/tokens";
+import { studentDarkTheme as theme } from "../theme/studentDark";
+import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AssessmentHistory">;
 type SubmissionFilter = "all" | "submitted" | "in_progress";
+type Tone = "blue" | "green" | "amber" | "red" | "purple";
 
 function formatDate(value?: string | null) {
   if (!value) return "--";
@@ -22,6 +24,94 @@ function formatDate(value?: string | null) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function resolveToneStyle(tone: Tone) {
+  return {
+    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    green: { backgroundColor: theme.greenSoft, color: theme.green },
+    amber: { backgroundColor: theme.amberSoft, color: theme.amber },
+    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
+  }[tone];
+}
+
+function DarkPanel({ children }: { children: ReactNode }) {
+  return (
+    <View
+      style={{
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function ToneTag({ label, tone }: { label: string; tone: Tone }) {
+  const toneStyle = resolveToneStyle(tone);
+
+  return (
+    <View
+      style={{
+        borderRadius: 999,
+        backgroundColor: toneStyle.backgroundColor,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      <Text style={{ fontSize: 10, fontWeight: "700", color: toneStyle.color }}>{label}</Text>
+    </View>
+  );
+}
+
+function ActionButton({
+  label,
+  onPress,
+  variant = "primary",
+  disabled = false,
+}: {
+  label: string;
+  onPress: () => void;
+  variant?: "primary" | "secondary";
+  disabled?: boolean;
+}) {
+  const primary = variant === "primary";
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        borderRadius: 12,
+        borderWidth: primary ? 0 : 1,
+        borderColor: primary ? "transparent" : theme.border,
+        backgroundColor: disabled
+          ? theme.active
+          : primary
+            ? theme.red
+            : theme.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 11,
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <Text
+        style={{
+          fontSize: 12,
+          fontWeight: "800",
+          color: disabled ? theme.muted : primary ? "#FFFFFF" : theme.text,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
 export function AssessmentHistoryScreen({ route, navigation }: Props) {
@@ -57,6 +147,7 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
 
   return (
     <ScreenScroll
+      backgroundColor={theme.bg}
       refreshControl={
         <Refreshable
           refreshing={historyQuery.isRefetching}
@@ -66,42 +157,61 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
         />
       }
     >
-      <GradientHeader colors={gradients.assessments} eyebrow="Student Records" title="Assessment History">
-        <View style={{ marginTop: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Pressable
-            onPress={() => navigation.goBack()}
+      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.active,
+              }}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Student Records</Text>
+              <Text style={{ marginTop: 4, color: theme.text, fontSize: 28, fontWeight: "800" }}>Assessment History</Text>
+            </View>
+            <ToneTag
+              label={`${historyQuery.data?.total ?? filteredRows.length} attempts`}
+              tone="blue"
+            />
+          </View>
+
+          <View
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.2)",
+              marginTop: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.active,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
             }}
           >
-            <MaterialCommunityIcons name="chevron-left" size={22} color={colors.white} />
-          </Pressable>
-          <Pill
-            label={`${historyQuery.data?.total ?? filteredRows.length} attempts`}
-            backgroundColor="rgba(255,255,255,0.18)"
-            color={colors.white}
-          />
+            <TextInput
+              value={search}
+              onChangeText={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              placeholder="Search by assessment or class"
+              placeholderTextColor={theme.muted}
+              style={{ color: theme.text, fontSize: 13, paddingVertical: 10 }}
+            />
+          </View>
         </View>
+      </View>
 
-        <SearchField
-          value={search}
-          onChangeText={(value) => {
-            setSearch(value);
-            setPage(1);
-          }}
-          placeholder="Search by assessment or class"
-        />
-      </GradientHeader>
-
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
-        <Card>
-          <SectionTitle title="Filter Attempts" />
-          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
+        <DarkPanel>
+          <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>Filter attempts</Text>
+          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {(["all", "submitted", "in_progress"] as const).map((value) => {
               const active = submission === value;
               return (
@@ -114,50 +224,52 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                   style={{
                     borderRadius: 999,
                     borderWidth: 1,
-                    borderColor: active ? colors.amber : colors.border,
-                    backgroundColor: active ? colors.paleAmber : colors.white,
+                    borderColor: active ? theme.amber : theme.border,
+                    backgroundColor: active ? theme.amberSoft : theme.active,
                     paddingHorizontal: 14,
                     paddingVertical: 10,
                   }}
                 >
-                  <Text style={{ color: active ? colors.text : colors.textSecondary, fontSize: 12, fontWeight: "800" }}>
+                  <Text style={{ color: active ? theme.amber : theme.text, fontSize: 12, fontWeight: "800" }}>
                     {value === "in_progress" ? "In Progress" : value === "submitted" ? "Submitted" : "All"}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
-        </Card>
+        </DarkPanel>
 
         {historyQuery.error ? (
-          <Card>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+          <DarkPanel>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>
               Assessment history is unavailable
             </Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
               {peekAppError(historyQuery.error).message}
             </Text>
-          </Card>
+          </DarkPanel>
         ) : null}
 
         {filteredRows.length === 0 ? (
-          <EmptyState
-            emoji="ðŸ“š"
-            title="No attempts found"
-            subtitle="Try a different search or filter to find a previous attempt."
-          />
+          <DarkPanel>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>No attempts found</Text>
+            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+              Try a different search or filter to find a previous attempt.
+            </Text>
+          </DarkPanel>
         ) : (
           filteredRows.map((row) => {
             const isSubmitted = row.isSubmitted !== false;
             const actionLabel = isSubmitted ? "View Results" : "Continue Attempt";
             const statusLabel = isSubmitted ? "Submitted" : "In Progress";
+            const statusTone = isSubmitted ? "green" : "blue";
             const subjectLabel =
               row.assessment?.class?.subjectName && row.assessment?.class?.subjectCode
                 ? `${row.assessment.class.subjectName} (${row.assessment.class.subjectCode})`
                 : row.assessment?.class?.subjectName || "Class";
 
             return (
-              <Card key={row.id}>
+              <DarkPanel key={row.id}>
                 <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                   <View style={{ flex: 1 }}>
                     <Pressable
@@ -168,124 +280,130 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
                         })
                       }
                     >
-                      <Text style={{ fontSize: 16, fontWeight: "900", color: colors.text }}>
+                      <Text style={{ fontSize: 17, fontWeight: "800", color: theme.text }}>
                         {row.assessment?.title || "Assessment"}
                       </Text>
                     </Pressable>
-                    <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
+                    <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>
                       {subjectLabel} • Attempt #{row.attemptNumber}
                     </Text>
                   </View>
-                  <Pill
-                    label={statusLabel}
-                    backgroundColor={isSubmitted ? colors.paleGreen : colors.paleBlue}
-                    color={isSubmitted ? colors.green : colors.blueDeep}
-                  />
+                  <ToneTag label={statusLabel} tone={statusTone} />
                 </View>
 
-                <View style={{ marginTop: 12, gap: 6 }}>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    Started: <Text style={{ color: colors.text, fontWeight: "800" }}>{formatDate(row.startedAt)}</Text>
-                  </Text>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    Submitted: <Text style={{ color: colors.text, fontWeight: "800" }}>{formatDate(row.submittedAt)}</Text>
-                  </Text>
-                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-                    Due: <Text style={{ color: colors.text, fontWeight: "800" }}>{formatDate(row.assessment?.dueDate)}</Text>
-                  </Text>
-                </View>
-
-                <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
-                    Score: {row.score ?? "--"}
-                  </Text>
-                  <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-                    <Pressable
-                      onPress={() => {
-                        if (isSubmitted) {
-                          navigation.navigate("AssessmentResults", {
-                            attemptId: row.id,
-                            assessmentId: row.assessmentId,
-                          } as never);
-                          return;
-                        }
-
-                        navigation.navigate("AssessmentTake", { assessmentId: row.assessmentId });
-                      }}
-                      style={{
-                        borderRadius: 16,
-                        backgroundColor: colors.text,
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
-                      }}
-                    >
-                      <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>{actionLabel}</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() =>
-                        navigation.navigate("AssessmentDetail", {
-                          assessmentId: row.assessmentId,
-                          classId: row.assessment?.classId || routeClassId || "",
-                        })
-                      }
-                      style={{
-                        borderRadius: 16,
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.white,
-                        paddingHorizontal: 16,
-                        paddingVertical: 12,
-                      }}
-                    >
-                      <Text style={{ color: colors.text, fontSize: 13, fontWeight: "800" }}>Open Assessment</Text>
-                    </Pressable>
+                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <View
+                    style={{
+                      minWidth: 110,
+                      flex: 1,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>STARTED</Text>
+                    <Text style={{ marginTop: 8, fontSize: 13, fontWeight: "800", color: theme.text }}>
+                      {formatDate(row.startedAt)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      minWidth: 110,
+                      flex: 1,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>SUBMITTED</Text>
+                    <Text style={{ marginTop: 8, fontSize: 13, fontWeight: "800", color: theme.text }}>
+                      {formatDate(row.submittedAt)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      minWidth: 110,
+                      flex: 1,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted }}>SCORE</Text>
+                    <Text style={{ marginTop: 8, fontSize: 22, lineHeight: 26, fontWeight: "900", color: theme.text }}>
+                      {row.score ?? "--"}
+                    </Text>
                   </View>
                 </View>
-              </Card>
+
+                <Text style={{ marginTop: 12, fontSize: 12, color: theme.muted }}>
+                  Due: <Text style={{ color: theme.text, fontWeight: "700" }}>{formatDate(row.assessment?.dueDate)}</Text>
+                </Text>
+
+                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                  <ActionButton
+                    label={actionLabel}
+                    onPress={() => {
+                      if (isSubmitted) {
+                        navigation.navigate("AssessmentResults", {
+                          attemptId: row.id,
+                          assessmentId: row.assessmentId,
+                        } as never);
+                        return;
+                      }
+
+                      navigation.navigate("AssessmentTake", { assessmentId: row.assessmentId });
+                    }}
+                  />
+                  <ActionButton
+                    label="Open Assessment"
+                    variant="secondary"
+                    onPress={() =>
+                      navigation.navigate("AssessmentDetail", {
+                        assessmentId: row.assessmentId,
+                        classId: row.assessment?.classId || routeClassId || "",
+                      })
+                    }
+                  />
+                </View>
+              </DarkPanel>
             );
           })
         )}
 
         {!isScopedHistory && (historyQuery.data?.totalPages ?? 1) > 1 ? (
-          <Card>
+          <DarkPanel>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>
                 Page {historyQuery.data?.page ?? page} of {historyQuery.data?.totalPages ?? 1}
               </Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
-                <Pressable
-                  onPress={() => setPage((current) => Math.max(1, current - 1))}
+                <ActionButton
+                  label="Previous"
+                  variant="secondary"
                   disabled={page <= 1}
-                  style={{
-                    borderRadius: 14,
-                    backgroundColor: page <= 1 ? colors.border : colors.white,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Text style={{ color: page <= 1 ? colors.muted : colors.text, fontSize: 12, fontWeight: "800" }}>Previous</Text>
-                </Pressable>
-                <Pressable
+                  onPress={() => setPage((current) => Math.max(1, current - 1))}
+                />
+                <ActionButton
+                  label="Next"
+                  variant="secondary"
+                  disabled={page >= (historyQuery.data?.totalPages ?? 1)}
                   onPress={() =>
                     setPage((current) => Math.min(historyQuery.data?.totalPages ?? current, current + 1))
                   }
-                  disabled={page >= (historyQuery.data?.totalPages ?? 1)}
-                  style={{
-                    borderRadius: 14,
-                    backgroundColor: page >= (historyQuery.data?.totalPages ?? 1) ? colors.border : colors.white,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Text style={{ color: page >= (historyQuery.data?.totalPages ?? 1) ? colors.muted : colors.text, fontSize: 12, fontWeight: "800" }}>Next</Text>
-                </Pressable>
+                />
               </View>
             </View>
-          </Card>
+          </DarkPanel>
         ) : null}
       </View>
     </ScreenScroll>

@@ -86,6 +86,72 @@ describe('ClassTemplatesService', () => {
     );
   });
 
+  it('hydrates template question and option image metadata into editor-safe content', async () => {
+    mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([
+      {
+        id: 'assessment-1',
+        templateId: '11111111-1111-1111-1111-111111111111',
+        title: 'Template Assessment',
+        description: '',
+        type: 'quiz',
+        dueDateOffsetDays: null,
+        settings: {},
+        totalPoints: 5,
+        order: 1,
+      },
+    ]);
+    mockDb.query.classTemplateAssessmentQuestions.findMany.mockResolvedValue([
+      {
+        id: 'question-1',
+        templateAssessmentId: 'assessment-1',
+        type: 'multiple_choice',
+        content: '<p>Question</p>',
+        points: 5,
+        order: 1,
+        isRequired: true,
+        explanation: '',
+        imageUrl: '/api/class-templates/images/question.png',
+        metadata: {
+          imageDisplayMode: 'expanded',
+          imageZoom: 120,
+        },
+      },
+    ]);
+    mockDb.query.classTemplateAssessmentQuestionOptions.findMany.mockResolvedValue([
+      {
+        id: 'option-1',
+        templateAssessmentQuestionId: 'question-1',
+        text: 'Option 1',
+        isCorrect: true,
+        order: 1,
+        metadata: {
+          imageUrl: '/api/class-templates/images/option.png',
+          imageDisplayMode: 'default',
+          imageZoom: 100,
+        },
+      },
+    ]);
+
+    const result = await service.getContent('11111111-1111-1111-1111-111111111111');
+    const firstQuestion = result.assessments[0]?.questions?.[0];
+    const firstOption = firstQuestion?.options?.[0] as Record<string, unknown> | undefined;
+
+    expect(firstQuestion).toEqual(
+      expect.objectContaining({
+        imageUrl: '/api/class-templates/images/question.png',
+        imageDisplayMode: 'expanded',
+        imageZoom: 120,
+      }),
+    );
+    expect(firstOption).toEqual(
+      expect.objectContaining({
+        imageUrl: '/api/class-templates/images/option.png',
+        imageDisplayMode: 'default',
+        imageZoom: 100,
+      }),
+    );
+  });
+
   it('rejects import when manifest validation fails', async () => {
     await expect(
       service.importEngine(

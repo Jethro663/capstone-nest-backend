@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     )
     ollama_keep_alive: str = "15m"
     upload_dir: str = "../backend/uploads"
+    backend_internal_url: str = ""
+    backend_upload_fetch_timeout_s: int = 60
     max_raw_text: int = 50_000
     log_level: str = "INFO"
     ai_service_shared_secret: str = ""
@@ -50,21 +52,41 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="AI_CLOUD_FALLBACK_ENABLED",
     )
+    ai_runtime_mode: str = Field(
+        default="auto",
+        validation_alias="AI_RUNTIME_MODE",
+    )
     ai_cloud_fallback_provider: str = Field(
         default="openai",
         validation_alias="AI_CLOUD_FALLBACK_PROVIDER",
     )
     ai_cloud_fallback_model: str = Field(
         default="gpt-4o-mini",
-        validation_alias="AI_CLOUD_FALLBACK_MODEL",
+        validation_alias=AliasChoices("AI_CLOUD_FALLBACK_MODEL", "OPENROUTER_TEXT_MODEL"),
+    )
+    ai_cloud_fallback_vision_model: str = Field(
+        default="",
+        validation_alias="OPENROUTER_VISION_MODEL",
+    )
+    ai_cloud_fallback_embedding_model: str = Field(
+        default="google/gemini-embedding-2-preview",
+        validation_alias="OPENROUTER_EMBEDDING_MODEL",
     )
     ai_cloud_fallback_api_key: str = Field(
         default="",
-        validation_alias="AI_CLOUD_FALLBACK_API_KEY",
+        validation_alias=AliasChoices("AI_CLOUD_FALLBACK_API_KEY", "OPENROUTER_API_KEY"),
     )
     ai_cloud_fallback_base_url: str = Field(
         default="https://api.openai.com/v1",
-        validation_alias="AI_CLOUD_FALLBACK_BASE_URL",
+        validation_alias=AliasChoices("AI_CLOUD_FALLBACK_BASE_URL", "OPENROUTER_BASE_URL"),
+    )
+    ai_cloud_fallback_referer: str = Field(
+        default="",
+        validation_alias="OPENROUTER_HTTP_REFERER",
+    )
+    ai_cloud_fallback_title: str = Field(
+        default="",
+        validation_alias="OPENROUTER_X_TITLE",
     )
 
     model_config = {"env_file": ".env", "extra": "ignore"}

@@ -29,11 +29,17 @@ import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
 import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
 import { AuditService } from '../audit/audit.service';
 
-/** DepEd default category configuration */
-const DEPED_CATEGORIES = [
-  { name: 'Written Works', weight: '30.00', prefix: 'WW', slots: 10 },
-  { name: 'Performance Tasks', weight: '50.00', prefix: 'PT', slots: 10 },
-  { name: 'Quarterly Assessment', weight: '20.00', prefix: 'QA', slots: 1 },
+/** DepEd default category configuration and fallback profile */
+const DEFAULT_DEPED_PROFILE = {
+  writtenWork: 30,
+  performanceTask: 50,
+  quarterlyAssessment: 20,
+} as const;
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Written Works', prefix: 'WW', slots: 10 },
+  { name: 'Performance Tasks', prefix: 'PT', slots: 10 },
+  { name: 'Quarterly Assessment', prefix: 'QA', slots: 1 },
 ] as const;
 
 const CATEGORY_NAME_TO_KEY = {
@@ -43,7 +49,7 @@ const CATEGORY_NAME_TO_KEY = {
 } as const;
 
 function getDefaultItemTitle(categoryName: string, itemOrder: number) {
-  const category = DEPED_CATEGORIES.find(
+  const category = DEFAULT_CATEGORIES.find(
     (entry) => entry.name === categoryName,
   );
   return `${category?.prefix ?? 'ITEM'}${itemOrder}`;
@@ -141,7 +147,13 @@ export class ClassRecordService {
     // Verify class exists & teacher owns it
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, dto.classId),
-      columns: { id: true, teacherId: true },
+      columns: {
+        id: true,
+        teacherId: true,
+        writtenWorkGradingWeight: true,
+        performanceTaskGradingWeight: true,
+        quarterlyAssessmentGradingWeight: true,
+      },
     });
 
     if (!cls) {
@@ -179,14 +191,52 @@ export class ClassRecordService {
       })
       .returning();
 
-    // Create DepEd categories with pre-allocated item slots
-    for (const cat of DEPED_CATEGORIES) {
+    const gradingProfile = {
+      writtenWork: Number(cls.writtenWorkGradingWeight ?? DEFAULT_DEPED_PROFILE.writtenWork),
+      performanceTask: Number(
+        cls.performanceTaskGradingWeight ??
+          DEFAULT_DEPED_PROFILE.performanceTask,
+      ),
+      quarterlyAssessment: Number(
+        cls.quarterlyAssessmentGradingWeight ??
+          DEFAULT_DEPED_PROFILE.quarterlyAssessment,
+      ),
+    };
+
+    const effectiveCategories = [
+      {
+        name: 'Written Works',
+        prefix: 'WW',
+        slots: 10,
+        weight: Number.isFinite(gradingProfile.writtenWork)
+          ? gradingProfile.writtenWork
+          : DEFAULT_DEPED_PROFILE.writtenWork,
+      },
+      {
+        name: 'Performance Tasks',
+        prefix: 'PT',
+        slots: 10,
+        weight: Number.isFinite(gradingProfile.performanceTask)
+          ? gradingProfile.performanceTask
+          : DEFAULT_DEPED_PROFILE.performanceTask,
+      },
+      {
+        name: 'Quarterly Assessment',
+        prefix: 'QA',
+        slots: 1,
+        weight: Number.isFinite(gradingProfile.quarterlyAssessment)
+          ? gradingProfile.quarterlyAssessment
+          : DEFAULT_DEPED_PROFILE.quarterlyAssessment,
+      },
+    ];
+
+    for (const cat of effectiveCategories) {
       const [category] = await this.db
         .insert(classRecordCategories)
         .values({
           classRecordId: record.id,
           name: cat.name,
-          weightPercentage: cat.weight,
+          weightPercentage: `${cat.weight.toFixed(2)}`,
         })
         .returning();
 
@@ -214,7 +264,7 @@ export class ClassRecordService {
       metadata: {
         classId: dto.classId,
         gradingPeriod: dto.gradingPeriod,
-        categoryCount: DEPED_CATEGORIES.length,
+        categoryCount: DEFAULT_CATEGORIES.length,
       },
     });
 

@@ -103,9 +103,10 @@ export class AuthService {
     // Silent — never reveal whether an account exists for this email
     const user = await this.usersService.findByEmail(email);
     if (!user) {
-      this.logger.debug(
+      this.logger.warn(
         `[AUTH] Password reset requested for unknown email: ${email}`,
       );
+      throw new NotFoundException('Account does not exist.');
       return; // Return silently — same response as a real account
     }
     await this.otpService.createAndSendOTP(
@@ -120,7 +121,7 @@ export class AuthService {
     // Silent — do not reveal if the email exists
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
-      return;
+      throw new NotFoundException('Account does not exist.');
     }
     await this.usersService.updatePassword(user.id, dto.newPassword);
   }

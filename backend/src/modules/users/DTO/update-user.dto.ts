@@ -9,14 +9,21 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-
-const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
-const PERSON_NAME_REGEX = /^[A-Za-z][A-Za-z' -]*$/;
+import {
+  ADDRESS_REGEX,
+  EMPLOYEE_ID_REGEX,
+  lowerTrimmedValue,
+  PASSWORD_SAFE_REGEX,
+  PERSON_NAME_REGEX,
+  PH_MOBILE_REGEX,
+  trimValue,
+  upperTrimmedValue,
+} from '../../../common/validation/input-policy';
 
 export class UpdateUserDto {
   @IsOptional()
   @IsEmail({}, { message: 'Must be a valid email address' })
-  @Transform(({ value }: { value: string }) => value?.toLowerCase().trim())
+  @Transform(({ value }: { value: string }) => lowerTrimmedValue(value))
   email?: string;
 
   @IsOptional()
@@ -31,6 +38,9 @@ export class UpdateUserDto {
   @Matches(/\d/, { message: 'Password must contain at least one number' })
   @Matches(/[@$!%*?&#]/, {
     message: 'Password must contain at least one special character',
+  })
+  @Matches(PASSWORD_SAFE_REGEX, {
+    message: 'Password contains unsupported control characters',
   })
   password?: string;
 
@@ -47,6 +57,10 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MaxLength(30)
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Middle name may only contain letters, spaces, hyphens, and apostrophes",
+  })
   @Transform(({ value }: { value: string }) => value?.trim())
   middleName?: string;
 
@@ -68,8 +82,8 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString({ message: 'Employee ID must be a string' })
-  @Transform(({ value }: { value?: string }) => value?.trim())
-  @Matches(/^[A-Za-z0-9-]{1,20}$/, {
+  @Transform(({ value }: { value?: string }) => upperTrimmedValue(value))
+  @Matches(EMPLOYEE_ID_REGEX, {
     message:
       'Employee ID must be 1-20 characters using letters, numbers, or hyphens',
   })
@@ -77,8 +91,8 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString({ message: 'Contact number must be a string' })
-  @Transform(({ value }: { value?: string }) => value?.trim())
-  @Matches(/^(?:\+63|0)9\d{9}$/, {
+  @Transform(({ value }: { value?: string }) => trimValue(value))
+  @Matches(PH_MOBILE_REGEX, {
     message:
       'Contact number must be a valid PH mobile format (e.g., 09171234567 or +639171234567)',
   })
@@ -86,7 +100,7 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString({ message: 'LRN must be a string' })
-  @Transform(({ value }: { value: string }) => value?.trim())
+  @Transform(({ value }: { value: string }) => trimValue(value))
   @Matches(/^[0-9]{12}$/, {
     message: 'LRN must be exactly 12 digits (e.g., 202401230001)',
   })
@@ -118,11 +132,21 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   @MaxLength(180)
+  @Matches(ADDRESS_REGEX, {
+    message:
+      'Address may only contain letters, numbers, spaces, commas, periods, number signs, apostrophes, hyphens, and slashes',
+  })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   address?: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(80)
+  @Matches(PERSON_NAME_REGEX, {
+    message:
+      "Guardian name may only contain letters, spaces, hyphens, and apostrophes",
+  })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   familyName?: string;
 
   @IsOptional()

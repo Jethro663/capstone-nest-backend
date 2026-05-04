@@ -29,6 +29,11 @@ export interface RubricScore {
   feedback?: string;
 }
 
+export interface ManualResponseScore {
+  questionId: string;
+  pointsEarned: number;
+}
+
 export interface Assessment {
   id: string;
   title: string;
@@ -92,6 +97,10 @@ export interface AssessmentQuestion {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
   options?: QuestionOption[];
 }
@@ -101,6 +110,11 @@ export interface QuestionOption {
   text: string;
   isCorrect: boolean;
   order: number;
+  imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
 }
 
 export interface CreateAssessmentDto {
@@ -167,8 +181,21 @@ export interface CreateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
-  options?: { text: string; isCorrect: boolean; order: number }[];
+  options?: {
+    text: string;
+    isCorrect: boolean;
+    order: number;
+    imageUrl?: string;
+    imageDisplayMode?: 'default' | 'expanded';
+    imageZoom?: number;
+    imagePositionX?: number;
+    imagePositionY?: number;
+  }[];
 }
 
 export interface UpdateQuestionDto {
@@ -178,8 +205,21 @@ export interface UpdateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   conceptTags?: string[];
-  options?: { text: string; isCorrect: boolean; order: number }[];
+  options?: {
+    text: string;
+    isCorrect: boolean;
+    order: number;
+    imageUrl?: string;
+    imageDisplayMode?: 'default' | 'expanded';
+    imageZoom?: number;
+    imagePositionX?: number;
+    imagePositionY?: number;
+  }[];
 }
 
 export interface AssessmentAttempt {
@@ -213,6 +253,13 @@ export interface AssessmentAttempt {
   teacherFeedback?: string;
   directScore?: number | null;
   rubricScores?: RubricScore[] | null;
+  submittedFiles?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt?: string | null;
+  }[];
   submittedFileId?: string | null;
   submittedFileOriginalName?: string | null;
   submittedFileMimeType?: string | null;
@@ -246,8 +293,15 @@ export interface AttemptResult {
     selectedOptionIds?: string[];
     isCorrect?: boolean;
     pointsEarned?: number;
+    hint?: string;
     question?: AssessmentQuestion;
   }[];
+  feedbackStatus?: {
+    level: string;
+    unlocked: boolean;
+    hoursRemaining?: number;
+    message?: string;
+  };
   submittedFile?: {
     id: string;
     originalName: string;
@@ -255,6 +309,13 @@ export interface AttemptResult {
     sizeBytes: number;
     uploadedAt: string;
   } | null;
+  submittedFiles?: Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  }>;
   assessment?: {
     id: string;
     title?: string;
@@ -318,6 +379,15 @@ export interface AssessmentStats {
 
 export type SubmissionStatus = 'not_started' | 'in_progress' | 'turned_in' | 'returned';
 
+export interface SubmissionTimelineEntry {
+  id: string;
+  attemptId: string;
+  action: string;
+  createdAt: string;
+  actorName?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface StudentAttemptSummary {
   id: string;
   attemptNumber?: number;
@@ -340,6 +410,13 @@ export interface StudentAttemptSummary {
     sizeBytes: number;
     uploadedAt: string;
   } | null;
+  submittedFiles?: Array<{
+    id: string;
+    originalName: string;
+    mimeType: string;
+    sizeBytes: number;
+    uploadedAt: string;
+  }>;
 }
 
 export interface StudentSubmission {
@@ -351,6 +428,7 @@ export interface StudentSubmission {
   attempt?: StudentAttemptSummary | null;
   attempts?: StudentAttemptSummary[];
   totalAttempts?: number;
+  timeline?: SubmissionTimelineEntry[];
 }
 
 export interface SubmissionsResponse {

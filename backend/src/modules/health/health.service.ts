@@ -8,12 +8,18 @@ type DependencyStatus = {
   message?: string;
 };
 
+type ServiceMetadata = {
+  name: string;
+  version: string;
+};
+
 type ReadinessStatus = {
   ready: boolean;
+  service: ServiceMetadata;
   dependencies: {
     database: DependencyStatus;
     redis: DependencyStatus;
-    aiService: DependencyStatus & { degraded?: boolean };
+    aiService: DependencyStatus & { degraded?: boolean; version?: string; runtimeProvider?: string };
   };
   timestamp: string;
 };
@@ -29,6 +35,13 @@ export class HealthService {
     private readonly databaseService: DatabaseService,
     private readonly configService: ConfigService,
   ) {}
+
+  getServiceMetadata(): ServiceMetadata {
+    return {
+      name: 'backend',
+      version: process.env.npm_package_version ?? '0.0.0',
+    };
+  }
 
   private async checkDatabase(): Promise<DependencyStatus> {
     try {
@@ -70,7 +83,7 @@ export class HealthService {
   }
 
   private async checkAiService(): Promise<
-    DependencyStatus & { degraded?: boolean }
+    DependencyStatus & { degraded?: boolean; version?: string; runtimeProvider?: string }
   > {
     const aiServiceUrl =
       this.configService.get<string>('AI_SERVICE_URL') ??
@@ -93,21 +106,32 @@ export class HealthService {
       }
 
       const payload = (await response.json()) as {
-        data?: { ollamaAvailable?: boolean };
+        data?: {
+          runtimeAvailable?: boolean;
+          runtimeProvider?: string;
+          ollamaAvailable?: boolean;
+          version?: string;
+        };
       };
-      const ollamaAvailable = payload?.data?.ollamaAvailable !== false;
+      const runtimeAvailable =
+        payload?.data?.runtimeAvailable ??
+        payload?.data?.ollamaAvailable !== false;
+      const version = payload?.data?.version;
+      const runtimeProvider = payload?.data?.runtimeProvider;
 
-      if (!ollamaAvailable) {
+      if (!runtimeAvailable) {
         return {
           ok: allowDegradedAi,
           degraded: true,
+          version,
+          runtimeProvider,
           message: allowDegradedAi
-            ? 'AI service reachable but running in degraded mode without Ollama'
-            : 'AI service reachable but Ollama is unavailable',
+            ? 'AI service reachable but running without an available AI runtime'
+            : 'AI service reachable but no AI runtime is available',
         };
       }
 
-      return { ok: true };
+      return { ok: true, version, runtimeProvider };
     } catch (error) {
       return {
         ok: allowDegradedAi,
@@ -136,6 +160,7 @@ export class HealthService {
 
         const value: ReadinessStatus = {
           ready: database.ok && redis.ok && aiService.ok,
+          service: this.getServiceMetadata(),
           dependencies: {
             database,
             redis,

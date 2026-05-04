@@ -18,6 +18,13 @@ import {
   AdminPageShell,
   AdminSectionCard,
 } from '@/components/admin/AdminPageShell';
+import {
+  sanitizeEmailInput,
+  sanitizeEmployeeIdInput,
+  sanitizeLrnInput,
+  sanitizePersonNameInput,
+  sanitizePhoneLocalInput,
+} from '@/lib/input-policy';
 import { userService } from '@/services/user-service';
 import { profileService } from '@/services/profile-service';
 
@@ -52,7 +59,26 @@ const APPROVED_EMAIL_DOMAINS = [
 ];
 
 const EMPLOYEE_ID_REGEX = /^[A-Za-z0-9-]{1,20}$/;
-const PH_MOBILE_REGEX = /^(?:\+63|0)9\d{9}$/;
+const PH_MOBILE_REGEX = /^09\d{9}$/;
+
+function sanitizeFieldValue(name: keyof FormData, value: string): string {
+  switch (name) {
+    case 'firstName':
+    case 'middleName':
+    case 'lastName':
+      return sanitizePersonNameInput(value, 30);
+    case 'email':
+      return sanitizeEmailInput(value, 100);
+    case 'studentId':
+      return sanitizeLrnInput(value, 12);
+    case 'employeeId':
+      return sanitizeEmployeeIdInput(value, 20);
+    case 'contactNumber':
+      return sanitizePhoneLocalInput(value, 11);
+    default:
+      return value;
+  }
+}
 
 function validateField(name: keyof FormData, value: string, formData: FormData): string {
   switch (name) {
@@ -131,8 +157,10 @@ export default function AdminCreateUserPage() {
   const isStudent = formData.role === 'student';
 
   const handleFieldChange = (name: keyof FormData, value: string) => {
+    const sanitizedValue = sanitizeFieldValue(name, value);
+
     setFormData((prev) => {
-      const next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: sanitizedValue };
       if (name === 'role') {
         if (value !== 'student') {
           next.studentId = '';
@@ -148,7 +176,10 @@ export default function AdminCreateUserPage() {
 
     setErrors((prev) => ({
       ...prev,
-      [name]: validateField(name, value, { ...formData, [name]: value }),
+      [name]: validateField(name, sanitizedValue, {
+        ...formData,
+        [name]: sanitizedValue,
+      }),
     }));
   };
 
@@ -183,11 +214,11 @@ export default function AdminCreateUserPage() {
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim() || undefined,
         lastName: formData.lastName.trim(),
-        email: formData.email.trim().toLowerCase(),
+        email: sanitizeEmailInput(formData.email, 100),
         role: formData.role,
-        lrn: isStudent ? formData.studentId.trim() : undefined,
-        employeeId: isTeacher ? formData.employeeId.trim() : undefined,
-        contactNumber: isTeacher ? formData.contactNumber.trim() : undefined,
+        lrn: isStudent ? sanitizeLrnInput(formData.studentId, 12) : undefined,
+        employeeId: isTeacher ? sanitizeEmployeeIdInput(formData.employeeId, 20) : undefined,
+        contactNumber: isTeacher ? sanitizePhoneLocalInput(formData.contactNumber, 11) : undefined,
       });
 
       const savedUserId = res?.data?.user?.id;

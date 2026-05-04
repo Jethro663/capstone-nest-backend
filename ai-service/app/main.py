@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import json
+import re
 import logging
 import math
 import os
@@ -24,6 +25,7 @@ from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .database import AsyncSessionLocal, get_db
 from . import ollama_client
@@ -36,7 +38,12 @@ from .library_indexing_pipeline import (
 )
 from .media_utils import normalize_attachment_images
 from .mentor_service import explain_mistake
-from .quiz_generation_service import generate_quiz_draft
+from .lesson_plan_service import (
+    generate_class_lesson_plan,
+    save_lesson_plan_draft,
+    _normalize_lesson_plan_output,
+)
+from .quiz_generation_service import generate_quiz_draft, save_quiz_draft
 from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
 from .llamaindex_adapter import build_text_node, llamaindex_available
@@ -62,6 +69,7 @@ from .schemas import (
     DemoInterventionPlanRequest,
     ExtractRequest,
     GenerateQuizDraftRequest,
+    GenerateLessonPlanRequest,
     InterventionRecommendationRequest,
     MentorExplainRequest,
     RequestUser,
@@ -71,6 +79,8 @@ from .schemas import (
     JaPracticeGenerateRequest,
     JaAskResponseRequest,
     JaReviewGenerateRequest,
+    UpdateLessonPlanDraftRequest,
+    UpdateQuizDraftRequest,
     UpdateExtractionRequest,
 )
 
@@ -538,6 +548,35 @@ def _normalize_intervention_structured_output(
     return normalized
 
 
+def _normalize_lesson_plan_structured_output(
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    normalized = dict(payload or {})
+    existing_header = normalized.get("header")
+    fallback_header = existing_header if isinstance(existing_header, dict) else {}
+    anchor_title = ""
+    if isinstance(existing_header, dict):
+        anchor_title = str(
+            existing_header.get("lessonTitle")
+            or existing_header.get("moduleTitle")
+            or "",
+        ).strip()
+    return _normalize_lesson_plan_output(
+        normalized,
+        fallback_header={
+            key: str(value)
+            for key, value in fallback_header.items()
+            if isinstance(key, str) and value is not None
+        },
+        class_profile=(
+            str(normalized.get("classProfile"))
+            if isinstance(normalized.get("classProfile"), str)
+            else None
+        ),
+        anchor_title=anchor_title or "the selected lesson",
+    )
+
+
 async def _create_ai_generation_job(
     db: AsyncSession,
     *,
@@ -968,6 +1007,102 @@ async def _run_intervention_generation_job(
                 errorMessage=str(exc),
             )
             logger.exception("[ai-job] Intervention generation %s failed", job_id)
+        finally:
+            AI_JOB_TASKS.pop(job_id, None)
+
+
+async def _run_lesson_plan_generation_job(
+    job_id: str,
+    body: GenerateLessonPlanRequest,
+    user: RequestUser,
+) -> None:
+    async with AsyncSessionLocal() as bg_db:
+        try:
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="processing",
+                error_message=None,
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=12,
+                statusMessage="Reviewing class context",
+                retryState={"attempt": 0, "maxAttempts": 2},
+            )
+
+            async def _operation(attempt: int) -> dict[str, Any]:
+                await bg_db.rollback()
+                await _record_ai_job_runtime(
+                    bg_db,
+                    job_id=job_id,
+                    retryState={"attempt": attempt, "maxAttempts": 2},
+                )
+                return await generate_class_lesson_plan(
+                    bg_db,
+                    user,
+                    body,
+                    existing_job_id=job_id,
+                    progress_callback=lambda status_message, progress_percent: _record_ai_job_runtime(
+                        bg_db,
+                        job_id=job_id,
+                        statusMessage=status_message,
+                        progressPercent=progress_percent,
+                        retryState={"attempt": attempt, "maxAttempts": 2},
+                    ),
+                )
+
+            result = await _run_with_retries(
+                _operation,
+                max_attempts=2,
+                delay_seconds=1.0,
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Lesson plan ready",
+                resultSummary={
+                    "outputId": result.get("outputId"),
+                    "classProfile": result.get("classProfile"),
+                    "header": result.get("header"),
+                },
+            )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="cancelled",
+                error_message="Generation cancelled by teacher.",
+                output_status="cancelled",
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation cancelled",
+                errorMessage="Generation cancelled by teacher.",
+            )
+            logger.info("[ai-job] Lesson plan generation %s cancelled", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation failed",
+                errorMessage=str(exc),
+            )
+            logger.exception("[ai-job] Lesson plan generation %s failed", job_id)
         finally:
             AI_JOB_TASKS.pop(job_id, None)
 
@@ -1493,22 +1628,33 @@ async def get_readiness_state(db: AsyncSession) -> dict[str, Any]:
     except Exception as err:
         database_status = {"ok": False, "message": str(err)}
 
-    ollama_status = await ollama_client.is_available()
+    runtime_status = await ollama_client.is_available()
     ai_degraded_allowed = settings.ai_degraded_allowed
     ready = database_status["ok"] and (
-        ollama_status["available"] or ai_degraded_allowed
+        runtime_status["available"] or ai_degraded_allowed
     )
     AI_READY.set(1 if ready else 0)
-    OLLAMA_AVAILABLE.set(1 if ollama_status["available"] else 0)
+    OLLAMA_AVAILABLE.set(1 if runtime_status["ollamaAvailable"] else 0)
 
     return {
         "ready": ready,
-        "degradedMode": bool(ai_degraded_allowed and not ollama_status["available"]),
+        "degradedMode": bool(ai_degraded_allowed and not runtime_status["available"]),
         "dependencies": {
             "database": database_status,
+            "runtime": {
+                "ok": runtime_status["available"],
+                "provider": runtime_status["provider"],
+                "mode": runtime_status["runtimeMode"],
+                "models": runtime_status["models"],
+            },
             "ollama": {
-                "ok": ollama_status["available"],
-                "models": ollama_status["models"],
+                "ok": runtime_status["ollamaAvailable"],
+                "models": runtime_status["ollamaModels"],
+            },
+            "cloud": {
+                "ok": runtime_status["cloudAvailable"],
+                "provider": runtime_status["cloudProvider"],
+                "models": runtime_status["cloudModels"],
             },
         },
         "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
@@ -1569,7 +1715,7 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ):
     chat_session_id = body.session_id or str(uuid.uuid4())
-    attachments = normalize_attachment_images(
+    attachments = await normalize_attachment_images(
         [item.model_dump(by_alias=True) for item in (body.attachments or [])]
     )
 
@@ -1597,6 +1743,7 @@ async def chat(
     user_message: dict[str, object] = {"role": "user", "content": body.message}
     if attachments:
         user_message["images"] = [item["base64Data"] for item in attachments]
+        user_message["_attachments"] = attachments
     ollama_messages.append(user_message)
 
     health = await ollama_client.is_available()
@@ -2036,23 +2183,31 @@ async def student_tutor_answers(
 
 @app.get("/health")
 async def health():
+    timestamp = datetime.now(timezone.utc).isoformat()
     status = await ollama_client.is_available()
     available_models = status["models"]
-    OLLAMA_AVAILABLE.set(1 if status["available"] else 0)
+    OLLAMA_AVAILABLE.set(1 if status["ollamaAvailable"] else 0)
     return {
         "success": True,
         "message": "AI health status",
         "data": {
-            "ollamaAvailable": status["available"],
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": timestamp,
+            "runtimeAvailable": status["available"],
+            "runtimeProvider": status["provider"],
+            "runtimeMode": status["runtimeMode"],
+            "ollamaAvailable": status["ollamaAvailable"],
             "configuredModel": ollama_client.get_text_model_name(),
             "configuredTextModel": ollama_client.get_text_model_name(),
             "configuredVisionModel": ollama_client.get_vision_model_name(),
             "configuredEmbeddingModel": ollama_client.get_embedding_model_name(),
-            "embeddingModelAvailable": ollama_client.is_model_available(
-                ollama_client.get_embedding_model_name(),
-                available_models,
-            ),
+            "embeddingModelAvailable": bool(status["available"]),
             "availableModels": available_models,
+            "ollamaModels": status["ollamaModels"],
+            "cloudAvailable": status["cloudAvailable"],
+            "cloudProvider": status["cloudProvider"],
+            "cloudModels": status["cloudModels"],
         },
     }
 
@@ -2068,6 +2223,9 @@ async def live():
         "success": True,
         "message": "AI service process is up",
         "data": {
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "ok",
         },
     }
@@ -2081,7 +2239,12 @@ async def ready(db: AsyncSession = Depends(get_db)):
     return {
         "success": True,
         "message": "AI service is ready",
-        "data": state,
+        "data": {
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **state,
+        },
     }
 
 
@@ -2486,6 +2649,8 @@ VALID_QUESTION_TYPES = {
     "fill_blank",
     "dropdown",
 }
+LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.85
+VERY_SHORT_APPLY_TEXT_THRESHOLD = 20
 
 
 def _safe_int(value: Any, fallback: int) -> int:
@@ -2504,6 +2669,138 @@ def _normalize_block_content(content: Any) -> dict[str, Any] | str:
     if content is None:
         return {"text": ""}
     return {"text": str(content)}
+
+
+def _normalize_string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _normalize_media_candidate(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    section_index = raw.get("sectionIndex")
+    if not isinstance(section_index, int):
+        return None
+    score = raw.get("score")
+    if not isinstance(score, (int, float)):
+        return None
+    payload = {
+        "sectionIndex": section_index,
+        "score": round(float(score), 4),
+    }
+    if isinstance(raw.get("explicitMatch"), bool):
+        payload["explicitMatch"] = bool(raw.get("explicitMatch"))
+    if isinstance(raw.get("scoreBreakdown"), dict):
+        payload["scoreBreakdown"] = {
+            str(key): round(float(value), 4)
+            for key, value in raw.get("scoreBreakdown", {}).items()
+            if isinstance(value, (int, float))
+        }
+    return payload
+
+
+def _normalize_media_asset(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    media_id = str(raw.get("id") or "").strip()
+    url = str(raw.get("url") or raw.get("dataUrl") or "").strip()
+    if not media_id or not url:
+        return None
+    selected_section_index = raw.get("selectedSectionIndex")
+    if not isinstance(selected_section_index, int):
+        selected_section_index = None
+    assignment_confidence = raw.get("assignmentConfidence")
+    candidate_sections = []
+    if isinstance(raw.get("candidateSections"), list):
+        for candidate in raw.get("candidateSections")[:3]:
+            normalized = _normalize_media_candidate(candidate)
+            if normalized is not None:
+                candidate_sections.append(normalized)
+    payload = {
+        "id": media_id,
+        "url": url,
+        "pageNumber": _safe_int(raw.get("pageNumber"), 0) or None,
+        "caption": str(raw.get("caption") or "").strip() or None,
+        "anchorText": str(raw.get("anchorText") or "").strip() or None,
+        "keywords": _normalize_string_list(raw.get("keywords")),
+        "figureReferences": _normalize_string_list(raw.get("figureReferences")),
+        "selectedSectionIndex": selected_section_index,
+        "assignmentConfidence": (
+            round(float(assignment_confidence), 4)
+            if isinstance(assignment_confidence, (int, float))
+            else None
+        ),
+        "assignmentBreakdown": (
+            {
+                str(key): round(float(value), 4)
+                for key, value in raw.get("assignmentBreakdown", {}).items()
+                if isinstance(value, (int, float))
+            }
+            if isinstance(raw.get("assignmentBreakdown"), dict)
+            else {}
+        ),
+        "candidateSections": candidate_sections,
+        "teacherReviewed": bool(raw.get("teacherReviewed")),
+        "reviewState": str(raw.get("reviewState") or "").strip() or None,
+    }
+    if payload["pageNumber"] is None:
+        payload.pop("pageNumber")
+    if payload["caption"] is None:
+        payload.pop("caption")
+    if payload["anchorText"] is None:
+        payload.pop("anchorText")
+    if payload["reviewState"] is None:
+        payload.pop("reviewState")
+    return payload
+
+
+def _synthesize_media_assets_from_sections(sections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    media_assets: list[dict[str, Any]] = []
+    for section_index, section in enumerate(sections):
+        lesson_blocks = section.get("lessonBlocks") if isinstance(section.get("lessonBlocks"), list) else []
+        for block_index, block in enumerate(lesson_blocks):
+            if not isinstance(block, dict) or str(block.get("type") or "").strip().lower() != "image":
+                continue
+            content = block.get("content")
+            metadata = block.get("metadata") if isinstance(block.get("metadata"), dict) else {}
+            if not isinstance(content, dict):
+                continue
+            url = str(content.get("url") or "").strip()
+            if not url:
+                continue
+            media_asset_id = str(metadata.get("mediaAssetId") or metadata.get("imageId") or f"image-{section_index + 1}-{block_index + 1}").strip()
+            media_assets.append(
+                {
+                    "id": media_asset_id,
+                    "url": url,
+                    "pageNumber": _safe_int(metadata.get("pageNumber"), 0) or None,
+                    "caption": str(content.get("caption") or content.get("alt") or "").strip() or None,
+                    "anchorText": None,
+                    "keywords": [],
+                    "figureReferences": [],
+                    "selectedSectionIndex": section_index,
+                    "assignmentConfidence": (
+                        round(float(metadata.get("assignmentConfidence")), 4)
+                        if isinstance(metadata.get("assignmentConfidence"), (int, float))
+                        else None
+                    ),
+                    "assignmentBreakdown": (
+                        metadata.get("assignmentBreakdown")
+                        if isinstance(metadata.get("assignmentBreakdown"), dict)
+                        else {}
+                    ),
+                    "candidateSections": (
+                        [{"sectionIndex": section_index, "score": round(float(metadata.get("assignmentConfidence")), 4)}]
+                        if isinstance(metadata.get("assignmentConfidence"), (int, float))
+                        else [{"sectionIndex": section_index, "score": 1.0}]
+                    ),
+                    "teacherReviewed": True,
+                    "reviewState": "reviewed",
+                }
+            )
+    return media_assets
 
 
 def _normalize_extraction_block(block: Any, order_fallback: int) -> dict[str, Any]:
@@ -2655,6 +2952,125 @@ def _derive_assessment_draft_from_blocks(
     }
 
 
+def _refresh_media_review_state(structured_content: dict[str, Any]) -> None:
+    sections = structured_content.get("sections") if isinstance(structured_content.get("sections"), list) else []
+    media_assets = structured_content.get("mediaAssets") if isinstance(structured_content.get("mediaAssets"), list) else []
+    normalized_media_assets: list[dict[str, Any]] = []
+    section_count = len(sections)
+
+    for asset in media_assets:
+        normalized = _normalize_media_asset(asset)
+        if normalized is None:
+            continue
+        selected_index = normalized.get("selectedSectionIndex")
+        if isinstance(selected_index, int) and (selected_index < 0 or selected_index >= section_count):
+            normalized["selectedSectionIndex"] = None
+            selected_index = None
+        confidence = normalized.get("assignmentConfidence")
+        if selected_index is None:
+            normalized["teacherReviewed"] = False
+            normalized["reviewState"] = "needs_teacher_assignment"
+        elif not normalized.get("teacherReviewed") and isinstance(confidence, (int, float)) and confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD:
+            normalized["reviewState"] = "needs_teacher_review"
+        elif normalized.get("teacherReviewed"):
+            normalized["reviewState"] = "reviewed"
+        else:
+            normalized["teacherReviewed"] = True
+            normalized["reviewState"] = "auto_assigned"
+        normalized_media_assets.append(normalized)
+
+    structured_content["mediaAssets"] = normalized_media_assets
+    audit = structured_content.get("audit") if isinstance(structured_content.get("audit"), dict) else {}
+    assigned = sum(1 for asset in normalized_media_assets if isinstance(asset.get("selectedSectionIndex"), int))
+    unassigned = max(len(normalized_media_assets) - assigned, 0)
+    image_summary = audit.get("imageAssignmentSummary") if isinstance(audit.get("imageAssignmentSummary"), dict) else {}
+    image_summary.update(
+        {
+            "assigned": assigned,
+            "unassigned": unassigned,
+            "reusedByCitation": int(image_summary.get("reusedByCitation") or 0),
+        }
+    )
+    audit["imageAssignmentSummary"] = image_summary
+    review_flags = [
+        str(flag)
+        for flag in audit.get("reviewFlags", [])
+        if str(flag).strip() and not str(flag).startswith("image-")
+    ]
+    audit["reviewFlags"] = review_flags
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    existing_review_required = audit.get("reviewRequired")
+    if isinstance(existing_review_required, bool):
+        audit["reviewRequired"] = existing_review_required or quality_gate == "fail"
+    else:
+        audit["reviewRequired"] = quality_gate != "pass" or bool(review_flags)
+    structured_content["audit"] = audit
+
+
+def _block_text_for_apply(block: dict[str, Any]) -> str:
+    content = block.get("content")
+    if isinstance(content, dict):
+        return str(content.get("text") or "").strip()
+    if isinstance(content, str):
+        return content.strip()
+    return ""
+
+
+def _block_has_usable_content(block: dict[str, Any]) -> bool:
+    block_type = str(block.get("type") or "").strip().lower()
+    if block_type == "image":
+        return False
+    if block_type == "divider":
+        return False
+    return bool(_block_text_for_apply(block))
+
+
+def _prepare_section_for_apply(section_data: dict[str, Any], *, fallback_title: str) -> dict[str, Any]:
+    section_title = str(section_data.get("title") or fallback_title).strip()
+    section_description = str(section_data.get("description") or "").strip()
+    blocks = section_data.get("lessonBlocks")
+    if not isinstance(blocks, list):
+        blocks = section_data.get("blocks")
+    if not isinstance(blocks, list):
+        blocks = []
+
+    normalized_blocks: list[dict[str, Any]] = []
+    seen_text_blocks: set[tuple[str, str]] = set()
+    for idx, block in enumerate(blocks, start=1):
+        normalized_block = _normalize_extraction_block(block, idx)
+        block_type = str(normalized_block.get("type") or "text").strip().lower()
+        if block_type == "image":
+            continue
+        text = _block_text_for_apply(normalized_block)
+        if block_type == "text" and text and len(text) < VERY_SHORT_APPLY_TEXT_THRESHOLD:
+            continue
+        if block_type != "image":
+            if not text:
+                continue
+            key = (block_type, re.sub(r"\s+", " ", text).strip().lower())
+            if key in seen_text_blocks:
+                continue
+            seen_text_blocks.add(key)
+        elif not _block_has_usable_content(normalized_block):
+            continue
+        normalized_blocks.append(normalized_block)
+
+    if not section_title:
+        raise HTTPException(400, "Selected extraction section is missing a title.")
+    if not any(_block_has_usable_content(block) for block in normalized_blocks):
+        raise HTTPException(400, f'Section "{section_title}" has no usable lesson blocks to apply.')
+
+    return {
+        "title": section_title,
+        "description": section_description,
+        "lessonBlocks": normalized_blocks,
+        "assessmentDraft": _normalize_assessment_draft(
+            section_data.get("assessmentDraft"),
+            section_title=section_title,
+        ),
+    }
+
+
 def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
     if not isinstance(section, dict):
         fallback_title = f"Section {index + 1}"
@@ -2701,6 +3117,8 @@ def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
         "lessonBlocks": lesson_blocks,
         "assessmentDraft": normalized_draft,
         "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
+        "graphKeywords": _normalize_string_list(section.get("graphKeywords")),
+        "figureReferences": _normalize_string_list(section.get("figureReferences")),
     }
 
 
@@ -2739,12 +3157,26 @@ def _normalize_structured_content(payload: Any) -> dict[str, Any]:
         for index, section in enumerate(raw_sections)
     ]
 
-    return {
+    raw_media_assets = payload.get("mediaAssets")
+    if not isinstance(raw_media_assets, list):
+        raw_media_assets = []
+    media_assets = []
+    for asset in raw_media_assets:
+        normalized_asset = _normalize_media_asset(asset)
+        if normalized_asset is not None:
+            media_assets.append(normalized_asset)
+    if not media_assets:
+        media_assets = _synthesize_media_assets_from_sections(sections)
+
+    structured_content = {
         "title": title,
         "description": description,
         "sections": sections,
         "audit": audit,
+        "mediaAssets": media_assets,
     }
+    _refresh_media_review_state(structured_content)
+    return structured_content
 
 
 # ---------------------------------------------------------------------------
@@ -2774,19 +3206,35 @@ async def extract_module(
     if not is_admin and str(file["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only extract your own files")
 
-    file_path = resolve_uploaded_file_path(str(file["file_path"]))
-    if not os.path.exists(file_path):
+    file_path = await materialize_backend_upload(str(file["file_path"]))
+    if not file_path or not os.path.exists(file_path):
         raise HTTPException(404, "Physical file not found on server")
 
     # Create extraction record
+    initial_structured_content = {
+        "title": "",
+        "description": "",
+        "sections": [],
+        "mediaAssets": [],
+        "audit": {
+            "requestedSectionCount": body.target_section_count,
+            "finalSectionCount": 0,
+            "sectionCountAdjustmentReason": None,
+        },
+    }
     result = await db.execute(
         sa_text(
             "INSERT INTO extracted_modules "
-            "(file_id, class_id, teacher_id, raw_text, extraction_status, progress_percent) "
-            "VALUES (:fileId, :classId, :teacherId, '', 'pending', 0) "
+            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
+            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
             "RETURNING id"
-        ),
-        {"fileId": file["id"], "classId": file["class_id"], "teacherId": user.id},
+        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
+        {
+            "fileId": file["id"],
+            "classId": file["class_id"],
+            "teacherId": user.id,
+            "structuredContent": initial_structured_content,
+        },
     )
     await db.commit()
     extraction_id = result.scalar_one()
@@ -2797,7 +3245,13 @@ async def extract_module(
 
         async with AsyncSessionLocal() as bg_db:
             logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
-            await run_extraction(bg_db, extraction_id, body.file_id, user.id)
+            await run_extraction(
+                bg_db,
+                extraction_id,
+                body.file_id,
+                user.id,
+                target_section_count=body.target_section_count,
+            )
 
     try:
         loop = asyncio.get_running_loop()
@@ -3035,6 +3489,17 @@ async def update_extraction(
     else:
         raw_sections = existing_content.get("sections") or []
 
+    raw_media_assets: list[Any]
+    if body.media_assets is not None:
+        raw_media_assets = [
+            asset.model_dump(by_alias=True)
+            if hasattr(asset, "model_dump")
+            else dict(asset)
+            for asset in body.media_assets
+        ]
+    else:
+        raw_media_assets = existing_content.get("mediaAssets") or []
+
     structured_content = _normalize_structured_content(
         {
             "title": body.title if body.title is not None else existing_content.get("title"),
@@ -3045,6 +3510,7 @@ async def update_extraction(
             ),
             "sections": raw_sections,
             "audit": existing_content.get("audit") or {},
+            "mediaAssets": raw_media_assets,
         }
     )
 
@@ -3098,6 +3564,12 @@ async def apply_extraction(
         raise HTTPException(400, "This extraction has already been applied")
 
     content = _normalize_structured_content(extraction["structured_content"])
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    if quality_gate == "fail":
+        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
+    if bool(audit.get("reviewRequired")):
+        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
     all_sections = content.get("sections") or []
     if not all_sections:
         raise HTTPException(400, "No sections found in extraction result")
@@ -3117,6 +3589,17 @@ async def apply_extraction(
         sections_to_apply = [(all_sections[i], i) for i in selected_indices]
     else:
         sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
+
+    prepared_sections = [
+        (
+            _prepare_section_for_apply(
+                section_data,
+                fallback_title=f"Section {source_section_index + 1}",
+            ),
+            source_section_index,
+        )
+        for section_data, source_section_index in sections_to_apply
+    ]
 
     class_id = extraction["class_id"]
 
@@ -3186,7 +3669,7 @@ async def apply_extraction(
     allowed_feedback_levels = {"immediate", "standard", "detailed"}
 
     for section_offset, (section_data, source_section_index) in enumerate(
-        sections_to_apply,
+        prepared_sections,
         start=1,
     ):
         section_title = str(section_data.get("title") or f"Section {section_offset}").strip()
@@ -3237,8 +3720,6 @@ async def apply_extraction(
 
         blocks = section_data.get("lessonBlocks")
         if not isinstance(blocks, list):
-            blocks = section_data.get("blocks")
-        if not isinstance(blocks, list):
             blocks = []
 
         for idx, block in enumerate(blocks):
@@ -3278,10 +3759,7 @@ async def apply_extraction(
 
         created_lessons.append({"id": new_lesson["id"], "title": new_lesson["title"]})
 
-        assessment_draft = _normalize_assessment_draft(
-            section_data.get("assessmentDraft"),
-            section_title=section_title,
-        )
+        assessment_draft = section_data.get("assessmentDraft")
         if assessment_draft and isinstance(assessment_draft.get("questions"), list):
             questions = assessment_draft["questions"]
             if questions:
@@ -3736,6 +4214,154 @@ async def queue_teacher_quiz_draft_job(
 
 
 # ---------------------------------------------------------------------------
+# POST /teacher/lesson-plans/jobs
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/lesson-plans/jobs", status_code=202)
+async def queue_teacher_lesson_plan_job(
+    body: GenerateLessonPlanRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    class_row = await db.execute(
+        sa_text(
+            """
+            SELECT c.id, c.teacher_id
+            FROM classes c
+            WHERE c.id = :classId
+            """
+        ),
+        {"classId": body.class_id},
+    )
+    class_info = class_row.mappings().first()
+    if not class_info:
+        raise HTTPException(404, "Class not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(class_info["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only generate lesson plans for your own classes")
+
+    job_id = await _create_ai_generation_job(
+        db,
+        job_type="class_lesson_plan_generation",
+        class_id=body.class_id,
+        teacher_id=user.id,
+        source_filters={
+            "anchorType": body.anchor_type,
+            "anchorId": body.anchor_id,
+            "teacherNote": body.teacher_note,
+            "header": body.header.model_dump(by_alias=True) if body.header else {},
+        },
+        max_attempts=2,
+    )
+
+    try:
+        loop = asyncio.get_running_loop()
+        task = loop.create_task(_run_lesson_plan_generation_job(job_id, body, user))
+        AI_JOB_TASKS[job_id] = task
+    except RuntimeError as exc:
+        logger.exception("[ai-job] Failed to schedule lesson plan job %s: %s", job_id, exc)
+        raise HTTPException(500, "Failed to schedule lesson plan generation job") from exc
+
+    return {
+        "success": True,
+        "message": "Lesson plan generation job queued",
+        "data": {
+            "jobId": job_id,
+            "jobType": "class_lesson_plan_generation",
+            "status": "pending",
+            "progressPercent": 5,
+            "statusMessage": "Queued",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /teacher/lesson-plans/jobs/:id/draft
+# ---------------------------------------------------------------------------
+
+
+@app.patch("/teacher/lesson-plans/jobs/{job_id}/draft")
+async def update_teacher_lesson_plan_draft(
+    job_id: str,
+    body: UpdateLessonPlanDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await save_lesson_plan_draft(
+        db,
+        job_id=job_id,
+        user=user,
+        structured_output=body.structured_output,
+    )
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft saved",
+        resultSummary={
+            "outputId": result.get("outputId"),
+            "classProfile": result.get("structuredOutput", {}).get("classProfile"),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Lesson plan draft saved",
+        "data": {
+            "jobId": result["jobId"],
+            "jobType": result["jobType"],
+            "status": result["status"],
+            "progressPercent": 100,
+            "statusMessage": result["statusMessage"],
+            "outputId": result["outputId"],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /teacher/quizzes/jobs/:id/draft
+# ---------------------------------------------------------------------------
+
+
+@app.patch("/teacher/quizzes/jobs/{job_id}/draft")
+async def update_teacher_quiz_draft(
+    job_id: str,
+    body: UpdateQuizDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await save_quiz_draft(
+        db,
+        job_id=job_id,
+        user=user,
+        structured_output=body.structured_output,
+    )
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft saved",
+        resultSummary={
+            "outputId": result.get("outputId"),
+            "questionCount": len(result.get("structuredOutput", {}).get("questions") or []),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Quiz draft saved",
+        "data": {
+            "jobId": result["jobId"],
+            "jobType": result["jobType"],
+            "status": result["status"],
+            "progressPercent": 100,
+            "statusMessage": result["statusMessage"],
+            "outputId": result["outputId"],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
 # GET /teacher/jobs/:id
 # ---------------------------------------------------------------------------
 
@@ -3787,6 +4413,8 @@ async def get_teacher_ai_job_result(
         result_data["assessmentId"] = assessment_id
     if job["output_type"] == "intervention_recommendation":
         result_data = _normalize_intervention_structured_output(result_data)
+    if job["output_type"] == "class_lesson_plan":
+        result_data = _normalize_lesson_plan_structured_output(result_data)
     if runtime and runtime.get("resultSummary"):
         result_data["runtime"] = runtime["resultSummary"]
 
@@ -3926,42 +4554,4 @@ async def teacher_generate_quiz_draft(
         },
     }
 
-
-def resolve_uploaded_file_path(raw_path: str) -> str:
-    """Resolve backend-stored upload paths against ai-service UPLOAD_DIR robustly."""
-    normalized = (raw_path or "").strip()
-    upload_root = os.path.abspath(settings.upload_dir)
-
-    candidates: list[str] = []
-    if os.path.isabs(normalized):
-        candidates.append(normalized)
-
-    # Backend can store paths like "./uploads/pdfs/file.pdf" or "uploads/pdfs/file.pdf"
-    normalized_slash = normalized.replace("\\", "/").lstrip("./")
-    if normalized_slash.startswith("uploads/"):
-        normalized_slash = normalized_slash[len("uploads/") :]
-
-    candidates.extend(
-        [
-            os.path.abspath(normalized),
-            os.path.join(upload_root, normalized_slash),
-            os.path.join(upload_root, os.path.basename(normalized)),
-        ]
-    )
-
-    seen: set[str] = set()
-    deduped_candidates: list[str] = []
-    for candidate in candidates:
-        abs_candidate = os.path.abspath(candidate)
-        if abs_candidate in seen:
-            continue
-        seen.add(abs_candidate)
-        deduped_candidates.append(abs_candidate)
-
-    for candidate in deduped_candidates:
-        if os.path.exists(candidate):
-            return candidate
-
-    # Return the most likely candidate for error messaging.
-    return deduped_candidates[0] if deduped_candidates else normalized
 

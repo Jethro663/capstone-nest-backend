@@ -1,0 +1,1212 @@
+{
+  "repo_name": "capstone-nest-react-lms",
+  "backend": {
+    "package_name": "capstone-nest-backend",
+    "nestjs_version_range": "^11.0.1",
+    "bullmq_version_range": "^5.70.1",
+    "socketio_version_range": "^4.8.3",
+    "swagger_version_range": "^11.2.6",
+    "otel_api_version_range": "^1.9.0",
+    "prom_client_version_range": "^15.1.3",
+    "modules": [
+      "academic-state",
+      "admin",
+      "ai-mentor",
+      "analytics",
+      "announcements",
+      "assessments",
+      "audit",
+      "auth",
+      "class-record",
+      "class-templates",
+      "classes",
+      "content-modules",
+      "discussion-board",
+      "file-upload",
+      "health",
+      "ja",
+      "lessons",
+      "lxp",
+      "mail",
+      "notifications",
+      "otp",
+      "performance",
+      "profiles",
+      "rag",
+      "reports",
+      "roles",
+      "roster-import",
+      "school-events",
+      "sections",
+      "teacher",
+      "teacher-profiles",
+      "users"
+    ],
+    "controllers": [
+      {
+        "file": "backend/src/modules/academic-state/academic-state.controller.ts",
+        "base": "'academic-state'"
+      },
+      {
+        "file": "backend/src/modules/admin/admin.controller.ts",
+        "base": "'admin'"
+      },
+      {
+        "file": "backend/src/modules/ai-mentor/ai-mentor.controller.ts",
+        "base": "'ai'"
+      },
+      {
+        "file": "backend/src/modules/analytics/analytics.controller.ts",
+        "base": "'analytics'"
+      },
+      {
+        "file": "backend/src/modules/announcements/announcements.controller.ts",
+        "base": "'classes/:classId/announcements'"
+      },
+      {
+        "file": "backend/src/modules/assessments/assessments-public.controller.ts",
+        "base": "'assessments'"
+      },
+      {
+        "file": "backend/src/modules/assessments/assessments.controller.ts",
+        "base": "'assessments'"
+      },
+      {
+        "file": "backend/src/modules/auth/auth.controller.ts",
+        "base": "'auth'"
+      },
+      {
+        "file": "backend/src/modules/class-record/class-record.controller.ts",
+        "base": "'class-record'"
+      },
+      {
+        "file": "backend/src/modules/class-templates/class-templates.controller.ts",
+        "base": "'class-templates'"
+      },
+      {
+        "file": "backend/src/modules/classes/classes.controller.ts",
+        "base": "'classes'"
+      },
+      {
+        "file": "backend/src/modules/classes/classes.controller.ts",
+        "base": "'classes'"
+      },
+      {
+        "file": "backend/src/modules/content-modules/content-modules.controller.ts",
+        "base": "'modules'"
+      },
+      {
+        "file": "backend/src/modules/discussion-board/discussion-board.controller.ts",
+        "base": "'classes/:classId/discussion-threads'"
+      },
+      {
+        "file": "backend/src/modules/file-upload/file-upload.controller.ts",
+        "base": "'files'"
+      },
+      {
+        "file": "backend/src/modules/file-upload/internal-uploads.controller.ts",
+        "base": "'internal/uploads'"
+      },
+      {
+        "file": "backend/src/modules/health/health.controller.ts",
+        "base": "'health'"
+      },
+      {
+        "file": "backend/src/modules/ja/ja-hub.controller.ts",
+        "base": "'ai/student/ja'"
+      },
+      {
+        "file": "backend/src/modules/ja/ja.controller.ts",
+        "base": "'ai/student/ja/practice'"
+      },
+      {
+        "file": "backend/src/modules/lessons/lessons.controller.ts",
+        "base": "'lessons'"
+      },
+      {
+        "file": "backend/src/modules/lxp/lxp.controller.ts",
+        "base": "'lxp'"
+      },
+      {
+        "file": "backend/src/modules/notifications/notifications.controller.ts",
+        "base": "'notifications'"
+      },
+      {
+        "file": "backend/src/modules/otp/otp.controller.ts",
+        "base": "'otp'"
+      },
+      {
+        "file": "backend/src/modules/performance/performance.controller.ts",
+        "base": "'performance'"
+      },
+      {
+        "file": "backend/src/modules/profiles/profiles.controller.ts",
+        "base": "'profiles'"
+      },
+      {
+        "file": "backend/src/modules/reports/reports.controller.ts",
+        "base": "'reports'"
+      },
+      {
+        "file": "backend/src/modules/roster-import/roster-import.controller.ts",
+        "base": "'roster-import'"
+      },
+      {
+        "file": "backend/src/modules/school-events/school-events.controller.ts",
+        "base": "'school-events'"
+      },
+      {
+        "file": "backend/src/modules/sections/sections.controller.ts",
+        "base": "'sections'"
+      },
+      {
+        "file": "backend/src/modules/sections/sections.controller.ts",
+        "base": "'sections'"
+      },
+      {
+        "file": "backend/src/modules/teacher/teacher.controller.ts",
+        "base": "'teacher'"
+      },
+      {
+        "file": "backend/src/modules/teacher-profiles/teacher-profiles.controller.ts",
+        "base": "'teacher-profiles'"
+      },
+      {
+        "file": "backend/src/modules/users/users.controller.ts",
+        "base": "'users'"
+      }
+    ]
+  },
+  "frontend": {
+    "next_version_range": "^16.2.4",
+    "react_version": "19.2.3",
+    "socketio_client_version_range": "^4.8.3",
+    "routes": [
+      {
+        "file": "next-frontend/app/(auth)/complete-profile/page.tsx",
+        "route": "/complete-profile"
+      },
+      {
+        "file": "next-frontend/app/(auth)/forgot-password/page.tsx",
+        "route": "/forgot-password"
+      },
+      {
+        "file": "next-frontend/app/(auth)/login/page.tsx",
+        "route": "/login"
+      },
+      {
+        "file": "next-frontend/app/(auth)/reset-password/page.tsx",
+        "route": "/reset-password"
+      },
+      {
+        "file": "next-frontend/app/(auth)/set-initial-password/page.tsx",
+        "route": "/set-initial-password"
+      },
+      {
+        "file": "next-frontend/app/(auth)/verify-email/page.tsx",
+        "route": "/verify-email"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/announcements/page.tsx",
+        "route": "/dashboard/admin/announcements"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/audit/page.tsx",
+        "route": "/dashboard/admin/audit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/calendar/page.tsx",
+        "route": "/dashboard/admin/calendar"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/chatbot/page.tsx",
+        "route": "/dashboard/admin/chatbot"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]/announcements/[announcementKey]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/announcements/new/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]/announcements/new"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]/assessments/[assessmentKey]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]/lessons/[lessonKey]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/modules/[moduleKey]/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]/modules/[moduleKey]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/[id]/page.tsx",
+        "route": "/dashboard/admin/class-templates/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/class-templates/page.tsx",
+        "route": "/dashboard/admin/class-templates"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/edit/page.tsx",
+        "route": "/dashboard/admin/classes/[id]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/classes/[id]/page.tsx",
+        "route": "/dashboard/admin/classes/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/classes/new/page.tsx",
+        "route": "/dashboard/admin/classes/new"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/classes/page.tsx",
+        "route": "/dashboard/admin/classes"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/diagnostics/page.tsx",
+        "route": "/dashboard/admin/diagnostics"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/evaluations/page.tsx",
+        "route": "/dashboard/admin/evaluations"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/library/page.tsx",
+        "route": "/dashboard/admin/library"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/page.tsx",
+        "route": "/dashboard/admin"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/profile/page.tsx",
+        "route": "/dashboard/admin/profile"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/reports/page.tsx",
+        "route": "/dashboard/admin/reports"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/roster-import/page.tsx",
+        "route": "/dashboard/admin/roster-import"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/edit/page.tsx",
+        "route": "/dashboard/admin/sections/[id]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/roster/page.tsx",
+        "route": "/dashboard/admin/sections/[id]/roster"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/sections/[id]/students/add/page.tsx",
+        "route": "/dashboard/admin/sections/[id]/students/add"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/sections/new/page.tsx",
+        "route": "/dashboard/admin/sections/new"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/sections/page.tsx",
+        "route": "/dashboard/admin/sections"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/system-settings/page.tsx",
+        "route": "/dashboard/admin/system-settings"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/users/[id]/page.tsx",
+        "route": "/dashboard/admin/users/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/users/create/page.tsx",
+        "route": "/dashboard/admin/users/create"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/admin/users/page.tsx",
+        "route": "/dashboard/admin/users"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/library/page.tsx",
+        "route": "/dashboard/library"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/notifications/page.tsx",
+        "route": "/dashboard/notifications"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/page.tsx",
+        "route": "/dashboard"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/profile/page.tsx",
+        "route": "/dashboard/profile"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/announcements/page.tsx",
+        "route": "/dashboard/student/announcements"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/assessment-history/page.tsx",
+        "route": "/dashboard/student/assessment-history"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/page.tsx",
+        "route": "/dashboard/student/assessments/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/results/[attemptId]/page.tsx",
+        "route": "/dashboard/student/assessments/[id]/results/[attemptId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/assessments/[id]/take/page.tsx",
+        "route": "/dashboard/student/assessments/[id]/take"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/assessments/page.tsx",
+        "route": "/dashboard/student/assessments"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/calendar/page.tsx",
+        "route": "/dashboard/student/calendar"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/chatbot/page.tsx",
+        "route": "/dashboard/student/chatbot"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/modules/[moduleId]/page.tsx",
+        "route": "/dashboard/student/classes/[id]/modules/[moduleId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/classes/[id]/page.tsx",
+        "route": "/dashboard/student/classes/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/classes/page.tsx",
+        "route": "/dashboard/student/classes"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/courses/page.tsx",
+        "route": "/dashboard/student/courses"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/ja/page.tsx",
+        "route": "/dashboard/student/ja"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/lessons/[id]/page.tsx",
+        "route": "/dashboard/student/lessons/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/lessons/page.tsx",
+        "route": "/dashboard/student/lessons"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/lxp/[classId]/page.tsx",
+        "route": "/dashboard/student/lxp/[classId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/lxp/page.tsx",
+        "route": "/dashboard/student/lxp"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/page.tsx",
+        "route": "/dashboard/student"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/performance/page.tsx",
+        "route": "/dashboard/student/performance"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/profile/page.tsx",
+        "route": "/dashboard/student/profile"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/student/transcript/page.tsx",
+        "route": "/dashboard/student/transcript"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/announcements/page.tsx",
+        "route": "/dashboard/teacher/announcements"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/edit/page.tsx",
+        "route": "/dashboard/teacher/assessments/[id]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/page.tsx",
+        "route": "/dashboard/teacher/assessments/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/results/[attemptId]/page.tsx",
+        "route": "/dashboard/teacher/assessments/[id]/results/[attemptId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/assessments/page.tsx",
+        "route": "/dashboard/teacher/assessments"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/calendar/page.tsx",
+        "route": "/dashboard/teacher/calendar"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/class-record/page.tsx",
+        "route": "/dashboard/teacher/class-record"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/ai-draft/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]/ai-draft"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/modules/[moduleId]/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]/modules/[moduleId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/[studentId]/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]/students/[studentId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/students/add/page.tsx",
+        "route": "/dashboard/teacher/classes/[id]/students/add"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/classes/page.tsx",
+        "route": "/dashboard/teacher/classes"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/evaluations/page.tsx",
+        "route": "/dashboard/teacher/evaluations"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/extractions/[id]/page.tsx",
+        "route": "/dashboard/teacher/extractions/[id]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/[caseId]/page.tsx",
+        "route": "/dashboard/teacher/interventions/[caseId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/interventions/page.tsx",
+        "route": "/dashboard/teacher/interventions"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/edit/page.tsx",
+        "route": "/dashboard/teacher/lessons/[id]/edit"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/[id]/view/page.tsx",
+        "route": "/dashboard/teacher/lessons/[id]/view"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/lessons/page.tsx",
+        "route": "/dashboard/teacher/lessons"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/library/page.tsx",
+        "route": "/dashboard/teacher/library"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/modules/page.tsx",
+        "route": "/dashboard/teacher/modules"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/page.tsx",
+        "route": "/dashboard/teacher"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/performance/page.tsx",
+        "route": "/dashboard/teacher/performance"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/profile/page.tsx",
+        "route": "/dashboard/teacher/profile"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/reports/page.tsx",
+        "route": "/dashboard/teacher/reports"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/roster/page.tsx",
+        "route": "/dashboard/teacher/sections/[id]/roster"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/[studentId]/page.tsx",
+        "route": "/dashboard/teacher/sections/[id]/students/[studentId]"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/sections/[id]/students/add/page.tsx",
+        "route": "/dashboard/teacher/sections/[id]/students/add"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/teacher/sections/page.tsx",
+        "route": "/dashboard/teacher/sections"
+      },
+      {
+        "file": "next-frontend/app/(dashboard)/dashboard/theme-test/page.tsx",
+        "route": "/dashboard/theme-test"
+      },
+      {
+        "file": "next-frontend/app/demo/page.tsx",
+        "route": "/demo"
+      },
+      {
+        "file": "next-frontend/app/page.tsx",
+        "route": "/"
+      }
+    ]
+  },
+  "mobile": {
+    "expo_version": "~54.0.0",
+    "react_native_version": "0.81.5",
+    "screens": [
+      "AiTutorScreen",
+      "AnnouncementsScreen",
+      "AssessmentDetailScreen",
+      "AssessmentHistoryScreen",
+      "AssessmentResultsScreen",
+      "AssessmentTakeScreen",
+      "AssessmentsScreen",
+      "ClassDetailScreen",
+      "CoursesScreen",
+      "DashboardScreen",
+      "JaScreen",
+      "LessonDetailScreen",
+      "LessonsScreen",
+      "LoginScreen",
+      "LxpScreen",
+      "ModuleDetailScreen",
+      "PerformanceScreen",
+      "ProfileScreen",
+      "ProgressScreen",
+      "RoleWorkspaceScreen",
+      "SubjectLessonsScreen",
+      "TeacherUnsupportedScreen",
+      "TranscriptScreen"
+    ]
+  },
+  "ai_service": {
+    "requirements": [
+      "fastapi>=0.115.0",
+      "uvicorn[standard]>=0.32.0",
+      "httpx>=0.28.0",
+      "asyncpg>=0.30.0",
+      "sqlalchemy[asyncio]>=2.0.36",
+      "pydantic>=2.10.0",
+      "pydantic-settings>=2.7.0",
+      "pymupdf>=1.25.0",
+      "python-dotenv>=1.0.1",
+      "llama-index-core>=0.12.0",
+      "python-pptx>=1.0.2",
+      "prometheus_client>=0.21.0"
+    ],
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/chat"
+      },
+      {
+        "method": "POST",
+        "path": "/admin/chat"
+      },
+      {
+        "method": "POST",
+        "path": "/mentor/explain"
+      },
+      {
+        "method": "GET",
+        "path": "/student/ja/practice/bootstrap"
+      },
+      {
+        "method": "POST",
+        "path": "/student/ja/practice/sessions/generate"
+      },
+      {
+        "method": "GET",
+        "path": "/student/ja/ask/bootstrap"
+      },
+      {
+        "method": "POST",
+        "path": "/student/ja/ask/respond"
+      },
+      {
+        "method": "GET",
+        "path": "/student/ja/review/bootstrap"
+      },
+      {
+        "method": "POST",
+        "path": "/student/ja/review/sessions/generate"
+      },
+      {
+        "method": "GET",
+        "path": "/student/tutor/bootstrap"
+      },
+      {
+        "method": "POST",
+        "path": "/student/tutor/session"
+      },
+      {
+        "method": "GET",
+        "path": "/student/tutor/session/{session_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/student/tutor/session/{session_id}/message"
+      },
+      {
+        "method": "POST",
+        "path": "/student/tutor/session/{session_id}/answers"
+      },
+      {
+        "method": "GET",
+        "path": "/health"
+      },
+      {
+        "method": "GET",
+        "path": "/metrics"
+      },
+      {
+        "method": "GET",
+        "path": "/live"
+      },
+      {
+        "method": "GET",
+        "path": "/ready"
+      },
+      {
+        "method": "POST",
+        "path": "/demo/intervention-plan"
+      },
+      {
+        "method": "GET",
+        "path": "/internal/retrieval/preview"
+      },
+      {
+        "method": "GET",
+        "path": "/internal/extractions/{extraction_id}/audit"
+      },
+      {
+        "method": "GET",
+        "path": "/index/classes/{class_id}/status"
+      },
+      {
+        "method": "POST",
+        "path": "/index/classes/{class_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/internal/index/classes/{class_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/internal/index/library-files/{file_id}"
+      },
+      {
+        "method": "DELETE",
+        "path": "/internal/index/library-files/{file_id}/chunks"
+      },
+      {
+        "method": "POST",
+        "path": "/internal/index/library/backfill"
+      },
+      {
+        "method": "POST",
+        "path": "/internal/index/backfill"
+      },
+      {
+        "method": "POST",
+        "path": "/extract"
+      },
+      {
+        "method": "GET",
+        "path": "/extractions/{extraction_id}/status"
+      },
+      {
+        "method": "GET",
+        "path": "/extractions"
+      },
+      {
+        "method": "GET",
+        "path": "/extractions/{extraction_id}"
+      },
+      {
+        "method": "PATCH",
+        "path": "/extractions/{extraction_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/extractions/{extraction_id}/apply"
+      },
+      {
+        "method": "DELETE",
+        "path": "/extractions/{extraction_id}"
+      },
+      {
+        "method": "GET",
+        "path": "/history"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/history"
+      },
+      {
+        "method": "GET",
+        "path": "/admin/sessions/{session_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/teacher/interventions/{case_id}/jobs"
+      },
+      {
+        "method": "POST",
+        "path": "/teacher/quizzes/jobs"
+      },
+      {
+        "method": "GET",
+        "path": "/teacher/jobs/{job_id}"
+      },
+      {
+        "method": "GET",
+        "path": "/teacher/jobs/{job_id}/result"
+      },
+      {
+        "method": "DELETE",
+        "path": "/teacher/jobs/{job_id}"
+      },
+      {
+        "method": "POST",
+        "path": "/teacher/interventions/{case_id}/recommend"
+      },
+      {
+        "method": "POST",
+        "path": "/teacher/quizzes/generate-draft"
+      }
+    ]
+  },
+  "database": {
+    "roles": [
+      "admin",
+      "teacher",
+      "student"
+    ],
+    "tables": [
+      {
+        "schema_file": "backend/src/drizzle/schema/academic-state.schema.ts",
+        "const": "academicSystemStates",
+        "table": "academic_system_states"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ai-mentor.schema.ts",
+        "const": "aiInteractionLogs",
+        "table": "ai_interaction_logs"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ai-mentor.schema.ts",
+        "const": "extractedModules",
+        "table": "extracted_modules"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/announcements-notifications.schema.ts",
+        "const": "announcements",
+        "table": "announcements"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/announcements-notifications.schema.ts",
+        "const": "notifications",
+        "table": "notifications"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "roles",
+        "table": "roles"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "users",
+        "table": "users"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "userRoles",
+        "table": "user_roles"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "auditLogs",
+        "table": "audit_logs"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "sections",
+        "table": "sections"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "classes",
+        "table": "classes"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "classSchedules",
+        "table": "class_schedules"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "studentProfiles",
+        "table": "student_profiles"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "teacherProfiles",
+        "table": "teacher_profiles"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "enrollments",
+        "table": "enrollments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "lessons",
+        "table": "lessons"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "lessonContentBlocks",
+        "table": "lesson_content_blocks"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "lessonCompletions",
+        "table": "lesson_completions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "lessonVersions",
+        "table": "lesson_versions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "assessments",
+        "table": "assessments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "assessmentQuestions",
+        "table": "assessment_questions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "assessmentQuestionOptions",
+        "table": "assessment_question_options"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "assessmentAttempts",
+        "table": "assessment_attempts"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "assessmentResponses",
+        "table": "assessment_responses"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "archivedUsers",
+        "table": "archived_users"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "classModules",
+        "table": "class_modules"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "moduleSections",
+        "table": "module_sections"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "moduleItems",
+        "table": "module_items"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "moduleGradingScaleEntries",
+        "table": "module_grading_scale_entries"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "uploadedFiles",
+        "table": "uploaded_files"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "classVisibilityPreferences",
+        "table": "class_visibility_preferences"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "studentClassPresentationPreferences",
+        "table": "student_class_presentation_preferences"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "studentCourseViewPreferences",
+        "table": "student_course_view_preferences"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "sectionVisibilityPreferences",
+        "table": "section_visibility_preferences"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "libraryFolders",
+        "table": "library_folders"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/base.schema.ts",
+        "const": "pendingRoster",
+        "table": "pending_roster"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-record.schema.ts",
+        "const": "classRecords",
+        "table": "class_records"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-record.schema.ts",
+        "const": "classRecordCategories",
+        "table": "class_record_categories"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-record.schema.ts",
+        "const": "classRecordItems",
+        "table": "class_record_items"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-record.schema.ts",
+        "const": "classRecordScores",
+        "table": "class_record_scores"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-record.schema.ts",
+        "const": "classRecordFinalGrades",
+        "table": "class_record_final_grades"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplates",
+        "table": "class_templates"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateModules",
+        "table": "class_template_modules"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateModuleSections",
+        "table": "class_template_module_sections"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateAssessments",
+        "table": "class_template_assessments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateLessons",
+        "table": "class_template_lessons"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateLessonBlocks",
+        "table": "class_template_lesson_blocks"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateAssessmentQuestions",
+        "table": "class_template_assessment_questions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateAssessmentQuestionOptions",
+        "table": "class_template_assessment_question_options"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateEngineChunks",
+        "table": "class_template_engine_chunks"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateModuleItems",
+        "table": "class_template_module_items"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/class-templates.schema.ts",
+        "const": "classTemplateAnnouncements",
+        "table": "class_template_announcements"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/discussion-board.schema.ts",
+        "const": "discussionThreads",
+        "table": "discussion_threads"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/discussion-board.schema.ts",
+        "const": "discussionThreadAttachments",
+        "table": "discussion_thread_attachments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/discussion-board.schema.ts",
+        "const": "discussionComments",
+        "table": "discussion_comments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/discussion-board.schema.ts",
+        "const": "discussionCommentAttachments",
+        "table": "discussion_comment_attachments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/discussion-board.schema.ts",
+        "const": "discussionCommentReactions",
+        "table": "discussion_comment_reactions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaSessions",
+        "table": "ja_sessions"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaSessionItems",
+        "table": "ja_session_items"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaSessionResponses",
+        "table": "ja_session_responses"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaSessionEvents",
+        "table": "ja_session_events"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaProgress",
+        "table": "ja_progress"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaXpLedger",
+        "table": "ja_xp_ledger"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaThreads",
+        "table": "ja_threads"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaThreadMessages",
+        "table": "ja_thread_messages"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/ja.schema.ts",
+        "const": "jaGuardrailEvents",
+        "table": "ja_guardrail_events"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/lxp.schema.ts",
+        "const": "interventionCases",
+        "table": "intervention_cases"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/lxp.schema.ts",
+        "const": "interventionAssignments",
+        "table": "intervention_assignments"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/lxp.schema.ts",
+        "const": "lxpProgress",
+        "table": "lxp_progress"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/lxp.schema.ts",
+        "const": "systemEvaluations",
+        "table": "system_evaluations"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/lxp.schema.ts",
+        "const": "classAiPolicies",
+        "table": "class_ai_policies"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/otp.schema.ts",
+        "const": "otpVerifications",
+        "table": "otp_verifications"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/performance.schema.ts",
+        "const": "performanceSnapshots",
+        "table": "performance_snapshots"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/performance.schema.ts",
+        "const": "performanceLogs",
+        "table": "performance_logs"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/rag.schema.ts",
+        "const": "contentChunks",
+        "table": "content_chunks"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/rag.schema.ts",
+        "const": "contentChunkEmbeddings",
+        "table": "content_chunk_embeddings"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/rag.schema.ts",
+        "const": "studentConceptMastery",
+        "table": "student_concept_mastery"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/rag.schema.ts",
+        "const": "aiGenerationJobs",
+        "table": "ai_generation_jobs"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/rag.schema.ts",
+        "const": "aiGenerationOutputs",
+        "table": "ai_generation_outputs"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/refresh-tokens.schema.ts",
+        "const": "refreshTokens",
+        "table": "refresh_tokens"
+      },
+      {
+        "schema_file": "backend/src/drizzle/schema/school-events.schema.ts",
+        "const": "schoolEvents",
+        "table": "school_events"
+      }
+    ]
+  }
+}

@@ -4,8 +4,16 @@ import type {
   LxpClassReport,
   LxpOverviewResponse,
   PlaylistResponse,
+  StudentTeacherEvaluationDashboardResponse,
   SystemEvaluationListResponse,
+  TeacherEvaluationSummaryResponse,
+  TeacherEvaluationType,
   SystemEvaluationTargetModule,
+  ApproveGeneratedRemedialPayload,
+  GeneratedLessonContent,
+  GeneratedArtifactApprovalResponse,
+  GuidedAssessmentResultResponse,
+  GuidedAssessmentSessionResponse,
   TeacherInterventionCaseDetail,
   TeacherPendingInterventionCountResponse,
   TeacherInterventionQueueResponse,
@@ -109,6 +117,126 @@ export const lxpService = {
   ): Promise<Envelope<TeacherInterventionCaseDetail>> {
     const { data } = await api.get(`/lxp/teacher/interventions/${caseId}/detail`);
     return normalizeEnvelope<TeacherInterventionCaseDetail>(data);
+  },
+
+  async approveGeneratedArtifacts(
+    caseId: string,
+    payload: ApproveGeneratedRemedialPayload,
+  ): Promise<Envelope<GeneratedArtifactApprovalResponse>> {
+    const { data } = await api.post(
+      `/lxp/teacher/interventions/${caseId}/generated-content/approve`,
+      payload,
+    );
+    return normalizeEnvelope<GeneratedArtifactApprovalResponse>(data);
+  },
+
+  async rejectGeneratedArtifacts(
+    caseId: string,
+    payload: ApproveGeneratedRemedialPayload,
+  ): Promise<Envelope<GeneratedArtifactApprovalResponse>> {
+    const { data } = await api.post(
+      `/lxp/teacher/interventions/${caseId}/generated-content/reject`,
+      payload,
+    );
+    return normalizeEnvelope<GeneratedArtifactApprovalResponse>(data);
+  },
+
+  async getGeneratedLesson(
+    classId: string,
+    assignmentId: string,
+  ): Promise<
+    Envelope<{
+      assignmentId: string;
+      caseId: string;
+      status: string;
+      checkpointLabel: string;
+      generatedLesson: GeneratedLessonContent;
+    }>
+  > {
+    const { data } = await api.get(
+      `/lxp/me/playlist/${classId}/generated-lessons/${assignmentId}`,
+    );
+    return normalizeEnvelope(data);
+  },
+
+  async startGuidedAssessment(
+    classId: string,
+    assignmentId: string,
+  ): Promise<Envelope<GuidedAssessmentSessionResponse>> {
+    const { data } = await api.post(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/start`,
+    );
+    return normalizeEnvelope<GuidedAssessmentSessionResponse>(data);
+  },
+
+  async updateGuidedAssessmentProgress(
+    classId: string,
+    assignmentId: string,
+    payload: {
+      currentQuestionIndex?: number;
+      responses?: GuidedAssessmentSessionResponse['attempt']['responses'];
+      hintedQuestionIds?: string[];
+    },
+  ): Promise<Envelope<GuidedAssessmentSessionResponse>> {
+    const { data } = await api.patch(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/progress`,
+      payload,
+    );
+    return normalizeEnvelope<GuidedAssessmentSessionResponse>(data);
+  },
+
+  async submitGuidedAssessment(
+    classId: string,
+    assignmentId: string,
+    payload: {
+      responses: GuidedAssessmentSessionResponse['attempt']['responses'];
+      hintedQuestionIds: string[];
+    },
+  ): Promise<Envelope<GuidedAssessmentResultResponse>> {
+    const { data } = await api.post(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/submit`,
+      payload,
+    );
+    return normalizeEnvelope<GuidedAssessmentResultResponse>(data);
+  },
+
+  async getGuidedAssessmentResult(
+    classId: string,
+    assignmentId: string,
+  ): Promise<Envelope<GuidedAssessmentResultResponse>> {
+    const { data } = await api.get(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/result`,
+    );
+    return normalizeEnvelope<GuidedAssessmentResultResponse>(data);
+  },
+
+  async getStudentTeacherEvaluationDashboard(): Promise<
+    Envelope<StudentTeacherEvaluationDashboardResponse>
+  > {
+    const { data } = await api.get('/lxp/me/teacher-evaluations');
+    return normalizeEnvelope<StudentTeacherEvaluationDashboardResponse>(data);
+  },
+
+  async submitTeacherEvaluation(payload: {
+    classId: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    evaluationType: TeacherEvaluationType;
+    ratings: Record<string, number>;
+    comment?: string;
+  }) {
+    const { data } = await api.post('/lxp/me/teacher-evaluations', payload);
+    return normalizeEnvelope(data);
+  },
+
+  async getTeacherEvaluationSummary(filters: {
+    evaluationType: TeacherEvaluationType;
+    classId?: string;
+    gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  }): Promise<Envelope<TeacherEvaluationSummaryResponse>> {
+    const { data } = await api.get('/lxp/teacher/evaluations/summary', {
+      params: filters,
+    });
+    return normalizeEnvelope<TeacherEvaluationSummaryResponse>(data);
   },
 
   async submitEvaluation(payload: {

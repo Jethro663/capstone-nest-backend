@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from typing import Any
+from typing import Any, Literal
 
 
 class ImageAttachment(BaseModel):
@@ -70,6 +70,7 @@ class AdminChatRequest(BaseModel):
 
 class ExtractRequest(BaseModel):
     file_id: str = Field(..., alias="fileId")
+    target_section_count: Literal[3, 4, 5] = Field(..., alias="targetSectionCount")
 
     model_config = {"populate_by_name": True}
 
@@ -127,6 +128,36 @@ class ExtractionAssessmentDraftDto(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class ExtractionMediaCandidateDto(BaseModel):
+    section_index: int = Field(alias="sectionIndex")
+    score: float
+    explicit_match: bool | None = Field(default=None, alias="explicitMatch")
+    score_breakdown: dict[str, float] | None = Field(default=None, alias="scoreBreakdown")
+
+    model_config = {"populate_by_name": True}
+
+
+class ExtractionMediaAssetDto(BaseModel):
+    id: str
+    url: str
+    page_number: int | None = Field(default=None, alias="pageNumber")
+    caption: str | None = None
+    anchor_text: str | None = Field(default=None, alias="anchorText")
+    keywords: list[str] = Field(default_factory=list)
+    figure_references: list[str] = Field(default_factory=list, alias="figureReferences")
+    selected_section_index: int | None = Field(default=None, alias="selectedSectionIndex")
+    assignment_confidence: float | None = Field(default=None, alias="assignmentConfidence")
+    assignment_breakdown: dict[str, float] | None = Field(default=None, alias="assignmentBreakdown")
+    candidate_sections: list[ExtractionMediaCandidateDto] = Field(
+        default_factory=list,
+        alias="candidateSections",
+    )
+    teacher_reviewed: bool = Field(default=False, alias="teacherReviewed")
+    review_state: str | None = Field(default=None, alias="reviewState")
+
+    model_config = {"populate_by_name": True}
+
+
 class ExtractionSectionDto(BaseModel):
     title: str
     description: str | None = None
@@ -137,6 +168,8 @@ class ExtractionSectionDto(BaseModel):
         alias="assessmentDraft",
     )
     confidence: float | None = None
+    graph_keywords: list[str] = Field(default_factory=list, alias="graphKeywords")
+    figure_references: list[str] = Field(default_factory=list, alias="figureReferences")
 
     model_config = {"populate_by_name": True}
 
@@ -146,6 +179,10 @@ class UpdateExtractionRequest(BaseModel):
     description: str | None = None
     sections: list[ExtractionSectionDto] | None = None
     lessons: list[ExtractionLessonDto] | None = None
+    media_assets: list[ExtractionMediaAssetDto] | None = Field(
+        default=None,
+        alias="mediaAssets",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -190,6 +227,42 @@ class GenerateQuizDraftRequest(BaseModel):
     feedback_level: str = Field(default="standard", alias="feedbackLevel")
     class_record_category: str | None = Field(default=None, alias="classRecordCategory")
     quarter: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class LessonPlanHeaderRequest(BaseModel):
+    instructional_format: str | None = Field(
+        default=None,
+        alias="instructionalFormat",
+    )
+    school_name: str | None = Field(default=None, alias="schoolName")
+    quarter: str | None = None
+    date: str | None = None
+    start_time: str | None = Field(default=None, alias="startTime")
+    end_time: str | None = Field(default=None, alias="endTime")
+
+    model_config = {"populate_by_name": True}
+
+
+class GenerateLessonPlanRequest(BaseModel):
+    class_id: str = Field(..., alias="classId")
+    anchor_type: str = Field(..., alias="anchorType")
+    anchor_id: str = Field(..., alias="anchorId")
+    teacher_note: str | None = Field(default=None, alias="teacherNote")
+    header: LessonPlanHeaderRequest | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+class UpdateLessonPlanDraftRequest(BaseModel):
+    structured_output: dict[str, Any] = Field(..., alias="structuredOutput")
+
+    model_config = {"populate_by_name": True}
+
+
+class UpdateQuizDraftRequest(BaseModel):
+    structured_output: dict[str, Any] = Field(..., alias="structuredOutput")
 
     model_config = {"populate_by_name": True}
 

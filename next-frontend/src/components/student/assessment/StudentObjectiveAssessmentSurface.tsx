@@ -20,6 +20,10 @@ interface ObjectiveAssessmentSurfaceQuestion {
   points?: number | null;
   promptHtml: string;
   imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   options?: SharedQuestionOption[];
 }
 
@@ -72,24 +76,24 @@ export function StudentObjectiveAssessmentSurface({
 
   return (
     <div
-      className="student-page rounded-3xl p-1"
+      className="student-page rounded-2xl p-1 sm:rounded-3xl"
       onKeyDown={onSurfaceKeyDown}
     >
       <div className="sticky top-0 z-30 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-glass)] p-3 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-[var(--student-text-strong)]">{title}</p>
             <p className="text-xs student-muted-text">{questionLabel}</p>
           </div>
-          <div className="flex items-center gap-2">{statusChips}</div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">{statusChips}</div>
         </div>
         <Progress value={progressValue} className="mt-2 h-2" />
       </div>
 
       <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_250px]">
         <Card className="student-card overflow-hidden">
-          <CardContent className="space-y-5 p-6">
-            <div className="flex items-center gap-2">
+          <CardContent className="space-y-5 p-4 sm:p-6">
+            <div className="flex flex-wrap items-center gap-2">
               {metaBadges ?? (
                 <>
                   <Badge variant="outline" className="capitalize">
@@ -118,18 +122,31 @@ export function StudentObjectiveAssessmentSurface({
                 >
                   <RichTextRenderer
                     html={question.promptHtml}
-                    className="text-lg font-semibold leading-relaxed text-[var(--student-text-strong)]"
+                    className="text-base font-semibold leading-relaxed text-[var(--student-text-strong)] sm:text-lg"
                   />
                   {question.imageUrl ? (
                     <div className="mt-4 overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3">
-                      <Image
-                        src={question.imageUrl}
-                        alt="Question"
-                        width={1200}
-                        height={675}
-                        unoptimized
-                        className="max-h-[360px] h-auto w-full rounded-xl object-contain"
-                      />
+                      <div
+                        className="mx-auto overflow-hidden rounded-xl"
+                        style={{
+                          maxWidth: question.imageDisplayMode === 'expanded' ? '100%' : '780px',
+                          height: question.imageDisplayMode === 'expanded' ? 'min(55vw, 440px)' : 'min(50vw, 360px)',
+                        }}
+                      >
+                        <Image
+                          src={question.imageUrl}
+                          alt="Question"
+                          width={1200}
+                          height={675}
+                          unoptimized
+                          className="h-full w-full rounded-xl object-cover"
+                          style={{
+                            objectPosition: `${Math.min(Math.max(question.imagePositionX ?? 50, 0), 100)}% ${Math.min(Math.max(question.imagePositionY ?? 50, 0), 100)}%`,
+                            transform: `scale(${Math.max(question.imageZoom ?? 100, 100) / 100})`,
+                            transformOrigin: 'center',
+                          }}
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -153,9 +170,9 @@ export function StudentObjectiveAssessmentSurface({
               </motion.div>
             </AnimatePresence>
 
-            <div className="flex items-center justify-between border-t pt-4">
-              <div>{footerLeft}</div>
-              <div>{footerRight}</div>
+            <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">{footerLeft}</div>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">{footerRight}</div>
             </div>
           </CardContent>
         </Card>

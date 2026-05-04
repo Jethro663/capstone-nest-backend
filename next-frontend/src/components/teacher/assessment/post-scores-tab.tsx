@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { isAxiosError } from 'axios';
 import { assessmentService } from '@/services/assessment-service';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,15 +15,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { motion } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/helpers';
 import { PreviewModal } from '@/components/teacher/assessment/preview-modal';
 import { downloadXlsxBuffer } from '@/lib/download-xlsx-buffer';
 import type {
   Assessment,
-  SubmissionsResponse,
   SubmissionStatus,
+  SubmissionsResponse,
 } from '@/types/assessment';
 
 interface PostScoresTabProps {
@@ -33,14 +32,37 @@ interface PostScoresTabProps {
   onDataChanged: () => void;
 }
 
-const STATUS_CONFIG: Record<SubmissionStatus, { label: string; color: string; badgeColor: string }> = {
-  not_started: { label: 'Not Started', color: 'text-gray-400', badgeColor: 'bg-gray-100 text-gray-600' },
-  in_progress: { label: 'In Progress', color: 'text-blue-500', badgeColor: 'bg-blue-100 text-blue-700' },
-  turned_in: { label: 'Graded', color: 'text-amber-600', badgeColor: 'bg-amber-100 text-amber-700' },
-  returned: { label: 'Posted', color: 'text-emerald-600', badgeColor: 'bg-emerald-100 text-emerald-700' },
+type ExportRow = Record<string, string | number>;
+type ScoreFilter = 'all' | 'pending' | 'posted' | 'no_submission';
+type ScoreBucket = Exclude<ScoreFilter, 'all'>;
+
+type SubmissionRow = {
+  studentId: string;
+  fullName: string;
+  email?: string;
+  status: SubmissionStatus;
+  bucket: ScoreBucket;
+  attemptId: string | null;
+  totalAttempts: number;
+  score: number | null;
+  submittedAt?: string;
+  timeSpentSeconds?: number | null;
+  teacherFeedback?: string | null;
 };
 
-type ExportRow = Record<string, string | number>;
+const STATUS_CONFIG: Record<SubmissionStatus, { label: string; badgeColor: string }> = {
+  not_started: { label: 'Not Started', badgeColor: 'bg-slate-100 text-slate-600' },
+  in_progress: { label: 'In Progress', badgeColor: 'bg-sky-100 text-sky-700' },
+  turned_in: { label: 'Pending Score', badgeColor: 'bg-amber-100 text-amber-700' },
+  returned: { label: 'Posted', badgeColor: 'bg-emerald-100 text-emerald-700' },
+};
+
+const FILTER_COPY: Record<ScoreFilter, { label: string; description: string }> = {
+  all: { label: 'All students', description: 'See the full roster with the latest score state.' },
+  pending: { label: 'Pending scores', description: 'Students who submitted and still need score posting.' },
+  posted: { label: 'Already scored', description: 'Students whose grades are already visible.' },
+  no_submission: { label: 'No submission', description: 'Students who have not turned in a submission yet.' },
+};
 
 function toErrorMessage(error: unknown, fallback: string): string {
   if (isAxiosError<{ message?: string }>(error)) {
@@ -54,72 +76,142 @@ function toErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-export function PostScoresTab({ assessmentId, assessment, submissions, onDataChanged }: PostScoresTabProps) {
-  const [returnAllOpen, setReturnAllOpen] = useState(false);
+function getRowBucket(status: SubmissionStatus): ScoreBucket {
+  if (status === 'returned') return 'posted';
+  if (status === 'turned_in') return 'pending';
+  return 'no_submission';
+}
+
+export function PostScoresTab({ assessment, submissions, onDataChanged }: PostScoresTabProps) {
+  const [postSelectedOpen, setPostSelectedOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
-  const [returning, setReturning] = useState(false);
+  const [postingSelected, setPostingSelected] = useState(false);
   const [previewAttemptId, setPreviewAttemptId] = useState<string | null>(null);
+  const [selectedAttemptIds, setSelectedAttemptIds] = useState<string[]>([]);
+  const [activeFilter, setActiveFilter] = useState<ScoreFilter>('all');
 
-  const allSubmissions = submissions?.submissions ?? [];
-  const answered = allSubmissions.filter((s) => s.attempt?.isSubmitted);
-  const notAnswered = allSubmissions.filter((s) => !s.attempt?.isSubmitted);
-  const turnedInCount = allSubmissions.filter((s) => s.status === 'turned_in').length;
-  const returnedCount = allSubmissions.filter((s) => s.status === 'returned').length;
+  const rows = useMemo<SubmissionRow[]>(
+    () => (submissions?.submissions ?? []).map((submission) => ({
+      studentId: submission.studentId,
+      fullName: `${submission.lastName}, ${submission.firstName}`,
+      email: submission.email,
+      status: submission.status,
+      bucket: getRowBucket(submission.status),
+      attemptId: submission.attempt?.isSubmitted ? submission.attempt.id : null,
+      totalAttempts: submission.totalAttempts ?? submission.attempts?.length ?? (submission.attempt ? 1 : 0),
+      score: submission.attempt?.score ?? null,
+      submittedAt: submission.attempt?.submittedAt,
+      timeSpentSeconds: submission.attempt?.timeSpentSeconds ?? null,
+      teacherFeedback: submission.attempt?.teacherFeedback ?? null,
+    })),
+    [submissions?.submissions],
+  );
 
-  const handleReturnAll = async () => {
+  const counts = useMemo(
+    () => ({
+      all: rows.length,
+      pending: rows.filter((row) => row.bucket === 'pending').length,
+      posted: rows.filter((row) => row.bucket === 'posted').length,
+      no_submission: rows.filter((row) => row.bucket === 'no_submission').length,
+    }),
+    [rows],
+  );
+
+  const visibleRows = useMemo(
+    () => rows.filter((row) => activeFilter === 'all' || row.bucket === activeFilter),
+    [activeFilter, rows],
+  );
+
+  const selectableVisibleAttemptIds = visibleRows
+    .filter((row) => row.bucket === 'pending' && row.attemptId)
+    .map((row) => row.attemptId as string);
+
+  const allVisibleSelected =
+    selectableVisibleAttemptIds.length > 0 &&
+    selectableVisibleAttemptIds.every((attemptId) => selectedAttemptIds.includes(attemptId));
+
+  const selectedCount = selectedAttemptIds.length;
+
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      setSelectedAttemptIds((current) => current.filter((attemptId) => !selectableVisibleAttemptIds.includes(attemptId)));
+      return;
+    }
+
+    setSelectedAttemptIds((current) => [
+      ...current,
+      ...selectableVisibleAttemptIds.filter((attemptId) => !current.includes(attemptId)),
+    ]);
+  };
+
+  const toggleAttemptSelection = (attemptId: string) => {
+    setSelectedAttemptIds((current) => (
+      current.includes(attemptId)
+        ? current.filter((currentAttemptId) => currentAttemptId !== attemptId)
+        : [...current, attemptId]
+    ));
+  };
+
+  const handlePostSelected = async () => {
+    if (selectedAttemptIds.length === 0) return;
+
     try {
-      setReturning(true);
-      await assessmentService.returnAllGrades(assessmentId, feedback || undefined);
-      toast.success('All grades posted to students');
-      setReturnAllOpen(false);
+      setPostingSelected(true);
+      await assessmentService.bulkReturnGrades({
+        attemptIds: selectedAttemptIds,
+        teacherFeedback: feedback || undefined,
+      });
+      toast.success(`${selectedAttemptIds.length} grade${selectedAttemptIds.length === 1 ? '' : 's'} posted to students`);
+      setSelectedAttemptIds([]);
       setFeedback('');
+      setPostSelectedOpen(false);
       onDataChanged();
     } catch (error: unknown) {
-      toast.error(toErrorMessage(error, 'Failed to post grades'));
+      toast.error(toErrorMessage(error, 'Failed to post selected grades'));
     } finally {
-      setReturning(false);
+      setPostingSelected(false);
     }
   };
 
   const handleExportExcel = async () => {
     try {
       const { default: ExcelJS } = await import('exceljs');
-      const rows: ExportRow[] = allSubmissions.map((s) => ({
-        'Student Name': `${s.lastName}, ${s.firstName}`,
-        'Email': s.email ?? '',
-        'Status': STATUS_CONFIG[s.status].label,
-        'Score (%)': s.attempt?.score ?? '',
-        'Points': s.attempt?.score != null ? Math.round(((s.attempt.score) / 100) * (assessment.totalPoints ?? 0)) : '',
+      const exportRows: ExportRow[] = rows.map((row) => ({
+        'Student Name': row.fullName,
+        'Email': row.email ?? '',
+        'Submission Status': STATUS_CONFIG[row.status].label,
+        'Score (%)': row.score ?? '',
+        'Points': row.score != null ? Math.round((row.score / 100) * (assessment.totalPoints ?? 0)) : '',
         'Total Points': assessment.totalPoints ?? 0,
-        'Time (seconds)': s.attempt?.timeSpentSeconds ?? '',
-        'Submitted': s.attempt?.submittedAt ? formatDate(s.attempt.submittedAt) : '',
-        'Feedback': s.attempt?.teacherFeedback ?? '',
+        'Attempts': row.totalAttempts,
+        'Submitted': row.submittedAt ? formatDate(row.submittedAt) : '',
+        'Feedback': row.teacherFeedback ?? '',
       }));
 
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet((assessment.title || 'Assessment').slice(0, 31));
-      const headers = Object.keys(rows[0] || {
+      const headers = Object.keys(exportRows[0] || {
         'Student Name': '',
         'Email': '',
-        'Status': '',
+        'Submission Status': '',
         'Score (%)': '',
         'Points': '',
         'Total Points': '',
-        'Time (seconds)': '',
+        'Attempts': '',
         'Submitted': '',
         'Feedback': '',
       });
 
       worksheet.addRow(headers);
-      rows.forEach((row) => {
+      exportRows.forEach((row) => {
         worksheet.addRow(headers.map((header) => row[header] ?? ''));
       });
-      worksheet.columns = headers.map((key) => {
+      worksheet.columns = headers.map((header) => {
         const maxLen = Math.max(
-          key.length,
-          ...rows.map((row) => String(row[key as keyof ExportRow]).length),
+          header.length,
+          ...exportRows.map((row) => String(row[header as keyof ExportRow]).length),
         );
-        return { width: Math.min(maxLen + 2, 40) };
+        return { width: Math.min(maxLen + 2, 42) };
       });
 
       const output = await workbook.xlsx.writeBuffer();
@@ -130,194 +222,215 @@ export function PostScoresTab({ assessmentId, assessment, submissions, onDataCha
     }
   };
 
-  const total = allSubmissions.length;
-
   return (
     <div className="space-y-4">
-      {/* Summary Progress Bar */}
-      <Card>
-        <CardContent className="py-4 px-5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="font-medium">{returnedCount}</span> posted
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="font-medium">{turnedInCount}</span> pending
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
-                <span className="font-medium">{notAnswered.length}</span> no submission
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleExportExcel}>
-                Export Excel
-              </Button>
-              {turnedInCount > 0 && (
-                <Button size="sm" onClick={() => { setFeedback(''); setReturnAllOpen(true); }}>
-                  Post All ({turnedInCount})
+      <Card className="border-slate-200 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+        <CardContent className="p-0">
+          <div className="space-y-4 border-b border-slate-200 px-5 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Score Posting
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-900">
+                  Select pending submissions and post their scores in bulk.
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {FILTER_COPY[activeFilter].label}: {visibleRows.length} student{visibleRows.length === 1 ? '' : 's'} in this view.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleExportExcel} className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+                  Export Excel
                 </Button>
-              )}
+                <Button
+                  size="sm"
+                  onClick={() => setPostSelectedOpen(true)}
+                  disabled={selectedCount === 0}
+                  className="bg-slate-900 text-white hover:bg-slate-800"
+                >
+                  Post Selected ({selectedCount})
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-2">
+                {([
+                  ['all', counts.all],
+                  ['pending', counts.pending],
+                  ['posted', counts.posted],
+                  ['no_submission', counts.no_submission],
+                ] as const).map(([filter, count]) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActiveFilter(filter)}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                      activeFilter === filter
+                        ? 'border-slate-300 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                    )}
+                  >
+                    <span>{FILTER_COPY[filter].label}</span>
+                    <span className={cn(
+                      'rounded-full px-2 py-0.5 text-xs font-semibold',
+                      activeFilter === filter ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600',
+                    )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {selectableVisibleAttemptIds.length > 0 ? (
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                  />
+                  Select visible pending students
+                </label>
+              ) : null}
             </div>
           </div>
-          <div className="h-2.5 rounded-full bg-muted overflow-hidden flex">
-            <motion.div
-              className="h-full bg-emerald-500"
-              initial={{ width: 0 }}
-              animate={{ width: total > 0 ? `${(returnedCount / total) * 100}%` : '0%' }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            />
-            <motion.div
-              className="h-full bg-amber-500"
-              initial={{ width: 0 }}
-              animate={{ width: total > 0 ? `${(turnedInCount / total) * 100}%` : '0%' }}
-              transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
-            />
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Answered Students Section */}
-      {answered.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-            Submitted ({answered.length})
-          </h3>
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="text-left px-4 py-2.5 text-xs font-medium text-muted-foreground">Student</th>
-                    <th className="text-center px-4 py-2.5 text-xs font-medium text-muted-foreground">Status</th>
-                    <th className="text-center px-4 py-2.5 text-xs font-medium text-muted-foreground">Score</th>
-                    <th className="text-center px-4 py-2.5 text-xs font-medium text-muted-foreground">Submitted</th>
-                    <th className="text-right px-4 py-2.5 text-xs font-medium text-muted-foreground">Actions</th>
+          {visibleRows.length === 0 ? (
+            <div className="px-5 py-12 text-center text-sm text-slate-500">
+              No students match this score filter yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[780px]">
+                <thead className="bg-slate-50/70">
+                  <tr className="border-b border-slate-200">
+                    <th className="w-12 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Pick
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Student
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Submission
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Score State
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Latest Score
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {answered.map((sub, i) => (
-                    <motion.tr
-                      key={sub.studentId}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.03 }}
-                      className="border-b last:border-0 hover:bg-muted/20 transition-colors"
-                    >
-                      <td className="px-4 py-2.5 text-sm font-medium">
-                        {sub.lastName}, {sub.firstName}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_CONFIG[sub.status].badgeColor)}>
-                          {STATUS_CONFIG[sub.status].label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        {sub.attempt?.score != null ? (
-                          <span className={cn(
-                            'font-semibold text-sm',
-                            sub.attempt.score >= 70 ? 'text-emerald-600' : sub.attempt.score >= 40 ? 'text-amber-600' : 'text-red-500',
-                          )}>
-                            {sub.attempt.score}%
+                  {visibleRows.map((row) => {
+                    const isSelectable = row.bucket === 'pending' && Boolean(row.attemptId);
+                    const isSelected = row.attemptId ? selectedAttemptIds.includes(row.attemptId) : false;
+                    return (
+                      <tr key={row.studentId} className="border-b border-slate-200 bg-white last:border-0 hover:bg-slate-50/70">
+                        <td className="px-4 py-3 align-top">
+                          {isSelectable && row.attemptId ? (
+                            <input
+                              type="checkbox"
+                              className="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                              checked={isSelected}
+                              onChange={() => toggleAttemptSelection(row.attemptId as string)}
+                              aria-label={`Select ${row.fullName}`}
+                            />
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <p className="font-medium text-slate-900">{row.fullName}</p>
+                          <p className="mt-1 text-xs text-slate-500">{row.email ?? 'No email available'}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {row.totalAttempts} attempt{row.totalAttempts === 1 ? '' : 's'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold', STATUS_CONFIG[row.status].badgeColor)}>
+                            {STATUS_CONFIG[row.status].label}
                           </span>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-xs text-muted-foreground">
-                        {sub.attempt?.submittedAt ? formatDate(sub.attempt.submittedAt) : '—'}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        {sub.attempt?.id && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-xs"
-                            onClick={() => setPreviewAttemptId(sub.attempt!.id)}
-                          >
-                            Preview
-                          </Button>
-                        )}
-                      </td>
-                    </motion.tr>
-                  ))}
+                          <p className="mt-2 text-xs text-slate-500">
+                            {row.submittedAt ? formatDate(row.submittedAt) : 'No submitted timestamp'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 align-top text-sm text-slate-700">
+                          {row.bucket === 'pending'
+                            ? 'Pending post'
+                            : row.bucket === 'posted'
+                              ? 'Posted'
+                              : 'No score yet'}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top">
+                          {row.score != null ? (
+                            <span
+                              className={cn(
+                                'text-sm font-semibold',
+                                row.score >= 70 ? 'text-emerald-600' : row.score >= 40 ? 'text-amber-600' : 'text-rose-600',
+                              )}
+                            >
+                              {row.score}%
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right align-top">
+                          {row.attemptId ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              onClick={() => setPreviewAttemptId(row.attemptId)}
+                            >
+                              Preview
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Not Answered Students Section */}
-      {notAnswered.length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-            No Submission ({notAnswered.length})
-          </h3>
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full">
-                <tbody>
-                  {notAnswered.map((sub, i) => (
-                    <motion.tr
-                      key={sub.studentId}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: i * 0.02 }}
-                      className="border-b last:border-0"
-                    >
-                      <td className="px-4 py-2.5 text-sm text-muted-foreground">
-                        {sub.lastName}, {sub.firstName}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium', STATUS_CONFIG[sub.status].badgeColor)}>
-                          {STATUS_CONFIG[sub.status].label}
-                        </span>
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {allSubmissions.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No students enrolled in this class.
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Return All Dialog */}
-      <Dialog open={returnAllOpen} onOpenChange={setReturnAllOpen}>
+      <Dialog open={postSelectedOpen} onOpenChange={setPostSelectedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Post All Grades</DialogTitle>
+            <DialogTitle>Post selected grades</DialogTitle>
             <DialogDescription>
-              Post grades for all {turnedInCount} unposted submission{turnedInCount !== 1 ? 's' : ''}.
-              Students will be able to see their scores.
+              Post scores for {selectedCount} selected submission{selectedCount === 1 ? '' : 's'}.
+              Students will be able to see their grades immediately.
             </DialogDescription>
           </DialogHeader>
           <Textarea
-            placeholder="Add feedback for all students (optional)"
+            placeholder="Add shared feedback for the selected students (optional)"
             value={feedback}
-            onChange={(e) => setFeedback(e.target.value)}
+            onChange={(event) => setFeedback(event.target.value)}
             rows={3}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setReturnAllOpen(false)}>Cancel</Button>
-            <Button onClick={handleReturnAll} disabled={returning}>
-              {returning ? 'Posting…' : `Post All (${turnedInCount})`}
+            <Button variant="outline" onClick={() => setPostSelectedOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handlePostSelected} disabled={postingSelected || selectedCount === 0}>
+              {postingSelected ? 'Posting...' : `Post Selected (${selectedCount})`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Preview Modal */}
       <PreviewModal
         attemptId={previewAttemptId}
         open={!!previewAttemptId}

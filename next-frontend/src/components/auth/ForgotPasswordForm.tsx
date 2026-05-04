@@ -14,6 +14,14 @@ import { Loader2 } from 'lucide-react';
 import { forgotPasswordSchema, type ForgotPasswordFormValues } from '@/schemas/auth';
 import { forgotPasswordAction } from '@/lib/auth-actions';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -22,6 +30,7 @@ export function ForgotPasswordForm() {
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
   const [serverError, setServerError] = useState('');
+  const [missingAccountOpen, setMissingAccountOpen] = useState(false);
 
   const {
     register,
@@ -33,6 +42,10 @@ export function ForgotPasswordForm() {
     setServerError('');
     const result = await forgotPasswordAction(data.email);
     if (!result.success) {
+      if (result.status === 404) {
+        setMissingAccountOpen(true);
+        return;
+      }
       setServerError(result.message || 'Failed to send reset email');
       return;
     }
@@ -63,6 +76,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
+    <>
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Reset password</h2>
@@ -103,5 +117,21 @@ export function ForgotPasswordForm() {
         </Link>
       </div>
     </form>
+      <Dialog open={missingAccountOpen} onOpenChange={setMissingAccountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Account does not exist</DialogTitle>
+            <DialogDescription>
+              No Nexora account was found for that email address. Check the email or contact an administrator.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" onClick={() => setMissingAccountOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

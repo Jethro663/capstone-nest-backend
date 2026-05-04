@@ -1,0 +1,16 @@
+venv
+__pycache__
+tests
+evals
+scripts
+.env
+.env.local
+.git
+.gitignore
+*.pyc
+*.pyo
+*.pyd
+*.log
+.idea
+.vscode
+README.md

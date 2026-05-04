@@ -716,6 +716,8 @@ export class ContentModulesService {
         title: dto.title.trim(),
         description: this.sanitizeOptionalRichText(dto.description),
         order: dto.order ?? nextOrder,
+        isVisible: dto.isVisible ?? false,
+        isLocked: dto.isLocked ?? true,
       })
       .returning();
 
@@ -1348,6 +1350,7 @@ export class ContentModulesService {
       .update(classModules)
       .set({
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        ...(dto.isLocked !== undefined ? { isLocked: dto.isLocked } : {}),
         updatedAt: new Date(),
       })
       .where(eq(classModules.id, moduleId))
@@ -1361,6 +1364,7 @@ export class ContentModulesService {
       metadata: {
         classId: module.classId,
         isVisible: updated.isVisible,
+        isLocked: updated.isLocked,
       },
     });
 

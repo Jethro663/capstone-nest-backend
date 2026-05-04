@@ -11,6 +11,11 @@ import {
   useAssessmentHistory,
   useClassDetail,
   useClassModules,
+  useDiscussionCommentMutation,
+  useDiscussionDeleteCommentMutation,
+  useDiscussionReactionMutation,
+  useDiscussionThread,
+  useDiscussionThreads,
   useSchoolEvents,
   useLessons,
   useLessonDetail,
@@ -63,6 +68,10 @@ jest.mock("react-native", () => {
     Alert: { alert: jest.fn() },
     AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
     BackHandler: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },
+    Linking: {
+      canOpenURL: jest.fn().mockResolvedValue(true),
+      openURL: jest.fn().mockResolvedValue(undefined),
+    },
     Platform: {
       OS: "ios",
       select: (options: Record<string, unknown>) => options.ios ?? options.default,
@@ -104,8 +113,17 @@ jest.mock("expo-screen-capture", () => ({
 }));
 
 jest.mock("expo-file-system/legacy", () => ({
+  documentDirectory: "file:///documents/",
   cacheDirectory: "file:///cache/",
   EncodingType: { Base64: "base64" },
+  downloadAsync: jest.fn().mockResolvedValue({
+    uri: "file:///documents/downloaded.pdf",
+    status: 200,
+    headers: {
+      "content-disposition": 'inline; filename="downloaded.pdf"',
+    },
+  }),
+  getContentUriAsync: jest.fn().mockResolvedValue("file:///documents/downloaded.pdf"),
   readAsStringAsync: jest.fn().mockResolvedValue(""),
   writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
 }));
@@ -231,13 +249,35 @@ jest.mock("../../api/services/assessments", () => ({
         startedAt: "2026-04-18T09:00:00.000Z",
       },
     }),
+    submit: jest.fn().mockResolvedValue(undefined),
+    unsubmitFileUploadAssessment: jest.fn().mockResolvedValue({
+      id: "attempt-ongoing",
+      assessmentId: "assessment-1",
+      isSubmitted: false,
+    }),
     getStudentAttempts: jest.fn().mockResolvedValue([]),
+    uploadSubmissionFile: jest.fn(),
+    removeSubmissionFile: jest.fn(),
+    openTeacherAttachment: jest.fn().mockResolvedValue(undefined),
+    downloadTeacherAttachment: jest.fn().mockResolvedValue(undefined),
+    openAttemptSubmissionAttachmentFile: jest.fn().mockResolvedValue(undefined),
+    downloadAttemptSubmissionAttachmentFile: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
 jest.mock("../../api/services/modules", () => ({
   modulesApi: {
     getByClass: jest.fn().mockResolvedValue([]),
+    openAttachedFile: jest.fn().mockResolvedValue(undefined),
+    downloadAttachedFile: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock("../../api/services/discussion-board", () => ({
+  discussionBoardApi: {
+    uploadCommentImage: jest.fn().mockResolvedValue({ id: "discussion-upload-1" }),
+    openAttachment: jest.fn().mockResolvedValue(undefined),
+    downloadAttachment: jest.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -266,6 +306,11 @@ jest.mock("../../api/hooks", () => ({
   useStudentClasses: jest.fn(),
   useClassDetail: jest.fn(),
   useClassModules: jest.fn(),
+  useDiscussionThreads: jest.fn(),
+  useDiscussionThread: jest.fn(),
+  useDiscussionCommentMutation: jest.fn(),
+  useDiscussionDeleteCommentMutation: jest.fn(),
+  useDiscussionReactionMutation: jest.fn(),
   useLxpEligibility: jest.fn(),
   useLxpOverview: jest.fn(),
   useJaHub: jest.fn(),
@@ -429,6 +474,11 @@ const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockedUseStudentClasses = useStudentClasses as jest.MockedFunction<typeof useStudentClasses>;
 const mockedUseClassDetail = useClassDetail as jest.MockedFunction<typeof useClassDetail>;
 const mockedUseClassModules = useClassModules as jest.MockedFunction<typeof useClassModules>;
+const mockedUseDiscussionThreads = useDiscussionThreads as jest.MockedFunction<typeof useDiscussionThreads>;
+const mockedUseDiscussionThread = useDiscussionThread as jest.MockedFunction<typeof useDiscussionThread>;
+const mockedUseDiscussionCommentMutation = useDiscussionCommentMutation as jest.MockedFunction<typeof useDiscussionCommentMutation>;
+const mockedUseDiscussionDeleteCommentMutation = useDiscussionDeleteCommentMutation as jest.MockedFunction<typeof useDiscussionDeleteCommentMutation>;
+const mockedUseDiscussionReactionMutation = useDiscussionReactionMutation as jest.MockedFunction<typeof useDiscussionReactionMutation>;
 const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<typeof useLxpEligibility>;
 const mockedUseLxpOverview = useLxpOverview as jest.MockedFunction<typeof useLxpOverview>;
 const mockedUseJaHub = useJaHub as jest.MockedFunction<typeof useJaHub>;
@@ -464,11 +514,31 @@ const mockedJaApi = jaApi as jest.Mocked<typeof jaApi>;
 const mockedAssessmentsApi = require("../../api/services/assessments").assessmentsApi as {
   getOngoingAttempt: jest.Mock;
   startAttempt: jest.Mock;
+  submit: jest.Mock;
+  unsubmitFileUploadAssessment: jest.Mock;
   getStudentAttempts: jest.Mock;
+  uploadSubmissionFile: jest.Mock;
+  removeSubmissionFile: jest.Mock;
+  openTeacherAttachment: jest.Mock;
+  downloadTeacherAttachment: jest.Mock;
+  openAttemptSubmissionAttachmentFile: jest.Mock;
+  downloadAttemptSubmissionAttachmentFile: jest.Mock;
+};
+const mockedModulesApi = require("../../api/services/modules").modulesApi as {
+  openAttachedFile: jest.Mock;
+  downloadAttachedFile: jest.Mock;
+};
+const mockedDiscussionBoardApi = require("../../api/services/discussion-board").discussionBoardApi as {
+  uploadCommentImage: jest.Mock;
+  openAttachment: jest.Mock;
+  downloadAttachment: jest.Mock;
 };
 let checkpointMutateAsync: jest.Mock;
 let lessonCompleteMutateAsync: jest.Mock;
 let profileUpdateMutateAsync: jest.Mock;
+let discussionCommentMutateAsync: jest.Mock;
+let discussionDeleteMutateAsync: jest.Mock;
+let discussionReactionMutateAsync: jest.Mock;
 let consoleErrorSpy: jest.SpyInstance;
 
 describe("mobile rendered screen flows", () => {
@@ -576,6 +646,32 @@ describe("mobile rendered screen flows", () => {
             : [],
         )) as ReturnType<typeof useClassModules>,
     );
+    mockedUseDiscussionThreads.mockReturnValue(
+      createQueryState({
+        items: [],
+        page: 1,
+        limit: 50,
+        total: 0,
+      }) as ReturnType<typeof useDiscussionThreads>,
+    );
+    mockedUseDiscussionThread.mockReturnValue(
+      createQueryState(undefined, { data: undefined }) as ReturnType<typeof useDiscussionThread>,
+    );
+    discussionCommentMutateAsync = jest.fn().mockResolvedValue(undefined);
+    mockedUseDiscussionCommentMutation.mockReturnValue({
+      mutateAsync: discussionCommentMutateAsync,
+      isPending: false,
+    } as ReturnType<typeof useDiscussionCommentMutation>);
+    discussionDeleteMutateAsync = jest.fn().mockResolvedValue(undefined);
+    mockedUseDiscussionDeleteCommentMutation.mockReturnValue({
+      mutateAsync: discussionDeleteMutateAsync,
+      isPending: false,
+    } as ReturnType<typeof useDiscussionDeleteCommentMutation>);
+    discussionReactionMutateAsync = jest.fn().mockResolvedValue(undefined);
+    mockedUseDiscussionReactionMutation.mockReturnValue({
+      mutateAsync: discussionReactionMutateAsync,
+      isPending: false,
+    } as ReturnType<typeof useDiscussionReactionMutation>);
     mockedUseLxpEligibility.mockReturnValue(
       createQueryState({
         threshold: 60,
@@ -1170,7 +1266,7 @@ describe("mobile rendered screen flows", () => {
       message: {
         id: "message-1",
         role: "assistant",
-        content: "Here is a grounded explanation.",
+        content: "<p><strong>Here is a grounded explanation.</strong></p><ul><li>Review the equivalent values first.</li></ul>",
         blocked: false,
       },
       blocked: false,
@@ -1371,7 +1467,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("LXP data is partially unavailable");
   });
 
-  it("renders the JA hub as a four-mode dark workspace with Learners Path embedded", () => {
+  it("renders the JA hub as an ask-first dark workspace with Learners Path embedded", () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1390,11 +1486,11 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("JA Hub");
     expect(renderedText).toContain("Activity History");
-    expect(renderedText).toContain("Practice");
     expect(renderedText).toContain("Ask");
     expect(renderedText).toContain("Replay");
     expect(renderedText).toContain("Learners Path");
-    expect(renderedText).toContain("Generate Practice Run");
+    expect(renderedText).not.toContain("Practice");
+    expect(renderedText).not.toContain("Generate Practice Run");
   });
 
   it("renders JA Ask with a chat composer and requires lesson context before sending", async () => {
@@ -1447,6 +1543,13 @@ describe("mobile rendered screen flows", () => {
       quickAction: "Explain the lesson",
       lessonId: "lesson-1",
     });
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(renderedText).toContain("Here is a grounded explanation.");
+    expect(renderedText).toContain("Review the equivalent values first.");
+    expect(renderedText).not.toContain("<p>");
   });
 
   it("switches JA classes from the header and clears ask state", async () => {
@@ -2683,6 +2786,84 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Number Sense Module");
   });
 
+  it("renders the live discussion board tab instead of the old placeholder", () => {
+    const { ClassDetailScreen } = require("../ClassDetailScreen");
+
+    mockedUseDiscussionThreads.mockReturnValue(
+      createQueryState({
+        items: [
+          {
+            id: "thread-1",
+            classId: "class-1",
+            authorId: "teacher-1",
+            title: "Quadratic Formula Questions",
+            bodyHtml: "<p>Post your questions before Friday.</p>",
+            themeId: "default",
+            commentLimitPerStudent: null,
+            allowComments: true,
+            isPinned: true,
+            status: "published",
+            publishedAt: "2026-05-02T08:00:00.000Z",
+            closedAt: null,
+            createdAt: "2026-05-02T08:00:00.000Z",
+            updatedAt: "2026-05-02T08:00:00.000Z",
+            author: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+            commentCount: 2,
+            attachments: [],
+          },
+        ],
+        page: 1,
+        limit: 50,
+        total: 1,
+      }) as ReturnType<typeof useDiscussionThreads>,
+    );
+    mockedUseDiscussionThread.mockReturnValue(
+      createQueryState({
+        id: "thread-1",
+        classId: "class-1",
+        authorId: "teacher-1",
+        title: "Quadratic Formula Questions",
+        bodyHtml: "<p>Post your questions before Friday.</p>",
+        themeId: "default",
+        commentLimitPerStudent: null,
+        allowComments: true,
+        isPinned: true,
+        status: "published",
+        publishedAt: "2026-05-02T08:00:00.000Z",
+        closedAt: null,
+        createdAt: "2026-05-02T08:00:00.000Z",
+        updatedAt: "2026-05-02T08:00:00.000Z",
+        author: { id: "teacher-1", firstName: "Teacher", lastName: "One" },
+        commentCount: 2,
+        attachments: [],
+        comments: [],
+      }) as ReturnType<typeof useDiscussionThread>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ClassDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: {
+            key: "ClassDetail",
+            name: "ClassDetail",
+            params: { classId: "class-1", initialTab: "discussion" },
+          } as never,
+        }),
+      );
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Discussion Board");
+    expect(renderedText).toContain("Quadratic Formula Questions");
+    expect(renderedText).not.toContain("Discussion board is not connected yet");
+  });
+
   it("routes expanded module lesson rows toward the latest visible unlocked module lesson", () => {
     const { ClassDetailScreen } = require("../ClassDetailScreen");
     const navigate = jest.fn();
@@ -2804,6 +2985,69 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(navigate).toHaveBeenCalledWith("LessonDetail", { lessonId: "lesson-visible", classId: "class-1" });
+  });
+
+  it("renders the standalone calendar screen and opens assessment items", async () => {
+    const { CalendarScreen } = require("../CalendarScreen");
+    const navigate = jest.fn();
+    const todayIso = new Date().toISOString();
+
+    mockedUseSchoolEvents.mockReturnValue(createQueryState([]) as ReturnType<typeof useSchoolEvents>);
+    mockedUseQueries.mockImplementation(({ queries }: { queries: Array<{ queryKey?: unknown[] }> }) => {
+      const firstQueryKey = Array.isArray(queries[0]?.queryKey) ? String(queries[0]?.queryKey?.[0] ?? "") : "";
+
+      if (firstQueryKey === "assessments") {
+        return queries.map(() => ({
+          data: [
+            {
+              id: "assessment-1",
+              classId: "class-1",
+              title: "Calendar Quiz",
+              description: "Review the chapter notes.",
+              type: "quiz",
+              isPublished: true,
+              dueDate: todayIso,
+            },
+          ],
+          error: null,
+          isRefetching: false,
+          refetch: jest.fn().mockResolvedValue(undefined),
+        }));
+      }
+
+      return queries.map(() => ({
+        data: [],
+        error: null,
+        isRefetching: false,
+        refetch: jest.fn().mockResolvedValue(undefined),
+      }));
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(CalendarScreen, {
+          navigation: { goBack: jest.fn(), navigate } as never,
+          route: { key: "Calendar", name: "Calendar", params: { classId: "class-1" } } as never,
+        }),
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      testRenderer!.root.find((node) => node.type === "Text" && flattenText(node).includes("Calendar Quiz")),
+    ).toBeTruthy();
+
+    act(() => {
+      findPressableByText(testRenderer!.root, "Calendar Quiz").props.onPress();
+    });
+
+    expect(navigate).toHaveBeenCalledWith("AssessmentDetail", {
+      assessmentId: "assessment-1",
+      classId: "class-1",
+    });
   });
 
   it("renders Class detail fetch errors without collapsing into not-found copy", () => {
@@ -3267,6 +3511,72 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Module locked");
     expect(renderedText).toContain("No module items yet");
     expect(renderedText).not.toContain("Locked Lesson");
+  });
+
+  it("opens and downloads module reference files from module detail", async () => {
+    const { ModuleDetailScreen } = require("../ModuleDetailScreen");
+
+    mockedUseModuleDetail.mockReturnValue(
+      createQueryState({
+        id: "module-1",
+        classId: "class-1",
+        title: "Number Sense Module",
+        description: "Foundations for fractions and decimals",
+        order: 1,
+        isLocked: false,
+        progressPercent: 40,
+        sections: [
+          {
+            id: "section-1",
+            title: "Resources",
+            order: 1,
+            items: [
+              {
+                id: "item-file-1",
+                itemType: "file",
+                order: 1,
+                fileId: "file-1",
+                file: {
+                  id: "file-1",
+                  originalName: "module-guide.pdf",
+                  mimeType: "application/pdf",
+                  sizeBytes: 1024,
+                },
+              },
+            ],
+          },
+        ],
+      }) as ReturnType<typeof useModuleDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ModuleDetailScreen, {
+          navigation: { goBack: jest.fn(), navigate: jest.fn() } as never,
+          route: { key: "ModuleDetail", name: "ModuleDetail", params: { classId: "class-1", moduleId: "module-1" } } as never,
+        }),
+      );
+    });
+
+    const openFileButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && flattenText(node) === "Open",
+    );
+    const downloadFileButton = testRenderer!.root.find(
+      (node) => node.type === "Pressable" && flattenText(node) === "Download",
+    );
+
+    await act(async () => {
+      openFileButton.props.onPress();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      downloadFileButton.props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(mockedModulesApi.openAttachedFile).toHaveBeenCalledWith("item-file-1", "module-guide.pdf");
+    expect(mockedModulesApi.downloadAttachedFile).toHaveBeenCalledWith("item-file-1", "module-guide.pdf");
   });
 
   it("renders Module detail fetch errors without collapsing into not-found copy", () => {
@@ -4776,6 +5086,131 @@ describe("mobile rendered screen flows", () => {
     });
   });
 
+  it("renders file upload detail sections without take or retake labels", () => {
+    const { AssessmentDetailScreen } = require("../AssessmentDetailScreen");
+
+    mockedUseAssessmentDetail.mockReturnValue(
+      createQueryState({
+        id: "assessment-1",
+        classId: "class-1",
+        title: "Upload proof",
+        description: "Submit your supporting files.",
+        type: "file_upload",
+        isPublished: true,
+        totalPoints: 20,
+        passingScore: 60,
+        maxAttempts: 1,
+        timeLimitMinutes: null,
+        dueDate: "2026-05-02T15:59:00.000Z",
+        fileUploadInstructions: "Attach the signed form and photo evidence.",
+        teacherAttachmentFile: {
+          id: "teacher-file-1",
+          originalName: "MOA-SIT-FORM-006.pdf",
+          mimeType: "application/pdf",
+          sizeBytes: 245760,
+        },
+        questions: [],
+      }) as ReturnType<typeof useAssessmentDetail>,
+    );
+    mockedUseAssessmentAttempts.mockReturnValue(
+      createQueryState([
+        {
+          id: "attempt-upload-1",
+          assessmentId: "assessment-1",
+          attemptNumber: 1,
+          isSubmitted: true,
+          isReturned: false,
+          submittedAt: "2026-05-02T14:30:00.000Z",
+          submittedFiles: [
+            {
+              id: "submission-file-1",
+              originalName: "endorsement-form.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 102400,
+            },
+            {
+              id: "submission-file-2",
+              originalName: "group-photo.jpg",
+              mimeType: "image/jpeg",
+              sizeBytes: 204800,
+            },
+          ],
+        },
+      ]) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentDetailScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentDetail",
+            name: "AssessmentDetail",
+            params: { assessmentId: "assessment-1", classId: "class-1" },
+          } as never,
+        }),
+      );
+    });
+
+    const texts = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node));
+
+    expect(texts).toContain("Reference material");
+    expect(texts).toContain("My work");
+    expect(texts).toContain("MOA-SIT-FORM-006.pdf");
+    expect(texts).toContain("endorsement-form.pdf");
+    expect(texts).toContain("group-photo.jpg");
+    expect(texts).toContain("Unsubmit");
+    expect(texts).not.toContain("Attempt history");
+    expect(() => findPressableByText(testRenderer!.root, "Retake Assessment")).toThrow();
+    expect(() => findPressableByText(testRenderer!.root, "Start Assessment")).toThrow();
+    expect(() => findPressableByText(testRenderer!.root, "Open History")).toThrow();
+    expect(testRenderer!.root.findAll((node) => node.type === "Pressable" && flattenText(node) === "Open")).toHaveLength(1);
+  });
+
+  it("keeps normal assessment attempt history collapsed until expanded", () => {
+    const { AssessmentDetailScreen } = require("../AssessmentDetailScreen");
+
+    mockedUseAssessmentAttempts.mockReturnValue(
+      createQueryState([
+        {
+          id: "attempt-returned",
+          assessmentId: "assessment-1",
+          attemptNumber: 2,
+          score: 92,
+          isSubmitted: true,
+          isReturned: true,
+          submittedAt: "2026-04-18T08:00:00.000Z",
+        },
+      ]) as ReturnType<typeof useAssessmentAttempts>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    act(() => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentDetailScreen, {
+          navigation: { navigate: jest.fn(), goBack: jest.fn() } as never,
+          route: {
+            key: "AssessmentDetail",
+            name: "AssessmentDetail",
+            params: { assessmentId: "assessment-1", classId: "class-1" },
+          } as never,
+        }),
+      );
+    });
+
+    expect(() => findPressableByText(testRenderer!.root, "Open Attempt")).toThrow();
+
+    const historyToggle = findPressableByText(testRenderer!.root, "Attempt history");
+    act(() => {
+      historyToggle.props.onPress();
+    });
+
+    expect(findPressableByText(testRenderer!.root, "Open Attempt")).toBeTruthy();
+  });
+
   it("renders assessment history actions for submitted and in-progress attempts", () => {
     const { AssessmentHistoryScreen } = require("../AssessmentHistoryScreen");
     const navigate = jest.fn();
@@ -4930,6 +5365,78 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Unable to prepare this attempt");
     expect(renderedText).toContain("Attempt history unavailable");
     expect(() => findPressableByText(testRenderer!.root, "Submit Assessment")).toThrow();
+  });
+
+  it("renders taker questions with stripped html, images, and dropdown options", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+
+    mockedUseAssessmentDetail.mockReturnValue(
+      createQueryState({
+        id: "assessment-1",
+        classId: "class-1",
+        title: "Assessment 1",
+        description: "Choose the best answer.",
+        type: "quiz",
+        isPublished: true,
+        totalPoints: 100,
+        passingScore: 75,
+        maxAttempts: 2,
+        timeLimitMinutes: 30,
+        dueDate: "2026-04-20T09:00:00.000Z",
+        questions: [
+          {
+            id: "question-1",
+            assessmentId: "assessment-1",
+            type: "dropdown",
+            content: "<p>Pick the correct color</p>",
+            imageUrl: "/api/assessments/questions/images/question.png",
+            points: 5,
+            order: 1,
+            options: [
+              { id: "option-1", text: "<p>Blue</p>", isCorrect: true, order: 1 },
+              { id: "option-2", text: "<p>Red</p>", isCorrect: false, order: 2 },
+            ],
+          },
+        ],
+      }) as ReturnType<typeof useAssessmentDetail>,
+    );
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(AssessmentTakeScreen, {
+          navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()) } as never,
+          route: {
+            key: "AssessmentTake",
+            name: "AssessmentTake",
+            params: { assessmentId: "assessment-1" },
+          } as never,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Pick the correct color");
+    expect(renderedText).not.toContain("<p>");
+    expect(testRenderer!.root.findAll((node) => node.type === "Image")).toHaveLength(1);
+
+    const dropdownPressable = findPressableByText(testRenderer!.root, "Select an answer");
+    act(() => {
+      dropdownPressable.props.onPress();
+    });
+
+    const expandedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(expandedText).toContain("Blue");
+    expect(expandedText).toContain("Red");
   });
 
   it("surfaces assessments backend error state in rendered screen flow", () => {

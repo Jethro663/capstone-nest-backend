@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import base64
-import os
 from typing import Any
 
-from .config import settings
+from .backend_uploads import materialize_backend_upload, resolve_local_backend_upload_path
 
 
 def encode_file_to_base64(file_path: str) -> str:
@@ -12,7 +11,7 @@ def encode_file_to_base64(file_path: str) -> str:
         return base64.b64encode(file_obj.read()).decode("utf-8")
 
 
-def normalize_attachment_images(
+async def normalize_attachment_images(
     attachments: list[dict[str, Any]] | None,
 ) -> list[dict[str, str]]:
     prepared: list[dict[str, str]] = []
@@ -28,13 +27,13 @@ def normalize_attachment_images(
         if not file_path:
             continue
 
-        abs_path = os.path.abspath(file_path)
-        if not os.path.exists(abs_path):
+        resolved_path = await materialize_backend_upload(file_path)
+        if not resolved_path:
             continue
         prepared.append(
             {
-                "filePath": abs_path,
-                "base64Data": encode_file_to_base64(abs_path),
+                "filePath": resolved_path,
+                "base64Data": encode_file_to_base64(resolved_path),
                 "mimeType": mime_type,
             }
         )
@@ -45,28 +44,13 @@ def resolve_backend_upload_path(raw_path: str) -> str | None:
     normalized = (raw_path or "").strip()
     if not normalized:
         return None
+    resolved = resolve_local_backend_upload_path(normalized)
+    if resolved:
+        return resolved
 
-    upload_root = os.path.abspath(settings.upload_dir)
-    backend_root = os.path.dirname(upload_root)
     normalized_slash = normalized.replace("\\", "/").lstrip("./")
-
-    candidates = [
-        os.path.abspath(normalized),
-        os.path.join(backend_root, normalized_slash),
-        os.path.join(upload_root, normalized_slash.removeprefix("uploads/")),
-    ]
-
     if normalized_slash.startswith("api/assessments/questions/images/"):
-        candidates.append(
-            os.path.join(
-                upload_root,
-                "question-images",
-                os.path.basename(normalized_slash),
-            )
+        return resolve_local_backend_upload_path(
+            f"uploads/question-images/{normalized_slash.rsplit('/', 1)[-1]}"
         )
-
-    for candidate in candidates:
-        abs_candidate = os.path.abspath(candidate)
-        if os.path.exists(abs_candidate):
-            return abs_candidate
     return None

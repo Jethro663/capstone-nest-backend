@@ -1,8 +1,12 @@
 'use client';
 
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
   Grid2X2,
   LayoutPanelTop,
   RefreshCcw,
@@ -64,11 +68,152 @@ interface ClassWithProgress extends ClassItem {
 }
 
 type PrimaryTab = 'all' | 'in_progress' | 'completed';
+type StudentCoursesGuideScreen = 'overview' | 'card' | 'actions' | 'organize' | 'calendar';
 
 const PRIMARY_TABS: Array<{ value: PrimaryTab; label: string }> = [
   { value: 'all', label: 'All Classes' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+];
+
+const studentCoursesGuidePages: Array<{
+  title: string;
+  description: string;
+  reminder: string;
+  screen: StudentCoursesGuideScreen;
+  steps: Array<{
+    action: string;
+    body: string;
+    tone?: 'default' | 'caution';
+  }>;
+}> = [
+  {
+    title: 'Start here and find the class you need',
+    description:
+      'This page keeps your classes in one place so you can search, filter, refresh, and open the right subject quickly.',
+    reminder:
+      'Simple rule: if you are looking for one class, start with the search box or the class status tabs.',
+    screen: 'overview',
+    steps: [
+      {
+        action: 'Search',
+        body: 'Type a class name, section, or subject code in the search box to narrow the list.',
+      },
+      {
+        action: 'Switch',
+        body: 'Use All Classes, In Progress, or Completed to show only the class group you want to see.',
+      },
+      {
+        action: 'Check',
+        body: 'Open Hidden when you want to see classes that you tucked away from the main list.',
+      },
+      {
+        action: 'Refresh',
+        body: 'Tap Refresh if you want the newest class details from the system.',
+      },
+    ],
+  },
+  {
+    title: 'Read the class card before you open it',
+    description:
+      'Each card tells you the subject, section, teacher, quick class numbers, and how far you already are.',
+    reminder:
+      'Look at the top badge and the progress bar first so you can tell if the class is ready, in progress, or done.',
+    screen: 'card',
+    steps: [
+      {
+        action: 'Notice',
+        body: 'Read the class title, grade, section, and teacher name to make sure this is the right subject.',
+      },
+      {
+        action: 'Check',
+        body: 'Use the Students, Lessons, and Pending boxes for a fast summary of what is inside the class.',
+      },
+      {
+        action: 'Track',
+        body: 'Watch the Learning progress bar to see how much of the class work you have already finished.',
+      },
+    ],
+  },
+  {
+    title: 'Use the class buttons for the next step',
+    description:
+      'Every card has buttons that help you jump straight to tasks, the class page, or the schedule without extra taps.',
+    reminder:
+      'Use View Tasks when you need work right now. Use Open Class or Continue Learning when you want the full class page.',
+    screen: 'actions',
+    steps: [
+      {
+        action: 'View',
+        body: 'Tap View Tasks to go straight to the assignments and activities for that class.',
+      },
+      {
+        action: 'Open',
+        body: 'Tap Open Class or Continue Learning to enter the class page and continue where you left off.',
+      },
+      {
+        action: 'Schedule',
+        body: 'Tap View Schedule when you want to check class timing, dates, or the class calendar view.',
+      },
+      {
+        action: 'Menu',
+        body: 'Open the small menu on the card if you want extra class options.',
+      },
+    ],
+  },
+  {
+    title: 'Arrange the page the way you like it',
+    description:
+      'You can switch card styles, change the card look, and hide or restore classes without deleting anything.',
+    reminder:
+      'Hidden classes are only moved out of the main list. You can always bring them back later from Hidden.',
+    screen: 'organize',
+    steps: [
+      {
+        action: 'Switch',
+        body: 'Use the card and wide layout buttons to choose the class view that is easier for you to read.',
+      },
+      {
+        action: 'Customize',
+        body: 'Pick Customize class from the card menu if you want a different class card theme.',
+      },
+      {
+        action: 'Hide',
+        body: 'Use Hide class when you want a cleaner main list for now.',
+      },
+      {
+        action: 'Restore',
+        body: 'Open Hidden and choose Restore class when you want that class back in your main list.',
+        tone: 'caution',
+      },
+    ],
+  },
+  {
+    title: 'Use the calendar and event list on the side',
+    description:
+      'The right side helps you spot deadlines, announcements, and school events so you know what is coming up next.',
+    reminder:
+      'Tap a date with colored dots to show the events for that day first, then use See All if you want the full list.',
+    screen: 'calendar',
+    steps: [
+      {
+        action: 'Move',
+        body: 'Use the month arrows to look at earlier or later dates on the class calendar.',
+      },
+      {
+        action: 'Choose',
+        body: 'Tap a calendar date to focus the event list on that day.',
+      },
+      {
+        action: 'Read',
+        body: 'Open an event card to jump to the related class announcement or task page.',
+      },
+      {
+        action: 'See All',
+        body: 'Tap See All when you want the larger announcements page with more updates.',
+      },
+    ],
+  },
 ];
 
 function toPreferenceMap(preferences: StudentClassPresentationPreference[] | undefined) {
@@ -111,6 +256,280 @@ function shiftMonth(baseDate: Date, monthDelta: number) {
   return new Date(baseDate.getFullYear(), baseDate.getMonth() + monthDelta, 1);
 }
 
+function StudentCoursesGuideScreenshot({ screen }: { screen: StudentCoursesGuideScreen }) {
+  if (screen === 'overview') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-courses-guide-shot">
+        <div className="student-courses-guide-shell">
+          <div className="student-courses-guide-shell__toolbar">
+            <span className="is-search">Search class</span>
+            <b>All</b>
+            <span>In Progress</span>
+            <span>Done</span>
+            <i>Hidden 2</i>
+            <span className="is-icon">Card</span>
+            <span className="is-icon">Wide</span>
+            <i className="is-strong">Refresh</i>
+            <strong>?</strong>
+          </div>
+
+          <div className="student-courses-guide-shell__course-grid">
+            <article>
+              <header>
+                <small>In Progress</small>
+                <strong>Mathematics 7</strong>
+                <p>Grade 7 - Section A</p>
+              </header>
+              <div className="student-courses-guide-shell__tiny-metrics">
+                <span>32 Students</span>
+                <span>8 Lessons</span>
+                <span>2 Pending</span>
+              </div>
+            </article>
+            <div className="student-courses-guide-shell__ja-tip">
+              <div className="student-courses-guide-shell__ja-image">
+                <Image src="/images/JA/ja_wave.png" alt="JA waving" fill sizes="72px" className="object-contain" />
+              </div>
+              <div className="student-courses-guide-shell__ja-copy">
+                <small>JA says</small>
+                <strong>Search first if you have many classes.</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-tools">
+          Page tools
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-help">
+          Help button
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'card') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-courses-guide-shot">
+        <div className="student-courses-guide-shell">
+          <article className="student-courses-guide-shell__card">
+            <header>
+              <small>In Progress</small>
+              <b>...</b>
+              <strong>Mathematics 7</strong>
+              <p>Grade 7 - Section A</p>
+              <p>with Mrs. Cruz</p>
+            </header>
+
+            <div className="student-courses-guide-shell__stats">
+              <span>
+                <strong>32</strong>
+                <small>Students</small>
+              </span>
+              <span>
+                <strong>8</strong>
+                <small>Lessons</small>
+              </span>
+              <span>
+                <strong>2</strong>
+                <small>Pending</small>
+              </span>
+            </div>
+
+            <div className="student-courses-guide-shell__progress">
+              <div>
+                <small>Learning progress</small>
+                <strong>68%</strong>
+              </div>
+              <p />
+            </div>
+          </article>
+
+          <div className="student-courses-guide-shell__ja-tip">
+            <div className="student-courses-guide-shell__ja-image">
+              <Image src="/images/JA/ja_cheer.png" alt="JA cheering" fill sizes="72px" className="object-contain" />
+            </div>
+            <div className="student-courses-guide-shell__ja-copy">
+              <small>Quick tip</small>
+              <strong>Watch the progress bar and the pending count.</strong>
+            </div>
+          </div>
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-badge">
+          Status badge
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-progress">
+          Learning progress
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'actions') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-courses-guide-shot">
+        <div className="student-courses-guide-shell">
+          <article className="student-courses-guide-shell__card is-compact">
+            <div className="student-courses-guide-shell__pills">
+              <span>3 tasks</span>
+              <span>Section A</span>
+            </div>
+
+            <div className="student-courses-guide-shell__buttons">
+              <b>View Tasks</b>
+              <b className="is-solid">Continue Learning</b>
+            </div>
+
+            <div className="student-courses-guide-shell__schedule">View Schedule</div>
+
+            <div className="student-courses-guide-shell__menu">
+              <span>Customize class</span>
+              <span>Hide class</span>
+            </div>
+          </article>
+
+          <div className="student-courses-guide-shell__ja-tip">
+            <div className="student-courses-guide-shell__ja-image">
+              <Image
+                src="/images/JA/ja_thinking.png"
+                alt="JA thinking beside class actions"
+                fill
+                sizes="72px"
+                className="object-contain"
+              />
+            </div>
+            <div className="student-courses-guide-shell__ja-copy">
+              <small>JA says</small>
+              <strong>Pick the button that matches what you want to do next.</strong>
+            </div>
+          </div>
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-tasks">
+          View Tasks
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-open">
+          Continue Learning
+        </em>
+      </div>
+    );
+  }
+
+  if (screen === 'organize') {
+    return (
+      <div className="teacher-intervention-workspace__manual-shot student-courses-guide-shot">
+        <div className="student-courses-guide-shell">
+          <div className="student-courses-guide-shell__toolbar is-short">
+            <i>Hidden 1</i>
+            <span className="is-icon">Card</span>
+            <span className="is-icon is-active">Wide</span>
+          </div>
+
+          <div className="student-courses-guide-shell__organize-grid">
+            <article className="student-courses-guide-shell__menu-card">
+              <small>Class menu</small>
+              <span>Customize class</span>
+              <span>Hide class</span>
+            </article>
+
+            <article className="student-courses-guide-shell__preview-card">
+              <small>Theme preview</small>
+              <div />
+              <b>Save Theme</b>
+            </article>
+          </div>
+
+          <div className="student-courses-guide-shell__ja-tip">
+            <div className="student-courses-guide-shell__ja-image">
+              <Image src="/images/JA/ja_wave.png" alt="JA waving with class settings" fill sizes="72px" className="object-contain" />
+            </div>
+            <div className="student-courses-guide-shell__ja-copy">
+              <small>Friendly reminder</small>
+              <strong>Hidden classes can still come back later.</strong>
+            </div>
+          </div>
+        </div>
+
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-hidden">
+          Hidden list
+        </em>
+        <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-customize">
+          Customize class
+        </em>
+      </div>
+    );
+  }
+
+  return (
+    <div className="teacher-intervention-workspace__manual-shot student-courses-guide-shot">
+      <div className="student-courses-guide-shell">
+        <div className="student-courses-guide-shell__calendar-layout">
+          <article className="student-courses-guide-shell__calendar-card">
+            <header>
+              <strong>May 2026</strong>
+              <span>‹ ›</span>
+            </header>
+            <div className="student-courses-guide-shell__weekdays">
+              {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((label, index) => (
+                <small key={`${label}-${index}`}>{label}</small>
+              ))}
+            </div>
+            <div className="student-courses-guide-shell__days">
+              {['12', '13', '14', '15', '16', '17', '18'].map((day) => (
+                <span key={day} data-selected={day === '15'}>
+                  {day}
+                </span>
+              ))}
+            </div>
+          </article>
+
+          <article className="student-courses-guide-shell__events-card">
+            <header>
+              <div className="student-courses-guide-shell__events-head">
+                <small>Upcoming</small>
+                <strong>Events on selected day</strong>
+              </div>
+              <b>See All</b>
+            </header>
+            <div className="student-courses-guide-shell__event-row">
+              <span>May 15</span>
+              <div>
+                <strong>Algebra Quiz</strong>
+                <p>Due 8:00 AM</p>
+              </div>
+            </div>
+            <div className="student-courses-guide-shell__event-row">
+              <span>May 15</span>
+              <div>
+                <strong>Class Announcement</strong>
+                <p>Science room update</p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div className="student-courses-guide-shell__ja-tip">
+          <div className="student-courses-guide-shell__ja-image">
+            <Image src="/images/JA/ja_cheer.png" alt="JA cheering beside the calendar" fill sizes="72px" className="object-contain" />
+          </div>
+          <div className="student-courses-guide-shell__ja-copy">
+            <small>JA says</small>
+            <strong>Tap the date first to focus the event list.</strong>
+          </div>
+        </div>
+      </div>
+
+      <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-calendar">
+        Calendar
+      </em>
+      <em className="teacher-intervention-workspace__manual-pin student-courses-guide-pin is-student-courses-guide-events">
+        Event list
+      </em>
+    </div>
+  );
+}
+
 export default function StudentCoursesPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -139,6 +558,10 @@ export default function StudentCoursesPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [helpPage, setHelpPage] = useState(0);
+
+  const activeGuidePage = studentCoursesGuidePages[helpPage];
 
   const fetchData = useCallback(async () => {
     if (!user?.id) return;
@@ -465,7 +888,7 @@ export default function StudentCoursesPage() {
   }
 
   return (
-    <div className="space-y-5 bg-[#f5f3f8] p-4 md:p-6">
+    <div className="space-y-5 bg-[var(--student-elevated)] p-4 md:p-6">
       <section className="rounded-[1.35rem] border border-[#e1deea] bg-white p-3.5 shadow-[0_18px_32px_-30px_rgba(22,32,58,0.5)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">
@@ -553,6 +976,19 @@ export default function StudentCoursesPage() {
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
               Refresh
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="student-courses-help-button"
+              aria-label="My Classes help"
+              onClick={() => {
+                setHelpPage(0);
+                setHelpOpen(true);
+              }}
+            >
+              <CircleHelp className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -649,6 +1085,90 @@ export default function StudentCoursesPage() {
           </aside>
         </section>
       )}
+
+      <Dialog
+        open={helpOpen}
+        onOpenChange={(open) => {
+          setHelpOpen(open);
+          if (!open) setHelpPage(0);
+        }}
+      >
+        <DialogContent className="teacher-intervention-workspace__manual-dialog student-courses-guide-dialog">
+          <DialogHeader>
+            <DialogTitle>Student guide: My Classes</DialogTitle>
+            <DialogDescription>
+              This guide explains each part of the page in simple steps so you can find classes, open work, and check upcoming dates more easily.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-intervention-workspace__manual-progress" aria-label="My Classes guide pages">
+            <span>{`Page ${helpPage + 1} of ${studentCoursesGuidePages.length}`}</span>
+            <div className="teacher-intervention-workspace__manual-dots">
+              {studentCoursesGuidePages.map((page, index) => (
+                <button
+                  key={page.title}
+                  type="button"
+                  className={index === helpPage ? 'is-active' : undefined}
+                  onClick={() => setHelpPage(index)}
+                  aria-label={`Open guide page ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-intervention-workspace__manual-layout">
+            <div className="teacher-intervention-workspace__manual-copy">
+              <span className="teacher-intervention-workspace__manual-kicker">My Classes tour</span>
+              <h3>{activeGuidePage.title}</h3>
+              <p>{activeGuidePage.description}</p>
+
+              <div className="route-guide-steps">
+                {activeGuidePage.steps.map((step, index) => (
+                  <div
+                    key={`${activeGuidePage.title}-${step.action}`}
+                    className={cn('route-guide-step', step.tone ? `is-${step.tone}` : undefined)}
+                  >
+                    <span className="route-guide-step__index">{index + 1}</span>
+                    <div>
+                      <strong>{step.action}</strong>
+                      <p>{step.body}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="teacher-intervention-workspace__manual-reminder">{activeGuidePage.reminder}</div>
+            </div>
+
+            <StudentCoursesGuideScreenshot screen={activeGuidePage.screen} />
+          </div>
+
+          <DialogFooter className="teacher-intervention-workspace__manual-footer">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setHelpPage((current) => Math.max(0, current - 1))}
+              disabled={helpPage === 0}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Previous page
+            </Button>
+            <Button type="button" variant="ghost" aria-label="Close guide" onClick={() => setHelpOpen(false)}>
+              Close guide
+            </Button>
+            <Button
+              type="button"
+              onClick={() =>
+                setHelpPage((current) => Math.min(studentCoursesGuidePages.length - 1, current + 1))
+              }
+              disabled={helpPage === studentCoursesGuidePages.length - 1}
+            >
+              Next page
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(customizingCourse)}

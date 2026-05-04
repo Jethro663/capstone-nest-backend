@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Lock, Save, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminPageShell } from '@/components/admin/AdminPageShell';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { changePassword, updateProfile } from '@/lib/auth-service';
 import { useAuth } from '@/providers/AuthProvider';
 import { getRoleName } from '@/utils/helpers';
+import { resolveUserProfilePicture } from '@/utils/profile';
 
 function PasswordField({
   id,
@@ -90,6 +92,7 @@ export function AdminProfilePage() {
     () => roleDisplayName(getRoleName(user?.roles?.[0])),
     [user?.roles],
   );
+  const avatarSrc = resolveUserProfilePicture(user);
 
   const handleSaveProfile = async () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -163,7 +166,15 @@ export function AdminProfilePage() {
       <div className="admin-profile-wrap">
         <section className="admin-profile-card">
           <div className="admin-profile-identity">
-            <div className="admin-profile-avatar">{initials}</div>
+            <Avatar className="admin-profile-avatar">
+              {avatarSrc ? (
+                <AvatarImage
+                  src={avatarSrc}
+                  alt={[firstName, lastName].filter(Boolean).join(' ') || 'Administrator'}
+                />
+              ) : null}
+              <AvatarFallback className="admin-profile-avatar">{initials}</AvatarFallback>
+            </Avatar>
             <div className="space-y-1">
               <p className="admin-profile-name">
                 {[firstName, lastName].filter(Boolean).join(' ') || 'Administrator'}

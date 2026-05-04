@@ -35,12 +35,6 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = hasRefreshCookie(request);
 
-  if (pathname === '/') {
-    return NextResponse.redirect(
-      new URL(hasSession ? '/dashboard' : '/login', request.url),
-    );
-  }
-
   const isPublic = PUBLIC_ROUTES.some((route) => matchesRoute(pathname, route));
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     matchesRoute(pathname, prefix),

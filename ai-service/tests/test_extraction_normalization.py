@@ -62,7 +62,57 @@ class ExtractionNormalizationTests(unittest.TestCase):
         self.assertEqual(len(draft["questions"]), 1)
         self.assertEqual(draft["questions"][0]["content"], "What is a cell?")
 
+    def test_media_assets_and_section_graph_hints_are_preserved(self) -> None:
+        payload = {
+            "title": "Module",
+            "description": "",
+            "sections": [
+                {
+                    "title": "Section 1",
+                    "description": "",
+                    "graphKeywords": ["cell", "membrane"],
+                    "figureReferences": ["figure:1"],
+                    "lessonBlocks": [
+                        {
+                            "type": "image",
+                            "order": 0,
+                            "content": {
+                                "url": "data:image/png;base64,ZmFrZQ==",
+                                "caption": "Figure 1",
+                            },
+                            "metadata": {
+                                "mediaAssetId": "image-1",
+                                "assignmentConfidence": 0.82,
+                            },
+                        }
+                    ],
+                }
+            ],
+            "mediaAssets": [
+                {
+                    "id": "image-1",
+                    "url": "data:image/png;base64,ZmFrZQ==",
+                    "pageNumber": 1,
+                    "caption": "Figure 1",
+                    "anchorText": "Figure 1. Cell membrane.",
+                    "keywords": ["cell", "membrane"],
+                    "figureReferences": ["figure:1"],
+                    "selectedSectionIndex": 0,
+                    "assignmentConfidence": 0.82,
+                    "assignmentBreakdown": {"explicitReference": 1.0},
+                    "candidateSections": [{"sectionIndex": 0, "score": 0.82}],
+                    "teacherReviewed": True,
+                }
+            ],
+        }
+
+        normalized = _normalize_structured_content(payload)
+
+        self.assertEqual(normalized["sections"][0]["graphKeywords"], ["cell", "membrane"])
+        self.assertEqual(normalized["sections"][0]["figureReferences"], ["figure:1"])
+        self.assertEqual(normalized["mediaAssets"][0]["selectedSectionIndex"], 0)
+        self.assertTrue(normalized["mediaAssets"][0]["teacherReviewed"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

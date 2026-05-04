@@ -1,5 +1,7 @@
 export type DashboardRole = 'student' | 'teacher' | 'admin';
 
+const INTERNAL_ROUTE_BASE = 'https://nexora.local';
+
 const DASHBOARD_ROLE_PREFIXES: Record<DashboardRole, string> = {
   student: '/dashboard/student',
   teacher: '/dashboard/teacher',
@@ -66,16 +68,38 @@ export function resolvePostLoginDestination(
   requestedPath?: string | null,
 ): string {
   const fallbackPath = getDefaultDashboardRouteForRole(role);
+  const normalizedRequestedPath = normalizeRequestedPath(requestedPath);
 
-  if (!requestedPath || requestedPath === '/dashboard') {
+  if (!normalizedRequestedPath || normalizedRequestedPath === '/dashboard') {
     return fallbackPath;
   }
 
-  if (!requestedPath.startsWith('/dashboard')) {
-    return requestedPath;
+  if (normalizedRequestedPath === '/complete-profile') {
+    return normalizedRequestedPath;
   }
 
-  return isDashboardRolePathAllowed(requestedPath, role)
-    ? requestedPath
+  if (!normalizedRequestedPath.startsWith('/dashboard')) {
+    return fallbackPath;
+  }
+
+  return isDashboardRolePathAllowed(normalizedRequestedPath, role)
+    ? normalizedRequestedPath
     : fallbackPath;
+}
+
+function normalizeRequestedPath(requestedPath?: string | null): string | null {
+  if (!requestedPath || !requestedPath.startsWith('/') || requestedPath.startsWith('//')) {
+    return null;
+  }
+
+  try {
+    const normalized = new URL(requestedPath, INTERNAL_ROUTE_BASE);
+    if (normalized.origin !== INTERNAL_ROUTE_BASE) {
+      return null;
+    }
+
+    return `${normalized.pathname}${normalized.search}${normalized.hash}`;
+  } catch {
+    return null;
+  }
 }

@@ -5,6 +5,7 @@ import { TeacherReportsFigmaPage } from './TeacherReportsFigmaPage';
 import { classRecordService } from '@/services/class-record-service';
 import { dashboardService } from '@/services/dashboard-service';
 import { reportService } from '@/services/report-service';
+import { downloadReportPdf } from '@/utils/report-pdf';
 import { toast } from 'sonner';
 
 jest.mock('sonner', () => ({
@@ -37,9 +38,14 @@ jest.mock('@/services/report-service', () => ({
   },
 }));
 
+jest.mock('@/utils/report-pdf', () => ({
+  downloadReportPdf: jest.fn(),
+}));
+
 const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
 const mockedDashboardService = dashboardService as jest.Mocked<typeof dashboardService>;
 const mockedReportService = reportService as jest.Mocked<typeof reportService>;
+const mockedDownloadReportPdf = downloadReportPdf as jest.MockedFunction<typeof downloadReportPdf>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
 describe('TeacherReportsFigmaPage', () => {
@@ -88,13 +94,26 @@ describe('TeacherReportsFigmaPage', () => {
       data: [],
     } as any);
     mockedReportService.exportCsv.mockResolvedValue(new Blob(['csv']));
+    mockedDownloadReportPdf.mockResolvedValue(undefined);
   });
 
-  it('downloads teacher report CSV through the authenticated report service', async () => {
+  it('offers separate CSV and PDF export actions for teacher reports', async () => {
     render(<TeacherReportsFigmaPage />);
 
-    const exportButton = await screen.findByRole('button', { name: /export/i });
-    fireEvent.click(exportButton);
+    const csvButton = await screen.findByRole('button', { name: /download csv/i });
+    const pdfButton = screen.getByRole('button', { name: /download pdf/i });
+
+    fireEvent.click(pdfButton);
+
+    await waitFor(() => {
+      expect(mockedDownloadReportPdf).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tab: 'studentMasterList',
+        }),
+      );
+    });
+
+    fireEvent.click(csvButton);
 
     await waitFor(() => {
       expect(mockedReportService.exportCsv).toHaveBeenCalledWith(

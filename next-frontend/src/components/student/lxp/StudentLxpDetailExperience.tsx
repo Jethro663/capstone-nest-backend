@@ -26,10 +26,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { ClassWorkspaceShell, type ClassWorkspaceTabItem } from '@/components/class/workspace/ClassWorkspaceShell';
 import { lxpService } from '@/services/lxp-service';
+import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { LxpCheckpoint, LxpOverviewResponse, PlaylistResponse } from '@/types/lxp';
 import { cn } from '@/utils/cn';
+import './StudentLxpDetailExperience.css';
 
 type DetailTab = 'steps' | 'replays' | 'case' | 'overview';
 
@@ -42,8 +45,6 @@ const TAB_ALIASES: Record<string, DetailTab> = {
   interventions: 'case',
   overview: 'overview',
 };
-
-const CHECKPOINT_TONE = ['blue', 'green', 'violet'] as const;
 
 function encode(value: string) {
   return encodeURIComponent(value);
@@ -83,7 +84,13 @@ function formatPercent(value: number | null | undefined) {
 }
 
 function getCheckpointTitle(checkpoint: LxpCheckpoint) {
-  return checkpoint.label || checkpoint.lesson?.title || checkpoint.assessment?.title;
+  return (
+    checkpoint.label ||
+    checkpoint.generatedLesson?.title ||
+    checkpoint.guidedAssessment?.title ||
+    checkpoint.lesson?.title ||
+    checkpoint.assessment?.title
+  );
 }
 
 function getTab(value: string | null): DetailTab {
@@ -127,14 +134,28 @@ function CheckpointCard({
   const router = useRouter();
   const title = getCheckpointTitle(checkpoint);
   const isReplay = checkpoint.type === 'assessment_retry';
+  const isGuidedAssessment = checkpoint.type === 'guided_assessment';
+  const isGeneratedLesson = checkpoint.type === 'generated_lesson_review';
   const lessonHref = buildLessonHref(classId, checkpoint.lesson?.id);
+  const generatedLessonHref = checkpoint.generatedLesson
+    ? `/dashboard/student/lxp/${encode(classId)}/generated-lessons/${encode(checkpoint.id)}`
+    : null;
+  const guidedAssessmentHref = checkpoint.guidedAssessment
+    ? `/dashboard/student/lxp/${encode(classId)}/guided-assessment/${encode(checkpoint.id)}`
+    : null;
   const jaHref = `/dashboard/student/ja?${new URLSearchParams({
     mode: 'review',
     classId,
     entry: 'lxp',
     returnTo: `/dashboard/student/lxp/${classId}?tab=replays`,
   }).toString()}`;
-  const primaryHref = isReplay ? jaHref : lessonHref;
+  const primaryHref = isReplay
+    ? jaHref
+    : isGuidedAssessment
+      ? guidedAssessmentHref
+      : isGeneratedLesson
+        ? generatedLessonHref
+        : lessonHref;
 
   const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
     if (!(target instanceof Element)) return false;
@@ -157,75 +178,73 @@ function CheckpointCard({
   return (
     <article
       className={cn(
-        'student-class-module-card',
-        primaryHref ? 'student-class-module-card--interactive' : null,
+        'student-lxp-checkpoint-card',
+        primaryHref ? 'student-lxp-checkpoint-card--interactive' : null,
       )}
-      data-tone={CHECKPOINT_TONE[index % CHECKPOINT_TONE.length]}
-      data-view="wide"
+      data-type={isGuidedAssessment ? 'guided' : isReplay ? 'replay' : 'step'}
+      data-state={checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'}
       role={primaryHref ? 'link' : undefined}
       tabIndex={primaryHref ? 0 : undefined}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >
-      <div className="student-class-module-card__body-link">
-        <header>
-          <span className="student-class-module-card__index">{index + 1}</span>
-          <div>
+      <div className="student-lxp-checkpoint-card__main">
+        <header className="student-lxp-checkpoint-card__header">
+          <span className="student-lxp-checkpoint-card__index">{index + 1}</span>
+          <div className="student-lxp-checkpoint-card__copy">
             <h3>{title}</h3>
+            <div className="student-lxp-checkpoint-card__meta" aria-label="Checkpoint details">
+              <span>{checkpoint.xpAwarded} XP</span>
+              <span>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
+              <span>{isGuidedAssessment ? 'Guided Assessment' : isReplay ? 'Replay' : 'Lesson Step'}</span>
+            </div>
           </div>
         </header>
-
-        <div className="student-class-module-card__stats">
-          <article>
-            <strong>{checkpoint.xpAwarded}</strong>
-            <span>XP</span>
-          </article>
-          <article>
-            <strong>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</strong>
-            <span>Status</span>
-          </article>
-          <article>
-            <strong>{isReplay ? 'Replay' : 'Step'}</strong>
-            <span>Type</span>
-          </article>
-        </div>
       </div>
 
-      <footer>
+      <footer className="student-lxp-checkpoint-card__footer">
         <span
           className={cn(
-            'student-class-chip',
-            checkpoint.isCompleted ? 'student-class-chip--open' : 'student-class-chip--locked',
+            'student-lxp-checkpoint-card__status',
+            checkpoint.isCompleted
+              ? 'student-lxp-checkpoint-card__status--completed'
+              : readOnly
+                ? 'student-lxp-checkpoint-card__status--closed'
+                : 'student-lxp-checkpoint-card__status--open',
           )}
         >
           {checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available'}
         </span>
-        {isReplay ? (
-          <Link
-            href={jaHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open JA Hub
-          </Link>
-        ) : lessonHref ? (
-          <Link
-            href={lessonHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open Lesson
-          </Link>
-        ) : null}
-        {!readOnly && !checkpoint.isCompleted && !isReplay ? (
+        <div className="student-lxp-checkpoint-card__actions">
+          {isReplay ? (
+            <Link href={jaHref} className="student-lxp-checkpoint-card__link">
+              Open JA Hub
+            </Link>
+          ) : isGuidedAssessment && guidedAssessmentHref ? (
+            <Link href={guidedAssessmentHref} className="student-lxp-checkpoint-card__link">
+              Open Guided Assessment
+            </Link>
+          ) : isGeneratedLesson && generatedLessonHref ? (
+            <Link href={generatedLessonHref} className="student-lxp-checkpoint-card__link">
+              Open Remedial Lesson
+            </Link>
+          ) : lessonHref ? (
+            <Link href={lessonHref} className="student-lxp-checkpoint-card__link">
+              Open Lesson
+            </Link>
+          ) : null}
+        {!readOnly && !checkpoint.isCompleted && !isReplay && !isGuidedAssessment ? (
           <Button
             type="button"
             size="sm"
             disabled={completing}
-            className="bg-[#e70012] text-white hover:bg-[#c90010]"
+            className="student-lxp-checkpoint-card__button"
             onClick={() => onComplete(checkpoint.id)}
           >
             Mark Complete
           </Button>
         ) : null}
+        </div>
       </footer>
     </article>
   );
@@ -239,6 +258,8 @@ export default function StudentLxpDetailExperience() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const aiAvailability = useAiAvailability();
+  const aiUnavailable = aiAvailability.status === 'degraded';
   const classId = resolveClassId(params.classId);
   const currentTab = getTab(searchParams.get('tab'));
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
@@ -282,7 +303,10 @@ export default function StudentLxpDetailExperience() {
     () => [...(playlist?.checkpoints ?? [])].sort((left, right) => left.order - right.order),
     [playlist?.checkpoints],
   );
-  const replays = checkpoints.filter((checkpoint) => checkpoint.type === 'assessment_retry');
+  const replays = checkpoints.filter(
+    (checkpoint) =>
+      checkpoint.type === 'assessment_retry' || checkpoint.type === 'guided_assessment',
+  );
   const steps = checkpoints;
   const progressPercent = clampPercent(
     overview?.progress.completionPercent ?? playlist?.progress.completionPercent,
@@ -297,28 +321,28 @@ export default function StudentLxpDetailExperience() {
   const tabs: ClassWorkspaceTabItem[] = [
     {
       key: 'steps',
-      label: 'Assigned Steps',
+      label: 'Guided Review',
       href: detailHref,
       icon: FolderOpen,
       active: currentTab === 'steps',
     },
     {
       key: 'replays',
-      label: 'Replays',
+      label: 'Assessment Retry Support',
       href: `${detailHref}?tab=replays`,
       icon: ClipboardCheck,
       active: currentTab === 'replays',
     },
     {
       key: 'case',
-      label: 'Case File',
+      label: 'Why This Path Opened',
       href: `${detailHref}?tab=case`,
       icon: FileText,
       active: currentTab === 'case',
     },
     {
       key: 'overview',
-      label: 'Overview',
+      label: 'Progress & Support Status',
       href: `${detailHref}?tab=overview`,
       icon: BarChart3,
       active: currentTab === 'overview',
@@ -384,13 +408,23 @@ export default function StudentLxpDetailExperience() {
       ]}
       tabs={tabs}
     >
+      {aiUnavailable ? (
+        <AiOutageNotice
+          mode="lxp"
+          message={aiAvailability.message}
+          className="mb-4 border-[#f4d192] bg-[#fff8e8]"
+        />
+      ) : null}
+
       {currentTab === 'steps' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head student-class-panel__head--modules">
             <div>
-              <h2 aria-label="Assigned Steps">Path Steps</h2>
+              <h2 aria-label="Guided Review">Guided Review</h2>
               <p>
-                {readOnly ? 'Read-only history' : `${steps.length} assigned steps available`}
+                {readOnly
+                  ? 'Read-only history'
+                  : `${steps.length} guided review ${steps.length === 1 ? 'step is' : 'steps are'} available before assessment retry support.`}
               </p>
             </div>
             <Button
@@ -416,6 +450,10 @@ export default function StudentLxpDetailExperience() {
             />
           </div>
 
+          <div className="rounded-xl border border-[#f3d8df] bg-[#fff7f9] p-4 text-sm font-medium text-[#5a6175]">
+            These guided review steps help you close the target concept gap before retrying the related assessment.
+          </div>
+
           {steps.length === 0 ? (
             <EmptyPanel message="No assigned steps are available for this path yet." />
           ) : (
@@ -439,9 +477,13 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'replays' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Replays</h2>
-            <p>Assessment retries open in JA review mode for guided feedback.</p>
+            <h2>Assessment Retry Support</h2>
+            <p>Complete guided review first, then open JA for the assessment retry.</p>
           </header>
+
+          <div className="rounded-xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm font-medium text-[#4f5d78]">
+            JA provides guided support, not a new official summative attempt. Use this space to review the failed assessment context with hints and explanations.
+          </div>
 
           {replays.length === 0 ? (
             <EmptyPanel message="No assessment replays are assigned for this path." />
@@ -466,8 +508,8 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'case' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Case File</h2>
-            <p>Support status, trigger score, and teacher approval record.</p>
+            <h2>Why This Path Opened</h2>
+            <p>This support path opened because your class performance dropped below the threshold for targeted intervention.</p>
           </header>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -484,7 +526,7 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'overview' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Overview</h2>
+            <h2>Progress & Support Status</h2>
             <p>{overview.interventionStatus.message}</p>
           </header>
 

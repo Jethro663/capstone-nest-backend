@@ -15,11 +15,18 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Copy or create Docker-specific env file so NEXT_PUBLIC_* vars are baked into the build.
-# If .env.docker exists, use it; otherwise create a default one with sensible Docker values.
-RUN if [ -f .env.docker ]; then cp .env.docker .env.local; else \
-    echo "NEXT_PUBLIC_API_URL=http://backend:3000" > .env.local && \
-    echo "NEXT_PUBLIC_WS_URL=http://localhost:3000" >> .env.local; \
+# Prefer explicit build-time env vars so hosted deploys can bake the right origins.
+# Fall back to .env.docker for local Docker builds.
+RUN if [ -n "$NEXT_PUBLIC_API_URL" ] || [ -n "$BACKEND_INTERNAL_URL" ] || [ -n "$NEXT_PUBLIC_WS_URL" ] || [ -n "$NEXT_PUBLIC_APP_ORIGIN" ] || [ -n "$NEXT_PUBLIC_SITE_URL" ]; then \
+      : > .env.local; \
+      if [ -n "$NEXT_PUBLIC_API_URL" ]; then echo "NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL" >> .env.local; fi; \
+      if [ -n "$BACKEND_INTERNAL_URL" ]; then echo "BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL" >> .env.local; fi; \
+      if [ -n "$NEXT_PUBLIC_WS_URL" ]; then echo "NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL" >> .env.local; fi; \
+      if [ -n "$NEXT_PUBLIC_APP_ORIGIN" ]; then echo "NEXT_PUBLIC_APP_ORIGIN=$NEXT_PUBLIC_APP_ORIGIN" >> .env.local; fi; \
+      if [ -n "$NEXT_PUBLIC_SITE_URL" ]; then echo "NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL" >> .env.local; fi; \
+    elif [ -f .env.docker ]; then cp .env.docker .env.local; else \
+      echo "NEXT_PUBLIC_API_URL=http://backend:3000" > .env.local && \
+      echo "NEXT_PUBLIC_WS_URL=http://localhost:3000" >> .env.local; \
     fi
 
 RUN npm run build

@@ -1,0 +1,110 @@
+[
+  {
+    "profile": "auth",
+    "consoleMessages": [],
+    "routes": [
+      {
+        "path": "/login",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/login",
+        "elapsedMs": 1687,
+        "screenshot": "docs/research-paper-audit/screenshots/login.png"
+      },
+      {
+        "path": "/forgot-password",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/forgot-password",
+        "elapsedMs": 7194,
+        "screenshot": "docs/research-paper-audit/screenshots/forgot-password.png"
+      }
+    ]
+  },
+  {
+    "profile": "admin",
+    "consoleMessages": [],
+    "routes": [
+      {
+        "path": "/dashboard/admin",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/admin",
+        "elapsedMs": 1490,
+        "screenshot": "docs/research-paper-audit/screenshots/admin-dashboard.png"
+      },
+      {
+        "path": "/dashboard/admin/diagnostics",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/admin/diagnostics",
+        "elapsedMs": 1387,
+        "screenshot": "docs/research-paper-audit/screenshots/admin-diagnostics.png"
+      },
+      {
+        "path": "/dashboard/admin/audit",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/admin/audit",
+        "elapsedMs": 3193,
+        "screenshot": "docs/research-paper-audit/screenshots/admin-audit.png"
+      }
+    ]
+  },
+  {
+    "profile": "teacher",
+    "consoleMessages": [],
+    "routes": [
+      {
+        "path": "/dashboard/teacher",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/teacher/classes",
+        "elapsedMs": 1646,
+        "screenshot": "docs/research-paper-audit/screenshots/teacher-dashboard.png"
+      },
+      {
+        "path": "/dashboard/teacher/classes",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/teacher/classes",
+        "elapsedMs": 1571,
+        "screenshot": "docs/research-paper-audit/screenshots/teacher-classes.png"
+      },
+      {
+        "path": "/dashboard/teacher/interventions",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/teacher/interventions",
+        "elapsedMs": 1499,
+        "screenshot": "docs/research-paper-audit/screenshots/teacher-interventions.png"
+      }
+    ]
+  },
+  {
+    "profile": "student",
+    "consoleMessages": [],
+    "routes": [
+      {
+        "path": "/dashboard/student",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/student",
+        "elapsedMs": 1632,
+        "screenshot": "docs/research-paper-audit/screenshots/student-dashboard.png"
+      },
+      {
+        "path": "/dashboard/student/courses",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/student/courses",
+        "elapsedMs": 1893,
+        "screenshot": "docs/research-paper-audit/screenshots/student-courses.png"
+      },
+      {
+        "path": "/dashboard/student/ja",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/student/ja",
+        "elapsedMs": 1802,
+        "screenshot": "docs/research-paper-audit/screenshots/student-ja.png"
+      },
+      {
+        "path": "/dashboard/student/announcements",
+        "status": 200,
+        "finalUrl": "http://127.0.0.1:3001/dashboard/student/announcements",
+        "elapsedMs": 1560,
+        "screenshot": "docs/research-paper-audit/screenshots/student-announcements.png"
+      }
+    ]
+  }
+]

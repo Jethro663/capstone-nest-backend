@@ -1508,7 +1508,8 @@ export function DashboardScreen({ navigation }: Props) {
         <AnimatedEntrance delay={220}>
           <SectionLabel
             title={formatCalendarMonth(calendarMonth)}
-            actionLabel=""
+            actionLabel="Open Calendar"
+            onPressAction={() => navigation.navigate("Calendar")}
           />
         </AnimatedEntrance>
 
@@ -1637,7 +1638,7 @@ export function DashboardScreen({ navigation }: Props) {
             </View>
 
             <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, paddingBottom: 4 }}>
-              <SectionLabel title="Upcoming" actionLabel="See All" />
+              <SectionLabel title="Upcoming" actionLabel="See All" onPressAction={() => navigation.navigate("Calendar")} />
             </View>
 
             {upcomingTimeline.length === 0 ? (

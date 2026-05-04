@@ -178,7 +178,11 @@ export type AiGenerationStatus =
 
 export interface AiGenerationJob {
   jobId: string;
-  jobType: 'quiz_generation' | 'remedial_plan_generation' | string;
+  jobType:
+    | 'quiz_generation'
+    | 'remedial_plan_generation'
+    | 'class_lesson_plan_generation'
+    | string;
   status: AiGenerationStatus;
   progressPercent: number;
   statusMessage?: string | null;
@@ -281,11 +285,141 @@ export interface InterventionStructuredOutput {
   };
   evidencePacket?: InterventionRecommendation['evidencePacket'];
   suggestedAssignmentPayload: InterventionRecommendation['suggestedAssignmentPayload'];
+  generatedLessonDraft?: {
+    title: string;
+    summary?: string | null;
+    lessonBody: string;
+    weakConcepts: string[];
+    sourceLessonIds: string[];
+    sourceReferences: Array<{
+      lessonId?: string;
+      chunkId?: string;
+      title?: string;
+      sourceReference?: string;
+      selectionReason?: string;
+    }>;
+  } | null;
+  generatedGuidedAssessmentDraft?: {
+    sourceAssessmentId?: string | null;
+    title: string;
+    description?: string | null;
+    weakConcepts: string[];
+    formativeSummary?: string | null;
+    sourceReferences: Array<{
+      assessmentId?: string;
+      questionId?: string;
+      sourceReference?: string;
+      selectionReason?: string;
+    }>;
+    questions: Array<{
+      id: string;
+      type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+      stem: string;
+      explanation: string;
+      hint?: string | null;
+      weakConceptTag?: string | null;
+      sourceQuestionId?: string | null;
+      options: Array<{
+        id: string;
+        text: string;
+        isCorrect: boolean;
+      }>;
+    }>;
+  } | null;
   note?: string | null;
   runtime?: {
     outputId?: string;
     caseId?: string;
   };
+}
+
+export type LessonPlanAnchorType = 'module' | 'lesson';
+export type LessonPlanClassProfile = 'excelling' | 'mixed' | 'struggling';
+
+export interface LessonPlanHeader {
+  instructionalFormat?: string;
+  schoolName?: string;
+  quarter?: string;
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  schoolYear?: string;
+  sectionName?: string;
+  gradeLevel?: string;
+  learningArea?: string;
+  subjectCode?: string;
+  teacherName?: string;
+  moduleTitle?: string;
+  lessonTitle?: string;
+}
+
+export interface LessonPlanProcedureMap {
+  review: string[];
+  purpose: string[];
+  examples: string[];
+  guidedPractice: string[];
+  mastery: string[];
+  application: string[];
+  generalization: string[];
+  evaluation: string[];
+  remediationOrEnrichment: string[];
+}
+
+export interface LessonPlanDifferentiation {
+  support: string[];
+  core: string[];
+  enrichment: string[];
+}
+
+export interface LessonPlanStructuredOutput {
+  header: LessonPlanHeader;
+  classProfile: LessonPlanClassProfile;
+  evidenceSummary: string;
+  objectives: string[];
+  contentOrSubjectMatter: string;
+  learningResources: string[];
+  procedures: LessonPlanProcedureMap;
+  assessment: string[];
+  remarks: string;
+  reflection: string;
+  assignmentOrHomeExtension: string;
+  differentiation: LessonPlanDifferentiation;
+  safeguards: string[];
+  metadata?: {
+    classId?: string;
+    anchorType?: LessonPlanAnchorType;
+    anchorId?: string;
+    weakConcepts?: string[];
+    performanceSummary?: Record<string, unknown>;
+  };
+  runtime?: {
+    outputId?: string;
+    classProfile?: LessonPlanClassProfile;
+    header?: LessonPlanHeader;
+  };
+}
+
+export interface GenerateLessonPlanDto {
+  classId: string;
+  anchorType: LessonPlanAnchorType;
+  anchorId: string;
+  teacherNote?: string;
+  header?: {
+    instructionalFormat?: string;
+    schoolName?: string;
+    quarter?: string;
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+  };
+}
+
+export interface UpdateLessonPlanDraftDto {
+  structuredOutput: LessonPlanStructuredOutput;
+}
+
+export interface UpdateQuizDraftDto {
+  structuredOutput: QuizDraftStructuredOutput;
 }
 
 export interface StudentTutorClassSummary {

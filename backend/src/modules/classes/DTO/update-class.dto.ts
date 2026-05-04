@@ -9,19 +9,36 @@ import {
   ArrayMinSize,
   ValidateNested,
   MinLength,
+  Matches,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from './validators';
 import { GRADE_LEVELS } from '../../../common/utils/grade-level.util';
 import { ScheduleSlotDto } from './schedule-slot.dto';
+import {
+  ROOM_LABEL_REGEX,
+  SUBJECT_CODE_REGEX,
+  SUBJECT_NAME_REGEX,
+  trimValue,
+  upperTrimmedValue,
+} from '../../../common/validation/input-policy';
 
 export class UpdateClassDto {
   @IsOptional()
   @IsString({ message: 'subjectName must be a string' })
+  @Transform(({ value }: { value?: string }) => trimValue(value))
+  @Matches(SUBJECT_NAME_REGEX, {
+    message:
+      "subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes",
+  })
   subjectName?: string;
 
   @IsOptional()
   @IsString({ message: 'subjectCode must be a string' })
+  @Transform(({ value }: { value?: string }) => upperTrimmedValue(value))
+  @Matches(SUBJECT_CODE_REGEX, {
+    message: 'subjectCode may only contain uppercase letters, numbers, and hyphens',
+  })
   subjectCode?: string;
 
   @IsOptional()
@@ -56,8 +73,12 @@ export class UpdateClassDto {
 
   @IsOptional()
   @IsString({ message: 'room must be a string' })
-  @Transform(({ value }: { value?: string }) => value?.trim())
+  @Transform(({ value }: { value?: string }) => trimValue(value))
   @MinLength(1, { message: 'room cannot be empty' })
+  @Matches(ROOM_LABEL_REGEX, {
+    message:
+      'room may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+  })
   room?: string;
 
   @IsOptional()

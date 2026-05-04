@@ -27,26 +27,26 @@ export function StudentPageShell({
 }) {
   return (
     <motion.div
-      className={cn('student-page mx-auto max-w-7xl space-y-8 p-6 md:p-10', className)}
+      className={cn('student-page mx-auto w-full max-w-7xl space-y-6 overflow-x-clip px-3 py-4 sm:px-4 md:space-y-8 md:p-8 lg:px-8 lg:py-10', className)}
       initial="hidden"
       animate="visible"
       variants={containerReveal}
     >
       <motion.section
         variants={itemReveal}
-        className="student-panel student-play-panel relative rounded-[1.75rem] px-6 py-6 md:px-8"
+        className="student-panel student-play-panel relative overflow-hidden rounded-[1.35rem] px-4 py-5 sm:px-5 md:rounded-[1.75rem] md:px-8 md:py-6"
       >
-        <div className="absolute -left-8 top-0 h-32 w-32 rounded-full bg-[var(--student-accent-soft)] blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-36 w-36 rounded-full bg-[var(--student-hero-stripe)] blur-3xl" />
+        <div className="absolute -left-10 top-0 h-24 w-24 rounded-full bg-[var(--student-accent-soft)] blur-3xl sm:h-32 sm:w-32" />
+        <div className="absolute bottom-0 right-0 h-28 w-28 rounded-full bg-[var(--student-hero-stripe)] blur-3xl sm:h-36 sm:w-36" />
         <div className="relative z-10 flex flex-col gap-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl space-y-3">
-              <div className="student-kicker inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.26em]">
+              <div className="student-kicker inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.26em]">
                 <Sparkles className="h-3.5 w-3.5" />
                 {badge}
               </div>
               <div className="space-y-2">
-                <h1 className="text-3xl font-black tracking-tight text-[var(--student-text-strong)] md:text-[2.25rem]">
+                <h1 className="text-[clamp(1.8rem,7vw,2.25rem)] font-black tracking-tight text-[var(--student-text-strong)]">
                   {title}
                 </h1>
                 <p className="max-w-2xl text-sm leading-6 text-[var(--student-text-muted)] md:text-[15px]">
@@ -54,7 +54,7 @@ export function StudentPageShell({
                 </p>
               </div>
             </div>
-            {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+            {actions ? <div className="flex w-full flex-wrap items-stretch gap-3 lg:w-auto lg:items-center lg:justify-end">{actions}</div> : null}
           </div>
           {stats ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{stats}</div> : null}
         </div>

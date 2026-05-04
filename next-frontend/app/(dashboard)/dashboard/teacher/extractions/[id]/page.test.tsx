@@ -33,6 +33,51 @@ jest.mock('@/components/shared/ConfirmationDialog', () => ({
   ConfirmationDialog: () => null,
 }));
 
+jest.mock('@/features/lesson-blocks/LessonBlockTeacherEditor', () => ({
+  LessonBlockTeacherPreview: ({ block }: { block: { content?: { html?: string } | string } }) => {
+    const content =
+      typeof block.content === 'string'
+        ? block.content
+        : block.content && typeof block.content === 'object' && 'html' in block.content
+          ? block.content.html
+          : '';
+    return <div data-testid="lesson-block-preview">{content || 'Empty text block'}</div>;
+  },
+  LessonBlockTeacherEditor: ({
+    block,
+    onSave,
+    onCancel,
+  }: {
+    block: { content?: { html?: string } | string };
+    onSave: (patch: { content: { html: string } }) => void;
+    onCancel: () => void;
+  }) => {
+    const value =
+      typeof block.content === 'string'
+        ? block.content
+        : block.content && typeof block.content === 'object' && 'html' in block.content
+          ? block.content.html || ''
+          : '';
+    return (
+      <div>
+        <textarea aria-label="Mock block editor" defaultValue={value} />
+        <button
+          type="button"
+          onClick={(event) => {
+            const textarea = event.currentTarget.parentElement?.querySelector('textarea');
+            onSave({ content: { html: textarea?.value || '' } });
+          }}
+        >
+          Save
+        </button>
+        <button type="button" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    );
+  },
+}));
+
 function buildExtraction(status: 'pending' | 'completed' = 'completed') {
   return {
     id: 'extraction-1',
@@ -46,16 +91,18 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
       status === 'completed'
         ? {
             title: 'Module Title',
-            description: 'Module Description',
+            description: '<p>Module Description</p>',
             sections: [
               {
                 title: 'Section 1',
                 description: 'Section Description',
                 order: 1,
+                graphKeywords: ['photosynthesis'],
+                figureReferences: ['figure:1'],
                 lessonBlocks: [
                   {
                     type: 'text',
-                    content: { text: 'Lesson content' },
+                    content: { html: '<p>Lesson content</p>' },
                     order: 0,
                   },
                   {
@@ -68,6 +115,7 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                     metadata: {
                       pageNumber: 1,
                       assignmentConfidence: 0.88,
+                      mediaAssetId: 'image-1',
                     },
                   },
                 ],
@@ -81,15 +129,40 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                 },
               },
             ],
+            mediaAssets: [
+              {
+                id: 'image-1',
+                url: 'data:image/png;base64,ZmFrZQ==',
+                pageNumber: 1,
+                caption: 'Figure from page 1',
+                selectedSectionIndex: 0,
+                teacherReviewed: true,
+                candidateSections: [{ sectionIndex: 0, score: 0.88 }],
+              },
+            ],
+            audit: {
+              coherenceScore: 0.73,
+              coherenceWarnings: ['A short fragment was merged into Section 1.'],
+              repairNotes: ['Coherence cleanup merged a micro-fragment into the previous section.'],
+              confidenceBreakdown: { overallConfidence: 0.8, warningCount: 1 },
+              pipelineStages: ['ingest', 'classify', 'segment', 'structure', 'coherence_cleanup', 'validate', 'persist'],
+              requestedSectionCount: 4,
+              finalSectionCount: 3,
+              sectionCountAdjustmentReason: 'Source content did not safely support the requested section count.',
+            },
           }
         : null,
     isApplied: false,
+    qualityGate: status === 'completed' ? 'warn' : null,
+    reviewRequired: status === 'completed',
     progressPercent: status === 'pending' ? 10 : 100,
     totalChunks: 10,
     processedChunks: status === 'pending' ? 1 : 10,
     createdAt: '2026-04-04T00:00:00.000Z',
     updatedAt: '2026-04-04T00:00:00.000Z',
     originalName: 'module.pdf',
+    repairNotes: ['Coherence cleanup merged a micro-fragment into the previous section.'],
+    confidenceBreakdown: { overallConfidence: 0.8, warningCount: 1 },
   };
 }
 
@@ -108,7 +181,7 @@ describe('ExtractionReviewPage', () => {
     jest.useRealTimers();
   });
 
-  it('renders section-first content with image preview and assessment draft', async () => {
+  it('renders a calmer lesson-editor-style workspace and hides legacy image review UI', async () => {
     mockedExtractionService.getById.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -117,13 +190,16 @@ describe('ExtractionReviewPage', () => {
 
     render(<ExtractionReviewPage />);
 
-    expect(await screen.findByText('Extraction Review')).toBeInTheDocument();
-    expect(screen.getByText('Sections (1)')).toBeInTheDocument();
-    expect(screen.getByText('Assessment Draft')).toBeInTheDocument();
-    expect(screen.getByAltText('Extracted visual')).toBeInTheDocument();
-    expect(screen.getByText('Page 1')).toBeInTheDocument();
-    expect(screen.getByText('Confidence 88%')).toBeInTheDocument();
-    expect(screen.queryByDisplayValue(/data:image\/png;base64/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Content' })).toBeInTheDocument();
+    expect(screen.getByText('Teacher review is still required before apply.')).toBeInTheDocument();
+    expect(screen.getByText('Coherence cleanup merged a micro-fragment into the previous section.')).toBeInTheDocument();
+    expect(screen.getByText('Requested sections')).toBeInTheDocument();
+    expect(screen.getByText('Final sections')).toBeInTheDocument();
+    expect(screen.getByText('Source content did not safely support the requested section count.')).toBeInTheDocument();
+    expect(screen.queryByText('Unassigned images')).not.toBeInTheDocument();
+    expect(screen.queryByAltText('Extracted visual')).not.toBeInTheDocument();
   });
 
   it('keeps extraction status summary inside the header without standalone stat cards', async () => {
@@ -135,14 +211,14 @@ describe('ExtractionReviewPage', () => {
 
     render(<ExtractionReviewPage />);
 
-    expect(await screen.findByText('Extraction Review')).toBeInTheDocument();
+    expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
 
     const headerSummary = screen.getByTestId('extraction-header-summary');
     expect(headerSummary).toHaveTextContent('Status');
     expect(headerSummary).toHaveTextContent('completed');
     expect(headerSummary).toHaveTextContent('Sections');
-    expect(headerSummary).toHaveTextContent('1 selected');
-    expect(headerSummary).toHaveTextContent('Draft Questions');
+    expect(headerSummary).toHaveTextContent('1');
+    expect(headerSummary).toHaveTextContent('Questions');
     expect(headerSummary).toHaveTextContent('1');
     expect(document.querySelector('.teacher-figma-stat')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('text-[#12284a]');
@@ -172,7 +248,7 @@ describe('ExtractionReviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Extraction Review')).toBeInTheDocument();
+      expect(screen.getByText('Extraction Workspace')).toBeInTheDocument();
     });
 
     expect(mockedExtractionService.getById).toHaveBeenCalledTimes(2);
@@ -215,7 +291,7 @@ describe('ExtractionReviewPage', () => {
     render(<ExtractionReviewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Extraction Review')).toBeInTheDocument();
+      expect(screen.getByText('Extraction Workspace')).toBeInTheDocument();
     });
 
     await act(async () => {
@@ -230,29 +306,85 @@ describe('ExtractionReviewPage', () => {
     expect(mockedToast.error).toHaveBeenCalledWith(outageMessage);
   });
 
-  it('surfaces backend apply error message when apply request fails', async () => {
-    const backendMessage = 'AI extraction apply is temporarily unavailable. Please retry shortly.';
-
+  it('blocks apply until review is cleared and save state is clean', async () => {
     mockedExtractionService.getById.mockResolvedValue({
       success: true,
       message: 'ok',
       data: buildExtraction('completed'),
     } as never);
-    mockedExtractionService.apply.mockRejectedValue({
-      response: { data: { message: backendMessage } },
-    } as never);
 
     render(<ExtractionReviewPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Extraction Review')).toBeInTheDocument();
+      expect(screen.getByText('Extraction Workspace')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Apply (1 section)' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
+    expect(screen.getByRole('button', { name: 'Apply Extraction' })).toBeDisabled();
+    expect(mockedExtractionService.apply).not.toHaveBeenCalled();
+  });
+
+  it('lets the teacher edit a block and save the extraction draft', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+    mockedExtractionService.update.mockImplementation(async (_id, payload) => ({
+      success: true,
+      message: 'saved',
+      data: {
+        ...buildExtraction('completed'),
+        structuredContent: {
+          ...buildExtraction('completed').structuredContent,
+          title: payload.title,
+          description: payload.description,
+          sections: payload.sections,
+          mediaAssets: payload.mediaAssets,
+        },
+      },
+    }) as never);
+
+    render(<ExtractionReviewPage />);
 
     await waitFor(() => {
-      expect(mockedToast.error).toHaveBeenCalledWith(backendMessage);
+      expect(screen.getByText('Extraction Workspace')).toBeInTheDocument();
+    });
+
+    const contentTab = screen.getByRole('tab', { name: 'Content' });
+    fireEvent.mouseDown(contentTab);
+    fireEvent.click(contentTab);
+    await waitFor(() => {
+      expect(contentTab).toHaveAttribute('data-state', 'active');
+    });
+    const editButton = await screen.findByRole('button', { name: 'Edit' });
+    fireEvent.click(editButton);
+
+    const editor = screen.getByLabelText('Mock block editor');
+    fireEvent.change(editor, { target: { value: '<p>Teacher revised content</p>' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const saveChangesButton = screen.getByRole('button', { name: 'Save Changes' });
+    expect(saveChangesButton).toBeEnabled();
+
+    fireEvent.click(saveChangesButton);
+
+    await waitFor(() => {
+      expect(mockedExtractionService.update).toHaveBeenCalledWith(
+        'extraction-1',
+        expect.objectContaining({
+          sections: expect.arrayContaining([
+            expect.objectContaining({
+              lessonBlocks: expect.arrayContaining([
+                expect.objectContaining({
+                  content: expect.objectContaining({
+                    html: '<p>Teacher revised content</p>',
+                  }),
+                }),
+              ]),
+            }),
+          ]),
+        }),
+      );
     });
   });
 });

@@ -17,6 +17,29 @@ describe('extractionService', () => {
     jest.clearAllMocks();
   });
 
+  it('sends target section count when queueing an extraction', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'queued',
+        data: {
+          extractionId: 'extract-queued',
+          status: 'pending',
+        },
+      },
+    });
+
+    await extractionService.extractModule({
+      fileId: 'file-queue',
+      targetSectionCount: 4,
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith('/ai/extract-module', {
+      fileId: 'file-queue',
+      targetSectionCount: 4,
+    });
+  });
+
   it('normalizes list payloads with snake_case keys and numeric-string progress fields', async () => {
     mockedApi.get.mockResolvedValue({
       data: {
@@ -86,6 +109,59 @@ describe('extractionService', () => {
     expect(result.data.progressPercent).toBe(12);
     expect(result.data.totalChunks).toBe(40);
     expect(result.data.processedChunks).toBe(5);
+  });
+
+  it('normalizes media assets and review metadata from extraction payloads', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'ok',
+        data: {
+          id: 'extraction-2',
+          fileId: 'file-2',
+          classId: 'class-2',
+          teacherId: 'teacher-2',
+          extractionStatus: 'completed',
+          isApplied: false,
+          qualityGate: 'warn',
+          reviewRequired: true,
+          progressPercent: 100,
+          totalChunks: 4,
+          processedChunks: 4,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:01:00.000Z',
+          structuredContent: {
+            title: 'Module',
+            description: '',
+            sections: [],
+            mediaAssets: [
+              {
+                id: 'image-1',
+                url: 'data:image/png;base64,ZmFrZQ==',
+                pageNumber: 1,
+                caption: 'Figure 1',
+                selectedSectionIndex: 0,
+                teacherReviewed: true,
+                candidateSections: [{ sectionIndex: 0, score: 0.88 }],
+              },
+            ],
+            audit: {
+              imageAssignmentSummary: { assigned: 1, unassigned: 0 },
+            },
+          },
+        },
+      },
+    });
+
+    const result = await extractionService.getById('extraction-2');
+
+    expect(result.data.qualityGate).toBe('warn');
+    expect(result.data.reviewRequired).toBe(true);
+    expect(result.data.structuredContent?.mediaAssets[0]).toMatchObject({
+      id: 'image-1',
+      selectedSectionIndex: 0,
+      teacherReviewed: true,
+    });
   });
 
   it('normalizes extraction status polling payload with snake_case and numeric-string fields', async () => {

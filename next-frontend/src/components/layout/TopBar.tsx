@@ -4,8 +4,9 @@
 
 'use client';
 
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Menu, Moon, User } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
@@ -17,11 +18,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { logoutAction } from '@/lib/auth-actions';
-import { getProfileRoute } from '@/utils/profile';
+import { getProfileRoute, resolveUserProfilePicture } from '@/utils/profile';
 import {
   normalizeDashboardRole,
   type DashboardRole,
 } from '@/lib/dashboard-route-access';
+import { SystemInfoButton } from './SystemInfoButton';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -52,15 +54,13 @@ export function TopBar({
   const initials = user?.firstName
     ? `${user.firstName[0]}${user.lastName?.[0] ?? ''}`.toUpperCase()
     : 'U';
-  const avatarSrc =
-    user?.profile?.profilePicture ??
-    user?.teacherProfile?.profilePicture ??
-    user?.profilePicture;
+  const avatarSrc = resolveUserProfilePicture(user);
   const profileHref = getProfileRoute(effectiveRole);
   const notificationsLabel =
     unreadCount > 0
       ? `Open notifications (${unreadCount > 9 ? '9+' : unreadCount} unread)`
       : 'Open notifications';
+  const studentApkHref = '/downloads/nexora-student-mobile-release.apk';
 
   if (isAdminShell) {
     return (
@@ -83,6 +83,8 @@ export function TopBar({
         </div>
 
         <div className="admin-topbar__actions">
+          <SystemInfoButton buttonClassName="admin-topbar__notif" />
+
           <button
             type="button"
             className="admin-topbar__notif"
@@ -159,6 +161,8 @@ export function TopBar({
         </div>
 
         <div className="teacher-topbar-shell__actions">
+          <SystemInfoButton buttonClassName="teacher-topbar-shell__notif" />
+
           <button
             type="button"
             className="teacher-topbar-shell__notif"
@@ -227,20 +231,31 @@ export function TopBar({
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <p className="student-topbar-shell__welcome">
+          <p className="student-topbar-shell__welcome max-[430px]:text-sm">
             Welcome back, <strong>{firstName}</strong>
           </p>
         </div>
 
         <div className="student-topbar-shell__actions">
-          <button
-            type="button"
+          <a
+            href={studentApkHref}
+            download="nexora-student-mobile.apk"
             className="student-topbar-shell__icon-button"
-            title="Student theme"
-            aria-label="Student theme"
+            title="Download Nexora Mobile for Android"
+            aria-label="Download Nexora Mobile for Android"
           >
-            <Moon className="h-5 w-5" />
-          </button>
+            <span className="student-topbar-shell__apk-art" aria-hidden="true">
+              <Image
+                src="/images/JA/apk_logo.png"
+                alt=""
+                width={64}
+                height={64}
+                className="student-topbar-shell__apk-logo"
+              />
+            </span>
+          </a>
+
+          <SystemInfoButton buttonClassName="student-topbar-shell__icon-button" />
 
           <button
             type="button"
@@ -266,11 +281,11 @@ export function TopBar({
                   {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
                   <AvatarFallback className="student-topbar-shell__avatar">{initials}</AvatarFallback>
                 </Avatar>
-                <span className="student-topbar-shell__profile-copy">
+                <span className="student-topbar-shell__profile-copy !hidden sm:!grid">
                   <span className="student-topbar-shell__name">{displayName}</span>
                   <span className="student-topbar-shell__role">Student Portal</span>
                 </span>
-                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+                <ChevronDown className="hidden h-4 w-4 text-[#9aa9c5] sm:block" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
@@ -309,6 +324,14 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-1">
+        <SystemInfoButton
+          buttonClassName={
+            isTeacherShell
+              ? 'inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--teacher-text-muted)] transition hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'
+              : 'inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700'
+          }
+        />
+
         <Button
           variant="ghost"
           size="icon"

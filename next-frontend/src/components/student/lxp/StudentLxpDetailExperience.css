@@ -1,0 +1,187 @@
+.student-lxp-checkpoint-card {
+  border: 1px solid #ddd5cd;
+  border-radius: 14px;
+  background: #fffdfa;
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.student-lxp-checkpoint-card--interactive {
+  cursor: pointer;
+}
+
+.student-lxp-checkpoint-card--interactive:hover {
+  border-color: #d0c3b8;
+  background: #fff9f4;
+}
+
+.student-lxp-checkpoint-card--interactive:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.student-lxp-checkpoint-card__main {
+  min-width: 0;
+}
+
+.student-lxp-checkpoint-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.student-lxp-checkpoint-card__index {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8ece6;
+  color: #974037;
+  font-size: 0.92rem;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.student-lxp-checkpoint-card[data-type='replay'] .student-lxp-checkpoint-card__index {
+  background: #f6ece8;
+  color: #7f3b46;
+}
+
+.student-lxp-checkpoint-card[data-type='guided'] .student-lxp-checkpoint-card__index {
+  background: #eef3fb;
+  color: #335d9d;
+}
+
+.student-lxp-checkpoint-card__copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.student-lxp-checkpoint-card__copy h3 {
+  margin: 0;
+  color: #211b1b;
+  font-size: clamp(1rem, 1.05vw, 1.12rem);
+  line-height: 1.28;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.student-lxp-checkpoint-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.student-lxp-checkpoint-card__meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  border: 1px solid #e4dad1;
+  background: #fcf7f1;
+  color: #6b5d58;
+  padding: 0 9px;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.student-lxp-checkpoint-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.student-lxp-checkpoint-card__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.student-lxp-checkpoint-card__status--completed {
+  background: #e9f8ee;
+  border-color: #afe5c4;
+  color: #0f7a41;
+}
+
+.student-lxp-checkpoint-card__status--open {
+  background: #fff0f1;
+  border-color: #f3c5ca;
+  color: #b91c2f;
+}
+
+.student-lxp-checkpoint-card__status--closed {
+  background: #f4f1ec;
+  border-color: #ddd4cb;
+  color: #6a5e59;
+}
+
+.student-lxp-checkpoint-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.student-lxp-checkpoint-card__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid #d6ccc3;
+  background: #fffdfa;
+  color: #5d4e4c;
+  padding: 0 11px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.student-lxp-checkpoint-card__link:hover {
+  border-color: #c9bcb0;
+  background: #faf3ec;
+  color: #392e2d;
+}
+
+.student-lxp-checkpoint-card__button {
+  min-height: 30px;
+  border-radius: 999px;
+  background: #cf2027;
+  color: #ffffff;
+  padding-inline: 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.student-lxp-checkpoint-card__button:hover {
+  background: #b71b21;
+}
+
+@media (max-width: 720px) {
+  .student-lxp-checkpoint-card {
+    padding: 13px 14px;
+  }
+
+  .student-lxp-checkpoint-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-lxp-checkpoint-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

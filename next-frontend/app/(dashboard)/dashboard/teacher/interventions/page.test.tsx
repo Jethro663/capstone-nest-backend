@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import TeacherInterventionsPage from "./page";
 import { classService } from "@/services/class-service";
+import { healthService } from "@/services/health-service";
 import { lxpService } from "@/services/lxp-service";
 
 jest.mock("next/navigation", () => ({
@@ -33,12 +34,28 @@ jest.mock("@/services/lxp-service", () => ({
   },
 }));
 
+jest.mock("@/services/health-service", () => ({
+  healthService: {
+    getReadiness: jest.fn(),
+  },
+}));
+
 const mockedClassService = classService as jest.Mocked<typeof classService>;
+const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
 
 describe("TeacherInterventionsPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedHealthService.getReadiness.mockResolvedValue({
+      ready: true,
+      timestamp: "2026-04-30T00:00:00.000Z",
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: true },
+      },
+    });
     mockedClassService.getByTeacher.mockResolvedValue({
       data: [
         {
@@ -198,6 +215,12 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
+    expect(
+      screen.getByText(/targeted intervention queue for learners below the support threshold/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/grounded on class-approved materials and teacher review/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Trigger" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Blended Score" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "XP" })).toBeInTheDocument();
@@ -244,13 +267,28 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Case Workspace" }));
 
     expect(
       await screen.findByText("Intervention Student Detail"),
     ).toBeInTheDocument();
     expect(screen.getByText("Review: Fractions")).toBeInTheDocument();
     expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith("case-1");
+  });
+
+  it("uses the safer remedial-plan and workspace labels in queue actions", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open Case Workspace" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the helper guide from the question mark button", async () => {
@@ -287,5 +325,65 @@ describe("TeacherInterventionsPage", () => {
     await waitFor(() => {
       expect(screen.queryByText("Teacher guide: Interventions Dashboard")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows the AI outage rail and disables AI Plan while keeping queue actions available", async () => {
+    mockedHealthService.getReadiness.mockResolvedValueOnce({
+      ready: false,
+      timestamp: "2026-04-30T00:00:00.000Z",
+      dependencies: {
+        database: { ok: true },
+        redis: { ok: true },
+        aiService: { ok: false, message: "connect ECONNREFUSED" },
+      },
+    });
+    mockedLxpService.getTeacherQueue.mockResolvedValueOnce({
+      data: {
+        classId: "class-1",
+        threshold: 74,
+        count: 1,
+        queue: [
+          {
+            id: "case-1",
+            classId: "class-1",
+            status: "pending",
+            studentId: "student-1",
+            student: {
+              id: "student-1",
+              firstName: "Liam",
+              lastName: "Navarro",
+              email: "liam@example.com",
+            },
+            openedAt: "2026-01-01T00:00:00.000Z",
+            triggerScore: 50,
+            thresholdApplied: 74,
+            isCurrentlyAtRisk: false,
+            latestBlendedScore: 79,
+            latestThreshold: 74,
+            aiPlanEligible: true,
+            totalCheckpoints: 2,
+            completedCheckpoints: 0,
+            completionPercent: 0,
+            progress: {
+              xpTotal: 0,
+              starsTotal: 0,
+              streakDays: 0,
+              checkpointsCompleted: 0,
+              lastActivityAt: null,
+            },
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof lxpService.getTeacherQueue>>);
+
+    render(<TeacherInterventionsPage />);
+
+    expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect ECONNREFUSED/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Activate" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open Case Workspace" })).toBeEnabled();
   });
 });

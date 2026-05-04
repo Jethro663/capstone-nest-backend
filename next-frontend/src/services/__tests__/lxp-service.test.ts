@@ -244,4 +244,103 @@ describe('lxpService', () => {
     );
     expect(result.data.id).toBe('case-1');
   });
+
+  it('loads the student teacher-evaluation dashboard', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          currentAcademicState: { schoolYear: '2025-2026', quarter: 'Q2' },
+          pending: [],
+          completed: [],
+        },
+      },
+    });
+
+    const result = await lxpService.getStudentTeacherEvaluationDashboard();
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/lxp/me/teacher-evaluations');
+    expect(result.data.currentAcademicState.quarter).toBe('Q2');
+  });
+
+  it('submits teacher evaluation payload', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: 'submission-1' },
+      },
+    });
+
+    await lxpService.submitTeacherEvaluation({
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+      evaluationType: 'teacher_class',
+      ratings: {
+        teaching_clarity: 5,
+        subject_mastery: 4,
+        pacing: 4,
+        fairness: 5,
+        responsiveness: 5,
+        materials: 4,
+      },
+      comment: 'Helpful class',
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith('/lxp/me/teacher-evaluations', {
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+      evaluationType: 'teacher_class',
+      ratings: {
+        teaching_clarity: 5,
+        subject_mastery: 4,
+        pacing: 4,
+        fairness: 5,
+        responsiveness: 5,
+        materials: 4,
+      },
+      comment: 'Helpful class',
+    });
+  });
+
+  it('requests teacher evaluation summary filters', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          classes: [],
+          periods: ['Q1'],
+          evaluationType: 'teacher_class',
+          tabTitle: 'My Teaching',
+          tabDescription: 'Anonymous teaching feedback',
+          overview: {
+            responseCount: 0,
+            eligibleCount: 0,
+            responseRate: 0,
+            averageOverall: 0,
+            latestSubmittedAt: null,
+          },
+          categoryAverages: [],
+          comments: [],
+          trends: [],
+        },
+      },
+    });
+
+    await lxpService.getTeacherEvaluationSummary({
+      evaluationType: 'teacher_class',
+      classId: 'class-1',
+      gradingPeriod: 'Q1',
+    });
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/lxp/teacher/evaluations/summary',
+      {
+        params: {
+          evaluationType: 'teacher_class',
+          classId: 'class-1',
+          gradingPeriod: 'Q1',
+        },
+      },
+    );
+  });
 });

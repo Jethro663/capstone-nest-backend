@@ -7,6 +7,8 @@ import type {
   ExtractionAssessmentOption,
   ExtractionAssessmentQuestion,
   ExtractionBlock,
+  ExtractionMediaAsset,
+  ExtractionMediaCandidate,
   ExtractionSection,
   ExtractionStructuredContent,
   UpdateExtractionDto,
@@ -188,6 +190,65 @@ function normalizeSection(raw: unknown, fallbackOrder: number): ExtractionSectio
   };
 }
 
+function normalizeMediaCandidate(raw: unknown): ExtractionMediaCandidate | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const sectionIndex = readNullableNumber(candidate.sectionIndex);
+  const score = readNullableNumber(candidate.score);
+  if (sectionIndex === null || score === null) return null;
+  return {
+    sectionIndex,
+    score,
+    explicitMatch: typeof candidate.explicitMatch === 'boolean' ? candidate.explicitMatch : undefined,
+    scoreBreakdown:
+      candidate.scoreBreakdown && typeof candidate.scoreBreakdown === 'object'
+        ? Object.fromEntries(
+            Object.entries(candidate.scoreBreakdown as Record<string, unknown>)
+              .map(([key, value]) => [key, readNullableNumber(value)])
+              .filter((entry): entry is [string, number] => entry[1] !== null),
+          )
+        : undefined,
+  };
+}
+
+function normalizeMediaAsset(raw: unknown): ExtractionMediaAsset | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const asset = raw as Record<string, unknown>;
+  const id = readString(asset.id).trim();
+  const url = readString(asset.url).trim();
+  if (!id || !url) return null;
+  return {
+    id,
+    url,
+    pageNumber: readNullableNumber(asset.pageNumber),
+    caption: readNullableString(asset.caption),
+    anchorText: readNullableString(asset.anchorText),
+    keywords: Array.isArray(asset.keywords)
+      ? asset.keywords.map((item) => readString(item).trim()).filter(Boolean)
+      : [],
+    figureReferences: Array.isArray(asset.figureReferences)
+      ? asset.figureReferences.map((item) => readString(item).trim()).filter(Boolean)
+      : [],
+    selectedSectionIndex: readNullableNumber(asset.selectedSectionIndex),
+    assignmentConfidence: readNullableNumber(asset.assignmentConfidence),
+    assignmentBreakdown:
+      asset.assignmentBreakdown && typeof asset.assignmentBreakdown === 'object'
+        ? Object.fromEntries(
+            Object.entries(asset.assignmentBreakdown as Record<string, unknown>)
+              .map(([key, value]) => [key, readNullableNumber(value)])
+              .filter((entry): entry is [string, number] => entry[1] !== null),
+          )
+        : undefined,
+    candidateSections: Array.isArray(asset.candidateSections)
+      ? asset.candidateSections
+          .map((candidate) => normalizeMediaCandidate(candidate))
+          .filter((candidate): candidate is ExtractionMediaCandidate => Boolean(candidate))
+      : [],
+    teacherReviewed: readBoolean(asset.teacherReviewed, false),
+    reviewState: readNullableString(asset.reviewState),
+  };
+}
+
 function normalizeStructuredContent(raw: unknown): ExtractionStructuredContent | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -212,6 +273,11 @@ function normalizeStructuredContent(raw: unknown): ExtractionStructuredContent |
     title: readString(payload.title, 'Extracted Module'),
     description: readString(payload.description, ''),
     sections,
+    mediaAssets: Array.isArray(payload.mediaAssets)
+      ? payload.mediaAssets
+          .map((asset) => normalizeMediaAsset(asset))
+          .filter((asset): asset is ExtractionMediaAsset => Boolean(asset))
+      : [],
     audit:
       payload.audit && typeof payload.audit === 'object'
         ? (payload.audit as ExtractionStructuredContent['audit'])
@@ -220,6 +286,7 @@ function normalizeStructuredContent(raw: unknown): ExtractionStructuredContent |
 }
 
 function normalizeExtraction(raw: RawExtraction): Extraction {
+  const rawRepairNotes = raw.repairNotes ?? raw.repair_notes;
   return {
     id: readString(raw.id),
     fileId: readString(raw.fileId ?? raw.file_id),
@@ -241,6 +308,19 @@ function normalizeExtraction(raw: RawExtraction): Extraction {
     updatedAt: readString(raw.updatedAt ?? raw.updated_at),
     originalName:
       readNullableString(raw.originalName ?? raw.original_name) ?? undefined,
+    qualityGate: readNullableString(raw.qualityGate ?? raw.quality_gate),
+    reviewRequired: readBoolean(raw.reviewRequired ?? raw.review_required),
+    confidenceBreakdown:
+      raw.confidenceBreakdown && typeof raw.confidenceBreakdown === 'object'
+        ? (raw.confidenceBreakdown as Record<string, unknown>)
+        : raw.confidence_breakdown && typeof raw.confidence_breakdown === 'object'
+          ? (raw.confidence_breakdown as Record<string, unknown>)
+          : undefined,
+    repairNotes: Array.isArray(rawRepairNotes)
+      ? rawRepairNotes
+          .map((note) => readString(note).trim())
+          .filter(Boolean)
+      : undefined,
   };
 }
 

@@ -26,6 +26,11 @@ export interface ClassTemplateQuestionOption {
   text: string;
   isCorrect?: boolean;
   order?: number;
+  imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
 }
 
 export interface ClassTemplateQuestion {
@@ -37,6 +42,10 @@ export interface ClassTemplateQuestion {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   options?: ClassTemplateQuestionOption[];
 }
 

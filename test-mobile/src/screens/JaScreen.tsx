@@ -1,11 +1,12 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { peekAppError, toAppError } from "../api/http";
 import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
+import { RichTextContent } from "../components/ui/RichTextContent";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse } from "../types/ja";
 import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
@@ -26,7 +27,8 @@ type Props = {
   };
 };
 
-type ActivityFilter = "all" | JaMode;
+type VisibleJaPanel = "ask" | "review" | "lxp";
+type ActivityFilter = "all" | Extract<JaMode, "ask" | "review">;
 type AnswerState = Record<string, string[]>;
 
 const dark = {
@@ -49,8 +51,7 @@ const dark = {
   amberSoft: "rgba(251,191,36,0.12)",
 };
 
-const MODE_ORDER: Array<{ key: JaPanel; label: string; icon: string }> = [
-  { key: "practice", label: "Practice", icon: "layers-triple-outline" },
+const MODE_ORDER: Array<{ key: VisibleJaPanel; label: string; icon: string }> = [
   { key: "ask", label: "Ask", icon: "message-text-outline" },
   { key: "review", label: "Replay", icon: "history" },
   { key: "lxp", label: "Learners Path", icon: "map-marker-path" },
@@ -86,6 +87,11 @@ function buildAnswerPayload(item: JaPracticeSessionItem, selected?: string[]) {
   return item.itemType === "multiple_select"
     ? { selectedOptionIds: selected ?? [] }
     : { selectedOptionId: selected?.[0] };
+}
+
+function normalizePanel(panel?: JaPanel): VisibleJaPanel {
+  if (panel === "review" || panel === "lxp" || panel === "ask") return panel;
+  return "ask";
 }
 
 function resolvePathFallback(paths: LxpPathSummary[] | undefined, eligibleClasses: Array<{
@@ -140,7 +146,7 @@ function SectionLabel({ title, meta }: { title: string; meta?: string }) {
 }
 
 export function JaScreen({ navigation, route }: Props) {
-  const [panel, setPanel] = useState<JaPanel>(route?.params?.panel ?? "practice");
+  const [panel, setPanel] = useState<VisibleJaPanel>(normalizePanel(route?.params?.panel));
   const [selectedClassId, setSelectedClassId] = useState<string | undefined>(route?.params?.classId);
   const [classPickerOpen, setClassPickerOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
@@ -170,7 +176,7 @@ export function JaScreen({ navigation, route }: Props) {
   }, [jaHubQuery.data, selectedClassId]);
 
   useEffect(() => {
-    if (route?.params?.panel) setPanel(route.params.panel);
+    if (route?.params?.panel) setPanel(normalizePanel(route.params.panel));
     if (route?.params?.classId) setSelectedClassId(route.params.classId);
     if (route?.params?.lxpClassId) {
       setSelectedLxpClassId(route.params.lxpClassId);
@@ -187,7 +193,6 @@ export function JaScreen({ navigation, route }: Props) {
   const resolvedClassId = selectedClassId || selectedClass?.id;
   const selectedClassText = classLabel(selectedClass);
   const activityCounts = {
-    practice: jaHubQuery.data?.practice.sessions.length ?? 0,
     ask: jaHubQuery.data?.ask.threads.length ?? 0,
     review: jaHubQuery.data?.review.sessions?.length ?? 0,
   };
@@ -200,13 +205,6 @@ export function JaScreen({ navigation, route }: Props) {
   const lessonSteps = checkpoints.filter((checkpoint) => checkpoint.type === "lesson_review");
   const replaySteps = checkpoints.filter((checkpoint) => checkpoint.type === "assessment_retry");
   const visibleActivities = [
-    ...(jaHubQuery.data?.practice.sessions ?? []).map((session) => ({
-      id: session.id,
-      mode: "practice" as const,
-      title: "Practice Run",
-      subtitle: `${session.status.toUpperCase()} - ${session.currentIndex}/${session.questionCount}`,
-      updatedAt: session.completedAt || session.startedAt,
-    })),
     ...(jaHubQuery.data?.ask.threads ?? []).map((thread) => ({
       id: thread.id,
       mode: "ask" as const,
@@ -252,7 +250,7 @@ export function JaScreen({ navigation, route }: Props) {
     setClassPickerOpen(false);
   };
 
-  const switchPanel = (nextPanel: JaPanel) => {
+  const switchPanel = (nextPanel: VisibleJaPanel) => {
     setPanel(nextPanel);
     setClassPickerOpen(false);
     setActionError("");
@@ -568,7 +566,7 @@ export function JaScreen({ navigation, route }: Props) {
       <View style={{ backgroundColor: "#191919", borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
         <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>Activity Filter</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-          {(["all", "practice", "ask", "review"] as ActivityFilter[]).map((filter) => (
+          {(["all", "ask", "review"] as ActivityFilter[]).map((filter) => (
             <Pressable
               key={filter}
               onPress={() => setActivityFilter(filter)}
@@ -591,20 +589,6 @@ export function JaScreen({ navigation, route }: Props) {
             <Text style={{ color: dark.text, fontWeight: "800" }}>JA data is partially unavailable</Text>
             <Text style={{ marginTop: 6, color: dark.muted, fontSize: 12 }}>{peekAppError(jaHubQuery.error).message}</Text>
           </DarkPanel>
-        ) : null}
-
-        {panel === "practice" ? (
-          <PracticePanel
-            session={practiceSession}
-            answers={answers}
-            setAnswers={setAnswers}
-            busy={busy}
-            counts={`${activityCounts.practice} Drill`}
-            recommendation={jaHubQuery.data?.practice.recommendations[0]}
-            onStart={startPractice}
-            onSubmit={() => void submitSessionAnswers("practice")}
-            onComplete={() => void completeSession("practice")}
-          />
         ) : null}
 
         {panel === "ask" ? (
@@ -746,15 +730,24 @@ function AskPanel({
   error: string;
 }) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const chatScrollRef = useRef<ScrollView | null>(null);
   const lastAssistantMessage = [...messages].reverse().find((message) => message.role !== "student");
   const visualState = busy ? "thinking" : resolveJaStateFromMessage(lastAssistantMessage);
   const avatar = resolveJaAvatar(visualState);
   const avatarSource = process.env.NODE_ENV === "test" ? undefined : avatar.getSource();
+  const chatViewportHeight = Math.max(300, Math.min(500, windowHeight * 0.46));
+  const panelMinHeight = chatViewportHeight + 300;
+
+  useEffect(() => {
+    const timer = setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 0);
+    return () => clearTimeout(timer);
+  }, [busy, messages]);
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={{ gap: 12 }}>
-        <DarkPanel style={{ padding: 0, overflow: "hidden" }}>
+        <DarkPanel style={{ padding: 0, overflow: "hidden", minHeight: panelMinHeight }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: dark.border }}>
             <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: dark.blueSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
               {avatarSource ? (
@@ -833,40 +826,51 @@ function AskPanel({
             </ScrollView>
           </View>
 
-          <View style={{ minHeight: 180, paddingHorizontal: 14, paddingVertical: 14, gap: 10 }}>
-            {messages.length ? messages.map((message) => (
-              <View
-                key={message.id}
-                style={{
-                  alignSelf: message.role === "student" ? "flex-end" : "flex-start",
-                  maxWidth: "88%",
-                  borderTopLeftRadius: message.role === "student" ? 16 : 5,
-                  borderTopRightRadius: message.role === "student" ? 5 : 16,
-                  borderBottomLeftRadius: 16,
-                  borderBottomRightRadius: 16,
-                  borderWidth: message.role === "student" ? 0 : 1,
-                  borderColor: message.blocked ? dark.amber : dark.border2,
-                  backgroundColor: message.role === "student" ? dark.blue : dark.surface2,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                }}
-              >
-                <Text style={{ color: message.role === "student" ? "#fff" : dark.text, fontSize: 12, lineHeight: 18 }}>{message.content}</Text>
-              </View>
-            )) : (
-              <View style={{ flex: 1, minHeight: 132, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 }}>
-                {avatarSource ? <Image source={avatarSource} style={{ width: 74, height: 74 }} resizeMode="contain" /> : null}
-                <Text style={{ marginTop: 10, color: dark.text, fontSize: 15, fontWeight: "900", textAlign: "center" }}>Start with a lesson question</Text>
-                <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11, lineHeight: 17, textAlign: "center" }}>
-                  JA answers through the backend using your selected lesson as context.
-                </Text>
-              </View>
-            )}
-            {busy ? (
-              <View style={{ alignSelf: "flex-start", borderRadius: 16, borderTopLeftRadius: 5, backgroundColor: dark.surface2, borderWidth: 1, borderColor: dark.border2, paddingHorizontal: 12, paddingVertical: 10 }}>
-                <Text style={{ color: dark.muted, fontSize: 12, fontWeight: "800" }}>JA is thinking...</Text>
-              </View>
-            ) : null}
+          <View style={{ height: chatViewportHeight, borderBottomWidth: 1, borderBottomColor: dark.border }}>
+            <ScrollView
+              ref={chatScrollRef}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 14, gap: 10, flexGrow: messages.length ? 0 : 1 }}
+            >
+              {messages.length ? messages.map((message) => (
+                <View
+                  key={message.id}
+                  style={{
+                    alignSelf: message.role === "student" ? "flex-end" : "flex-start",
+                    maxWidth: "91%",
+                    borderTopLeftRadius: message.role === "student" ? 18 : 6,
+                    borderTopRightRadius: message.role === "student" ? 6 : 18,
+                    borderBottomLeftRadius: 18,
+                    borderBottomRightRadius: 18,
+                    borderWidth: message.role === "student" ? 0 : 1,
+                    borderColor: message.blocked ? dark.amber : dark.border2,
+                    backgroundColor: message.role === "student" ? dark.blue : dark.surface2,
+                    paddingHorizontal: 13,
+                    paddingVertical: 11,
+                  }}
+                >
+                  {message.role === "student" ? (
+                    <Text style={{ color: "#fff", fontSize: 13, lineHeight: 20 }}>{message.content}</Text>
+                  ) : (
+                    <RichTextContent html={message.content} color={dark.text} mutedColor={dark.muted} accentColor={dark.blue} />
+                  )}
+                </View>
+              )) : (
+                <View style={{ flex: 1, minHeight: 210, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 }}>
+                  {avatarSource ? <Image source={avatarSource} style={{ width: 82, height: 82 }} resizeMode="contain" /> : null}
+                  <Text style={{ marginTop: 10, color: dark.text, fontSize: 16, fontWeight: "900", textAlign: "center" }}>Start with a lesson question</Text>
+                  <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11, lineHeight: 18, textAlign: "center" }}>
+                    JA answers through the backend using your selected lesson as context.
+                  </Text>
+                </View>
+              )}
+              {busy ? (
+                <View style={{ alignSelf: "flex-start", borderRadius: 18, borderTopLeftRadius: 6, backgroundColor: dark.surface2, borderWidth: 1, borderColor: dark.border2, paddingHorizontal: 12, paddingVertical: 10 }}>
+                  <Text style={{ color: dark.muted, fontSize: 12, fontWeight: "800" }}>JA is thinking...</Text>
+                </View>
+              ) : null}
+            </ScrollView>
           </View>
 
           <View style={{ paddingHorizontal: 14, paddingBottom: Math.max(18, insets.bottom + 14), gap: 8 }}>
@@ -885,7 +889,7 @@ function AskPanel({
                 placeholderTextColor={dark.dim}
                 multiline
                 editable={!busy && Boolean(selectedLesson)}
-                style={{ flex: 1, maxHeight: 110, minHeight: 35, color: dark.text, fontSize: 13, lineHeight: 18, padding: 0, textAlignVertical: "center" }}
+                style={{ flex: 1, maxHeight: 140, minHeight: 44, color: dark.text, fontSize: 13, lineHeight: 20, padding: 0, textAlignVertical: "top" }}
               />
               <Pressable
                 disabled={busy || !draft.trim() || !selectedLesson}

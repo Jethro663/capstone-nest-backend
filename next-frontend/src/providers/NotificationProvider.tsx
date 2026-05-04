@@ -6,7 +6,14 @@ import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
+import {
+  isTrackedExtractionTerminalStatus,
+  readAllTrackedExtractionNotifications,
+  upsertTrackedExtractionNotification,
+} from '@/lib/extraction-notification-tracker';
+import { extractionService } from '@/services/extraction-service';
 import { normalizeNotification, notificationService } from '@/services/notification-service';
+import type { ExtractionStatus } from '@/types/extraction';
 import type { Notification } from '@/types/notification';
 
 interface NotificationContextType {
@@ -16,6 +23,7 @@ interface NotificationContextType {
   fetchNotifications: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  subscribe: (listener: (notification: Notification) => void) => () => void;
 }
 
 const NotificationContext = createContext<NotificationContextType>({
@@ -25,6 +33,7 @@ const NotificationContext = createContext<NotificationContextType>({
   fetchNotifications: async () => {},
   markAsRead: async () => {},
   markAllAsRead: async () => {},
+  subscribe: () => () => {},
 });
 
 export function useNotifications() {
@@ -32,12 +41,20 @@ export function useNotifications() {
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, role } = useAuth();
   const sessionUserId = isAuthenticated ? user?.id ?? null : null;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const subscribersRef = useRef(new Set<(notification: Notification) => void>());
+
+  const subscribe = useCallback((listener: (notification: Notification) => void) => {
+    subscribersRef.current.add(listener);
+    return () => {
+      subscribersRef.current.delete(listener);
+    };
+  }, []);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -79,6 +96,67 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  const syncTrackedExtractionNotifications = useCallback(async () => {
+    if (!sessionUserId || role !== 'teacher') return;
+
+    const tracked = readAllTrackedExtractionNotifications().filter(
+      (entry) => !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) || !entry.notifiedAt,
+    );
+
+    if (tracked.length === 0) return;
+
+    await Promise.all(
+      tracked.map(async (entry) => {
+        try {
+          const statusRes = await extractionService.getStatus(entry.extractionId);
+          const nextStatus = statusRes.data.status as ExtractionStatus;
+          const nextEntry = {
+            ...entry,
+            lastKnownStatus: nextStatus,
+            lastKnownProgress: statusRes.data.progressPercent,
+            updatedAt: new Date().toISOString(),
+          };
+
+          const shouldNotify =
+            !entry.notifiedAt &&
+            !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) &&
+            isTrackedExtractionTerminalStatus(nextStatus);
+
+          if (shouldNotify) {
+            nextEntry.notifiedAt = new Date().toISOString();
+            if (nextStatus === 'completed' || nextStatus === 'applied') {
+              toast.success('Extraction ready', {
+                description: `${entry.originalName} finished processing and is ready for teacher review.`,
+                action: {
+                  label: 'View',
+                  onClick: () => {
+                    window.location.assign(`/dashboard/teacher/extractions/${entry.extractionId}`);
+                  },
+                },
+              });
+            } else if (nextStatus === 'failed') {
+              toast.error('Extraction failed', {
+                description:
+                  statusRes.data.errorMessage ||
+                  `${entry.originalName} could not be completed. Open the extraction history to review the error.`,
+                action: {
+                  label: 'History',
+                  onClick: () => {
+                    window.location.assign(`/dashboard/teacher/classes/${entry.classId}?view=extraction`);
+                  },
+                },
+              });
+            }
+          }
+
+          upsertTrackedExtractionNotification(entry.classId, nextEntry);
+        } catch {
+          // Keep the existing tracked state on transient polling failures.
+        }
+      }),
+    );
+  }, [role, sessionUserId]);
+
   // Fetch notifications when user is authenticated
   useEffect(() => {
     if (sessionUserId) {
@@ -88,6 +166,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       setUnreadCount(0);
     }
   }, [fetchNotifications, sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId || role !== 'teacher') return;
+    void syncTrackedExtractionNotifications();
+    const interval = window.setInterval(() => {
+      void syncTrackedExtractionNotifications();
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [role, sessionUserId, syncTrackedExtractionNotifications]);
 
   // WebSocket connection
   useEffect(() => {
@@ -130,6 +217,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
       setNotifications((prev) => [newNotification, ...prev]);
       setUnreadCount((prev) => prev + 1);
+      subscribersRef.current.forEach((listener) => {
+        try {
+          listener(newNotification);
+        } catch {
+          // best-effort fanout for page-level listeners
+        }
+      });
       toast(payload.title, {
         description: payload.body,
         action: {
@@ -159,7 +253,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   return (
     <NotificationContext.Provider
-      value={{ notifications, unreadCount, loading, fetchNotifications, markAsRead, markAllAsRead }}
+      value={{
+        notifications,
+        unreadCount,
+        loading,
+        fetchNotifications,
+        markAsRead,
+        markAllAsRead,
+        subscribe,
+      }}
     >
       {children}
     </NotificationContext.Provider>

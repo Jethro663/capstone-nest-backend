@@ -69,6 +69,11 @@ export interface EngineAssessmentOptionManifest {
   text: string;
   isCorrect: boolean;
   order: number;
+  imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded' | null;
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
 }
 
 export interface EngineAssessmentQuestionManifest {
@@ -80,6 +85,10 @@ export interface EngineAssessmentQuestionManifest {
   isRequired: boolean;
   explanation?: string | null;
   imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded' | null;
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
   options: EngineAssessmentOptionManifest[];
 }
 

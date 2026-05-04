@@ -243,6 +243,10 @@ export class ReleaseCoreModuleDto {
   @IsOptional()
   @IsBoolean()
   isVisible?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isLocked?: boolean;
 }
 
 export class ReleaseCoreModuleItemDto {

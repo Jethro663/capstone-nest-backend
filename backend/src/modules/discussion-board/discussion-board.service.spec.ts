@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 describe('DiscussionBoardService', () => {
   let service: DiscussionBoardService;
   let mockDb: any;
+  let mockAuditService: { log: jest.Mock };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -33,14 +34,13 @@ describe('DiscussionBoardService', () => {
       select: jest.fn(),
     };
 
+    mockAuditService = { log: jest.fn().mockResolvedValue(undefined) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DiscussionBoardService,
         { provide: DatabaseService, useValue: { db: mockDb } },
-        {
-          provide: AuditService,
-          useValue: { log: jest.fn().mockResolvedValue(undefined) },
-        },
+        { provide: AuditService, useValue: mockAuditService },
         {
           provide: getQueueToken('discussion-board'),
           useValue: { add: jest.fn().mockResolvedValue({ id: 'job-1' }) },
@@ -161,5 +161,58 @@ describe('DiscussionBoardService', () => {
     await expect(
       service.getThread('class-1', 'thread-1', 'student-1', ['student']),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('allows a teacher to report a comment for moderation follow-up', async () => {
+    jest.spyOn(service as any, 'getThreadOrThrow').mockResolvedValue({
+      thread: {
+        id: 'thread-1',
+        title: 'Week 2 Discussion',
+        status: 'published',
+        publishedAt: new Date(),
+        allowComments: true,
+      },
+      access: {
+        isAdmin: false,
+        isTeacher: true,
+        isStudent: false,
+        classTeacherId: 'teacher-1',
+      },
+    });
+
+    mockDb.query.discussionComments.findFirst.mockResolvedValue({
+      id: 'comment-1',
+      authorId: 'student-1',
+    });
+
+    const result = await service.reportComment(
+      'class-1',
+      'thread-1',
+      'comment-1',
+      'teacher-1',
+      ['teacher'],
+      {
+        reasonCode: 'inappropriate',
+        notes: 'Contains personal attacks.',
+      },
+    );
+
+    expect(result.commentId).toBe('comment-1');
+    expect(result.reasonCode).toBe('inappropriate');
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 'teacher-1',
+        action: 'discussion.comment.reported',
+        targetType: 'discussion_comment',
+        targetId: 'comment-1',
+        metadata: expect.objectContaining({
+          classId: 'class-1',
+          threadId: 'thread-1',
+          commentAuthorId: 'student-1',
+          reasonCode: 'inappropriate',
+          notes: 'Contains personal attacks.',
+        }),
+      }),
+    );
   });
 });

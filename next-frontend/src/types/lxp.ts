@@ -51,13 +51,18 @@ export interface EligibilityResponse {
 
 export interface LxpCheckpoint {
   id: string;
-  type: 'lesson_review' | 'assessment_retry';
+  type:
+    | 'lesson_review'
+    | 'assessment_retry'
+    | 'generated_lesson_review'
+    | 'guided_assessment';
   label: string;
   order: number;
   isCompleted: boolean;
   completedAt: string | null;
   xpAwarded: number;
   lesson?: { id: string; title: string; description?: string | null; order?: number } | null;
+  generatedLesson?: GeneratedLessonContent | null;
   assessment?: {
     id: string;
     title: string;
@@ -66,6 +71,34 @@ export interface LxpCheckpoint {
     passingScore?: number | null;
     dueDate?: string | null;
   } | null;
+  guidedAssessment?: GuidedAssessmentContent | null;
+}
+
+export interface GeneratedLessonContent {
+  id: string;
+  title: string;
+  summary?: string | null;
+  lessonBody: string;
+  weakConcepts: string[];
+  sourceLessonIds?: string[];
+  sourceReferences?: Array<Record<string, unknown>>;
+  status?: 'draft' | 'approved' | 'rejected' | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+}
+
+export interface GuidedAssessmentContent {
+  id: string;
+  title: string;
+  description?: string | null;
+  weakConcepts: string[];
+  sourceAssessmentId?: string | null;
+  sourceReferences?: Array<Record<string, unknown>>;
+  formativeSummary?: string | null;
+  questions: GuidedAssessmentQuestion[];
+  status?: 'draft' | 'approved' | 'rejected' | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
 }
 
 export interface PlaylistResponse {
@@ -136,7 +169,11 @@ export interface LxpOverviewSubjectMasteryRow {
 
 export interface LxpOverviewRecommendedAction {
   assignmentId: string;
-  type: 'lesson_review' | 'assessment_retry';
+  type:
+    | 'lesson_review'
+    | 'assessment_retry'
+    | 'generated_lesson_review'
+    | 'guided_assessment';
   title: string;
   subtitle: string;
   xpAwarded: number;
@@ -259,7 +296,11 @@ export interface TeacherInterventionCaseDetail {
   };
   assignments: Array<{
     id: string;
-    type: 'lesson_review' | 'assessment_retry';
+    type:
+      | 'lesson_review'
+      | 'assessment_retry'
+      | 'generated_lesson_review'
+      | 'guided_assessment';
     label: string;
     order: number;
     isCompleted: boolean;
@@ -277,7 +318,13 @@ export interface TeacherInterventionCaseDetail {
       passingScore: number | null;
       dueDate: string | null;
     } | null;
+    generatedLesson?: GeneratedLessonContent | null;
+    guidedAssessment?: GuidedAssessmentContent | null;
   }>;
+  generatedArtifacts?: {
+    generatedLesson: GeneratedLessonContent | null;
+    guidedAssessment: GuidedAssessmentContent | null;
+  } | null;
   latestSnapshot: {
     assessmentAverage: number | null;
     classRecordAverage: number | null;
@@ -405,4 +452,194 @@ export interface SystemEvaluationListResponse {
       };
     }>;
   };
+}
+
+export interface ApproveGeneratedRemedialPayload {
+  generatedLessonDraft?: {
+    title: string;
+    summary?: string | null;
+    lessonBody: string;
+    weakConcepts: string[];
+    sourceLessonIds: string[];
+    sourceReferences: Array<Record<string, unknown>>;
+  } | null;
+  generatedGuidedAssessmentDraft?: {
+    sourceAssessmentId?: string | null;
+    title: string;
+    description?: string | null;
+    weakConcepts: string[];
+    formativeSummary?: string | null;
+    sourceReferences: Array<Record<string, unknown>>;
+    questions: Array<{
+      id: string;
+      type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+      stem: string;
+      explanation: string;
+      hint?: string | null;
+      weakConceptTag?: string | null;
+      sourceQuestionId?: string | null;
+      options: Array<{
+        id: string;
+        text: string;
+        isCorrect: boolean;
+      }>;
+    }>;
+  } | null;
+}
+
+export interface GeneratedArtifactApprovalResponse {
+  caseId?: string;
+  generatedLesson: GeneratedLessonContent | null;
+  guidedAssessment: GuidedAssessmentContent | null;
+}
+
+export interface GuidedAssessmentQuestionOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface GuidedAssessmentQuestion {
+  id: string;
+  type: 'multiple_choice' | 'multiple_select' | 'true_false' | 'dropdown';
+  stem: string;
+  explanation: string;
+  hint?: string | null;
+  weakConceptTag?: string | null;
+  options: GuidedAssessmentQuestionOption[];
+}
+
+export interface GuidedAssessmentAttemptState {
+  id: string;
+  status: 'in_progress' | 'submitted';
+  currentQuestionIndex: number;
+  responses: Array<{
+    questionId: string;
+    answer?: string | string[];
+    isCorrect?: boolean;
+    explanationShown?: boolean;
+  }>;
+  hintedQuestionIds: string[];
+  scorePercent: number | null;
+  submittedAt?: string | null;
+}
+
+export interface GuidedAssessmentSessionResponse {
+  assignmentId: string;
+  checkpointLabel?: string;
+  guidedAssessment: GuidedAssessmentContent;
+  attempt: GuidedAssessmentAttemptState;
+}
+
+export interface GuidedAssessmentResultResponse {
+  assignmentId: string;
+  attemptId: string;
+  guidedAssessment: GuidedAssessmentContent | null;
+  scorePercent: number;
+  correctCount: number;
+  responses: Array<{
+    questionId: string;
+    answer?: string | string[];
+    isCorrect?: boolean;
+    explanationShown?: boolean;
+    weakConceptTag?: string | null;
+  }>;
+  hintedQuestionIds: string[];
+  formativeSummary: Record<string, unknown> | null;
+  submittedAt?: string | null;
+}
+
+export type TeacherEvaluationType =
+  | 'teacher_class'
+  | 'ja_hub'
+  | 'learners_path';
+
+export interface TeacherEvaluationQuestion {
+  key: string;
+  label: string;
+}
+
+export interface StudentTeacherEvaluationItem {
+  classId: string;
+  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  schoolYear: string;
+  evaluationType: TeacherEvaluationType;
+  title: string;
+  description: string;
+  class: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
+  };
+  questions: TeacherEvaluationQuestion[];
+}
+
+export interface StudentTeacherEvaluationCompletedItem {
+  id: string;
+  classId: string;
+  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  evaluationType: TeacherEvaluationType;
+  title: string;
+  class: StudentTeacherEvaluationItem['class'] | null;
+  submittedAt: string;
+}
+
+export interface StudentTeacherEvaluationDashboardResponse {
+  currentAcademicState: {
+    schoolYear: string;
+    quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  };
+  pending: StudentTeacherEvaluationItem[];
+  completed: StudentTeacherEvaluationCompletedItem[];
+}
+
+export interface TeacherEvaluationCategoryAverage {
+  key: string;
+  label: string;
+  average: number;
+}
+
+export interface TeacherEvaluationSummaryResponse {
+  classes: Array<{
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
+  }>;
+  periods: Array<'Q1' | 'Q2' | 'Q3' | 'Q4'>;
+  evaluationType: TeacherEvaluationType;
+  tabTitle: string;
+  tabDescription: string;
+  overview: {
+    responseCount: number;
+    eligibleCount: number;
+    responseRate: number;
+    averageOverall: number;
+    latestSubmittedAt: string | null;
+  };
+  categoryAverages: TeacherEvaluationCategoryAverage[];
+  comments: Array<{
+    id: string;
+    comment: string;
+    submittedAt: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    classId: string;
+    classLabel: string;
+  }>;
+  trends: Array<{
+    classId: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    classLabel: string;
+    responseCount: number;
+    eligibleCount: number;
+  }>;
 }

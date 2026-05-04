@@ -1,0 +1,11 @@
+{
+  "source_docx": "C:\\Users\\jethr\\Downloads\\May03-CHAPTER-1-4 (2).docx",
+  "readiness_score": 89,
+  "panel_risk": "Medium",
+  "verdict": "Almost panel-safe, but still needs one short correction pass.",
+  "finding_counts": {
+    "Major": 2,
+    "Moderate": 2,
+    "Minor": 1
+  }
+}

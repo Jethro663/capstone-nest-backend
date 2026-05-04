@@ -23,6 +23,7 @@ import type {
   StudentMasterListRow,
   StudentPerformanceReportRow,
 } from '@/types/report';
+import { downloadReportPdf } from '@/utils/report-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -76,11 +77,16 @@ export function TeacherReportsFigmaPage() {
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const selectedClass = useMemo(
     () => classes.find((item) => item.id === selectedClassId) ?? null,
     [classes, selectedClassId],
+  );
+  const selectedRecord = useMemo(
+    () => records.find((entry) => entry.id === selectedRecordId) ?? null,
+    [records, selectedRecordId],
   );
 
   const reportQuery = useMemo<ReportQuery>(
@@ -185,9 +191,9 @@ export function TeacherReportsFigmaPage() {
     fetchReports();
   }, [fetchReports]);
 
-  const handleExport = async () => {
+  const handleExportCsv = async () => {
     try {
-      setExporting(true);
+      setExportingCsv(true);
       const tab = activeView === 'classRecord' ? 'interventionParticipation' : activeView;
       const blob = await reportService.exportCsv(tab, reportQuery);
       const url = URL.createObjectURL(blob);
@@ -202,7 +208,43 @@ export function TeacherReportsFigmaPage() {
     } catch {
       toast.error('Unable to export report');
     } finally {
-      setExporting(false);
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    try {
+      setExportingPdf(true);
+      await downloadReportPdf({
+        tab: activeView,
+        heading: 'Reports',
+        scopeLabel: 'Teacher Reports Hub',
+        filters: reportQuery,
+        classLabel: selectedClass
+          ? `${selectedClass.subjectName} (${selectedClass.subjectCode})`
+          : null,
+        recordLabel: selectedRecord
+          ? `${selectedRecord.gradingPeriod} - ${selectedRecord.status}`
+          : null,
+        data: {
+          classRecord: {
+            average,
+            distribution,
+            interventions,
+          },
+          studentMasterList,
+          classEnrollment: [],
+          studentPerformance,
+          interventionParticipation: [],
+          assessmentSummary: [],
+          systemUsage: null,
+        },
+      });
+      toast.success('PDF report downloaded');
+    } catch {
+      toast.error('Unable to export PDF report');
+    } finally {
+      setExportingPdf(false);
     }
   };
 
@@ -258,15 +300,26 @@ export function TeacherReportsFigmaPage() {
         </>
       }
       actions={
-        <Button
-          variant="teacher"
-          className="rounded-xl px-4"
-          onClick={() => void handleExport()}
-          disabled={exporting}
-        >
-          <Download className="h-4 w-4" />
-          {exporting ? 'Exporting...' : 'Export'}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="teacherOutline"
+            className="rounded-xl px-4"
+            onClick={() => void handleExportCsv()}
+            disabled={exportingCsv || exportingPdf}
+          >
+            <Download className="h-4 w-4" />
+            {exportingCsv ? 'Exporting CSV...' : 'Download CSV'}
+          </Button>
+          <Button
+            variant="teacher"
+            className="rounded-xl px-4"
+            onClick={() => void handleExportPdf()}
+            disabled={exportingCsv || exportingPdf}
+          >
+            <Download className="h-4 w-4" />
+            {exportingPdf ? 'Exporting PDF...' : 'Download PDF'}
+          </Button>
+        </div>
       }
     >
       <TeacherSectionCard title="Filters" className="teacher-figma-stagger">

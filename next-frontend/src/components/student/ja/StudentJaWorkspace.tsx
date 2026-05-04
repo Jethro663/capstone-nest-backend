@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CircleHelp,
   CircleDot,
   LockKeyhole,
   Loader2,
@@ -24,9 +25,10 @@ import {
   MessageCircleQuestion,
   ShieldAlert,
   Sparkles,
-  Swords,
   X,
 } from "lucide-react";
+import { AiOutageNotice } from "@/components/student/AiOutageNotice";
+import { StudentJaHubGuideDialog } from "@/components/student/ja/StudentJaHubGuideDialog";
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
 import { StudentStatusChip } from "@/components/student/student-primitives";
@@ -35,7 +37,9 @@ import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { normalizeRichText } from "@/lib/rich-text";
 import { jaService } from "@/services/ja-service";
+import { useAiAvailability } from "@/hooks/use-ai-availability";
 import type {
   JaAskMessage,
   JaAskLessonContextSummary,
@@ -49,11 +53,12 @@ import { cn } from "@/utils/cn";
 
 type AnswerState = Record<string, string[]>;
 type JaEntry = "sidebar" | "class" | "lxp" | "lesson" | "assessment";
-type JaActivityFilter = "all" | JaMode;
+type JaVisibleMode = Extract<JaMode, "ask" | "review">;
+type JaActivityFilter = "all" | JaVisibleMode;
 
 interface JaActivityItem {
   id: string;
-  mode: JaMode;
+  mode: JaVisibleMode;
   title: string;
   subtitle: string;
   classLabel: string;
@@ -61,23 +66,27 @@ interface JaActivityItem {
   updatedAt: string;
 }
 
-const MODE_ORDER: JaMode[] = ["practice", "ask", "review"];
+type JaAssistantTone = "grounded" | "guarded" | "thin-evidence";
+
+const MODE_ORDER: JaVisibleMode[] = ["ask", "review"];
+const JA_INLINE_ACTIONS: JaAskPresetAction[] = [
+  { id: "inline-explain-simpler", label: "Explain simpler" },
+  { id: "inline-give-analogy", label: "Give analogy" },
+  { id: "inline-quiz-me", label: "Quiz me" },
+  { id: "inline-study-next", label: "What should I study next?" },
+];
+const JA_THIN_EVIDENCE_PATTERN =
+  /i do not have enough readable class evidence|i cannot answer that confidently|pick one visible lesson|avoids filling gaps with unsupported guesses|would rather be explicit about weak evidence/i;
 
 const MODE_META: Record<
-  JaMode,
+  JaVisibleMode,
   {
     title: string;
     subtitle: string;
-    icon: typeof Swords;
+    icon: typeof MessageCircleQuestion;
     kicker: string;
   }
 > = {
-  practice: {
-    title: "Practice",
-    subtitle: "Fresh objective checks grounded to your class lessons.",
-    icon: Swords,
-    kicker: "Drill",
-  },
   ask: {
     title: "Ask",
     subtitle: "Class-grounded mentor chat for concept clarity.",
@@ -143,13 +152,64 @@ const ASK_PRESET_GROUPS: Array<{
   },
 ];
 
-function isJaMode(value: string | null | undefined): value is JaMode {
-  return value === "practice" || value === "ask" || value === "review";
+function isJaMode(value: string | null | undefined): value is JaVisibleMode {
+  return value === "ask" || value === "review";
 }
 
 function itemReady(item: JaPracticeSessionItem, selected: string[] | undefined) {
   if (!selected || selected.length === 0) return false;
   return item.itemType === "multiple_select" ? selected.length > 0 : Boolean(selected[0]);
+}
+
+function getAssistantTone(message: JaAskMessage): JaAssistantTone {
+  if (message.blocked) return "guarded";
+  if (
+    message.insufficientEvidence ||
+    (Array.isArray(message.citations) &&
+      message.citations.length === 0 &&
+      JA_THIN_EVIDENCE_PATTERN.test(message.content))
+  ) {
+    return "thin-evidence";
+  }
+  return "grounded";
+}
+
+function getAssistantToneLabel(tone: JaAssistantTone) {
+  if (tone === "guarded") {
+    return {
+      chipTone: "warning" as const,
+      label: "Guarded",
+      subtitle: "Safety first",
+    };
+  }
+  if (tone === "thin-evidence") {
+    return {
+      chipTone: "info" as const,
+      label: "Thin evidence",
+      subtitle: "Needs clearer class material",
+    };
+  }
+  return {
+    chipTone: "success" as const,
+    label: "Grounded",
+    subtitle: "Based on your class",
+  };
+}
+
+function readCitationValue(citation: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = citation[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function formatCitationSource(sourceType: string) {
+  return sourceType
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function classLabel(item: { subjectName: string; subjectCode: string }) {
@@ -192,6 +252,47 @@ function splitCoachPrompt(prompt: string) {
     prompt: parts[0].trim(),
     coach: parts.slice(1).join(" JA Coach: ").trim(),
   };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeJaAssistantContent(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("{") || !trimmed.includes('"html"')) {
+    return normalizeRichText(content);
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return normalizeRichText(content);
+    }
+
+    const heading = typeof parsed.heading === "string" ? parsed.heading.trim() : "";
+    const html =
+      typeof parsed.html === "string"
+        ? parsed.html.trim()
+        : typeof parsed.text === "string"
+          ? parsed.text.trim()
+          : "";
+
+    if (!heading && !html) {
+      return normalizeRichText(content);
+    }
+
+    return normalizeRichText(
+      `${heading ? `<h3>${escapeHtml(heading)}</h3>` : ""}${html}`,
+    );
+  } catch {
+    return normalizeRichText(content);
+  }
 }
 
 function JaAssistantAvatar({
@@ -250,6 +351,8 @@ export default function StudentJaWorkspace({
   initialMode,
   returnTo,
 }: StudentJaWorkspaceProps) {
+  const aiAvailability = useAiAvailability();
+  const aiUnavailable = aiAvailability.status === "degraded";
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = Boolean(prefersReducedMotion);
   const motionProps = useMemo(
@@ -266,10 +369,12 @@ export default function StudentJaWorkspace({
 
   const [hub, setHub] = useState<JaHubResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<JaMode>(
+  const [mode, setMode] = useState<JaVisibleMode>(
     isJaMode(initialMode) ? initialMode : "ask",
   );
   const [showHome, setShowHome] = useState(false);
+  const [guideResetToken, setGuideResetToken] = useState(0);
+  const [guideOpen, setGuideOpen] = useState(true);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [classSelectorOpen, setClassSelectorOpen] = useState(
     !(initialClassId && initialEntry && initialEntry !== "sidebar"),
@@ -279,7 +384,6 @@ export default function StudentJaWorkspace({
   const [activityFilter, setActivityFilter] = useState<JaActivityFilter>("all");
   const [activeActivityKey, setActiveActivityKey] = useState("");
 
-  const [practiceSession, setPracticeSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewSession, setReviewSession] = useState<JaPracticeSessionResponse | null>(null);
   const [reviewCursor, setReviewCursor] = useState(0);
   const [reviewSessionTitle, setReviewSessionTitle] = useState("Assessment Replay");
@@ -317,6 +421,7 @@ export default function StudentJaWorkspace({
   }, [clearAnswersForItems, reviewSession]);
 
   const startNewAskChat = useCallback(() => {
+    if (aiUnavailable) return;
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
     setAskMessages([]);
@@ -328,7 +433,7 @@ export default function StudentJaWorkspace({
     setMode("ask");
     setShowHome(false);
     setActivityFilter("ask");
-  }, [selectedClassId]);
+  }, [aiUnavailable, selectedClassId]);
 
   const syncAskThreadSummary = useCallback(
     (
@@ -392,7 +497,6 @@ export default function StudentJaWorkspace({
           setAskError("");
           setSelectedLessonContext(null);
           setAskMenuOpen(false);
-          setPracticeSession(null);
           setReviewSession(null);
           setAnswers({});
           setReviewCursor(0);
@@ -485,13 +589,11 @@ export default function StudentJaWorkspace({
   }, [askMenuOpen]);
 
   useEffect(() => {
-    const activeSession = mode === "practice" ? practiceSession : reviewSession;
+    const activeSession = mode === "review" ? reviewSession : null;
     if (!activeSession || activeSession.session.status !== "active") return;
     const onVisibilityChange = () => {
       if (document.visibilityState !== "hidden") return;
-      const fn =
-        mode === "practice" ? jaService.logEvent : jaService.logReviewEvent;
-      void fn(activeSession.session.id, "focus_strike", {
+      void jaService.logReviewEvent(activeSession.session.id, "focus_strike", {
         reason: "visibility_hidden",
         at: new Date().toISOString(),
       });
@@ -499,18 +601,14 @@ export default function StudentJaWorkspace({
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, [mode, practiceSession, reviewSession]);
+  }, [mode, reviewSession]);
 
-  const currentSession = mode === "practice" ? practiceSession : reviewSession;
+  const currentSession = mode === "review" ? reviewSession : null;
   const activeItemIndex = useMemo(() => {
     if (!currentSession) return null;
     if (currentSession.items.length === 0) return -1;
-    if (mode === "review") {
-      return Math.min(Math.max(reviewCursor, 0), currentSession.items.length - 1);
-    }
-    const nextIndex = currentSession.items.findIndex((item) => !item.response);
-    return nextIndex >= 0 ? nextIndex : currentSession.items.length - 1;
-  }, [currentSession, mode, reviewCursor]);
+    return Math.min(Math.max(reviewCursor, 0), currentSession.items.length - 1);
+  }, [currentSession, reviewCursor]);
 
   const activeItem =
     currentSession && activeItemIndex !== null && activeItemIndex >= 0
@@ -567,9 +665,8 @@ export default function StudentJaWorkspace({
     : 0;
 
   const modeCount = useMemo(() => {
-    if (!hub) return { practice: 0, ask: 0, review: 0 };
+    if (!hub) return { ask: 0, review: 0 };
     return {
-      practice: hub.practice.sessions.length,
       ask: hub.ask.threads.length,
       review: hub.review.sessions?.length ?? 0,
     };
@@ -595,15 +692,6 @@ export default function StudentJaWorkspace({
       status: thread.status.toUpperCase(),
       updatedAt: thread.lastMessageAt || thread.updatedAt,
     }));
-    const practiceItems = hub.practice.sessions.map((session) => ({
-      id: session.id,
-      mode: "practice" as const,
-      title: "Practice Mission",
-      subtitle: getSessionSubtitle(session),
-      classLabel: className,
-      status: session.status.toUpperCase(),
-      updatedAt: session.completedAt || session.startedAt,
-    }));
     const reviewItems = (hub.review.sessions ?? []).map((session) => ({
       id: session.id,
       mode: "review" as const,
@@ -613,7 +701,7 @@ export default function StudentJaWorkspace({
       status: session.status.toUpperCase(),
       updatedAt: session.completedAt || session.startedAt,
     }));
-    return [...askItems, ...practiceItems, ...reviewItems].sort(
+    return [...askItems, ...reviewItems].sort(
       (left, right) => getActivityTimestamp(right.updatedAt) - getActivityTimestamp(left.updatedAt),
     );
   }, [hub, selectedClassLabel]);
@@ -636,18 +724,12 @@ export default function StudentJaWorkspace({
     ? hub.ask.guidelines
     : DEFAULT_JA_ASK_GUIDELINES;
 
-  const loadSession = async (sessionId: string, targetMode: JaMode) => {
+  const loadReviewSession = async (sessionId: string) => {
     try {
-      setActiveActivityKey(`${targetMode}:${sessionId}`);
-      const res =
-        targetMode === "practice"
-          ? await jaService.getSession(sessionId)
-          : await jaService.getReviewSession(sessionId);
-      if (targetMode === "practice") setPracticeSession(res.data);
-      if (targetMode === "review") {
-        setReviewSession(res.data);
-        setReviewCursor(0);
-      }
+      setActiveActivityKey(`review:${sessionId}`);
+      const res = await jaService.getReviewSession(sessionId);
+      setReviewSession(res.data);
+      setReviewCursor(0);
 
       const draft: AnswerState = {};
       res.data.items.forEach((item) => {
@@ -667,7 +749,7 @@ export default function StudentJaWorkspace({
     }
   };
 
-  const selectMode = (nextMode: JaMode) => {
+  const selectMode = (nextMode: JaVisibleMode) => {
     if (nextMode === "review") {
       resetReviewStage();
     } else {
@@ -689,10 +771,11 @@ export default function StudentJaWorkspace({
       setAskThreadId(item.id);
       return;
     }
-    void loadSession(item.id, item.mode);
+    void loadReviewSession(item.id);
   };
 
   const selectAskLessonContext = (context: JaAskLessonContextSummary) => {
+    if (aiUnavailable) return;
     setSelectedLessonContext(context);
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
@@ -707,6 +790,7 @@ export default function StudentJaWorkspace({
   };
 
   const clearAskLessonContext = () => {
+    if (aiUnavailable) return;
     setSelectedLessonContext(null);
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
@@ -717,29 +801,8 @@ export default function StudentJaWorkspace({
     setActiveActivityKey("");
   };
 
-  const startPractice = async () => {
-    if (!hub || !selectedClassId) return;
-    setBusy(true);
-    try {
-      const recommendation = hub.practice.recommendations[0];
-      const res = await jaService.createSession({ classId: selectedClassId, recommendation });
-      setPracticeSession(res.data);
-      setActiveActivityKey(`practice:${res.data.session.id}`);
-      setMode("practice");
-      setShowHome(false);
-      toast.success("Practice mission generated.");
-      await refreshHub(selectedClassId);
-    } catch (error: unknown) {
-      const message =
-        (error as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "JA could not generate practice yet.";
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const startReview = async (attemptId: string) => {
+    if (aiUnavailable) return;
     if (!selectedClassId) return;
     setBusy(true);
     try {
@@ -767,46 +830,30 @@ export default function StudentJaWorkspace({
   };
 
   const submitCurrentAnswer = async () => {
+    if (aiUnavailable) return;
     if (!currentSession || !activeItem) return;
     setBusy(true);
     try {
-      if (mode === "practice") {
-        const selected = answers[activeItem.id];
-        if (!itemReady(activeItem, selected)) {
-          toast.error("Select an answer first.");
-          return;
-        }
+      const unansweredItems = currentSession.items.filter((item) => !item.response);
+      const incompleteItem = unansweredItems.find(
+        (item) => !itemReady(item, answers[item.id]),
+      );
+      if (incompleteItem) {
+        toast.error("Answer every replay item before submitting.");
+        return;
+      }
+      for (const item of unansweredItems) {
+        const selected = answers[item.id];
         const payload =
-          activeItem.itemType === "multiple_select"
+          item.itemType === "multiple_select"
             ? { selectedOptionIds: selected }
             : { selectedOptionId: selected?.[0] };
-        await jaService.submitResponse(currentSession.session.id, {
-          itemId: activeItem.id,
+        await jaService.submitReviewResponse(currentSession.session.id, {
+          itemId: item.id,
           answer: payload,
         });
-        await loadSession(currentSession.session.id, "practice");
-      } else {
-        const unansweredItems = currentSession.items.filter((item) => !item.response);
-        const incompleteItem = unansweredItems.find(
-          (item) => !itemReady(item, answers[item.id]),
-        );
-        if (incompleteItem) {
-          toast.error("Answer every replay item before submitting.");
-          return;
-        }
-        for (const item of unansweredItems) {
-          const selected = answers[item.id];
-          const payload =
-            item.itemType === "multiple_select"
-              ? { selectedOptionIds: selected }
-              : { selectedOptionId: selected?.[0] };
-          await jaService.submitReviewResponse(currentSession.session.id, {
-            itemId: item.id,
-            answer: payload,
-          });
-        }
-        await loadSession(currentSession.session.id, "review");
       }
+      await loadReviewSession(currentSession.session.id);
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Failed to save answer."));
     } finally {
@@ -815,6 +862,7 @@ export default function StudentJaWorkspace({
   };
 
   const sendAskPreset = async (preset: JaAskPresetAction) => {
+    if (aiUnavailable) return;
     if (!selectedClassId || busy) return;
     setAskMenuOpen(false);
 
@@ -837,9 +885,15 @@ export default function StudentJaWorkspace({
         {
           id: warningMessageId,
           role: "assistant",
-          content:
+          content: [
+            "## Main idea",
             "Select a visible lesson first so JA can keep this help grounded to your class material.",
+            "",
+            "## Try this now",
+            "- Choose one lesson card before asking for a summary, explanation, quiz, or study plan.",
+          ].join("\n"),
           blocked: false,
+          insufficientEvidence: true,
         },
       ]);
       return;
@@ -868,10 +922,14 @@ export default function StudentJaWorkspace({
         quickAction: preset.label,
         lessonId: selectedLessonContext?.lessonId,
       });
+      const assistantMessage: JaAskMessage = {
+        ...response.data.message,
+        insufficientEvidence: response.data.insufficientEvidence,
+      };
       setAskMessages((prev) => [
         ...prev.filter((message) => message.id !== localMessageId),
         studentMessage,
-        response.data.message,
+        assistantMessage,
       ]);
       setAskError("");
       if (response.data.blocked) setShowGuardrailModal(true);
@@ -880,7 +938,7 @@ export default function StudentJaWorkspace({
       setSelectedLessonContext(resolveThreadLessonContext(response.data.thread));
       syncAskThreadSummary(
         response.data.thread,
-        response.data.message.createdAt ?? new Date().toISOString(),
+        assistantMessage.createdAt ?? new Date().toISOString(),
       );
     } catch (error: unknown) {
       setAskMessages((prev) => prev.filter((message) => message.id !== localMessageId));
@@ -893,16 +951,12 @@ export default function StudentJaWorkspace({
   };
 
   const completeCurrentSession = async () => {
+    if (aiUnavailable) return;
     if (!currentSession) return;
     setBusy(true);
     try {
-      if (mode === "practice") {
-        await jaService.completeSession(currentSession.session.id);
-        await loadSession(currentSession.session.id, "practice");
-      } else {
-        await jaService.completeReviewSession(currentSession.session.id);
-        await loadSession(currentSession.session.id, "review");
-      }
+      await jaService.completeReviewSession(currentSession.session.id);
+      await loadReviewSession(currentSession.session.id);
       await refreshHub(selectedClassId);
       toast.success("Session completed.");
     } catch (error: unknown) {
@@ -1043,6 +1097,11 @@ export default function StudentJaWorkspace({
       ) : null}
 
       <motion.section className="ja-center-panel ja-main" {...motionProps.item}>
+        <StudentJaHubGuideDialog
+          key={guideResetToken}
+          open={guideOpen}
+          onOpenChange={setGuideOpen}
+        />
         {!historyOpen ? (
           <button
             type="button"
@@ -1096,13 +1155,27 @@ export default function StudentJaWorkspace({
             ) : (
               <span className="ja-class-label-static">{selectedClassLabel}</span>
             )}
+            {aiUnavailable ? (
+              <span className="ja-ai-offline-pill">AI offline</span>
+            ) : null}
           </div>
           <div className="ja-topbar__actions">
+            <button
+              type="button"
+              className="ja-head-link ja-guide-trigger"
+              onClick={() => {
+                setGuideResetToken((current) => current + 1);
+                setGuideOpen(true);
+              }}
+            >
+              <CircleHelp className="h-4 w-4" />
+              JA guide
+            </button>
             {mode === "ask" ? (
               <Button
                 type="button"
                 variant="outline"
-                disabled={busy}
+                disabled={busy || aiUnavailable}
                 className="ja-head-link ja-new-chat-button"
                 onClick={startNewAskChat}
               >
@@ -1135,6 +1208,13 @@ export default function StudentJaWorkspace({
             ) : null}
           </div>
         </div>
+
+        {aiUnavailable ? (
+          <AiOutageNotice
+            className="ja-outage-notice"
+            message={aiAvailability.message}
+          />
+        ) : null}
 
         <AnimatePresence mode="wait" initial={false}>
           {showHome ? (
@@ -1217,6 +1297,7 @@ export default function StudentJaWorkspace({
                                   "ja-context-chip",
                                   isSelected && "is-selected",
                                 )}
+                                disabled={aiUnavailable}
                                 onClick={() => selectAskLessonContext(context)}
                               >
                                 <BookOpen className="h-4 w-4" />
@@ -1253,42 +1334,129 @@ export default function StudentJaWorkspace({
                   </div>
                 </article>
 
-                {askMessages.map((msg) => (
-                  <article
-                    key={msg.id}
-                    className={cn(
-                      "ja-msg-row",
-                      msg.role === "student" ? "user" : "ja",
-                    )}
-                  >
-                    {msg.role === "student" ? (
-                      <span className="ja-msg-avatar user-av" aria-hidden="true">
-                        ME
-                      </span>
-                    ) : (
-                      <JaAssistantAvatar mood={msg.blocked ? "guarded" : "default"} />
-                    )}
-                    <div
-                      className={cn(
-                        "ja-bubble",
-                        msg.role === "student" ? "user" : "ja",
-                        msg.blocked && "notice",
-                      )}
+                {askMessages.map((msg) => {
+                  const isStudentMessage = msg.role === "student";
+                  const tone = isStudentMessage ? null : getAssistantTone(msg);
+                  const toneMeta = tone ? getAssistantToneLabel(tone) : null;
+                  const citations = Array.isArray(msg.citations) ? msg.citations : [];
+                  const inlineActions =
+                    !isStudentMessage && !msg.blocked ? JA_INLINE_ACTIONS : [];
+
+                  return (
+                    <article
+                      key={msg.id}
+                      className={cn("ja-msg-row", isStudentMessage ? "user" : "ja")}
                     >
-                      {msg.blocked ? (
-                        <StudentStatusChip tone="warning">Guarded</StudentStatusChip>
-                      ) : null}
-                      <p>{msg.content}</p>
-                    </div>
-                  </article>
-                ))}
+                      {isStudentMessage ? (
+                        <span className="ja-msg-avatar user-av" aria-hidden="true">
+                          ME
+                        </span>
+                      ) : (
+                        <JaAssistantAvatar mood={msg.blocked ? "guarded" : "default"} />
+                      )}
+                      <div
+                        className={cn(
+                          "ja-bubble",
+                          isStudentMessage ? "user" : "ja",
+                          isStudentMessage && "ja-bubble--student",
+                          tone === "grounded" && "ja-bubble--grounded",
+                          tone === "thin-evidence" && "ja-bubble--thin-evidence",
+                          tone === "guarded" && "ja-bubble--guarded",
+                          msg.blocked && "notice",
+                        )}
+                      >
+                        {isStudentMessage ? (
+                          <p>{msg.content}</p>
+                        ) : (
+                          <>
+                            {toneMeta ? (
+                              <div className="ja-bubble__meta">
+                                <div className="ja-bubble__speaker">
+                                  <span>JA Coach</span>
+                                  <small>{toneMeta.subtitle}</small>
+                                </div>
+                                <StudentStatusChip tone={toneMeta.chipTone}>
+                                  {toneMeta.label}
+                                </StudentStatusChip>
+                              </div>
+                            ) : null}
+
+                            <RichTextRenderer
+                              html={normalizeJaAssistantContent(msg.content)}
+                              className="ja-bubble__content"
+                            />
+
+                            {citations.length > 0 ? (
+                              <div className="ja-bubble__evidence">
+                                <div className="ja-bubble__evidence-head">
+                                  <BookOpen className="h-4 w-4" />
+                                  <span>From your class</span>
+                                </div>
+                                <div className="ja-bubble__evidence-list">
+                                  {citations.map((entry, index) => {
+                                    const citation =
+                                      entry && typeof entry === "object"
+                                        ? (entry as Record<string, unknown>)
+                                        : {};
+                                    const label = readCitationValue(citation, [
+                                      "label",
+                                      "lessonTitle",
+                                      "assessmentTitle",
+                                      "title",
+                                    ]);
+                                    const snippet = readCitationValue(citation, [
+                                      "snippet",
+                                      "chunkText",
+                                    ]);
+                                    const sourceType = readCitationValue(citation, [
+                                      "sourceType",
+                                    ]);
+
+                                    return (
+                                      <article
+                                        key={`${msg.id}-citation-${index}`}
+                                        className="ja-evidence-card"
+                                      >
+                                        <strong>{label || "Class material"}</strong>
+                                        {snippet ? <p>{snippet}</p> : null}
+                                        {sourceType ? (
+                                          <span>{formatCitationSource(sourceType)}</span>
+                                        ) : null}
+                                      </article>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {inlineActions.length > 0 ? (
+                              <div className="ja-bubble__actions" aria-label="Suggested follow-ups">
+                                {inlineActions.map((action) => (
+                                  <button
+                                    key={`${msg.id}-${action.id}`}
+                                    type="button"
+                                    className="ja-bubble__action"
+                                    onClick={() => void sendAskPreset(action)}
+                                    disabled={busy || aiUnavailable}
+                                  >
+                                    {action.label}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })}
 
                 {busy ? (
                   <article className="ja-msg-row ja is-pending">
                     <JaAssistantAvatar mood="thinking" />
-                    <div className="ja-bubble ja notice">
+                    <div className="ja-bubble ja notice ja-bubble--pending">
                       <Loader2 className="h-4 w-4 animate-spin" /> Thinking through your
-                      question...
+                      question and grounding it to your class material...
                     </div>
                   </article>
                 ) : null}
@@ -1342,6 +1510,7 @@ export default function StudentJaWorkspace({
                             key={item.id}
                             type="button"
                             className="ja-ask-menu__item"
+                            disabled={aiUnavailable}
                             onClick={() => void sendAskPreset(item)}
                           >
                             {item.label}
@@ -1353,7 +1522,7 @@ export default function StudentJaWorkspace({
                 </div>
                 <Button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || aiUnavailable}
                   className={cn(
                     "student-button-solid ja-send-button ja-prompt-button",
                     askMenuOpen && "is-open",
@@ -1376,71 +1545,37 @@ export default function StudentJaWorkspace({
             >
               {!currentSession ? (
                 <div className="ja-session-empty student-panel">
-                  {mode === "practice" ? (
-                    <>
-                      <div className="ja-empty-copy">
-                        <h3>Start your next practice run</h3>
-                        <p>
-                          JA will generate 10 objective checks tuned to your current
-                          learning focus in this class.
-                        </p>
-                      </div>
-                      <Button
-                        onClick={() => void startPractice()}
-                        disabled={busy}
-                        className="student-button-solid ja-primary-action"
-                      >
-                        <Swords className="h-4 w-4" />
-                        Generate Practice Run
-                      </Button>
+                  <div className="ja-empty-copy">
+                    <h3>Pick an assessment to replay</h3>
+                    <p>
+                      Replay mode builds a focused retry session from one submitted
+                      assessment attempt.
+                    </p>
+                  </div>
 
-                      <div className="ja-recommendation-list">
-                        {hub.practice.recommendations.slice(0, 3).map((recommendation) => (
-                          <article key={recommendation.id} className="ja-recommendation-item">
-                            <header>
-                              <h4>{recommendation.title}</h4>
-                              <StudentStatusChip tone="info">Focus</StudentStatusChip>
-                            </header>
-                            <p>{recommendation.reason}</p>
-                            <span>{recommendation.focusText}</span>
-                          </article>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="ja-empty-copy">
-                        <h3>Pick an assessment to replay</h3>
-                        <p>
-                          Replay mode builds a focused retry session from one submitted
-                          assessment attempt.
-                        </p>
-                      </div>
-
-                      <div className="ja-review-attempts">
-                        {hub.review.eligibleAttempts.length === 0 ? (
-                          <p className="ja-inline-empty">
-                            No eligible attempts yet. Complete an assessment and return to
-                            replay weak areas.
-                          </p>
-                        ) : (
-                          hub.review.eligibleAttempts.map((attempt) => (
-                            <button
-                              key={attempt.attemptId}
-                              type="button"
-                              onClick={() => void startReview(attempt.attemptId)}
-                            >
-                              <strong>{attempt.assessmentTitle}</strong>
-                              <span>
-                                Submitted {new Date(attempt.submittedAt).toLocaleDateString()} |{" "}
-                                {attempt.score !== null ? `${attempt.score}%` : "Ungraded"}
-                              </span>
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </>
-                  )}
+                  <div className="ja-review-attempts">
+                    {hub.review.eligibleAttempts.length === 0 ? (
+                      <p className="ja-inline-empty">
+                        No eligible attempts yet. Complete an assessment and return to
+                        replay weak areas.
+                      </p>
+                    ) : (
+                      hub.review.eligibleAttempts.map((attempt) => (
+                        <button
+                          key={attempt.attemptId}
+                          type="button"
+                          disabled={aiUnavailable}
+                          onClick={() => void startReview(attempt.attemptId)}
+                        >
+                          <strong>{attempt.assessmentTitle}</strong>
+                          <span>
+                            Submitted {new Date(attempt.submittedAt).toLocaleDateString()} |{" "}
+                            {attempt.score !== null ? `${attempt.score}%` : "Ungraded"}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="ja-session-active student-panel">
@@ -1584,7 +1719,7 @@ export default function StudentJaWorkspace({
                               type="button"
                               className="student-button-solid"
                               onClick={() => void completeCurrentSession()}
-                              disabled={busy}
+                              disabled={busy || aiUnavailable}
                             >
                               Complete Session
                             </Button>
@@ -1593,7 +1728,7 @@ export default function StudentJaWorkspace({
                               type="button"
                               className="student-button-solid"
                               onClick={() => void submitCurrentAnswer()}
-                              disabled={busy || !allSessionItemsReady}
+                              disabled={busy || aiUnavailable || !allSessionItemsReady}
                             >
                               Submit Answers
                             </Button>
@@ -1647,6 +1782,7 @@ export default function StudentJaWorkspace({
                                 type="button"
                                 className={cn(selected && "selected")}
                                 onClick={() => {
+                                  if (aiUnavailable) return;
                                   setAnswers((prev) => ({
                                     ...prev,
                                     [activeItem.id]:
@@ -1660,7 +1796,7 @@ export default function StudentJaWorkspace({
                                   }));
                                 }}
                                 aria-pressed={selected}
-                                disabled={Boolean(activeItem.response)}
+                                disabled={aiUnavailable || Boolean(activeItem.response)}
                               >
                                 <span className="ja-option-mark" aria-hidden="true">
                                   {selected ? "[x]" : "[ ]"}
@@ -1723,26 +1859,12 @@ export default function StudentJaWorkspace({
                           )}
 
                           <div className="ja-question-actions__primary">
-                            {mode === "practice" && !activeItem.response ? (
-                              <Button
-                                onClick={() => void submitCurrentAnswer()}
-                                disabled={
-                                  busy ||
-                                  Boolean(activeItem.response) ||
-                                  !itemReady(activeItem, answers[activeItem.id])
-                                }
-                                className="student-button-solid ja-primary-action"
-                              >
-                                Submit Answer
-                              </Button>
-                            ) : null}
-
                             {mode === "review" &&
                             currentSession.session.status === "active" &&
                             !canComplete ? (
                               <Button
                                 onClick={() => void submitCurrentAnswer()}
-                                disabled={busy || !allSessionItemsReady}
+                                disabled={busy || aiUnavailable || !allSessionItemsReady}
                                 className="student-button-solid ja-primary-action"
                               >
                                 Submit Answers
@@ -1753,7 +1875,7 @@ export default function StudentJaWorkspace({
                               <Button
                                 variant="outline"
                                 onClick={() => void completeCurrentSession()}
-                                disabled={busy}
+                                disabled={busy || aiUnavailable}
                                 className="student-button-outline ja-secondary-action"
                               >
                                 Complete Session
