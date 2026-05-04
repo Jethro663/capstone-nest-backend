@@ -45,8 +45,8 @@ export function ProfilePageFrame({
       : 'text-[var(--student-text-muted)]';
 
   return (
-    <div className={cn('mx-auto max-w-4xl space-y-8 p-6 md:p-10', isTeacher && 'teacher-page', isAdmin && 'admin-page')}>
-      <section className={cn('relative overflow-hidden rounded-[1.5rem] p-6', isTeacher ? 'teacher-panel' : isAdmin ? 'admin-panel' : 'student-panel')}>
+    <div className={cn('mx-auto max-w-4xl space-y-6 px-3 py-4 sm:px-4 md:space-y-8 md:p-8 lg:px-8 lg:py-10', isTeacher && 'teacher-page', isAdmin && 'admin-page')}>
+      <section className={cn('relative overflow-hidden rounded-[1.25rem] p-4 sm:p-5 md:rounded-[1.5rem] md:p-6', isTeacher ? 'teacher-panel' : isAdmin ? 'admin-panel' : 'student-panel')}>
         <div className={cn('absolute top-0 right-0 h-full w-32 -skew-x-12 translate-x-8', isTeacher ? 'bg-sky-300/15' : isAdmin ? 'bg-emerald-300/15' : 'bg-[var(--student-hero-stripe)]')} />
         {isTeacher || isAdmin ? (
           <>
@@ -61,7 +61,7 @@ export function ProfilePageFrame({
             <div className={cn('inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest', isTeacher ? 'teacher-kicker' : isAdmin ? 'admin-kicker' : 'student-kicker')}>
               <Sparkles className="h-3 w-3" /> Account Settings
             </div>
-            <h1 className={cn('text-3xl font-black tracking-tight', accentText)}>{title}</h1>
+            <h1 className={cn('text-[clamp(1.85rem,7vw,3rem)] font-black tracking-tight', accentText)}>{title}</h1>
             <div className={cn('flex flex-wrap items-center gap-2 text-sm font-medium', mutedText)}>
               {email ? (
                 <>
@@ -86,7 +86,7 @@ export function ProfilePageFrame({
             <p className={cn('max-w-xl text-sm', mutedText)}>{subtitle}</p>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <Avatar className={cn('h-20 w-20 rounded-[1.5rem] shadow-lg shadow-black/5', isTeacher ? 'border border-[var(--teacher-outline)]' : isAdmin ? 'border border-[var(--admin-outline)]' : 'border border-[var(--student-outline)]')}>
               {avatarSrc ? <AvatarImage src={avatarSrc} alt={title} /> : null}
               <AvatarFallback className={cn('rounded-[1.5rem] text-xl font-black', isTeacher ? 'bg-[var(--teacher-accent)] text-white' : isAdmin ? 'bg-[var(--admin-accent)] text-white' : 'bg-[var(--student-accent)] text-[var(--student-accent-contrast)]')}>
@@ -98,9 +98,9 @@ export function ProfilePageFrame({
         </div>
       </section>
 
-      <div className="grid gap-8 md:grid-cols-12">
-        <div className="md:col-span-8 space-y-6">{left}</div>
-        <div className="md:col-span-4 space-y-6">
+      <div className="grid gap-6 md:grid-cols-12 md:gap-8">
+        <div className="space-y-6 md:col-span-8">{left}</div>
+        <div className="space-y-6 md:col-span-4">
           {right}
           <div className={cn('rounded-2xl p-6', isTeacher ? 'teacher-soft-panel' : isAdmin ? 'admin-soft-panel' : 'student-note-danger')}>
             <div className={cn('mb-2 flex items-center gap-2', isTeacher ? 'text-[var(--teacher-accent)]' : isAdmin ? 'text-[var(--admin-accent)]' : 'text-[var(--student-accent)]')}>

@@ -127,7 +127,7 @@ export default function NotificationsPage() {
       <div
         role="main"
         aria-label="Student notifications"
-        className="space-y-5 rounded-[1.35rem] bg-[#f4f7fb] p-4 text-[#0f2340] md:p-5"
+        className="mx-auto max-w-6xl space-y-5 rounded-[1.35rem] bg-[#f4f7fb] p-3 text-[#0f2340] sm:p-4 md:p-5"
       >
         <section
           data-testid="student-notifications-hero"
@@ -138,18 +138,18 @@ export default function NotificationsPage() {
             subtitle={`${unreadCount} unread update${unreadCount === 1 ? '' : 's'} waiting in your student inbox.`}
             className="[&_h2]:text-white [&_p]:text-[#d9e6ff]"
             action={(
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full flex-wrap items-stretch gap-2 sm:w-auto sm:items-center sm:justify-end">
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="border border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff]"
+                  className="w-full border border-white/20 bg-white text-[#12284a] hover:bg-[#edf4ff] sm:w-auto"
                   onClick={() => void refreshAll()}
                 >
                   <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
                 </Button>
                 <Button
                   size="sm"
-                  className="bg-[#e70012] text-white hover:bg-[#c90010] disabled:bg-white/20 disabled:text-white/55"
+                  className="w-full bg-[#e70012] text-white hover:bg-[#c90010] disabled:bg-white/20 disabled:text-white/55 sm:w-auto"
                   onClick={() => void handleMarkAll()}
                   disabled={unreadCount === 0}
                 >
@@ -176,7 +176,7 @@ export default function NotificationsPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-stretch gap-2">
             {(['all', 'unread', 'read'] as const).map((value) => (
               <Button
                 key={value}
@@ -185,8 +185,8 @@ export default function NotificationsPage() {
                 variant="outline"
                 className={
                   filter === value
-                    ? 'border-[#e70012] bg-[#e70012] text-white hover:bg-[#c90010]'
-                    : 'border-[#c9d6e8] bg-white text-[#183a63] hover:bg-[#edf4ff]'
+                    ? 'min-w-[7rem] flex-1 border-[#e70012] bg-[#e70012] text-white hover:bg-[#c90010] sm:flex-none'
+                    : 'min-w-[7rem] flex-1 border-[#c9d6e8] bg-white text-[#183a63] hover:bg-[#edf4ff] sm:flex-none'
                 }
                 onClick={() => setFilter(value)}
               >
@@ -248,7 +248,7 @@ export default function NotificationsPage() {
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="shrink-0 border-[#e70012] text-[#e70012] hover:bg-[#fff1f3] hover:text-[#c90010]"
+                        className="w-full border-[#e70012] text-[#e70012] hover:bg-[#fff1f3] hover:text-[#c90010] sm:w-auto sm:shrink-0"
                         onClick={() => void handleMarkRead(notification.id)}
                       >
                         Mark Read
@@ -602,11 +602,11 @@ function Pagination({
       <p className="text-sm student-muted-text">
         Page {page} of {totalPages}
       </p>
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" className="flex-1 sm:flex-none" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
           Previous
         </Button>
-        <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+        <Button type="button" variant="outline" size="sm" className="flex-1 sm:flex-none" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
           Next
         </Button>
       </div>

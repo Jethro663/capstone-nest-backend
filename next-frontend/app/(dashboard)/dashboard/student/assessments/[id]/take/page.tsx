@@ -798,17 +798,17 @@ export default function StudentAssessmentTakePage() {
           initial={reduceMotion ? false : { opacity: 0, y: 8 }}
           animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
           transition={{ duration: 0.25 }}
-          className="mx-auto max-w-6xl space-y-4"
+          className="mx-auto max-w-6xl space-y-4 px-3 pb-4 sm:px-4"
         >
           <Card className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_64px_-48px_rgba(15,23,42,0.35)]">
-            <CardContent className="p-6 space-y-4">
-              <div className="sticky top-0 z-20 -mx-6 -mt-6 border-b border-slate-200 bg-white/95 px-6 py-4 backdrop-blur">
+            <CardContent className="space-y-4 p-4 sm:p-6">
+              <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-lg font-semibold text-slate-900">{assessment.title}</p>
                     <p className="text-sm text-slate-500">File Upload Assessment</p>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-stretch gap-2 lg:justify-end">
                     <StudentStatusChip tone={isAttemptSubmitted ? 'success' : 'neutral'} className="border-slate-200 bg-white text-slate-700">
                       {isAttemptSubmitted ? (
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
@@ -828,7 +828,7 @@ export default function StudentAssessmentTakePage() {
                       {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeSpentSeconds)}
                     </StudentStatusChip>
                     <Button
-                      className="min-w-[170px] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800"
+                      className="w-full border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800 sm:w-auto sm:min-w-[170px]"
                       onClick={handleSubmitFileUpload}
                       disabled={submitting || uploadingFile || isAttemptSubmitted}
                       aria-label="Submit assessment"
@@ -841,7 +841,7 @@ export default function StudentAssessmentTakePage() {
 
               <div className="space-y-5">
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="space-y-5">
+                <div className="space-y-5 min-w-0">
               <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.22)]">
                 <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Instruction</p>
                 {assessment.fileUploadInstructions ? (
@@ -875,7 +875,7 @@ export default function StudentAssessmentTakePage() {
 
                 </div>
 
-                <div className="space-y-5">
+                <div className="space-y-5 min-w-0">
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Submission Rules</p>
                 <div className="space-y-3 text-sm text-slate-900">

@@ -46,4 +46,29 @@ describe('HealthService', () => {
     expect(mockDatabaseService.ping).toHaveBeenCalledTimes(1);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('includes backend and ai service version metadata in readiness status', async () => {
+    const previousVersion = process.env.npm_package_version;
+    process.env.npm_package_version = '0.0.1-test';
+    (global as any).fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        data: {
+          runtimeAvailable: true,
+          version: '1.0.0-test',
+        },
+      }),
+    });
+
+    const service = new HealthService(mockDatabaseService, mockConfigService);
+    const readiness = await service.getReadiness();
+
+    expect(readiness.service).toEqual({
+      name: 'backend',
+      version: '0.0.1-test',
+    });
+    expect(readiness.dependencies.aiService.version).toBe('1.0.0-test');
+
+    process.env.npm_package_version = previousVersion;
+  });
 });

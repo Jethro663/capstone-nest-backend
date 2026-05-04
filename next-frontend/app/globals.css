@@ -5247,6 +5247,31 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .student-topbar-shell__welcome {
+    font-size: 0.92rem;
+    line-height: 1.2;
+    max-width: 7.5rem;
+  }
+
+  .student-topbar-shell__actions {
+    gap: 0.2rem;
+  }
+
+  .student-topbar-shell__icon-button,
+  .student-topbar-shell__notif {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .student-topbar-shell__profile {
+    padding: 0.15rem 0.18rem;
+    gap: 0.3rem;
+  }
+
+  .student-topbar-shell__profile-copy {
+    display: none;
+  }
+
   .student-v2-hero__actions {
     width: 100%;
   }
@@ -12527,6 +12552,19 @@ html[data-theme='dark'] {
 
   .teacher-class-workspace__body {
     padding-inline: 0.7rem;
+  }
+
+  .teacher-class-workspace__tabs {
+    gap: 0.1rem;
+    padding-inline: 0.4rem;
+  }
+
+  .teacher-class-workspace__tab {
+    min-height: 2.9rem;
+    flex: 0 0 auto;
+    gap: 0.34rem;
+    padding-inline: 0.65rem;
+    font-size: 0.82rem;
   }
 
   .teacher-class-workspace__modules-grid {

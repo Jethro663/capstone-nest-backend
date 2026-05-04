@@ -32,6 +32,7 @@ import { lxpService } from '@/services/lxp-service';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { LxpCheckpoint, LxpOverviewResponse, PlaylistResponse } from '@/types/lxp';
 import { cn } from '@/utils/cn';
+import './StudentLxpDetailExperience.css';
 
 type DetailTab = 'steps' | 'replays' | 'case' | 'overview';
 
@@ -44,8 +45,6 @@ const TAB_ALIASES: Record<string, DetailTab> = {
   interventions: 'case',
   overview: 'overview',
 };
-
-const CHECKPOINT_TONE = ['blue', 'green', 'violet'] as const;
 
 function encode(value: string) {
   return encodeURIComponent(value);
@@ -179,89 +178,73 @@ function CheckpointCard({
   return (
     <article
       className={cn(
-        'student-class-module-card',
-        primaryHref ? 'student-class-module-card--interactive' : null,
+        'student-lxp-checkpoint-card',
+        primaryHref ? 'student-lxp-checkpoint-card--interactive' : null,
       )}
-      data-tone={CHECKPOINT_TONE[index % CHECKPOINT_TONE.length]}
-      data-view="wide"
+      data-type={isGuidedAssessment ? 'guided' : isReplay ? 'replay' : 'step'}
+      data-state={checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'}
       role={primaryHref ? 'link' : undefined}
       tabIndex={primaryHref ? 0 : undefined}
       onClick={handleCardClick}
       onKeyDown={handleCardKeyDown}
     >
-      <div className="student-class-module-card__body-link">
-        <header>
-          <span className="student-class-module-card__index">{index + 1}</span>
-          <div>
+      <div className="student-lxp-checkpoint-card__main">
+        <header className="student-lxp-checkpoint-card__header">
+          <span className="student-lxp-checkpoint-card__index">{index + 1}</span>
+          <div className="student-lxp-checkpoint-card__copy">
             <h3>{title}</h3>
+            <div className="student-lxp-checkpoint-card__meta" aria-label="Checkpoint details">
+              <span>{checkpoint.xpAwarded} XP</span>
+              <span>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
+              <span>{isGuidedAssessment ? 'Guided Assessment' : isReplay ? 'Replay' : 'Lesson Step'}</span>
+            </div>
           </div>
         </header>
-
-        <div className="student-class-module-card__stats">
-          <article>
-            <strong>{checkpoint.xpAwarded}</strong>
-            <span>XP</span>
-          </article>
-          <article>
-            <strong>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</strong>
-            <span>Status</span>
-          </article>
-          <article>
-            <strong>{isGuidedAssessment ? 'Guided' : isReplay ? 'Replay' : 'Step'}</strong>
-            <span>Type</span>
-          </article>
-        </div>
       </div>
 
-      <footer>
+      <footer className="student-lxp-checkpoint-card__footer">
         <span
           className={cn(
-            'student-class-chip',
-            checkpoint.isCompleted ? 'student-class-chip--open' : 'student-class-chip--locked',
+            'student-lxp-checkpoint-card__status',
+            checkpoint.isCompleted
+              ? 'student-lxp-checkpoint-card__status--completed'
+              : readOnly
+                ? 'student-lxp-checkpoint-card__status--closed'
+                : 'student-lxp-checkpoint-card__status--open',
           )}
         >
           {checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available'}
         </span>
-        {isReplay ? (
-          <Link
-            href={jaHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open JA Hub
-          </Link>
-        ) : isGuidedAssessment && guidedAssessmentHref ? (
-          <Link
-            href={guidedAssessmentHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open Guided Assessment
-          </Link>
-        ) : isGeneratedLesson && generatedLessonHref ? (
-          <Link
-            href={generatedLessonHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open Remedial Lesson
-          </Link>
-        ) : lessonHref ? (
-          <Link
-            href={lessonHref}
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#e70012] transition hover:bg-[#fff1f4]"
-          >
-            Open Lesson
-          </Link>
-        ) : null}
+        <div className="student-lxp-checkpoint-card__actions">
+          {isReplay ? (
+            <Link href={jaHref} className="student-lxp-checkpoint-card__link">
+              Open JA Hub
+            </Link>
+          ) : isGuidedAssessment && guidedAssessmentHref ? (
+            <Link href={guidedAssessmentHref} className="student-lxp-checkpoint-card__link">
+              Open Guided Assessment
+            </Link>
+          ) : isGeneratedLesson && generatedLessonHref ? (
+            <Link href={generatedLessonHref} className="student-lxp-checkpoint-card__link">
+              Open Remedial Lesson
+            </Link>
+          ) : lessonHref ? (
+            <Link href={lessonHref} className="student-lxp-checkpoint-card__link">
+              Open Lesson
+            </Link>
+          ) : null}
         {!readOnly && !checkpoint.isCompleted && !isReplay && !isGuidedAssessment ? (
           <Button
             type="button"
             size="sm"
             disabled={completing}
-            className="bg-[#e70012] text-white hover:bg-[#c90010]"
+            className="student-lxp-checkpoint-card__button"
             onClick={() => onComplete(checkpoint.id)}
           >
             Mark Complete
           </Button>
         ) : null}
+        </div>
       </footer>
     </article>
   );

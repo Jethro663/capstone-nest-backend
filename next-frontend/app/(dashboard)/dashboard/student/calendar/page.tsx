@@ -304,9 +304,9 @@ export default function StudentCalendarPage() {
 
   if (loadingClasses && classes.length === 0) {
     return (
-      <div className="flex h-[calc(100vh-1.5rem)] flex-col gap-4 overflow-hidden rounded-[1.5rem] p-2 md:p-3">
+      <div className="flex min-h-[24rem] flex-col gap-4 rounded-[1.5rem] p-2 md:p-3">
         <Skeleton className="h-28 rounded-[1.2rem]" />
-        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <Skeleton className="h-full rounded-[1.4rem]" />
           <Skeleton className="h-full rounded-[1.4rem]" />
         </div>
@@ -315,8 +315,8 @@ export default function StudentCalendarPage() {
   }
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-1rem)] max-w-[1520px] flex-col gap-3 overflow-hidden rounded-[1.6rem] p-2">
-      <header className="sticky top-0 z-20 rounded-[1.1rem] border border-[#223459] bg-[linear-gradient(180deg,#16284a_0%,#182b50_58%,#1d3158_100%)] px-4 py-2.5 text-white shadow-[0_18px_32px_-24px_rgba(8,16,36,0.75)]">
+    <div className="mx-auto flex max-w-[1520px] flex-col gap-3 rounded-[1.3rem] p-2 sm:rounded-[1.6rem]">
+      <header className="z-20 rounded-[1.1rem] border border-[#223459] bg-[linear-gradient(180deg,#16284a_0%,#182b50_58%,#1d3158_100%)] px-3 py-3 text-white shadow-[0_18px_32px_-24px_rgba(8,16,36,0.75)] sm:px-4">
         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 space-y-1.5">
             <Link
@@ -342,7 +342,7 @@ export default function StudentCalendarPage() {
             </div>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[24rem]">
+          <div className="grid w-full gap-2 sm:grid-cols-2 xl:min-w-[24rem]">
             <label className="space-y-1">
               <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#90a9d6]">
                 School Year
@@ -383,8 +383,8 @@ export default function StudentCalendarPage() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_22.5rem]">
-        <section className="flex min-h-0 flex-col rounded-[1.2rem] border border-[#dde3ef] bg-[linear-gradient(180deg,#ffffff_0%,#f4f6fb_100%)] p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.38)] md:p-3">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_22.5rem]">
+        <section className="flex flex-col rounded-[1.2rem] border border-[#dde3ef] bg-[linear-gradient(180deg,#ffffff_0%,#f4f6fb_100%)] p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.38)] md:p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7e8dab]">

@@ -23,6 +23,7 @@ import {
   normalizeDashboardRole,
   type DashboardRole,
 } from '@/lib/dashboard-route-access';
+import { SystemInfoButton } from './SystemInfoButton';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -82,6 +83,8 @@ export function TopBar({
         </div>
 
         <div className="admin-topbar__actions">
+          <SystemInfoButton buttonClassName="admin-topbar__notif" />
+
           <button
             type="button"
             className="admin-topbar__notif"
@@ -158,6 +161,8 @@ export function TopBar({
         </div>
 
         <div className="teacher-topbar-shell__actions">
+          <SystemInfoButton buttonClassName="teacher-topbar-shell__notif" />
+
           <button
             type="button"
             className="teacher-topbar-shell__notif"
@@ -226,7 +231,7 @@ export function TopBar({
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <p className="student-topbar-shell__welcome">
+          <p className="student-topbar-shell__welcome max-[430px]:text-sm">
             Welcome back, <strong>{firstName}</strong>
           </p>
         </div>
@@ -241,7 +246,7 @@ export function TopBar({
           >
             <span className="student-topbar-shell__apk-art" aria-hidden="true">
               <Image
-                src="/images/ja/apk_logo.png"
+                src="/images/JA/apk_logo.png"
                 alt=""
                 width={64}
                 height={64}
@@ -249,6 +254,8 @@ export function TopBar({
               />
             </span>
           </a>
+
+          <SystemInfoButton buttonClassName="student-topbar-shell__icon-button" />
 
           <button
             type="button"
@@ -274,11 +281,11 @@ export function TopBar({
                   {avatarSrc ? <AvatarImage src={avatarSrc} alt={displayName} /> : null}
                   <AvatarFallback className="student-topbar-shell__avatar">{initials}</AvatarFallback>
                 </Avatar>
-                <span className="student-topbar-shell__profile-copy">
+                <span className="student-topbar-shell__profile-copy !hidden sm:!grid">
                   <span className="student-topbar-shell__name">{displayName}</span>
                   <span className="student-topbar-shell__role">Student Portal</span>
                 </span>
-                <ChevronDown className="h-4 w-4 text-[#9aa9c5]" />
+                <ChevronDown className="hidden h-4 w-4 text-[#9aa9c5] sm:block" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52 rounded-xl border-[#e7edf5] p-1.5 shadow-lg">
@@ -317,6 +324,14 @@ export function TopBar({
       </div>
 
       <div className="flex items-center gap-1">
+        <SystemInfoButton
+          buttonClassName={
+            isTeacherShell
+              ? 'inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--teacher-text-muted)] transition hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'
+              : 'inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-700'
+          }
+        />
+
         <Button
           variant="ghost"
           size="icon"

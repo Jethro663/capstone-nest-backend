@@ -12,6 +12,9 @@ const DEFAULT_SERVER_API_ORIGIN =
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  env: {
+    NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version ?? '0.1.0',
+  },
   allowedDevOrigins: [
     '127.0.0.1',
     'localhost',

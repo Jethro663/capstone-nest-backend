@@ -51,6 +51,7 @@ import {
   ASSESSMENT_COMPOSER_QUESTION_TYPES,
 } from '@/features/assessment-composer/question-config';
 import type { AssessmentComposerQuestionDraft as QuestionDraft } from '@/features/assessment-composer/types';
+import { academicStateService } from '@/services/academic-state-service';
 import { assessmentService } from '@/services/assessment-service';
 import { classRecordService } from '@/services/class-record-service';
 import type {
@@ -923,6 +924,7 @@ export default function AssessmentEditorPage() {
 
   const [category, setCategory] = useState<ClassRecordCategory>('written_work');
   const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
+  const [lockedSystemQuarter, setLockedSystemQuarter] = useState<GradingPeriod | null>(null);
   const [placementMode, setPlacementMode] = useState<AssessmentPlacementMode>('automatic');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [slotOverview, setSlotOverview] = useState<ClassRecordSlotOverview | null>(null);
@@ -1153,6 +1155,33 @@ export default function AssessmentEditorPage() {
   useEffect(() => {
     void fetchAssessment();
   }, [fetchAssessment]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentAcademicQuarter = async () => {
+      try {
+        const response = await academicStateService.getCurrent();
+        if (cancelled) return;
+        const currentQuarter = response.data.quarter as GradingPeriod;
+        setLockedSystemQuarter(currentQuarter);
+      } catch {
+        if (cancelled) return;
+        setLockedSystemQuarter(null);
+      }
+    };
+
+    void loadCurrentAcademicQuarter();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!lockedSystemQuarter) return;
+    setQuarter((currentQuarter) => (currentQuarter === lockedSystemQuarter ? currentQuarter : lockedSystemQuarter));
+  }, [lockedSystemQuarter]);
 
   useEffect(() => {
     if (rightTab !== 'analytics' || !assessmentId) return;
@@ -2102,6 +2131,8 @@ export default function AssessmentEditorPage() {
     try {
       setSaving(true);
       setSaveState('saving');
+      const isCoreTemplateAssessment = Boolean(assessment.isCoreTemplateAsset);
+      const targetPublishedState = availability === 'given';
 
       const classRecordPlacementPayload = {
         classRecordCategory: category || undefined,
@@ -2114,7 +2145,7 @@ export default function AssessmentEditorPage() {
             : null,
       };
 
-      await assessmentService.update(assessment.id, {
+      const updatePayload = {
         title: title.trim(),
         description: description.trim() || undefined,
         type: assessmentType,
@@ -2154,11 +2185,19 @@ export default function AssessmentEditorPage() {
           assessmentType === 'file_upload' ? allowedUploadMimeTypes : undefined,
         maxUploadSizeBytes:
           assessmentType === 'file_upload' ? maxUploadSizeBytes : undefined,
-        isPublished: availability === 'given',
-      });
+        ...(isCoreTemplateAssessment ? {} : { isPublished: targetPublishedState }),
+      };
 
-      if (assessmentType !== 'file_upload') {
+      await assessmentService.update(assessment.id, updatePayload);
+
+      if (!isCoreTemplateAssessment && assessmentType !== 'file_upload') {
         await syncQuestions();
+      }
+
+      if (isCoreTemplateAssessment && assessment.isPublished !== targetPublishedState) {
+        await assessmentService.releaseCore(assessment.id, {
+          isPublished: targetPublishedState,
+        });
       }
 
       toast.success('Assessment saved');
@@ -2572,7 +2611,7 @@ export default function AssessmentEditorPage() {
               <select
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode}
+                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -2582,6 +2621,11 @@ export default function AssessmentEditorPage() {
               </select>
             </div>
           </div>
+          {lockedSystemQuarter ? (
+            <p className="text-xs text-slate-500">
+              Quarter is locked to the current system quarter: {lockedSystemQuarter}.
+            </p>
+          ) : null}
 
           <div className="assessment-editor__placement-toggle">
             <button
@@ -2845,7 +2889,7 @@ export default function AssessmentEditorPage() {
               <select
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode}
+                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -2855,6 +2899,11 @@ export default function AssessmentEditorPage() {
               </select>
             </div>
           </div>
+          {lockedSystemQuarter ? (
+            <p className="text-xs text-slate-500">
+              Quarter is locked to the current system quarter: {lockedSystemQuarter}.
+            </p>
+          ) : null}
 
           <div className="assessment-editor__placement-toggle">
             <button
@@ -3756,19 +3805,24 @@ export default function AssessmentEditorPage() {
                 </div>
                 <div className="assessment-editor__field">
                   <label>Quarter</label>
-                  <select
-                    value={quarter}
-                    onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                    disabled={isReadOnlyMode}
-                  >
-                    <option value="">Select quarter</option>
-                    <option value="Q1">Q1</option>
-                    <option value="Q2">Q2</option>
-                    <option value="Q3">Q3</option>
-                    <option value="Q4">Q4</option>
-                  </select>
-                </div>
+                <select
+                  value={quarter}
+                  onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
+                  disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                >
+                  <option value="">Select quarter</option>
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
               </div>
+            </div>
+            {lockedSystemQuarter ? (
+              <p className="text-xs text-slate-500">
+                Quarter is locked to the current system quarter: {lockedSystemQuarter}.
+              </p>
+            ) : null}
 
               <div className="assessment-editor__placement-toggle">
                 <button

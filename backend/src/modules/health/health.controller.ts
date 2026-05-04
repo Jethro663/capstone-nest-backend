@@ -17,6 +17,7 @@ export class HealthController {
   check() {
     return {
       status: 'ok',
+      service: this.healthService.getServiceMetadata(),
       timestamp: new Date().toISOString(),
     };
   }

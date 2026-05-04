@@ -2183,6 +2183,7 @@ async def student_tutor_answers(
 
 @app.get("/health")
 async def health():
+    timestamp = datetime.now(timezone.utc).isoformat()
     status = await ollama_client.is_available()
     available_models = status["models"]
     OLLAMA_AVAILABLE.set(1 if status["ollamaAvailable"] else 0)
@@ -2190,6 +2191,9 @@ async def health():
         "success": True,
         "message": "AI health status",
         "data": {
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": timestamp,
             "runtimeAvailable": status["available"],
             "runtimeProvider": status["provider"],
             "runtimeMode": status["runtimeMode"],
@@ -2219,6 +2223,9 @@ async def live():
         "success": True,
         "message": "AI service process is up",
         "data": {
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "status": "ok",
         },
     }
@@ -2232,7 +2239,12 @@ async def ready(db: AsyncSession = Depends(get_db)):
     return {
         "success": True,
         "message": "AI service is ready",
-        "data": state,
+        "data": {
+            "service": "ai-service",
+            "version": app.version,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **state,
+        },
     }
 
 

@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AssessmentEditorPage from './page';
 import { assessmentService } from '@/services/assessment-service';
+import { academicStateService } from '@/services/academic-state-service';
 import { classRecordService } from '@/services/class-record-service';
 import { toast } from 'sonner';
 
@@ -57,6 +58,7 @@ jest.mock('@/services/assessment-service', () => ({
   assessmentService: {
     getById: jest.fn(),
     update: jest.fn(),
+    releaseCore: jest.fn(),
     createQuestion: jest.fn(),
     updateQuestion: jest.fn(),
     deleteQuestion: jest.fn(),
@@ -73,7 +75,14 @@ jest.mock('@/services/class-record-service', () => ({
   },
 }));
 
+jest.mock('@/services/academic-state-service', () => ({
+  academicStateService: {
+    getCurrent: jest.fn(),
+  },
+}));
+
 const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
+const mockedAcademicStateService = academicStateService as jest.Mocked<typeof academicStateService>;
 const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 const LOCAL_DRAFT_KEY = 'teacher-assessment-editor-draft:assessment-1';
@@ -140,6 +149,11 @@ describe('AssessmentEditorPage', () => {
       message: 'saved',
       data: buildAssessment(),
     } as Awaited<ReturnType<typeof assessmentService.update>>);
+    mockedAssessmentService.releaseCore.mockResolvedValue({
+      success: true,
+      message: 'saved',
+      data: buildAssessment({ isPublished: true }),
+    } as Awaited<ReturnType<typeof assessmentService.releaseCore>>);
     mockedAssessmentService.updateQuestion.mockResolvedValue({
       success: true,
       message: 'saved',
@@ -161,6 +175,16 @@ describe('AssessmentEditorPage', () => {
         rubricCriteria: [],
       },
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
+    mockedAcademicStateService.getCurrent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        schoolYear: '2025-2026',
+        quarter: 'Q1',
+        updatedAt: '2026-05-05T00:00:00.000Z',
+        transitionConfirmationText: 'Advance quarter',
+      },
+    });
     mockedClassRecordService.getSlotOverview.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -255,6 +279,9 @@ describe('AssessmentEditorPage', () => {
 
     expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
 
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /manual slot/i })[0]);
+
     fireEvent.click(screen.getAllByRole('button', { name: /ready to give/i })[0]);
     fireEvent.click(screen.getByRole('button', { name: /save now/i }));
 
@@ -264,6 +291,45 @@ describe('AssessmentEditorPage', () => {
       );
     });
     expect(mockedAssessmentService.update).not.toHaveBeenCalled();
+  });
+
+  it('publishes core assessments through the dedicated release endpoint after saving settings', async () => {
+    mockedAssessmentService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({
+        isCoreTemplateAsset: true,
+        quarter: 'Q1',
+        classRecordItemId: 'slot-1',
+        classRecordPlacement: {
+          category: 'written_work',
+          gradingPeriod: 'Q1',
+          itemId: 'slot-1',
+          placementMode: 'manual',
+        },
+      }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
+
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /ready to give/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /save now/i }));
+
+    await waitFor(() => {
+      expect(mockedAssessmentService.releaseCore).toHaveBeenCalledWith('assessment-1', {
+        isPublished: true,
+      });
+    });
+
+    expect(mockedAssessmentService.update).toHaveBeenCalled();
+    const updatePayload = mockedAssessmentService.update.mock.calls[0]?.[1] as
+      | Record<string, unknown>
+      | undefined;
+    expect(updatePayload).toBeDefined();
+    expect(updatePayload).not.toHaveProperty('isPublished');
+    expect(mockedAssessmentService.updateQuestion).not.toHaveBeenCalled();
   });
 
   it('sanitizes advanced numeric inputs and constrains passing score choices', async () => {
@@ -310,6 +376,30 @@ describe('AssessmentEditorPage', () => {
     expect(maxAttemptsInput).toHaveValue('');
     fireEvent.blur(maxAttemptsInput);
     expect(maxAttemptsInput).toHaveValue('1');
+  });
+
+  it('locks the class record quarter to the current academic quarter', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({
+        quarter: 'Q3',
+      }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
+
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+
+    const quarterSelect = screen.getAllByRole('combobox').find((element) =>
+      element.querySelector('option[value="Q1"]'),
+    ) as HTMLSelectElement | undefined;
+
+    expect(quarterSelect).toBeDefined();
+    expect(quarterSelect).toHaveValue('Q1');
+    expect(quarterSelect).toBeDisabled();
   });
 
   it('swaps the setup rules for file upload mode', async () => {

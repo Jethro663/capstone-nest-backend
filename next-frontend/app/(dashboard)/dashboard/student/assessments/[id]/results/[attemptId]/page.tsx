@@ -440,7 +440,7 @@ export default function StudentAssessmentResultsPage() {
               </ResultPill>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-4">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Score</p>
                 <p className="mt-2 text-4xl font-black leading-none text-slate-950">{pct}%</p>
@@ -468,7 +468,7 @@ export default function StudentAssessmentResultsPage() {
         </div>
 
         <div>
-          <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]">
+          <div className="inline-flex w-full flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)] sm:w-auto">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'review', label: 'Review' },
@@ -540,7 +540,7 @@ export default function StudentAssessmentResultsPage() {
 
         {showReviewTabContent && isFileUpload ? (
           <div>
-            <div className="grid gap-4 lg:grid-cols-[1fr_0.92fr]">
+            <div className="grid gap-4 xl:grid-cols-[1fr_0.92fr]">
               <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
                 <StudentSectionHeader
                   title="Rubric Breakdown"

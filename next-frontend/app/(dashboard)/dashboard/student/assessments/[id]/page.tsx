@@ -244,7 +244,7 @@ export default function StudentAssessmentPage() {
   const summaryCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)] transition-colors hover:bg-slate-50';
   const detailCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)]';
   const submittedPillClass = 'rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-[0_10px_22px_-20px_rgba(15,23,42,0.18)]';
-  const primaryButtonClass = 'min-w-[10rem] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800';
+  const primaryButtonClass = 'w-full sm:w-auto sm:min-w-[10rem] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800';
   const backButtonClass = 'inline-flex h-auto items-center gap-2 px-0 py-0 text-slate-600 hover:bg-transparent hover:text-slate-900';
   const submittedMutedTextClass = 'text-slate-500';
   const submittedStrongTextClass = 'text-slate-900';
@@ -271,7 +271,7 @@ export default function StudentAssessmentPage() {
                 {classId ? 'Back to class assignments' : 'Back to dashboard'}
               </Button>
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem_auto] lg:items-start">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_auto] xl:items-start">
                 <div className="space-y-2">
                   <h1 className="text-[clamp(1.65rem,2.2vw,2.35rem)] font-black leading-tight tracking-[-0.03em] text-slate-900">
                     {assessment.title}
@@ -302,7 +302,7 @@ export default function StudentAssessmentPage() {
                     </Button>
                   ) : (
                     <div className="flex flex-col items-start gap-2 lg:items-end">
-                      <Button disabled className="min-w-[10rem]">
+                      <Button disabled className="w-full sm:w-auto sm:min-w-[10rem]">
                         {isAlreadyGraded ? 'Already graded' : 'No attempts remaining'}
                       </Button>
                       {isAlreadyGraded ? (
@@ -324,7 +324,7 @@ export default function StudentAssessmentPage() {
         >
           <div className={sectionDividerClass}>
             <section className="px-4 py-4 md:px-5">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 <div className={summaryCardClass}>
                   <SummaryMetric label="Type" value={toAssessmentTypeLabel(assessment.type)} />
                 </div>
