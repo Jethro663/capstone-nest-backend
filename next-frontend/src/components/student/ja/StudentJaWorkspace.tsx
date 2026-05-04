@@ -254,6 +254,47 @@ function splitCoachPrompt(prompt: string) {
   };
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeJaAssistantContent(content: string) {
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("{") || !trimmed.includes('"html"')) {
+    return normalizeRichText(content);
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return normalizeRichText(content);
+    }
+
+    const heading = typeof parsed.heading === "string" ? parsed.heading.trim() : "";
+    const html =
+      typeof parsed.html === "string"
+        ? parsed.html.trim()
+        : typeof parsed.text === "string"
+          ? parsed.text.trim()
+          : "";
+
+    if (!heading && !html) {
+      return normalizeRichText(content);
+    }
+
+    return normalizeRichText(
+      `${heading ? `<h3>${escapeHtml(heading)}</h3>` : ""}${html}`,
+    );
+  } catch {
+    return normalizeRichText(content);
+  }
+}
+
 function JaAssistantAvatar({
   mood = "default",
 }: {
@@ -1341,7 +1382,7 @@ export default function StudentJaWorkspace({
                             ) : null}
 
                             <RichTextRenderer
-                              html={normalizeRichText(msg.content)}
+                              html={normalizeJaAssistantContent(msg.content)}
                               className="ja-bubble__content"
                             />
 

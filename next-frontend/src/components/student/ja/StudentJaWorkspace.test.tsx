@@ -1005,6 +1005,65 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(screen.getAllByText('Guarded').length).toBeGreaterThan(0);
   });
 
+  it('renders serialized lesson block JSON replies as lesson HTML instead of raw object text', async () => {
+    mockedJaService.getAskThread.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-lesson-block',
+          classId: 'class-1',
+          title: 'Ask: Factoring',
+          status: 'active',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        messages: [],
+      },
+    } as never);
+    mockedJaService.sendAskMessage.mockResolvedValueOnce({
+      data: {
+        thread: {
+          id: 'thread-lesson-block',
+          classId: 'class-1',
+          title: 'Ask: Factoring',
+          contextLessonId: 'lesson-2',
+          contextLessonTitle: 'Equivalent Fractions',
+          contextModuleTitle: 'Module 1',
+          contextSectionTitle: 'Lesson Set B',
+        },
+        message: {
+          id: 'assistant-lesson-block',
+          role: 'assistant',
+          content: JSON.stringify({
+            heading: 'Lesson 1: Factoring Polynomials',
+            html: '<p><strong>What is it</strong></p><p>Factoring is the process of finding the factors of an expression.</p>',
+          }),
+          blocked: false,
+          citations: [],
+          createdAt: '2026-05-01T09:03:00.000Z',
+        },
+        blocked: false,
+        insufficientEvidence: false,
+      },
+    } as never);
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByText('Explain the lesson'));
+
+    expect(await screen.findByText('Lesson 1: Factoring Polynomials')).toBeInTheDocument();
+    expect(screen.getByText('What is it')).toBeInTheDocument();
+    expect(
+      screen.getByText('Factoring is the process of finding the factors of an expression.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/"html":/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^\{"heading":/i)).not.toBeInTheDocument();
+  });
+
   it('shows a view-only outage state and keeps history usable when AI is degraded', async () => {
     mockedHealthService.getReadiness.mockResolvedValueOnce({
       ready: true,

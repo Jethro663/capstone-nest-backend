@@ -21,6 +21,11 @@ const TEACHER_ID = 'teacher-uuid-1';
 const STUDENT_ID = 'student-uuid-1';
 const ENROLLMENT_ID = 'enrollment-uuid-1';
 const SCHOOL_YEAR = '2026-2027';
+const DEFAULT_GRADING_PROFILE = {
+  writtenWork: 30,
+  performanceTask: 50,
+  quarterlyAssessment: 20,
+} as const;
 
 const makeClass = (overrides: Partial<any> = {}) => ({
   id: CLASS_ID,
@@ -61,6 +66,21 @@ const makeTeacher = (overrides: Partial<any> = {}) => ({
   lastName: 'Smith',
   userRoles: [{ role: { name: 'teacher' } }],
   ...overrides,
+});
+
+const withClientGradingProfile = (classRecord: any) => ({
+  ...classRecord,
+  gradingProfile: {
+    writtenWork:
+      classRecord?.writtenWorkGradingWeight ??
+      DEFAULT_GRADING_PROFILE.writtenWork,
+    performanceTask:
+      classRecord?.performanceTaskGradingWeight ??
+      DEFAULT_GRADING_PROFILE.performanceTask,
+    quarterlyAssessment:
+      classRecord?.quarterlyAssessmentGradingWeight ??
+      DEFAULT_GRADING_PROFILE.quarterlyAssessment,
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -223,7 +243,7 @@ describe('ClassesService', () => {
 
       const result = await service.findById(CLASS_ID);
 
-      expect(result).toEqual(cls);
+      expect(result).toMatchObject(withClientGradingProfile(cls));
       expect(mockDb.query.classes.findFirst).toHaveBeenCalledTimes(1);
       expect(mockDb.query.classes.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,7 +295,12 @@ describe('ClassesService', () => {
 
       const result = await service.findAll({ page: 1, limit: 10 });
 
-      expect(result).toEqual({ data: classList, total: 1, page: 1, limit: 10 });
+      expect(result).toEqual({
+        data: classList.map(withClientGradingProfile),
+        total: 1,
+        page: 1,
+        limit: 10,
+      });
     });
 
     it('uses page=1 and limit=50 when no filters are provided', async () => {
@@ -338,7 +363,14 @@ describe('ClassesService', () => {
 
       const result = await service.create(dto as any);
 
-      expect(result).toEqual(makeClass());
+      expect(result).toMatchObject({
+        ...makeClass(),
+        gradingProfile: {
+          writtenWork: 30,
+          performanceTask: 50,
+          quarterlyAssessment: 20,
+        },
+      });
       expect(mockDb.insert).toHaveBeenCalledTimes(2);
     });
 
@@ -389,7 +421,14 @@ describe('ClassesService', () => {
         ['admin'],
       );
 
-      expect(result).toEqual(makeClass());
+      expect(result).toMatchObject({
+        ...makeClass(),
+        gradingProfile: {
+          writtenWork: 30,
+          performanceTask: 50,
+          quarterlyAssessment: 20,
+        },
+      });
       expect(mockDb.transaction).toHaveBeenCalledTimes(1);
     });
 
@@ -408,7 +447,14 @@ describe('ClassesService', () => {
           'admin-actor-1',
           ['admin'],
         ),
-      ).resolves.toEqual(makeClass());
+      ).resolves.toMatchObject({
+        ...makeClass(),
+        gradingProfile: {
+          writtenWork: 30,
+          performanceTask: 50,
+          quarterlyAssessment: 20,
+        },
+      });
     });
 
     it('allows template selection when grade matches even if subjectCode differs', async () => {
@@ -426,7 +472,14 @@ describe('ClassesService', () => {
           'admin-actor-1',
           ['admin'],
         ),
-      ).resolves.toEqual(makeClass());
+      ).resolves.toMatchObject({
+        ...makeClass(),
+        gradingProfile: {
+          writtenWork: 30,
+          performanceTask: 50,
+          quarterlyAssessment: 20,
+        },
+      });
     });
 
     it('copies template module teacherNotes, visibility, and locking into class modules', async () => {
@@ -581,6 +634,61 @@ describe('ClassesService', () => {
       );
     });
 
+    it('stores the provided grading profile when creating a class', async () => {
+      setupHappyPath();
+
+      const insertValues: any[] = [];
+      mockDb.insert.mockImplementation(() => ({
+        values: jest.fn((values: unknown) => {
+          insertValues.push(values);
+          return {
+            returning: jest.fn().mockResolvedValue([{ id: CLASS_ID }]),
+          };
+        }),
+      }));
+
+      await service.create(
+        {
+          ...dto,
+          gradingProfile: {
+            writtenWork: 35,
+            performanceTask: 35,
+            quarterlyAssessment: 30,
+          },
+        } as any,
+        'admin-actor-1',
+        ['admin'],
+      );
+
+      expect(insertValues[0]).toMatchObject({
+        writtenWorkGradingWeight: 35,
+        performanceTaskGradingWeight: 35,
+        quarterlyAssessmentGradingWeight: 30,
+      });
+    });
+
+    it('falls back to default grading weights when grading profile is omitted', async () => {
+      setupHappyPath();
+
+      const insertValues: any[] = [];
+      mockDb.insert.mockImplementation(() => ({
+        values: jest.fn((values: unknown) => {
+          insertValues.push(values);
+          return {
+            returning: jest.fn().mockResolvedValue([{ id: CLASS_ID }]),
+          };
+        }),
+      }));
+
+      await service.create(dto as any, 'admin-actor-1', ['admin']);
+
+      expect(insertValues[0]).toMatchObject({
+        writtenWorkGradingWeight: 30,
+        performanceTaskGradingWeight: 50,
+        quarterlyAssessmentGradingWeight: 20,
+      });
+    });
+
     it('throws BadRequestException when the section does not exist', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(null);
 
@@ -679,7 +787,7 @@ describe('ClassesService', () => {
 
       const result = await service.create(dtoWithSlots as any);
 
-      expect(result).toEqual(makeClass());
+      expect(result).toMatchObject(withClientGradingProfile(makeClass()));
       expect(mockDb.insert).toHaveBeenCalledTimes(2);
     });
 
@@ -952,7 +1060,7 @@ describe('ClassesService', () => {
         ['teacher'],
       );
 
-      expect(result).toEqual(updatedClass);
+      expect(result).toMatchObject(withClientGradingProfile(updatedClass));
       expect(mockAuditService.log).toHaveBeenCalledWith({
         actorId: TEACHER_ID,
         action: 'class.presentation.updated',
@@ -1220,10 +1328,12 @@ describe('ClassesService', () => {
       ]);
 
       expect(result).toEqual(
-        classList.map((classRecord) => ({
-          ...classRecord,
-          isHidden: false,
-        })),
+        classList.map((classRecord) =>
+          withClientGradingProfile({
+            ...classRecord,
+            isHidden: false,
+          }),
+        ),
       );
     });
 
@@ -1238,10 +1348,12 @@ describe('ClassesService', () => {
       );
 
       expect(result).toEqual(
-        classList.map((classRecord) => ({
-          ...classRecord,
-          isHidden: false,
-        })),
+        classList.map((classRecord) =>
+          withClientGradingProfile({
+            ...classRecord,
+            isHidden: false,
+          }),
+        ),
       );
     });
 

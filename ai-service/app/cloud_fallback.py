@@ -119,6 +119,16 @@ def _json_response_format(response_format: dict[str, Any] | str | None) -> dict[
     return {"type": "json_object"}
 
 
+def _coerce_embedding_values(value: Any) -> list[float] | None:
+    if isinstance(value, list):
+        return [float(item) for item in value]
+    if isinstance(value, dict):
+        nested = value.get("values")
+        if isinstance(nested, list):
+            return [float(item) for item in nested]
+    return None
+
+
 async def generate_text(
     *,
     prompt: str,
@@ -228,6 +238,7 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         "model": get_embedding_model(),
         "input": texts,
         "dimensions": settings.embedding_dimensions,
+        "encoding_format": "float",
     }
 
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/embeddings"
@@ -236,12 +247,40 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         response.raise_for_status()
         body = response.json()
 
+    ordered_embeddings: list[list[float] | None] = [None] * len(texts)
+    fallback_embeddings: list[list[float]] = []
+
     data = body.get("data", [])
-    embeddings: list[list[float]] = []
-    for item in data:
-        embedding = item.get("embedding") if isinstance(item, dict) else None
-        if isinstance(embedding, list):
-            embeddings.append([float(value) for value in embedding])
-    if len(embeddings) != len(texts):
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            embedding = _coerce_embedding_values(item.get("embedding"))
+            if embedding is None:
+                continue
+            index = item.get("index")
+            if isinstance(index, int) and 0 <= index < len(texts):
+                ordered_embeddings[index] = embedding
+            else:
+                fallback_embeddings.append(embedding)
+
+    if len(texts) == 1 and ordered_embeddings[0] is None:
+        single_embedding = _coerce_embedding_values(body.get("embedding"))
+        if single_embedding is not None:
+            ordered_embeddings[0] = single_embedding
+
+    if any(item is None for item in ordered_embeddings):
+        extra_embeddings = body.get("embeddings")
+        if isinstance(extra_embeddings, list):
+            for item in extra_embeddings:
+                embedding = _coerce_embedding_values(item)
+                if embedding is not None:
+                    fallback_embeddings.append(embedding)
+
+    for index, embedding in enumerate(ordered_embeddings):
+        if embedding is None and fallback_embeddings:
+            ordered_embeddings[index] = fallback_embeddings.pop(0)
+
+    if any(item is None for item in ordered_embeddings):
         raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")
-    return embeddings
+    return [item for item in ordered_embeddings if item is not None]

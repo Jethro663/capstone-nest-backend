@@ -6,6 +6,12 @@ const scheduleSlotSchema = z.object({
   endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
 });
 
+const gradingProfileSchema = z.object({
+  writtenWork: z.number().int().min(1).max(99),
+  performanceTask: z.number().int().min(1).max(99),
+  quarterlyAssessment: z.number().int().min(1).max(99),
+});
+
 export const createClassSchema = z.object({
   subjectName: z.string().min(1, 'Subject name is required'),
   subjectCode: z.string().min(1, 'Subject code is required'),
@@ -14,6 +20,14 @@ export const createClassSchema = z.object({
   teacherId: z.string().min(1, 'Teacher is required'),
   schoolYear: z.string().regex(/^\d{4}-\d{4}$/, 'Format: YYYY-YYYY'),
   room: z.string().trim().min(1, 'Room is required'),
+  gradingProfile: gradingProfileSchema.refine(
+    (value) =>
+      value.writtenWork + value.performanceTask + value.quarterlyAssessment ===
+      100,
+    {
+      message: 'Grading profile must sum to 100',
+    },
+  ),
   schedules: z.array(scheduleSlotSchema).min(1, 'At least one schedule slot is required'),
 });
 export type CreateClassFormValues = z.infer<typeof createClassSchema>;

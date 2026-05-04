@@ -210,6 +210,7 @@ export default function CreateClassPage() {
         subjectName: values.subjectName,
         subjectCode: values.subjectCode,
         subjectGradeLevel: values.subjectGradeLevel,
+        gradingProfile: values.gradingProfile,
         sectionId: values.sectionId,
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
@@ -285,6 +286,7 @@ export default function CreateClassPage() {
           templatesLoading={templatesLoading}
           onTemplateChange={setSelectedTemplateId}
           onValuesChange={setFormValues}
+          showGradingProfile
           submitLabel="Create Class"
           onSubmit={handleSubmit}
           onCancel={() => router.push('/dashboard/admin/classes')}

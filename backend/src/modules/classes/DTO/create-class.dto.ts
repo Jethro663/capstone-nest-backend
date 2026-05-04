@@ -9,6 +9,13 @@ import {
   ValidateNested,
   MinLength,
   Matches,
+  IsDefined,
+  IsInt,
+  Min,
+  Max,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  type ValidationArguments,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from './validators';
@@ -21,6 +28,65 @@ import {
   trimValue,
   upperTrimmedValue,
 } from '../../../common/validation/input-policy';
+
+@ValidatorConstraint({ name: 'gradingProfileSum', async: false })
+class GradingProfileSumConstraint implements ValidatorConstraintInterface {
+  validate(
+    value: unknown,
+    _args: ValidationArguments,
+  ): boolean {
+    if (!value || typeof value !== 'object') {
+      return false;
+    }
+
+    const profile = value as {
+      writtenWork?: unknown;
+      performanceTask?: unknown;
+      quarterlyAssessment?: unknown;
+    };
+    if (
+      typeof profile.writtenWork !== 'number' ||
+      typeof profile.performanceTask !== 'number' ||
+      typeof profile.quarterlyAssessment !== 'number'
+    ) {
+      return false;
+    }
+
+    return (
+      profile.writtenWork +
+        profile.performanceTask +
+        profile.quarterlyAssessment ===
+      100
+    );
+  }
+
+  defaultMessage(): string {
+    return 'gradingProfile must sum to exactly 100';
+  }
+}
+
+export class ClassGradingProfileDto {
+  @IsDefined({ message: 'writtenWork is required' })
+  @IsInt({ message: 'writtenWork must be a whole number' })
+  @Min(1, { message: 'writtenWork must be greater than 0' })
+  @Max(99, { message: 'writtenWork must be 99 or less' })
+  @Type(() => Number)
+  writtenWork: number;
+
+  @IsDefined({ message: 'performanceTask is required' })
+  @IsInt({ message: 'performanceTask must be a whole number' })
+  @Min(1, { message: 'performanceTask must be greater than 0' })
+  @Max(99, { message: 'performanceTask must be 99 or less' })
+  @Type(() => Number)
+  performanceTask: number;
+
+  @IsDefined({ message: 'quarterlyAssessment is required' })
+  @IsInt({ message: 'quarterlyAssessment must be a whole number' })
+  @Min(1, { message: 'quarterlyAssessment must be greater than 0' })
+  @Max(99, { message: 'quarterlyAssessment must be 99 or less' })
+  @Type(() => Number)
+  quarterlyAssessment: number;
+}
 
 export class CreateClassDto {
   @IsString({ message: 'subjectName must be a string' })
@@ -80,4 +146,12 @@ export class CreateClassDto {
   @IsOptional()
   @IsString({ message: 'cardBannerUrl must be a string' })
   cardBannerUrl?: string;
+
+  @IsOptional()
+  @Validate(GradingProfileSumConstraint, {
+    message: 'gradingProfile must sum to exactly 100',
+  })
+  @ValidateNested()
+  @Type(() => ClassGradingProfileDto)
+  gradingProfile?: ClassGradingProfileDto;
 }

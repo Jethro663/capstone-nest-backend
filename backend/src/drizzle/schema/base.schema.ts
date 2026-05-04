@@ -270,6 +270,15 @@ export const classes = pgTable(
     cardPreset: text('card_preset').notNull().default('aurora'),
     cardBannerUrl: text('card_banner_url'),
     schoolYear: text('school_year').notNull(),
+    writtenWorkGradingWeight: integer(
+      'written_work_grading_weight',
+    ).notNull().default(30),
+    performanceTaskGradingWeight: integer(
+      'performance_task_grading_weight',
+    ).notNull().default(50),
+    quarterlyAssessmentGradingWeight: integer(
+      'quarterly_assessment_grading_weight',
+    ).notNull().default(20),
 
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),

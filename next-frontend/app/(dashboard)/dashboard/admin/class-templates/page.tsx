@@ -519,7 +519,7 @@ export default function ClassTemplatesPage() {
               >
                 {SUBJECTS.map((subject) => (
                   <option key={subject.code} value={subject.code}>
-                    {subject.label} ({subject.code})
+                    {subject.label}
                   </option>
                 ))}
               </select>
