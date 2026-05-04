@@ -882,6 +882,50 @@ describe('TeacherInterventionWorkspacePage', () => {
     });
   });
 
+  it('degrades safely when AI summary lists are missing from AI result', async () => {
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildCompletedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+    mockedAiService.getInterventionJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'remedial_plan_generation',
+          status: 'completed',
+          outputId: 'output-1',
+        },
+        result: {
+          outputId: 'output-1',
+          outputType: 'intervention_plan',
+          structuredOutput: {
+            ...buildStructuredResult(),
+            aiSummary: {
+              summary: 'Use the selected review path.',
+            },
+          } as unknown as InterventionStructuredOutput,
+        },
+      },
+    } as Awaited<ReturnType<typeof aiService.getInterventionJobResult>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /generate plan/i }),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Use the selected review path.'),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: /assign suggested path/i })).toBeEnabled();
+  });
+
   it('keeps assignment disabled while intervention case is pending activation', async () => {
     mockedLxpService.getTeacherQueue.mockResolvedValue({
       data: {

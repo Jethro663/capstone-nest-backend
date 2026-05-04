@@ -211,14 +211,26 @@ describe('exportClassRecordTemplateWorkbook', () => {
     const inputXml = await outputZip.file('xl/worksheets/sheet1.xml')?.async('string');
     const musicXml = await outputZip.file('xl/worksheets/sheet2.xml')?.async('string');
     const workbookXml = await outputZip.file('xl/workbook.xml')?.async('string');
+    const workbookRelsXml = await outputZip.file('xl/_rels/workbook.xml.rels')?.async('string');
+    const contentTypesXml = await outputZip.file('[Content_Types].xml')?.async('string');
     const mediaFiles = Object.keys(outputZip.files).filter((file) => file.startsWith('xl/media/'));
 
     expect(inputXml).toContain('r="B12"');
     expect(inputXml).toContain('Lopez, Ben');
     expect(musicXml).toContain('r="F12"');
     expect(musicXml).toContain('<v>18</v>');
+    expect(musicXml).toContain('IF(COUNT($F12:$O12)=0');
+    expect(musicXml).toContain("'Masterlist'!G4");
+    expect(musicXml).not.toContain('view="pageBreakPreview"');
     expect((musicXml?.match(/<f/g) || []).length).toBeGreaterThan(100);
+    expect(workbookXml).toContain('name="Masterlist"');
+    expect(workbookXml).toContain('name="Grades"');
+    expect(workbookXml).toContain('name="ARTS_Q1"');
+    expect(workbookXml).toContain('state="veryHidden"');
     expect(workbookXml).toContain('fullCalcOnLoad="1"');
+    expect(outputZip.file('xl/calcChain.xml')).toBeNull();
+    expect(workbookRelsXml).not.toContain('calcChain');
+    expect(contentTypesXml).not.toContain('/xl/calcChain.xml');
     expect(mediaFiles.length).toBeGreaterThan(0);
 
     global.fetch = originalFetch;
