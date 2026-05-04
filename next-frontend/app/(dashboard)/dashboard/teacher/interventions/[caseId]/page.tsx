@@ -30,6 +30,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { getApiErrorMessage } from '@/lib/api-error';
+import { richTextToPlainText } from '@/lib/rich-text';
 import type { AiGenerationJob, ClassAiPolicy, InterventionStructuredOutput } from '@/types/ai';
 import type { Assessment } from '@/types/assessment';
 import type { Lesson } from '@/types/lesson';
@@ -42,6 +43,11 @@ function studentName(entry: TeacherInterventionQueueItem['student']): string {
   if (last) return last;
   if (first) return first;
   return entry?.email ?? 'Unknown student';
+}
+
+function toPlainTeacherText(value: string | null | undefined, fallback = ''): string {
+  const cleaned = richTextToPlainText(value ?? '').replace(/\s+/g, ' ').trim();
+  return cleaned || fallback;
 }
 
 const JOB_STATUS_FAILURE_THRESHOLD = 3;
@@ -1207,12 +1213,12 @@ export default function TeacherInterventionWorkspacePage() {
               <h3>Teacher review before assignment</h3>
               {result?.aiSummary ? (
                 <>
-                  <p>{result.aiSummary.summary}</p>
+                  <p>{toPlainTeacherText(result.aiSummary.summary)}</p>
                   <div>
                     <strong>Teacher actions</strong>
                     <ul>
                       {result.aiSummary.teacherActions.map((action) => (
-                        <li key={action}>{action}</li>
+                        <li key={action}>{toPlainTeacherText(action)}</li>
                       ))}
                     </ul>
                   </div>
@@ -1220,7 +1226,7 @@ export default function TeacherInterventionWorkspacePage() {
                     <strong>Student focus</strong>
                     <div className="teacher-intervention-workspace__chips">
                       {result.aiSummary.studentFocus.map((focus) => (
-                        <Badge key={focus} variant="outline">{focus}</Badge>
+                        <Badge key={focus} variant="outline">{toPlainTeacherText(focus)}</Badge>
                       ))}
                     </div>
                   </div>

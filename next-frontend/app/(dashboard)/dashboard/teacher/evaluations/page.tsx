@@ -1,5 +1,5 @@
-import { TeacherEvaluationsFigmaPage } from '@/components/teacher/TeacherEvaluationsFigmaPage';
+import { TeacherEvaluationInsightsPage } from '@/components/teacher/TeacherEvaluationInsightsPage';
 
 export default function TeacherEvaluationsPage() {
-  return <TeacherEvaluationsFigmaPage />;
+  return <TeacherEvaluationInsightsPage />;
 }

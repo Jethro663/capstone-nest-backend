@@ -8,12 +8,16 @@ import { SQL, and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
+  academicSystemStates,
   assessments,
   assessmentAttempts,
+  classRecordFinalGrades,
+  classRecords,
   classes,
   enrollments,
   interventionAssignments,
   interventionCases,
+  jaSessions,
   lessons,
   lxpProgress,
   performanceSnapshots,
@@ -21,14 +25,19 @@ import {
   studentConceptMastery,
   systemEvaluationTargetEnum,
   systemEvaluations,
+  teacherEvaluationSubmissions,
+  teacherEvaluationTypeEnum,
+  teacherEvaluationWindows,
   users,
 } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import {
   AssignInterventionDto,
+  ListTeacherEvaluationSummaryQueryDto,
   ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
   SubmitSystemEvaluationDto,
+  SubmitTeacherEvaluationDto,
 } from './dto/lxp.dto';
 import { AuditService } from '../audit/audit.service';
 
@@ -44,6 +53,62 @@ type UserContext = {
 
 type SystemEvaluationTarget =
   (typeof systemEvaluationTargetEnum.enumValues)[number];
+type TeacherEvaluationType =
+  (typeof teacherEvaluationTypeEnum.enumValues)[number];
+
+type TeacherEvaluationDefinition = {
+  title: string;
+  description: string;
+  categories: Array<{
+    key: string;
+    label: string;
+  }>;
+};
+
+const TEACHER_EVALUATION_DEFINITIONS: Record<
+  TeacherEvaluationType,
+  TeacherEvaluationDefinition
+> = {
+  teacher_class: {
+    title: 'My Teaching',
+    description:
+      'Share feedback about teaching clarity, support, fairness, and learning materials.',
+    categories: [
+      { key: 'teaching_clarity', label: 'Teaching Clarity' },
+      { key: 'subject_mastery', label: 'Subject Mastery' },
+      { key: 'pacing', label: 'Pacing' },
+      { key: 'fairness', label: 'Fairness' },
+      { key: 'responsiveness', label: 'Responsiveness and Support' },
+      { key: 'materials', label: 'Materials and Activities' },
+    ],
+  },
+  ja_hub: {
+    title: 'JA Hub in My Classes',
+    description:
+      'Rate how helpful JA Hub was for guided support in this class.',
+    categories: [
+      { key: 'clarity', label: 'Clarity of Explanation' },
+      { key: 'usefulness', label: 'Usefulness' },
+      { key: 'trust', label: 'Accuracy and Trust' },
+      { key: 'ease_of_use', label: 'Ease of Use' },
+      { key: 'understanding', label: 'Helped Me Understand Better' },
+    ],
+  },
+  learners_path: {
+    title: 'Learners Path in My Classes',
+    description:
+      'Rate how helpful the Learners Path activities were for recovery and review.',
+    categories: [
+      { key: 'matched_weaknesses', label: 'Matched My Weaknesses' },
+      { key: 'clear_instructions', label: 'Clear Instructions' },
+      { key: 'helpful_activities', label: 'Helpful Activities' },
+      { key: 'motivating_progress', label: 'Motivating Progress' },
+      { key: 'improvement', label: 'Helped Me Improve' },
+    ],
+  },
+};
+
+const GRADING_PERIOD_ORDER = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
 
 @Injectable()
 export class LxpService {
@@ -57,8 +122,229 @@ export class LxpService {
     return this.databaseService.db;
   }
 
+  private getDefaultSchoolYear() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const schoolYearStart = now.getMonth() >= 5 ? currentYear : currentYear - 1;
+    return `${schoolYearStart}-${schoolYearStart + 1}`;
+  }
+
+  private async getCurrentAcademicStateSnapshot() {
+    const existing = await this.db.query.academicSystemStates.findFirst({
+      orderBy: [desc(academicSystemStates.updatedAt)],
+    });
+
+    return (
+      existing ?? {
+        schoolYear: this.getDefaultSchoolYear(),
+        quarter: 'Q1' as const,
+      }
+    );
+  }
+
   private isAdmin(roles: string[]): boolean {
     return roles.includes('admin');
+  }
+
+  private getTeacherEvaluationDefinition(type: TeacherEvaluationType) {
+    return TEACHER_EVALUATION_DEFINITIONS[type];
+  }
+
+  private quarterSortValue(value: string) {
+    const index = GRADING_PERIOD_ORDER.indexOf(value as (typeof GRADING_PERIOD_ORDER)[number]);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  }
+
+  private buildTeacherEvaluationScopeKey(input: {
+    classId: string;
+    gradingPeriod: string;
+    evaluationType: TeacherEvaluationType;
+  }) {
+    return `${input.classId}:${input.gradingPeriod}:${input.evaluationType}`;
+  }
+
+  private normalizeTeacherEvaluationRatings(
+    evaluationType: TeacherEvaluationType,
+    ratings: Record<string, unknown>,
+  ) {
+    const definition = this.getTeacherEvaluationDefinition(evaluationType);
+    const normalized: Record<string, number> = {};
+
+    for (const category of definition.categories) {
+      const rawValue = ratings[category.key];
+      const parsedValue =
+        typeof rawValue === 'number' ? rawValue : Number.parseInt(String(rawValue), 10);
+      if (!Number.isInteger(parsedValue) || parsedValue < 1 || parsedValue > 5) {
+        throw new BadRequestException(
+          `Rating "${category.key}" must be an integer from 1 to 5.`,
+        );
+      }
+      normalized[category.key] = parsedValue;
+    }
+
+    const unknownKeys = Object.keys(ratings).filter(
+      (key) => !definition.categories.some((category) => category.key === key),
+    );
+    if (unknownKeys.length > 0) {
+      throw new BadRequestException(
+        `Unexpected rating keys: ${unknownKeys.join(', ')}`,
+      );
+    }
+
+    return normalized;
+  }
+
+  private async getStudentTeacherEvaluationCandidates(studentId: string) {
+    const finalGradeRows = await this.db.query.classRecordFinalGrades.findMany({
+      where: eq(classRecordFinalGrades.studentId, studentId),
+      with: {
+        classRecord: {
+          columns: {
+            classId: true,
+            gradingPeriod: true,
+            status: true,
+          },
+          with: {
+            class: {
+              columns: {
+                id: true,
+                subjectName: true,
+                subjectCode: true,
+                schoolYear: true,
+                teacherId: true,
+              },
+              with: {
+                section: {
+                  columns: {
+                    id: true,
+                    name: true,
+                    gradeLevel: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [desc(classRecordFinalGrades.computedAt)],
+    });
+
+    const finalizedRows = finalGradeRows.filter(
+      (row) =>
+        row.classRecord?.status === 'finalized' &&
+        row.classRecord.class?.teacherId,
+    );
+    const classIds = Array.from(
+      new Set(
+        finalizedRows
+          .map((row) => row.classRecord.classId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    const [jaUsageRows, lxpUsageRows, completedCaseRows] = await Promise.all([
+      classIds.length > 0
+        ? this.db.query.jaSessions.findMany({
+            where: and(
+              eq(jaSessions.studentId, studentId),
+              eq(jaSessions.status, 'completed'),
+              inArray(jaSessions.classId, classIds),
+            ),
+            columns: { classId: true },
+          })
+        : Promise.resolve<Array<{ classId: string | null }>>([]),
+      classIds.length > 0
+        ? this.db.query.lxpProgress.findMany({
+            where: and(
+              eq(lxpProgress.studentId, studentId),
+              inArray(lxpProgress.classId, classIds),
+            ),
+            columns: {
+              classId: true,
+              checkpointsCompleted: true,
+            },
+          })
+        : Promise.resolve<
+            Array<{ classId: string | null; checkpointsCompleted: number | null }>
+          >([]),
+      classIds.length > 0
+        ? this.db.query.interventionCases.findMany({
+            where: and(
+              eq(interventionCases.studentId, studentId),
+              inArray(interventionCases.classId, classIds),
+              eq(interventionCases.status, 'completed'),
+            ),
+            columns: {
+              classId: true,
+            },
+          })
+        : Promise.resolve<Array<{ classId: string | null }>>([]),
+    ]);
+
+    const jaUsedClassIds = new Set(
+      jaUsageRows
+        .map((row) => row.classId)
+        .filter((value): value is string => Boolean(value)),
+    );
+    const lxpCheckpointMap = new Map<string, number>(
+      lxpUsageRows
+        .filter((row): row is { classId: string; checkpointsCompleted: number | null } =>
+          Boolean(row.classId),
+        )
+        .map((row) => [row.classId, row.checkpointsCompleted ?? 0] as const),
+    );
+    const completedLearnersPathClassIds = new Set(
+      completedCaseRows
+        .map((row) => row.classId)
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    return finalizedRows.flatMap((row) => {
+      const cls = row.classRecord.class;
+      const classId = row.classRecord.classId;
+      const gradingPeriod = row.classRecord.gradingPeriod;
+      const base = {
+        classId,
+        gradingPeriod,
+        schoolYear: cls.schoolYear,
+        teacherId: cls.teacherId as string,
+        class: cls,
+      };
+
+      const candidates: Array<{
+        classId: string;
+        gradingPeriod: string;
+        schoolYear: string;
+        teacherId: string;
+        evaluationType: TeacherEvaluationType;
+        class: typeof cls;
+      }> = [
+        {
+          ...base,
+          evaluationType: 'teacher_class',
+        },
+      ];
+
+      if (jaUsedClassIds.has(classId)) {
+        candidates.push({
+          ...base,
+          evaluationType: 'ja_hub',
+        });
+      }
+
+      const checkpointsCompleted = lxpCheckpointMap.get(classId) ?? 0;
+      if (
+        checkpointsCompleted > 0 ||
+        completedLearnersPathClassIds.has(classId)
+      ) {
+        candidates.push({
+          ...base,
+          evaluationType: 'learners_path',
+        });
+      }
+
+      return candidates;
+    });
   }
 
   private toNumber(value: string | number | null | undefined): number | null {
@@ -2386,6 +2672,628 @@ export class LxpService {
         lastActivityAt: row.lastActivityAt,
         student: row.student,
       })),
+    };
+  }
+
+  async getStudentTeacherEvaluationDashboard(studentId: string) {
+    const [academicState, candidates, existingSubmissions] = await Promise.all([
+      this.getCurrentAcademicStateSnapshot(),
+      this.getStudentTeacherEvaluationCandidates(studentId),
+      this.db.query.teacherEvaluationSubmissions.findMany({
+        where: eq(teacherEvaluationSubmissions.studentId, studentId),
+        columns: {
+          id: true,
+          classId: true,
+          gradingPeriod: true,
+          evaluationType: true,
+          submittedAt: true,
+        },
+      }),
+    ]);
+
+    const submittedScopeKeys = new Set(
+      existingSubmissions.map((submission) =>
+        this.buildTeacherEvaluationScopeKey({
+          classId: submission.classId,
+          gradingPeriod: submission.gradingPeriod,
+          evaluationType: submission.evaluationType,
+        }),
+      ),
+    );
+
+    const pending = candidates
+      .filter(
+        (candidate) =>
+          !submittedScopeKeys.has(
+            this.buildTeacherEvaluationScopeKey(candidate),
+          ),
+      )
+      .map((candidate) => {
+        const definition = this.getTeacherEvaluationDefinition(
+          candidate.evaluationType,
+        );
+        return {
+          classId: candidate.classId,
+          gradingPeriod: candidate.gradingPeriod,
+          schoolYear: candidate.schoolYear,
+          evaluationType: candidate.evaluationType,
+          title: definition.title,
+          description: definition.description,
+          class: {
+            id: candidate.class.id,
+            subjectName: candidate.class.subjectName,
+            subjectCode: candidate.class.subjectCode,
+            section: candidate.class.section,
+          },
+          questions: definition.categories,
+        };
+      })
+      .sort((left, right) => {
+        if (left.class.subjectName !== right.class.subjectName) {
+          return left.class.subjectName.localeCompare(right.class.subjectName);
+        }
+        return (
+          this.quarterSortValue(left.gradingPeriod) -
+          this.quarterSortValue(right.gradingPeriod)
+        );
+      });
+
+    const completed = existingSubmissions
+      .map((submission) => {
+        const matchingCandidate = candidates.find(
+          (candidate) =>
+            candidate.classId === submission.classId &&
+            candidate.gradingPeriod === submission.gradingPeriod &&
+            candidate.evaluationType === submission.evaluationType,
+        );
+        const definition = this.getTeacherEvaluationDefinition(
+          submission.evaluationType,
+        );
+        return {
+          id: submission.id,
+          classId: submission.classId,
+          gradingPeriod: submission.gradingPeriod,
+          evaluationType: submission.evaluationType,
+          title: definition.title,
+          class: matchingCandidate
+            ? {
+                id: matchingCandidate.class.id,
+                subjectName: matchingCandidate.class.subjectName,
+                subjectCode: matchingCandidate.class.subjectCode,
+                section: matchingCandidate.class.section,
+              }
+            : null,
+          submittedAt: submission.submittedAt,
+        };
+      })
+      .sort(
+        (left, right) =>
+          new Date(right.submittedAt).getTime() -
+          new Date(left.submittedAt).getTime(),
+      );
+
+    return {
+      currentAcademicState: {
+        schoolYear: academicState.schoolYear,
+        quarter: academicState.quarter,
+      },
+      pending,
+      completed,
+    };
+  }
+
+  async submitTeacherEvaluation(
+    user: UserContext,
+    dto: SubmitTeacherEvaluationDto,
+  ) {
+    const cls = await this.db.query.classes.findFirst({
+      where: eq(classes.id, dto.classId),
+      columns: {
+        id: true,
+        subjectName: true,
+        subjectCode: true,
+        schoolYear: true,
+        teacherId: true,
+      },
+    });
+    if (!cls?.teacherId) {
+      throw new NotFoundException('Class or class teacher not found.');
+    }
+
+    const matchingRecord = await this.db.query.classRecords.findFirst({
+      where: and(
+        eq(classRecords.classId, dto.classId),
+        eq(classRecords.gradingPeriod, dto.gradingPeriod),
+        eq(classRecords.status, 'finalized'),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+        gradingPeriod: true,
+        teacherId: true,
+        status: true,
+      },
+    });
+
+    if (!matchingRecord) {
+      throw new BadRequestException(
+        'This evaluation is not open because the grading period is not finalized yet.',
+      );
+    }
+
+    await this.assertStudentEnrollment(user.userId, dto.classId);
+
+    const candidateKeys = new Set(
+      (
+        await this.getStudentTeacherEvaluationCandidates(user.userId)
+      ).map((candidate) => this.buildTeacherEvaluationScopeKey(candidate)),
+    );
+    const targetKey = this.buildTeacherEvaluationScopeKey({
+      classId: dto.classId,
+      gradingPeriod: dto.gradingPeriod,
+      evaluationType: dto.evaluationType,
+    });
+    if (!candidateKeys.has(targetKey)) {
+      throw new BadRequestException(
+        'This evaluation is not available for the selected class and grading period.',
+      );
+    }
+
+    const existingSubmission =
+      await this.db.query.teacherEvaluationSubmissions.findFirst({
+        where: and(
+          eq(teacherEvaluationSubmissions.studentId, user.userId),
+          eq(teacherEvaluationSubmissions.classId, dto.classId),
+          eq(teacherEvaluationSubmissions.gradingPeriod, dto.gradingPeriod),
+          eq(
+            teacherEvaluationSubmissions.evaluationType,
+            dto.evaluationType,
+          ),
+        ),
+        columns: { id: true },
+      });
+    if (existingSubmission) {
+      throw new BadRequestException(
+        'You already submitted this evaluation for the selected grading period.',
+      );
+    }
+
+    const ratings = this.normalizeTeacherEvaluationRatings(
+      dto.evaluationType,
+      dto.ratings ?? {},
+    );
+
+    const eligibleCount = (
+      await this.getTeacherEvaluationSummary(
+        { userId: cls.teacherId, roles: ['teacher'] },
+        {
+          evaluationType: dto.evaluationType,
+          classId: dto.classId,
+          gradingPeriod: dto.gradingPeriod,
+        },
+      )
+    ).overview.eligibleCount;
+
+    const [window] = await this.db
+      .insert(teacherEvaluationWindows)
+      .values({
+        classId: dto.classId,
+        teacherId: cls.teacherId,
+        schoolYear: cls.schoolYear,
+        gradingPeriod: dto.gradingPeriod,
+        evaluationType: dto.evaluationType,
+        eligibleCount,
+        status: 'active',
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          teacherEvaluationWindows.classId,
+          teacherEvaluationWindows.schoolYear,
+          teacherEvaluationWindows.gradingPeriod,
+          teacherEvaluationWindows.evaluationType,
+        ],
+        set: {
+          teacherId: cls.teacherId,
+          eligibleCount,
+          status: 'active',
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    const [created] = await this.db
+      .insert(teacherEvaluationSubmissions)
+      .values({
+        windowId: window.id,
+        classId: dto.classId,
+        teacherId: cls.teacherId,
+        studentId: user.userId,
+        schoolYear: cls.schoolYear,
+        gradingPeriod: dto.gradingPeriod,
+        evaluationType: dto.evaluationType,
+        ratingsJson: ratings,
+        comment: dto.comment?.trim() ? dto.comment.trim() : null,
+      })
+      .returning();
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.teacher_evaluation.submitted',
+      targetType: 'teacher_evaluation_submission',
+      targetId: created.id,
+      metadata: {
+        classId: dto.classId,
+        teacherId: cls.teacherId,
+        gradingPeriod: dto.gradingPeriod,
+        evaluationType: dto.evaluationType,
+        hasComment: Boolean(dto.comment?.trim()),
+      },
+    });
+
+    return {
+      id: created.id,
+      classId: dto.classId,
+      gradingPeriod: dto.gradingPeriod,
+      evaluationType: dto.evaluationType,
+      submittedAt: created.submittedAt,
+      class: {
+        subjectName: cls.subjectName,
+        subjectCode: cls.subjectCode,
+      },
+    };
+  }
+
+  async getTeacherEvaluationSummary(
+    user: UserContext,
+    query: ListTeacherEvaluationSummaryQueryDto,
+  ) {
+    if (!this.isAdmin(user.roles) && !user.roles.includes('teacher')) {
+      throw new ForbiddenException(
+        'Only teachers and admins can view teacher evaluation summaries.',
+      );
+    }
+
+    if (query.classId && !this.isAdmin(user.roles)) {
+      await this.assertTeacherClassAccess(query.classId, user);
+    }
+
+    const classConditions: SQL[] = [];
+    if (!this.isAdmin(user.roles)) {
+      classConditions.push(eq(classes.teacherId, user.userId));
+    }
+    if (query.classId) {
+      classConditions.push(eq(classes.id, query.classId));
+    }
+
+    const teacherClassRows = await this.db.query.classes.findMany({
+      where: classConditions.length > 0 ? and(...classConditions) : undefined,
+      columns: {
+        id: true,
+        subjectName: true,
+        subjectCode: true,
+        schoolYear: true,
+        teacherId: true,
+      },
+      with: {
+        section: {
+          columns: {
+            id: true,
+            name: true,
+            gradeLevel: true,
+          },
+        },
+      },
+      orderBy: [asc(classes.subjectName)],
+    });
+    const classIds = teacherClassRows.map((row) => row.id);
+
+    const classRecordConditions: SQL[] = [
+      eq(classRecords.status, 'finalized'),
+    ];
+    if (classIds.length > 0) {
+      classRecordConditions.push(inArray(classRecords.classId, classIds));
+    }
+    if (query.gradingPeriod) {
+      classRecordConditions.push(
+        eq(classRecords.gradingPeriod, query.gradingPeriod),
+      );
+    }
+
+    const classRecordRows =
+      classIds.length > 0
+        ? await this.db.query.classRecords.findMany({
+            where: and(...classRecordConditions),
+            columns: {
+              id: true,
+              classId: true,
+              gradingPeriod: true,
+            },
+            with: {
+              finalGrades: {
+                columns: {
+                  studentId: true,
+                },
+              },
+            },
+            orderBy: [asc(classRecords.classId)],
+          })
+        : [];
+
+    const relevantClassIds = Array.from(
+      new Set(classRecordRows.map((row) => row.classId)),
+    );
+    const [jaRows, lxpRows, completedCaseRows, submissionRows] = await Promise.all([
+      relevantClassIds.length > 0
+        ? this.db.query.jaSessions.findMany({
+            where: and(
+              inArray(jaSessions.classId, relevantClassIds),
+              eq(jaSessions.status, 'completed'),
+            ),
+            columns: {
+              classId: true,
+              studentId: true,
+            },
+          })
+        : Promise.resolve<Array<{ classId: string | null; studentId: string | null }>>([]),
+      relevantClassIds.length > 0
+        ? this.db.query.lxpProgress.findMany({
+            where: inArray(lxpProgress.classId, relevantClassIds),
+            columns: {
+              classId: true,
+              studentId: true,
+              checkpointsCompleted: true,
+            },
+          })
+        : Promise.resolve<
+            Array<{
+              classId: string | null;
+              studentId: string | null;
+              checkpointsCompleted: number | null;
+            }>
+          >([]),
+      relevantClassIds.length > 0
+        ? this.db.query.interventionCases.findMany({
+            where: and(
+              inArray(interventionCases.classId, relevantClassIds),
+              eq(interventionCases.status, 'completed'),
+            ),
+            columns: {
+              classId: true,
+              studentId: true,
+            },
+          })
+        : Promise.resolve<Array<{ classId: string | null; studentId: string | null }>>([]),
+      classIds.length > 0
+        ? this.db.query.teacherEvaluationSubmissions.findMany({
+            where: and(
+              inArray(teacherEvaluationSubmissions.classId, classIds),
+              eq(
+                teacherEvaluationSubmissions.evaluationType,
+                query.evaluationType,
+              ),
+              ...(
+                query.classId
+                  ? [eq(teacherEvaluationSubmissions.classId, query.classId)]
+                  : []
+              ),
+              ...(
+                query.gradingPeriod
+                  ? [
+                      eq(
+                        teacherEvaluationSubmissions.gradingPeriod,
+                        query.gradingPeriod,
+                      ),
+                    ]
+                  : []
+              ),
+            ),
+            columns: {
+              id: true,
+              classId: true,
+              gradingPeriod: true,
+              ratingsJson: true,
+              comment: true,
+              submittedAt: true,
+            },
+          })
+        : Promise.resolve<
+            Array<{
+              id: string;
+              classId: string;
+              gradingPeriod: string;
+              ratingsJson: Record<string, unknown> | null;
+              comment: string | null;
+              submittedAt: Date;
+            }>
+          >([]),
+    ]);
+
+    const jaUsageMap = new Map<string, Set<string>>();
+    for (const row of jaRows) {
+      if (!row.classId || !row.studentId) continue;
+      const current = jaUsageMap.get(row.classId) ?? new Set<string>();
+      current.add(row.studentId);
+      jaUsageMap.set(row.classId, current);
+    }
+
+    const lxpUsageMap = new Map<string, Set<string>>();
+    for (const row of lxpRows) {
+      if (!row.classId || !row.studentId) continue;
+      if ((row.checkpointsCompleted ?? 0) <= 0) continue;
+      const current = lxpUsageMap.get(row.classId) ?? new Set<string>();
+      current.add(row.studentId);
+      lxpUsageMap.set(row.classId, current);
+    }
+    for (const row of completedCaseRows) {
+      if (!row.classId || !row.studentId) continue;
+      const current = lxpUsageMap.get(row.classId) ?? new Set<string>();
+      current.add(row.studentId);
+      lxpUsageMap.set(row.classId, current);
+    }
+
+    const eligibleWindows = classRecordRows
+      .map((record) => {
+        const matchingClass = teacherClassRows.find(
+          (cls) => cls.id === record.classId,
+        );
+        if (!matchingClass) return null;
+
+        const studentIds = record.finalGrades.map((grade) => grade.studentId);
+        let eligibleStudentIds = studentIds;
+        if (query.evaluationType === 'ja_hub') {
+          const jaUsedIds = jaUsageMap.get(record.classId) ?? new Set<string>();
+          eligibleStudentIds = studentIds.filter((studentId) =>
+            jaUsedIds.has(studentId),
+          );
+        } else if (query.evaluationType === 'learners_path') {
+          const lxpUsedIds = lxpUsageMap.get(record.classId) ?? new Set<string>();
+          eligibleStudentIds = studentIds.filter((studentId) =>
+            lxpUsedIds.has(studentId),
+          );
+        }
+
+        return {
+          classId: record.classId,
+          gradingPeriod: record.gradingPeriod,
+          eligibleCount: eligibleStudentIds.length,
+          class: matchingClass,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      .filter((row) => row.eligibleCount > 0);
+
+    const activeWindows = eligibleWindows.filter(
+      (row) =>
+        (!query.classId || row.classId === query.classId) &&
+        (!query.gradingPeriod || row.gradingPeriod === query.gradingPeriod),
+    );
+
+    const definition = this.getTeacherEvaluationDefinition(query.evaluationType);
+    const ratingTotals = Object.fromEntries(
+      definition.categories.map((category) => [category.key, 0]),
+    ) as Record<string, number>;
+    const ratingCounts = Object.fromEntries(
+      definition.categories.map((category) => [category.key, 0]),
+    ) as Record<string, number>;
+
+    for (const submission of submissionRows) {
+      const ratings = (submission.ratingsJson ?? {}) as Record<string, unknown>;
+      for (const category of definition.categories) {
+        const value = this.toNumber(ratings[category.key] as number | string);
+        if (value === null) continue;
+        ratingTotals[category.key] += value;
+        ratingCounts[category.key] += 1;
+      }
+    }
+
+    const categoryAverages = definition.categories.map((category) => ({
+      key: category.key,
+      label: category.label,
+      average:
+        ratingCounts[category.key] > 0
+          ? Math.round(
+              (ratingTotals[category.key] / ratingCounts[category.key]) * 100,
+            ) / 100
+          : 0,
+    }));
+    const averageOverall =
+      categoryAverages.length > 0
+        ? Math.round(
+            (categoryAverages.reduce((sum, item) => sum + item.average, 0) /
+              categoryAverages.length) *
+              100,
+          ) / 100
+        : 0;
+
+    const comments = submissionRows
+      .filter((submission) => submission.comment?.trim())
+      .sort(
+        (left, right) =>
+          new Date(right.submittedAt).getTime() -
+          new Date(left.submittedAt).getTime(),
+      )
+      .slice(0, 20)
+      .map((submission) => {
+        const matchingClass = teacherClassRows.find(
+          (cls) => cls.id === submission.classId,
+        );
+        return {
+          id: submission.id,
+          comment: submission.comment?.trim() ?? '',
+          submittedAt: submission.submittedAt,
+          gradingPeriod: submission.gradingPeriod,
+          classId: submission.classId,
+          classLabel: matchingClass
+            ? `${matchingClass.subjectCode} | ${matchingClass.subjectName}`
+            : submission.classId,
+        };
+      });
+
+    const trends = activeWindows
+      .map((window) => {
+        const matchingSubmissions = submissionRows.filter(
+          (submission) =>
+            submission.classId === window.classId &&
+            submission.gradingPeriod === window.gradingPeriod,
+        );
+        return {
+          classId: window.classId,
+          gradingPeriod: window.gradingPeriod,
+          classLabel: `${window.class.subjectCode} | ${window.class.subjectName}`,
+          responseCount: matchingSubmissions.length,
+          eligibleCount: window.eligibleCount,
+        };
+      })
+      .sort((left, right) => {
+        if (left.gradingPeriod !== right.gradingPeriod) {
+          return (
+            this.quarterSortValue(left.gradingPeriod) -
+            this.quarterSortValue(right.gradingPeriod)
+          );
+        }
+        return left.classLabel.localeCompare(right.classLabel);
+      });
+
+    return {
+      classes: teacherClassRows.map((row) => ({
+        id: row.id,
+        subjectName: row.subjectName,
+        subjectCode: row.subjectCode,
+        section: row.section,
+      })),
+      periods: Array.from(
+        new Set(classRecordRows.map((row) => row.gradingPeriod)),
+      ).sort((left, right) => this.quarterSortValue(left) - this.quarterSortValue(right)),
+      evaluationType: query.evaluationType,
+      tabTitle: definition.title,
+      tabDescription: definition.description,
+      overview: {
+        responseCount: submissionRows.length,
+        eligibleCount: activeWindows.reduce(
+          (sum, item) => sum + item.eligibleCount,
+          0,
+        ),
+        responseRate:
+          activeWindows.length > 0
+            ? Math.round(
+                (submissionRows.length /
+                  Math.max(
+                    activeWindows.reduce(
+                      (sum, item) => sum + item.eligibleCount,
+                      0,
+                    ),
+                    1,
+                  )) *
+                  100,
+              )
+            : 0,
+        averageOverall,
+        latestSubmittedAt: submissionRows[0]?.submittedAt ?? null,
+      },
+      categoryAverages,
+      comments,
+      trends,
     };
   }
 

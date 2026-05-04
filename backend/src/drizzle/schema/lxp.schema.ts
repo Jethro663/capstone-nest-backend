@@ -10,9 +10,10 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { assessments, classes, lessons, users } from './base.schema';
+import { assessments, classes, gradingPeriodEnum, lessons, users } from './base.schema';
 
 export const interventionCaseStatusEnum = pgEnum('intervention_case_status', [
   'pending',
@@ -33,6 +34,17 @@ export const systemEvaluationTargetEnum = pgEnum('system_evaluation_target', [
   'intervention',
   'overall',
 ]);
+
+export const teacherEvaluationTypeEnum = pgEnum('teacher_evaluation_type', [
+  'teacher_class',
+  'ja_hub',
+  'learners_path',
+]);
+
+export const teacherEvaluationWindowStatusEnum = pgEnum(
+  'teacher_evaluation_window_status',
+  ['active', 'closed'],
+);
 
 export const aiPolicySourceScopeEnum = pgEnum('ai_policy_source_scope', [
   'recommended_only',
@@ -190,6 +202,97 @@ export const classAiPolicies = pgTable(
   }),
 );
 
+export const teacherEvaluationWindows = pgTable(
+  'teacher_evaluation_windows',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    schoolYear: text('school_year').notNull(),
+    gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
+    evaluationType: teacherEvaluationTypeEnum('evaluation_type').notNull(),
+    status: teacherEvaluationWindowStatusEnum('status')
+      .notNull()
+      .default('active'),
+    eligibleCount: integer('eligible_count').notNull().default(0),
+    opensAt: timestamp('opens_at').notNull().defaultNow(),
+    closesAt: timestamp('closes_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    classPeriodTypeUnique: uniqueIndex(
+      'teacher_evaluation_windows_class_period_type_unique',
+    ).on(
+      table.classId,
+      table.schoolYear,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+    teacherIdx: index('teacher_evaluation_windows_teacher_idx').on(
+      table.teacherId,
+    ),
+    classIdx: index('teacher_evaluation_windows_class_idx').on(table.classId),
+    periodTypeIdx: index('teacher_evaluation_windows_period_type_idx').on(
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+  }),
+);
+
+export const teacherEvaluationSubmissions = pgTable(
+  'teacher_evaluation_submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    windowId: uuid('window_id')
+      .notNull()
+      .references(() => teacherEvaluationWindows.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    schoolYear: text('school_year').notNull(),
+    gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
+    evaluationType: teacherEvaluationTypeEnum('evaluation_type').notNull(),
+    ratingsJson: json('ratings_json').notNull(),
+    comment: text('comment'),
+    submittedAt: timestamp('submitted_at').notNull().defaultNow(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    studentScopeUnique: uniqueIndex(
+      'teacher_evaluation_submissions_student_scope_unique',
+    ).on(
+      table.studentId,
+      table.classId,
+      table.schoolYear,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+    windowIdx: index('teacher_evaluation_submissions_window_idx').on(
+      table.windowId,
+    ),
+    teacherIdx: index('teacher_evaluation_submissions_teacher_idx').on(
+      table.teacherId,
+    ),
+    classPeriodIdx: index('teacher_evaluation_submissions_class_period_idx').on(
+      table.classId,
+      table.gradingPeriod,
+      table.evaluationType,
+    ),
+  }),
+);
+
 export const interventionCasesRelations = relations(
   interventionCases,
   ({ one, many }) => ({
@@ -253,6 +356,43 @@ export const classAiPoliciesRelations = relations(
     }),
     updatedByUser: one(users, {
       fields: [classAiPolicies.updatedBy],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const teacherEvaluationWindowsRelations = relations(
+  teacherEvaluationWindows,
+  ({ one, many }) => ({
+    class: one(classes, {
+      fields: [teacherEvaluationWindows.classId],
+      references: [classes.id],
+    }),
+    teacher: one(users, {
+      fields: [teacherEvaluationWindows.teacherId],
+      references: [users.id],
+    }),
+    submissions: many(teacherEvaluationSubmissions),
+  }),
+);
+
+export const teacherEvaluationSubmissionsRelations = relations(
+  teacherEvaluationSubmissions,
+  ({ one }) => ({
+    window: one(teacherEvaluationWindows, {
+      fields: [teacherEvaluationSubmissions.windowId],
+      references: [teacherEvaluationWindows.id],
+    }),
+    class: one(classes, {
+      fields: [teacherEvaluationSubmissions.classId],
+      references: [classes.id],
+    }),
+    teacher: one(users, {
+      fields: [teacherEvaluationSubmissions.teacherId],
+      references: [users.id],
+    }),
+    student: one(users, {
+      fields: [teacherEvaluationSubmissions.studentId],
       references: [users.id],
     }),
   }),

@@ -406,3 +406,98 @@ export interface SystemEvaluationListResponse {
     }>;
   };
 }
+
+export type TeacherEvaluationType =
+  | 'teacher_class'
+  | 'ja_hub'
+  | 'learners_path';
+
+export interface TeacherEvaluationQuestion {
+  key: string;
+  label: string;
+}
+
+export interface StudentTeacherEvaluationItem {
+  classId: string;
+  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  schoolYear: string;
+  evaluationType: TeacherEvaluationType;
+  title: string;
+  description: string;
+  class: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
+  };
+  questions: TeacherEvaluationQuestion[];
+}
+
+export interface StudentTeacherEvaluationCompletedItem {
+  id: string;
+  classId: string;
+  gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  evaluationType: TeacherEvaluationType;
+  title: string;
+  class: StudentTeacherEvaluationItem['class'] | null;
+  submittedAt: string;
+}
+
+export interface StudentTeacherEvaluationDashboardResponse {
+  currentAcademicState: {
+    schoolYear: string;
+    quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  };
+  pending: StudentTeacherEvaluationItem[];
+  completed: StudentTeacherEvaluationCompletedItem[];
+}
+
+export interface TeacherEvaluationCategoryAverage {
+  key: string;
+  label: string;
+  average: number;
+}
+
+export interface TeacherEvaluationSummaryResponse {
+  classes: Array<{
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
+  }>;
+  periods: Array<'Q1' | 'Q2' | 'Q3' | 'Q4'>;
+  evaluationType: TeacherEvaluationType;
+  tabTitle: string;
+  tabDescription: string;
+  overview: {
+    responseCount: number;
+    eligibleCount: number;
+    responseRate: number;
+    averageOverall: number;
+    latestSubmittedAt: string | null;
+  };
+  categoryAverages: TeacherEvaluationCategoryAverage[];
+  comments: Array<{
+    id: string;
+    comment: string;
+    submittedAt: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    classId: string;
+    classLabel: string;
+  }>;
+  trends: Array<{
+    classId: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    classLabel: string;
+    responseCount: number;
+    eligibleCount: number;
+  }>;
+}

@@ -99,6 +99,22 @@ function stripText(html: string) {
     .replace(/\s/g, '');
 }
 
+function decodeHtmlEntities(input: string) {
+  if (typeof window === 'undefined') {
+    return input
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'");
+  }
+
+  const textArea = window.document.createElement('textarea');
+  textArea.innerHTML = input;
+  return textArea.value;
+}
+
 function applyInlineMarkdown(value: string) {
   return value
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
@@ -201,4 +217,21 @@ export function plainTextToRichHtml(input: string): RichTextHtml {
   flushParagraph();
 
   return blocks.join('') as RichTextHtml;
+}
+
+export function richTextToPlainText(input: string): string {
+  const raw = input.trim();
+  if (!raw) return '';
+
+  const html = RICH_TEXT_TAG_PATTERN.test(raw)
+    ? sanitizeRichTextHtml(raw)
+    : plainTextToRichHtml(raw);
+
+  return decodeHtmlEntities(
+    html
+      .replace(/<(?:br|\/p|\/li|\/ul|\/ol|\/blockquote|\/h[1-6]|hr)\s*\/?>/gi, '\n')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  );
 }

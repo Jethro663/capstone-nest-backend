@@ -2,6 +2,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -11,10 +12,18 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { systemEvaluationTargetEnum } from '../../../drizzle/schema';
+import {
+  gradingPeriodEnum,
+  systemEvaluationTargetEnum,
+  teacherEvaluationTypeEnum,
+} from '../../../drizzle/schema';
 
 const systemTargets = systemEvaluationTargetEnum.enumValues;
 export type SystemEvaluationTarget = (typeof systemTargets)[number];
+const teacherEvaluationTypes = teacherEvaluationTypeEnum.enumValues;
+export type TeacherEvaluationType = (typeof teacherEvaluationTypes)[number];
+const gradingPeriods = gradingPeriodEnum.enumValues;
+export type TeacherEvaluationGradingPeriod = (typeof gradingPeriods)[number];
 const aiSessionTypes = [
   'mentor_chat',
   'mistake_explanation',
@@ -159,4 +168,36 @@ export class ListSystemEvaluationsQueryDto {
   @IsString()
   @MaxLength(64)
   aiSourceFlow?: string;
+}
+
+export class SubmitTeacherEvaluationDto {
+  @IsUUID('4')
+  classId: string;
+
+  @IsIn(gradingPeriods)
+  gradingPeriod: TeacherEvaluationGradingPeriod;
+
+  @IsIn(teacherEvaluationTypes)
+  evaluationType: TeacherEvaluationType;
+
+  @IsObject()
+  ratings: Record<string, number>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  comment?: string;
+}
+
+export class ListTeacherEvaluationSummaryQueryDto {
+  @IsIn(teacherEvaluationTypes)
+  evaluationType: TeacherEvaluationType;
+
+  @IsOptional()
+  @IsUUID('4')
+  classId?: string;
+
+  @IsOptional()
+  @IsIn(gradingPeriods)
+  gradingPeriod?: TeacherEvaluationGradingPeriod;
 }

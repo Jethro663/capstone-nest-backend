@@ -32,8 +32,11 @@ describe('LxpController', () => {
     getTeacherInterventionCase: jest.fn(),
     getTeacherInterventionCaseDetail: jest.fn(),
     getClassReport: jest.fn(),
+    getStudentTeacherEvaluationDashboard: jest.fn(),
+    submitTeacherEvaluation: jest.fn(),
     submitSystemEvaluation: jest.fn(),
     listSystemEvaluations: jest.fn(),
+    getTeacherEvaluationSummary: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -123,6 +126,49 @@ describe('LxpController', () => {
     expect(res).toEqual({ success: true, data });
   });
 
+  it('returns the student teacher-evaluation dashboard in a success envelope', async () => {
+    const data = {
+      currentAcademicState: { schoolYear: '2025-2026', quarter: 'Q2' },
+      pending: [],
+      completed: [],
+    };
+    mockLxpService.getStudentTeacherEvaluationDashboard.mockResolvedValue(data);
+
+    const res = await controller.getTeacherEvaluationDashboard(STUDENT_USER);
+
+    expect(
+      mockLxpService.getStudentTeacherEvaluationDashboard,
+    ).toHaveBeenCalledWith(STUDENT_USER.userId);
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('submits teacher evaluation using current student context', async () => {
+    const dto = {
+      classId: '00000000-0000-0000-0000-000000000201',
+      gradingPeriod: 'Q1',
+      evaluationType: 'teacher_class',
+      ratings: {
+        teaching_clarity: 5,
+        subject_mastery: 4,
+        pacing: 4,
+        fairness: 5,
+        responsiveness: 5,
+        materials: 4,
+      },
+      comment: 'Helpful class',
+    };
+    const data = { submitted: true };
+    mockLxpService.submitTeacherEvaluation.mockResolvedValue(data);
+
+    const res = await controller.submitTeacherEvaluation(STUDENT_USER, dto);
+
+    expect(mockLxpService.submitTeacherEvaluation).toHaveBeenCalledWith(
+      STUDENT_USER,
+      dto,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
   it('returns pending intervention count for teacher/admin', async () => {
     const data = {
       pendingCount: 2,
@@ -175,11 +221,35 @@ describe('LxpController', () => {
     const data = { targetModule: 'lxp', evaluations: [], count: 0 };
     mockLxpService.listSystemEvaluations.mockResolvedValue(data);
 
-    const res = await controller.listEvaluations(ADMIN_USER, 'lxp');
+    const res = await controller.listEvaluations(ADMIN_USER, {
+      targetModule: 'lxp',
+    });
 
     expect(mockLxpService.listSystemEvaluations).toHaveBeenCalledWith(
       ADMIN_USER,
-      'lxp',
+      { targetModule: 'lxp' },
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns teacher evaluation summary for teacher/admin', async () => {
+    const data = {
+      classes: [],
+      periods: ['Q1'],
+      evaluationType: 'teacher_class',
+      overview: { responseCount: 0, eligibleCount: 0, responseRate: 0 },
+      categoryAverages: [],
+      comments: [],
+      trends: [],
+    };
+    const query = { evaluationType: 'teacher_class', classId: undefined };
+    mockLxpService.getTeacherEvaluationSummary.mockResolvedValue(data);
+
+    const res = await controller.getTeacherEvaluationSummary(TEACHER_USER, query as any);
+
+    expect(mockLxpService.getTeacherEvaluationSummary).toHaveBeenCalledWith(
+      TEACHER_USER,
+      query,
     );
     expect(res).toEqual({ success: true, data });
   });

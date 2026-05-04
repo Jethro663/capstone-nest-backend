@@ -13,9 +13,11 @@ import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   AssignInterventionDto,
+  ListTeacherEvaluationSummaryQueryDto,
   ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
   SubmitSystemEvaluationDto,
+  SubmitTeacherEvaluationDto,
 } from './dto/lxp.dto';
 import { LxpService } from './lxp.service';
 
@@ -65,6 +67,27 @@ export class LxpController {
       classId,
       assignmentId,
     );
+    return { success: true, data };
+  }
+
+  @Get('me/teacher-evaluations')
+  @Roles(RoleName.Student)
+  async getTeacherEvaluationDashboard(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getStudentTeacherEvaluationDashboard(
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Post('me/teacher-evaluations')
+  @Roles(RoleName.Student)
+  async submitTeacherEvaluation(
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() dto: SubmitTeacherEvaluationDto,
+  ) {
+    const data = await this.lxpService.submitTeacherEvaluation(user, dto);
     return { success: true, data };
   }
 
@@ -169,6 +192,16 @@ export class LxpController {
     @Query() query?: ListSystemEvaluationsQueryDto,
   ) {
     const data = await this.lxpService.listSystemEvaluations(user, query);
+    return { success: true, data };
+  }
+
+  @Get('teacher/evaluations/summary')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherEvaluationSummary(
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Query() query: ListTeacherEvaluationSummaryQueryDto,
+  ) {
+    const data = await this.lxpService.getTeacherEvaluationSummary(user, query);
     return { success: true, data };
   }
 }

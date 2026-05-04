@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, type CSSProperties } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -29,6 +29,7 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
+import { richTextToPlainText } from '@/lib/rich-text';
 import { downloadLessonPlanPdf } from '@/utils/lesson-plan-pdf';
 import { toast } from 'sonner';
 import type { ClassItem } from '@/types/class';
@@ -45,7 +46,7 @@ import type {
   PerformanceStudentRow,
 } from '@/types/performance';
 
-type PerformanceWorkspaceView = 'performance' | 'lesson-plan' | 'data';
+type PerformanceWorkspaceView = 'performance' | 'heatmap' | 'lesson-plan' | 'data';
 type LessonPlanProcedureKey = keyof LessonPlanStructuredOutput['procedures'];
 type LessonPlanDifferentiationKey = keyof LessonPlanStructuredOutput['differentiation'];
 type LessonPlanEditorMode = 'preview' | 'edit';
@@ -134,19 +135,26 @@ function formatLogStudent(entry: {
 }
 
 function formatConceptLabel(rawConcept: string): string {
-  const cleaned = rawConcept
+  const cleaned = richTextToPlainText(rawConcept)
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   if (!cleaned) return 'Unlabeled concept';
 
+  const tokens = cleaned.split(' ').filter(Boolean);
+  while (tokens[0] && /^p$/i.test(tokens[0])) tokens.shift();
+  while (tokens[tokens.length - 1] && /^p$/i.test(tokens[tokens.length - 1])) tokens.pop();
+
+  const normalized = tokens.join(' ').trim();
+  if (!normalized) return 'Unlabeled concept';
+
   const lowSignal =
-    cleaned.length < 3 ||
-    /^[a-z]$/i.test(cleaned) ||
-    /^(unknown concept|question|item)$/i.test(cleaned);
+    normalized.length < 3 ||
+    /^[a-z]$/i.test(normalized) ||
+    /^(unknown concept|question|item)$/i.test(normalized);
   if (lowSignal) return 'Unlabeled concept';
 
-  return cleaned
+  return normalized
     .split(' ')
     .map((token) =>
       token.length <= 2
@@ -154,6 +162,13 @@ function formatConceptLabel(rawConcept: string): string {
         : token[0].toUpperCase() + token.slice(1),
     )
     .join(' ');
+}
+
+function formatTeacherFacingText(value: string | null | undefined, fallback: string): string {
+  const cleaned = richTextToPlainText(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned || fallback;
 }
 
 function classifyMasteryBand(score: number) {
@@ -182,6 +197,17 @@ function classifyMasteryBand(score: number) {
     label: 'Critical',
     tone: 'bg-rose-500/18 border-rose-300/40 text-rose-50',
     fill: 'linear-gradient(180deg, rgba(244,63,94,0.95), rgba(190,24,93,0.78))',
+  };
+}
+
+function buildHeatmapCellStyle(score: number): CSSProperties {
+  const clamped = Math.max(0, Math.min(100, Number.isFinite(score) ? score : 0));
+  const hue = Math.round((clamped / 100) * 120);
+  const alpha = 0.28 + ((100 - clamped) / 100) * 0.36;
+
+  return {
+    backgroundColor: `hsla(${hue}, 82%, 44%, ${alpha})`,
+    borderColor: `hsla(${hue}, 68%, 24%, 0.48)`,
   };
 }
 
@@ -288,6 +314,22 @@ export default function TeacherPerformancePage() {
   );
   const aiUnavailable = aiAvailability.status === 'degraded';
   const threshold = summary?.threshold ?? atRisk?.threshold ?? null;
+  const conceptHeatmapRows = useMemo(
+    () =>
+      [...(diagnostics?.conceptHotspots ?? [])]
+        .map((concept) => {
+          const masteryScore = Number(concept.masteryScore ?? 0);
+          return {
+            ...concept,
+            masteryScore,
+            label: formatConceptLabel(concept.concept),
+            band: classifyMasteryBand(masteryScore),
+            heatStyle: buildHeatmapCellStyle(masteryScore),
+          };
+        })
+        .sort((left, right) => left.masteryScore - right.masteryScore),
+    [diagnostics?.conceptHotspots],
+  );
   const lessonPlanMetadata = useMemo(() => {
     if (!lessonPlanDraft) return [];
     return [
@@ -888,6 +930,13 @@ export default function TeacherPerformancePage() {
             </button>
             <button
               type="button"
+              className={`teacher-interventions-view-switcher__tab ${workspaceView === 'heatmap' ? 'is-active' : ''}`}
+              onClick={() => setWorkspaceView('heatmap')}
+            >
+              Heatmap
+            </button>
+            <button
+              type="button"
               className={`teacher-interventions-view-switcher__tab ${workspaceView === 'lesson-plan' ? 'is-active' : ''}`}
               onClick={() => setWorkspaceView('lesson-plan')}
             >
@@ -966,7 +1015,7 @@ export default function TeacherPerformancePage() {
 
               <TeacherSectionCard
                 title="AI Teaching Assistant"
-                description="Class or student-level teaching insights based on learner mistakes and lesson evidence."
+                description="Simple teaching guidance based on learner mistakes and recent lesson evidence."
                 className="teacher-figma-stagger"
               >
                 <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -997,30 +1046,235 @@ export default function TeacherPerformancePage() {
                   />
                 ) : (
                   <div className="space-y-4">
-                    <div className="teacher-soft-panel rounded-[12px] border border-white/15 px-3 py-3 text-sm">
-                      <p className="font-semibold text-[var(--teacher-text-strong)]">
+                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
+                        Recommended next step
+                      </p>
+                      <p className="mt-2 font-semibold text-[var(--teacher-text-strong)]">
                         {analysisResult.recommendedIntervention.status === 'insufficient_evidence'
                           ? 'Not enough recent evidence yet'
                           : 'Action-ready teaching insight'}
                       </p>
-                      <p className="text-[var(--teacher-text-muted)]">
-                        {analysisResult.teacherActions[0] ?? 'No teacher action provided.'}
+                      <p className="mt-1 text-sm leading-6 text-[var(--teacher-text-muted)]">
+                        {formatTeacherFacingText(
+                          analysisResult.teacherActions[0],
+                          'No teacher action provided.',
+                        )}
                       </p>
                     </div>
-                    <div className="grid gap-2">
+
+                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
+                        Concepts to review
+                      </p>
+                      <div className="mt-3 space-y-2">
                       {analysisResult.learningGaps.slice(0, 6).map((gap) => (
-                        <div key={gap.concept} className="teacher-figma-kv">
-                          <span>{formatConceptLabel(gap.concept)}</span>
-                          <strong>
+                        <div
+                          key={gap.concept}
+                          className="flex items-center justify-between gap-4 rounded-[12px] border border-slate-200 px-3 py-2 text-sm"
+                        >
+                          <span className="font-medium text-[var(--teacher-text-strong)]">
+                            {formatConceptLabel(gap.concept)}
+                          </span>
+                          <strong className="text-[var(--teacher-text-muted)]">
                             {gap.masteryScore}% student confidence - {gap.wrongCount} incorrect responses
                           </strong>
                         </div>
                       ))}
+                      </div>
                     </div>
                   </div>
                 )}
               </TeacherSectionCard>
 
+            </>
+          ) : workspaceView === 'heatmap' ? (
+            <>
+              <TeacherSectionCard
+                title="Concept Mastery Heatmap"
+                description="Read the colors first, then use the table to decide what to reteach."
+                className="teacher-figma-stagger"
+              >
+                {conceptHeatmapRows.length === 0 ? (
+                  <TeacherEmptyState
+                    title="No concept focus areas yet"
+                    description="Run assessments and recompute this class to surface concept-level mastery signals."
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+                      <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
+                          How to read this
+                        </p>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {[
+                            { label: 'High mastery', score: 92, note: 'Doing well. Keep light review only.' },
+                            { label: 'Watch', score: 76, note: 'Monitor and add short reinforcement.' },
+                            { label: 'Needs reteach', score: 61, note: 'Plan reteaching before the next graded task.' },
+                            { label: 'Critical', score: 32, note: 'Address this first with guided support.' },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="flex items-start gap-3 rounded-[12px] border border-slate-200 px-3 py-3"
+                            >
+                              <span
+                                className="mt-0.5 h-4 w-4 shrink-0 rounded-[5px] border"
+                                style={buildHeatmapCellStyle(item.score)}
+                              />
+                              <div className="space-y-1">
+                                <p className="font-semibold text-[var(--teacher-text-strong)]">{item.label}</p>
+                                <p className="text-xs leading-5 text-[var(--teacher-text-muted)]">{item.note}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-[16px] border border-[var(--teacher-border)] bg-[#f8fafc] px-4 py-4 shadow-sm">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
+                          Class snapshot
+                        </p>
+                        <div className="mt-3 grid grid-cols-2 gap-3">
+                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
+                            <p className="text-xs text-[var(--teacher-text-muted)]">Tracked concepts</p>
+                            <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
+                              {conceptHeatmapRows.length}
+                            </p>
+                          </div>
+                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
+                            <p className="text-xs text-[var(--teacher-text-muted)]">Support threshold</p>
+                            <p className="mt-1 text-2xl font-semibold text-[var(--teacher-text-strong)]">
+                              {threshold !== null ? `${threshold}%` : '--'}
+                            </p>
+                          </div>
+                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
+                            <p className="text-xs text-[var(--teacher-text-muted)]">Lowest mastery</p>
+                            <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
+                              {conceptHeatmapRows[0]?.masteryScore.toFixed(1) ?? '--'}%
+                            </p>
+                          </div>
+                          <div className="rounded-[12px] border border-slate-200 bg-white px-3 py-3">
+                            <p className="text-xs text-[var(--teacher-text-muted)]">Highest mastery</p>
+                            <p className="mt-1 text-lg font-semibold text-[var(--teacher-text-strong)]">
+                              {conceptHeatmapRows[conceptHeatmapRows.length - 1]?.masteryScore.toFixed(1) ?? '--'}%
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white px-4 py-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--teacher-text-muted)]">
+                        Heat strip
+                      </p>
+                      <p className="mt-1 text-sm text-[var(--teacher-text-muted)]">
+                        Ordered from lowest mastery to highest mastery.
+                      </p>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {conceptHeatmapRows.map((concept) => (
+                          <div
+                            key={`${concept.concept}-tile`}
+                            className="rounded-[16px] border p-4 shadow-sm"
+                            style={concept.heatStyle}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-slate-950">
+                                  {concept.label}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-800/80">
+                                  {concept.masteryScore.toFixed(1)}% mastery
+                                </p>
+                              </div>
+                              <Badge className={`border bg-white/70 text-slate-900 ${concept.band.tone}`}>
+                                {concept.band.label}
+                              </Badge>
+                            </div>
+                            <div className="mt-4 flex items-end justify-between gap-3">
+                              <div>
+                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
+                                  Misses
+                                </p>
+                                <p className="text-lg font-semibold text-slate-950">{concept.wrongCount}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-slate-800/80">
+                                  Evidence
+                                </p>
+                                <p className="text-lg font-semibold text-slate-950">{concept.evidenceCount}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[16px] border border-[var(--teacher-border)] bg-white shadow-sm">
+                    <div className="teacher-table-shell">
+                      <Table>
+                        <TableHeader className="teacher-table-head [&_tr]:border-slate-200">
+                          <TableRow className="border-slate-200 hover:bg-transparent">
+                            <TableHead className="w-[96px]">Heat</TableHead>
+                            <TableHead>Concept</TableHead>
+                            <TableHead>Mastery</TableHead>
+                            <TableHead>Signal</TableHead>
+                            <TableHead>Misses</TableHead>
+                            <TableHead>Evidence</TableHead>
+                            <TableHead>Teacher Read</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody className="[&_tr:last-child]:border-0">
+                          {conceptHeatmapRows.map((concept) => (
+                            <TableRow key={`${concept.concept}-row`} className="teacher-table-row border-slate-200">
+                              <TableCell>
+                                <div
+                                  className="flex h-14 items-center justify-center rounded-[12px] border text-sm font-semibold text-slate-950"
+                                  style={concept.heatStyle}
+                                >
+                                  {concept.masteryScore.toFixed(0)}%
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                <div className="space-y-1">
+                                  <p className="font-semibold">{concept.label}</p>
+                                  <p className="text-xs text-[var(--teacher-text-muted)]">
+                                    Focus area for reteaching review
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {concept.masteryScore.toFixed(1)}%
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`${concept.band.tone} border`}>
+                                  {concept.band.label}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {concept.wrongCount}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {concept.evidenceCount}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-muted)]">
+                                {concept.masteryScore < 55
+                                  ? 'Immediate reteach and guided practice'
+                                  : concept.masteryScore < 70
+                                    ? 'Plan reteach before the next graded task'
+                                    : concept.masteryScore < 85
+                                      ? 'Watch for drift and reinforce with checkpoints'
+                                      : 'Maintain with spiral review'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    </div>
+                  </div>
+                )}
+              </TeacherSectionCard>
             </>
           ) : workspaceView === 'lesson-plan' ? (
             <>
@@ -1650,7 +1904,7 @@ export default function TeacherPerformancePage() {
 
                 <TeacherSectionCard
                   title="Teaching Signals"
-                  description="Lowest-scoring assessments and focus concepts for reteaching."
+                  description="Lowest-scoring assessments and the current reteaching priorities for this class."
                 >
                   <div className="space-y-3 text-sm">
                     <div>
@@ -1672,69 +1926,27 @@ export default function TeacherPerformancePage() {
                         </div>
                       )}
                     </div>
-                    <div>
-                      <p className="font-semibold text-[var(--teacher-text-strong)]">Concept Mastery Heatmap</p>
-                      {(diagnostics?.conceptHotspots.length ?? 0) === 0 ? (
-                        <p className="text-[var(--teacher-text-muted)]">No concept focus areas yet.</p>
+                    <div className="rounded-[16px] border border-white/10 bg-white/6 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-[var(--teacher-text-strong)]">Concept Trends Snapshot</p>
+                          <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
+                            Open the Heatmap tab for the full mastery table and color map.
+                          </p>
+                        </div>
+                        <Badge className="border border-white/12 bg-white/8 text-[var(--teacher-text-strong)]">
+                          {conceptHeatmapRows.length} concept{conceptHeatmapRows.length === 1 ? '' : 's'}
+                        </Badge>
+                      </div>
+                      {conceptHeatmapRows.length === 0 ? (
+                        <p className="mt-3 text-[var(--teacher-text-muted)]">No concept focus areas yet.</p>
                       ) : (
-                        <div className="mt-3 space-y-3">
-                          <div className="grid gap-2 sm:grid-cols-2">
-                            {[
-                              'High mastery',
-                              'Watch',
-                              'Needs reteach',
-                              'Critical',
-                            ].map((label) => (
-                              <div
-                                key={label}
-                                className="rounded-xl border border-white/12 bg-white/6 px-3 py-2 text-xs font-semibold text-[var(--teacher-text-strong)]"
-                              >
-                                {label}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="grid gap-3 md:grid-cols-2">
-                            {diagnostics?.conceptHotspots.slice(0, 6).map((concept) => {
-                              const masteryScore = Number(concept.masteryScore ?? 0);
-                              const band = classifyMasteryBand(masteryScore);
-                              const normalized = Math.max(8, Math.min(100, masteryScore));
-                              return (
-                                <div
-                                  key={concept.concept}
-                                  className="rounded-[16px] border border-white/10 bg-white/7 p-3"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="font-semibold text-[var(--teacher-text-strong)]">
-                                        {formatConceptLabel(concept.concept)}
-                                      </p>
-                                      <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
-                                        {concept.wrongCount} misses across {concept.evidenceCount} evidence points
-                                      </p>
-                                    </div>
-                                    <Badge className={`${band.tone} border`}>
-                                      {band.label}
-                                    </Badge>
-                                  </div>
-                                  <div className="mt-3">
-                                    <div className="h-3 overflow-hidden rounded-full bg-white/10">
-                                      <div
-                                        className="h-full rounded-full"
-                                        style={{
-                                          width: `${normalized}%`,
-                                          background: band.fill,
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between text-xs text-[var(--teacher-text-muted)]">
-                                      <span>{masteryScore.toFixed(1)}% mastery</span>
-                                      <span>{concept.evidenceCount} samples</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {conceptHeatmapRows.slice(0, 4).map((concept) => (
+                            <Badge key={concept.concept} className={`${concept.band.tone} border`}>
+                              {concept.label}: {concept.masteryScore.toFixed(1)}%
+                            </Badge>
+                          ))}
                         </div>
                       )}
                     </div>

@@ -4,7 +4,10 @@ import type {
   LxpClassReport,
   LxpOverviewResponse,
   PlaylistResponse,
+  StudentTeacherEvaluationDashboardResponse,
   SystemEvaluationListResponse,
+  TeacherEvaluationSummaryResponse,
+  TeacherEvaluationType,
   SystemEvaluationTargetModule,
   TeacherInterventionCaseDetail,
   TeacherPendingInterventionCountResponse,
@@ -109,6 +112,35 @@ export const lxpService = {
   ): Promise<Envelope<TeacherInterventionCaseDetail>> {
     const { data } = await api.get(`/lxp/teacher/interventions/${caseId}/detail`);
     return normalizeEnvelope<TeacherInterventionCaseDetail>(data);
+  },
+
+  async getStudentTeacherEvaluationDashboard(): Promise<
+    Envelope<StudentTeacherEvaluationDashboardResponse>
+  > {
+    const { data } = await api.get('/lxp/me/teacher-evaluations');
+    return normalizeEnvelope<StudentTeacherEvaluationDashboardResponse>(data);
+  },
+
+  async submitTeacherEvaluation(payload: {
+    classId: string;
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+    evaluationType: TeacherEvaluationType;
+    ratings: Record<string, number>;
+    comment?: string;
+  }) {
+    const { data } = await api.post('/lxp/me/teacher-evaluations', payload);
+    return normalizeEnvelope(data);
+  },
+
+  async getTeacherEvaluationSummary(filters: {
+    evaluationType: TeacherEvaluationType;
+    classId?: string;
+    gradingPeriod?: 'Q1' | 'Q2' | 'Q3' | 'Q4';
+  }): Promise<Envelope<TeacherEvaluationSummaryResponse>> {
+    const { data } = await api.get('/lxp/teacher/evaluations/summary', {
+      params: filters,
+    });
+    return normalizeEnvelope<TeacherEvaluationSummaryResponse>(data);
   },
 
   async submitEvaluation(payload: {

@@ -69,6 +69,11 @@ const studentNav: NavItem[] = [
     icon: Megaphone,
   },
   {
+    label: "Evaluations",
+    href: "/dashboard/student/evaluations",
+    icon: ClipboardCheck,
+  },
+  {
     label: "Calendar",
     href: "/dashboard/student/calendar",
     icon: CalendarDays,
@@ -138,6 +143,11 @@ const studentNavCategories: NavCategory[] = [
         label: "Announcements",
         href: "/dashboard/student/announcements",
         icon: Megaphone,
+      },
+      {
+        label: "Evaluations",
+        href: "/dashboard/student/evaluations",
+        icon: ClipboardCheck,
       },
       {
         label: "Calendar",

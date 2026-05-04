@@ -180,7 +180,7 @@ describe('TeacherPerformancePage', () => {
     expect(mockedPerformanceService.createAnalysisJob).not.toHaveBeenCalled();
   });
 
-  it('renders a concept mastery heatmap when concept hotspots are available', async () => {
+  it('renders a dedicated concept mastery heatmap tab when concept hotspots are available', async () => {
     mockedPerformanceService.getClassDiagnostics.mockResolvedValueOnce({
       data: {
         classId: 'class-1',
@@ -208,10 +208,97 @@ describe('TeacherPerformancePage', () => {
 
     render(<TeacherPerformancePage />);
 
+    expect(await screen.findByRole('button', { name: /Heatmap/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+
     expect(await screen.findByText(/Concept Mastery Heatmap/i)).toBeInTheDocument();
-    expect(screen.getByText('High mastery')).toBeInTheDocument();
-    expect(screen.getByText('Critical')).toBeInTheDocument();
-    expect(screen.getByText('Fractions')).toBeInTheDocument();
-    expect(screen.getByText('Decimals')).toBeInTheDocument();
+    expect(screen.getAllByText('High mastery').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Critical').length).toBeGreaterThan(0);
+    expect(screen.getByRole('columnheader', { name: /Concept/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Mastery/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Fractions').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Decimals').length).toBeGreaterThan(0);
+  });
+
+  it('strips rich-text tags from heatmap concepts and teacher action copy', async () => {
+    mockedPerformanceService.getClassDiagnostics.mockResolvedValueOnce({
+      data: {
+        classId: 'class-1',
+        threshold: 74,
+        lowestAssessments: [],
+        conceptHotspots: [
+          {
+            concept: 'P Dropdown Time P',
+            wrongCount: 3,
+            masteryScore: 64,
+            evidenceCount: 3,
+          },
+          {
+            concept: 'P P',
+            wrongCount: 1,
+            masteryScore: 52,
+            evidenceCount: 1,
+          },
+        ],
+        studentCount: 12,
+        atRiskCount: 4,
+        insufficientEvidence: false,
+      },
+    } as Awaited<ReturnType<typeof performanceService.getClassDiagnostics>>);
+    mockedPerformanceService.createAnalysisJob.mockResolvedValueOnce({
+      data: {
+        jobId: 'job-1',
+        status: 'completed',
+        progressPercent: 100,
+        statusMessage: 'done',
+        outputId: 'output-1',
+      },
+    } as Awaited<ReturnType<typeof performanceService.createAnalysisJob>>);
+    mockedPerformanceService.getAnalysisJobResult.mockResolvedValueOnce({
+      data: {
+        result: {
+          structuredOutput: {
+            classId: 'class-1',
+            studentId: null,
+            generatedAt: '2026-04-30T00:00:00.000Z',
+            insufficientEvidence: false,
+            teacherNote: null,
+            learningGaps: [
+              {
+                concept: 'P This IS A Multi',
+                wrongCount: 3,
+                evidenceCount: 3,
+                masteryScore: 64,
+                lessonEvidence: [],
+              },
+            ],
+            scoreBreakdown: [],
+            evidence: [],
+            teacherActions: ['<p>Plan reteach before the next graded task</p>'],
+            recommendedIntervention: {
+              shouldOpenCase: true,
+              status: 'actionable',
+              topConcepts: ['<p>Dropdown Time</p>'],
+            },
+          },
+        },
+      },
+    } as Awaited<ReturnType<typeof performanceService.getAnalysisJobResult>>);
+
+    render(<TeacherPerformancePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Analyze Whole Class/i }));
+
+    expect(await screen.findByText('Plan reteach before the next graded task')).toBeInTheDocument();
+    expect(screen.queryByText(/^P Dropdown Time P$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^P This IS A Multi\.? P$/i)).not.toBeInTheDocument();
+    expect(screen.getByText('This IS A Multi')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+
+    expect(screen.getAllByText('Dropdown Time').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^P Dropdown Time P$/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText('Unlabeled concept').length).toBeGreaterThan(0);
   });
 });
