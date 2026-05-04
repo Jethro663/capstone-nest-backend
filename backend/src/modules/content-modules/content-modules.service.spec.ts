@@ -399,6 +399,52 @@ describe('ContentModulesService', () => {
     );
   });
 
+  it('allows teachers to unlock a core template module through the release endpoint', async () => {
+    db.query.classModules.findFirst
+      .mockResolvedValueOnce({
+        id: MODULE_ID,
+        classId: CLASS_ID,
+        isCoreTemplateAsset: true,
+      })
+      .mockResolvedValueOnce({
+        id: MODULE_ID,
+        classId: CLASS_ID,
+        title: 'Default module',
+        description: null,
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        isCoreTemplateAsset: true,
+        sections: [],
+        gradingScaleEntries: [],
+      });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+
+    const returning = jest
+      .fn()
+      .mockResolvedValue([{ id: MODULE_ID, classId: CLASS_ID, isVisible: true, isLocked: false }]);
+    const where = jest.fn().mockReturnValue({ returning });
+    const set = jest.fn().mockReturnValue({ where });
+    db.update.mockReturnValueOnce({ set });
+
+    const result = await service.releaseCoreModule(
+      MODULE_ID,
+      { isLocked: false },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        isLocked: false,
+      }),
+    );
+    expect(result.isLocked).toBe(false);
+  });
+
   it('allows students to download a teacher-private file when it is attached to an accessible module item', async () => {
     db.query.moduleItems.findFirst.mockResolvedValue({
       id: ITEM_ID,

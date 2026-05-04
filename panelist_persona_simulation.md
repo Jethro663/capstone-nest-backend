@@ -1,0 +1,105 @@
+# Panelist Persona Simulation
+## Technical Panelist
+- Focus: architecture, database, APIs, security, queues, observability, AI separation, deployment realism
+- Hidden concern behind the questions: The repo sounds mature, so any incorrect technical claim will be punished fast.
+- Danger level: Critical
+- Likely questions:
+- Where is the 74% threshold actually enforced?
+- Show me where pgvector is really used.
+- How does the backend talk to the AI service?
+- What happens if the AI service or backend is down?
+- How do you prevent AI outputs from mutating official grades?
+- Best answer approach: Keep answers anchored to concrete modules, schemas, and routes. Admit runtime status honestly if a service is currently down, then pivot to the verified code boundary and the prepared fallback evidence.
+- Answer to avoid: Do not answer with vague architecture buzzwords like 'full-stack integration' without naming NestJS, Next.js, FastAPI, PostgreSQL, Redis, and Ollama clearly.
+- Evidence we should prepare:
+- backend/src/modules/lxp/lxp.service.ts
+- backend/src/app.module.ts
+- backend/src/main.ts
+- ai-service/app/retrieval_service.py
+- docker-compose.yml
+- Feature/file/page to show if asked: Show the teacher performance/intervention logic, health controller, AI policy schema, and retrieval code.
+## Research and Academic Panelist
+- Focus: problem statement, objectives, gap, methodology, scope, evaluation, validity, literature
+- Hidden concern behind the questions: The implementation may be stronger than the research design, so overclaiming impact will be exposed.
+- Danger level: Critical
+- Likely questions:
+- What exact gap does Nexora solve that existing LMS tools do not?
+- How is the school context specifically justified?
+- How many respondents evaluated the system?
+- What statistical treatment did you use?
+- Is Chapter 4 really results and discussion or mostly design documentation?
+- Best answer approach: Separate implementation proof from outcome proof. Say the capstone demonstrates feasibility, system integration, and prototype behavior first, while broader educational effectiveness needs larger-scale study.
+- Answer to avoid: Do not claim proven effectiveness unless you can defend respondents, instrument, and statistics immediately.
+- Evidence we should prepare:
+- Concept paper objectives and scope
+- Paper extract lines on promised evaluation dimensions
+- Repo system_evaluations schema and routes
+- Feature/file/page to show if asked: Show the evaluation module and then admit that implementation readiness is stronger than formal impact evaluation evidence.
+## Education and Pedagogy Panelist
+- Focus: LMS vs LXP, mastery learning, intervention fairness, teacher workload, learner support design
+- Hidden concern behind the questions: They suspect the system is just an LMS with a gated remedial tab.
+- Danger level: High
+- Likely questions:
+- Why do you call it an LXP?
+- How is 74% justified pedagogically?
+- Could high-performing students also benefit from the same support?
+- How does the system personalize learning rather than just restrict access?
+- Does the AI undermine teacher judgment?
+- Best answer approach: Defend Nexora as an LMS with intervention-oriented LXP features. Emphasize targeted guidance, review paths, teacher control, and AI as support rather than replacement.
+- Answer to avoid: Do not insist that the system is a full commercial-grade LXP if the panel challenges personalization depth.
+- Evidence we should prepare:
+- Paper scope statements about targeted intervention
+- intervention_cases and intervention_assignments schema
+- student JA/LXP routes
+- Feature/file/page to show if asked: Show the intervention queue, LXP progress concepts, and JA hub guidance around grounded help.
+## AI Ethics and Data Privacy Panelist
+- Focus: hallucination, minors, consent, harmful outputs, logging, privacy law, abuse prevention
+- Hidden concern behind the questions: AI for minors is risky unless governance is explicit.
+- Danger level: Critical
+- Likely questions:
+- Can JAKIPIR hallucinate?
+- What happens if a student enters private information into the AI mentor?
+- Are AI chats logged and who can see them?
+- How do you answer a Data Privacy Act question?
+- Why should minors trust an anthropomorphic AI mentor?
+- Best answer approach: Acknowledge risk, then show the mitigations: grounding, AI policy controls, chat logs, role boundaries, and the separation of AI outputs from official records.
+- Answer to avoid: Do not say the AI is perfectly safe or completely compliant by default.
+- Evidence we should prepare:
+- ai_interaction_logs schema
+- class_ai_policies schema and teacher controls
+- OTP, JWT, audit, and validation setup
+- Feature/file/page to show if asked: Show AI policy toggles and explain that official grades remain outside AI control.
+## Demo-Focused Panelist
+- Focus: live behavior, broken routes, empty datasets, random account switching, latency, edge cases
+- Hidden concern behind the questions: They assume documentation can be polished while live systems still break.
+- Danger level: Critical
+- Likely questions:
+- Show me the threshold rule live.
+- Show me a student who actually triggered intervention.
+- Use a random account.
+- Show me mobile admin.
+- What if the AI takes too long?
+- Best answer approach: Control the demo sequence tightly, start with stable web routes, use seeded accounts intentionally, and keep a fallback screenshot/video pack ready for AI-heavy flows.
+- Answer to avoid: Do not improvise with unprepared accounts or high-latency AI flows first.
+- Evidence we should prepare:
+- Current runtime check showing backend unavailable but frontend and AI service reachable
+- Seeded report and intervention routes in the repo
+- Demo plan prepared in this package
+- Feature/file/page to show if asked: Show login, role dashboards, teacher classes, student assessment results, intervention trigger, then only stable AI surfaces.
+## Skeptical Business and Deployment Panelist
+- Focus: cost, sustainability, school feasibility, training burden, infrastructure, maintenance
+- Hidden concern behind the questions: A public school may not realistically maintain a multi-service AI stack.
+- Danger level: High
+- Likely questions:
+- Can the school actually run this hardware?
+- Who maintains Ollama, Docker, and the database?
+- What if there is no GPU?
+- Is this still useful without the AI?
+- Why not just use existing school tools and a simpler workflow?
+- Best answer approach: Position the current system as technically deployable for pilot use, with the core LMS still useful even if AI is degraded, and describe AI-enabled deployment as a staged decision rather than a mandatory baseline.
+- Answer to avoid: Do not promise easy school-wide rollout with no training, no cost, and no operational support.
+- Evidence we should prepare:
+- docker-compose.yml and README deployment notes
+- ai-service readiness output with available models
+- hardware notes in chapter-3 documentation
+- Feature/file/page to show if asked: Show the deployment stack diagram and then explain the staged rollout path.

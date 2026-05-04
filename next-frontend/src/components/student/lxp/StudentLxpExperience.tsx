@@ -335,8 +335,8 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
         className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-inset"
       >
         <div className="grid grid-cols-3 gap-2">
-          <PathStat value={path.counts.steps} label="Steps" />
-          <PathStat value={path.counts.replays} label="Replays" />
+          <PathStat value={path.counts.steps} label="Guided Review" />
+          <PathStat value={path.counts.replays} label="Assessment Retry" />
           <PathStat value={path.counts.pending} label="Pending" />
         </div>
 
@@ -516,7 +516,7 @@ export default function StudentLxpExperience() {
               My Paths
             </h1>
             <p className="mt-1 max-w-2xl text-sm font-medium text-[#6d7891]">
-              Continue assigned steps, review replays, and reopen completed support paths.
+              Continue targeted intervention support through guided review, assessment retry, and completed review history.
             </p>
           </div>
 
@@ -593,6 +593,25 @@ export default function StudentLxpExperience() {
             <CheckCircle2 className="h-3.5 w-3.5" />
             {totalCompleted} completed
           </span>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-2xl border border-[#e6dfea] bg-[#fcf8fb] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#d81b50]">
+              Remedial entry
+            </p>
+            <p className="mt-1 text-sm font-medium text-[#4f5d78]">
+              Learners Path opens only for remediation-eligible learners below the support threshold.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-[#dce7f7] bg-[#f7fbff] px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#31518a]">
+              Guided recovery
+            </p>
+            <p className="mt-1 text-sm font-medium text-[#4f5d78]">
+              Each support path helps you review guided steps and assessment retries to close specific weaknesses.
+            </p>
+          </div>
         </div>
       </section>
 

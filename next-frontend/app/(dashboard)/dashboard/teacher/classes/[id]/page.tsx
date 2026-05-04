@@ -75,6 +75,7 @@ import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
+import { upsertTrackedExtractionNotification } from '@/lib/extraction-notification-tracker';
 import {
   createCroppedModuleCoverBlob,
   DEFAULT_MODULE_GRADIENT,
@@ -137,6 +138,7 @@ type AssignmentFilter = 'all' | 'written' | 'performance' | 'quarterly' | 'discu
 type CalendarKind = 'assessment' | 'event' | 'holiday';
 type CalendarViewMode = 'calendar' | 'upcoming';
 type ModuleViewMode = 'wide' | 'compact';
+type ExtractionTargetSectionCount = 3 | 4 | 5;
 type ModuleThemeKind = 'gradient' | 'image';
 
 interface ModulePresentationDraft {
@@ -836,8 +838,6 @@ function formatRelativeTime(value?: string | null) {
 
 function getExtractionStatusLabel(extraction: Extraction) {
   if (extraction.extractionStatus === 'failed') return 'Failed';
-  const unassigned = extraction.structuredContent?.audit?.imageAssignmentSummary?.unassigned ?? 0;
-  if (unassigned > 0) return 'Images unassigned';
   if (extraction.reviewRequired) return 'Needs review';
   if (extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'applied') return 'Ready';
   return extraction.extractionStatus;
@@ -1247,6 +1247,7 @@ export default function TeacherClassDetailPage() {
   const [aiDraftJobsBusy, setAiDraftJobsBusy] = useState(false);
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
+  const [targetSectionCount, setTargetSectionCount] = useState<ExtractionTargetSectionCount>(4);
   const extractionInputRef = useRef<HTMLInputElement | null>(null);
   const aiUnavailable = aiAvailability.status === 'degraded';
 
@@ -1505,6 +1506,17 @@ export default function TeacherClassDetailPage() {
     }, 3000);
     return () => window.clearInterval(interval);
   }, [activeTab, aiDraftJobs, refreshAiDraftJobs]);
+
+  useEffect(() => {
+    if (activeTab !== 'extraction') return;
+    if (!extractions.some((entry) => entry.extractionStatus === 'pending' || entry.extractionStatus === 'processing')) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      void fetchData();
+    }, 5000);
+    return () => window.clearInterval(interval);
+  }, [activeTab, extractions, fetchData]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -2258,7 +2270,21 @@ export default function TeacherClassDetailPage() {
         gradeLevel,
         aiEnabled: true,
       });
-      await extractionService.extractModule({ fileId: uploadRes.data.id });
+      const extractionRes = await extractionService.extractModule({
+        fileId: uploadRes.data.id,
+        targetSectionCount,
+      });
+      upsertTrackedExtractionNotification(classId, {
+        extractionId: extractionRes.data.extractionId,
+        classId,
+        createdAt: new Date().toISOString(),
+        originalName: file.name,
+        targetSectionCount,
+        lastKnownStatus: 'pending',
+        lastKnownProgress: 0,
+        updatedAt: null,
+        notifiedAt: null,
+      });
       toast.success('Extraction started');
       await fetchData();
     } catch (error) {
@@ -2266,6 +2292,27 @@ export default function TeacherClassDetailPage() {
     } finally {
       setUploadingExtraction(false);
     }
+  };
+
+  const performDeleteExtraction = async (extractionId: string) => {
+    try {
+      await extractionService.delete(extractionId);
+      setExtractions((current) => current.filter((extraction) => extraction.id !== extractionId));
+      toast.success('Extraction deleted');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to delete extraction'));
+    }
+  };
+
+  const handleDeleteExtraction = (extractionId: string) => {
+    setConfirmation({
+      title: 'Delete Extraction',
+      description: 'This extraction draft will be permanently removed from the class workspace.',
+      confirmLabel: 'Delete Extraction',
+      tone: 'danger',
+      details: 'This action cannot be undone.',
+      onConfirm: () => performDeleteExtraction(extractionId),
+    });
   };
 
   const handleCreateAnnouncement = async () => {
@@ -3082,6 +3129,30 @@ export default function TeacherClassDetailPage() {
               </div>
             </div>
             <div className="teacher-class-workspace__extract-wrap">
+              <div className="rounded-[1.1rem] border border-[#e3eaf5] bg-[#f8fbfe] px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-[#143155]">Lesson structure depth</p>
+                    <p className="mt-1 text-xs text-[#647083]">
+                      Choose how many sections the extraction should target. This shapes coherence, not output length.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm font-semibold text-[#435f86]">
+                    <span>Target</span>
+                    <select
+                      value={String(targetSectionCount)}
+                      onChange={(event) => setTargetSectionCount(Number(event.target.value) as ExtractionTargetSectionCount)}
+                      disabled={uploadingExtraction || aiUnavailable}
+                      className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
+                      aria-label="Target section count"
+                    >
+                      <option value="3">3 sections</option>
+                      <option value="4">4 sections</option>
+                      <option value="5">5 sections</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
               <button
                 type="button"
                 className="teacher-class-workspace__extract-dropzone"
@@ -3105,7 +3176,12 @@ export default function TeacherClassDetailPage() {
                   <article key={extraction.id} className="teacher-class-workspace__extract-item">
                     <div>
                       <h3>{extraction.structuredContent?.title || extraction.originalName || 'PDF Extraction'}</h3>
-                      <p>{formatDateYmd(extraction.createdAt)}</p>
+                      <p>
+                        {formatDateYmd(extraction.createdAt)}
+                        {typeof extraction.structuredContent?.audit?.requestedSectionCount === 'number'
+                          ? ` · Requested sections: ${extraction.structuredContent.audit.requestedSectionCount}`
+                          : ''}
+                      </p>
                     </div>
                     <div className="teacher-class-workspace__extract-item-actions">
                       <span data-status={extraction.extractionStatus}>{getExtractionStatusLabel(extraction)}</span>
@@ -3113,6 +3189,15 @@ export default function TeacherClassDetailPage() {
                         <Eye className="h-4 w-4" />
                         View
                       </Link>
+                      <button
+                        type="button"
+                        className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
+                        onClick={() => handleDeleteExtraction(extraction.id)}
+                        aria-label={`Delete ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
                     </div>
                   </article>
                 ))}

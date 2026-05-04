@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
-from typing import Any
+from typing import Any, Literal
 
 
 class ImageAttachment(BaseModel):
@@ -70,6 +70,7 @@ class AdminChatRequest(BaseModel):
 
 class ExtractRequest(BaseModel):
     file_id: str = Field(..., alias="fileId")
+    target_section_count: Literal[3, 4, 5] = Field(..., alias="targetSectionCount")
 
     model_config = {"populate_by_name": True}
 
@@ -255,6 +256,12 @@ class GenerateLessonPlanRequest(BaseModel):
 
 
 class UpdateLessonPlanDraftRequest(BaseModel):
+    structured_output: dict[str, Any] = Field(..., alias="structuredOutput")
+
+    model_config = {"populate_by_name": True}
+
+
+class UpdateQuizDraftRequest(BaseModel):
     structured_output: dict[str, Any] = Field(..., alias="structuredOutput")
 
     model_config = {"populate_by_name": True}

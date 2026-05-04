@@ -291,7 +291,7 @@ describe('AiMentorController', () => {
 
   describe('extractModule()', () => {
     it('should forward POST /extract with dto and user', async () => {
-      const dto = { fileId: 'file-uuid-1' };
+      const dto = { fileId: 'file-uuid-1', targetSectionCount: 4 };
       mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
 
       const result = await controller.extractModule(dto, TEACHER_USER);
@@ -1177,6 +1177,52 @@ describe('AiMentorController', () => {
         expect.objectContaining({
           actorId: TEACHER_USER.id,
           action: 'ai.lesson_plan.draft_saved',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+    });
+  });
+
+  describe('updateQuizDraft()', () => {
+    it('should forward PATCH /teacher/quizzes/jobs/:jobId/draft and audit the save', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+
+      const payload = {
+        structuredOutput: {
+          title: 'Fractions AI Draft',
+          questions: [
+            {
+              type: 'multiple_choice',
+              content: '<p>What is one half of 10?</p>',
+            },
+          ],
+        },
+      };
+
+      const result = await controller.updateQuizDraft(
+        JOB_ID,
+        payload as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'PATCH',
+        `/teacher/quizzes/jobs/${JOB_ID}/draft`,
+        TEACHER_USER,
+        payload,
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.saved',
           targetType: 'ai_generation_job',
           targetId: JOB_ID,
         }),

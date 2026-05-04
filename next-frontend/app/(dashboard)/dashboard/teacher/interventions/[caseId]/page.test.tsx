@@ -310,6 +310,50 @@ describe('TeacherInterventionWorkspacePage', () => {
     });
   });
 
+  it('surfaces intervention basis and formative-only review guidance in the workspace', async () => {
+    mockedAiService.createInterventionJob.mockResolvedValue({
+      data: buildCompletedJob(),
+    } as Awaited<ReturnType<typeof aiService.createInterventionJob>>);
+    mockedAiService.getInterventionJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'remedial_plan_generation',
+          status: 'completed',
+          outputId: 'output-1',
+        },
+        result: {
+          outputId: 'output-1',
+          outputType: 'intervention_plan',
+          structuredOutput: buildStructuredResult(),
+        },
+      },
+    } as Awaited<ReturnType<typeof aiService.getInterventionJobResult>>);
+
+    render(<TeacherInterventionWorkspacePage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Plan Creator' })).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Intervention Basis')).toBeInTheDocument();
+    expect(screen.getAllByText(/grounded on class-scoped materials/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /generate plan/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Practice lessons then a quick quiz.')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Weakness detected')).toBeInTheDocument();
+    expect(screen.getByText('Recommended lesson review')).toBeInTheDocument();
+    expect(screen.getByText('Recommended assessment retry')).toBeInTheDocument();
+    expect(screen.getByText('Teacher review before assignment')).toBeInTheDocument();
+    expect(
+      screen.getByText(/do not automatically alter official class records/i),
+    ).toBeInTheDocument();
+  });
+
   it('opens the helper instructions from the question mark button', async () => {
     render(<TeacherInterventionWorkspacePage />);
 

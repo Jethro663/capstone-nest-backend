@@ -301,28 +301,28 @@ export default function StudentLxpDetailExperience() {
   const tabs: ClassWorkspaceTabItem[] = [
     {
       key: 'steps',
-      label: 'Assigned Steps',
+      label: 'Guided Review',
       href: detailHref,
       icon: FolderOpen,
       active: currentTab === 'steps',
     },
     {
       key: 'replays',
-      label: 'Replays',
+      label: 'Assessment Retry Support',
       href: `${detailHref}?tab=replays`,
       icon: ClipboardCheck,
       active: currentTab === 'replays',
     },
     {
       key: 'case',
-      label: 'Case File',
+      label: 'Why This Path Opened',
       href: `${detailHref}?tab=case`,
       icon: FileText,
       active: currentTab === 'case',
     },
     {
       key: 'overview',
-      label: 'Overview',
+      label: 'Progress & Support Status',
       href: `${detailHref}?tab=overview`,
       icon: BarChart3,
       active: currentTab === 'overview',
@@ -400,9 +400,11 @@ export default function StudentLxpDetailExperience() {
         <section className="student-class-panel">
           <header className="student-class-panel__head student-class-panel__head--modules">
             <div>
-              <h2 aria-label="Assigned Steps">Path Steps</h2>
+              <h2 aria-label="Guided Review">Guided Review</h2>
               <p>
-                {readOnly ? 'Read-only history' : `${steps.length} assigned steps available`}
+                {readOnly
+                  ? 'Read-only history'
+                  : `${steps.length} guided review ${steps.length === 1 ? 'step is' : 'steps are'} available before assessment retry support.`}
               </p>
             </div>
             <Button
@@ -428,6 +430,10 @@ export default function StudentLxpDetailExperience() {
             />
           </div>
 
+          <div className="rounded-xl border border-[#f3d8df] bg-[#fff7f9] p-4 text-sm font-medium text-[#5a6175]">
+            These guided review steps help you close the target concept gap before retrying the related assessment.
+          </div>
+
           {steps.length === 0 ? (
             <EmptyPanel message="No assigned steps are available for this path yet." />
           ) : (
@@ -451,9 +457,13 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'replays' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Replays</h2>
-            <p>Assessment retries open in JA review mode for guided feedback.</p>
+            <h2>Assessment Retry Support</h2>
+            <p>Complete guided review first, then open JA for the assessment retry.</p>
           </header>
+
+          <div className="rounded-xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm font-medium text-[#4f5d78]">
+            JA provides guided support, not a new official summative attempt. Use this space to review the failed assessment context with hints and explanations.
+          </div>
 
           {replays.length === 0 ? (
             <EmptyPanel message="No assessment replays are assigned for this path." />
@@ -478,8 +488,8 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'case' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Case File</h2>
-            <p>Support status, trigger score, and teacher approval record.</p>
+            <h2>Why This Path Opened</h2>
+            <p>This support path opened because your class performance dropped below the threshold for targeted intervention.</p>
           </header>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -496,7 +506,7 @@ export default function StudentLxpDetailExperience() {
       {currentTab === 'overview' ? (
         <section className="student-class-panel">
           <header className="student-class-panel__head">
-            <h2>Overview</h2>
+            <h2>Progress & Support Status</h2>
             <p>{overview.interventionStatus.message}</p>
           </header>
 

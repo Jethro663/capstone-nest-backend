@@ -78,7 +78,13 @@ class ExtractionApplyTests(unittest.IsolatedAsyncioTestCase):
                         "title": "Section 1",
                         "description": "Desc",
                         "lessonBlocks": [
-                            {"type": "text", "order": 0, "content": {"text": "Body"}},
+                            {
+                                "type": "text",
+                                "order": 0,
+                                "content": {
+                                    "text": "Body text that is long enough to survive text-first apply filtering.",
+                                },
+                            },
                             {
                                 "type": "image",
                                 "order": 1,

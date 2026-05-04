@@ -17,6 +17,29 @@ describe('extractionService', () => {
     jest.clearAllMocks();
   });
 
+  it('sends target section count when queueing an extraction', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'queued',
+        data: {
+          extractionId: 'extract-queued',
+          status: 'pending',
+        },
+      },
+    });
+
+    await extractionService.extractModule({
+      fileId: 'file-queue',
+      targetSectionCount: 4,
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith('/ai/extract-module', {
+      fileId: 'file-queue',
+      targetSectionCount: 4,
+    });
+  });
+
   it('normalizes list payloads with snake_case keys and numeric-string progress fields', async () => {
     mockedApi.get.mockResolvedValue({
       data: {

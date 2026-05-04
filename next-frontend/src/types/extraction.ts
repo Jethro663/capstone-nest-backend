@@ -113,6 +113,9 @@ export interface ExtractionStructuredContent {
     chunkCount?: number;
     pageCount?: number;
     sourceDocument?: string;
+    requestedSectionCount?: number;
+    finalSectionCount?: number;
+    sectionCountAdjustmentReason?: string | null;
   };
 }
 
@@ -140,6 +143,7 @@ export interface Extraction {
 
 export interface ExtractModuleDto {
   fileId: string;
+  targetSectionCount: 3 | 4 | 5;
 }
 
 export interface ApplyExtractionDto {

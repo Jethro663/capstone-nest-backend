@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import json
+import re
 import logging
 import math
 import os
@@ -42,7 +43,7 @@ from .lesson_plan_service import (
     save_lesson_plan_draft,
     _normalize_lesson_plan_output,
 )
-from .quiz_generation_service import generate_quiz_draft
+from .quiz_generation_service import generate_quiz_draft, save_quiz_draft
 from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
 from .llamaindex_adapter import build_text_node, llamaindex_available
@@ -79,6 +80,7 @@ from .schemas import (
     JaAskResponseRequest,
     JaReviewGenerateRequest,
     UpdateLessonPlanDraftRequest,
+    UpdateQuizDraftRequest,
     UpdateExtractionRequest,
 )
 
@@ -2969,7 +2971,6 @@ def _refresh_media_review_state(structured_content: dict[str, Any]) -> None:
     audit = structured_content.get("audit") if isinstance(structured_content.get("audit"), dict) else {}
     assigned = sum(1 for asset in normalized_media_assets if isinstance(asset.get("selectedSectionIndex"), int))
     unassigned = max(len(normalized_media_assets) - assigned, 0)
-    needs_review = any(not bool(asset.get("teacherReviewed")) for asset in normalized_media_assets)
     image_summary = audit.get("imageAssignmentSummary") if isinstance(audit.get("imageAssignmentSummary"), dict) else {}
     image_summary.update(
         {
@@ -2979,14 +2980,18 @@ def _refresh_media_review_state(structured_content: dict[str, Any]) -> None:
         }
     )
     audit["imageAssignmentSummary"] = image_summary
-    review_flags = [str(flag) for flag in audit.get("reviewFlags", []) if str(flag).strip()]
-    if unassigned > 0 and "image-unassigned" not in review_flags:
-        review_flags.append("image-unassigned")
-    if needs_review and "image-review-pending" not in review_flags:
-        review_flags.append("image-review-pending")
+    review_flags = [
+        str(flag)
+        for flag in audit.get("reviewFlags", [])
+        if str(flag).strip() and not str(flag).startswith("image-")
+    ]
     audit["reviewFlags"] = review_flags
     quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
-    audit["reviewRequired"] = quality_gate == "fail" or needs_review
+    existing_review_required = audit.get("reviewRequired")
+    if isinstance(existing_review_required, bool):
+        audit["reviewRequired"] = existing_review_required or quality_gate == "fail"
+    else:
+        audit["reviewRequired"] = quality_gate != "pass" or bool(review_flags)
     structured_content["audit"] = audit
 
 
@@ -3002,8 +3007,7 @@ def _block_text_for_apply(block: dict[str, Any]) -> str:
 def _block_has_usable_content(block: dict[str, Any]) -> bool:
     block_type = str(block.get("type") or "").strip().lower()
     if block_type == "image":
-        content = block.get("content")
-        return isinstance(content, dict) and isinstance(content.get("url"), str) and bool(content.get("url").strip())
+        return False
     if block_type == "divider":
         return False
     return bool(_block_text_for_apply(block))
@@ -3023,6 +3027,8 @@ def _prepare_section_for_apply(section_data: dict[str, Any], *, fallback_title: 
     for idx, block in enumerate(blocks, start=1):
         normalized_block = _normalize_extraction_block(block, idx)
         block_type = str(normalized_block.get("type") or "text").strip().lower()
+        if block_type == "image":
+            continue
         text = _block_text_for_apply(normalized_block)
         if block_type == "text" and text and len(text) < VERY_SHORT_APPLY_TEXT_THRESHOLD:
             continue
@@ -3193,14 +3199,30 @@ async def extract_module(
         raise HTTPException(404, "Physical file not found on server")
 
     # Create extraction record
+    initial_structured_content = {
+        "title": "",
+        "description": "",
+        "sections": [],
+        "mediaAssets": [],
+        "audit": {
+            "requestedSectionCount": body.target_section_count,
+            "finalSectionCount": 0,
+            "sectionCountAdjustmentReason": None,
+        },
+    }
     result = await db.execute(
         sa_text(
             "INSERT INTO extracted_modules "
-            "(file_id, class_id, teacher_id, raw_text, extraction_status, progress_percent) "
-            "VALUES (:fileId, :classId, :teacherId, '', 'pending', 0) "
+            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
+            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
             "RETURNING id"
-        ),
-        {"fileId": file["id"], "classId": file["class_id"], "teacherId": user.id},
+        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
+        {
+            "fileId": file["id"],
+            "classId": file["class_id"],
+            "teacherId": user.id,
+            "structuredContent": initial_structured_content,
+        },
     )
     await db.commit()
     extraction_id = result.scalar_one()
@@ -3211,7 +3233,13 @@ async def extract_module(
 
         async with AsyncSessionLocal() as bg_db:
             logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
-            await run_extraction(bg_db, extraction_id, body.file_id, user.id)
+            await run_extraction(
+                bg_db,
+                extraction_id,
+                body.file_id,
+                user.id,
+                target_section_count=body.target_section_count,
+            )
 
     try:
         loop = asyncio.get_running_loop()
@@ -4268,6 +4296,48 @@ async def update_teacher_lesson_plan_draft(
     return {
         "success": True,
         "message": "Lesson plan draft saved",
+        "data": {
+            "jobId": result["jobId"],
+            "jobType": result["jobType"],
+            "status": result["status"],
+            "progressPercent": 100,
+            "statusMessage": result["statusMessage"],
+            "outputId": result["outputId"],
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /teacher/quizzes/jobs/:id/draft
+# ---------------------------------------------------------------------------
+
+
+@app.patch("/teacher/quizzes/jobs/{job_id}/draft")
+async def update_teacher_quiz_draft(
+    job_id: str,
+    body: UpdateQuizDraftRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await save_quiz_draft(
+        db,
+        job_id=job_id,
+        user=user,
+        structured_output=body.structured_output,
+    )
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft saved",
+        resultSummary={
+            "outputId": result.get("outputId"),
+            "questionCount": len(result.get("structuredOutput", {}).get("questions") or []),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Quiz draft saved",
         "data": {
             "jobId": result["jobId"],
             "jobType": result["jobType"],

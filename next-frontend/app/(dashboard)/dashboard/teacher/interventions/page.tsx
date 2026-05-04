@@ -584,8 +584,8 @@ export default function TeacherInterventionsPage() {
       title="Interventions"
       description={
         thresholdLabel !== null
-          ? `AI-assisted support for active cohorts. Current trigger threshold: ${thresholdLabel}%.`
-          : 'AI-assisted management of student development paths across active cohorts.'
+          ? `Targeted intervention oversight for below-threshold learners. Current support threshold: ${thresholdLabel}%.`
+          : 'Targeted intervention oversight for learners who need grounded remedial support.'
       }
       className="teacher-interventions-page"
       actions={
@@ -666,12 +666,39 @@ export default function TeacherInterventionsPage() {
 
       {selectedClassId && !loadingData ? (
         <>
+          <TeacherSectionCard
+            title="Targeted Triage"
+            description="Review why a learner entered remediation before opening the intervention workspace."
+            className="teacher-figma-stagger"
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-[#f3d7de] bg-[#fff7fa] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#b42358]">Eligibility</p>
+                <strong className="mt-2 block text-sm text-[var(--teacher-text-strong)]">
+                  Targeted intervention queue for learners below the support threshold
+                </strong>
+              </div>
+              <div className="rounded-xl border border-[#dfe8f6] bg-[#f8fbff] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#3b5e8e]">Grounding</p>
+                <strong className="mt-2 block text-sm text-[var(--teacher-text-strong)]">
+                  AI-assisted plans stay grounded on class-approved materials and teacher review
+                </strong>
+              </div>
+              <div className="rounded-xl border border-[#e5e1f1] bg-[#fbf9ff] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#6d4eb3]">Use in grading</p>
+                <strong className="mt-2 block text-sm text-[var(--teacher-text-strong)]">
+                  Intervention outcomes remain formative support and do not auto-mutate class records
+                </strong>
+              </div>
+            </div>
+          </TeacherSectionCard>
+
           <div className="teacher-interventions-page__layout teacher-figma-stagger">
             <TeacherSectionCard
               title={workspaceView === 'queue' ? 'Priority Intervention Queue' : 'XP Leaderboard'}
               description={
                 workspaceView === 'queue'
-                  ? 'Take action on at-risk learners without leaving the queue.'
+                  ? 'Take action on at-risk learners, review the trigger basis, and open the remedial workspace.'
                   : 'Track learner momentum and jump into active intervention cases.'
               }
               className="teacher-interventions-page__queue-card"
@@ -752,6 +779,9 @@ export default function TeacherInterventionsPage() {
                                   >
                                     {entry.status}
                                   </Badge>
+                                  <span className="teacher-interventions-small">
+                                    {entry.isCurrentlyAtRisk ? 'Currently at risk' : 'Recovered above threshold'}
+                                  </span>
                                 </div>
                               </TableCell>
                               <TableCell>
@@ -791,7 +821,7 @@ export default function TeacherInterventionsPage() {
                                       disabled={aiUnavailable}
                                       onClick={() => handleRecommend(entry.id)}
                                     >
-                                      AI Plan
+                                      Generate AI-Assisted Remedial Plan
                                     </Button>
                                   ) : null}
                                   {entry.status === 'pending' ? (
@@ -811,7 +841,7 @@ export default function TeacherInterventionsPage() {
                                     className="rounded-md"
                                     onClick={() => void handleOpenDetail(entry.id)}
                                   >
-                                    View
+                                    Open Case Workspace
                                   </Button>
                                   <Button
                                     size="sm"

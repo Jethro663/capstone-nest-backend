@@ -114,6 +114,44 @@ class IndexingPipelineTests(unittest.TestCase):
         self.assertEqual(status["sourceSummary"]["extractions"]["blocked"], 1)
         self.assertIn("No usable class sources are ready yet", status["reason"])
 
+    def test_build_class_index_status_tolerates_completed_extractions_without_subject_metadata(self) -> None:
+        status = build_class_index_status(
+            "class-1",
+            lesson_rows=[],
+            extraction_rows=[
+                {
+                    "id": "extraction-ready",
+                    "class_id": "class-1",
+                    "teacher_id": "teacher-1",
+                    "extraction_status": "completed",
+                    "structured_content": {
+                        "title": "Fractions Module",
+                        "sections": [
+                            {
+                                "title": "Equivalent Fractions",
+                                "lessonBlocks": [
+                                    {
+                                        "type": "text",
+                                        "content": {"text": "Equivalent fractions name the same value."},
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    "error_message": None,
+                    "source_updated_at": "2026-04-24T08:05:00+00:00",
+                    "original_name": "fractions.pdf",
+                }
+            ],
+            assessment_rows=[],
+            chunk_rows=[],
+        )
+
+        self.assertTrue(status["needsReindex"])
+        self.assertEqual(status["sourceSummary"]["extractions"]["ready"], 1)
+        self.assertEqual(status["readyExtractions"][0]["status"], "ready_to_index")
+        self.assertIn("Reindex", status["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

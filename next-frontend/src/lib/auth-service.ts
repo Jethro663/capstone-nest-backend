@@ -27,6 +27,7 @@ export interface AuthResponse {
 
 type AuthErrorResponse = AuthResponse & {
   errors?: unknown;
+  status?: number;
 };
 
 const publicAuthRequestConfig: ApiRequestConfig = {
@@ -40,10 +41,13 @@ function toAuthErrorResponse(
   fallbackMessage: string,
 ): AuthErrorResponse {
   if (isAxiosError<AuthErrorResponse>(error)) {
-    return error.response?.data ?? {
-      success: false,
-      message: error.message || fallbackMessage,
-    };
+    return error.response?.data
+      ? { ...error.response.data, status: error.response.status }
+      : {
+          success: false,
+          message: error.message || fallbackMessage,
+          status: error.response?.status,
+        };
   }
 
   if (error instanceof Error) {
@@ -129,8 +133,7 @@ export async function forgotPassword(email: string): Promise<AuthResponse> {
 export async function resetPassword(data: {
   email: string;
   code: string;
-  password: string;
-  confirmPassword: string;
+  newPassword: string;
 }): Promise<AuthResponse> {
   try {
     const response = await api.post(

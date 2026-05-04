@@ -616,6 +616,11 @@ export default function TeacherInterventionWorkspacePage() {
       ? `${studentName(queueEntry.student)} is no longer at-risk, so AI planning is disabled for this case.`
       : `${studentName(queueEntry.student)} - trigger ${queueEntry.triggerScore?.toFixed(1) ?? '--'}%`
     : 'Select a case from the intervention queue first.';
+  const policySummary = [
+    `Source scope: ${classPolicy?.sourceScope === 'recommended_only' ? 'recommended content only' : 'class materials'}`,
+    `Strict grounding: ${classPolicy?.strictGrounding ? 'on' : 'off'}`,
+    `AI mentor explanations: ${classPolicy?.mentorExplainEnabled ? 'enabled' : 'disabled'}${classPolicy ? `, follow-up cap ${classPolicy.maxFollowUpTurns}` : ''}`,
+  ];
 
   const handleRemoveLesson = (lessonId: string) => {
     setResult((current) => current
@@ -868,6 +873,45 @@ export default function TeacherInterventionWorkspacePage() {
             </Button>
           </div>
 
+          <section className="rounded-2xl border border-[#eadde3] bg-[#fff9fb] p-4">
+            <div className="teacher-intervention-workspace__subhead">
+              <div>
+                <h3>Intervention Basis</h3>
+                <p>Use the weakness signals below to keep this targeted intervention grounded on class-scoped materials before assigning any review or assessment retry.</p>
+              </div>
+            </div>
+            <div className="teacher-intervention-workspace__chips">
+              <Badge variant="secondary">
+                {queueEntry?.isCurrentlyAtRisk ? 'Currently at risk' : 'Recovered above threshold'}
+              </Badge>
+              <Badge variant="outline">
+                Trigger {queueEntry?.triggerScore?.toFixed(1) ?? '--'}% vs threshold {queueEntry?.thresholdApplied?.toFixed(1) ?? '--'}%
+              </Badge>
+              <Badge variant="outline">
+                Current blended score {queueEntry?.latestBlendedScore?.toFixed(1) ?? '--'}%
+              </Badge>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
+              <div className="rounded-xl border border-[#f0e5ea] bg-white p-3">
+                <strong className="block text-sm text-[#1f2937]">Teacher note</strong>
+                <p className="mt-2 text-sm text-[#5f6b84]">
+                  {note.trim() || 'No teacher note added yet. Add context if you want the remedial plan to follow a specific weakness or pacing concern.'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-[#f0e5ea] bg-white p-3">
+                <strong className="block text-sm text-[#1f2937]">Grounding policy</strong>
+                <ul className="mt-2 space-y-1 text-sm text-[#5f6b84]">
+                  {policySummary.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs font-medium text-[#7a5160]">
+                  Recommended lessons and assessment retries stay grounded on class-scoped materials.
+                </p>
+              </div>
+            </div>
+          </section>
+
           <div className="teacher-intervention-workspace__creator-grid">
             <div className="teacher-intervention-workspace__field-group is-wide">
               <label>Teacher note</label>
@@ -1085,7 +1129,7 @@ export default function TeacherInterventionWorkspacePage() {
 
           <div className="teacher-intervention-workspace__assign-grid">
             <section className="teacher-intervention-workspace__assign-block">
-              <h3>Weak concepts</h3>
+              <h3>Weakness detected</h3>
               <div className="teacher-intervention-workspace__chips">
                 {result?.weakConcepts?.length ? result.weakConcepts.map((concept) => (
                   <Badge key={concept} variant="secondary">{concept}</Badge>
@@ -1096,14 +1140,17 @@ export default function TeacherInterventionWorkspacePage() {
             </section>
 
             <section className="teacher-intervention-workspace__assign-block">
-              <h3>Recommended lessons</h3>
+              <h3>Recommended lesson review</h3>
+              <p className="mb-3 text-sm text-[#5f6b84]">
+                These lesson reviews were chosen to reinforce the weak concepts before the student reopens an assessment retry.
+              </p>
               {visibleLessons.length === 0 ? (
                 <p className="teacher-intervention-workspace__empty">No lessons selected yet.</p>
               ) : visibleLessons.map((lesson) => (
                 <div key={lesson.lessonId} className="teacher-intervention-workspace__resource-row">
                   <div>
                     <strong>{lesson.title}</strong>
-                    <span>{lesson.reason}</span>
+                    <span>Why it was chosen: {lesson.reason}</span>
                   </div>
                   <label>
                     <span>XP</span>
@@ -1125,14 +1172,17 @@ export default function TeacherInterventionWorkspacePage() {
             </section>
 
             <section className="teacher-intervention-workspace__assign-block">
-              <h3>Recommended assessments</h3>
+              <h3>Recommended assessment retry</h3>
+              <p className="mb-3 text-sm text-[#5f6b84]">
+                These assessment retries should validate improvement after guided review while staying inside the original class scope.
+              </p>
               {visibleAssessments.length === 0 ? (
                 <p className="teacher-intervention-workspace__empty">No assessments selected yet.</p>
               ) : visibleAssessments.map((assessment) => (
                 <div key={assessment.assessmentId} className="teacher-intervention-workspace__resource-row">
                   <div>
                     <strong>{assessment.title}</strong>
-                    <span>{assessment.reason}</span>
+                    <span>Why it was chosen: {assessment.reason}</span>
                   </div>
                   <label>
                     <span>XP</span>
@@ -1154,7 +1204,7 @@ export default function TeacherInterventionWorkspacePage() {
             </section>
 
             <section className="teacher-intervention-workspace__assign-block is-summary">
-              <h3>Teacher-facing summary</h3>
+              <h3>Teacher review before assignment</h3>
               {result?.aiSummary ? (
                 <>
                   <p>{result.aiSummary.summary}</p>
@@ -1174,6 +1224,9 @@ export default function TeacherInterventionWorkspacePage() {
                       ))}
                     </div>
                   </div>
+                  <p className="rounded-xl border border-[#f0d7df] bg-[#fff7f9] px-3 py-2 text-sm font-medium text-[#6a4f5b]">
+                    Formative support only: intervention checkpoints support remediation and teacher reference. They do not automatically alter official class records.
+                  </p>
                 </>
               ) : (
                 <p className="teacher-intervention-workspace__empty">

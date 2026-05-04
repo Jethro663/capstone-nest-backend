@@ -35,7 +35,10 @@ import {
   ApplyExtractionDto,
   UpdateExtractionDto,
 } from './DTO/extract-module.dto';
-import { GenerateQuizDraftDto } from './DTO/quiz-generation.dto';
+import {
+  GenerateQuizDraftDto,
+  UpdateQuizDraftDto,
+} from './DTO/quiz-generation.dto';
 import {
   GenerateLessonPlanDto,
   UpdateLessonPlanDraftDto,
@@ -2167,6 +2170,30 @@ export class AiMentorController {
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.lesson_plan.draft_saved',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
+  @Patch('teacher/quizzes/jobs/:jobId/draft')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Save teacher edits to a quiz AI draft output' })
+  async updateQuizDraft(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body() dto: UpdateQuizDraftDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'PATCH',
+      `/teacher/quizzes/jobs/${jobId}/draft`,
+      user,
+      dto,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.saved',
       targetType: 'ai_generation_job',
       targetId: jobId,
     });

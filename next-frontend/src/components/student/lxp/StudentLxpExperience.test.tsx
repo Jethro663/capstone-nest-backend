@@ -155,13 +155,19 @@ describe('StudentLxpExperience path list', () => {
     expect(
       await screen.findByPlaceholderText('Search path, section, or subject code'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/opens only for remediation-eligible learners below the support threshold/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/each support path helps you review guided steps and assessment retries/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'All Paths' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'In Progress' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument();
     expect(screen.getByText('Mathematics 7')).toBeInTheDocument();
     expect(screen.getByText('Science 7')).toBeInTheDocument();
-    expect(screen.getAllByText('Steps')).toHaveLength(2);
-    expect(screen.getAllByText('Replays')).toHaveLength(2);
+    expect(screen.getAllByText('Guided Review')).toHaveLength(2);
+    expect(screen.getAllByText('Assessment Retry')).toHaveLength(2);
     expect(screen.getAllByText('Pending')).toHaveLength(2);
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();

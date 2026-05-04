@@ -2,7 +2,8 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.extraction_pipeline import (
-    _attach_images_to_sections,
+    _build_structure_prompt,
+    _cleanup_text_first_sections,
     _derive_section_assessment_draft,
     _detect_structure_with_rules,
     _merge_structured_chunks,
@@ -24,12 +25,27 @@ class ExtractionPipelineTests(unittest.TestCase):
             chunk,
             pages=[{"pageNumber": 1, "text": chunk.text, "charCount": len(chunk.text)}],
             sanitization_warning_count=0,
+            target_section_count=4,
         )
 
         self.assertEqual(result["title"], "Lesson 1: Cells")
         self.assertTrue(result["sections"])
         self.assertTrue(result["sections"][0]["sectionId"].startswith("chunk-01-section-01"))
         self.assertGreater(result["sections"][0]["confidence"], 0)
+
+    def test_build_structure_prompt_includes_target_section_count(self) -> None:
+        chunk = TextChunk(
+            index=1,
+            total=1,
+            text="Lesson 1: Cells\nCells are the basic unit of life.",
+            context_header='Document: "Biology"',
+            split_method="heading",
+        )
+
+        prompt = _build_structure_prompt(chunk, 5)
+
+        self.assertIn("Target 5 major instructional section(s)", prompt)
+        self.assertIn("Never create filler sections", prompt)
 
     def test_merge_structured_chunks_preserves_duplicate_titles_via_section_ids(self) -> None:
         merged = _merge_structured_chunks(
@@ -75,7 +91,7 @@ class ExtractionPipelineTests(unittest.TestCase):
         first_block = merged["sections"][0]["lessonBlocks"][0]
         self.assertEqual(first_block["metadata"]["sectionId"], "chunk-01-section-01-intro")
 
-    def test_merge_structured_chunks_attaches_pdf_image_blocks(self) -> None:
+    def test_merge_structured_chunks_is_text_first_and_ignores_page_images(self) -> None:
         merged = _merge_structured_chunks(
             [
                 {
@@ -110,18 +126,41 @@ class ExtractionPipelineTests(unittest.TestCase):
 
         blocks = merged["sections"][0]["lessonBlocks"]
         image_blocks = [block for block in blocks if block.get("type") == "image"]
-        self.assertTrue(image_blocks)
-        self.assertEqual(
-            image_blocks[0]["content"]["url"],
-            "data:image/png;base64,ZmFrZQ==",
-        )
-        self.assertEqual(image_blocks[0]["metadata"]["mediaAssetId"], "image-1")
-        self.assertEqual(merged["audit"]["imageAssignmentSummary"]["assigned"], 1)
-        self.assertEqual(len(merged["mediaAssets"]), 1)
-        self.assertEqual(merged["mediaAssets"][0]["selectedSectionIndex"], 0)
-        self.assertEqual(merged["mediaAssets"][0]["candidateSections"][0]["sectionIndex"], 0)
+        self.assertFalse(image_blocks)
+        self.assertEqual(merged["audit"]["imageAssignmentSummary"]["assigned"], 0)
+        self.assertEqual(merged["audit"]["imageAssignmentSummary"]["unassigned"], 0)
+        self.assertEqual(merged["mediaAssets"], [])
 
-    def test_low_confidence_image_assignment_stays_unassigned(self) -> None:
+    def test_text_first_cleanup_records_merge_actions(self) -> None:
+        cleaned, cleanup_warnings, cleanup = _cleanup_text_first_sections(
+            [
+                {
+                    "title": "Overview",
+                    "description": "",
+                    "lessonBlocks": [
+                        {"type": "text", "order": 0, "content": {"text": "Cells are the basic unit of life."}},
+                    ],
+                    "assessmentDraft": None,
+                },
+                {
+                    "title": "Fragment",
+                    "description": "",
+                    "lessonBlocks": [
+                        {"type": "text", "order": 0, "content": {"text": "Cells are the basic unit of life."}},
+                    ],
+                    "assessmentDraft": None,
+                },
+            ]
+            ,
+            target_section_count=1,
+        )
+
+        self.assertEqual(cleanup_warnings, [])
+        self.assertTrue(cleanup.get("applied"))
+        self.assertTrue(cleanup.get("actions"))
+        self.assertEqual(len(cleaned), 1)
+
+    def test_merge_structured_chunks_caps_final_sections_to_requested_count(self) -> None:
         merged = _merge_structured_chunks(
             [
                 {
@@ -132,96 +171,48 @@ class ExtractionPipelineTests(unittest.TestCase):
                             "sectionId": "chunk-01-section-01-intro",
                             "sectionTitle": "Introduction",
                             "sectionDescription": "",
-                            "sectionBody": "Cells are the basic unit of life.",
+                            "sectionBody": "Cells are the basic unit of life. They make up all living things.",
                             "sectionKind": "lesson",
                             "chunkIndex": 1,
                             "pageStart": 1,
                             "pageEnd": 1,
                             "sourceMethod": "text",
                             "confidence": 0.8,
-                        }
+                        },
+                        {
+                            "sectionId": "chunk-01-section-02-membrane",
+                            "sectionTitle": "Membranes",
+                            "sectionDescription": "",
+                            "sectionBody": "Cell membranes control what enters and exits the cell.",
+                            "sectionKind": "lesson",
+                            "chunkIndex": 1,
+                            "pageStart": 1,
+                            "pageEnd": 1,
+                            "sourceMethod": "text",
+                            "confidence": 0.79,
+                        },
+                        {
+                            "sectionId": "chunk-01-section-03-energy",
+                            "sectionTitle": "Energy",
+                            "sectionDescription": "",
+                            "sectionBody": "Cells need energy to carry out basic life processes.",
+                            "sectionKind": "lesson",
+                            "chunkIndex": 1,
+                            "pageStart": 1,
+                            "pageEnd": 1,
+                            "sourceMethod": "text",
+                            "confidence": 0.78,
+                        },
                     ],
                 }
             ],
-            page_images=[
-                {
-                    "id": "img-1",
-                    "pageNumber": 3,
-                    "dataUrl": "data:image/png;base64,ZmFrZQ==",
-                    "width": 100,
-                    "height": 100,
-                    "alt": "Extracted figure from page 3",
-                    "anchorText": "Figure 4. A chloroplast diagram.",
-                    "keywords": ["chloroplast", "diagram"],
-                    "figureReferences": ["figure:4"],
-                }
-            ],
+            target_section_count=2,
         )
 
-        image_blocks = [
-            block
-            for block in merged["sections"][0]["lessonBlocks"]
-            if block.get("type") == "image"
-        ]
-        self.assertFalse(image_blocks)
-        self.assertEqual(merged["audit"]["imageAssignmentSummary"]["unassigned"], 1)
-        self.assertTrue(merged["audit"]["reviewFlags"])
-        self.assertEqual(len(merged["mediaAssets"]), 1)
-        self.assertIsNone(merged["mediaAssets"][0]["selectedSectionIndex"])
-        self.assertFalse(merged["mediaAssets"][0]["teacherReviewed"])
-        self.assertEqual(len(merged["mediaAssets"][0]["candidateSections"]), 1)
-        self.assertEqual(
-            merged["mediaAssets"][0]["reviewState"],
-            "needs_teacher_assignment",
-        )
-
-    def test_image_reuse_requires_explicit_citation(self) -> None:
-        sections = [
-            {
-                "title": "Section 1",
-                "description": "Figure 2 explains cellular transport.",
-                "lessonBlocks": [
-                    {"type": "text", "order": 0, "content": {"text": "Study Figure 2 carefully."}},
-                ],
-                "pageStart": 2,
-                "pageEnd": 2,
-                "graphKeywords": ["cellular", "transport"],
-                "figureReferences": ["figure:2"],
-            },
-            {
-                "title": "Section 2",
-                "description": "Figure 2 is referenced in the summary.",
-                "lessonBlocks": [
-                    {"type": "text", "order": 0, "content": {"text": "As seen in Figure 2, diffusion occurs."}},
-                ],
-                "pageStart": 2,
-                "pageEnd": 2,
-                "graphKeywords": ["summary", "diffusion"],
-                "figureReferences": ["figure:2"],
-            },
-        ]
-        summary = _attach_images_to_sections(
-            sections,
-            [
-                {
-                    "id": "img-2",
-                    "pageNumber": 2,
-                    "dataUrl": "data:image/png;base64,ZmFrZQ==",
-                    "width": 100,
-                    "height": 100,
-                    "alt": "Figure 2",
-                    "anchorText": "Figure 2. Cell transport diagram.",
-                    "keywords": ["cell", "transport", "diagram"],
-                    "figureReferences": ["figure:2"],
-                }
-            ],
-        )
-
-        section1_images = [block for block in sections[0]["lessonBlocks"] if block.get("type") == "image"]
-        section2_images = [block for block in sections[1]["lessonBlocks"] if block.get("type") == "image"]
-        self.assertTrue(section1_images)
-        self.assertTrue(section2_images)
-        self.assertEqual(summary["reusedByCitation"], 1)
+        self.assertEqual(len(merged["sections"]), 2)
+        self.assertEqual(merged["audit"]["requestedSectionCount"], 2)
+        self.assertEqual(merged["audit"]["finalSectionCount"], 2)
+        self.assertTrue(merged["audit"]["coherenceCleanup"]["actions"])
 
     def test_assessment_media_attaches_only_when_question_references_figure(self) -> None:
         draft = _derive_section_assessment_draft(
@@ -271,7 +262,7 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
                     }
                 ],
             ),
-            patch("app.extraction_pipeline._extract_pdf_embedded_images", return_value=[]),
+            patch("app.extraction_pipeline._extract_pdf_embedded_images") as extract_images,
             patch("app.extraction_pipeline._render_pdf_pages_to_images") as render_pages,
             patch(
                 "app.extraction_pipeline.ollama_client.is_available",
@@ -284,8 +275,40 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         ):
             await run_extraction(db, "extract-1", "file-1", "user-1")
 
+        extract_images.assert_not_called()
         render_pages.assert_not_called()
         doc.close.assert_called_once()
+
+    async def test_run_extraction_rejects_scanned_pdf_without_text(self) -> None:
+        db = MagicMock()
+        upload_row = MagicMock()
+        upload_row.mappings.return_value.first.return_value = {
+            "file_path": "uploads/test.pdf",
+            "original_name": "Scanned.pdf",
+        }
+        db.execute = AsyncMock(return_value=upload_row)
+        db.commit = AsyncMock()
+
+        doc = MagicMock()
+
+        with (
+            patch("app.extraction_pipeline._update_extraction", new=AsyncMock()) as update_extraction,
+            patch(
+                "app.extraction_pipeline.materialize_backend_upload",
+                new=AsyncMock(return_value="uploads/test.pdf"),
+            ),
+            patch("app.extraction_pipeline.os.path.exists", return_value=True),
+            patch("app.extraction_pipeline.fitz.open", return_value=doc),
+            patch(
+                "app.extraction_pipeline._extract_pdf_pages",
+                return_value=[{"pageNumber": 1, "text": "", "charCount": 0}],
+            ),
+        ):
+            await run_extraction(db, "extract-1", "file-1", "user-1")
+
+        final_update = update_extraction.await_args_list[-1].args[2]
+        self.assertEqual(final_update["extraction_status"], "failed")
+        self.assertIn("text-based pdf", final_update["error_message"].lower())
 
 
 if __name__ == "__main__":

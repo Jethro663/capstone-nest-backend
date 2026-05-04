@@ -72,7 +72,6 @@ export function ResetPasswordScreen({ navigation, route }: Props) {
         email: normalizedEmail,
         code: normalizedCode,
         newPassword,
-        confirmPassword,
       });
       pushAuthNotice("Password reset complete. Sign in with your new password.");
       navigation.replace("Login");

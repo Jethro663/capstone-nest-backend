@@ -248,6 +248,52 @@ describe('aiService', () => {
     expect(result.data.statusMessage).toBe('Draft saved');
   });
 
+  it('saves edited quiz drafts', async () => {
+    mockedApi.patch.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          jobId: 'job-quiz-3',
+          jobType: 'quiz_generation',
+          status: 'completed',
+          progressPercent: 100,
+          statusMessage: 'Draft saved',
+          outputId: 'output-quiz-3',
+        },
+      },
+    });
+
+    const result = await aiService.updateQuizDraft('job-quiz-3', {
+      structuredOutput: {
+        title: 'Updated draft',
+        questions: [
+          {
+            type: 'multiple_choice',
+            content: '<p>Updated</p>',
+            options: [{ text: 'A', isCorrect: true }],
+          },
+        ],
+      },
+    });
+
+    expect(mockedApi.patch).toHaveBeenCalledWith(
+      '/ai/teacher/quizzes/jobs/job-quiz-3/draft',
+      {
+        structuredOutput: {
+          title: 'Updated draft',
+          questions: [
+            {
+              type: 'multiple_choice',
+              content: '<p>Updated</p>',
+              options: [{ text: 'A', isCorrect: true }],
+            },
+          ],
+        },
+      },
+    );
+    expect(result.data.statusMessage).toBe('Draft saved');
+  });
+
   it('normalizes quiz job result payloads', async () => {
     mockedApi.get.mockResolvedValue({
       data: {

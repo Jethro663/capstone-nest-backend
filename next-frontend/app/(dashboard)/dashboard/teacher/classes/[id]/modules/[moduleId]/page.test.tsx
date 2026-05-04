@@ -317,7 +317,7 @@ describe('TeacherModuleDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Release Module' })).toBeInTheDocument();
   });
 
-  it('routes core default assessment content to the read-only editor shell', async () => {
+  it('routes core default assessment content to the teacher editor so release controls stay available', async () => {
     mockedModuleService.getByClass.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -375,10 +375,66 @@ describe('TeacherModuleDetailPage', () => {
 
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith(
-        '/dashboard/teacher/assessments/assessment-existing/edit?mode=view&classId=class-1&moduleId=module-1',
+        '/dashboard/teacher/assessments/assessment-existing/edit?classId=class-1&moduleId=module-1',
       );
     });
     expect(mockedAssessmentService.getById).not.toHaveBeenCalled();
+  });
+
+  it('allows unlocking a default module from the locking tab', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'module-1',
+          classId: 'class-1',
+          title: 'Default Module',
+          description: 'Locked from template',
+          order: 1,
+          isVisible: true,
+          isLocked: true,
+          isCoreTemplateAsset: true,
+          teacherNotes: '',
+          sections: [],
+          gradingScaleEntries: [],
+        },
+      ] as never,
+      count: 1,
+    });
+    mockedModuleService.releaseCoreModule.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'module-1',
+        classId: 'class-1',
+        title: 'Default Module',
+        description: 'Locked from template',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        isCoreTemplateAsset: true,
+        teacherNotes: '',
+        sections: [],
+        gradingScaleEntries: [],
+      } as never,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByText('Default Module');
+    fireEvent.click(screen.getByRole('button', { name: 'Locking' }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Unlocked Students can open this template module once it is visible and its items are given\./i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockedModuleService.releaseCoreModule).toHaveBeenCalledWith('module-1', {
+        isLocked: false,
+      });
+    });
   });
 
   it('routes core default lesson content to the teacher read-only reader', async () => {

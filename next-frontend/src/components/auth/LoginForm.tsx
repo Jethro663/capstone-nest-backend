@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
@@ -152,6 +153,11 @@ export function LoginForm() {
             Leading or trailing spaces will be kept as part of your password.
           </p>
         ) : null}
+        <div className="flex justify-end">
+          <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
+            Forgot password?
+          </Link>
+        </div>
       </div>
 
       <Button type="submit" className="auth-primary-button w-full" disabled={isSubmitting}>

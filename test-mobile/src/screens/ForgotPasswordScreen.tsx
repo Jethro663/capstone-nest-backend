@@ -13,11 +13,13 @@ import {
   authTheme,
 } from "../components/auth/MobileAuthPrimitives";
 import type { AuthStackParamList } from "../navigation/types";
+import { useErrorModal } from "../providers/ErrorModalProvider";
 import { isValidAuthEmail, normalizeAuthEmail } from "./screen-flow";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "ForgotPassword">;
 
 export function ForgotPasswordScreen({ navigation }: Props) {
+  const { presentError } = useErrorModal();
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -48,7 +50,16 @@ export function ForgotPasswordScreen({ navigation }: Props) {
         navigation.replace("ResetPassword", { email: normalizedEmail });
       }, 450);
     } catch (rawError) {
-      setError(toAppError(rawError).message);
+      const appError = toAppError(rawError, { present: false });
+      if (appError.status === 404) {
+        presentError({
+          title: "Account does not exist",
+          message: "No Nexora account was found for that email address. Check the email or contact an administrator.",
+        });
+        setError("");
+        return;
+      }
+      setError(appError.message);
     } finally {
       setLoading(false);
     }

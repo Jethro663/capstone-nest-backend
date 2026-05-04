@@ -162,12 +162,12 @@ describe('StudentLxpDetailExperience', () => {
     render(<StudentLxpDetailExperience />);
 
     expect(await screen.findByText('Mathematics 7')).toBeInTheDocument();
-    expect(screen.getByText('Assigned Steps')).toBeInTheDocument();
-    expect(screen.getByText('Replays')).toBeInTheDocument();
-    expect(screen.getByText('Case File')).toBeInTheDocument();
-    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Guided Review' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Assessment Retry Support' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Why This Path Opened' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Progress & Support Status' })).toBeInTheDocument();
     expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Assigned Steps' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Guided Review' })).toBeInTheDocument();
   });
 
   it('routes assessment replays to the standalone JA page', async () => {
@@ -283,5 +283,24 @@ describe('StudentLxpDetailExperience', () => {
       'href',
       '/dashboard/student/ja?mode=review&classId=class-active&entry=lxp&returnTo=%2Fdashboard%2Fstudent%2Flxp%2Fclass-active%3Ftab%3Dreplays',
     );
+  });
+
+  it('explains why the path opened', async () => {
+    searchParamsState.tab = 'case';
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByRole('heading', { name: 'Why This Path Opened' })).toBeInTheDocument();
+    expect(screen.getByText(/this support path opened because your class performance dropped below the threshold/i)).toBeInTheDocument();
+    expect(screen.getByText('Current score')).toBeInTheDocument();
+  });
+
+  it('explains how assessment retry support should be used', async () => {
+    searchParamsState.tab = 'replays';
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByRole('heading', { name: 'Assessment Retry Support' })).toBeInTheDocument();
+    expect(screen.getByText(/complete guided review first, then open ja for the assessment retry/i)).toBeInTheDocument();
+    expect(screen.getByText(/guided support, not a new official summative attempt/i)).toBeInTheDocument();
   });
 });

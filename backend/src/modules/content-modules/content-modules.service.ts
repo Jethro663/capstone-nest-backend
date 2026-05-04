@@ -1350,6 +1350,7 @@ export class ContentModulesService {
       .update(classModules)
       .set({
         ...(dto.isVisible !== undefined ? { isVisible: dto.isVisible } : {}),
+        ...(dto.isLocked !== undefined ? { isLocked: dto.isLocked } : {}),
         updatedAt: new Date(),
       })
       .where(eq(classModules.id, moduleId))
@@ -1363,6 +1364,7 @@ export class ContentModulesService {
       metadata: {
         classId: module.classId,
         isVisible: updated.isVisible,
+        isLocked: updated.isLocked,
       },
     });
 

@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TeacherClassDetailPage from './page';
+import { getTrackedExtractionNotificationStorageKey } from '@/lib/extraction-notification-tracker';
 import { announcementService } from '@/services/announcement-service';
 import { assessmentService } from '@/services/assessment-service';
 import { classRecordService } from '@/services/class-record-service';
@@ -71,6 +72,7 @@ jest.mock('@/services/extraction-service', () => ({
   extractionService: {
     listByClass: jest.fn(),
     extractModule: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -105,6 +107,7 @@ const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 describe('TeacherClassDetailPage extraction view', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
     mockedHealthService.getReadiness.mockResolvedValue({
       ready: true,
       timestamp: '2026-04-30T00:00:00.000Z',
@@ -146,7 +149,8 @@ describe('TeacherClassDetailPage extraction view', () => {
           structuredContent: {
             title: 'Cells and Systems',
             audit: {
-              imageAssignmentSummary: { assigned: 1, unassigned: 1 },
+              requestedSectionCount: 4,
+              finalSectionCount: 4,
             },
           },
         },
@@ -175,7 +179,8 @@ describe('TeacherClassDetailPage extraction view', () => {
     expect(screen.getByText(/AI service returned HTTP 503/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Drop a PDF here to extract module/i })).toBeDisabled();
     expect(screen.getByText('Cells and Systems')).toBeInTheDocument();
-    expect(screen.getByText('Images unassigned')).toBeInTheDocument();
+    expect(screen.getByText('Needs review')).toBeInTheDocument();
+    expect(screen.getByText(/Requested sections: 4/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /View/i })).toHaveAttribute(
       'href',
       '/dashboard/teacher/extractions/extraction-1',
@@ -184,5 +189,73 @@ describe('TeacherClassDetailPage extraction view', () => {
     fireEvent.click(screen.getByRole('button', { name: /Drop a PDF here to extract module/i }));
     expect(mockedFileService.upload).not.toHaveBeenCalled();
     expect(mockedExtractionService.extractModule).not.toHaveBeenCalled();
+  });
+
+  it('shows a delete action beside view and removes the extraction after confirmation', async () => {
+    mockedExtractionService.delete.mockResolvedValue({
+      success: true,
+      message: 'deleted',
+    } as Awaited<ReturnType<typeof extractionService.delete>>);
+
+    render(<TeacherClassDetailPage />);
+
+    expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /View/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete Cells and Systems/i }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Delete Extraction' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Extraction' }));
+
+    expect(mockedExtractionService.delete).toHaveBeenCalledWith('extraction-1');
+  });
+
+  it('defaults the section target to 4 and sends the selected value when queueing extraction', async () => {
+    mockedFileService.upload.mockResolvedValue({
+      data: { id: 'file-uploaded-1' },
+    } as Awaited<ReturnType<typeof fileService.upload>>);
+    mockedExtractionService.extractModule.mockResolvedValue({
+      success: true,
+      message: 'queued',
+      data: { extractionId: 'extract-new', status: 'pending' },
+    } as Awaited<ReturnType<typeof extractionService.extractModule>>);
+
+    render(<TeacherClassDetailPage />);
+
+    expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
+
+    const selector = screen.getByRole('combobox', { name: 'Target section count' });
+    expect(selector).toHaveValue('4');
+
+    fireEvent.change(selector, { target: { value: '5' } });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(['module'], 'module.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(mockedExtractionService.extractModule).toHaveBeenCalledWith({
+        fileId: 'file-uploaded-1',
+        targetSectionCount: 5,
+      });
+    });
+
+    const tracked = JSON.parse(
+      window.localStorage.getItem(getTrackedExtractionNotificationStorageKey(classId)) || '[]',
+    );
+    expect(tracked).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          extractionId: 'extract-new',
+          classId,
+          originalName: 'module.pdf',
+          targetSectionCount: 5,
+          lastKnownStatus: 'pending',
+        }),
+      ]),
+    );
   });
 });

@@ -199,7 +199,7 @@ const teacherModuleGuidePages: Array<{
     description:
       'Sections are containers for lessons, assessments, and resources. Start by creating clear learning blocks.',
     screen: 'sections',
-    reminder: 'Core modules from templates may be locked by design; edit in template mode for deep structure changes.',
+    reminder: 'Template modules keep their copied structure, but teachers can still control student release and readiness here.',
     steps: [
       {
         action: 'Create',
@@ -231,7 +231,7 @@ const teacherModuleGuidePages: Array<{
       },
       {
         action: 'Open',
-        body: 'Use View Content for quick read-only review of attached assessments and lessons.',
+        body: 'Use View Content to open the attached lesson or assessment workflow from this module.',
       },
     ],
   },
@@ -272,8 +272,8 @@ const teacherModuleGuidePages: Array<{
         body: 'Lock to pause access without deleting assignments or materials.',
       },
       {
-        action: 'Release core',
-        body: 'For template modules, release the default module only after template-level changes are done.',
+        action: 'Unlock or lock',
+        body: 'Template modules can still be opened or locked for students without changing the copied structure.',
       },
       {
         action: 'Avoid confusion',
@@ -875,18 +875,22 @@ export default function TeacherModuleDetailPage() {
     }
   };
 
-  const handleReleaseCoreModule = async (isVisible: boolean) => {
+  const handleReleaseCoreModule = async (patch: { isVisible?: boolean; isLocked?: boolean }) => {
     if (!module || updatingModule) return;
 
     const previous = module;
-    const next = { ...module, isVisible };
+    const next = { ...module, ...patch };
     setModule(next);
 
     try {
       setUpdatingModule(true);
-      const response = await moduleService.releaseCoreModule(module.id, { isVisible });
+      const response = await moduleService.releaseCoreModule(module.id, patch);
       setModule(response.data);
-      toast.success(isVisible ? 'Default module released to students' : 'Default module hidden from students');
+      if (patch.isLocked !== undefined) {
+        toast.success(patch.isLocked ? 'Default module locked' : 'Default module unlocked');
+      } else {
+        toast.success(patch.isVisible ? 'Default module released to students' : 'Default module hidden from students');
+      }
     } catch {
       setModule(previous);
       toast.error('Unable to update default module release');
@@ -1144,7 +1148,7 @@ export default function TeacherModuleDetailPage() {
 
     if (item.itemType === 'assessment' && item.assessmentId) {
       router.push(
-        `/dashboard/teacher/assessments/${item.assessmentId}/edit?mode=view&classId=${classId}&moduleId=${moduleId}`,
+        `/dashboard/teacher/assessments/${item.assessmentId}/edit?classId=${classId}&moduleId=${moduleId}`,
       );
       return;
     }
@@ -1780,7 +1784,7 @@ export default function TeacherModuleDetailPage() {
                 data-active={module.isVisible}
                 onClick={() =>
                   void (isCoreModule
-                    ? handleReleaseCoreModule(true)
+                    ? handleReleaseCoreModule({ isVisible: true })
                     : runModulePatch({ isVisible: true }))
                 }
                 disabled={updatingModule}
@@ -1791,7 +1795,7 @@ export default function TeacherModuleDetailPage() {
                   <h3>{isCoreModule ? 'Release Module' : 'Visible'}</h3>
                   <p>
                     {isCoreModule
-                      ? 'Students can see this default module and access its locked template content.'
+                      ? 'Students can see this default module and access its current template content.'
                       : 'Students can see this module and access its content.'}
                   </p>
                 </div>
@@ -1803,7 +1807,7 @@ export default function TeacherModuleDetailPage() {
                 data-active={!module.isVisible}
                 onClick={() =>
                   void (isCoreModule
-                    ? handleReleaseCoreModule(false)
+                    ? handleReleaseCoreModule({ isVisible: false })
                     : runModulePatch({ isVisible: false }))
                 }
                 disabled={updatingModule}
@@ -1832,10 +1836,40 @@ export default function TeacherModuleDetailPage() {
             {isCoreModule ? (
               <>
                 <p className="teacher-module-detail__lead">
-                  Default modules remain locked and immutable in the class. Change the template if the structure needs to evolve.
+                  Template modules keep their copied structure, but you can still lock or unlock student access here.
                 </p>
                 <div className="teacher-module-detail__tip" data-tone="warning">
-                  <strong>Default module:</strong> Locking is enforced by the template copy. Only student visibility can be changed here.
+                  <strong>Default module:</strong> Locking here changes student access only. Edit the template itself if the structure needs to change.
+                </div>
+                <div className="teacher-module-detail__choice-grid">
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={!module.isLocked}
+                    onClick={() => void handleReleaseCoreModule({ isLocked: false })}
+                    disabled={updatingModule}
+                  >
+                    <Unlock className="h-5 w-5" />
+                    <div>
+                      <h3>Unlocked</h3>
+                      <p>Students can open this template module once it is visible and its items are given.</p>
+                    </div>
+                    {!module.isLocked ? <span><Unlock className="h-4 w-4" /></span> : null}
+                  </button>
+                  <button
+                    type="button"
+                    className="teacher-module-detail__choice"
+                    data-active={module.isLocked}
+                    onClick={() => void handleReleaseCoreModule({ isLocked: true })}
+                    disabled={updatingModule}
+                  >
+                    <Lock className="h-5 w-5" />
+                    <div>
+                      <h3>Locked</h3>
+                      <p>Students can still see the module shell, but they cannot open its content yet.</p>
+                    </div>
+                    {module.isLocked ? <span><Lock className="h-4 w-4" /></span> : null}
+                  </button>
                 </div>
               </>
             ) : (

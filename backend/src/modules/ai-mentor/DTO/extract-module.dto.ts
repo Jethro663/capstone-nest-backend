@@ -3,6 +3,8 @@ import {
   IsOptional,
   IsArray,
   IsNumber,
+  IsInt,
+  IsIn,
   IsString,
   ValidateNested,
   IsObject,
@@ -23,6 +25,15 @@ export class ExtractModuleDto {
   })
   @IsUUID()
   fileId: string;
+
+  @ApiProperty({
+    description: 'Teacher-selected target section count for structured extraction.',
+    example: 4,
+    enum: [3, 4, 5],
+  })
+  @IsInt()
+  @IsIn([3, 4, 5])
+  targetSectionCount: 3 | 4 | 5;
 }
 
 /**

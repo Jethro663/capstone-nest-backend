@@ -24,6 +24,7 @@ import type {
   StudentTutorSessionStartResponse,
   UpdateClassAiPolicyDto,
   UpdateLessonPlanDraftDto,
+  UpdateQuizDraftDto,
 } from '@/types/ai';
 
 type Envelope<T> = {
@@ -361,6 +362,14 @@ export const aiService = {
       `/ai/teacher/lesson-plans/jobs/${jobId}/draft`,
       dto,
     );
+    return normalizeJobEnvelope(data);
+  },
+
+  async updateQuizDraft(
+    jobId: string,
+    dto: UpdateQuizDraftDto,
+  ): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.patch(`/ai/teacher/quizzes/jobs/${jobId}/draft`, dto);
     return normalizeJobEnvelope(data);
   },
 

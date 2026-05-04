@@ -377,6 +377,10 @@ export interface UpdateLessonPlanDraftDto {
   structuredOutput: LessonPlanStructuredOutput;
 }
 
+export interface UpdateQuizDraftDto {
+  structuredOutput: QuizDraftStructuredOutput;
+}
+
 export interface StudentTutorClassSummary {
   id: string;
   subjectName: string;

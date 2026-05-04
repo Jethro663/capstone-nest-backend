@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import time
+from copy import deepcopy
 from typing import Any
 
 import fitz  # PyMuPDF
@@ -889,7 +890,7 @@ def _apply_assessment_media_rules(section: dict[str, Any]) -> None:
 
 
 
-def _build_structure_prompt(chunk: TextChunk) -> str:
+def _build_structure_prompt(chunk: TextChunk, target_section_count: int) -> str:
     return (
         f"{chunk.context_header}\n\n"
         "Analyze the module text and detect its instructional structure.\n\n"
@@ -907,10 +908,12 @@ def _build_structure_prompt(chunk: TextChunk) -> str:
         "  ]\n"
         "}\n\n"
         "Rules:\n"
-        "1. Detect major lesson/topic boundaries first.\n"
+        f"1. Target {target_section_count} major instructional section(s) for the full module when the content safely supports it.\n"
         "2. Preserve the original text in sectionBody. Do not paraphrase.\n"
-        "3. If the chunk contains continuation text, still split it into clean sections.\n"
-        "4. If headings are weak, infer reasonable section splits from formatting and topic changes.\n\n"
+        "3. Never create filler sections just to reach the target count.\n"
+        "4. If the chunk contains continuation text, still split it into clean sections.\n"
+        "5. If headings are weak, infer reasonable section splits from formatting and topic changes.\n"
+        "6. Prefer fewer, stronger sections over fragmented micro-sections.\n\n"
         f"RAW MODULE TEXT:\n---\n{chunk.text}\n---"
     )
 
@@ -943,6 +946,7 @@ def _detect_structure_with_rules(
     *,
     pages: list[dict[str, Any]],
     sanitization_warning_count: int,
+    target_section_count: int,
 ) -> dict[str, Any]:
     fallback = extract_with_rules(
         chunk.text,
@@ -989,9 +993,10 @@ async def _detect_structure_with_ai(
     *,
     pages: list[dict[str, Any]],
     sanitization_warning_count: int,
+    target_section_count: int,
 ) -> dict[str, Any]:
     raw = await ollama_client.generate(
-        _build_structure_prompt(chunk),
+        _build_structure_prompt(chunk, target_section_count),
         STRUCTURE_SYSTEM_PROMPT,
         task="text_extraction",
         response_format=STRUCTURE_DETECTION_FORMAT,
@@ -1417,10 +1422,197 @@ def _normalize_vision_output(parsed: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _merge_module_sections(primary: dict[str, Any], secondary: dict[str, Any]) -> dict[str, Any]:
+    merged = deepcopy(primary)
+
+    primary_description = str(primary.get("description") or "").strip()
+    secondary_description = str(secondary.get("description") or "").strip()
+    if secondary_description and secondary_description != primary_description:
+        merged["description"] = (
+            f"{primary_description}\n\n{secondary_description}".strip()
+            if primary_description
+            else secondary_description
+        )
+
+    merged["lessonBlocks"] = [
+        *(deepcopy(primary.get("lessonBlocks") or [])),
+        *(deepcopy(secondary.get("lessonBlocks") or [])),
+    ]
+    for block_index, block in enumerate(merged["lessonBlocks"]):
+        block["order"] = block_index
+
+    primary_keywords = [str(item).strip() for item in primary.get("graphKeywords") or [] if str(item).strip()]
+    secondary_keywords = [str(item).strip() for item in secondary.get("graphKeywords") or [] if str(item).strip()]
+    merged["graphKeywords"] = list(dict.fromkeys([*primary_keywords, *secondary_keywords]))
+
+    primary_figures = [str(item).strip() for item in primary.get("figureReferences") or [] if str(item).strip()]
+    secondary_figures = [str(item).strip() for item in secondary.get("figureReferences") or [] if str(item).strip()]
+    merged["figureReferences"] = list(dict.fromkeys([*primary_figures, *secondary_figures]))
+
+    if primary.get("assessmentDraft") is None and secondary.get("assessmentDraft") is not None:
+        merged["assessmentDraft"] = deepcopy(secondary.get("assessmentDraft"))
+
+    confidence_values = [
+        float(value)
+        for value in (primary.get("confidence"), secondary.get("confidence"))
+        if isinstance(value, (int, float))
+    ]
+    if confidence_values:
+        merged["confidence"] = round(sum(confidence_values) / len(confidence_values), 4)
+
+    return merged
+
+
+def _cap_sections_to_target(
+    sections: list[dict[str, Any]],
+    target_section_count: int | None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    if not target_section_count or len(sections) <= target_section_count:
+        return sections, []
+
+    compact_sections = deepcopy(sections)
+    actions: list[str] = []
+
+    def section_text_length(section: dict[str, Any]) -> int:
+        return len(_section_search_text(section))
+
+    while len(compact_sections) > target_section_count:
+        candidate_index = min(
+            range(1, len(compact_sections)),
+            key=lambda index: section_text_length(compact_sections[index]),
+        )
+        previous = compact_sections[candidate_index - 1]
+        current = compact_sections[candidate_index]
+        previous_title = str(previous.get("title") or f"Section {candidate_index}").strip()
+        current_title = str(current.get("title") or f"Section {candidate_index + 1}").strip()
+        compact_sections[candidate_index - 1] = _merge_module_sections(previous, current)
+        compact_sections.pop(candidate_index)
+        actions.append(
+            f'Coherence cleanup merged "{current_title}" into "{previous_title}" to stay within the requested section count.'
+        )
+
+    for section_index, section in enumerate(compact_sections, start=1):
+        section["order"] = section_index
+        for block_index, block in enumerate(section.get("lessonBlocks", [])):
+            block["order"] = block_index
+
+    return compact_sections, actions
+
+
+def _cleanup_text_first_sections(
+    sections: list[dict[str, Any]],
+    *,
+    target_section_count: int | None = None,
+) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
+    cleaned_sections = deepcopy(sections)
+    actions: list[str] = []
+    cleanup_warnings: list[str] = []
+
+    def normalized_text(value: str) -> str:
+        return re.sub(r"\s+", " ", value).strip().lower()
+
+    compact_sections: list[dict[str, Any]] = []
+    for section_index, section in enumerate(cleaned_sections, start=1):
+        visible_blocks: list[dict[str, Any]] = []
+        seen_texts: set[str] = set()
+        removed_images = 0
+        removed_duplicates = 0
+
+        for block in section.get("lessonBlocks", []):
+            if not isinstance(block, dict):
+                continue
+            block_type = str(block.get("type") or "text").strip().lower()
+            if block_type == "image":
+                removed_images += 1
+                continue
+
+            block_text = _block_text_content(block)
+            normalized_block_text = normalized_text(block_text)
+            if (
+                block_type == "text"
+                and normalized_block_text
+                and normalized_block_text in seen_texts
+            ):
+                removed_duplicates += 1
+                continue
+            if normalized_block_text:
+                seen_texts.add(normalized_block_text)
+            visible_blocks.append(block)
+
+        if removed_images > 0:
+            actions.append(
+                f"Coherence cleanup removed {removed_images} legacy image block(s) from Section {section_index}."
+            )
+        if removed_duplicates > 0:
+            actions.append(
+                f"Coherence cleanup removed {removed_duplicates} duplicate text block(s) from Section {section_index}."
+            )
+
+        section["lessonBlocks"] = visible_blocks
+        if not section.get("assessmentDraft"):
+            section["assessmentDraft"] = _derive_section_assessment_draft(
+                section_title=str(section.get("title") or f"Section {section_index}"),
+                lesson_blocks=visible_blocks,
+                image_url=None,
+            )
+
+        body_text = normalized_text(
+            " ".join(_block_text_content(block) for block in visible_blocks if isinstance(block, dict))
+        )
+        if (
+            compact_sections
+            and body_text
+            and len(body_text) < MICRO_FRAGMENT_CHAR_THRESHOLD
+            and not section.get("assessmentDraft")
+        ):
+            previous = compact_sections[-1]
+            previous_text = normalized_text(
+                " ".join(
+                    _block_text_content(block)
+                    for block in previous.get("lessonBlocks", [])
+                    if isinstance(block, dict)
+                )
+            )
+            if body_text == previous_text or body_text in previous_text:
+                actions.append(
+                    f'Coherence cleanup merged low-information Section {section_index} into "{previous.get("title") or "previous section"}".'
+                )
+                previous["lessonBlocks"].extend(section.get("lessonBlocks") or [])
+                continue
+
+        if not section.get("lessonBlocks"):
+            cleanup_warnings.append(
+                f'Section "{section.get("title") or f"Section {section_index}"}" has no remaining text blocks after cleanup.'
+            )
+        compact_sections.append(section)
+
+    compact_sections, target_actions = _cap_sections_to_target(
+        compact_sections,
+        target_section_count,
+    )
+    actions.extend(target_actions)
+
+    for section in compact_sections:
+        for block_index, block in enumerate(section.get("lessonBlocks", [])):
+            block["order"] = block_index
+
+    return (
+        compact_sections,
+        cleanup_warnings,
+        {
+            "applied": bool(actions),
+            "actions": actions,
+            "sectionCountBefore": len(sections),
+            "sectionCountAfter": len(compact_sections),
+        },
+    )
+
+
 def _merge_structured_chunks(
     structured_chunks: list[dict[str, Any]],
     *,
     page_images: list[dict[str, Any]] | None = None,
+    target_section_count: int | None = None,
 ) -> dict[str, Any]:
     if not structured_chunks:
         return {
@@ -1434,7 +1626,7 @@ def _merge_structured_chunks(
                 "coherenceWarnings": ["No structured sections were produced from extracted chunks."],
                 "imageAssignmentSummary": {
                     "assigned": 0,
-                    "unassigned": len(page_images or []),
+                    "unassigned": 0,
                     "reusedByCitation": 0,
                 },
                 "reviewFlags": ["empty-sections"],
@@ -1443,6 +1635,19 @@ def _merge_structured_chunks(
                     "warningCount": 1,
                     "sectionCount": 0,
                 },
+                "coherenceCleanup": {
+                    "applied": False,
+                    "actions": [],
+                    "sectionCountBefore": 0,
+                    "sectionCountAfter": 0,
+                },
+                "requestedSectionCount": target_section_count,
+                "finalSectionCount": 0,
+                "sectionCountAdjustmentReason": (
+                    "No sections were produced from the source document."
+                    if target_section_count
+                    else None
+                ),
                 "repairNotes": ["No structured sections were produced from extracted chunks."],
             },
         }
@@ -1479,7 +1684,7 @@ def _merge_structured_chunks(
     if any(not str(section.get("sectionBody") or "").strip() for section in merged_candidates):
         warnings.append("One or more detected sections produced no content spans.")
 
-    document_graph = _build_document_graph(merged_candidates, page_images or [])
+    document_graph = _build_document_graph(merged_candidates, [])
     assembled_candidates, coherence_warnings, assembly_flags = _assemble_sections_from_graph(
         merged_candidates,
         document_graph,
@@ -1492,9 +1697,11 @@ def _merge_structured_chunks(
         for index, block in enumerate(section["lessonBlocks"]):
             block["order"] = index
 
-    image_assignment = _attach_images_to_sections(merged_sections, page_images or [])
-    warnings.extend(image_assignment.get("warnings") or [])
-    review_flags.extend(image_assignment.get("reviewFlags") or [])
+    merged_sections, cleanup_warnings, coherence_cleanup = _cleanup_text_first_sections(
+        merged_sections,
+        target_section_count=target_section_count,
+    )
+    warnings.extend(cleanup_warnings)
     warnings = list(dict.fromkeys(warnings))
     review_flags = list(dict.fromkeys(review_flags))
 
@@ -1512,6 +1719,17 @@ def _merge_structured_chunks(
     elif overall_confidence < 0.78 or coherence_score < 0.7 or warning_count > 0:
         quality_gate = "warn"
     review_required = quality_gate != "pass"
+    final_section_count = len(merged_sections)
+    section_count_adjustment_reason: str | None = None
+    if target_section_count and final_section_count != target_section_count:
+        if final_section_count < target_section_count:
+            section_count_adjustment_reason = (
+                "Source content did not safely support the requested section count."
+            )
+        else:
+            section_count_adjustment_reason = (
+                "Adjacent low-signal sections were merged to honor the requested section count."
+            )
 
     repair_notes: list[str] = []
     if quality_gate == "fail":
@@ -1520,6 +1738,8 @@ def _merge_structured_chunks(
         repair_notes.append("Teacher review is recommended before applying this extraction.")
     if warning_count > 0:
         repair_notes.extend(warnings[:3])
+    if coherence_cleanup.get("actions"):
+        repair_notes.extend(coherence_cleanup["actions"][:2])
 
     normalized_sections = [
         {
@@ -1539,7 +1759,7 @@ def _merge_structured_chunks(
         "title": merged_title,
         "description": merged_description,
         "sections": normalized_sections,
-        "mediaAssets": image_assignment.get("mediaAssets") or [],
+        "mediaAssets": [],
         "audit": {
             "pipelineVersion": "2.0",
             "overallConfidence": overall_confidence,
@@ -1549,17 +1769,21 @@ def _merge_structured_chunks(
             "coherenceScore": coherence_score,
             "coherenceWarnings": coherence_warnings,
             "imageAssignmentSummary": {
-                "assigned": int(image_assignment.get("assigned") or 0),
-                "unassigned": int(image_assignment.get("unassigned") or 0),
-                "reusedByCitation": int(image_assignment.get("reusedByCitation") or 0),
+                "assigned": 0,
+                "unassigned": 0,
+                "reusedByCitation": 0,
             },
             "reviewFlags": review_flags,
             "documentGraph": {
                 "version": "graph-v1",
                 "summary": document_graph.get("summary") if isinstance(document_graph, dict) else {},
             },
+            "coherenceCleanup": coherence_cleanup,
             "qualityGate": quality_gate,
             "reviewRequired": review_required,
+            "requestedSectionCount": target_section_count,
+            "finalSectionCount": final_section_count,
+            "sectionCountAdjustmentReason": section_count_adjustment_reason,
             "confidenceBreakdown": {
                 "overallConfidence": overall_confidence,
                 "warningCount": warning_count,
@@ -1602,6 +1826,8 @@ async def run_extraction(
     extraction_id: str,
     file_id: str,
     user_id: str,
+    *,
+    target_section_count: int = 4,
 ) -> None:
     try:
         await _update_extraction(
@@ -1626,128 +1852,19 @@ async def run_extraction(
         await _update_extraction(db, extraction_id, {"progress_percent": 10})
         doc = fitz.open(file_path)
         pages = _extract_pdf_pages(doc)
-        embedded_images = _extract_pdf_embedded_images(doc)
         raw_text = "\f".join(page["text"] for page in pages if page["text"])
-        uses_vision_extraction = not raw_text or len(raw_text.strip()) < 20
-        vision_images: list[dict[str, str]] = []
-        if uses_vision_extraction:
-            vision_images = _render_pdf_pages_to_images(doc)
         doc.close()
 
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
 
         await _update_extraction(db, extraction_id, {"raw_text": raw_text, "progress_percent": 15})
+        if len(raw_text.strip()) < 20:
+            raise ValueError(
+                "This extraction flow currently supports text-based PDFs only. Upload a PDF with selectable text."
+            )
         start_time = time.time()
         health = await ollama_client.is_available()
-
-        if uses_vision_extraction:
-            if not health["available"]:
-                raise ValueError("PDF contains too little extractable text and Ollama vision is unavailable.")
-
-            await _update_extraction(db, extraction_id, {"progress_percent": 35})
-            raw = await ollama_client.generate(
-                _build_vision_extraction_prompt(original_name),
-                EXTRACTION_SYSTEM_PROMPT,
-                task="vision_extraction",
-                response_format=EXTRACTION_OUTPUT_FORMAT,
-                images=vision_images,
-            )
-            parsed = _normalize_vision_output(_parse_json_object(raw))
-            vision_sections = parsed.get("sections") if isinstance(parsed.get("sections"), list) else []
-            image_assignment = _attach_images_to_sections(vision_sections, embedded_images)
-            coherence_score = _derive_coherence_score(vision_sections, coherence_warnings=[])
-            audit = parsed.get("audit") or {}
-            overall_confidence = float(audit.get("overallConfidence") or 0.62)
-            warnings = list(audit.get("warnings") or [])
-            warnings.extend(image_assignment.get("warnings") or [])
-            warnings = list(dict.fromkeys(warnings))
-            quality_gate = "pass"
-            if overall_confidence < 0.45 or coherence_score < 0.4:
-                quality_gate = "fail"
-            elif overall_confidence < 0.78 or coherence_score < 0.7 or warnings:
-                quality_gate = "warn"
-            audit.update(
-                {
-                    "pipelineVersion": "2.0",
-                    "visionPages": len(vision_images),
-                    "sourceMethods": ["vision"],
-                    "overallConfidence": overall_confidence,
-                    "warnings": warnings,
-                    "coherenceScore": coherence_score,
-                    "coherenceWarnings": [],
-                    "imageAssignmentSummary": {
-                        "assigned": int(image_assignment.get("assigned") or 0),
-                        "unassigned": int(image_assignment.get("unassigned") or 0),
-                        "reusedByCitation": int(image_assignment.get("reusedByCitation") or 0),
-                    },
-                    "reviewFlags": image_assignment.get("reviewFlags") or [],
-                    "qualityGate": quality_gate,
-                    "reviewRequired": quality_gate != "pass",
-                    "confidenceBreakdown": {
-                        "overallConfidence": overall_confidence,
-                        "warningCount": len(warnings),
-                        "sectionCount": len(parsed.get("sections") or []),
-                    },
-                    "repairNotes": (
-                        ["Teacher review is recommended before applying this extraction."]
-                        if quality_gate != "pass"
-                        else []
-                    ),
-                }
-            )
-            parsed["audit"] = audit
-            parsed["mediaAssets"] = image_assignment.get("mediaAssets") or []
-            validation = validate_extraction_output(parsed)
-            final_result = validation.sanitized_output or parsed
-            response_time_ms = int((time.time() - start_time) * 1000)
-            model_used = ollama_client.get_task_model_name("vision_extraction", images=vision_images)
-
-            await _update_extraction(
-                db,
-                extraction_id,
-                {
-                    "extraction_status": "completed",
-                    "model_used": model_used,
-                    "progress_percent": 100,
-                    "total_chunks": 1,
-                    "processed_chunks": 1,
-                },
-            )
-            await db.execute(
-                sa_text("UPDATE extracted_modules SET structured_content = :sc, updated_at = NOW() WHERE id = :id").bindparams(
-                    bindparam("sc", type_=postgresql.JSONB)
-                ),
-                {"sc": final_result, "id": extraction_id},
-            )
-            await db.commit()
-            await db.execute(
-                sa_text(
-                    "INSERT INTO ai_interaction_logs "
-                    "(user_id, session_type, input_text, output_text, model_used, response_time_ms, context_metadata) "
-                    "VALUES (:userId, 'module_extraction', :inputText, :outputText, :modelUsed, :responseTimeMs, :ctx)"
-                ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
-                {
-                    "userId": user_id,
-                    "inputText": f"[vision extraction] {original_name}",
-                    "outputText": json.dumps(final_result)[:5000],
-                    "modelUsed": model_used,
-                    "responseTimeMs": response_time_ms,
-                    "ctx": {
-                        "fileId": str(file_id),
-                        "extractionId": str(extraction_id),
-                        "originalFileName": original_name,
-                        "pipelineStages": ["ingest", "structure", "validate", "persist"],
-                        "visionPages": len(vision_images),
-                        "embeddedImages": len(embedded_images),
-                        "scannedPdf": True,
-                        "validationErrors": validation.errors,
-                        "audit": final_result.get("audit") or {},
-                    },
-                },
-            )
-            await db.commit()
-            return
 
         sanitization = sanitize_extracted_text(raw_text)
         cleaned_text = sanitization.cleaned_text
@@ -1785,12 +1902,14 @@ async def run_extraction(
                         chunk,
                         pages=pages,
                         sanitization_warning_count=len(sanitization.warnings),
+                        target_section_count=target_section_count,
                     )
                     if health["available"]
                     else _detect_structure_with_rules(
                         chunk,
                         pages=pages,
                         sanitization_warning_count=len(sanitization.warnings),
+                        target_section_count=target_section_count,
                     )
                 )
             except Exception as err:
@@ -1799,6 +1918,7 @@ async def run_extraction(
                     chunk,
                     pages=pages,
                     sanitization_warning_count=len(sanitization.warnings),
+                    target_section_count=target_section_count,
                 )
                 chunk_warnings.append(f"Chunk {index} fell back to rule-based structure detection.")
 
@@ -1813,10 +1933,13 @@ async def run_extraction(
             )
 
         await _update_extraction(db, extraction_id, {"progress_percent": 85})
-        final_result = _merge_structured_chunks(structured_chunks, page_images=embedded_images)
+        final_result = _merge_structured_chunks(
+            structured_chunks,
+            target_section_count=target_section_count,
+        )
         final_result["audit"].update(
             {
-                "pipelineStages": ["ingest", "classify", "segment", "structure", "validate", "persist"],
+                "pipelineStages": ["ingest", "classify", "segment", "structure", "coherence_cleanup", "validate", "persist"],
                 "classification": {
                     "safe": classification.safe,
                     "category": classification.category,
@@ -1827,8 +1950,10 @@ async def run_extraction(
                 "chunkWarnings": chunk_warnings,
                 "chunkCount": len(chunks),
                 "pageCount": len(pages),
-                "embeddedImages": len(embedded_images),
+                "embeddedImages": 0,
                 "sourceDocument": original_name,
+                "requestedSectionCount": target_section_count,
+                "finalSectionCount": len(final_result.get("sections", [])),
             }
         )
         if final_result["audit"]["overallConfidence"] < 0.6:

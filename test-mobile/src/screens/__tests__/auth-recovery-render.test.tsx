@@ -56,6 +56,15 @@ jest.mock("../../providers/AuthProvider", () => ({
   useAuth: jest.fn(),
 }));
 
+const presentError = jest.fn();
+
+jest.mock("../../providers/ErrorModalProvider", () => ({
+  useErrorModal: () => ({
+    presentError,
+    dismissError: jest.fn(),
+  }),
+}));
+
 jest.mock("../../api/services/auth", () => ({
   authApi: {
     validateCredentials: jest.fn(),
@@ -225,6 +234,43 @@ describe("mobile auth recovery screens", () => {
     });
   });
 
+  it("shows an account missing modal and stays on forgot password when email is unknown", async () => {
+    const { ForgotPasswordScreen } = require("../ForgotPasswordScreen");
+    mockedAuthApi.forgotPassword.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 404,
+        data: { message: "Account does not exist." },
+      },
+      message: "Account does not exist.",
+    });
+    const navigation = { replace: jest.fn() };
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(ForgotPasswordScreen, {
+          navigation,
+          route: { key: "ForgotPassword", name: "ForgotPassword" },
+        }),
+      );
+    });
+
+    act(() => {
+      findTextInputByPlaceholder(testRenderer!.root, "you@example.com").props.onChangeText("missing@example.com");
+    });
+
+    await act(async () => {
+      findPressableByText(testRenderer!.root, "Send reset code").props.onPress();
+    });
+
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(presentError).toHaveBeenCalledWith({
+      title: "Account does not exist",
+      message: "No Nexora account was found for that email address. Check the email or contact an administrator.",
+    });
+  });
+
   it("returns reset password success back to login", async () => {
     const { ResetPasswordScreen } = require("../ResetPasswordScreen");
     mockedAuthApi.resetPassword.mockResolvedValue({ success: true } as never);
@@ -258,7 +304,6 @@ describe("mobile auth recovery screens", () => {
       email: "student@example.com",
       code: "123456",
       newPassword: "Password1!",
-      confirmPassword: "Password1!",
     });
     expect(navigation.replace).toHaveBeenCalledWith("Login");
   });

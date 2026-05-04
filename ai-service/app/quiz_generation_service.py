@@ -16,6 +16,94 @@ from .schemas import GenerateQuizDraftRequest, RequestUser
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_quiz_draft_output(
+    structured_output: dict[str, Any] | None,
+    *,
+    fallback_title: str,
+    fallback_description: str,
+    existing_output: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    base = existing_output if isinstance(existing_output, dict) else {}
+    candidate = structured_output if isinstance(structured_output, dict) else {}
+
+    title = str(candidate.get("title") or base.get("title") or fallback_title).strip()
+    if not title:
+        title = fallback_title
+
+    description = str(
+        candidate.get("description")
+        or base.get("description")
+        or fallback_description
+    ).strip()
+
+    normalized_questions: list[dict[str, Any]] = []
+    raw_questions = candidate.get("questions")
+    if not isinstance(raw_questions, list):
+        raw_questions = base.get("questions")
+    if not isinstance(raw_questions, list):
+        raw_questions = []
+
+    for question in raw_questions:
+        if not isinstance(question, dict):
+            continue
+        content = str(question.get("content") or "").strip()
+        if not content:
+            continue
+
+        normalized_question: dict[str, Any] = {
+            "type": str(question.get("type") or "multiple_choice").strip().lower()
+            or "multiple_choice",
+            "content": content,
+            "points": max(1, int(question.get("points") or 1)),
+        }
+
+        explanation = str(question.get("explanation") or "").strip()
+        if explanation:
+            normalized_question["explanation"] = explanation
+
+        concept_tags = question.get("conceptTags")
+        if isinstance(concept_tags, list):
+            normalized_question["conceptTags"] = [
+                str(tag).strip()
+                for tag in concept_tags
+                if str(tag).strip()
+            ]
+
+        options = question.get("options")
+        if isinstance(options, list):
+            normalized_options: list[dict[str, Any]] = []
+            for option_order, option in enumerate(options, start=1):
+                if not isinstance(option, dict):
+                    continue
+                option_text = str(option.get("text") or "").strip()
+                if not option_text:
+                    continue
+                normalized_options.append(
+                    {
+                        "text": option_text,
+                        "isCorrect": bool(option.get("isCorrect")),
+                        "order": int(option.get("order") or option_order),
+                    }
+                )
+            if normalized_options:
+                normalized_question["options"] = normalized_options
+
+        normalized_questions.append(normalized_question)
+
+    normalized = {
+        "title": title,
+        "description": description or fallback_description,
+        "questions": normalized_questions,
+    }
+
+    if isinstance(base.get("blueprint"), dict):
+        normalized["blueprint"] = base["blueprint"]
+    if isinstance(base.get("blueprintSource"), str):
+        normalized["blueprintSource"] = base["blueprintSource"]
+
+    return normalized
+
 QUIZ_GENERATION_SYSTEM_PROMPT = """You generate grounded draft assessments for a high-school LMS.
 
 RULES:
@@ -647,6 +735,98 @@ Source material:
         ],
         "questionsCreated": len(questions),
         "message": "AI draft assessment created as an unpublished draft for teacher review.",
+    }
+
+
+async def save_quiz_draft(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    user: RequestUser,
+    structured_output: dict[str, Any],
+) -> dict[str, Any]:
+    job_row = await db.execute(
+        sa_text(
+            """
+            SELECT id, teacher_id
+            FROM ai_generation_jobs
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
+    job = job_row.mappings().first()
+    if not job:
+        raise HTTPException(404, "Quiz draft job not found")
+
+    is_admin = "admin" in [role.lower() for role in user.roles]
+    if not is_admin and str(job["teacher_id"]) != user.id:
+        raise HTTPException(403, "You do not have access to this quiz draft job")
+
+    output_row = await db.execute(
+        sa_text(
+            """
+            SELECT id, structured_output
+            FROM ai_generation_outputs
+            WHERE job_id = :jobId
+              AND output_type = 'assessment_draft'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"jobId": job_id},
+    )
+    output = output_row.mappings().first()
+    if not output:
+        raise HTTPException(409, "Quiz draft output is not ready yet")
+
+    existing_output = output.get("structured_output") or {}
+    existing_map = existing_output if isinstance(existing_output, dict) else {}
+    normalized = _normalize_quiz_draft_output(
+        structured_output or {},
+        fallback_title=str(existing_map.get("title") or "AI Draft Quiz"),
+        fallback_description=str(
+            existing_map.get("description")
+            or "AI-generated draft assessment for teacher review."
+        ),
+        existing_output=existing_map,
+    )
+
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_outputs
+            SET
+              structured_output = :structuredOutput,
+              updated_at = NOW()
+            WHERE id = :outputId
+            """
+        ).bindparams(bindparam("structuredOutput", type_=postgresql.JSONB)),
+        {
+            "outputId": output["id"],
+            "structuredOutput": normalized,
+        },
+    )
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
+    await db.commit()
+
+    return {
+        "jobId": str(job_id),
+        "outputId": str(output["id"]),
+        "jobType": "quiz_generation",
+        "status": "completed",
+        "statusMessage": "Draft saved",
+        "structuredOutput": normalized,
     }
 
 

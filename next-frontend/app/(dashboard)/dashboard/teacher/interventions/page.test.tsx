@@ -215,6 +215,12 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
+    expect(
+      screen.getByText(/targeted intervention queue for learners below the support threshold/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/grounded on class-approved materials and teacher review/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Trigger" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Blended Score" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "XP" })).toBeInTheDocument();
@@ -261,13 +267,28 @@ describe("TeacherInterventionsPage", () => {
       expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "View" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Case Workspace" }));
 
     expect(
       await screen.findByText("Intervention Student Detail"),
     ).toBeInTheDocument();
     expect(screen.getByText("Review: Fractions")).toBeInTheDocument();
     expect(mockedLxpService.getTeacherCaseDetail).toHaveBeenCalledWith("case-1");
+  });
+
+  it("uses the safer remedial-plan and workspace labels in queue actions", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.queryByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open Case Workspace" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the helper guide from the question mark button", async () => {
@@ -359,8 +380,10 @@ describe("TeacherInterventionsPage", () => {
 
     expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
     expect(screen.getByText(/connect ECONNREFUSED/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "AI Plan" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Generate AI-Assisted Remedial Plan" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Activate" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "View" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Open Case Workspace" })).toBeEnabled();
   });
 });
