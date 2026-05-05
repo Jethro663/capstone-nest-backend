@@ -166,7 +166,7 @@ function ReactionButton({
       style={{
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? "rgba(74,140,247,0.45)" : theme.border,
+        borderColor: active ? "rgba(0,217,255,0.45)" : theme.border,
         backgroundColor: active ? theme.blueSoft : theme.surface,
         paddingHorizontal: 10,
         paddingVertical: 6,

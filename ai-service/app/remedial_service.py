@@ -356,6 +356,56 @@ def _build_generated_lesson_draft(
     }
 
 
+def _clean_hint_focus(value: Any) -> str:
+    cleaned = _sanitize_plain_text(value, max_length=90)
+    cleaned = cleaned.replace("_", " ")
+    cleaned = " ".join(cleaned.split())
+    if not cleaned:
+        return ""
+    if len(cleaned.split()) > 8 or cleaned.endswith(".") or cleaned.endswith("?"):
+        return ""
+    return cleaned
+
+
+def _correct_option_labels(question: dict[str, Any]) -> list[str]:
+    options = question.get("options")
+    if not isinstance(options, list):
+        return []
+    labels: list[str] = []
+    for option in options:
+        if not isinstance(option, dict) or not option.get("isCorrect"):
+            continue
+        label = _sanitize_plain_text(option.get("text"), max_length=80)
+        if label:
+            labels.append(label)
+    return labels
+
+
+def _build_guided_question_hint(
+    question: dict[str, Any],
+    concept_label: str | None,
+) -> str:
+    stem = _sanitize_plain_text(question.get("content"), max_length=240)
+    lowered = stem.lower()
+    focus = _clean_hint_focus(concept_label)
+    if not focus:
+        focus = _clean_hint_focus(_derive_question_focus_label(stem))
+
+    if "homogeneous" in lowered and "same properties" in lowered:
+        return "Look for the term that describes a homogeneous sample with the same properties throughout."
+    if "pure substance" in lowered and "one type of atom" in lowered:
+        return "Look for the term for a pure substance made of only one type of atom."
+    if "element" in lowered and "symbol" in lowered:
+        return "Think about how each element is written on the periodic table."
+
+    correct_options = _correct_option_labels(question)
+    if focus:
+        return f"Match the clue in the question to the idea of {focus} before choosing."
+    if correct_options:
+        return "Compare each option with the clue in the question, then remove choices that do not match."
+    return "Underline the key clue in the question, then eliminate choices that do not match it."
+
+
 def _build_generated_guided_assessment_draft(
     weak_concepts: list[str],
     recommended_assessments: list[dict[str, Any]],
@@ -369,11 +419,7 @@ def _build_generated_guided_assessment_draft(
     for index, question in enumerate(source_questions[:5], start=1):
         concept_tag = question.get("concept_tags", [])
         concept_label = concept_tag[0] if concept_tag else (weak_concepts[0] if weak_concepts else None)
-        hint = (
-            f"Focus on {concept_label} before choosing your answer."
-            if concept_label
-            else "Review the key term and eliminate the weakest choices first."
-        )
+        hint = _build_guided_question_hint(question, concept_label)
         explanation = question.get("explanation") or (
             f"This item checks your understanding of {concept_label}."
             if concept_label

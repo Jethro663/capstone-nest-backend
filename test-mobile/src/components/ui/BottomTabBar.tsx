@@ -98,9 +98,9 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       <View
         style={{
           minHeight: 72,
-          backgroundColor: "#1C1C1C",
+          backgroundColor: "#0B1833",
           borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.07)",
+          borderTopColor: "rgba(255,255,255,0.08)",
           flexDirection: "row",
           alignItems: "flex-end",
           paddingHorizontal: 8,
@@ -151,7 +151,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: 4,
-                      borderColor: "#1C1C1C",
+                      borderColor: "#0B1833",
                     }}
                   >
                     <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
@@ -162,7 +162,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       marginBottom: 10,
                       fontSize: 10,
                       fontWeight: focused ? "800" : "600",
-                      color: focused ? darkRed() : "#777777",
+                      color: focused ? darkRed() : "#8EA0BC",
                     }}
                   >
                     {config.label}
@@ -185,13 +185,13 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}
                 size={20}
-                color={focused ? darkRed() : "#555555"}
+                color={focused ? darkRed() : "#7890B3"}
               />
               <Text
                 style={{
                   fontSize: 10,
                   fontWeight: focused ? "800" : "600",
-                  color: focused ? darkRed() : "#777777",
+                  color: focused ? darkRed() : "#8EA0BC",
                 }}
               >
                 {config.label}

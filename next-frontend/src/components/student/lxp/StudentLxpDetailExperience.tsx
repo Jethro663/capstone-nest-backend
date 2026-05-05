@@ -233,7 +233,7 @@ function CheckpointCard({
               Open Lesson
             </Link>
           ) : null}
-        {!readOnly && !checkpoint.isCompleted && !isReplay && !isGuidedAssessment ? (
+        {!readOnly && !checkpoint.isCompleted && !isReplay && !isGuidedAssessment && !isGeneratedLesson ? (
           <Button
             type="button"
             size="sm"

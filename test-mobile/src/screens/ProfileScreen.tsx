@@ -21,22 +21,22 @@ type ProfileStatusItem = {
 const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
 
 const theme = {
-  pageBg: "#0E0E0E",
-  bg: "#141414",
-  topbar: "#1C1C1C",
-  surface: "#1E1E1E",
-  surface2: "#242424",
-  border: "rgba(255,255,255,0.07)",
-  border2: "rgba(255,255,255,0.12)",
-  text: "#E8E8E8",
-  muted: "#777777",
-  dim: "#444444",
+  pageBg: "#071225",
+  bg: "#0A1630",
+  topbar: "#0B1833",
+  surface: "#0F2438",
+  surface2: "#132D45",
+  border: "rgba(0,217,255,0.18)",
+  border2: "rgba(0,217,255,0.28)",
+  text: "#E0F7FF",
+  muted: "#7AA3B8",
+  dim: "#426478",
   red: "#E8294E",
   redSoft: "rgba(232,41,78,0.12)",
   redLine: "rgba(232,41,78,0.2)",
   redText: "#FF8A9B",
-  blue: "#4A8CF7",
-  blueLine: "rgba(74,140,247,0.25)",
+  blue: "#00D9FF",
+  blueLine: "rgba(0,217,255,0.25)",
   green: "#22C97A",
   greenSoft: "rgba(34,201,122,0.12)",
   greenLine: "rgba(34,201,122,0.2)",
@@ -508,7 +508,7 @@ export function ProfileScreen(props: Props) {
         >
           <View
             style={{
-              backgroundColor: "rgba(74,140,247,0.06)",
+              backgroundColor: "rgba(0,217,255,0.06)",
               borderRadius: 999,
               height: 130,
               position: "absolute",

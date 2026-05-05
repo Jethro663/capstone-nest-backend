@@ -308,8 +308,10 @@ describe("mobile auth recovery screens", () => {
     expect(navigation.replace).toHaveBeenCalledWith("Login");
   });
 
-  it("supports setting or skipping the initial password", async () => {
+  it("signs in after setting the initial password and still supports skipping", async () => {
     const { SetInitialPasswordScreen } = require("../SetInitialPasswordScreen");
+    const login = jest.fn().mockResolvedValue({ user: { id: "student-1" } });
+    mockedUseAuth.mockReturnValue({ login } as never);
     mockedAuthApi.setActivationPassword.mockResolvedValue({ success: true } as never);
     const navigation = { replace: jest.fn() };
 
@@ -340,13 +342,14 @@ describe("mobile auth recovery screens", () => {
       email: "student@example.com",
       newPassword: "Password1!",
     });
-    expect(navigation.replace).toHaveBeenCalledWith("Login");
+    expect(login).toHaveBeenCalledWith("student@example.com", "Password1!");
+    expect(navigation.replace).not.toHaveBeenCalled();
 
     await act(async () => {
       findPressableByText(testRenderer!.root, "Skip for now").props.onPress();
     });
 
     expect(navigation.replace).toHaveBeenCalledWith("Login");
-    expect(navigation.replace).toHaveBeenCalledTimes(2);
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
   });
 });

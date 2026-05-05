@@ -361,7 +361,11 @@ export class AuthController {
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async validateCredentials(@Body() dto: ValidateCredentialsDto) {
     await this.authService.validateCredentials(dto.email, dto.password);
-    return { success: true, message: 'Credentials valid' };
+    return {
+      success: true,
+      message: 'Credentials valid',
+      data: { valid: true },
+    };
   }
 
   // --------------------------------------------------------------------------

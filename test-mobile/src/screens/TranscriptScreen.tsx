@@ -1,26 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { peekAppError } from "../api/http";
 import { useTranscript } from "../api/hooks";
-import { Card, EmptyState, GradientHeader, Pill, Refreshable, ScreenScroll, SectionTitle } from "../components/ui/primitives";
+import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { RootStackParamList } from "../navigation/types";
-import { colors, gradients } from "../theme/tokens";
+import { studentDarkTheme as theme } from "../theme/studentDark";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Transcript">;
+type StatusTone = "blue" | "green" | "amber";
 
 const PAGE_SIZE = 15;
 
 function formatDate(value?: string) {
-  if (!value) {
-    return "--";
-  }
+  if (!value) return "--";
 
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return "--";
-  }
+  if (Number.isNaN(parsed.getTime())) return "--";
 
   return parsed.toLocaleDateString("en-US", {
     month: "short",
@@ -29,16 +27,87 @@ function formatDate(value?: string) {
   });
 }
 
-function getStatusPillColors(status: string) {
-  if (status === "completed") {
-    return { backgroundColor: colors.paleGreen, color: colors.green };
-  }
+function pluralize(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
 
-  if (status === "enrolled") {
-    return { backgroundColor: colors.paleBlue, color: colors.blueDeep };
-  }
+function resolveStatusTone(status: string): StatusTone {
+  if (status === "completed") return "green";
+  if (status === "enrolled") return "blue";
+  return "amber";
+}
 
-  return { backgroundColor: colors.paleAmber, color: colors.orange };
+function resolveToneStyle(tone: StatusTone) {
+  return {
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
+    green: { backgroundColor: theme.greenSoft, color: theme.green },
+    amber: { backgroundColor: theme.amberSoft, color: theme.amber },
+  }[tone];
+}
+
+function DarkPanel({ children, style }: { children: ReactNode; style?: object }) {
+  return (
+    <View
+      style={{
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingHorizontal: 14,
+        paddingVertical: 14,
+        ...style,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+function ToneTag({ label, tone }: { label: string; tone: StatusTone }) {
+  const toneStyle = resolveToneStyle(tone);
+
+  return (
+    <View
+      style={{
+        borderRadius: 999,
+        backgroundColor: toneStyle.backgroundColor,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+      }}
+    >
+      <Text style={{ color: toneStyle.color, fontSize: 10, fontWeight: "800", textTransform: "capitalize" }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function PagerButton({
+  label,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={{
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: theme.border,
+        backgroundColor: theme.active,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      <Text style={{ color: disabled ? theme.muted : theme.text, fontSize: 12, fontWeight: "800" }}>{label}</Text>
+    </Pressable>
+  );
 }
 
 export function TranscriptScreen({ navigation }: Props) {
@@ -78,6 +147,7 @@ export function TranscriptScreen({ navigation }: Props) {
 
   return (
     <ScreenScroll
+      backgroundColor={theme.bg}
       refreshControl={
         <Refreshable
           refreshing={transcriptQuery.isRefetching}
@@ -87,147 +157,170 @@ export function TranscriptScreen({ navigation }: Props) {
         />
       }
     >
-      <GradientHeader
-        colors={gradients.profile}
-        eyebrow="Student Records"
-        title="Transcript"
-        rightContent={
-          <Pressable
-            onPress={() => navigation.goBack()}
+      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.active,
+              }}
+            >
+              <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "700" }}>Student Records</Text>
+              <Text style={{ marginTop: 4, color: theme.text, fontSize: 26, fontWeight: "900" }}>
+                Subject Enrollment Transcript
+              </Text>
+              <Text style={{ marginTop: 6, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
+                Every class you have enrolled in, grouped by school year.
+              </Text>
+            </View>
+            <ToneTag label={pluralize(totalRows, "enrollment", "enrollments")} tone="blue" />
+          </View>
+
+          <View
             style={{
-              width: 36,
-              height: 36,
-              borderRadius: 999,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "rgba(255,255,255,0.2)",
+              marginTop: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: theme.border,
+              backgroundColor: theme.active,
+              paddingHorizontal: 14,
+              paddingVertical: 4,
             }}
           >
-            <MaterialCommunityIcons name="chevron-left" size={20} color={colors.white} />
-          </Pressable>
-        }
-      >
-        <Text style={{ marginTop: 12, color: "rgba(255,255,255,0.86)", fontSize: 12 }}>
-          Subject enrollment history grouped by school year and backed by the live transcript endpoint.
-        </Text>
-      </GradientHeader>
+            <TextInput
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Search by subject, section, or school year"
+              placeholderTextColor={theme.muted}
+              style={{ color: theme.text, fontSize: 13, paddingVertical: 10 }}
+            />
+          </View>
+        </View>
+      </View>
 
-      <View style={{ paddingHorizontal: 20, marginTop: 20, gap: 14 }}>
-        <Card>
-          <SectionTitle title="Search transcript" />
-          <TextInput
-            value={searchInput}
-            onChangeText={setSearchInput}
-            placeholder="Search by subject, section, or school year"
-            placeholderTextColor={colors.muted}
-            style={{
-              marginTop: 12,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: colors.border,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              color: colors.text,
-            }}
-          />
-        </Card>
-
+      <View style={{ paddingHorizontal: 16, paddingTop: 18, gap: 10 }}>
         {transcriptQuery.error ? (
-          <Card>
-            <Text style={{ fontSize: 14, fontWeight: "800", color: colors.text }}>
+          <DarkPanel>
+            <Text style={{ color: theme.text, fontSize: 14, fontWeight: "800" }}>
               Transcript data is temporarily unavailable
             </Text>
-            <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.textSecondary }}>
+            <Text style={{ marginTop: 6, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
               {peekAppError(transcriptQuery.error).message}
             </Text>
-          </Card>
+          </DarkPanel>
         ) : null}
 
         {rows.length === 0 ? (
-          <EmptyState
-            emoji="🎓"
-            title="No transcript rows found"
-            subtitle="Try another search or wait for your academic enrollment history to sync."
-          />
+          <DarkPanel>
+            <Text style={{ color: theme.text, fontSize: 14, fontWeight: "800" }}>No transcript rows found</Text>
+            <Text style={{ marginTop: 6, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
+              Try another search or wait for your academic enrollment history to sync.
+            </Text>
+          </DarkPanel>
         ) : (
           Object.entries(groupedRows).map(([schoolYear, schoolYearRows]) => (
-            <Card key={schoolYear}>
-              <SectionTitle title={schoolYear} />
+            <DarkPanel key={schoolYear}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <MaterialCommunityIcons name="school-outline" size={18} color={theme.blue} />
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: "900" }}>{schoolYear}</Text>
+              </View>
+
               <View style={{ marginTop: 12, gap: 10 }}>
-                {schoolYearRows.map((row) => {
-                  const pillColors = getStatusPillColors(row.status);
-                  return (
-                    <Card key={row.id} style={{ backgroundColor: colors.surface }}>
+                {schoolYearRows.map((row) => (
+                  <View
+                    key={row.id}
+                    style={{
+                      borderRadius: 13,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 12,
+                      paddingVertical: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: theme.text, fontSize: 15, fontWeight: "900" }}>
+                          {row.class?.subjectName || "Unlinked Subject"} ({row.class?.subjectCode || "--"})
+                        </Text>
+                        <Text style={{ marginTop: 5, color: theme.muted, fontSize: 12 }}>
+                          Grade {row.section?.gradeLevel || "--"} / {row.section?.name || "No section"}
+                        </Text>
+                      </View>
+                      <ToneTag label={row.status} tone={resolveStatusTone(row.status)} />
+                    </View>
+
+                    <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                       <View
                         style={{
-                          flexDirection: "row",
-                          alignItems: "flex-start",
-                          justifyContent: "space-between",
-                          gap: 12,
+                          minWidth: 112,
+                          flex: 1,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface,
+                          paddingHorizontal: 10,
+                          paddingVertical: 10,
                         }}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 14, fontWeight: "900", color: colors.text }}>
-                            {row.class?.subjectName || "Unlinked Subject"} ({row.class?.subjectCode || "--"})
-                          </Text>
-                          <Text style={{ marginTop: 4, fontSize: 12, color: colors.textSecondary }}>
-                            Grade {row.section?.gradeLevel || "--"} • {row.section?.name || "No section"}
-                          </Text>
-                        </View>
-                        <Pill
-                          label={row.status}
-                          backgroundColor={pillColors.backgroundColor}
-                          color={pillColors.color}
-                        />
+                        <Text style={{ color: theme.muted, fontSize: 10, fontWeight: "800" }}>ENROLLED</Text>
+                        <Text style={{ marginTop: 6, color: theme.text, fontSize: 13, fontWeight: "800" }}>
+                          {formatDate(row.enrolledAt)}
+                        </Text>
                       </View>
-                      <Text style={{ marginTop: 10, fontSize: 11, color: colors.textSecondary }}>
-                        Enrolled: {formatDate(row.enrolledAt)}
-                      </Text>
-                    </Card>
-                  );
-                })}
+                      <View
+                        style={{
+                          minWidth: 112,
+                          flex: 1,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          backgroundColor: theme.surface,
+                          paddingHorizontal: 10,
+                          paddingVertical: 10,
+                        }}
+                      >
+                        <Text style={{ color: theme.muted, fontSize: 10, fontWeight: "800" }}>SECTION</Text>
+                        <Text style={{ marginTop: 6, color: theme.text, fontSize: 13, fontWeight: "800" }}>
+                          {row.section?.name || "No section"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
               </View>
-            </Card>
+            </DarkPanel>
           ))
         )}
 
-        <Card>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-              Showing page {page} of {totalPages} • {totalRows} total rows
+        <DarkPanel>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <Text style={{ flex: 1, color: theme.muted, fontSize: 12 }}>
+              Showing page {page} of {totalPages} / {pluralize(totalRows, "total row", "total rows")}
             </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
-              <Pressable
+              <PagerButton
+                label="Previous"
                 disabled={page <= 1}
                 onPress={() => setPage((current) => Math.max(1, current - 1))}
-                style={{
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  opacity: page <= 1 ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>Previous</Text>
-              </Pressable>
-              <Pressable
+              />
+              <PagerButton
+                label="Next"
                 disabled={page >= totalPages}
                 onPress={() => setPage((current) => Math.min(totalPages, current + 1))}
-                style={{
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  opacity: page >= totalPages ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>Next</Text>
-              </Pressable>
+              />
             </View>
           </View>
-        </Card>
+        </DarkPanel>
       </View>
     </ScreenScroll>
   );

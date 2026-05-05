@@ -1,6 +1,7 @@
 'use client';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import JSZip from 'jszip';
 import RosterImportPage from './page';
 import { sectionService } from '@/services/section-service';
 import { rosterImportService } from '@/services/roster-import-service';
@@ -31,6 +32,15 @@ const mockedRosterImportService = rosterImportService as jest.Mocked<typeof rost
 type SectionListResponse = Awaited<ReturnType<typeof sectionService.getAll>>;
 type PendingResponse = Awaited<ReturnType<typeof rosterImportService.getPending>>;
 type PreviewResponse = Awaited<ReturnType<typeof rosterImportService.preview>>;
+
+function readBlobAsArrayBuffer(blob: Blob) {
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsArrayBuffer(blob);
+  });
+}
 
 describe('RosterImportPage', () => {
   beforeEach(() => {
@@ -124,6 +134,64 @@ describe('RosterImportPage', () => {
       expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file),
     );
   });
+
+  it('downloads a protected Excel template for the selected section', async () => {
+    let exportedBlob: Blob | null = null;
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    const originalCreateElement = document.createElement.bind(document);
+    const anchor = originalCreateElement('a') as HTMLAnchorElement;
+    const clickSpy = jest.spyOn(anchor, 'click').mockImplementation();
+    const createElementSpy = jest
+      .spyOn(document, 'createElement')
+      .mockImplementation((tagName, options) => {
+        if (tagName.toLowerCase() === 'a') return anchor;
+        return originalCreateElement(tagName, options);
+      });
+    URL.createObjectURL = jest.fn((blob) => {
+      exportedBlob = blob as Blob;
+      return 'blob:roster-template';
+    });
+    URL.revokeObjectURL = jest.fn();
+
+    try {
+      render(<RosterImportPage />);
+
+      const templateButton = await screen.findByRole('button', { name: /download excel template/i });
+      expect(templateButton).toBeDisabled();
+
+      fireEvent.change(await screen.findByLabelText('Target Section'), {
+        target: { value: 'section-1' },
+      });
+      fireEvent.click(templateButton);
+
+      await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+      expect(anchor.download).toMatch(/roster-template.*\.xlsx$/);
+      expect(exportedBlob).not.toBeNull();
+
+      const zip = await JSZip.loadAsync(await readBlobAsArrayBuffer(exportedBlob!));
+      const workbookXml = await zip.file('xl/workbook.xml')?.async('string');
+      const sharedStringsXml = await zip.file('xl/sharedStrings.xml')?.async('string');
+      const sheetXml = await zip.file('xl/worksheets/sheet1.xml')?.async('string');
+
+      expect(workbookXml).toContain('name="Roster Import"');
+      expect(sharedStringsXml).toContain('GRADE 7 Grade 7 - Rizal');
+      expect(sharedStringsXml).toContain('Student Name');
+      expect(sharedStringsXml).toContain('LRN');
+      expect(sharedStringsXml).toContain('Email');
+      expect(sheetXml).toContain('r="A1"');
+      expect(sheetXml).toContain('r="A3"');
+      expect(sheetXml).toContain('r="B3"');
+      expect(sheetXml).toContain('r="C3"');
+      expect(sheetXml).toContain('<sheetProtection');
+      expect(sheetXml).toContain('sqref="B4:B203"');
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      createElementSpy.mockRestore();
+      clickSpy.mockRestore();
+    }
+  }, 30000);
 
   it('renders backend preview rows and commits using the backend roster contract', async () => {
     const { container } = render(<RosterImportPage />);

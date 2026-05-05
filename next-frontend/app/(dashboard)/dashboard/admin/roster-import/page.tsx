@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileUp, Upload } from 'lucide-react';
+import { Download, FileUp, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   rosterImportService,
@@ -11,6 +11,7 @@ import {
 } from '@/services/roster-import-service';
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
+import { downloadRosterImportTemplate } from '@/lib/roster-import-template';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,8 @@ export default function RosterImportPage() {
   const [loadingPending, setLoadingPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const selectedSection = sections.find((section) => section.id === sectionId) ?? null;
 
   useEffect(() => {
     sectionService
@@ -118,6 +121,23 @@ export default function RosterImportPage() {
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    if (!selectedSection) {
+      toast.error('Select a target section before downloading the template.');
+      return;
+    }
+
+    try {
+      setDownloadingTemplate(true);
+      await downloadRosterImportTemplate(selectedSection);
+      toast.success('Roster template downloaded.');
+    } catch {
+      toast.error('Failed to create the roster template.');
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   return (
     <AdminPageShell
       badge="Admin Roster Import"
@@ -188,6 +208,17 @@ export default function RosterImportPage() {
           >
             <Upload className="h-4 w-4" />
             {uploading ? 'Uploading...' : 'Upload & Preview'}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="admin-button-outline rounded-xl font-black"
+            onClick={handleDownloadTemplate}
+            disabled={!selectedSection || downloadingTemplate}
+          >
+            <Download className="h-4 w-4" />
+            {downloadingTemplate ? 'Creating Template...' : 'Download Excel Template'}
           </Button>
         </div>
       </AdminSectionCard>

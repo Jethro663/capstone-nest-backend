@@ -57,6 +57,39 @@ class RemedialServiceTests(unittest.IsolatedAsyncioTestCase):
             remedial_service.FAILED_RETRY_ASSESSMENT_SQL,
         )
 
+    def test_generated_guided_assessment_hints_are_student_friendly(self) -> None:
+        draft = remedial_service._build_generated_guided_assessment_draft(
+            ["________ are homogeneous and have the same properties throughout the sample"],
+            [
+                {
+                    "assessmentId": "assessment-1",
+                    "title": "Module 2 Quiz",
+                    "reason": "Recent failed assessment.",
+                }
+            ],
+            [
+                {
+                    "id": "question-1",
+                    "type": "multiple_choice",
+                    "content": "________ are homogeneous and have the same properties throughout the sample.",
+                    "concept_tags": [
+                        "________ are homogeneous and have the same properties throughout the sample"
+                    ],
+                    "explanation": "",
+                    "options": [
+                        {"id": "a", "text": "Homogeneous mixtures", "isCorrect": True},
+                        {"id": "b", "text": "Compounds", "isCorrect": False},
+                    ],
+                }
+            ],
+        )
+
+        self.assertIsNotNone(draft)
+        hint = draft["questions"][0]["hint"]
+        self.assertNotIn("________", hint)
+        self.assertIn("homogeneous", hint.lower())
+        self.assertIn("same properties", hint.lower())
+
     async def test_ensure_intervention_index_ready_reindexes_missing_class_chunks(self) -> None:
         fake_db = AsyncMock()
 
