@@ -464,14 +464,93 @@ export type SystemEvaluationTargetModule =
   | 'intervention'
   | 'overall';
 
+export type SystemEvaluationFormType = 'system' | 'ja_hub';
+export type SystemEvaluationAudienceRole = 'student' | 'teacher';
+export type SystemEvaluationCampaignStatus = 'draft' | 'active' | 'closed';
+export type SystemEvaluationAssignmentStatus =
+  | 'pending'
+  | 'submitted'
+  | 'expired';
+
+export interface SystemEvaluationQuestion {
+  key: string;
+  label: string;
+}
+
+export interface AssignedSystemEvaluationItem {
+  id: string;
+  campaignId: string;
+  formType: SystemEvaluationFormType;
+  targetModule: SystemEvaluationTargetModule;
+  title: string;
+  description: string;
+  audienceRole: SystemEvaluationAudienceRole;
+  classId: string | null;
+  class?: {
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
+  } | null;
+  startsAt: string;
+  endsAt: string;
+  status: SystemEvaluationAssignmentStatus;
+  submittedAt?: string | null;
+  questions: SystemEvaluationQuestion[];
+}
+
+export interface MySystemEvaluationsResponse {
+  pending: AssignedSystemEvaluationItem[];
+  completed: AssignedSystemEvaluationItem[];
+}
+
+export interface CreateSystemEvaluationCampaignPayload {
+  formType: SystemEvaluationFormType;
+  audienceRole: SystemEvaluationAudienceRole;
+  classId?: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status?: SystemEvaluationCampaignStatus;
+}
+
+export interface SystemEvaluationCampaign {
+  id: string;
+  formType: SystemEvaluationFormType;
+  targetModule: SystemEvaluationTargetModule;
+  audienceRole: SystemEvaluationAudienceRole;
+  classId: string | null;
+  class?: AssignedSystemEvaluationItem['class'];
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  status: SystemEvaluationCampaignStatus;
+  createdAt: string;
+  updatedAt: string;
+  assignmentCount: number;
+  submittedCount: number;
+}
+
+export interface SystemEvaluationCampaignListResponse {
+  campaigns: SystemEvaluationCampaign[];
+  count: number;
+}
+
 export interface SystemEvaluationRow {
   id: string;
   submittedBy: string;
+  campaignId?: string | null;
   targetModule: SystemEvaluationTargetModule;
   usabilityScore: number | string;
   functionalityScore: number | string;
   performanceScore: number | string;
   satisfactionScore: number | string;
+  overallScore?: number | string | null;
+  questionRatingsJson?: Record<string, number> | null;
   feedback: string | null;
   aiContextMetadata?: {
     sessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
@@ -486,6 +565,13 @@ export interface SystemEvaluationRow {
     firstName: string | null;
     lastName: string | null;
     email: string | null;
+  } | null;
+  campaign?: {
+    id: string;
+    title: string;
+    formType: SystemEvaluationFormType;
+    audienceRole: SystemEvaluationAudienceRole;
+    status: SystemEvaluationCampaignStatus;
   } | null;
 }
 

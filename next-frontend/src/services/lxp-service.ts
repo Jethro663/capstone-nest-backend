@@ -4,7 +4,12 @@ import type {
   LxpClassReport,
   LxpOverviewResponse,
   PlaylistResponse,
+  AssignedSystemEvaluationItem,
+  CreateSystemEvaluationCampaignPayload,
   StudentTeacherEvaluationDashboardResponse,
+  MySystemEvaluationsResponse,
+  SystemEvaluationCampaignListResponse,
+  SystemEvaluationCampaignStatus,
   SystemEvaluationListResponse,
   RegenerateInterventionPathResponse,
   TeacherEvaluationSummaryResponse,
@@ -276,12 +281,65 @@ export const lxpService = {
     return normalizeEnvelope(data);
   },
 
+  async getMySystemEvaluations(): Promise<Envelope<MySystemEvaluationsResponse>> {
+    const { data } = await api.get('/lxp/me/system-evaluations');
+    return normalizeEnvelope<MySystemEvaluationsResponse>(data);
+  },
+
+  async submitAssignedSystemEvaluation(
+    assignmentId: string,
+    payload: {
+      questionRatings: Record<string, number>;
+      feedback?: string;
+    },
+  ): Promise<Envelope<AssignedSystemEvaluationItem>> {
+    const { data } = await api.post(
+      `/lxp/me/system-evaluations/${assignmentId}/submit`,
+      payload,
+    );
+    return normalizeEnvelope<AssignedSystemEvaluationItem>(data);
+  },
+
+  async createSystemEvaluationCampaign(
+    payload: CreateSystemEvaluationCampaignPayload,
+  ) {
+    const { data } = await api.post('/lxp/system-evaluation-campaigns', payload);
+    return normalizeEnvelope(data);
+  },
+
+  async getSystemEvaluationCampaigns(filters?: {
+    formType?: 'system' | 'ja_hub';
+    audienceRole?: 'student' | 'teacher';
+    status?: SystemEvaluationCampaignStatus;
+    classId?: string;
+  }): Promise<Envelope<SystemEvaluationCampaignListResponse>> {
+    const { data } = await api.get('/lxp/system-evaluation-campaigns', {
+      params: filters && Object.keys(filters).length > 0 ? filters : undefined,
+    });
+    return normalizeEnvelope<SystemEvaluationCampaignListResponse>(data);
+  },
+
+  async updateSystemEvaluationCampaignStatus(
+    campaignId: string,
+    status: SystemEvaluationCampaignStatus,
+  ) {
+    const { data } = await api.patch(
+      `/lxp/system-evaluation-campaigns/${campaignId}/status`,
+      { status },
+    );
+    return normalizeEnvelope(data);
+  },
+
   async getEvaluations(
     filters?: {
       targetModule?: SystemEvaluationTargetModule;
       aiClassId?: string;
       aiSessionType?: 'mentor_chat' | 'mistake_explanation' | 'student_tutor';
       aiSourceFlow?: string;
+      campaignId?: string;
+      audienceRole?: 'student' | 'teacher';
+      from?: string;
+      to?: string;
     },
   ): Promise<Envelope<SystemEvaluationListResponse>> {
     const { data } = await api.get('/lxp/evaluations', {

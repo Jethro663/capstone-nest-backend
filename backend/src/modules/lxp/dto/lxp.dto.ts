@@ -3,6 +3,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsISO8601,
   IsObject,
   IsOptional,
   IsString,
@@ -15,12 +16,26 @@ import {
 import { Type } from 'class-transformer';
 import {
   gradingPeriodEnum,
+  systemEvaluationAudienceRoleEnum,
+  systemEvaluationCampaignStatusEnum,
+  systemEvaluationFormTypeEnum,
   systemEvaluationTargetEnum,
   teacherEvaluationTypeEnum,
 } from '../../../drizzle/schema';
 
 const systemTargets = systemEvaluationTargetEnum.enumValues;
 export type SystemEvaluationTarget = (typeof systemTargets)[number];
+const systemEvaluationFormTypes = systemEvaluationFormTypeEnum.enumValues;
+export type SystemEvaluationFormType =
+  (typeof systemEvaluationFormTypes)[number];
+const systemEvaluationAudienceRoles =
+  systemEvaluationAudienceRoleEnum.enumValues;
+export type SystemEvaluationAudienceRole =
+  (typeof systemEvaluationAudienceRoles)[number];
+const systemEvaluationCampaignStatuses =
+  systemEvaluationCampaignStatusEnum.enumValues;
+export type SystemEvaluationCampaignStatus =
+  (typeof systemEvaluationCampaignStatuses)[number];
 const teacherEvaluationTypes = teacherEvaluationTypeEnum.enumValues;
 export type TeacherEvaluationType = (typeof teacherEvaluationTypes)[number];
 const gradingPeriods = gradingPeriodEnum.enumValues;
@@ -271,22 +286,22 @@ export class SubmitSystemEvaluationDto {
   targetModule: SystemEvaluationTarget;
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(5)
   usabilityScore: number;
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(5)
   functionalityScore: number;
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(5)
   performanceScore: number;
 
   @IsInt()
-  @Min(1)
+  @Min(0)
   @Max(5)
   satisfactionScore: number;
 
@@ -318,6 +333,81 @@ export class ListSystemEvaluationsQueryDto {
   @IsString()
   @MaxLength(64)
   aiSourceFlow?: string;
+
+  @IsOptional()
+  @IsUUID('4')
+  campaignId?: string;
+
+  @IsOptional()
+  @IsIn(systemEvaluationAudienceRoles)
+  audienceRole?: SystemEvaluationAudienceRole;
+
+  @IsOptional()
+  @IsISO8601()
+  from?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  to?: string;
+}
+
+export class SubmitAssignedSystemEvaluationDto {
+  @IsObject()
+  questionRatings: Record<string, number>;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  feedback?: string;
+}
+
+export class CreateSystemEvaluationCampaignDto {
+  @IsIn(systemEvaluationFormTypes)
+  formType: SystemEvaluationFormType;
+
+  @IsIn(systemEvaluationAudienceRoles)
+  audienceRole: SystemEvaluationAudienceRole;
+
+  @IsOptional()
+  @IsUUID('4')
+  classId?: string;
+
+  @IsString()
+  @MaxLength(160)
+  title: string;
+
+  @IsISO8601()
+  startsAt: string;
+
+  @IsISO8601()
+  endsAt: string;
+
+  @IsOptional()
+  @IsIn(systemEvaluationCampaignStatuses)
+  status?: SystemEvaluationCampaignStatus;
+}
+
+export class ListSystemEvaluationCampaignsQueryDto {
+  @IsOptional()
+  @IsIn(systemEvaluationFormTypes)
+  formType?: SystemEvaluationFormType;
+
+  @IsOptional()
+  @IsIn(systemEvaluationAudienceRoles)
+  audienceRole?: SystemEvaluationAudienceRole;
+
+  @IsOptional()
+  @IsIn(systemEvaluationCampaignStatuses)
+  status?: SystemEvaluationCampaignStatus;
+
+  @IsOptional()
+  @IsUUID('4')
+  classId?: string;
+}
+
+export class UpdateSystemEvaluationCampaignStatusDto {
+  @IsIn(systemEvaluationCampaignStatuses)
+  status: SystemEvaluationCampaignStatus;
 }
 
 export class SubmitTeacherEvaluationDto {

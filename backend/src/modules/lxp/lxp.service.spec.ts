@@ -25,6 +25,11 @@ describe('LxpService', () => {
       studentConceptMastery: { findMany: jest.fn() },
       lxpProgress: { findFirst: jest.fn(), findMany: jest.fn() },
       systemEvaluations: { findMany: jest.fn() },
+      systemEvaluationCampaigns: { findFirst: jest.fn(), findMany: jest.fn() },
+      systemEvaluationAssignments: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+      },
       lessons: { findMany: jest.fn() },
       assessments: { findMany: jest.fn() },
     },
@@ -37,7 +42,9 @@ describe('LxpService', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
-    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue(
+      [],
+    );
     mockDb.query.generatedRemedialLessons.findFirst.mockResolvedValue(null);
     mockDb.query.generatedRemedialLessons.findMany.mockResolvedValue([]);
     mockDb.query.generatedGuidedAssessments.findFirst.mockResolvedValue(null);
@@ -248,7 +255,9 @@ describe('LxpService', () => {
       service as any,
       'ensureDefaultAssignments',
     );
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
@@ -282,7 +291,12 @@ describe('LxpService', () => {
         isCompleted: true,
         completedAt: new Date('2026-02-09T00:00:00.000Z'),
         xpAwarded: 20,
-        lesson: { id: 'lesson-1', title: 'Fractions', description: null, order: 1 },
+        lesson: {
+          id: 'lesson-1',
+          title: 'Fractions',
+          description: null,
+          order: 1,
+        },
         assessment: null,
       },
       {
@@ -318,7 +332,9 @@ describe('LxpService', () => {
       service as any,
       'ensureDefaultAssignments',
     );
-    mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+    });
     mockDb.query.interventionCases.findFirst
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
@@ -1224,7 +1240,9 @@ describe('LxpService', () => {
 
     await expect(
       service.getStudentPlaylist('student-1', 'class-1'),
-    ).rejects.toThrow('Learners Path is only available after your teacher assigns checkpoints.');
+    ).rejects.toThrow(
+      'Learners Path is only available after your teacher assigns checkpoints.',
+    );
   });
 
   it('blocks overview access when intervention is active but has no teacher-assigned path yet', async () => {
@@ -1256,7 +1274,9 @@ describe('LxpService', () => {
 
     await expect(
       service.getStudentOverview('student-1', 'class-1'),
-    ).rejects.toThrow('Learners Path is only available after your teacher assigns checkpoints.');
+    ).rejects.toThrow(
+      'Learners Path is only available after your teacher assigns checkpoints.',
+    );
   });
 
   it('submits a system evaluation tied to the requesting user', async () => {
@@ -1312,7 +1332,7 @@ describe('LxpService', () => {
     );
   });
 
-  it('lists system evaluations for teachers and applies module filter', async () => {
+  it('lists system evaluations for admins and applies module filter', async () => {
     mockDb.query.systemEvaluations.findMany.mockResolvedValue([
       {
         id: 'evaluation-1',
@@ -1327,7 +1347,7 @@ describe('LxpService', () => {
     ]);
 
     const result = await service.listSystemEvaluations(
-      { userId: 'teacher-1', roles: ['teacher'] },
+      { userId: 'admin-1', roles: ['admin'] },
       { targetModule: 'lxp' },
     );
 
@@ -1441,17 +1461,234 @@ describe('LxpService', () => {
   it('rejects invalid system evaluation target filters', async () => {
     await expect(
       service.listSystemEvaluations(
-        { userId: 'teacher-1', roles: ['teacher'] },
+        { userId: 'admin-1', roles: ['admin'] },
         { targetModule: 'not-a-real-module' as never },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('rejects system evaluation listing for non-teacher/non-admin users', async () => {
+  it('rejects system evaluation listing for non-admin users', async () => {
     await expect(
       service.listSystemEvaluations(
         { userId: 'student-1', roles: ['student'] },
         {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(
+      service.listSystemEvaluations(
+        { userId: 'teacher-1', roles: ['teacher'] },
+        {},
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('returns only assigned system evaluation forms for the current student respondent', async () => {
+    mockDb.query.systemEvaluationAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-system',
+        status: 'pending',
+        submittedAt: null,
+        campaign: {
+          id: 'campaign-system',
+          formType: 'system',
+          targetModule: 'overall',
+          title: 'System Pulse',
+          audienceRole: 'student',
+          classId: null,
+          startsAt: new Date('2026-05-01T00:00:00.000Z'),
+          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          status: 'active',
+          class: null,
+        },
+      },
+      {
+        id: 'assignment-ja',
+        status: 'pending',
+        submittedAt: null,
+        campaign: {
+          id: 'campaign-ja',
+          formType: 'ja_hub',
+          targetModule: 'ai_mentor',
+          title: 'JA Hub Pulse',
+          audienceRole: 'student',
+          classId: null,
+          startsAt: new Date('2026-05-01T00:00:00.000Z'),
+          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          status: 'active',
+          class: null,
+        },
+      },
+    ]);
+
+    const result = await service.getMySystemEvaluationDashboard({
+      userId: 'student-1',
+      roles: ['student'],
+    });
+
+    expect(result.pending).toHaveLength(2);
+    expect(result.pending.map((item) => item.formType)).toEqual([
+      'system',
+      'ja_hub',
+    ]);
+    expect(result.pending[0].questions).toHaveLength(5);
+  });
+
+  it('submits an assigned system evaluation and accepts explicit zero-star ratings', async () => {
+    mockDb.query.systemEvaluationAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      respondentId: 'student-1',
+      respondentRole: 'student',
+      status: 'pending',
+      campaign: {
+        id: 'campaign-1',
+        formType: 'system',
+        targetModule: 'overall',
+        status: 'active',
+        startsAt: new Date('2026-05-01T00:00:00.000Z'),
+        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+        title: 'System Pulse',
+      },
+    });
+    const created = {
+      id: 'evaluation-1',
+      targetModule: 'overall',
+      campaignId: 'campaign-1',
+      submittedBy: 'student-1',
+    };
+    const returning = jest.fn().mockResolvedValue([created]);
+    const values = jest.fn().mockReturnValue({ returning });
+    mockDb.insert.mockReturnValue({ values });
+    const where = jest.fn().mockResolvedValue(undefined);
+    const set = jest.fn().mockReturnValue({ where });
+    mockDb.update.mockReturnValue({ set });
+
+    const result = await service.submitAssignedSystemEvaluation(
+      'assignment-1',
+      { userId: 'student-1', roles: ['student'] },
+      {
+        questionRatings: {
+          system_navigation: 0,
+          system_features: 5,
+          system_speed: 4,
+          system_efficiency: 5,
+          system_satisfaction: 4,
+        },
+        feedback: 'Zero should be valid when intentional.',
+      },
+    );
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        campaignId: 'campaign-1',
+        targetModule: 'overall',
+        usabilityScore: 0,
+        functionalityScore: 5,
+        performanceScore: 4,
+        satisfactionScore: 4,
+        overallScore: 4,
+      }),
+    );
+    expect(result).toEqual(created);
+  });
+
+  it('rejects duplicate assigned system evaluation submissions', async () => {
+    mockDb.query.systemEvaluationAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+      respondentId: 'student-1',
+      respondentRole: 'student',
+      status: 'submitted',
+      campaign: {
+        id: 'campaign-1',
+        formType: 'system',
+        targetModule: 'overall',
+        status: 'active',
+        startsAt: new Date('2026-05-01T00:00:00.000Z'),
+        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+      },
+    });
+
+    await expect(
+      service.submitAssignedSystemEvaluation(
+        'assignment-1',
+        { userId: 'student-1', roles: ['student'] },
+        {
+          questionRatings: {
+            system_navigation: 5,
+            system_features: 5,
+            system_speed: 5,
+            system_efficiency: 5,
+            system_satisfaction: 5,
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('creates class-scoped active student campaigns for a teacher-owned class', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+      subjectCode: 'MATH-7',
+      subjectName: 'Mathematics 7',
+    });
+    mockDb.query.enrollments.findMany.mockResolvedValue([
+      { studentId: 'student-1' },
+      { studentId: 'student-2' },
+    ]);
+    const campaign = {
+      id: 'campaign-1',
+      formType: 'system',
+      targetModule: 'overall',
+      audienceRole: 'student',
+      classId: 'class-1',
+      status: 'active',
+    };
+    mockDb.insert
+      .mockReturnValueOnce({
+        values: jest.fn().mockReturnValue({
+          returning: jest.fn().mockResolvedValue([campaign]),
+        }),
+      })
+      .mockReturnValueOnce({
+        values: jest.fn().mockReturnValue({
+          onConflictDoNothing: jest.fn().mockResolvedValue(undefined),
+        }),
+      });
+
+    const result = await service.createSystemEvaluationCampaign(
+      { userId: 'teacher-1', roles: ['teacher'] },
+      {
+        formType: 'system',
+        audienceRole: 'student',
+        classId: 'class-1',
+        title: 'System Pulse',
+        startsAt: '2026-05-01T00:00:00.000Z',
+        endsAt: '2026-05-20T00:00:00.000Z',
+        status: 'active',
+      },
+    );
+
+    expect(result.assignmentCount).toBe(2);
+  });
+
+  it('rejects teacher-created campaigns outside the teacher owned classes', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'other-teacher',
+    });
+
+    await expect(
+      service.createSystemEvaluationCampaign(
+        { userId: 'teacher-1', roles: ['teacher'] },
+        {
+          formType: 'system',
+          audienceRole: 'student',
+          classId: 'class-1',
+          title: 'System Pulse',
+          startsAt: '2026-05-01T00:00:00.000Z',
+          endsAt: '2026-05-20T00:00:00.000Z',
+          status: 'active',
+        },
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -1561,9 +1798,9 @@ describe('LxpService', () => {
     mockDb.select.mockReturnValue({
       from: jest.fn().mockReturnValue({
         where: jest.fn().mockReturnValue({
-          groupBy: jest.fn().mockResolvedValue([
-            { assessmentId: 'assessment-1' },
-          ]),
+          groupBy: jest
+            .fn()
+            .mockResolvedValue([{ assessmentId: 'assessment-1' }]),
         }),
       }),
     });
@@ -2045,7 +2282,9 @@ describe('LxpService', () => {
       }),
     ).rejects.toThrow('Only completed intervention paths can be regenerated.');
 
-    expect(mockDb.query.interventionAssignments.findMany).not.toHaveBeenCalled();
+    expect(
+      mockDb.query.interventionAssignments.findMany,
+    ).not.toHaveBeenCalled();
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
@@ -2069,7 +2308,9 @@ describe('LxpService', () => {
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
-    expect(mockDb.query.interventionAssignments.findMany).not.toHaveBeenCalled();
+    expect(
+      mockDb.query.interventionAssignments.findMany,
+    ).not.toHaveBeenCalled();
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 

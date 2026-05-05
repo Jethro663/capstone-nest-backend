@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
-  ClipboardCheck,
   Filter,
   ListChecks,
   MessageSquareQuote,
   Sparkles,
+  Star,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -18,8 +18,13 @@ import {
 } from '@/components/teacher/TeacherPageShell';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { lxpService } from '@/services/lxp-service';
-import type { TeacherEvaluationSummaryResponse, TeacherEvaluationType } from '@/types/lxp';
+import type {
+  AssignedSystemEvaluationItem,
+  TeacherEvaluationSummaryResponse,
+  TeacherEvaluationType,
+} from '@/types/lxp';
 import { cn } from '@/utils/cn';
 import { toast } from 'sonner';
 
@@ -29,6 +34,43 @@ const TABS: Array<{ value: TeacherEvaluationType; label: string; icon: LucideIco
   { value: 'learners_path', label: 'Learners Path in My Classes', icon: ListChecks },
 ];
 
+function SystemStarRating({
+  questionKey,
+  value,
+  onChange,
+}: {
+  questionKey: string;
+  value: number | null;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      {[0, 1, 2, 3, 4, 5].map((rating) => (
+        <button
+          key={rating}
+          type="button"
+          aria-label={`${questionKey} ${rating} stars`}
+          onClick={() => onChange(rating)}
+          className={
+            value === rating
+              ? 'inline-flex h-9 min-w-9 items-center justify-center rounded-full bg-[var(--teacher-accent)] px-3 text-sm font-semibold text-white'
+              : 'inline-flex h-9 min-w-9 items-center justify-center rounded-full border border-[#dbe2ec] bg-white px-3 text-sm font-semibold text-[var(--teacher-text-strong)]'
+          }
+        >
+          {rating === 0 ? (
+            '0'
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              {rating}
+              <Star className="h-3.5 w-3.5" />
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function TeacherEvaluationInsightsPage() {
   const [evaluationType, setEvaluationType] = useState<TeacherEvaluationType>('teacher_class');
   const [classId, setClassId] = useState('');
@@ -37,6 +79,11 @@ export function TeacherEvaluationInsightsPage() {
   >('');
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<TeacherEvaluationSummaryResponse | null>(null);
+  const [systemAssignments, setSystemAssignments] = useState<AssignedSystemEvaluationItem[]>([]);
+  const [activeSystemAssignmentId, setActiveSystemAssignmentId] = useState<string | null>(null);
+  const [systemRatings, setSystemRatings] = useState<Record<string, number | null>>({});
+  const [systemComment, setSystemComment] = useState('');
+  const [systemSubmitting, setSystemSubmitting] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -66,6 +113,74 @@ export function TeacherEvaluationInsightsPage() {
       mounted = false;
     };
   }, [classId, evaluationType, gradingPeriod]);
+
+  const fetchSystemAssignments = async () => {
+    try {
+      const response = await lxpService.getMySystemEvaluations();
+      setSystemAssignments(
+        (response.data.pending ?? []).filter((item) => item.formType === 'system'),
+      );
+    } catch {
+      setSystemAssignments([]);
+    }
+  };
+
+  useEffect(() => {
+    void fetchSystemAssignments();
+  }, []);
+
+  const activeSystemAssignment = useMemo(
+    () =>
+      systemAssignments.find((assignment) => assignment.id === activeSystemAssignmentId) ??
+      systemAssignments[0] ??
+      null,
+    [activeSystemAssignmentId, systemAssignments],
+  );
+
+  useEffect(() => {
+    if (!activeSystemAssignment) {
+      setSystemRatings({});
+      setSystemComment('');
+      return;
+    }
+    setActiveSystemAssignmentId(activeSystemAssignment.id);
+    setSystemRatings(
+      Object.fromEntries(
+        activeSystemAssignment.questions.map((question) => [question.key, null]),
+      ),
+    );
+    setSystemComment('');
+  }, [activeSystemAssignment]);
+
+  const submitSystemAssignment = async () => {
+    if (!activeSystemAssignment) return;
+    const hasMissing = activeSystemAssignment.questions.some(
+      (question) =>
+        systemRatings[question.key] === null ||
+        systemRatings[question.key] === undefined,
+    );
+    if (hasMissing) {
+      toast.error('Complete every rating before submitting.');
+      return;
+    }
+
+    try {
+      setSystemSubmitting(true);
+      await lxpService.submitAssignedSystemEvaluation(activeSystemAssignment.id, {
+        questionRatings: Object.fromEntries(
+          Object.entries(systemRatings).map(([key, value]) => [key, Number(value)]),
+        ),
+        feedback: systemComment.trim() || undefined,
+      });
+      toast.success('System evaluation submitted.');
+      setActiveSystemAssignmentId(null);
+      await fetchSystemAssignments();
+    } catch {
+      toast.error('Failed to submit system evaluation.');
+    } finally {
+      setSystemSubmitting(false);
+    }
+  };
 
   const stats = useMemo(() => {
     if (!summary) {
@@ -136,6 +251,80 @@ export function TeacherEvaluationInsightsPage() {
         </>
       }
     >
+      <TeacherSectionCard
+        title="Forms To Answer"
+        description="Assigned respondent forms for teachers. Only system evaluation forms appear here."
+        className="teacher-figma-stagger"
+      >
+        {systemAssignments.length === 0 ? (
+          <TeacherEmptyState
+            title="No assigned system forms"
+            description="System evaluation forms appear here only after an active campaign assigns them to teachers."
+          />
+        ) : (
+          <div className="grid gap-5 xl:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="space-y-2">
+              {systemAssignments.map((assignment) => (
+                <button
+                  key={assignment.id}
+                  type="button"
+                  onClick={() => setActiveSystemAssignmentId(assignment.id)}
+                  className={cn(
+                    'w-full rounded-[14px] border px-4 py-3 text-left text-sm font-semibold',
+                    activeSystemAssignment?.id === assignment.id
+                      ? 'border-[var(--teacher-accent)] bg-[var(--teacher-accent)] text-white'
+                      : 'border-[#dbe2ec] bg-white text-[var(--teacher-text-strong)]',
+                  )}
+                >
+                  <span>{assignment.title}</span>
+                  <span className="mt-1 block text-xs opacity-80">
+                    Due {new Date(assignment.endsAt).toLocaleDateString('en-US')}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {activeSystemAssignment ? (
+              <div className="space-y-4">
+                {activeSystemAssignment.questions.map((question) => (
+                  <div
+                    key={question.key}
+                    className="rounded-[14px] border border-[#edf2f7] bg-white px-4 py-4"
+                  >
+                    <p className="text-sm font-semibold text-[var(--teacher-text-strong)]">
+                      {question.label}
+                    </p>
+                    <SystemStarRating
+                      questionKey={question.key}
+                      value={systemRatings[question.key] ?? null}
+                      onChange={(value) =>
+                        setSystemRatings((current) => ({
+                          ...current,
+                          [question.key]: value,
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+                <Textarea
+                  value={systemComment}
+                  onChange={(event) => setSystemComment(event.target.value)}
+                  rows={4}
+                  placeholder="Optional system feedback"
+                />
+                <Button
+                  type="button"
+                  variant="teacher"
+                  onClick={() => void submitSystemAssignment()}
+                  disabled={systemSubmitting}
+                >
+                  {systemSubmitting ? 'Submitting...' : 'Submit System Evaluation'}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </TeacherSectionCard>
+
       <TeacherSectionCard
         title="Evaluation Scope"
         description="Switch tabs to focus on one teacher-facing evaluation surface at a time."
