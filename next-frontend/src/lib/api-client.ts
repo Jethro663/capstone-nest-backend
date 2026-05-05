@@ -29,6 +29,21 @@ export type ApiRequestOptions = Pick<
   'skipAuthRefresh' | 'skipSessionExpiredRedirect'
 >;
 
+function expireClientSession(shouldRedirect: boolean) {
+  accessToken = null;
+
+  if (typeof window === 'undefined' || !shouldRedirect) {
+    return;
+  }
+
+  import('sonner').then(({ toast }) => {
+    toast.error('Session expired. Please log in again.');
+  });
+  setTimeout(() => {
+    window.location.href = '/login';
+  }, 1500);
+}
+
 /**
  * Create axios instance with base configuration
  */
@@ -105,23 +120,13 @@ export function createApiClient(): AxiosInstance {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return api(originalRequest);
           } else {
-            // Refresh failed (expired/invalid refresh token) → force re-login
-            accessToken = null;
-            if (
-              typeof window !== 'undefined' &&
-              !originalRequest.skipSessionExpiredRedirect
-            ) {
-              import('sonner').then(({ toast }) => {
-                toast.error('Session expired. Please log in again.');
-              });
-              setTimeout(() => {
-                window.location.href = '/login';
-              }, 1500);
-            }
+            // Refresh returned no usable token, so force re-login.
+            expireClientSession(!originalRequest.skipSessionExpiredRedirect);
             return Promise.reject(error);
           }
         } catch (refreshError) {
           refreshPromise = null;
+          expireClientSession(!originalRequest.skipSessionExpiredRedirect);
           return Promise.reject(refreshError);
         }
       }

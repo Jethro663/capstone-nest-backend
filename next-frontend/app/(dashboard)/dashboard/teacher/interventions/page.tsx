@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Award,
   CircleHelp,
@@ -17,7 +17,13 @@ import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lxpService } from '@/services/lxp-service';
 import type { ClassItem } from '@/types/class';
-import type { LxpClassReport, TeacherInterventionQueueResponse } from '@/types/lxp';
+import type {
+  LxpClassReport,
+  TeacherInterventionAssignment,
+  TeacherInterventionHistoryResponse,
+  TeacherInterventionHistoryRow,
+  TeacherInterventionQueueResponse,
+} from '@/types/lxp';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,7 +81,7 @@ const LEADERBOARD_TIER_ICONS = {
 
 type LeaderboardScope = (typeof LEADERBOARD_SCOPE_OPTIONS)[number]['key'];
 type LeaderboardTier = keyof typeof LEADERBOARD_TIER_ICONS;
-type InterventionWorkspaceView = 'queue' | 'overview';
+type InterventionWorkspaceView = 'queue' | 'overview' | 'history';
 type InterventionsGuideScreen = 'summary' | 'queue' | 'overview' | 'detail';
 
 const interventionsGuidePages: Array<{
@@ -354,6 +360,27 @@ function getCaseSeverity(triggerScore: number | null, threshold: number | null) 
   return { label: 'Monitoring', tone: 'monitoring' as const };
 }
 
+function formatPercent(value?: number | null): string {
+  return value === null || value === undefined ? '--' : `${value.toFixed(1)}%`;
+}
+
+function assignmentTypeLabel(type: TeacherInterventionAssignment['type']) {
+  if (type === 'lesson_review') return 'Lesson Review';
+  if (type === 'assessment_retry') return 'Assessment Retry';
+  if (type === 'generated_lesson_review') return 'Generated Lesson';
+  return 'Guided Assessment';
+}
+
+function assignmentContentTitle(assignment: TeacherInterventionAssignment) {
+  return (
+    assignment.lesson?.title ??
+    assignment.assessment?.title ??
+    assignment.generatedLesson?.title ??
+    assignment.guidedAssessment?.title ??
+    assignment.label
+  );
+}
+
 type LeaderboardScoreRow = LxpClassReport['leaderboard'][number] & {
   score: number;
   scoreLabel: string;
@@ -366,6 +393,7 @@ type LeaderboardScoreRow = LxpClassReport['leaderboard'][number] & {
 export default function TeacherInterventionsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const aiAvailability = useAiAvailability();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
@@ -373,14 +401,17 @@ export default function TeacherInterventionsPage() {
   const [loadingData, setLoadingData] = useState(false);
   const [queue, setQueue] = useState<TeacherInterventionQueueResponse | null>(null);
   const [report, setReport] = useState<LxpClassReport | null>(null);
+  const [history, setHistory] = useState<TeacherInterventionHistoryResponse | null>(null);
   const [resolvingCaseId, setResolvingCaseId] = useState<string | null>(null);
   const [activatingCaseId, setActivatingCaseId] = useState<string | null>(null);
+  const [regeneratingCaseId, setRegeneratingCaseId] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [selectedCaseDetail, setSelectedCaseDetail] = useState<
     Awaited<ReturnType<typeof lxpService.getTeacherCaseDetail>>['data'] | null
   >(null);
+  const [selectedHistoryRow, setSelectedHistoryRow] = useState<TeacherInterventionHistoryRow | null>(null);
   const [workspaceView, setWorkspaceView] = useState<InterventionWorkspaceView>('queue');
   const [leaderboardScope, setLeaderboardScope] = useState<LeaderboardScope>('xp');
   const [leaderboardExpanded, setLeaderboardExpanded] = useState(false);
@@ -389,8 +420,11 @@ export default function TeacherInterventionsPage() {
   const [helpPage, setHelpPage] = useState(0);
 
   const aiUnavailable = aiAvailability.status === 'degraded';
+  const requestedClassId = searchParams.get('classId') ?? '';
   const thresholdLabel = report?.threshold ?? queue?.threshold ?? null;
   const queueEntries = useMemo(() => queue?.queue ?? [], [queue]);
+  const historyRows = useMemo(() => history?.history ?? [], [history]);
+  const historyScoreThreshold = history?.scoreThreshold ?? 60;
   const leaderboardRows = useMemo(() => report?.leaderboard ?? [], [report]);
   const leaderboardRowsByScope = useMemo(() => {
     const activeScope = leaderboardScope;
@@ -465,32 +499,42 @@ export default function TeacherInterventionsPage() {
       const response = await classService.getByTeacher(user.id);
       const rows = response.data ?? [];
       setClasses(rows);
-      setSelectedClassId((current) => current || rows[0]?.id || '');
+      setSelectedClassId((current) => {
+        if (current) return current;
+        if (requestedClassId && rows.some((entry) => entry.id === requestedClassId)) {
+          return requestedClassId;
+        }
+        return rows[0]?.id || '';
+      });
     } catch {
       toast.error('Failed to load classes');
     } finally {
       setLoadingClasses(false);
     }
-  }, [user?.id]);
+  }, [requestedClassId, user?.id]);
 
   const fetchInterventionData = useCallback(async () => {
     if (!selectedClassId) {
       setQueue(null);
       setReport(null);
+      setHistory(null);
       return;
     }
     try {
       setLoadingData(true);
-      const [queueRes, reportRes] = await Promise.all([
+      const [queueRes, reportRes, historyRes] = await Promise.all([
         lxpService.getTeacherQueue(selectedClassId),
         lxpService.getClassReport(selectedClassId),
+        lxpService.getTeacherInterventionHistory(selectedClassId),
       ]);
       setQueue(queueRes.data);
       setReport(reportRes.data);
+      setHistory(historyRes.data);
     } catch {
       toast.error('Failed to load intervention data');
       setQueue(null);
       setReport(null);
+      setHistory(null);
     } finally {
       setLoadingData(false);
     }
@@ -528,6 +572,7 @@ export default function TeacherInterventionsPage() {
   const handleOpenDetail = async (caseId: string) => {
     setDetailOpen(true);
     setSelectedCaseId(caseId);
+    setSelectedHistoryRow(null);
     setLoadingDetail(true);
     try {
       const detailRes = await lxpService.getTeacherCaseDetail(caseId);
@@ -538,6 +583,28 @@ export default function TeacherInterventionsPage() {
     } finally {
       setLoadingDetail(false);
     }
+  };
+
+  const handleOpenHistoryDetail = (row: TeacherInterventionHistoryRow) => {
+    setSelectedHistoryRow(row);
+    setSelectedCaseDetail({
+      ...row,
+      progress: {
+        xpTotal: 0,
+        starsTotal: 0,
+        streakDays: 0,
+        checkpointsCompleted: row.completion.completedCheckpoints,
+        lastActivityAt: row.closedAt,
+      },
+      generatedArtifacts: null,
+      latestSnapshot: null,
+      weakConcepts: [],
+      recentRiskTransitions: [],
+      links: { performancePage: '' },
+    });
+    setSelectedCaseId(row.id);
+    setDetailOpen(true);
+    setLoadingDetail(false);
   };
 
   const handleOpenPerformance = () => {
@@ -558,6 +625,27 @@ export default function TeacherInterventionsPage() {
     }
   };
 
+  const handleRegeneratePath = async (caseId: string) => {
+    try {
+      setRegeneratingCaseId(caseId);
+      const result = await lxpService.regenerateInterventionPath(caseId);
+      const targetCaseId = result.data.case.id;
+      toast.success(
+        result.data.reusedExisting
+          ? 'Existing intervention cycle opened'
+          : 'New intervention path created',
+      );
+      const target = selectedClassId
+        ? `/dashboard/teacher/interventions/${targetCaseId}?classId=${selectedClassId}`
+        : `/dashboard/teacher/interventions/${targetCaseId}`;
+      router.push(target);
+    } catch {
+      toast.error('Failed to regenerate intervention path');
+    } finally {
+      setRegeneratingCaseId(null);
+    }
+  };
+
   const handleLeaderboardProfile = (row: LeaderboardScoreRow) => {
     const queueCaseId = queueCaseByStudent.get(row.studentId);
     setHighlightedLeaderboardStudentId(row.studentId);
@@ -567,6 +655,12 @@ export default function TeacherInterventionsPage() {
     }
     void handleOpenDetail(queueCaseId);
   };
+
+  const activeDetail = selectedHistoryRow ?? selectedCaseDetail;
+  const activeDetailAssignments = selectedHistoryRow?.assignments ?? selectedCaseDetail?.assignments ?? [];
+  const activeWeakConcepts = selectedCaseDetail?.weakConcepts ?? [];
+  const activeRecentRiskTransitions = selectedCaseDetail?.recentRiskTransitions ?? [];
+  const isHistoryDetail = Boolean(selectedHistoryRow);
 
   if (loadingClasses) {
     return (
@@ -695,11 +789,19 @@ export default function TeacherInterventionsPage() {
 
           <div className="teacher-interventions-page__layout teacher-figma-stagger">
             <TeacherSectionCard
-              title={workspaceView === 'queue' ? 'Priority Intervention Queue' : 'XP Leaderboard'}
+              title={
+                workspaceView === 'queue'
+                  ? 'Priority Intervention Queue'
+                  : workspaceView === 'history'
+                    ? 'Intervention History'
+                    : 'XP Leaderboard'
+              }
               description={
                 workspaceView === 'queue'
                   ? 'Take action on at-risk learners, review the trigger basis, and open the remedial workspace.'
-                  : 'Track learner momentum and jump into active intervention cases.'
+                  : workspaceView === 'history'
+                    ? 'Review completed Learners Path cycles, checkpoint contents, and formative path scores.'
+                    : 'Track learner momentum and jump into active intervention cases.'
               }
               className="teacher-interventions-page__queue-card"
               contentClassName="teacher-interventions-page__queue-content"
@@ -718,6 +820,13 @@ export default function TeacherInterventionsPage() {
                     onClick={() => setWorkspaceView('overview')}
                   >
                     Leaderboard & Outcomes
+                  </button>
+                  <button
+                    type="button"
+                    className={`teacher-interventions-view-switcher__tab ${workspaceView === 'history' ? 'is-active' : ''}`}
+                    onClick={() => setWorkspaceView('history')}
+                  >
+                    History
                   </button>
                 </div>
               }
@@ -857,6 +966,109 @@ export default function TeacherInterventionsPage() {
                             </TableRow>
                           );
                         })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )
+              ) : workspaceView === 'history' ? (
+                historyRows.length === 0 ? (
+                  <TeacherEmptyState
+                    title="No intervention history yet"
+                    description="Completed intervention cycles will appear here with their Learners Path contents and score."
+                  />
+                ) : (
+                  <div className="teacher-interventions-table-shell">
+                    <Table className="teacher-interventions-table">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Path Score</TableHead>
+                          <TableHead>Learners Path</TableHead>
+                          <TableHead>Opened/Closed</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {historyRows.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell>
+                              <div className="teacher-interventions-student">
+                                <span className="teacher-interventions-avatar is-monitoring">
+                                  {studentInitials(row.student)}
+                                </span>
+                                <span className="teacher-interventions-student__copy">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenHistoryDetail(row)}
+                                    className="teacher-interventions-student__name"
+                                  >
+                                    {studentName(row.student ?? {})}
+                                  </button>
+                                  <span>{row.student?.email ?? 'No email recorded'}</span>
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={
+                                  row.status === 'completed'
+                                    ? 'teacher-badge-success border-0'
+                                    : 'teacher-badge-danger border-0'
+                                }
+                              >
+                                {row.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <span className="teacher-interventions-muted">
+                                {formatPercent(row.pathScore?.scorePercent)}
+                              </span>
+                              <span className="teacher-interventions-small">
+                                Below {historyScoreThreshold}% can regenerate
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="teacher-interventions-muted">
+                                {row.completion.completedCheckpoints}/{row.completion.totalCheckpoints}
+                              </span>
+                              <span className="teacher-interventions-small">
+                                {row.completion.completionPercent}% complete
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <span className="teacher-interventions-muted">
+                                {formatShortDate(row.openedAt)}
+                              </span>
+                              <span className="teacher-interventions-small">
+                                Closed {formatShortDate(row.closedAt)}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="teacher-interventions-actions">
+                                <Button
+                                  size="sm"
+                                  variant="teacherOutline"
+                                  className="rounded-md"
+                                  onClick={() => handleOpenHistoryDetail(row)}
+                                >
+                                  View Learners Path
+                                </Button>
+                                {row.canRegenerate ? (
+                                  <Button
+                                    size="sm"
+                                    variant="teacher"
+                                    className="rounded-md"
+                                    disabled={regeneratingCaseId === row.id}
+                                    onClick={() => void handleRegeneratePath(row.id)}
+                                  >
+                                    {regeneratingCaseId === row.id ? 'Regenerating...' : 'Regenerate Path'}
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
@@ -1115,6 +1327,7 @@ export default function TeacherInterventionsPage() {
           if (!open) {
             setSelectedCaseId(null);
             setSelectedCaseDetail(null);
+            setSelectedHistoryRow(null);
           }
         }}
       >
@@ -1123,7 +1336,9 @@ export default function TeacherInterventionsPage() {
           className="teacher-interventions-detail-sheet w-full max-w-[36rem] overflow-y-auto text-white sm:max-w-[36rem]"
         >
           <SheetHeader>
-            <SheetTitle className="text-white">Intervention Student Detail</SheetTitle>
+            <SheetTitle className="text-white">
+              {isHistoryDetail ? 'Learners Path Detail' : 'Intervention Student Detail'}
+            </SheetTitle>
             <SheetDescription className="text-[#8ea0bc]">
               {selectedCaseDetail?.student
                 ? `${studentName(selectedCaseDetail.student)} • ${selectedCaseDetail.status}`
@@ -1139,7 +1354,7 @@ export default function TeacherInterventionsPage() {
               <Skeleton className="h-32 rounded-lg bg-white/10" />
               <Skeleton className="h-32 rounded-lg bg-white/10" />
             </div>
-          ) : !selectedCaseDetail ? (
+          ) : !activeDetail ? (
             <div className="mt-6 rounded-lg border border-white/10 p-4 text-sm text-[#8ea0bc]">
               No case detail available.
             </div>
@@ -1150,71 +1365,83 @@ export default function TeacherInterventionsPage() {
                 <div className="mt-2 grid grid-cols-2 gap-3">
                   <div>
                     <p className="text-[#8ea0bc]">Case status</p>
-                    <p className="font-semibold">{selectedCaseDetail.status}</p>
+                    <p className="font-semibold">{activeDetail.status}</p>
                   </div>
                   <div>
                     <p className="text-[#8ea0bc]">Completion</p>
-                    <p className="font-semibold">{selectedCaseDetail.completion.completionPercent}%</p>
+                    <p className="font-semibold">{activeDetail.completion.completionPercent}%</p>
                   </div>
                   <div>
                     <p className="text-[#8ea0bc]">Trigger</p>
                     <p className="font-semibold">
-                      {selectedCaseDetail.triggerScore !== null
-                        ? `${selectedCaseDetail.triggerScore.toFixed(1)}%`
+                      {activeDetail.triggerScore !== null
+                        ? `${activeDetail.triggerScore.toFixed(1)}%`
                         : '--'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-[#8ea0bc]">Latest blended</p>
+                    <p className="text-[#8ea0bc]">{isHistoryDetail ? 'Path score' : 'Latest blended'}</p>
                     <p className="font-semibold">
-                      {selectedCaseDetail.latestSnapshot?.blendedScore !== null &&
-                      selectedCaseDetail.latestSnapshot?.blendedScore !== undefined
-                        ? `${selectedCaseDetail.latestSnapshot.blendedScore.toFixed(1)}%`
-                        : '--'}
+                      {isHistoryDetail
+                        ? formatPercent(selectedHistoryRow?.pathScore?.scorePercent)
+                        : selectedCaseDetail?.latestSnapshot?.blendedScore !== null &&
+                            selectedCaseDetail?.latestSnapshot?.blendedScore !== undefined
+                          ? `${selectedCaseDetail.latestSnapshot.blendedScore.toFixed(1)}%`
+                          : '--'}
                     </p>
                   </div>
                 </div>
               </div>
-
               <div className="rounded-lg border border-white/10 p-4">
                 <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Checkpoints</p>
                 <div className="mt-2 space-y-2">
-                  {selectedCaseDetail.assignments.length === 0 ? (
+                  {activeDetailAssignments.length === 0 ? (
                     <p className="text-[#8ea0bc]">No assigned checkpoints yet.</p>
                   ) : (
-                    selectedCaseDetail.assignments.map((assignment) => (
+                    activeDetailAssignments.map((assignment) => (
                       <div
                         key={assignment.id}
-                        className="flex items-center justify-between rounded-md bg-white/5 px-3 py-2"
+                        className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2"
                       >
                         <div>
                           <p className="font-medium">{assignment.label}</p>
                           <p className="text-xs text-[#8ea0bc]">
-                            {assignment.type === 'lesson_review' ? 'Lesson Review' : 'Assessment Retry'}
+                            {assignmentTypeLabel(assignment.type)}
                           </p>
+                          {assignmentContentTitle(assignment) !== assignment.label ? (
+                            <p className="text-xs text-[#c8d2e3]">{assignmentContentTitle(assignment)}</p>
+                          ) : null}
                         </div>
-                        <Badge
-                          className={
-                            assignment.isCompleted
-                              ? 'teacher-badge-success border-0'
-                              : 'teacher-badge-danger border-0'
-                          }
-                        >
-                          {assignment.isCompleted ? 'Done' : 'Pending'}
-                        </Badge>
+                        <div className="flex flex-col items-end gap-1">
+                          {assignment.score ? (
+                            <span className="text-xs font-semibold text-white">
+                              {formatPercent(assignment.score.scorePercent)} score
+                            </span>
+                          ) : null}
+                          <Badge
+                            className={
+                              assignment.isCompleted
+                                ? 'teacher-badge-success border-0'
+                                : 'teacher-badge-danger border-0'
+                            }
+                          >
+                            {assignment.isCompleted ? 'Done' : 'Pending'}
+                          </Badge>
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
               </div>
-
+              {!isHistoryDetail ? (
+              <>
               <div className="rounded-lg border border-white/10 p-4">
                 <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Weak Concepts</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedCaseDetail.weakConcepts.length === 0 ? (
+                  {activeWeakConcepts.length === 0 ? (
                     <p className="text-[#8ea0bc]">No concept evidence captured yet.</p>
                   ) : (
-                    selectedCaseDetail.weakConcepts.map((concept) => (
+                    activeWeakConcepts.map((concept) => (
                       <Badge key={concept.concept} variant="secondary">
                         {concept.concept} ({concept.masteryScore}%)
                       </Badge>
@@ -1226,10 +1453,10 @@ export default function TeacherInterventionsPage() {
               <div className="rounded-lg border border-white/10 p-4">
                 <p className="text-xs uppercase tracking-wide text-[#8ea0bc]">Latest Evidence Snippets</p>
                 <div className="mt-2 space-y-2">
-                  {selectedCaseDetail.recentRiskTransitions.length === 0 ? (
+                  {activeRecentRiskTransitions.length === 0 ? (
                     <p className="text-[#8ea0bc]">No recent risk transition logs.</p>
                   ) : (
-                    selectedCaseDetail.recentRiskTransitions.map((log) => (
+                    activeRecentRiskTransitions.map((log) => (
                       <div key={log.id} className="rounded-md bg-white/5 px-3 py-2">
                         <p className="font-medium">{log.triggerSource}</p>
                         <p className="text-xs text-[#8ea0bc]">
@@ -1241,7 +1468,10 @@ export default function TeacherInterventionsPage() {
                   )}
                 </div>
               </div>
+              </>
+              ) : null}
 
+              {!isHistoryDetail ? (
               <Button
                 variant="teacherOutline"
                 className="w-full rounded-lg"
@@ -1250,6 +1480,7 @@ export default function TeacherInterventionsPage() {
                 <ExternalLink className="mr-2 h-4 w-4" />
                 Open Full Performance Analysis
               </Button>
+              ) : null}
             </div>
           )}
           </SheetContent>

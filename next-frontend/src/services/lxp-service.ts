@@ -6,6 +6,7 @@ import type {
   PlaylistResponse,
   StudentTeacherEvaluationDashboardResponse,
   SystemEvaluationListResponse,
+  RegenerateInterventionPathResponse,
   TeacherEvaluationSummaryResponse,
   TeacherEvaluationType,
   SystemEvaluationTargetModule,
@@ -15,6 +16,7 @@ import type {
   GuidedAssessmentResultResponse,
   GuidedAssessmentSessionResponse,
   TeacherInterventionCaseDetail,
+  TeacherInterventionHistoryResponse,
   TeacherPendingInterventionCountResponse,
   TeacherInterventionQueueResponse,
 } from '@/types/lxp';
@@ -62,6 +64,15 @@ export const lxpService = {
   ): Promise<Envelope<TeacherInterventionQueueResponse>> {
     const { data } = await api.get(`/lxp/teacher/classes/${classId}/interventions`);
     return normalizeEnvelope<TeacherInterventionQueueResponse>(data);
+  },
+
+  async getTeacherInterventionHistory(
+    classId: string,
+  ): Promise<Envelope<TeacherInterventionHistoryResponse>> {
+    const { data } = await api.get(
+      `/lxp/teacher/classes/${classId}/interventions/history`,
+    );
+    return normalizeEnvelope<TeacherInterventionHistoryResponse>(data);
   },
 
   async resolveIntervention(
@@ -117,6 +128,13 @@ export const lxpService = {
   ): Promise<Envelope<TeacherInterventionCaseDetail>> {
     const { data } = await api.get(`/lxp/teacher/interventions/${caseId}/detail`);
     return normalizeEnvelope<TeacherInterventionCaseDetail>(data);
+  },
+
+  async regenerateInterventionPath(
+    caseId: string,
+  ): Promise<Envelope<RegenerateInterventionPathResponse>> {
+    const { data } = await api.post(`/lxp/teacher/interventions/${caseId}/regenerate`);
+    return normalizeEnvelope<RegenerateInterventionPathResponse>(data);
   },
 
   async approveGeneratedArtifacts(

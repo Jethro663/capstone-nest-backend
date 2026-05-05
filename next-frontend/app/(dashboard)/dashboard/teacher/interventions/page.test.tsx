@@ -4,8 +4,12 @@ import { classService } from "@/services/class-service";
 import { healthService } from "@/services/health-service";
 import { lxpService } from "@/services/lxp-service";
 
+const mockRouterPush = jest.fn();
+let mockSearchParams = new URLSearchParams();
+
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockRouterPush }),
+  useSearchParams: () => mockSearchParams,
 }));
 
 jest.mock("sonner", () => ({
@@ -31,6 +35,8 @@ jest.mock("@/services/lxp-service", () => ({
     resolveIntervention: jest.fn(),
     activateIntervention: jest.fn(),
     getTeacherCaseDetail: jest.fn(),
+    getTeacherInterventionHistory: jest.fn(),
+    regenerateInterventionPath: jest.fn(),
   },
 }));
 
@@ -47,6 +53,7 @@ const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
 describe("TeacherInterventionsPage", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     mockedHealthService.getReadiness.mockResolvedValue({
       ready: true,
       timestamp: "2026-04-30T00:00:00.000Z",
@@ -120,6 +127,178 @@ describe("TeacherInterventionsPage", () => {
         leaderboard: [],
       },
     } as Awaited<ReturnType<typeof lxpService.getClassReport>>);
+    mockedLxpService.getTeacherInterventionHistory.mockResolvedValue({
+      data: {
+        classId: "class-1",
+        scoreThreshold: 60,
+        history: [
+          {
+            id: "case-history-low",
+            classId: "class-1",
+            studentId: "student-1",
+            student: {
+              id: "student-1",
+              firstName: "Liam",
+              lastName: "Navarro",
+              email: "liam@example.com",
+            },
+            status: "completed",
+            openedAt: "2026-01-01T00:00:00.000Z",
+            closedAt: "2026-01-05T00:00:00.000Z",
+            triggerSource: "performance_status_changed",
+            triggerScore: 50,
+            thresholdApplied: 74,
+            note: null,
+            completion: {
+              totalCheckpoints: 2,
+              completedCheckpoints: 2,
+              completionPercent: 100,
+            },
+            pathScore: {
+              source: "guided_assessment",
+              assignmentId: "assignment-guided-low",
+              attemptId: "attempt-low",
+              scorePercent: 58,
+              correctCount: 3,
+              totalQuestions: 5,
+              passed: null,
+              submittedAt: "2026-01-05T01:00:00.000Z",
+            },
+            canRegenerate: true,
+            assignments: [
+              {
+                id: "assignment-lesson",
+                type: "lesson_review",
+                label: "Review: Fractions",
+                order: 1,
+                isCompleted: true,
+                completedAt: "2026-01-03T00:00:00.000Z",
+                xpAwarded: 20,
+                lesson: {
+                  id: "lesson-1",
+                  title: "Fractions Basics",
+                  description: "Review equivalent fractions.",
+                },
+                assessment: null,
+                generatedLesson: null,
+                guidedAssessment: null,
+                score: null,
+              },
+              {
+                id: "assignment-guided-low",
+                type: "guided_assessment",
+                label: "AI guided assessment: Fractions recovery",
+                order: 2,
+                isCompleted: true,
+                completedAt: "2026-01-05T00:00:00.000Z",
+                xpAwarded: 30,
+                lesson: null,
+                assessment: null,
+                generatedLesson: null,
+                guidedAssessment: {
+                  id: "guided-low",
+                  title: "Fractions recovery",
+                  description: "Guided practice",
+                  weakConcepts: ["Fractions"],
+                  sourceAssessmentId: "assessment-1",
+                  sourceReferences: [],
+                  formativeSummary: "Needs more work",
+                  questions: [],
+                  status: "approved",
+                  approvedAt: "2026-01-04T00:00:00.000Z",
+                  rejectedAt: null,
+                },
+                score: {
+                  source: "guided_assessment",
+                  assignmentId: "assignment-guided-low",
+                  attemptId: "attempt-low",
+                  scorePercent: 58,
+                  correctCount: 3,
+                  totalQuestions: 5,
+                  passed: null,
+                  submittedAt: "2026-01-05T01:00:00.000Z",
+                },
+              },
+            ],
+          },
+          {
+            id: "case-history-pass",
+            classId: "class-1",
+            studentId: "student-2",
+            student: {
+              id: "student-2",
+              firstName: "Mina",
+              lastName: "Santos",
+              email: "mina@example.com",
+            },
+            status: "completed",
+            openedAt: "2026-01-06T00:00:00.000Z",
+            closedAt: "2026-01-08T00:00:00.000Z",
+            triggerSource: "performance_status_changed",
+            triggerScore: 55,
+            thresholdApplied: 74,
+            note: null,
+            completion: {
+              totalCheckpoints: 1,
+              completedCheckpoints: 1,
+              completionPercent: 100,
+            },
+            pathScore: {
+              source: "guided_assessment",
+              assignmentId: "assignment-guided-pass",
+              attemptId: "attempt-pass",
+              scorePercent: 60,
+              correctCount: 3,
+              totalQuestions: 5,
+              passed: null,
+              submittedAt: "2026-01-08T01:00:00.000Z",
+            },
+            canRegenerate: false,
+            assignments: [],
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof lxpService.getTeacherInterventionHistory>>);
+    mockedLxpService.regenerateInterventionPath.mockResolvedValue({
+      data: {
+        sourceCaseId: "case-history-low",
+        reusedExisting: false,
+        scoreThreshold: 60,
+        pathScore: {
+          source: "guided_assessment",
+          assignmentId: "assignment-guided-low",
+          attemptId: "attempt-low",
+          scorePercent: 58,
+          correctCount: 3,
+          totalQuestions: 5,
+          passed: null,
+          submittedAt: "2026-01-05T01:00:00.000Z",
+        },
+        case: {
+          id: "case-regenerated",
+          classId: "class-1",
+          status: "active",
+          studentId: "student-1",
+          openedAt: "2026-01-09T00:00:00.000Z",
+          triggerScore: 58,
+          thresholdApplied: 60,
+          isCurrentlyAtRisk: false,
+          latestBlendedScore: 80,
+          latestThreshold: 74,
+          aiPlanEligible: true,
+          totalCheckpoints: 0,
+          completedCheckpoints: 0,
+          completionPercent: 0,
+          progress: {
+            xpTotal: 0,
+            starsTotal: 0,
+            streakDays: 0,
+            checkpointsCompleted: 0,
+            lastActivityAt: null,
+          },
+        },
+      },
+    } as Awaited<ReturnType<typeof lxpService.regenerateInterventionPath>>);
     mockedLxpService.getTeacherCaseDetail.mockResolvedValue({
       data: {
         id: "case-1",
@@ -227,6 +406,7 @@ describe("TeacherInterventionsPage", () => {
     expect(screen.getByRole("columnheader", { name: "Checkpoints" })).toBeInTheDocument();
     expect(screen.queryByText("XP Leaderboard")).not.toBeInTheDocument();
     expect(screen.queryByText("Intervention Outcomes")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "History" })).toBeInTheDocument();
   });
 
   it("combines the intervention metrics into the page header", async () => {
@@ -258,6 +438,77 @@ describe("TeacherInterventionsPage", () => {
     expect(screen.getByText("XP Leaderboard")).toBeInTheDocument();
     expect(screen.getByText("Intervention Outcomes")).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Trigger" })).not.toBeInTheDocument();
+  });
+
+  it("renders intervention history and opens learners path detail with scores", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+
+    expect(screen.getByRole("columnheader", { name: "Path Score" })).toBeInTheDocument();
+    expect(screen.getByText("58.0%")).toBeInTheDocument();
+    expect(screen.getByText("60.0%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate Path" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "View Learners Path" })).toHaveLength(2);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View Learners Path" })[0]);
+
+    expect(await screen.findByText("Learners Path Detail")).toBeInTheDocument();
+    expect(screen.getByText("Fractions Basics")).toBeInTheDocument();
+    expect(screen.getByText("Fractions recovery")).toBeInTheDocument();
+    expect(screen.getByText("58.0% score")).toBeInTheDocument();
+  });
+
+  it("regenerates only below-threshold history rows and routes to the returned case", async () => {
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Navarro, Liam")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    expect(screen.getAllByRole("button", { name: "Regenerate Path" })).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate Path" }));
+
+    await waitFor(() => {
+      expect(mockedLxpService.regenerateInterventionPath).toHaveBeenCalledWith("case-history-low");
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith(
+      "/dashboard/teacher/interventions/case-regenerated?classId=class-1",
+    );
+  });
+
+  it("selects the class from the page query string before loading data", async () => {
+    mockSearchParams = new URLSearchParams("classId=class-2");
+    mockedClassService.getByTeacher.mockResolvedValueOnce({
+      data: [
+        {
+          id: "class-1",
+          subjectName: "Math",
+          subjectCode: "MATH-7",
+          section: { name: "Rizal" },
+        },
+        {
+          id: "class-2",
+          subjectName: "Science",
+          subjectCode: "SCI-7",
+          section: { name: "Bonifacio" },
+        },
+      ],
+    } as Awaited<ReturnType<typeof classService.getByTeacher>>);
+
+    render(<TeacherInterventionsPage />);
+
+    await waitFor(() => {
+      expect(mockedLxpService.getTeacherQueue).toHaveBeenCalledWith("class-2");
+    });
+    expect(mockedLxpService.getClassReport).toHaveBeenCalledWith("class-2");
+    expect(mockedLxpService.getTeacherInterventionHistory).toHaveBeenCalledWith("class-2");
   });
 
   it("opens student detail side panel from queue action", async () => {

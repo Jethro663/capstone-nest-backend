@@ -184,6 +184,19 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('teacher/classes/:classId/interventions/history')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherInterventionHistory(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherInterventionHistory(
+      classId,
+      user,
+    );
+    return { success: true, data };
+  }
+
   @Get('teacher/interventions/pending-count')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getTeacherPendingInterventionCount(
@@ -222,6 +235,19 @@ export class LxpController {
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.lxpService.activateIntervention(caseId, user);
+    return { success: true, data };
+  }
+
+  @Post('teacher/interventions/:caseId/regenerate')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async regenerateInterventionPath(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.regenerateInterventionPath(
+      caseId,
+      user,
+    );
     return { success: true, data };
   }
 

@@ -48,6 +48,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 
 const INTERVENTION_THRESHOLD = 74;
+const PATH_REGENERATION_SCORE_THRESHOLD = 60;
 const LESSON_XP = 20;
 const ASSESSMENT_XP = 30;
 const STAR_XP = 1000;
@@ -61,6 +62,31 @@ const GUIDED_ASSESSMENT_SUPPORTED_TYPES = new Set([
 type UserContext = {
   userId: string;
   roles: string[];
+};
+
+type TeacherPathScoreSource = 'guided_assessment' | 'assessment_retry';
+
+type TeacherPathScore = {
+  source: TeacherPathScoreSource;
+  assignmentId: string | null;
+  attemptId: string;
+  scorePercent: number;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
+  passed?: boolean | null;
+  submittedAt: Date | null;
+};
+
+type TeacherPathScoreCase = {
+  id: string;
+  studentId: string;
+};
+
+type TeacherPathScoreAssignment = {
+  id: string;
+  caseId: string;
+  assignmentType: string;
+  assessmentId?: string | null;
 };
 
 type SystemEvaluationTarget =
@@ -513,6 +539,218 @@ export class LxpService {
       approvedAt: assessment.approvedAt ?? null,
       rejectedAt: assessment.rejectedAt ?? null,
     };
+  }
+
+  private toDate(value: Date | string | null | undefined): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private isNewerScore(
+    candidate: TeacherPathScore,
+    current: TeacherPathScore | undefined,
+  ) {
+    if (!current) return true;
+    const candidateTime = this.toDate(candidate.submittedAt)?.getTime() ?? 0;
+    const currentTime = this.toDate(current.submittedAt)?.getTime() ?? 0;
+    return candidateTime > currentTime;
+  }
+
+  private serializeTeacherPathScore(
+    score: TeacherPathScore | null | undefined,
+  ) {
+    if (!score) return null;
+    return {
+      source: score.source,
+      assignmentId: score.assignmentId,
+      attemptId: score.attemptId,
+      scorePercent: score.scorePercent,
+      correctCount: score.correctCount ?? null,
+      totalQuestions: score.totalQuestions ?? null,
+      passed: score.passed ?? null,
+      submittedAt: score.submittedAt,
+    };
+  }
+
+  private serializeTeacherInterventionAssignment(
+    row: any,
+    score: TeacherPathScore | null | undefined,
+  ) {
+    return {
+      id: row.id,
+      type: row.assignmentType,
+      label: row.checkpointLabel,
+      order: row.orderIndex,
+      isCompleted: row.isCompleted,
+      completedAt: row.completedAt,
+      xpAwarded: row.xpAwarded,
+      lesson: row.lesson ?? null,
+      assessment: row.assessment ?? null,
+      generatedLesson: this.serializeGeneratedLesson(
+        row.generatedRemedialLesson,
+      ),
+      guidedAssessment: this.serializeGeneratedGuidedAssessment(
+        row.generatedGuidedAssessment,
+      ),
+      score: this.serializeTeacherPathScore(score),
+    };
+  }
+
+  private async resolveTeacherPathScores(
+    cases: TeacherPathScoreCase[],
+    assignments: TeacherPathScoreAssignment[],
+  ) {
+    const caseIds = cases.map((row) => row.id);
+    const studentIds = Array.from(new Set(cases.map((row) => row.studentId)));
+    const assessmentIds = Array.from(
+      new Set(
+        assignments
+          .filter(
+            (row) =>
+              row.assignmentType === 'assessment_retry' && row.assessmentId,
+          )
+          .map((row) => row.assessmentId as string),
+      ),
+    );
+    const caseById = new Map(cases.map((row) => [row.id, row] as const));
+    const guidedAssignmentIds = new Set(
+      assignments
+        .filter((row) => row.assignmentType === 'guided_assessment')
+        .map((row) => row.id),
+    );
+
+    const retryAssignmentsByAssessmentAndStudent = new Map<
+      string,
+      TeacherPathScoreAssignment[]
+    >();
+    for (const assignment of assignments) {
+      if (
+        assignment.assignmentType !== 'assessment_retry' ||
+        !assignment.assessmentId
+      ) {
+        continue;
+      }
+
+      const relatedCase = caseById.get(assignment.caseId);
+      if (!relatedCase) continue;
+      const key = `${assignment.assessmentId}:${relatedCase.studentId}`;
+      const existing = retryAssignmentsByAssessmentAndStudent.get(key) ?? [];
+      existing.push(assignment);
+      retryAssignmentsByAssessmentAndStudent.set(key, existing);
+    }
+
+    const [guidedAttempts, retryAttempts] = await Promise.all([
+      caseIds.length > 0
+        ? this.db.query.generatedGuidedAssessmentAttempts.findMany({
+            where: and(
+              inArray(generatedGuidedAssessmentAttempts.caseId, caseIds),
+              eq(generatedGuidedAssessmentAttempts.status, 'submitted'),
+            ),
+            columns: {
+              id: true,
+              caseId: true,
+              assignmentId: true,
+              score: true,
+              correctCount: true,
+              totalQuestions: true,
+              submittedAt: true,
+            },
+            orderBy: [desc(generatedGuidedAssessmentAttempts.submittedAt)],
+          })
+        : Promise.resolve([]),
+      assessmentIds.length > 0 && studentIds.length > 0
+        ? this.db.query.assessmentAttempts.findMany({
+            where: and(
+              inArray(assessmentAttempts.assessmentId, assessmentIds),
+              inArray(assessmentAttempts.studentId, studentIds),
+              eq(assessmentAttempts.isSubmitted, true),
+            ),
+            columns: {
+              id: true,
+              studentId: true,
+              assessmentId: true,
+              score: true,
+              passed: true,
+              submittedAt: true,
+            },
+            orderBy: [desc(assessmentAttempts.submittedAt)],
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const guidedScoreByCase = new Map<string, TeacherPathScore>();
+    const retryScoreByCase = new Map<string, TeacherPathScore>();
+    const assignmentScores = new Map<string, TeacherPathScore>();
+
+    for (const attempt of guidedAttempts) {
+      const scorePercent = this.toNumber(attempt.score);
+      if (
+        scorePercent === null ||
+        !guidedAssignmentIds.has(attempt.assignmentId)
+      ) {
+        continue;
+      }
+
+      const score: TeacherPathScore = {
+        source: 'guided_assessment',
+        assignmentId: attempt.assignmentId,
+        attemptId: attempt.id,
+        scorePercent,
+        correctCount: attempt.correctCount ?? null,
+        totalQuestions: attempt.totalQuestions ?? null,
+        submittedAt: attempt.submittedAt ?? null,
+      };
+
+      if (this.isNewerScore(score, assignmentScores.get(attempt.assignmentId))) {
+        assignmentScores.set(attempt.assignmentId, score);
+      }
+      if (this.isNewerScore(score, guidedScoreByCase.get(attempt.caseId))) {
+        guidedScoreByCase.set(attempt.caseId, score);
+      }
+    }
+
+    for (const attempt of retryAttempts) {
+      const scorePercent = this.toNumber(attempt.score);
+      if (scorePercent === null) continue;
+
+      const retryAssignments =
+        retryAssignmentsByAssessmentAndStudent.get(
+          `${attempt.assessmentId}:${attempt.studentId}`,
+        ) ?? [];
+
+      for (const assignment of retryAssignments) {
+        const score: TeacherPathScore = {
+          source: 'assessment_retry',
+          assignmentId: assignment.id,
+          attemptId: attempt.id,
+          scorePercent,
+          passed: attempt.passed ?? null,
+          submittedAt: attempt.submittedAt ?? null,
+        };
+
+        if (this.isNewerScore(score, assignmentScores.get(assignment.id))) {
+          assignmentScores.set(assignment.id, score);
+        }
+        if (this.isNewerScore(score, retryScoreByCase.get(assignment.caseId))) {
+          retryScoreByCase.set(assignment.caseId, score);
+        }
+      }
+    }
+
+    const pathScores = new Map<string, TeacherPathScore>();
+    for (const row of cases) {
+      const guidedScore = guidedScoreByCase.get(row.id);
+      const retryScore = retryScoreByCase.get(row.id);
+      if (guidedScore) {
+        pathScores.set(row.id, guidedScore);
+      } else if (retryScore) {
+        pathScores.set(row.id, retryScore);
+      }
+    }
+
+    return { assignmentScores, pathScores };
   }
 
   private normalizeGuidedResponseAnswer(answer: unknown) {
@@ -2783,6 +3021,8 @@ export class LxpService {
       const progress = progressByStudentId.get(row.studentId);
       const snapshot = snapshotByStudentId.get(row.studentId);
       const isCurrentlyAtRisk = Boolean(snapshot?.isAtRisk);
+      const isPathScoreRegeneration =
+        row.triggerSource === 'path_score_below_threshold';
       const latestBlendedScore = this.toNumber(snapshot?.blendedScore);
       const latestThreshold =
         this.toNumber(snapshot?.thresholdApplied) ??
@@ -2805,7 +3045,12 @@ export class LxpService {
         isCurrentlyAtRisk,
         latestBlendedScore,
         latestThreshold,
-        aiPlanEligible: isCurrentlyAtRisk,
+        aiPlanEligible: isCurrentlyAtRisk || isPathScoreRegeneration,
+        aiPlanEligibilityReason: isCurrentlyAtRisk
+          ? 'at_risk'
+          : isPathScoreRegeneration
+            ? 'path_score_below_threshold'
+            : null,
         totalCheckpoints,
         completedCheckpoints: completed,
         completionPercent:
@@ -2832,6 +3077,263 @@ export class LxpService {
       threshold: INTERVENTION_THRESHOLD,
       count: queue.length,
       queue,
+    };
+  }
+
+  async getTeacherInterventionHistory(classId: string, user: UserContext) {
+    await this.assertTeacherClassAccess(classId, user);
+
+    const cases = await this.db.query.interventionCases.findMany({
+      where: eq(interventionCases.classId, classId),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    const caseIds = cases.map((row) => row.id);
+    const assignmentRows =
+      caseIds.length > 0
+        ? await this.db.query.interventionAssignments.findMany({
+            where: inArray(interventionAssignments.caseId, caseIds),
+            columns: {
+              id: true,
+              caseId: true,
+              assignmentType: true,
+              lessonId: true,
+              assessmentId: true,
+              generatedRemedialLessonId: true,
+              generatedGuidedAssessmentId: true,
+              checkpointLabel: true,
+              orderIndex: true,
+              isCompleted: true,
+              completedAt: true,
+              xpAwarded: true,
+            },
+            with: {
+              lesson: {
+                columns: {
+                  id: true,
+                  title: true,
+                  description: true,
+                },
+              },
+              assessment: {
+                columns: {
+                  id: true,
+                  title: true,
+                  type: true,
+                  passingScore: true,
+                  dueDate: true,
+                },
+              },
+              generatedRemedialLesson: {
+                columns: {
+                  id: true,
+                  title: true,
+                  summary: true,
+                  lessonBody: true,
+                  weakConcepts: true,
+                  sourceLessonIds: true,
+                  sourceReferences: true,
+                  approvalStatus: true,
+                  approvedAt: true,
+                  rejectedAt: true,
+                },
+              },
+              generatedGuidedAssessment: {
+                columns: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  weakConcepts: true,
+                  sourceAssessmentId: true,
+                  sourceReferences: true,
+                  formativeSummary: true,
+                  questions: true,
+                  approvalStatus: true,
+                  approvedAt: true,
+                  rejectedAt: true,
+                },
+              },
+            },
+            orderBy: [asc(interventionAssignments.orderIndex)],
+          })
+        : [];
+
+    const assignmentsByCaseId = new Map<string, typeof assignmentRows>();
+    for (const row of assignmentRows) {
+      const items = assignmentsByCaseId.get(row.caseId) ?? [];
+      items.push(row);
+      assignmentsByCaseId.set(row.caseId, items);
+    }
+
+    const { assignmentScores, pathScores } = await this.resolveTeacherPathScores(
+      cases.map((row) => ({ id: row.id, studentId: row.studentId })),
+      assignmentRows,
+    );
+
+    const history = cases.map((row) => {
+      const assignments = assignmentsByCaseId.get(row.id) ?? [];
+      const completedCheckpoints = assignments.filter(
+        (item) => item.isCompleted,
+      ).length;
+      const pathScore = pathScores.get(row.id) ?? null;
+
+      return {
+        id: row.id,
+        classId: row.classId,
+        studentId: row.studentId,
+        student: row.student,
+        status: row.status,
+        openedAt: row.openedAt,
+        closedAt: row.closedAt,
+        triggerSource: row.triggerSource,
+        triggerScore: this.toNumber(row.triggerScore),
+        thresholdApplied:
+          this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+        note: row.note,
+        completion: {
+          totalCheckpoints: assignments.length,
+          completedCheckpoints,
+          completionPercent:
+            assignments.length > 0
+              ? Math.round((completedCheckpoints / assignments.length) * 100)
+              : 0,
+        },
+        pathScore: this.serializeTeacherPathScore(pathScore),
+        canRegenerate:
+          row.status === 'completed' &&
+          pathScore !== null &&
+          pathScore.scorePercent < PATH_REGENERATION_SCORE_THRESHOLD,
+        assignments: assignments.map((assignment) =>
+          this.serializeTeacherInterventionAssignment(
+            assignment,
+            assignmentScores.get(assignment.id),
+          ),
+        ),
+      };
+    });
+
+    return {
+      classId,
+      scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      history,
+    };
+  }
+
+  async regenerateInterventionPath(caseId: string, user: UserContext) {
+    const sourceCase = await this.db.query.interventionCases.findFirst({
+      where: eq(interventionCases.id, caseId),
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        status: true,
+        note: true,
+      },
+    });
+    if (!sourceCase) throw new NotFoundException('Intervention case not found');
+    await this.assertTeacherClassAccess(sourceCase.classId, user);
+
+    if (sourceCase.status !== 'completed') {
+      throw new BadRequestException(
+        'Only completed intervention paths can be regenerated.',
+      );
+    }
+
+    const assignmentRows = await this.db.query.interventionAssignments.findMany({
+      where: eq(interventionAssignments.caseId, sourceCase.id),
+      columns: {
+        id: true,
+        caseId: true,
+        assignmentType: true,
+        assessmentId: true,
+      },
+    });
+    const { pathScores } = await this.resolveTeacherPathScores(
+      [{ id: sourceCase.id, studentId: sourceCase.studentId }],
+      assignmentRows,
+    );
+    const pathScore = pathScores.get(sourceCase.id) ?? null;
+
+    if (!pathScore) {
+      throw new BadRequestException(
+        'A submitted path assessment score is required before regenerating this path.',
+      );
+    }
+
+    if (pathScore.scorePercent >= PATH_REGENERATION_SCORE_THRESHOLD) {
+      throw new BadRequestException(
+        'Only paths scored below 60% can be regenerated.',
+      );
+    }
+
+    const existingOpenCase = await this.db.query.interventionCases.findFirst({
+      where: and(
+        eq(interventionCases.studentId, sourceCase.studentId),
+        eq(interventionCases.classId, sourceCase.classId),
+        or(
+          eq(interventionCases.status, 'pending'),
+          eq(interventionCases.status, 'active'),
+        ),
+      ),
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    if (existingOpenCase) {
+      return {
+        sourceCaseId: sourceCase.id,
+        reusedExisting: true,
+        scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+        pathScore: this.serializeTeacherPathScore(pathScore),
+        case: await this.getTeacherInterventionCase(existingOpenCase.id, user),
+      };
+    }
+
+    const [created] = await this.db
+      .insert(interventionCases)
+      .values({
+        studentId: sourceCase.studentId,
+        classId: sourceCase.classId,
+        status: 'active',
+        triggerSource: 'path_score_below_threshold',
+        triggerScore: pathScore.scorePercent.toString(),
+        thresholdApplied: PATH_REGENERATION_SCORE_THRESHOLD.toString(),
+        note: this.appendInterventionNote(
+          null,
+          `Regenerated from completed Learners Path ${sourceCase.id}.`,
+        ),
+      })
+      .returning();
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.intervention.regenerated',
+      targetType: 'intervention_case',
+      targetId: created.id,
+      metadata: {
+        sourceCaseId: sourceCase.id,
+        classId: sourceCase.classId,
+        studentId: sourceCase.studentId,
+        pathScore: pathScore.scorePercent,
+        scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      },
+    });
+
+    return {
+      sourceCaseId: sourceCase.id,
+      reusedExisting: false,
+      scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      pathScore: this.serializeTeacherPathScore(pathScore),
+      case: await this.getTeacherInterventionCase(created.id, user),
     };
   }
 
@@ -3334,7 +3836,9 @@ export class LxpService {
           where: eq(interventionAssignments.caseId, interventionCase.id),
           columns: {
             id: true,
+            caseId: true,
             assignmentType: true,
+            assessmentId: true,
             checkpointLabel: true,
             orderIndex: true,
             isCompleted: true,
@@ -3472,6 +3976,11 @@ export class LxpService {
     const completedCheckpoints = assignmentRows.filter(
       (row) => row.isCompleted,
     ).length;
+    const { assignmentScores, pathScores } = await this.resolveTeacherPathScores(
+      [{ id: interventionCase.id, studentId: interventionCase.studentId }],
+      assignmentRows,
+    );
+    const pathScore = pathScores.get(interventionCase.id) ?? null;
 
     return {
       id: interventionCase.id,
@@ -3486,6 +3995,11 @@ export class LxpService {
         this.toNumber(interventionCase.thresholdApplied) ??
         INTERVENTION_THRESHOLD,
       note: interventionCase.note,
+      pathScore: this.serializeTeacherPathScore(pathScore),
+      canRegenerate:
+        interventionCase.status === 'completed' &&
+        pathScore !== null &&
+        pathScore.scorePercent < PATH_REGENERATION_SCORE_THRESHOLD,
       completion: {
         totalCheckpoints,
         completedCheckpoints,
@@ -3506,23 +4020,12 @@ export class LxpService {
             checkpointsCompleted: 0,
             lastActivityAt: null,
           },
-      assignments: assignmentRows.map((row) => ({
-        id: row.id,
-        type: row.assignmentType,
-        label: row.checkpointLabel,
-        order: row.orderIndex,
-        isCompleted: row.isCompleted,
-        completedAt: row.completedAt,
-        xpAwarded: row.xpAwarded,
-        lesson: row.lesson,
-        assessment: row.assessment,
-        generatedLesson: this.serializeGeneratedLesson(
-          row.generatedRemedialLesson,
+      assignments: assignmentRows.map((row) =>
+        this.serializeTeacherInterventionAssignment(
+          row,
+          assignmentScores.get(row.id),
         ),
-        guidedAssessment: this.serializeGeneratedGuidedAssessment(
-          row.generatedGuidedAssessment,
-        ),
-      })),
+      ),
       generatedArtifacts: {
         generatedLesson: this.serializeGeneratedLesson(generatedLessonDraft),
         guidedAssessment: this.serializeGeneratedGuidedAssessment(

@@ -18,6 +18,10 @@ describe('LxpService', () => {
       performanceLogs: { findMany: jest.fn() },
       interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionAssignments: { findFirst: jest.fn(), findMany: jest.fn() },
+      generatedGuidedAssessmentAttempts: { findMany: jest.fn() },
+      generatedRemedialLessons: { findFirst: jest.fn(), findMany: jest.fn() },
+      generatedGuidedAssessments: { findFirst: jest.fn(), findMany: jest.fn() },
+      assessmentAttempts: { findMany: jest.fn() },
       studentConceptMastery: { findMany: jest.fn() },
       lxpProgress: { findFirst: jest.fn(), findMany: jest.fn() },
       systemEvaluations: { findMany: jest.fn() },
@@ -33,6 +37,12 @@ describe('LxpService', () => {
   beforeEach(async () => {
     jest.resetAllMocks();
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([]);
+    mockDb.query.generatedRemedialLessons.findFirst.mockResolvedValue(null);
+    mockDb.query.generatedRemedialLessons.findMany.mockResolvedValue([]);
+    mockDb.query.generatedGuidedAssessments.findFirst.mockResolvedValue(null);
+    mockDb.query.generatedGuidedAssessments.findMany.mockResolvedValue([]);
+    mockDb.query.assessmentAttempts.findMany.mockResolvedValue([]);
     mockDb.select.mockReturnValue({
       from: jest.fn().mockReturnValue({
         where: jest.fn().mockReturnValue({
@@ -483,6 +493,54 @@ describe('LxpService', () => {
     });
   });
 
+  it('marks path-score regeneration cases as AI-plan eligible in the teacher queue', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionCases.findMany.mockResolvedValue([
+      {
+        id: 'case-regenerated',
+        studentId: 'student-1',
+        classId: 'class-1',
+        status: 'active',
+        openedAt: new Date('2026-01-09'),
+        triggerSource: 'path_score_below_threshold',
+        triggerScore: '58',
+        thresholdApplied: '60',
+        student: {
+          id: 'student-1',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          email: 'ada@example.com',
+        },
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([]);
+    mockDb.query.lxpProgress.findMany.mockResolvedValue([]);
+    mockDb.query.performanceSnapshots.findMany.mockResolvedValue([
+      {
+        studentId: 'student-1',
+        isAtRisk: false,
+        blendedScore: '82',
+        thresholdApplied: '74',
+      },
+    ]);
+
+    const result = await service.getTeacherQueue('class-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result.queue[0]).toMatchObject({
+      id: 'case-regenerated',
+      isCurrentlyAtRisk: false,
+      latestBlendedScore: 82,
+      aiPlanEligible: true,
+      aiPlanEligibilityReason: 'path_score_below_threshold',
+    });
+  });
+
   it('aggregates pending intervention counts across teacher classes', async () => {
     mockDb.query.classes.findMany.mockResolvedValue([
       {
@@ -778,6 +836,245 @@ describe('LxpService', () => {
         (entry) => entry.id === 'checkpoint-assignment-assessment',
       )?.subtitle,
     ).toBe('Retry the fractions quiz. Due 2026-02-10.');
+  });
+
+  it('returns teacher intervention history with guided scores and regeneration eligibility', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionCases.findMany.mockResolvedValue([
+      {
+        id: 'case-low',
+        studentId: 'student-1',
+        classId: 'class-1',
+        status: 'completed',
+        openedAt: new Date('2026-01-01T00:00:00.000Z'),
+        closedAt: new Date('2026-01-05T00:00:00.000Z'),
+        triggerScore: '55',
+        thresholdApplied: '74',
+        note: 'Finished first remedial path',
+        student: {
+          id: 'student-1',
+          firstName: 'Liam',
+          lastName: 'Navarro',
+          email: 'liam@example.com',
+        },
+      },
+      {
+        id: 'case-pass',
+        studentId: 'student-2',
+        classId: 'class-1',
+        status: 'completed',
+        openedAt: new Date('2026-01-06T00:00:00.000Z'),
+        closedAt: new Date('2026-01-08T00:00:00.000Z'),
+        triggerScore: '57',
+        thresholdApplied: '74',
+        note: null,
+        student: {
+          id: 'student-2',
+          firstName: 'Mina',
+          lastName: 'Santos',
+          email: 'mina@example.com',
+        },
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-guided-low',
+        caseId: 'case-low',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Fractions recovery',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-05T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: {
+          id: 'guided-low',
+          title: 'Fractions recovery',
+          description: 'Guided practice',
+          weakConcepts: ['Fractions'],
+          sourceAssessmentId: 'assessment-1',
+          sourceReferences: [],
+          formativeSummary: 'Needs more work',
+          questions: [],
+          approvalStatus: 'approved',
+          approvedAt: new Date('2026-01-04T00:00:00.000Z'),
+          rejectedAt: null,
+        },
+      },
+      {
+        id: 'assignment-guided-pass',
+        caseId: 'case-pass',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Decimals recovery',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-08T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: {
+          id: 'guided-pass',
+          title: 'Decimals recovery',
+          description: 'Guided practice',
+          weakConcepts: ['Decimals'],
+          sourceAssessmentId: 'assessment-2',
+          sourceReferences: [],
+          formativeSummary: 'Recovered',
+          questions: [],
+          approvalStatus: 'approved',
+          approvedAt: new Date('2026-01-07T00:00:00.000Z'),
+          rejectedAt: null,
+        },
+      },
+    ]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-low',
+        caseId: 'case-low',
+        assignmentId: 'assignment-guided-low',
+        score: 58,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-01-05T01:00:00.000Z'),
+      },
+      {
+        id: 'attempt-pass',
+        caseId: 'case-pass',
+        assignmentId: 'assignment-guided-pass',
+        score: 60,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-01-08T01:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getTeacherInterventionHistory('class-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result.scoreThreshold).toBe(60);
+    expect(result.history).toHaveLength(2);
+    expect(result.history[0]).toMatchObject({
+      id: 'case-low',
+      pathScore: {
+        scorePercent: 58,
+        source: 'guided_assessment',
+        assignmentId: 'assignment-guided-low',
+      },
+      canRegenerate: true,
+    });
+    expect(result.history[0].assignments[0]).toMatchObject({
+      id: 'assignment-guided-low',
+      score: {
+        scorePercent: 58,
+        source: 'guided_assessment',
+      },
+      guidedAssessment: {
+        title: 'Fractions recovery',
+      },
+    });
+    expect(result.history[1]).toMatchObject({
+      id: 'case-pass',
+      pathScore: {
+        scorePercent: 60,
+        source: 'guided_assessment',
+      },
+      canRegenerate: false,
+    });
+  });
+
+  it('falls back to the latest submitted assessment retry score for history path score', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionCases.findMany.mockResolvedValue([
+      {
+        id: 'case-retry',
+        studentId: 'student-1',
+        classId: 'class-1',
+        status: 'completed',
+        openedAt: new Date('2026-01-01T00:00:00.000Z'),
+        closedAt: new Date('2026-01-04T00:00:00.000Z'),
+        triggerScore: '53',
+        thresholdApplied: '74',
+        note: null,
+        student: {
+          id: 'student-1',
+          firstName: 'Liam',
+          lastName: 'Navarro',
+          email: 'liam@example.com',
+        },
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-retry',
+        caseId: 'case-retry',
+        assignmentType: 'assessment_retry',
+        assessmentId: 'assessment-1',
+        checkpointLabel: 'Retry: Fractions quiz',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-04T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: {
+          id: 'assessment-1',
+          title: 'Fractions quiz',
+          type: 'quiz',
+          passingScore: 60,
+          dueDate: null,
+        },
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: null,
+      },
+    ]);
+    mockDb.query.assessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'retry-old',
+        studentId: 'student-1',
+        assessmentId: 'assessment-1',
+        score: 45,
+        passed: false,
+        submittedAt: new Date('2026-01-03T00:00:00.000Z'),
+      },
+      {
+        id: 'retry-latest',
+        studentId: 'student-1',
+        assessmentId: 'assessment-1',
+        score: 59,
+        passed: false,
+        submittedAt: new Date('2026-01-04T00:00:00.000Z'),
+      },
+    ]);
+
+    const result = await service.getTeacherInterventionHistory('class-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result.history[0]).toMatchObject({
+      id: 'case-retry',
+      pathScore: {
+        scorePercent: 59,
+        source: 'assessment_retry',
+        attemptId: 'retry-latest',
+      },
+      canRegenerate: true,
+    });
+    expect(result.history[0].assignments[0].score).toMatchObject({
+      scorePercent: 59,
+      source: 'assessment_retry',
+      passed: false,
+    });
   });
 
   it('falls back to assessment retry when no incomplete lesson remains', async () => {
@@ -1476,6 +1773,306 @@ describe('LxpService', () => {
     expect((service as any).getOrCreateProgress).not.toHaveBeenCalled();
   });
 
+  it('creates a new active intervention cycle when a completed path score is below threshold', async () => {
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce({
+        id: 'case-completed',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'completed',
+        note: 'Completed with low score',
+      })
+      .mockResolvedValueOnce(null);
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-guided-low',
+        caseId: 'case-completed',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Fractions recovery',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-05T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: {
+          id: 'guided-low',
+          title: 'Fractions recovery',
+          description: 'Guided practice',
+          weakConcepts: ['Fractions'],
+          sourceAssessmentId: 'assessment-1',
+          sourceReferences: [],
+          formativeSummary: 'Needs more work',
+          questions: [],
+          approvalStatus: 'approved',
+          approvedAt: new Date('2026-01-04T00:00:00.000Z'),
+          rejectedAt: null,
+        },
+      },
+    ]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-low',
+        caseId: 'case-completed',
+        assignmentId: 'assignment-guided-low',
+        score: 58,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-01-05T01:00:00.000Z'),
+      },
+    ]);
+
+    const created = {
+      id: 'case-new',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+      openedAt: new Date('2026-01-06T00:00:00.000Z'),
+      triggerScore: '58',
+      thresholdApplied: '60',
+      student: null,
+    };
+    const returning = jest.fn().mockResolvedValue([created]);
+    const values = jest.fn().mockReturnValue({ returning });
+    mockDb.insert.mockReturnValue({ values });
+    jest.spyOn(service, 'getTeacherInterventionCase').mockResolvedValue({
+      id: 'case-new',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+    } as any);
+
+    const result = await service.regenerateInterventionPath('case-completed', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: 'student-1',
+        classId: 'class-1',
+        status: 'active',
+        triggerSource: 'path_score_below_threshold',
+        triggerScore: '58',
+        thresholdApplied: '60',
+      }),
+    );
+    expect(mockAuditService.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorId: 'teacher-1',
+        action: 'lxp.intervention.regenerated',
+        targetType: 'intervention_case',
+        targetId: 'case-new',
+        metadata: expect.objectContaining({
+          sourceCaseId: 'case-completed',
+          pathScore: 58,
+          scoreThreshold: 60,
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      sourceCaseId: 'case-completed',
+      reusedExisting: false,
+      scoreThreshold: 60,
+      pathScore: { scorePercent: 58 },
+      case: { id: 'case-new' },
+    });
+  });
+
+  it('reuses an existing open case instead of duplicating regeneration cycles', async () => {
+    mockDb.query.interventionCases.findFirst
+      .mockResolvedValueOnce({
+        id: 'case-completed',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'completed',
+        note: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'case-open',
+        classId: 'class-1',
+        studentId: 'student-1',
+        status: 'pending',
+      });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-guided-low',
+        caseId: 'case-completed',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Fractions recovery',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-05T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: null,
+      },
+    ]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-low',
+        caseId: 'case-completed',
+        assignmentId: 'assignment-guided-low',
+        score: 58,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-01-05T01:00:00.000Z'),
+      },
+    ]);
+    jest.spyOn(service, 'getTeacherInterventionCase').mockResolvedValue({
+      id: 'case-open',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'pending',
+    } as any);
+
+    const result = await service.regenerateInterventionPath('case-completed', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      reusedExisting: true,
+      case: { id: 'case-open' },
+    });
+  });
+
+  it('blocks path regeneration when completed score is missing or not below threshold', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-completed',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'completed',
+      note: null,
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-guided-pass',
+        caseId: 'case-completed',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Fractions recovery',
+        orderIndex: 1,
+        isCompleted: true,
+        completedAt: new Date('2026-01-05T00:00:00.000Z'),
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: null,
+      },
+    ]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-pass',
+        caseId: 'case-completed',
+        assignmentId: 'assignment-guided-pass',
+        score: 60,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-01-05T01:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.regenerateInterventionPath('case-completed', {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      }),
+    ).rejects.toThrow('Only paths scored below 60% can be regenerated.');
+
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('blocks path regeneration when the completed source has no submitted score', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-completed',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'completed',
+      note: null,
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.regenerateInterventionPath('case-completed', {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      }),
+    ).rejects.toThrow(
+      'A submitted path assessment score is required before regenerating this path.',
+    );
+
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('blocks path regeneration for non-completed source cases', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-active',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+      note: null,
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+
+    await expect(
+      service.regenerateInterventionPath('case-active', {
+        userId: 'teacher-1',
+        roles: ['teacher'],
+      }),
+    ).rejects.toThrow('Only completed intervention paths can be regenerated.');
+
+    expect(mockDb.query.interventionAssignments.findMany).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('blocks path regeneration when the teacher does not own the class', async () => {
+    mockDb.query.interventionCases.findFirst.mockResolvedValue({
+      id: 'case-completed',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'completed',
+      note: null,
+    });
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-owner',
+    });
+
+    await expect(
+      service.regenerateInterventionPath('case-completed', {
+        userId: 'teacher-other',
+        roles: ['teacher'],
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(mockDb.query.interventionAssignments.findMany).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it('writes audit metadata when performance status auto-resolves active intervention cases', async () => {
     mockDb.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -1566,6 +2163,9 @@ describe('LxpService', () => {
       }),
       query: {
         interventionAssignments: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'assignment-1', isCompleted: false }),
           findMany: jest.fn().mockResolvedValue([
             { id: 'assignment-1', isCompleted: true },
             { id: 'assignment-2', isCompleted: true },
@@ -1687,6 +2287,9 @@ describe('LxpService', () => {
       }),
       query: {
         interventionAssignments: {
+          findFirst: jest
+            .fn()
+            .mockResolvedValue({ id: 'assignment-retry', isCompleted: false }),
           findMany: jest
             .fn()
             .mockResolvedValue([{ id: 'assignment-retry', isCompleted: true }]),

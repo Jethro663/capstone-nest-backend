@@ -31,6 +31,8 @@ describe('LxpController', () => {
     resolveIntervention: jest.fn(),
     getTeacherInterventionCase: jest.fn(),
     getTeacherInterventionCaseDetail: jest.fn(),
+    getTeacherInterventionHistory: jest.fn(),
+    regenerateInterventionPath: jest.fn(),
     getClassReport: jest.fn(),
     getStudentTeacherEvaluationDashboard: jest.fn(),
     submitTeacherEvaluation: jest.fn(),
@@ -211,6 +213,48 @@ describe('LxpController', () => {
     expect(
       mockLxpService.getTeacherInterventionCaseDetail,
     ).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns teacher intervention history in a success envelope', async () => {
+    const data = {
+      classId: '00000000-0000-0000-0000-000000000201',
+      scoreThreshold: 60,
+      history: [],
+    };
+    mockLxpService.getTeacherInterventionHistory.mockResolvedValue(data);
+
+    const res = await controller.getTeacherInterventionHistory(
+      '00000000-0000-0000-0000-000000000201',
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.getTeacherInterventionHistory).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000201',
+      TEACHER_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('regenerates an intervention path in a success envelope', async () => {
+    const data = {
+      sourceCaseId: '00000000-0000-0000-0000-000000000501',
+      reusedExisting: false,
+      scoreThreshold: 60,
+      pathScore: { scorePercent: 58 },
+      case: { id: '00000000-0000-0000-0000-000000000601' },
+    };
+    mockLxpService.regenerateInterventionPath.mockResolvedValue(data);
+
+    const res = await controller.regenerateInterventionPath(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.regenerateInterventionPath).toHaveBeenCalledWith(
       '00000000-0000-0000-0000-000000000501',
       TEACHER_USER,
     );

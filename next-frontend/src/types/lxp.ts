@@ -249,6 +249,48 @@ export interface TeacherInterventionQueueItem {
   };
 }
 
+export type TeacherPathScoreSource = 'guided_assessment' | 'assessment_retry';
+
+export interface TeacherPathScore {
+  source: TeacherPathScoreSource;
+  assignmentId: string | null;
+  attemptId: string;
+  scorePercent: number;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
+  passed?: boolean | null;
+  submittedAt: string | null;
+}
+
+export interface TeacherInterventionAssignment {
+  id: string;
+  type:
+    | 'lesson_review'
+    | 'assessment_retry'
+    | 'generated_lesson_review'
+    | 'guided_assessment';
+  label: string;
+  order: number;
+  isCompleted: boolean;
+  completedAt: string | null;
+  xpAwarded: number;
+  lesson?: {
+    id: string;
+    title: string;
+    description: string | null;
+  } | null;
+  assessment?: {
+    id: string;
+    title: string;
+    type: string | null;
+    passingScore: number | null;
+    dueDate: string | null;
+  } | null;
+  generatedLesson?: GeneratedLessonContent | null;
+  guidedAssessment?: GuidedAssessmentContent | null;
+  score?: TeacherPathScore | null;
+}
+
 export interface TeacherInterventionQueueResponse {
   classId: string;
   threshold: number;
@@ -294,33 +336,9 @@ export interface TeacherInterventionCaseDetail {
     checkpointsCompleted: number;
     lastActivityAt: string | null;
   };
-  assignments: Array<{
-    id: string;
-    type:
-      | 'lesson_review'
-      | 'assessment_retry'
-      | 'generated_lesson_review'
-      | 'guided_assessment';
-    label: string;
-    order: number;
-    isCompleted: boolean;
-    completedAt: string | null;
-    xpAwarded: number;
-    lesson?: {
-      id: string;
-      title: string;
-      description: string | null;
-    } | null;
-    assessment?: {
-      id: string;
-      title: string;
-      type: string | null;
-      passingScore: number | null;
-      dueDate: string | null;
-    } | null;
-    generatedLesson?: GeneratedLessonContent | null;
-    guidedAssessment?: GuidedAssessmentContent | null;
-  }>;
+  pathScore?: TeacherPathScore | null;
+  canRegenerate?: boolean;
+  assignments: TeacherInterventionAssignment[];
   generatedArtifacts?: {
     generatedLesson: GeneratedLessonContent | null;
     guidedAssessment: GuidedAssessmentContent | null;
@@ -352,6 +370,47 @@ export interface TeacherInterventionCaseDetail {
   links: {
     performancePage: string;
   };
+}
+
+export interface TeacherInterventionHistoryRow {
+  id: string;
+  classId: string;
+  studentId: string;
+  student?: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  status: 'pending' | 'active' | 'completed' | 'dismissed';
+  openedAt: string;
+  closedAt: string | null;
+  triggerSource: string | null;
+  triggerScore: number | null;
+  thresholdApplied: number;
+  note: string | null;
+  completion: {
+    totalCheckpoints: number;
+    completedCheckpoints: number;
+    completionPercent: number;
+  };
+  pathScore: TeacherPathScore | null;
+  canRegenerate: boolean;
+  assignments: TeacherInterventionAssignment[];
+}
+
+export interface TeacherInterventionHistoryResponse {
+  classId: string;
+  scoreThreshold: number;
+  history: TeacherInterventionHistoryRow[];
+}
+
+export interface RegenerateInterventionPathResponse {
+  sourceCaseId: string;
+  reusedExisting: boolean;
+  scoreThreshold: number;
+  pathScore: TeacherPathScore;
+  case: TeacherInterventionQueueItem;
 }
 
 export interface LxpClassReport {
