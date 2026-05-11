@@ -1,20 +1,33 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+} from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
+import { showLiveNotificationToast } from '@/components/notifications/LiveNotificationToast';
 import {
   isTrackedExtractionTerminalStatus,
   readAllTrackedExtractionNotifications,
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
 import { extractionService } from '@/services/extraction-service';
-import { normalizeNotification, notificationService } from '@/services/notification-service';
+import {
+  normalizeNotification,
+  notificationService,
+} from '@/services/notification-service';
 import type { ExtractionStatus } from '@/types/extraction';
 import type { Notification } from '@/types/notification';
+
+const NOTIFICATION_POLL_MS = 5000;
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -48,6 +61,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [loading, setLoading] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const subscribersRef = useRef(new Set<(notification: Notification) => void>());
+  const seenNotificationIdsRef = useRef(new Set<string>());
+  const hasHydratedSeenIdsRef = useRef(false);
 
   const subscribe = useCallback((listener: (notification: Notification) => void) => {
     subscribersRef.current.add(listener);
@@ -56,30 +71,86 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [listRes, countRes] = await Promise.all([
-        notificationService.getAll({ limit: 50 }),
-        notificationService.getUnreadCount(),
-      ]);
-      if (listRes.data) {
-        setNotifications(Array.isArray(listRes.data) ? listRes.data : []);
+  const publishIncomingNotification = useCallback(
+    (notification: Notification, options?: { showToast?: boolean }) => {
+      if (!notification?.id) return false;
+
+      const alreadySeen = seenNotificationIdsRef.current.has(notification.id);
+      seenNotificationIdsRef.current.add(notification.id);
+      if (alreadySeen) {
+        return false;
       }
-      if (countRes.data) setUnreadCount(countRes.data.count ?? 0);
-    } catch {
-      // silently fail — notifications are non-critical
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+
+      subscribersRef.current.forEach((listener) => {
+        try {
+          listener(notification);
+        } catch {
+          // best-effort fanout for page-level listeners
+        }
+      });
+
+      if (options?.showToast) {
+        showLiveNotificationToast(notification);
+      }
+
+      return true;
+    },
+    [],
+  );
+
+  const syncNotifications = useCallback(
+    async (showToastForFresh: boolean) => {
+      try {
+        setLoading(true);
+        const [listRes, countRes] = await Promise.all([
+          notificationService.getAll({ limit: 50 }),
+          notificationService.getUnreadCount(),
+        ]);
+
+        const rows = Array.isArray(listRes.data) ? listRes.data : [];
+
+        if (!hasHydratedSeenIdsRef.current) {
+          rows.forEach((row) => {
+            if (row?.id) {
+              seenNotificationIdsRef.current.add(row.id);
+            }
+          });
+          hasHydratedSeenIdsRef.current = true;
+        } else {
+          const freshRows = rows
+            .filter((row) => row?.id && !seenNotificationIdsRef.current.has(row.id))
+            .sort((left, right) => {
+              const leftTs = Date.parse(left.createdAt);
+              const rightTs = Date.parse(right.createdAt);
+              return leftTs - rightTs;
+            });
+
+          freshRows.forEach((row) => {
+            publishIncomingNotification(row, { showToast: showToastForFresh });
+          });
+        }
+
+        setNotifications(rows);
+        if (countRes.data) {
+          setUnreadCount(countRes.data.count ?? 0);
+        }
+      } catch {
+        // silently fail - notifications are non-critical
+      } finally {
+        setLoading(false);
+      }
+    },
+    [publishIncomingNotification],
+  );
+
+  const fetchNotifications = useCallback(async () => {
+    await syncNotifications(false);
+  }, [syncNotifications]);
 
   const markAsRead = useCallback(async (id: string) => {
     try {
       await notificationService.markRead(id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-      );
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
       setUnreadCount((prev) => Math.max(0, prev - 1));
     } catch {
       // best-effort
@@ -100,7 +171,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!sessionUserId || role !== 'teacher') return;
 
     const tracked = readAllTrackedExtractionNotifications().filter(
-      (entry) => !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) || !entry.notifiedAt,
+      (entry) =>
+        !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) || !entry.notifiedAt,
     );
 
     if (tracked.length === 0) return;
@@ -142,7 +214,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                 action: {
                   label: 'History',
                   onClick: () => {
-                    window.location.assign(`/dashboard/teacher/classes/${entry.classId}?view=extraction`);
+                    window.location.assign(
+                      `/dashboard/teacher/classes/${entry.classId}?view=extraction`,
+                    );
                   },
                 },
               });
@@ -157,15 +231,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     );
   }, [role, sessionUserId]);
 
-  // Fetch notifications when user is authenticated
   useEffect(() => {
     if (sessionUserId) {
-      void fetchNotifications();
+      void syncNotifications(false);
     } else {
       setNotifications([]);
       setUnreadCount(0);
+      seenNotificationIdsRef.current = new Set();
+      hasHydratedSeenIdsRef.current = false;
     }
-  }, [fetchNotifications, sessionUserId]);
+  }, [sessionUserId, syncNotifications]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+
+    const interval = window.setInterval(() => {
+      void syncNotifications(true);
+    }, NOTIFICATION_POLL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [sessionUserId, syncNotifications]);
 
   useEffect(() => {
     if (!sessionUserId || role !== 'teacher') return;
@@ -197,43 +284,34 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       console.log('[WS] Notifications connected');
     });
 
-    socket.on('notification.new', (payload: {
-      id: string;
-      type: string;
-      title: string;
-      body: string;
-      referenceId?: string;
-      createdAt: string;
-    }) => {
-      const newNotification = normalizeNotification({
-        id: payload.id,
-        userId: activeUserId,
-        type: payload.type,
-        title: payload.title,
-        body: payload.body,
-        isRead: false,
-        referenceId: payload.referenceId,
-        createdAt: payload.createdAt,
-      });
-      setNotifications((prev) => [newNotification, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-      subscribersRef.current.forEach((listener) => {
-        try {
-          listener(newNotification);
-        } catch {
-          // best-effort fanout for page-level listeners
-        }
-      });
-      toast(payload.title, {
-        description: payload.body,
-        action: {
-          label: 'View',
-          onClick: () => {
-            window.location.assign('/dashboard/notifications');
-          },
-        },
-      });
-    });
+    socket.on(
+      'notification.new',
+      (payload: {
+        id: string;
+        type: string;
+        title: string;
+        body: string;
+        referenceId?: string;
+        createdAt: string;
+      }) => {
+        const newNotification = normalizeNotification({
+          id: payload.id,
+          userId: activeUserId,
+          type: payload.type,
+          title: payload.title,
+          body: payload.body,
+          isRead: false,
+          referenceId: payload.referenceId,
+          createdAt: payload.createdAt,
+        });
+
+        const inserted = publishIncomingNotification(newNotification, { showToast: true });
+        if (!inserted) return;
+
+        setNotifications((prev) => [newNotification, ...prev]);
+        setUnreadCount((prev) => prev + 1);
+      },
+    );
 
     socket.on('error', (err: { message: string }) => {
       console.warn('[WS] Notification error:', err.message);
@@ -249,7 +327,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [sessionUserId]);
+  }, [publishIncomingNotification, sessionUserId]);
 
   return (
     <NotificationContext.Provider

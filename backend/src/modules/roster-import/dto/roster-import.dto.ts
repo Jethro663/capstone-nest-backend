@@ -1,6 +1,7 @@
-import {
+﻿import {
   IsArray,
   IsEmail,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -9,18 +10,21 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// ─── Shared sub-types ─────────────────────────────────────────────────────────
-
 export class ParsedNameDto {
+  @IsString()
+  @IsNotEmpty()
   lastName: string;
+
+  @IsString()
+  @IsNotEmpty()
   firstName: string;
-  middleInitial: string | null;
+
+  @IsOptional()
+  @IsString()
+  middleName?: string;
 }
 
-// ─── Preview response ─────────────────────────────────────────────────────────
-
 export class SectionMatchDto {
-  /** The raw header text found in the file (e.g. "GRADE_7 HUMSS-A"). */
   fileHeader: string;
   foundSection: {
     id: string;
@@ -34,9 +38,7 @@ export class PreviewStudentRowDto {
   name: ParsedNameDto;
   lrn: string;
   email: string;
-  /** UUID of the matched LMS user (present only when email was found in users table). */
   userId: string;
-  /** True if this student is already enrolled in the section. */
   alreadyEnrolled: boolean;
 }
 
@@ -69,8 +71,6 @@ export class RosterImportPreviewResponseDto {
   errors: RowErrorDto[];
   summary: PreviewSummaryDto;
 }
-
-// ─── Commit request ───────────────────────────────────────────────────────────
 
 export class CommitStudentRowDto {
   @IsUUID('4')
@@ -116,8 +116,6 @@ export class RosterImportCommitDto {
   pendingRows: CommitPendingRowDto[];
 }
 
-// ─── Commit response ──────────────────────────────────────────────────────────
-
 export class RosterImportCommitResponseDto {
   enrolledUserIds: string[];
   pendingRosterIds: string[];
@@ -128,8 +126,6 @@ export class RosterImportCommitResponseDto {
     total: number;
   };
 }
-
-// ─── Pending roster list response ─────────────────────────────────────────────
 
 export class PendingRosterRowDto {
   id: string;
@@ -143,8 +139,6 @@ export class PendingRosterRowDto {
   resolvedUserId: string | null;
   importedAt: Date;
 }
-
-// ─── Resolve pending row request ──────────────────────────────────────────────
 
 export class ResolvePendingRowDto {
   @IsOptional()

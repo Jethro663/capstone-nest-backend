@@ -78,7 +78,7 @@ describe('RosterImportPage', () => {
             name: {
               firstName: 'Liam',
               lastName: 'Navarro',
-              middleInitial: null,
+              middleName: 'Reyes',
             },
             lrn: '202407000001',
             userId: 'student-1',
@@ -93,7 +93,7 @@ describe('RosterImportPage', () => {
             name: {
               firstName: 'Mia',
               lastName: 'Villanueva',
-              middleInitial: null,
+              middleName: 'Santos',
             },
             lrn: '202407000002',
             reason: 'No existing account matched this row',
@@ -128,11 +128,12 @@ describe('RosterImportPage', () => {
     const file = new File(['csv-data'], 'roster.csv', { type: 'text/csv' });
     fireEvent.change(fileInput, { target: { files: [file] } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Upload & Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload & Import' }));
 
     await waitFor(() =>
       expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file),
     );
+    await waitFor(() => expect(mockedRosterImportService.commit).toHaveBeenCalledTimes(1));
   });
 
   it('downloads a protected Excel template for the selected section', async () => {
@@ -176,15 +177,19 @@ describe('RosterImportPage', () => {
 
       expect(workbookXml).toContain('name="Roster Import"');
       expect(sharedStringsXml).toContain('GRADE 7 Grade 7 - Rizal');
-      expect(sharedStringsXml).toContain('Student Name');
+      expect(sharedStringsXml).toContain('Last Name');
+      expect(sharedStringsXml).toContain('First Name');
+      expect(sharedStringsXml).toContain('Middle Name');
       expect(sharedStringsXml).toContain('LRN');
       expect(sharedStringsXml).toContain('Email');
       expect(sheetXml).toContain('r="A1"');
       expect(sheetXml).toContain('r="A3"');
       expect(sheetXml).toContain('r="B3"');
       expect(sheetXml).toContain('r="C3"');
+      expect(sheetXml).toContain('r="D3"');
+      expect(sheetXml).toContain('r="E3"');
       expect(sheetXml).toContain('<sheetProtection');
-      expect(sheetXml).toContain('sqref="B4:B203"');
+      expect(sheetXml).toContain('sqref="D4:D203"');
     } finally {
       URL.createObjectURL = originalCreateObjectURL;
       URL.revokeObjectURL = originalRevokeObjectURL;
@@ -193,7 +198,7 @@ describe('RosterImportPage', () => {
     }
   }, 30000);
 
-  it('renders backend preview rows and commits using the backend roster contract', async () => {
+  it('auto-commits using the backend roster contract after preview', async () => {
     const { container } = render(<RosterImportPage />);
 
     fireEvent.change(await screen.findByLabelText('Target Section'), {
@@ -203,13 +208,7 @@ describe('RosterImportPage', () => {
     fireEvent.change(fileInput, {
       target: { files: [new File(['csv-data'], 'roster.csv', { type: 'text/csv' })] },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Upload & Preview' }));
-
-    expect(await screen.findByText('Liam Navarro')).toBeInTheDocument();
-    expect(screen.getByText('Mia Villanueva')).toBeInTheDocument();
-    expect(screen.getByText('LRN is required')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Commit Import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upload & Import' }));
 
     await waitFor(() =>
       expect(mockedRosterImportService.commit).toHaveBeenCalledWith('section-1', {
@@ -220,7 +219,7 @@ describe('RosterImportPage', () => {
             name: {
               firstName: 'Liam',
               lastName: 'Navarro',
-              middleInitial: null,
+              middleName: 'Reyes',
             },
             lrn: '202407000001',
             email: 'liam@nexora.edu',
@@ -231,7 +230,7 @@ describe('RosterImportPage', () => {
             name: {
               firstName: 'Mia',
               lastName: 'Villanueva',
-              middleInitial: null,
+              middleName: 'Santos',
             },
             lrn: '202407000002',
             email: 'mia@nexora.edu',

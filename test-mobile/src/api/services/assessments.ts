@@ -5,12 +5,17 @@ import type { ApiEnvelope } from "../../types/api";
 import type {
   Assessment,
   AssessmentAttempt,
+  AssessmentQuestion,
   AttemptResult,
+  CreateAssessmentDto,
+  CreateQuestionDto,
   OngoingAttemptResult,
   RemovedAssessmentSubmissionFiles,
   SubmitAssessmentDto,
   TeacherAssessmentSubmissionsResponse,
+  UpdateAssessmentDto,
   UpdateAttemptProgressDto,
+  UpdateQuestionDto,
   UploadedAssessmentFile,
   UploadedAssessmentSubmission,
 } from "../../types/assessment";
@@ -24,6 +29,11 @@ export type AssessmentAttemptDetail = AttemptResult;
 export type AssessmentHistoryList = AssessmentHistoryResponse;
 
 export const assessmentsApi = {
+  async create(payload: CreateAssessmentDto) {
+    const response = await apiClient.post<ApiEnvelope<Assessment>>("/assessments", payload);
+    return unwrapEnvelope(response.data);
+  },
+
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<Assessment[]>>(`/assessments/class/${classId}`);
     return unwrapEnvelope(response.data);
@@ -115,8 +125,31 @@ export const assessmentsApi = {
     return unwrapEnvelope(response.data);
   },
 
-  async update(assessmentId: string, payload: Partial<Assessment>) {
+  async update(assessmentId: string, payload: UpdateAssessmentDto) {
     const response = await apiClient.put<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async createQuestion(payload: CreateQuestionDto) {
+    const response = await apiClient.post<ApiEnvelope<AssessmentQuestion>>(
+      "/assessments/questions",
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateQuestion(questionId: string, payload: UpdateQuestionDto) {
+    const response = await apiClient.put<ApiEnvelope<AssessmentQuestion>>(
+      `/assessments/questions/${questionId}`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async deleteQuestion(questionId: string) {
+    const response = await apiClient.delete<ApiEnvelope<{ success?: boolean }>>(
+      `/assessments/questions/${questionId}`,
+    );
     return unwrapEnvelope(response.data);
   },
 

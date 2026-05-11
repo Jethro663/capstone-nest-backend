@@ -20,6 +20,7 @@ export interface ClassesQuery {
   subjectId?: string;
   sectionId?: string;
   teacherId?: string;
+  room?: string;
   schoolYear?: string;
   isActive?: string;
   search?: string;

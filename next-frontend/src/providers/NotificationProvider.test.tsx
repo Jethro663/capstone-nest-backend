@@ -53,6 +53,8 @@ jest.mock('sonner', () => ({
   toast: Object.assign(jest.fn(), {
     success: jest.fn(),
     error: jest.fn(),
+    custom: jest.fn(),
+    dismiss: jest.fn(),
   }),
 }));
 

@@ -930,19 +930,16 @@ export function AssessmentQuestionEditor({
               maxLength={2}
               className="h-9 w-[4.75rem] rounded-xl border-slate-200 bg-white"
               value={pointsInput}
-              onChange={(event) =>
-                setPointsInput(() => {
-                  const nextValue = sanitizeQuestionPointsInput(event.target.value);
-                  if (nextValue) {
-                    updateQuestion(question.id, (currentQuestion) => ({
-                      ...currentQuestion,
-                      points: normalizeQuestionPoints(nextValue),
-                    }));
-                    return nextValue;
-                  }
-                  return '';
-                })
-              }
+              onChange={(event) => {
+                const nextValue = sanitizeQuestionPointsInput(event.target.value);
+                setPointsInput(nextValue);
+                if (!nextValue) return;
+
+                updateQuestion(question.id, (currentQuestion) => ({
+                  ...currentQuestion,
+                  points: normalizeQuestionPoints(nextValue),
+                }));
+              }}
               onBlur={() => setPointsInput(String(question.points))}
             />
             <span className="text-slate-500">{pointsLabel}</span>

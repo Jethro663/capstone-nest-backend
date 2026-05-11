@@ -53,3 +53,41 @@ export interface EnrollmentRecord {
     profilePicture?: string;
   } | null;
 }
+
+export interface EnrollStudentDto {
+  studentId: string;
+}
+
+export interface StudentMasterlistSection {
+  id: string;
+  name: string;
+  gradeLevel: string;
+  schoolYear: string;
+}
+
+export interface StudentMasterlistItem {
+  id: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  status?: string;
+  profilePicture?: string | null;
+  lrn?: string | null;
+  gradeLevel?: string | null;
+  section: StudentMasterlistSection | null;
+  isEligible: boolean;
+  disabledReason: string | null;
+}
+
+export interface StudentMasterlistQuery {
+  gradeLevel?: string;
+  sectionId?: string;
+  search?: string;
+  eligibility?: "all" | "eligible" | "mismatch";
+  sortBy?: "lastName" | "firstName" | "email" | "gradeLevel" | "lrn" | "eligibility";
+  sortDirection?: "asc" | "desc";
+  prioritizeEligible?: boolean;
+  page?: number;
+  limit?: number;
+}

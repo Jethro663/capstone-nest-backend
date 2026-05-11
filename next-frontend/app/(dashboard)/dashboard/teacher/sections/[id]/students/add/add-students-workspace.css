@@ -425,7 +425,7 @@
 }
 
 .teacher-add-students__soft-enter {
-  opacity: 0;
+  opacity: 1;
   animation: teacher-add-students-fade-up 0.32s ease forwards;
   animation-delay: var(--enter-delay, 0ms);
 }

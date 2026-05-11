@@ -12,7 +12,7 @@ jest.mock('sonner', () => ({
 
 jest.mock('@/services/class-service', () => ({
   classService: {
-    getBySection: jest.fn().mockResolvedValue({ data: [] }),
+    getAll: jest.fn().mockResolvedValue({ data: { data: [] } }),
   },
 }));
 
@@ -31,6 +31,7 @@ describe('ClassForm', () => {
         gradeLevel: '7',
         schoolYear: '2026-2027',
         capacity: 40,
+        roomNumber: '201',
         isActive: true,
       },
     ],
@@ -76,13 +77,13 @@ describe('ClassForm', () => {
 
     await waitFor(() =>
       expect(mockedToast.error).toHaveBeenCalledWith(
-        'Room and at least one schedule slot are required',
+        'Select a room and at least one schedule slot',
       ),
     );
     expect(baseProps.onSubmit).not.toHaveBeenCalled();
   });
 
-  it('sanitizes subject code and room before submit', async () => {
+  it('sanitizes subject code and submits selected room before submit', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -93,17 +94,14 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: '',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
         }}
       />,
     );
 
     fireEvent.change(screen.getByPlaceholderText('e.g. MATH-7'), {
-      target: { value: ' math-7 / rm🙂 ' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('e.g. Room 201'), {
-      target: { value: ' Room #201/<A>🙂 ' },
+      target: { value: ' math-7 / rm@ ' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Class' }));
@@ -112,7 +110,7 @@ describe('ClassForm', () => {
       expect(baseProps.onSubmit).toHaveBeenCalledWith(
         expect.objectContaining({
           subjectCode: 'MATH-7RM',
-          room: 'Room #201/A',
+          room: '201',
         }),
       ),
     );
@@ -130,7 +128,7 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: 'Room 201',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
           gradingProfile: {
             writtenWork: 50,
@@ -174,7 +172,7 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: 'Room 201',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
           gradingProfile: {
             writtenWork: 30,
@@ -215,7 +213,7 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: 'Room 201',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
           gradingProfile: {
             writtenWork: 50,
@@ -249,7 +247,7 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: 'Room 201',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
           gradingProfile: {
             writtenWork: 30,
@@ -309,7 +307,7 @@ describe('ClassForm', () => {
           subjectGradeLevel: '7',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
-          room: 'Room 201',
+          room: '201',
           schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
           gradingProfile: {
             writtenWork: 30,
@@ -334,3 +332,4 @@ describe('ClassForm', () => {
     expect(createButton).toBeDisabled();
   });
 });
+

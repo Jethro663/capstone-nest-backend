@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, count, desc, eq, inArray, SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, or, SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
@@ -24,6 +24,8 @@ import {
   classes,
   classRecords,
   archivedUsers,
+  refreshTokens,
+  auditLogs,
 } from '../../drizzle/schema';
 import { CreateUserDto } from './DTO/create-user.dto';
 import { UpdateUserDto } from './DTO/update-user.dto';
@@ -62,6 +64,64 @@ export class UsersService {
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private formatInactiveDuration(durationMs: number): string {
+    const totalMinutes = Math.max(0, Math.floor(durationMs / 60000));
+    if (totalMinutes < 1) return '0m';
+    if (totalMinutes < 60) return `${totalMinutes}m`;
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    if (totalHours < 24) {
+      const remainingMinutes = totalMinutes % 60;
+      return remainingMinutes > 0
+        ? `${totalHours}h ${remainingMinutes}m`
+        : `${totalHours}h`;
+    }
+
+    const totalDays = Math.floor(totalHours / 24);
+    const remainingHours = totalHours % 24;
+    return remainingHours > 0
+      ? `${totalDays}d ${remainingHours}h`
+      : `${totalDays}d`;
+  }
+
+  private extractIpFromMetadata(metadata: unknown): string | null {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+      return null;
+    }
+
+    const record = metadata as Record<string, unknown>;
+    const candidate =
+      record.ip ??
+      record.ipAddress ??
+      record.clientIp ??
+      record.remoteIp;
+
+    if (typeof candidate !== 'string') {
+      return null;
+    }
+
+    const trimmed = candidate.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private async dispatchUserCreatedEventOrThrow(event: UserCreatedEvent) {
+    try {
+      const emitter = this.eventEmitter as EventEmitter2 & {
+        emitAsync?: (event: string, payload: unknown) => Promise<unknown>;
+      };
+      if (typeof emitter.emitAsync === 'function') {
+        await emitter.emitAsync(UserCreatedEvent.eventName, event);
+      } else {
+        emitter.emit(UserCreatedEvent.eventName, event);
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to deliver onboarding email(s) for ${event.email}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   private getRoleNames(user: { roles?: Array<{ name?: string } | string> }) {
@@ -186,6 +246,200 @@ export class UsersService {
       limit,
       totalPages: Math.max(1, Math.ceil(total / limit)),
       ...(statusCounts ? { statusCounts } : {}),
+    };
+  }
+
+  async getMonitoringReports(filters?: {
+    role?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    if (filters?.status && !VALID_STATUSES.includes(filters.status as any)) {
+      throw new BadRequestException(
+        `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+      );
+    }
+
+    const page = Math.max(1, Number(filters?.page ?? 1) || 1);
+    const limit = Math.max(
+      1,
+      Math.min(Number(filters?.limit ?? 50) || 50, 200),
+    );
+    const offset = (page - 1) * limit;
+
+    const whereConditions: SQL<unknown>[] = [];
+    if (filters?.status) {
+      whereConditions.push(eq(users.status, filters.status as any));
+    }
+
+    if (filters?.role) {
+      const roleSubquery = this.db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(eq(roles.name, filters.role));
+      whereConditions.push(inArray(users.id, roleSubquery));
+    }
+
+    const normalizedSearch = filters?.search?.trim();
+    if (normalizedSearch) {
+      const searchPattern = `%${normalizedSearch}%`;
+      whereConditions.push(
+        or(
+          ilike(users.firstName, searchPattern),
+          ilike(users.lastName, searchPattern),
+          ilike(users.email, searchPattern),
+        ) as SQL<unknown>,
+      );
+    }
+
+    const whereClause =
+      whereConditions.length > 0 ? and(...whereConditions) : undefined;
+
+    const [totalRow] = await this.db
+      .select({ total: count() })
+      .from(users)
+      .where(whereClause);
+
+    const userRows = await this.db.query.users.findMany({
+      where: whereClause,
+      with: {
+        userRoles: {
+          with: { role: true },
+        },
+      },
+      orderBy: [desc(users.createdAt)],
+      limit,
+      offset,
+    });
+
+    if (userRows.length === 0) {
+      return {
+        data: [],
+        total: Number(totalRow?.total ?? 0),
+        page,
+        limit,
+        totalPages: Math.max(1, Math.ceil(Number(totalRow?.total ?? 0) / limit)),
+      };
+    }
+
+    const userIds = userRows.map((row) => row.id);
+    const now = new Date();
+
+    const activeSessionRows = await this.db.query.refreshTokens.findMany({
+      where: and(
+        inArray(refreshTokens.userId, userIds),
+        eq(refreshTokens.revoked, false),
+        gt(refreshTokens.expiresAt, now),
+      ),
+      columns: {
+        userId: true,
+        ip: true,
+        createdAt: true,
+      },
+      orderBy: [desc(refreshTokens.createdAt)],
+    });
+    const activeSessionByUserId = new Set(
+      activeSessionRows.map((row) => row.userId),
+    );
+    const activeSessionIpByUserId = new Map<string, string>();
+    for (const row of activeSessionRows) {
+      if (
+        !activeSessionIpByUserId.has(row.userId) &&
+        typeof row.ip === 'string' &&
+        row.ip.trim().length > 0
+      ) {
+        activeSessionIpByUserId.set(row.userId, row.ip.trim());
+      }
+    }
+
+    const loginEvents = await this.db.query.auditLogs.findMany({
+      where: and(
+        eq(auditLogs.action, 'auth.login'),
+        inArray(auditLogs.actorId, userIds),
+      ),
+      columns: {
+        actorId: true,
+        metadata: true,
+        createdAt: true,
+      },
+      orderBy: [desc(auditLogs.createdAt)],
+    });
+    const lastLoginIpByUserId = new Map<string, string>();
+    for (const entry of loginEvents) {
+      if (!lastLoginIpByUserId.has(entry.actorId)) {
+        const extractedIp = this.extractIpFromMetadata(entry.metadata);
+        if (extractedIp) {
+          lastLoginIpByUserId.set(entry.actorId, extractedIp);
+        }
+      }
+    }
+
+    const logoutEvents = await this.db.query.auditLogs.findMany({
+      where: and(
+        eq(auditLogs.action, 'auth.logout'),
+        inArray(auditLogs.actorId, userIds),
+      ),
+      columns: {
+        actorId: true,
+        createdAt: true,
+      },
+      orderBy: [desc(auditLogs.createdAt)],
+    });
+    const lastLogoutAtByUserId = new Map<string, Date>();
+    for (const entry of logoutEvents) {
+      if (!lastLogoutAtByUserId.has(entry.actorId)) {
+        lastLogoutAtByUserId.set(entry.actorId, entry.createdAt);
+      }
+    }
+
+    const data = userRows.map((row) => {
+      const publicUser = this.toPublicUser({
+        ...row,
+        roles: row.userRoles
+          .map((ur) => ur.role?.name)
+          .filter((roleName): roleName is string => Boolean(roleName)),
+      });
+
+      const lastLoginAt = row.lastLoginAt ?? null;
+      const lastLogoutAt = lastLogoutAtByUserId.get(row.id) ?? null;
+      const isCurrentlyActive =
+        row.status === 'ACTIVE' && activeSessionByUserId.has(row.id);
+      const inactivityAnchor =
+        isCurrentlyActive
+          ? null
+          : lastLogoutAt ?? lastLoginAt ?? row.createdAt ?? null;
+      const inactiveFor =
+        inactivityAnchor === null
+          ? 'No activity'
+          : this.formatInactiveDuration(now.getTime() - inactivityAnchor.getTime());
+      const activityIp =
+        activeSessionIpByUserId.get(row.id) ??
+        lastLoginIpByUserId.get(row.id) ??
+        null;
+
+      return {
+        ...publicUser,
+        lastLoginAt: lastLoginAt ? lastLoginAt.toISOString() : null,
+        lastLogoutAt: lastLogoutAt ? lastLogoutAt.toISOString() : null,
+        lastActivityAt: inactivityAnchor ? inactivityAnchor.toISOString() : null,
+        activityIp,
+        inactiveFor,
+        isCurrentlyActive,
+        isSuspended: row.status === 'SUSPENDED',
+        isArchived: row.status === 'DELETED',
+      };
+    });
+
+    const total = Number(totalRow?.total ?? 0);
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   }
 
@@ -462,8 +716,7 @@ export class UsersService {
     }
 
     // 7. Emit user.created event — listeners handle OTP + password emails
-    this.eventEmitter.emit(
-      UserCreatedEvent.eventName,
+    await this.dispatchUserCreatedEventOrThrow(
       new UserCreatedEvent({
         userId: result.id,
         email: result.email,
@@ -680,8 +933,7 @@ export class UsersService {
     }
 
     if (shouldSendEmailVerification) {
-      this.eventEmitter.emit(
-        UserCreatedEvent.eventName,
+      await this.dispatchUserCreatedEventOrThrow(
         new UserCreatedEvent({
           userId: id,
           email: updateData.email!,

@@ -12,6 +12,9 @@ export function TeacherScreen({
   title,
   subtitle,
   icon,
+  showBackButton = false,
+  onBackPress,
+  backLabel = "Back",
   rightAction,
   refreshing,
   onRefresh,
@@ -20,10 +23,15 @@ export function TeacherScreen({
   title: string;
   subtitle?: string;
   icon?: IconName;
+  showBackButton?: boolean;
+  onBackPress?: () => void;
+  backLabel?: string;
   rightAction?: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
 }>) {
+  const canGoBack = showBackButton && typeof onBackPress === "function";
+
   return (
     <ScreenScroll
       backgroundColor={theme.bg}
@@ -33,6 +41,27 @@ export function TeacherScreen({
     >
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
         <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+          {canGoBack ? (
+            <Pressable
+              onPress={onBackPress}
+              style={{
+                alignSelf: "flex-start",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: theme.border,
+                backgroundColor: theme.active,
+                paddingHorizontal: 10,
+                paddingVertical: 7,
+                marginBottom: 10,
+              }}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={14} color={theme.red} />
+              <Text style={{ fontSize: 11, fontWeight: "700", color: theme.red }}>{backLabel}</Text>
+            </Pressable>
+          ) : null}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
             {icon ? (
               <View
@@ -54,7 +83,38 @@ export function TeacherScreen({
               </Text>
               <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "800", color: theme.text }}>{title}</Text>
             </View>
-            {rightAction}
+            {rightAction || onRefresh ? (
+              <View style={{ alignItems: "flex-end", gap: 8 }}>
+                {rightAction}
+                {onRefresh ? (
+                  <Pressable
+                    onPress={onRefresh}
+                    disabled={Boolean(refreshing)}
+                    style={{
+                      opacity: refreshing ? 0.6 : 1,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                    }}
+                  >
+                    <MaterialCommunityIcons
+                      name={refreshing ? "refresh-circle" : "refresh"}
+                      size={14}
+                      color={theme.red}
+                    />
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.red }}>
+                      {refreshing ? "Refreshing..." : "Refresh"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </View>
           {subtitle ? (
             <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>{subtitle}</Text>

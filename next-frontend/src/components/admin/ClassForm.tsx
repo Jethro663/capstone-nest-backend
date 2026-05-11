@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  sanitizeRoomLabelInput,
-  sanitizeSubjectCodeInput,
-} from '@/lib/input-policy';
+import { sanitizeSubjectCodeInput } from '@/lib/input-policy';
+import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from '@/lib/room-options';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import {
@@ -114,6 +112,7 @@ type ClassFormProps = {
   sections: Section[];
   teachers: User[];
   schoolYears: string[];
+  lockSchoolYear?: boolean;
   saving?: boolean;
   onSubmit: (values: ClassFormValues) => Promise<void>;
   onCancel: () => void;
@@ -132,6 +131,7 @@ export default function ClassForm({
   sections,
   teachers,
   schoolYears,
+  lockSchoolYear = false,
   saving = false,
   onSubmit,
   onCancel,
@@ -196,21 +196,24 @@ export default function ClassForm({
     let nextValue = value;
     if (field === 'subjectCode') {
       nextValue = sanitizeSubjectCodeInput(value, 20);
-    } else if (field === 'room') {
-      nextValue = sanitizeRoomLabelInput(value, 50);
     }
 
     setForm((current) => ({ ...current, [field]: nextValue }));
   };
 
   const handleGradeLevelChange = (value: string) => {
+    const currentSection = sections.find((s) => s.id === form.sectionId);
+    const nextSectionId =
+      currentSection?.gradeLevel === value ? currentSection.id : '';
+    const nextSectionRoom =
+      sections.find((section) => section.id === nextSectionId)?.roomNumber?.trim() ??
+      '';
+
     setForm((current) => ({
       ...current,
       subjectGradeLevel: value,
-      sectionId:
-        sections.find((s) => s.id === current.sectionId)?.gradeLevel === value
-          ? current.sectionId
-          : '',
+      sectionId: nextSectionId,
+      room: nextSectionRoom,
       schedules: [],
     }));
     setExistingSlots([]);
@@ -223,12 +226,27 @@ export default function ClassForm({
   };
 
   const handleSectionChange = (sectionId: string) => {
-    setForm((current) => ({ ...current, sectionId, schedules: [] }));
+    const selectedSection = sections.find((section) => section.id === sectionId);
+    const sectionRoom = selectedSection?.roomNumber?.trim() ?? '';
+    setForm((current) => ({
+      ...current,
+      sectionId,
+      room: sectionRoom,
+      schedules: [],
+    }));
+    setExistingSlots([]);
   };
 
   const filteredSections = form.subjectGradeLevel
     ? sections.filter((s) => s.gradeLevel === form.subjectGradeLevel)
     : [];
+  const selectedSection = useMemo(
+    () => sections.find((section) => section.id === form.sectionId),
+    [form.sectionId, sections],
+  );
+  const sectionRoomNumber = selectedSection?.roomNumber?.trim() ?? '';
+  const sectionHasAssignedRoom = Boolean(sectionRoomNumber);
+  const sectionRequiresRoomAssignment = Boolean(form.sectionId) && !sectionHasAssignedRoom;
   const subjectOptions = useMemo(() => {
     const currentSubject = form.subjectName.trim();
     if (!currentSubject || SUBJECTS.includes(currentSubject as (typeof SUBJECTS)[number])) {
@@ -237,24 +255,83 @@ export default function ClassForm({
     return [currentSubject, ...SUBJECTS];
   }, [form.subjectName]);
 
+  const roomOptions = useMemo(() => {
+    if (sectionHasAssignedRoom) {
+      return [sectionRoomNumber];
+    }
+    if (!form.room) return [...ROOM_OPTIONS];
+    if (ROOM_OPTIONS.includes(form.room as (typeof ROOM_OPTIONS)[number])) {
+      return [...ROOM_OPTIONS];
+    }
+
+    return [form.room, ...ROOM_OPTIONS];
+  }, [form.room, sectionHasAssignedRoom, sectionRoomNumber]);
+
+  const roomHelpText = useMemo(() => {
+    if (!form.sectionId) {
+      return 'Select a section first to load its assigned room.';
+    }
+
+    if (sectionRequiresRoomAssignment) {
+      return 'This section has no assigned room yet. Assign a room in section setup before creating classes.';
+    }
+
+    if (sectionHasAssignedRoom) {
+      return `This section is assigned to Room ${sectionRoomNumber}. All classes under this section must use this room.`;
+    }
+
+    return ROOM_OPTIONS_HELP_TEXT;
+  }, [
+    form.sectionId,
+    sectionHasAssignedRoom,
+    sectionRequiresRoomAssignment,
+    sectionRoomNumber,
+  ]);
+
+  useEffect(() => {
+    if (!form.sectionId) return;
+
+    if (!sectionHasAssignedRoom) {
+      if (form.room) {
+        setForm((current) => ({ ...current, room: '' }));
+      }
+      return;
+    }
+
+    if (form.room !== sectionRoomNumber) {
+      setForm((current) => ({ ...current, room: sectionRoomNumber }));
+    }
+  }, [
+    form.room,
+    form.sectionId,
+    sectionHasAssignedRoom,
+    sectionRoomNumber,
+  ]);
+
   const isScheduleReady = Boolean(
     form.subjectName &&
       form.subjectCode.trim() &&
       form.subjectGradeLevel &&
       form.sectionId &&
-      form.schoolYear,
+      form.schoolYear &&
+      form.room.trim(),
   );
   const isTemplateReady = Boolean(form.subjectName && form.subjectGradeLevel);
 
-  const fetchSectionSchedules = useCallback(
-    async (sectionId: string) => {
+  const fetchRoomSchedules = useCallback(
+    async (room: string, schoolYear: string) => {
       try {
         setLoadingSection(true);
-        const res = await classService.getBySection(sectionId);
-        const sectionClasses: ClassItem[] = res.data || [];
+        const res = await classService.getAll({
+          room,
+          schoolYear,
+          page: 1,
+          limit: 100,
+        });
+        const roomClasses: ClassItem[] = res.data?.data || [];
         const slots: ExistingScheduleSlot[] = [];
 
-        for (const cls of sectionClasses) {
+        for (const cls of roomClasses) {
           if (editingClassId && cls.id === editingClassId) continue;
           if (!cls.schedules?.length) continue;
           for (const sched of cls.schedules) {
@@ -282,12 +359,12 @@ export default function ClassForm({
   );
 
   useEffect(() => {
-    if (isScheduleReady && form.sectionId) {
-      fetchSectionSchedules(form.sectionId);
+    if (isScheduleReady && form.room.trim()) {
+      fetchRoomSchedules(form.room.trim(), form.schoolYear);
     } else {
       setExistingSlots([]);
     }
-  }, [isScheduleReady, form.sectionId, fetchSectionSchedules]);
+  }, [form.room, form.schoolYear, isScheduleReady, fetchRoomSchedules]);
 
   const gradingTotal =
     Number(gradingProfileDraft.writtenWork || 0) +
@@ -358,8 +435,14 @@ export default function ClassForm({
       toast.error('Section and teacher are required');
       return;
     }
+    if (sectionRequiresRoomAssignment) {
+      toast.error(
+        'Selected section has no assigned room. Assign a room in section setup first.',
+      );
+      return;
+    }
     if (!form.room.trim() || schedules.length === 0) {
-      toast.error('Room and at least one schedule slot are required');
+      toast.error('Select a room and at least one schedule slot');
       return;
     }
     if (isCreateBlocked) {
@@ -370,7 +453,6 @@ export default function ClassForm({
     await onSubmit({
       ...form,
       subjectCode: sanitizeSubjectCodeInput(form.subjectCode, 20),
-      room: sanitizeRoomLabelInput(form.room, 50),
       gradingProfile,
       schedules,
     });
@@ -475,8 +557,9 @@ export default function ClassForm({
             value={form.schoolYear}
             onChange={(event) => setField('schoolYear', event.target.value)}
             className={SELECT_CLS}
+            disabled={lockSchoolYear}
           >
-            <option value="">Select year</option>
+            <option value="">{lockSchoolYear ? 'Locked by transition state' : 'Select year'}</option>
             {schoolYears.map((year) => (
               <option key={year} value={year}>
                 {year}
@@ -524,13 +607,29 @@ export default function ClassForm({
       </div>
 
       <Field label="Room">
-        <Input
+        <select
           value={form.room}
           onChange={(event) => setField('room', event.target.value)}
-          placeholder="e.g. Room 201"
-          maxLength={50}
-          className="admin-input h-10 rounded-xl"
-        />
+          className={SELECT_CLS}
+          aria-label="Room"
+          disabled={!form.sectionId || sectionHasAssignedRoom || sectionRequiresRoomAssignment}
+        >
+          <option value="">
+            {!form.sectionId
+              ? 'Select section first'
+              : sectionRequiresRoomAssignment
+                ? 'Assign room in section setup first'
+                : 'Select room'}
+          </option>
+          {roomOptions.map((room) => (
+            <option key={room} value={room}>
+              Room {room}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-[var(--admin-text-muted)]">
+          {roomHelpText}
+        </p>
       </Field>
 
       {showGradingProfile ? (
@@ -598,13 +697,13 @@ export default function ClassForm({
           <div className="space-y-1">
             <p className="text-sm font-black text-[var(--admin-text-strong)]">Schedule</p>
             <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
-              Pick the timetable after the subject, grade level, section, and school
-              year are set.
+              Pick the timetable after subject, grade level, section, school year, and
+              room are set.
             </p>
           </div>
           <div className="admin-chip">
             {loadingSection
-              ? 'Checking section schedule...'
+              ? `Checking room ${form.room || ''} schedule...`
               : `${form.schedules.length} slot${form.schedules.length === 1 ? '' : 's'} selected`}
           </div>
         </div>

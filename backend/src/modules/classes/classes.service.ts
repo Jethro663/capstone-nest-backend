@@ -322,6 +322,7 @@ export class ClassesService {
     subjectGradeLevel?: '7' | '8' | '9' | '10';
     sectionId?: string;
     teacherId?: string;
+    room?: string;
     schoolYear?: string;
     isActive?: boolean;
     search?: string;
@@ -350,6 +351,10 @@ export class ClassesService {
 
     if (filters?.teacherId) {
       whereConditions.push(eq(classes.teacherId, filters.teacherId));
+    }
+
+    if (filters?.room) {
+      whereConditions.push(eq(classes.room, filters.room.trim()));
     }
 
     if (filters?.schoolYear) {
@@ -531,11 +536,31 @@ export class ClassesService {
     // Section check
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, createClassDto.sectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        roomNumber: true,
+      },
     });
 
     if (!section) {
       throw new BadRequestException(
         `Section with ID "${createClassDto.sectionId}" not found`,
+      );
+    }
+
+    const sectionRoomNumber = section.roomNumber?.trim() ?? '';
+    if (!sectionRoomNumber) {
+      throw new BadRequestException(
+        `Section "${section.name}" (Grade ${section.gradeLevel}) has no assigned room. Assign a room in section setup first.`,
+      );
+    }
+
+    const requestedRoom = createClassDto.room.trim();
+    if (requestedRoom !== sectionRoomNumber) {
+      throw new BadRequestException(
+        `Section "${section.name}" (Grade ${section.gradeLevel}) is assigned to Room ${sectionRoomNumber}. Use Room ${sectionRoomNumber} for all classes in this section.`,
       );
     }
 
@@ -596,7 +621,7 @@ export class ClassesService {
         sectionId: createClassDto.sectionId,
         teacherId: createClassDto.teacherId,
         schoolYear: effectiveSchoolYear,
-        room: createClassDto.room.trim(),
+        room: requestedRoom,
         cardPreset: createClassDto.cardPreset ?? 'aurora',
         cardBannerUrl: createClassDto.cardBannerUrl ?? null,
         writtenWorkGradingWeight:
@@ -618,7 +643,7 @@ export class ClassesService {
             classId: newClass.id,
             sectionId: createClassDto.sectionId,
             teacherId: createClassDto.teacherId,
-            room: createClassDto.room,
+            room: requestedRoom,
             slots: createClassDto.schedules,
           },
           tx,
@@ -1231,12 +1256,27 @@ export class ClassesService {
     // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
 
     // If updating section, verify it exists
+    let targetSection:
+      | {
+          id: string;
+          name: string;
+          gradeLevel: string;
+          roomNumber: string | null;
+        }
+      | null = null;
     if (updateClassDto.sectionId) {
-      const section = await this.db.query.sections.findFirst({
+      targetSection =
+        (await this.db.query.sections.findFirst({
         where: eq(sections.id, updateClassDto.sectionId),
-      });
+        columns: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          roomNumber: true,
+        },
+      })) ?? null;
 
-      if (!section) {
+      if (!targetSection) {
         throw new BadRequestException(
           `Section with ID "${updateClassDto.sectionId}" not found`,
         );
@@ -1276,6 +1316,60 @@ export class ClassesService {
     }
     if (updatePayload.room !== undefined) {
       updatePayload.room = updatePayload.room.trim();
+    }
+
+    const shouldValidateSectionRoom =
+      updateClassDto.sectionId !== undefined ||
+      updateClassDto.room !== undefined ||
+      schedules !== undefined;
+
+    if (shouldValidateSectionRoom) {
+      if (!targetSection) {
+        targetSection =
+          (await this.db.query.sections.findFirst({
+          where: eq(sections.id, existing.sectionId),
+          columns: {
+            id: true,
+            name: true,
+            gradeLevel: true,
+            roomNumber: true,
+          },
+        })) ?? null;
+      }
+
+      if (!targetSection) {
+        throw new BadRequestException(
+          `Section with ID "${updateClassDto.sectionId ?? existing.sectionId}" not found`,
+        );
+      }
+
+      const sectionRoomNumber = targetSection.roomNumber?.trim() ?? '';
+      if (!sectionRoomNumber) {
+        throw new BadRequestException(
+          `Section "${targetSection.name}" (Grade ${targetSection.gradeLevel}) has no assigned room. Assign a room in section setup first.`,
+        );
+      }
+
+      if (
+        updateClassDto.sectionId !== undefined &&
+        updateClassDto.room === undefined
+      ) {
+        updatePayload.room = sectionRoomNumber;
+      }
+
+      const effectiveRoom = String(
+        updatePayload.room ?? existing.room ?? '',
+      ).trim();
+
+      if (!effectiveRoom) {
+        throw new BadRequestException('room is required');
+      }
+
+      if (effectiveRoom !== sectionRoomNumber) {
+        throw new BadRequestException(
+          `Section "${targetSection.name}" (Grade ${targetSection.gradeLevel}) is assigned to Room ${sectionRoomNumber}. Use Room ${sectionRoomNumber} for all classes in this section.`,
+        );
+      }
     }
 
     await this.db.update(classes).set(updatePayload).where(eq(classes.id, id));
@@ -3116,8 +3210,22 @@ export class ClassesService {
     }
 
     if (conflicts.length > 0) {
+      const conflictPreview = conflicts
+        .slice(0, 3)
+        .map((conflict) => {
+          const scopes = Array.isArray(conflict.conflictType)
+            ? conflict.conflictType.join('/')
+            : 'schedule';
+          return `${scopes.toUpperCase()} conflict with ${conflict.subjectName} (${conflict.days.join('/')} ${conflict.startTime}-${conflict.endTime})`;
+        })
+        .join('; ');
+      const remainingCount = conflicts.length - Math.min(conflicts.length, 3);
+
       throw new ConflictException({
-        message: 'Schedule conflicts detected',
+        message:
+          remainingCount > 0
+            ? `Schedule conflicts detected. ${conflictPreview}; and ${remainingCount} more conflict(s).`
+            : `Schedule conflicts detected. ${conflictPreview}`,
         conflicts,
       });
     }

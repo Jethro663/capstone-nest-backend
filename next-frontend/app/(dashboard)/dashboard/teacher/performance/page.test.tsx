@@ -34,6 +34,7 @@ jest.mock('@/services/performance-service', () => ({
   performanceService: {
     getClassSummary: jest.fn(),
     getAtRiskStudents: jest.fn(),
+    getInterventionQuizComparison: jest.fn(),
     getClassLogs: jest.fn(),
     getClassDiagnostics: jest.fn(),
     recomputeClass: jest.fn(),
@@ -135,6 +136,41 @@ describe('TeacherPerformancePage', () => {
         logs: [],
       },
     } as Awaited<ReturnType<typeof performanceService.getClassLogs>>);
+    mockedPerformanceService.getInterventionQuizComparison.mockResolvedValue({
+      data: {
+        classId: 'class-1',
+        count: 1,
+        improvedCount: 1,
+        declinedCount: 0,
+        unchangedCount: 0,
+        awaitingRetryCount: 0,
+        comparisons: [
+          {
+            caseId: 'case-1',
+            caseStatus: 'active',
+            caseOpenedAt: '2026-05-01T08:00:00.000Z',
+            studentId: 'student-1',
+            student: {
+              id: 'student-1',
+              firstName: 'Liam',
+              lastName: 'Navarro',
+              email: 'liam@example.com',
+            },
+            assignmentId: 'assignment-1',
+            assessmentId: 'assessment-1',
+            assessmentTitle: 'Fractions Quiz',
+            beforeAttemptId: 'before-1',
+            beforeScorePercent: 52,
+            beforeSubmittedAt: '2026-04-30T08:00:00.000Z',
+            afterAttemptId: 'after-1',
+            afterScorePercent: 78,
+            afterSubmittedAt: '2026-05-02T08:00:00.000Z',
+            deltaScorePercent: 26,
+            trend: 'improved',
+          },
+        ],
+      },
+    } as Awaited<ReturnType<typeof performanceService.getInterventionQuizComparison>>);
     mockedPerformanceService.getClassDiagnostics.mockResolvedValue({
       data: {
         classId: 'class-1',

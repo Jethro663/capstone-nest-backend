@@ -81,6 +81,72 @@ export interface Assessment {
   questions?: AssessmentQuestion[];
 }
 
+export interface CreateAssessmentDto {
+  title: string;
+  description?: string;
+  classId: string;
+  type?: AssessmentType;
+  dueDate?: string;
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean;
+  fileUploadInstructions?: string;
+  allowedUploadMimeTypes?: string[];
+  allowedUploadExtensions?: string[];
+  maxUploadSizeBytes?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  timeLimitMinutes?: number | null;
+}
+
+export interface UpdateAssessmentDto {
+  title?: string;
+  description?: string;
+  type?: AssessmentType;
+  dueDate?: string;
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
+  timedQuestionsEnabled?: boolean;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean;
+  fileUploadInstructions?: string;
+  allowedUploadMimeTypes?: string[];
+  allowedUploadExtensions?: string[];
+  maxUploadSizeBytes?: number;
+  passingScore?: number;
+  maxAttempts?: number;
+  timeLimitMinutes?: number | null;
+  isPublished?: boolean;
+}
+
+export interface QuestionOptionInput {
+  text: string;
+  isCorrect: boolean;
+  order: number;
+}
+
+export interface CreateQuestionDto {
+  assessmentId: string;
+  type: QuestionType;
+  content: string;
+  points: number;
+  order: number;
+  isRequired?: boolean;
+  explanation?: string;
+  options?: QuestionOptionInput[];
+}
+
+export interface UpdateQuestionDto {
+  content?: string;
+  points?: number;
+  order?: number;
+  isRequired?: boolean;
+  explanation?: string;
+  options?: QuestionOptionInput[];
+}
+
 export interface AssessmentAttempt {
   id: string;
   assessmentId: string;

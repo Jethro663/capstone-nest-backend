@@ -87,6 +87,17 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
           <TeacherPanel title="Assessment controls" subtitle="Keep publish state management available at the top of the teacher detail page.">
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               <TeacherActionButton
+                label="Edit assessment"
+                icon="pencil-outline"
+                tone="blue"
+                onPress={() =>
+                  navigation.navigate("TeacherAssessmentEditor", {
+                    assessmentId: assessment.id,
+                    classId: assessment.classId || classId,
+                  })
+                }
+              />
+              <TeacherActionButton
                 label={assessment.isPublished ? "Move to draft" : "Publish assessment"}
                 icon={assessment.isPublished ? "file-hidden" : "publish"}
                 tone={assessment.isPublished ? "amber" : "green"}

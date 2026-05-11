@@ -39,8 +39,10 @@ import type { ClassModule } from '@/types/module';
 import type {
   ClassDiagnosticsResponse,
   ClassAtRiskResponse,
+  ClassInterventionQuizComparisonResponse,
   ClassPerformanceLogsResponse,
   ClassPerformanceSummary,
+  InterventionQuizComparisonRow,
   PerformanceAnalysisJob,
   PerformanceAnalysisStructuredOutput,
   PerformanceStudentRow,
@@ -132,6 +134,33 @@ function formatLogStudent(entry: {
   if (last) return last;
   if (first) return first;
   return entry.student?.email ?? entry.studentId;
+}
+
+function formatSignedDelta(value: number | null): string {
+  if (value === null) return '--';
+  if (value > 0) return `+${value.toFixed(1)} pts`;
+  if (value < 0) return `${value.toFixed(1)} pts`;
+  return '0.0 pts';
+}
+
+function trendBadgeClass(trend: InterventionQuizComparisonRow['trend']): string {
+  if (trend === 'improved') {
+    return 'bg-emerald-500/20 text-emerald-100 border border-emerald-300/45';
+  }
+  if (trend === 'declined') {
+    return 'bg-rose-500/18 text-rose-100 border border-rose-300/45';
+  }
+  if (trend === 'unchanged') {
+    return 'bg-slate-500/18 text-slate-100 border border-slate-300/45';
+  }
+  return 'bg-amber-500/18 text-amber-100 border border-amber-300/45';
+}
+
+function trendLabel(trend: InterventionQuizComparisonRow['trend']): string {
+  if (trend === 'improved') return 'Improved';
+  if (trend === 'declined') return 'Declined';
+  if (trend === 'unchanged') return 'Unchanged';
+  return 'Awaiting Retry';
 }
 
 function formatConceptLabel(rawConcept: string): string {
@@ -264,6 +293,8 @@ export default function TeacherPerformancePage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [summary, setSummary] = useState<ClassPerformanceSummary | null>(null);
   const [atRisk, setAtRisk] = useState<ClassAtRiskResponse | null>(null);
+  const [interventionComparisons, setInterventionComparisons] =
+    useState<ClassInterventionQuizComparisonResponse | null>(null);
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<ClassDiagnosticsResponse | null>(null);
   const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(null);
@@ -330,6 +361,26 @@ export default function TeacherPerformancePage() {
         .sort((left, right) => left.masteryScore - right.masteryScore),
     [diagnostics?.conceptHotspots],
   );
+  const latestComparisonByStudent = useMemo(() => {
+    const map = new Map<string, InterventionQuizComparisonRow>();
+    for (const row of interventionComparisons?.comparisons ?? []) {
+      const current = map.get(row.studentId);
+      if (!current) {
+        map.set(row.studentId, row);
+        continue;
+      }
+      const currentAfter = current.afterSubmittedAt
+        ? new Date(current.afterSubmittedAt).getTime()
+        : 0;
+      const nextAfter = row.afterSubmittedAt
+        ? new Date(row.afterSubmittedAt).getTime()
+        : 0;
+      if (nextAfter > currentAfter) {
+        map.set(row.studentId, row);
+      }
+    }
+    return map;
+  }, [interventionComparisons?.comparisons]);
   const lessonPlanMetadata = useMemo(() => {
     if (!lessonPlanDraft) return [];
     return [
@@ -404,6 +455,7 @@ export default function TeacherPerformancePage() {
     if (!selectedClassId) {
       setSummary(null);
       setAtRisk(null);
+      setInterventionComparisons(null);
       setLogs(null);
       setDiagnostics(null);
       return;
@@ -411,9 +463,11 @@ export default function TeacherPerformancePage() {
 
     try {
       setLoadingData(true);
-      const [summaryRes, atRiskRes, logsRes, diagnosticsRes] = await Promise.allSettled([
+      const [summaryRes, atRiskRes, comparisonRes, logsRes, diagnosticsRes] =
+        await Promise.allSettled([
         performanceService.getClassSummary(selectedClassId),
         performanceService.getAtRiskStudents(selectedClassId),
+        performanceService.getInterventionQuizComparison(selectedClassId),
         performanceService.getClassLogs(selectedClassId, { limit: 25 }),
         performanceService.getClassDiagnostics(selectedClassId),
       ]);
@@ -426,6 +480,11 @@ export default function TeacherPerformancePage() {
         setAtRisk(atRiskRes.value.data);
       } else {
         setAtRisk(null);
+      }
+      if (comparisonRes.status === 'fulfilled') {
+        setInterventionComparisons(comparisonRes.value.data);
+      } else {
+        setInterventionComparisons(null);
       }
       if (logsRes.status === 'fulfilled') {
         setLogs(logsRes.value.data);
@@ -440,6 +499,7 @@ export default function TeacherPerformancePage() {
       if (
         summaryRes.status === 'rejected' &&
         atRiskRes.status === 'rejected' &&
+        comparisonRes.status === 'rejected' &&
         logsRes.status === 'rejected' &&
         diagnosticsRes.status === 'rejected'
       ) {
@@ -447,6 +507,7 @@ export default function TeacherPerformancePage() {
       } else if (
         summaryRes.status === 'rejected' ||
         atRiskRes.status === 'rejected' ||
+        comparisonRes.status === 'rejected' ||
         logsRes.status === 'rejected' ||
         diagnosticsRes.status === 'rejected'
       ) {
@@ -971,44 +1032,153 @@ export default function TeacherPerformancePage() {
                           <TableHead>Student</TableHead>
                           <TableHead>Assessment Avg</TableHead>
                           <TableHead>Class Record Avg</TableHead>
+                          <TableHead>Before Quiz</TableHead>
+                          <TableHead>After Retry</TableHead>
+                          <TableHead>Delta</TableHead>
                           <TableHead>Overall Avg</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead className="text-right">AI</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody className="[&_tr:last-child]:border-0">
-                        {(atRisk?.students ?? []).map((student) => (
-                          <TableRow key={student.studentId} className="teacher-table-row border-white/10">
-                            <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                              {formatStudentName(student)}
-                            </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {toPercent(student.assessmentAverage)}
-                            </TableCell>
-                            <TableCell className="text-[var(--teacher-text-strong)]">
-                              {toPercent(student.classRecordAverage)}
-                            </TableCell>
-                            <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                              {toPercent(student.blendedScore)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge className="teacher-badge-danger border-0">Needs Support</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                size="sm"
-                                variant="teacherOutline"
-                                className="rounded-lg"
-                                disabled={aiUnavailable || analyzing}
-                                onClick={() => handleAnalyze(student.studentId)}
-                              >
-                                Analyze
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {(atRisk?.students ?? []).map((student) => {
+                          const studentComparison = latestComparisonByStudent.get(
+                            student.studentId,
+                          );
+                          return (
+                            <TableRow key={student.studentId} className="teacher-table-row border-white/10">
+                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                                {formatStudentName(student)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(student.assessmentAverage)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(student.classRecordAverage)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(
+                                  studentComparison?.beforeScorePercent ?? null,
+                                )}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(
+                                  studentComparison?.afterScorePercent ?? null,
+                                )}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {formatSignedDelta(
+                                  studentComparison?.deltaScorePercent ?? null,
+                                )}
+                              </TableCell>
+                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                                {toPercent(student.blendedScore)}
+                              </TableCell>
+                              <TableCell className="space-y-1">
+                                <Badge className="teacher-badge-danger border-0">Needs Support</Badge>
+                                {studentComparison ? (
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(studentComparison.trend)}`}
+                                  >
+                                    {trendLabel(studentComparison.trend)}
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  size="sm"
+                                  variant="teacherOutline"
+                                  className="rounded-lg"
+                                  disabled={aiUnavailable || analyzing}
+                                  onClick={() => handleAnalyze(student.studentId)}
+                                >
+                                  Analyze
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
+                  </div>
+                )}
+              </TeacherSectionCard>
+
+              <TeacherSectionCard
+                title="Intervention Quiz Comparison"
+                description="Compare the same quiz score before intervention and after the intervention retry."
+                className="teacher-figma-stagger"
+              >
+                {(interventionComparisons?.comparisons.length ?? 0) === 0 ? (
+                  <TeacherEmptyState
+                    title="No intervention quiz retries yet"
+                    description="Once a learner retries an intervention quiz, before-and-after scores will appear here."
+                  />
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <Badge variant="secondary">
+                        Improved: {interventionComparisons?.improvedCount ?? 0}
+                      </Badge>
+                      <Badge variant="secondary">
+                        Declined: {interventionComparisons?.declinedCount ?? 0}
+                      </Badge>
+                      <Badge variant="secondary">
+                        Unchanged: {interventionComparisons?.unchangedCount ?? 0}
+                      </Badge>
+                      <Badge variant="secondary">
+                        Awaiting Retry: {interventionComparisons?.awaitingRetryCount ?? 0}
+                      </Badge>
+                    </div>
+                    <div className="teacher-table-shell">
+                      <Table>
+                        <TableHeader className="teacher-table-head [&_tr]:border-white/15">
+                          <TableRow className="border-white/10 hover:bg-transparent">
+                            <TableHead>Student</TableHead>
+                            <TableHead>Quiz</TableHead>
+                            <TableHead>Before</TableHead>
+                            <TableHead>After</TableHead>
+                            <TableHead>Delta</TableHead>
+                            <TableHead>Trend</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody className="[&_tr:last-child]:border-0">
+                          {(interventionComparisons?.comparisons ?? []).map((entry) => (
+                            <TableRow
+                              key={`${entry.caseId}-${entry.assignmentId}-${entry.assessmentId}`}
+                              className="teacher-table-row border-white/10"
+                            >
+                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                                {entry.student
+                                  ? `${entry.student.lastName ?? ''}, ${entry.student.firstName ?? ''}`
+                                      .replace(/^,\s*/, '')
+                                      .trim() || entry.student.email || entry.studentId
+                                  : entry.studentId}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {entry.assessmentTitle}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(entry.beforeScorePercent)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {toPercent(entry.afterScorePercent)}
+                              </TableCell>
+                              <TableCell className="text-[var(--teacher-text-strong)]">
+                                {formatSignedDelta(entry.deltaScorePercent)}
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(entry.trend)}`}
+                                >
+                                  {trendLabel(entry.trend)}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </div>
                 )}
               </TeacherSectionCard>

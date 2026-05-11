@@ -22,33 +22,21 @@ export class UserEventsListener {
   async handleUserCreated(event: UserCreatedEvent): Promise<void> {
     // Send OTP verification email
     if (event.requiresOTP) {
-      try {
-        await this.otpService.createAndSendOTP(
-          event.userId,
-          event.email,
-          'email_verification',
-        );
-      } catch (err) {
-        this.logger.error(
-          `Failed to send verification OTP for user ${event.email}`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      }
+      await this.otpService.createAndSendOTP(
+        event.userId,
+        event.email,
+        'email_verification',
+      );
     }
 
     // Send generated password email
     if (event.generatedPassword) {
-      try {
-        await this.mailService.sendPasswordEmail(
-          event.email,
-          event.generatedPassword,
-        );
-      } catch (err) {
-        this.logger.error(
-          `Failed to send password email for user ${event.email}`,
-          err instanceof Error ? err.stack : String(err),
-        );
-      }
+      await this.mailService.sendPasswordEmail(
+        event.email,
+        event.generatedPassword,
+      );
     }
+
+    this.logger.log(`User onboarding email flow completed for ${event.email}`);
   }
 }

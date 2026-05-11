@@ -1144,8 +1144,10 @@ def get_current_user(
     x_user_roles: str = Header(...),
     x_internal_service_token: str | None = Header(None),
 ) -> RequestUser:
-    if settings.ai_service_shared_secret:
-        if x_internal_service_token != settings.ai_service_shared_secret:
+    expected_secret = (settings.ai_service_shared_secret or "").strip()
+    provided_secret = (x_internal_service_token or "").strip()
+    if expected_secret:
+        if provided_secret != expected_secret:
             raise HTTPException(401, "Invalid internal service token")
     return RequestUser(
         id=x_user_id,
@@ -1157,9 +1159,11 @@ def get_current_user(
 def require_internal_service(
     x_internal_service_token: str | None = Header(None),
 ) -> None:
-    if not settings.ai_service_shared_secret:
+    expected_secret = (settings.ai_service_shared_secret or "").strip()
+    provided_secret = (x_internal_service_token or "").strip()
+    if not expected_secret:
         return
-    if x_internal_service_token != settings.ai_service_shared_secret:
+    if provided_secret != expected_secret:
         raise HTTPException(401, "Invalid internal service token")
 
 

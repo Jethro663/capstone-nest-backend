@@ -181,13 +181,18 @@ export class HealthService {
         uploadMaterialization,
       };
     } catch (error) {
+      const rawMessage =
+        error instanceof Error ? error.message : 'AI service health check failed';
+      const connectivityFailure = /fetch failed|econnrefused|enotfound|ehostunreach|socket hang up/i.test(
+        rawMessage,
+      );
+
       return {
         ok: allowDegradedAi,
         degraded: allowDegradedAi,
-        message:
-          error instanceof Error
-            ? error.message
-            : 'AI service health check failed',
+        message: connectivityFailure
+          ? `Cannot reach AI service at ${aiServiceUrl}. Ensure the service is running and reachable from backend.`
+          : rawMessage,
       };
     }
   }

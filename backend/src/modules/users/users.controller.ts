@@ -22,6 +22,7 @@ import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import { parseOptionalBoolQuery } from '../../common/utils/parse-optional-bool-query.util';
+import { parsePositiveIntQuery } from '../../common/utils/parse-positive-int-query.util';
 
 @ApiBearerAuth('token')
 @Controller('users')
@@ -57,6 +58,30 @@ export class UsersController {
       total: result.total,
       totalPages: result.totalPages,
       ...(result.statusCounts ? { statusCounts: result.statusCounts } : {}),
+    };
+  }
+
+  @Get('reports/monitoring')
+  @Roles(RoleName.Admin)
+  async getMonitoringReport(
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.usersService.getMonitoringReports({
+      role,
+      status,
+      search,
+      page: parsePositiveIntQuery(page, 'page'),
+      limit: parsePositiveIntQuery(limit, 'limit'),
+    });
+
+    return {
+      success: true,
+      message: 'User monitoring report retrieved successfully.',
+      data: result,
     };
   }
 

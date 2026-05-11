@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -124,7 +124,7 @@ export function LxpScreen({ navigation }: Props) {
       }
     >
       {showConfetti ? (
-        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, zIndex: 30 }}>
+        <View style={{ pointerEvents: "none", position: "absolute", top: 0, left: 0, right: 0, height: 220, zIndex: 30 }}>
           {Array.from({ length: 16 }).map((_, index) => (
             <View
               key={index}
@@ -145,7 +145,7 @@ export function LxpScreen({ navigation }: Props) {
 
       <GradientHeader
         colors={gradients.lxp}
-        eyebrow="Learning Experience ✨"
+        eyebrow="Learning Experience âœ¨"
         title="LXP Dashboard"
         rightContent={
           <View
@@ -231,7 +231,7 @@ export function LxpScreen({ navigation }: Props) {
                 backgroundColor: "#FDE68A",
               }}
             >
-              <Text style={{ fontSize: 28 }}>🤖</Text>
+              <Text style={{ fontSize: 28 }}>ðŸ¤–</Text>
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -266,7 +266,7 @@ export function LxpScreen({ navigation }: Props) {
         <View>
           <SectionTitle title="Eligible Classes" />
           {eligibleClassCards.length === 0 ? (
-            <EmptyState emoji="📘" title="No classes ready" subtitle="Your account has no classes available for LXP yet." />
+            <EmptyState emoji="ðŸ“˜" title="No classes ready" subtitle="Your account has no classes available for LXP yet." />
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
               {eligibleClassCards.map((entry) => (
@@ -278,7 +278,7 @@ export function LxpScreen({ navigation }: Props) {
                       borderColor: entry.classId === selectedClassId ? colors.indigo : `${colors.indigo}22`,
                     }}
                   >
-                    <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "📘"}</Text>
+                    <Text style={{ fontSize: 30 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
                     <Text style={{ marginTop: 10, fontSize: 13, fontWeight: "800", color: colors.text }}>
                       {entry.class.subjectName}
                     </Text>
@@ -293,7 +293,7 @@ export function LxpScreen({ navigation }: Props) {
         </View>
 
         <View>
-          <SectionTitle title="Recommended for You 🎯" />
+          <SectionTitle title="Recommended for You ðŸŽ¯" />
           <View style={{ gap: 12 }}>
             {recommendations.length === 0 ? (
               <Card>
@@ -336,7 +336,7 @@ export function LxpScreen({ navigation }: Props) {
                           <Text style={{ fontSize: 12, fontWeight: "900", color: colors.amber }}>+{recommendation.xp}</Text>
                         </View>
                         {recommendation.completed ? (
-                          <Text style={{ fontSize: 18 }}>✅</Text>
+                          <Text style={{ fontSize: 18 }}>âœ…</Text>
                         ) : (
                           <Pressable
                             onPress={() => void handleCompleteCheckpoint(recommendation.id)}
@@ -372,13 +372,13 @@ export function LxpScreen({ navigation }: Props) {
           <SectionTitle title="Checkpoint Progress" />
           <View style={{ gap: 14 }}>
             {(playlistQuery.data?.checkpoints ?? []).length === 0 ? (
-              <EmptyState emoji="🚀" title="No checkpoints yet" subtitle="This class has not opened any LXP checkpoint progress." />
+              <EmptyState emoji="ðŸš€" title="No checkpoints yet" subtitle="This class has not opened any LXP checkpoint progress." />
             ) : (
               (playlistQuery.data?.checkpoints ?? []).map((checkpoint) => (
                 <View key={checkpoint.id}>
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "📘"}</Text>
+                      <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "ðŸ“˜"}</Text>
                       <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
                     </View>
                     <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>
@@ -400,3 +400,4 @@ export function LxpScreen({ navigation }: Props) {
     </ScreenScroll>
   );
 }
+

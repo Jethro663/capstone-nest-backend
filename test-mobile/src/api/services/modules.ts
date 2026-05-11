@@ -2,7 +2,13 @@ import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import { downloadProtectedFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
-import type { ClassModule, ModuleItem, UpdateClassModuleDto, UpdateModuleItemDto } from "../../types/module";
+import type {
+  ClassModule,
+  CreateClassModuleDto,
+  ModuleItem,
+  UpdateClassModuleDto,
+  UpdateModuleItemDto,
+} from "../../types/module";
 
 export type ModuleDetail = ClassModule;
 
@@ -10,6 +16,11 @@ export const modulesApi = {
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<ClassModule[]>>(`/modules/class/${classId}`);
     return normalizeArray<ClassModule>(unwrapEnvelope(response.data));
+  },
+
+  async create(payload: CreateClassModuleDto) {
+    const response = await apiClient.post<ApiEnvelope<ClassModule>>("/modules", payload);
+    return unwrapEnvelope(response.data);
   },
 
   async getByClassAndModule(classId: string, moduleId: string) {

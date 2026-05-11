@@ -58,21 +58,38 @@ export function createApiClient(): AxiosInstance {
     timeout: 30000,
   });
 
-  // Request interceptor: add authorization header
+  // Response interceptor: handle 401 and token refresh
+  let refreshPromise: Promise<string | null> | null = null;
+  let bootstrapPromise: Promise<string | null> | null = null;
+
+  // Request interceptor: ensure auth header is present before protected calls.
   api.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
+    async (config: InternalAxiosRequestConfig) => {
+      const requestUrl = typeof config.url === 'string' ? config.url : '';
+      const isAuthRefreshRequest = requestUrl.includes('/auth/refresh');
+
+      if (!accessToken && !isAuthRefreshRequest) {
+        if (!bootstrapPromise) {
+          bootstrapPromise = refreshSessionAccessToken()
+            .catch(() => null)
+            .finally(() => {
+              bootstrapPromise = null;
+            });
+        }
+
+        const bootstrappedToken = await bootstrapPromise;
+        if (bootstrappedToken) {
+          accessToken = bootstrappedToken;
+        }
+      }
+
       if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
       }
       return config;
     },
-    (error: AxiosError) => {
-      return Promise.reject(error);
-    }
+    (error: AxiosError) => Promise.reject(error),
   );
-
-  // Response interceptor: handle 401 and token refresh
-  let refreshPromise: Promise<string | null> | null = null;
 
   api.interceptors.response.use(
     (response) => response,

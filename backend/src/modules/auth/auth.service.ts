@@ -72,6 +72,25 @@ export class AuthService {
       userAgent,
     );
 
+    try {
+      await this.auditService.log({
+        actorId: user.id,
+        action: 'auth.login',
+        targetType: 'auth_session',
+        targetId: user.id,
+        metadata: {
+          ip: ip ?? null,
+          userAgent: userAgent ?? null,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[AUTH] Failed to write login audit log for user ${user.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
     // 7. Return sanitized user + tokens
     return {
       user: this.sanitizeUser(user),
@@ -209,7 +228,24 @@ export class AuthService {
   async logout(rawToken: string): Promise<void> {
     // Revoke the specific refresh token; silently no-op if already gone
     try {
-      await this.tokenService.revokeByToken(rawToken);
+      const revokedUserId = await this.tokenService.revokeByToken(rawToken);
+      if (revokedUserId) {
+        try {
+          await this.auditService.log({
+            actorId: revokedUserId,
+            action: 'auth.logout',
+            targetType: 'auth_session',
+            targetId: revokedUserId,
+            metadata: {},
+          });
+        } catch (error) {
+          this.logger.warn(
+            `[AUTH] Failed to write logout audit log for user ${revokedUserId}: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      }
     } catch {
       // Non-critical — cookie will be cleared regardless
     }

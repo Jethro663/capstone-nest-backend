@@ -11,19 +11,32 @@ import SectionForm, {
 import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { sectionService } from '@/services/section-service';
+import { academicStateService } from '@/services/academic-state-service';
 import { userService } from '@/services/user-service';
-import { getCurrentToFutureSchoolYears } from '@/lib/school-year';
+import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
 import { toast } from 'sonner';
 import { getApiErrorMessage } from '@/lib/api-error';
 
+function getFallbackSchoolYear() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const startYear = now.getMonth() >= 5 ? year : year - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
 export default function CreateSectionPage() {
   const router = useRouter();
+  const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
   const [teachers, setTeachers] = useState<User[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const schoolYears = useMemo(() => getCurrentToFutureSchoolYears(4), []);
+  const schoolYears = useMemo(
+    () => [activeSchoolYear || getFallbackSchoolYear()],
+    [activeSchoolYear],
+  );
   const initialValues = useMemo(
     () => createEmptySectionForm(schoolYears[0] || ''),
     [schoolYears],
@@ -32,8 +45,18 @@ export default function CreateSectionPage() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const teachersRes = await userService.getAll({ role: 'teacher', limit: 200 });
+      const [teachersRes, sectionsRes] = await Promise.all([
+        userService.getAll({ role: 'teacher', limit: 200 }),
+        sectionService.getAll({ limit: 100 }),
+      ]);
       setTeachers(teachersRes.users || []);
+      setSections(sectionsRes.data || []);
+      try {
+        const academicState = await academicStateService.getCurrent();
+        setActiveSchoolYear(academicState.data.schoolYear);
+      } catch {
+        setActiveSchoolYear(null);
+      }
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to load section form data'));
     } finally {
@@ -44,6 +67,30 @@ export default function CreateSectionPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const adviserDisabledReasonById = useMemo(() => {
+    const byTeacher: Record<string, string> = {};
+
+    for (const section of sections) {
+      if (!section.adviserId || !section.isActive) continue;
+      if (byTeacher[section.adviserId]) continue;
+      byTeacher[section.adviserId] = `Already assigned to Grade ${section.gradeLevel} - ${section.name}`;
+    }
+
+    return byTeacher;
+  }, [sections]);
+  const roomDisabledReasonByNumber = useMemo(() => {
+    const byRoom: Record<string, string> = {};
+
+    for (const section of sections) {
+      const room = section.roomNumber?.trim();
+      if (!room || !section.isActive) continue;
+      if (byRoom[room]) continue;
+      byRoom[room] = `Assigned to Grade ${section.gradeLevel} - ${section.name}`;
+    }
+
+    return byRoom;
+  }, [sections]);
 
   const handleSubmit = async (values: SectionFormValues) => {
     try {
@@ -116,7 +163,10 @@ export default function CreateSectionPage() {
         <SectionForm
           initialValues={initialValues}
           teachers={teachers}
+          adviserDisabledReasonById={adviserDisabledReasonById}
+          roomDisabledReasonByNumber={roomDisabledReasonByNumber}
           schoolYears={schoolYears}
+          lockSchoolYear
           saving={saving}
           submitLabel="Create Section"
           onSubmit={handleSubmit}

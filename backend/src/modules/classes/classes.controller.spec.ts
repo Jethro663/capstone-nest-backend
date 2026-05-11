@@ -54,6 +54,7 @@ describe('ClassesController', () => {
         '2026-2027',
         'true',
         'math',
+        '201',
         '2',
         '10',
       );
@@ -63,6 +64,7 @@ describe('ClassesController', () => {
         sectionId: 'section-1',
         teacherId: 'teacher-1',
         schoolYear: '2026-2027',
+        room: '201',
         isActive: true,
         search: 'math',
         page: 2,
@@ -79,12 +81,14 @@ describe('ClassesController', () => {
           undefined,
           undefined,
           undefined,
+          undefined,
           '0',
         ),
       ).rejects.toThrow(BadRequestException);
 
       await expect(
         controller.getAllClasses(
+          undefined,
           undefined,
           undefined,
           undefined,

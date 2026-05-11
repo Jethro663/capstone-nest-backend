@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { OTP_TTL_MINUTES } from '../../common/constants';
 
@@ -8,6 +8,8 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly emailService = process.env.EMAIL_SERVICE?.toLowerCase() || '';
   private readonly resendApiKey = process.env.RESEND_API_KEY || '';
+  private smtpReady = false;
+  private smtpError: string | null = null;
 
   constructor() {
     if (this.emailService === 'gmail') {
@@ -18,12 +20,20 @@ export class MailService {
           pass: process.env.EMAIL_PASSWORD,
         },
       });
-      this.transporter.verify().catch((err) => {
-        this.logger.error(
-          '[MAIL] SMTP transporter verification failed',
-          err.message,
-        );
-      });
+      this.transporter
+        .verify()
+        .then(() => {
+          this.smtpReady = true;
+          this.smtpError = null;
+        })
+        .catch((err) => {
+          this.smtpReady = false;
+          this.smtpError = err?.message ?? 'Unknown SMTP verification error';
+          this.logger.error(
+            '[MAIL] SMTP transporter verification failed',
+            this.smtpError,
+          );
+        });
     }
   }
 
@@ -32,7 +42,20 @@ export class MailService {
   }
 
   private getFromAddress() {
-    return process.env.EMAIL_FROM || process.env.EMAIL_USER || '';
+    const configuredFrom = process.env.EMAIL_FROM?.trim() || '';
+    const configuredUser = process.env.EMAIL_USER?.trim() || '';
+
+    if (this.emailService === 'gmail') {
+      if (configuredFrom) {
+        return configuredFrom;
+      }
+
+      if (configuredUser) {
+        return `Nexora LMS <${configuredUser}>`;
+      }
+    }
+
+    return configuredFrom || configuredUser;
   }
 
   private async sendViaResend(options: {
@@ -88,6 +111,12 @@ export class MailService {
       return { success: true, mode: 'development' };
     }
 
+    if (this.emailService === 'gmail' && this.smtpError) {
+      throw new Error(
+        `Gmail SMTP is not ready (${this.smtpError}). Set EMAIL_PASSWORD to a valid Gmail App Password.`,
+      );
+    }
+
     await this.transporter.sendMail({
       from: this.getFromAddress(),
       to: options.to,
@@ -116,7 +145,10 @@ export class MailService {
         text: `Your Nexora verification code is: ${otp}. Expires in ${OTP_TTL_MINUTES} minutes.`,
       });
     } catch (error) {
-      this.logger.error(`Failed to send email to ${email}`, error.stack);
+      this.logger.error(
+        `Failed to send email to ${email}`,
+        error instanceof Error ? error.stack : String(error),
+      );
       throw new Error('Email delivery failed');
     }
   }
@@ -135,7 +167,7 @@ export class MailService {
     } catch (error) {
       this.logger.error(
         `Failed to send password email to ${email}`,
-        error.stack,
+        error instanceof Error ? error.stack : String(error),
       );
       throw new Error('Email delivery failed');
     }
@@ -240,3 +272,7 @@ export class MailService {
     `;
   }
 }
+
+
+
+

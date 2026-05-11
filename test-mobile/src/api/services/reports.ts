@@ -2,6 +2,9 @@ import { apiClient } from "../client";
 import type {
   AssessmentHistoryQuery,
   AssessmentHistoryResponse,
+  TeacherPaginatedReportResponse,
+  TeacherReportQuery,
+  TeacherReportRow,
   TranscriptQuery,
   TranscriptResponse,
 } from "../../types/report";
@@ -17,6 +20,46 @@ export const reportsApi = {
   async getAssessmentHistory(query?: AssessmentHistoryQuery) {
     const response = await apiClient.get<AssessmentHistoryResponse>(
       "/profiles/me/assessment-history",
+      { params: query },
+    );
+    return response.data;
+  },
+
+  async getClassEnrollment(query?: TeacherReportQuery) {
+    const response = await apiClient.get<TeacherPaginatedReportResponse<TeacherReportRow[]>>(
+      "/reports/class-enrollment",
+      { params: query },
+    );
+    return response.data;
+  },
+
+  async getStudentPerformance(query?: TeacherReportQuery) {
+    const response = await apiClient.get<TeacherPaginatedReportResponse<TeacherReportRow[]>>(
+      "/reports/student-performance",
+      { params: query },
+    );
+    return response.data;
+  },
+
+  async getAssessmentSummary(query?: TeacherReportQuery) {
+    const response = await apiClient.get<TeacherPaginatedReportResponse<TeacherReportRow[]>>(
+      "/reports/assessment-summary",
+      { params: query },
+    );
+    return response.data;
+  },
+
+  async getInterventionParticipation(query?: TeacherReportQuery) {
+    const response = await apiClient.get<TeacherPaginatedReportResponse<TeacherReportRow[]>>(
+      "/reports/intervention-participation",
+      { params: query },
+    );
+    return response.data;
+  },
+
+  async getSystemUsage(query?: TeacherReportQuery) {
+    const response = await apiClient.get<TeacherPaginatedReportResponse<TeacherReportRow[] | Record<string, unknown>>>(
+      "/reports/system-usage",
       { params: query },
     );
     return response.data;

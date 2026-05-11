@@ -621,7 +621,7 @@ export function ScheduleCalendarCreator({
             <h3 className="text-sm font-black text-[var(--admin-text-strong)]">Class Schedule</h3>
             <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
               {disabled
-                ? 'Fill in subject, code, grade level, school year, and section to enable scheduling.'
+                ? 'Fill in subject, code, grade level, school year, section, and room to enable scheduling.'
                 : 'Click any open cell to open the add popup, then choose a quick duration or custom range.'}
             </p>
           </div>
@@ -696,7 +696,7 @@ export function ScheduleCalendarCreator({
         {!disabled && existingSlots.length > 0 ? (
           <div className="flex items-center gap-2 text-xs text-[var(--admin-text-muted)]">
             <span className="inline-block h-3 w-4 rounded border border-slate-300 bg-slate-100" />
-            Existing section classes are shown in gray.
+            Existing room schedules are shown in gray.
           </div>
         ) : null}
 

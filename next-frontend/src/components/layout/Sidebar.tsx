@@ -240,6 +240,16 @@ const adminNav: NavItem[] = [
     href: "/dashboard/admin/roster-import",
     icon: Upload,
   },
+  {
+    label: "Access Students",
+    href: "/dashboard/admin/access-students",
+    icon: Users,
+  },
+  {
+    label: "User Reports",
+    href: "/dashboard/admin/user-reports",
+    icon: BarChart3,
+  },
   { label: "Reports", href: "/dashboard/admin/reports", icon: BarChart3 },
   {
     label: "Evaluations",
@@ -286,6 +296,16 @@ const adminNavCategories: NavCategory[] = [
         label: "Roster Import",
         href: "/dashboard/admin/roster-import",
         icon: Upload,
+      },
+      {
+        label: "Access Students",
+        href: "/dashboard/admin/access-students",
+        icon: Users,
+      },
+      {
+        label: "User Reports",
+        href: "/dashboard/admin/user-reports",
+        icon: BarChart3,
       },
     ],
   },

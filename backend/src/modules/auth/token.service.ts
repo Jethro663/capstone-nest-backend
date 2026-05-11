@@ -150,12 +150,15 @@ export class TokenService {
    * Revoke a single token by its raw value (used on logout).
    * Hash-based lookup — no userId required.
    */
-  async revokeByToken(rawToken: string): Promise<void> {
+  async revokeByToken(rawToken: string): Promise<string | null> {
     const tokenHash = this.hashToken(rawToken);
-    await this.dbService.db
+    const [revokedToken] = await this.dbService.db
       .update(refreshTokens)
       .set({ revoked: true })
-      .where(eq(refreshTokens.tokenHash, tokenHash));
+      .where(eq(refreshTokens.tokenHash, tokenHash))
+      .returning({ userId: refreshTokens.userId });
+
+    return revokedToken?.userId ?? null;
   }
 
   /**

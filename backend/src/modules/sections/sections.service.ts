@@ -14,6 +14,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  ne,
   notInArray,
   or,
   SQL,
@@ -24,6 +25,8 @@ import { AuditService } from '../audit/audit.service';
 import {
   sections,
   classes,
+  classRecords,
+  classRecordFinalGrades,
   sectionVisibilityPreferences,
   users,
   enrollments,
@@ -34,6 +37,10 @@ import {
 import { toCalendarSlot } from '../../common/utils/schedule.util';
 import { CreateSectionDto } from './DTO/create-section.dto';
 import { UpdateSectionDto } from './DTO/update-section.dto';
+import {
+  ALLOWED_ROOM_NUMBERS_MESSAGE,
+  ALLOWED_ROOM_NUMBERS_SET,
+} from '../../common/constants/room-options';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
 import {
   type BulkSectionLifecycleAction,
@@ -86,6 +93,80 @@ export class SectionsService {
     if (!adviserRoles.some((r) => r.roleName === 'teacher')) {
       throw new BadRequestException(
         `User "${adviserId}" does not have the teacher role and cannot be assigned as adviser`,
+      );
+    }
+  }
+
+  private normalizeRoomNumber(roomNumber?: string | null): string | null {
+    const normalized = roomNumber?.trim() ?? '';
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  private assertAllowedRoomNumber(roomNumber: string | null): void {
+    if (!roomNumber) return;
+    if (!ALLOWED_ROOM_NUMBERS_SET.has(roomNumber)) {
+      throw new BadRequestException(ALLOWED_ROOM_NUMBERS_MESSAGE);
+    }
+  }
+
+  private async ensureRoomIsAvailable(
+    roomNumber: string | null,
+    excludeSectionId?: string,
+  ): Promise<void> {
+    if (!roomNumber) return;
+
+    const roomConditions: SQL<unknown>[] = [
+      eq(sections.roomNumber, roomNumber),
+      eq(sections.isActive, true),
+    ];
+
+    if (excludeSectionId) {
+      roomConditions.push(ne(sections.id, excludeSectionId));
+    }
+
+    const roomOwner = await this.db.query.sections.findFirst({
+      where: and(...roomConditions),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (roomOwner) {
+      throw new ConflictException(
+        `Room ${roomNumber} is already assigned to Grade ${roomOwner.gradeLevel} - ${roomOwner.name} (${roomOwner.schoolYear}). Choose another room.`,
+      );
+    }
+  }
+
+  private async ensureAdviserAvailable(
+    adviserId: string,
+    excludeSectionId?: string,
+  ): Promise<void> {
+    const adviserConditions: SQL<unknown>[] = [
+      eq(sections.adviserId, adviserId),
+      eq(sections.isActive, true),
+    ];
+
+    if (excludeSectionId) {
+      adviserConditions.push(ne(sections.id, excludeSectionId));
+    }
+
+    const assignedSection = await this.db.query.sections.findFirst({
+      where: and(...adviserConditions),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (assignedSection) {
+      throw new ConflictException(
+        `Teacher is already assigned as adviser to Grade ${assignedSection.gradeLevel} - ${assignedSection.name} (${assignedSection.schoolYear}). Select another teacher.`,
       );
     }
   }
@@ -734,6 +815,11 @@ export class SectionsService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
+    const normalizedRoomNumber = this.normalizeRoomNumber(
+      createSectionDto.roomNumber,
+    );
+    this.assertAllowedRoomNumber(normalizedRoomNumber);
+
     const existingSection = await this.db.query.sections.findFirst({
       where: and(
         eq(sections.name, createSectionDto.name),
@@ -761,7 +847,10 @@ export class SectionsService {
 
       // Ensure the assigned adviser actually holds the teacher role
       await this.verifyAdviserHasTeacherRole(createSectionDto.adviserId);
+      await this.ensureAdviserAvailable(createSectionDto.adviserId);
     }
+
+    await this.ensureRoomIsAvailable(normalizedRoomNumber);
 
     try {
       const [newSection] = await this.db
@@ -771,7 +860,7 @@ export class SectionsService {
           gradeLevel: createSectionDto.gradeLevel,
           schoolYear: createSectionDto.schoolYear,
           capacity: createSectionDto.capacity,
-          roomNumber: createSectionDto.roomNumber || null,
+          roomNumber: normalizedRoomNumber,
           adviserId: createSectionDto.adviserId || null,
           isActive: true,
         })
@@ -813,6 +902,14 @@ export class SectionsService {
     actorId?: string,
     actorRoles: string[] = [],
   ) {
+    const normalizedRoomNumber =
+      updateSectionDto.roomNumber !== undefined
+        ? this.normalizeRoomNumber(updateSectionDto.roomNumber)
+        : undefined;
+    if (normalizedRoomNumber !== undefined) {
+      this.assertAllowedRoomNumber(normalizedRoomNumber);
+    }
+
     const existingSection = await this.findById(id);
 
     if (
@@ -877,6 +974,11 @@ export class SectionsService {
 
       // Ensure the new adviser holds the teacher role
       await this.verifyAdviserHasTeacherRole(updateSectionDto.adviserId);
+      await this.ensureAdviserAvailable(updateSectionDto.adviserId, id);
+    }
+
+    if (normalizedRoomNumber !== undefined) {
+      await this.ensureRoomIsAvailable(normalizedRoomNumber, id);
     }
 
     const updateData: Partial<{
@@ -898,8 +1000,8 @@ export class SectionsService {
       updateData.schoolYear = updateSectionDto.schoolYear;
     if (updateSectionDto.capacity !== undefined)
       updateData.capacity = updateSectionDto.capacity;
-    if (updateSectionDto.roomNumber !== undefined)
-      updateData.roomNumber = updateSectionDto.roomNumber;
+    if (normalizedRoomNumber !== undefined)
+      updateData.roomNumber = normalizedRoomNumber;
     if (updateSectionDto.adviserId !== undefined)
       updateData.adviserId = updateSectionDto.adviserId;
     if (updateSectionDto.isActive !== undefined)
@@ -1333,6 +1435,728 @@ export class SectionsService {
         previousIsActive: section.isActive,
       },
     });
+  }
+
+  private parseGradeLevelAsNumber(gradeLevel: string): number {
+    const parsed = Number.parseInt(gradeLevel, 10);
+    if (!Number.isFinite(parsed)) {
+      throw new BadRequestException(`Invalid grade level: "${gradeLevel}"`);
+    }
+    return parsed;
+  }
+
+  private getNextSchoolYear(currentSchoolYear: string): string {
+    const match = currentSchoolYear.match(/^(\d{4})-(\d{4})$/);
+    if (!match) {
+      throw new BadRequestException(
+        `Invalid school year format "${currentSchoolYear}". Expected YYYY-YYYY.`,
+      );
+    }
+
+    const start = Number.parseInt(match[1], 10) + 1;
+    const end = Number.parseInt(match[2], 10) + 1;
+    return `${start}-${end}`;
+  }
+
+  private async computeSectionStudentFinalGrades(
+    sectionId: string,
+    studentIds: string[],
+  ) {
+    if (studentIds.length === 0) {
+      return new Map<string, number>();
+    }
+
+    const rows = await this.db
+      .select({
+        studentId: classRecordFinalGrades.studentId,
+        avgFinal:
+          sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
+            Number,
+          ),
+      })
+      .from(classRecordFinalGrades)
+      .innerJoin(
+        classRecords,
+        eq(classRecords.id, classRecordFinalGrades.classRecordId),
+      )
+      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .where(
+        and(
+          eq(classes.sectionId, sectionId),
+          inArray(classRecordFinalGrades.studentId, studentIds),
+        ),
+      )
+      .groupBy(classRecordFinalGrades.studentId);
+
+    return new Map(
+      rows.map((row) => [row.studentId, Number(row.avgFinal ?? 0)]),
+    );
+  }
+
+  async getAccessStudentsOverview(filters?: {
+    schoolYear?: string;
+    gradeLevel?: string;
+    sectionId?: string;
+    search?: string;
+  }) {
+    const sectionWhere: SQL<unknown>[] = [eq(sections.isActive, true)];
+    if (filters?.schoolYear) {
+      sectionWhere.push(eq(sections.schoolYear, filters.schoolYear));
+    }
+    if (filters?.gradeLevel) {
+      sectionWhere.push(eq(sections.gradeLevel, filters.gradeLevel));
+    }
+    if (filters?.sectionId) {
+      sectionWhere.push(eq(sections.id, filters.sectionId));
+    }
+
+    const sectionList = await this.db.query.sections.findMany({
+      where: and(...sectionWhere),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+        roomNumber: true,
+        capacity: true,
+      },
+      with: {
+        adviser: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: (table, { asc }) => [
+        asc(table.schoolYear),
+        asc(table.gradeLevel),
+        asc(table.name),
+      ],
+    });
+
+    if (sectionList.length === 0) {
+      return {
+        data: [],
+        totalSections: 0,
+        totalStudents: 0,
+      };
+    }
+
+    const sectionIds = sectionList.map((section) => section.id);
+
+    const rosterRows = await this.db
+      .select({
+        sectionId: enrollments.sectionId,
+        studentId: users.id,
+        firstName: users.firstName,
+        middleName: users.middleName,
+        lastName: users.lastName,
+        email: users.email,
+        lrn: studentProfiles.lrn,
+        gradeLevel: studentProfiles.gradeLevel,
+      })
+      .from(enrollments)
+      .innerJoin(users, eq(users.id, enrollments.studentId))
+      .leftJoin(studentProfiles, eq(studentProfiles.userId, users.id))
+      .where(
+        and(
+          inArray(enrollments.sectionId, sectionIds),
+          eq(enrollments.status, 'enrolled'),
+          isNull(enrollments.classId),
+        ),
+      );
+
+    const finalGradeRows = await this.db
+      .select({
+        sectionId: classes.sectionId,
+        studentId: classRecordFinalGrades.studentId,
+        avgFinal:
+          sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
+            Number,
+          ),
+      })
+      .from(classRecordFinalGrades)
+      .innerJoin(
+        classRecords,
+        eq(classRecords.id, classRecordFinalGrades.classRecordId),
+      )
+      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .where(inArray(classes.sectionId, sectionIds))
+      .groupBy(classes.sectionId, classRecordFinalGrades.studentId);
+
+    const classRecordCountRows = await this.db
+      .select({
+        sectionId: classes.sectionId,
+        totalRecords:
+          sql<number>`count(distinct ${classRecords.id})`.mapWith(Number),
+        finalizedRecords:
+          sql<number>`count(distinct case when ${classRecords.status} in ('finalized', 'locked') then ${classRecords.id} end)`.mapWith(
+            Number,
+          ),
+      })
+      .from(classes)
+      .leftJoin(classRecords, eq(classRecords.classId, classes.id))
+      .where(inArray(classes.sectionId, sectionIds))
+      .groupBy(classes.sectionId);
+
+    const classRecordCountBySectionId = new Map<
+      string,
+      { totalRecords: number; finalizedRecords: number }
+    >();
+    for (const row of classRecordCountRows) {
+      classRecordCountBySectionId.set(row.sectionId, {
+        totalRecords: Number(row.totalRecords ?? 0),
+        finalizedRecords: Number(row.finalizedRecords ?? 0),
+      });
+    }
+
+    const finalGradeBySectionStudentKey = new Map<string, number>();
+    for (const row of finalGradeRows) {
+      finalGradeBySectionStudentKey.set(
+        `${row.sectionId}:${row.studentId}`,
+        Number(row.avgFinal ?? 0),
+      );
+    }
+
+    const normalizedSearch = filters?.search?.trim().toLowerCase() ?? '';
+    const studentsBySectionId = new Map<
+      string,
+      Array<{
+        id: string;
+        firstName: string | null;
+        middleName: string | null;
+        lastName: string | null;
+        email: string;
+        lrn: string | null;
+        gradeLevel: string | null;
+        finalGrade: number | null;
+        isFailing: boolean;
+      }>
+    >();
+
+    for (const row of rosterRows) {
+      const finalGradeKey = `${row.sectionId}:${row.studentId}`;
+      const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
+      const finalGrade =
+        finalGradeValue === undefined
+          ? null
+          : Math.round(finalGradeValue * 100) / 100;
+      const searchable = [
+        row.firstName ?? '',
+        row.middleName ?? '',
+        row.lastName ?? '',
+        row.email ?? '',
+        row.lrn ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      if (normalizedSearch && !searchable.includes(normalizedSearch)) {
+        continue;
+      }
+
+      const bucket = studentsBySectionId.get(row.sectionId) ?? [];
+      bucket.push({
+        id: row.studentId,
+        firstName: row.firstName,
+        middleName: row.middleName,
+        lastName: row.lastName,
+        email: row.email,
+        lrn: row.lrn,
+        gradeLevel: row.gradeLevel ?? null,
+        finalGrade,
+        isFailing: finalGrade !== null && finalGrade < 75,
+      });
+      studentsBySectionId.set(row.sectionId, bucket);
+    }
+
+    const gradeBuckets = new Map<
+      string,
+      Array<{
+        id: string;
+        name: string;
+        gradeLevel: string;
+        schoolYear: string;
+        roomNumber: string | null;
+        capacity: number;
+        adviser: {
+          id: string;
+          firstName: string | null;
+          lastName: string | null;
+          email: string;
+        } | null;
+        classRecordCount: number;
+        finalizedClassRecordCount: number;
+        studentCount: number;
+        students: Array<{
+          id: string;
+          firstName: string | null;
+          middleName: string | null;
+          lastName: string | null;
+          email: string;
+          lrn: string | null;
+          gradeLevel: string | null;
+          finalGrade: number | null;
+          isFailing: boolean;
+        }>;
+      }>
+    >();
+
+    for (const section of sectionList) {
+      const students = studentsBySectionId.get(section.id) ?? [];
+      const classRecordCounts = classRecordCountBySectionId.get(section.id) ?? {
+        totalRecords: 0,
+        finalizedRecords: 0,
+      };
+
+      const gradeBucket = gradeBuckets.get(section.gradeLevel) ?? [];
+      gradeBucket.push({
+        id: section.id,
+        name: section.name,
+        gradeLevel: section.gradeLevel,
+        schoolYear: section.schoolYear,
+        roomNumber: section.roomNumber ?? null,
+        capacity: section.capacity,
+        adviser: section.adviser
+          ? {
+              id: section.adviser.id,
+              firstName: section.adviser.firstName,
+              lastName: section.adviser.lastName,
+              email: section.adviser.email,
+            }
+          : null,
+        classRecordCount: classRecordCounts.totalRecords,
+        finalizedClassRecordCount: classRecordCounts.finalizedRecords,
+        studentCount: students.length,
+        students: students.sort((left, right) => {
+          const leftLast = (left.lastName ?? '').toLowerCase();
+          const rightLast = (right.lastName ?? '').toLowerCase();
+          if (leftLast !== rightLast) return leftLast.localeCompare(rightLast);
+          return (left.firstName ?? '')
+            .toLowerCase()
+            .localeCompare((right.firstName ?? '').toLowerCase());
+        }),
+      });
+      gradeBuckets.set(section.gradeLevel, gradeBucket);
+    }
+
+    const data = Array.from(gradeBuckets.entries())
+      .sort(
+        ([leftGrade], [rightGrade]) =>
+          this.parseGradeLevelAsNumber(leftGrade) -
+          this.parseGradeLevelAsNumber(rightGrade),
+      )
+      .map(([gradeLevel, sectionRows]) => ({
+        gradeLevel,
+        sections: sectionRows.sort((left, right) =>
+          left.name.localeCompare(right.name),
+        ),
+      }));
+
+    const totalStudents = data.reduce(
+      (studentTotal, gradeBucket) =>
+        studentTotal +
+        gradeBucket.sections.reduce(
+          (sectionTotal, section) => sectionTotal + section.studentCount,
+          0,
+        ),
+      0,
+    );
+    const totalSections = data.reduce(
+      (sectionTotal, gradeBucket) => sectionTotal + gradeBucket.sections.length,
+      0,
+    );
+
+    return {
+      data,
+      totalStudents,
+      totalSections,
+    };
+  }
+
+  async getAccessStudentsTargetSections(query: {
+    fromSectionId: string;
+    mode: 'promote' | 'retain';
+    schoolYear?: string;
+  }) {
+    const fromSection = await this.db.query.sections.findFirst({
+      where: eq(sections.id, query.fromSectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (!fromSection) {
+      throw new NotFoundException('Source section not found');
+    }
+
+    const fromGradeLevel = this.parseGradeLevelAsNumber(fromSection.gradeLevel);
+    if (query.mode === 'promote' && fromGradeLevel >= 10) {
+      throw new BadRequestException(
+        'Grade 10 students cannot be promoted to the next grade level.',
+      );
+    }
+
+    const targetGradeLevel =
+      query.mode === 'promote'
+        ? String(fromGradeLevel + 1)
+        : fromSection.gradeLevel;
+    const targetSchoolYear =
+      query.schoolYear ?? this.getNextSchoolYear(fromSection.schoolYear);
+
+    const targetSections = await this.db.query.sections.findMany({
+      where: and(
+        eq(sections.isActive, true),
+        eq(sections.gradeLevel, targetGradeLevel),
+        eq(sections.schoolYear, targetSchoolYear),
+      ),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+        roomNumber: true,
+        capacity: true,
+      },
+      orderBy: (table, { asc }) => [asc(table.name)],
+    });
+
+    return {
+      mode: query.mode,
+      fromSection,
+      targetGradeLevel,
+      targetSchoolYear,
+      sections: targetSections,
+    };
+  }
+
+  private async validateStudentAssignmentTransfer(
+    fromSectionId: string,
+    targetSectionId: string,
+    studentIds: string[],
+  ) {
+    const sourceMembershipRows = await this.db
+      .select({
+        studentId: enrollments.studentId,
+      })
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.sectionId, fromSectionId),
+          eq(enrollments.status, 'enrolled'),
+          inArray(enrollments.studentId, studentIds),
+        ),
+      )
+      .groupBy(enrollments.studentId);
+
+    const sourceStudentIdSet = new Set(
+      sourceMembershipRows.map((row) => row.studentId),
+    );
+    const missingStudentIds = studentIds.filter(
+      (studentId) => !sourceStudentIdSet.has(studentId),
+    );
+    if (missingStudentIds.length > 0) {
+      throw new BadRequestException(
+        `These student(s) are not enrolled in the source section: ${missingStudentIds.join(', ')}`,
+      );
+    }
+
+    const conflictingAssignments = await this.db
+      .select({
+        studentId: enrollments.studentId,
+        sectionId: enrollments.sectionId,
+        sectionName: sections.name,
+        sectionGradeLevel: sections.gradeLevel,
+      })
+      .from(enrollments)
+      .innerJoin(sections, eq(sections.id, enrollments.sectionId))
+      .where(
+        and(
+          inArray(enrollments.studentId, studentIds),
+          eq(enrollments.status, 'enrolled'),
+          isNull(enrollments.classId),
+          notInArray(enrollments.sectionId, [fromSectionId, targetSectionId]),
+        ),
+      );
+
+    if (conflictingAssignments.length > 0) {
+      const firstConflict = conflictingAssignments[0];
+      throw new ConflictException(
+        `Student assignment conflict detected. Student ${firstConflict.studentId} is already assigned to Grade ${firstConflict.sectionGradeLevel} - ${firstConflict.sectionName}.`,
+      );
+    }
+  }
+
+  private async transferStudentsBetweenSections(params: {
+    fromSectionId: string;
+    targetSectionId: string;
+    studentIds: string[];
+    targetGradeLevel: string;
+  }) {
+    const uniqueStudentIds = [...new Set(params.studentIds)];
+    if (uniqueStudentIds.length === 0) {
+      return 0;
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(enrollments)
+        .set({ status: 'dropped' })
+        .where(
+          and(
+            eq(enrollments.sectionId, params.fromSectionId),
+            eq(enrollments.status, 'enrolled'),
+            inArray(enrollments.studentId, uniqueStudentIds),
+          ),
+        );
+
+      const alreadyInTargetRows = await tx
+        .select({ studentId: enrollments.studentId })
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.sectionId, params.targetSectionId),
+            eq(enrollments.status, 'enrolled'),
+            isNull(enrollments.classId),
+            inArray(enrollments.studentId, uniqueStudentIds),
+          ),
+        );
+
+      const alreadyInTargetSet = new Set(
+        alreadyInTargetRows.map((row) => row.studentId),
+      );
+      const studentsToInsert = uniqueStudentIds.filter(
+        (studentId) => !alreadyInTargetSet.has(studentId),
+      );
+
+      if (studentsToInsert.length > 0) {
+        await tx.insert(enrollments).values(
+          studentsToInsert.map((studentId) => ({
+            studentId,
+            classId: null,
+            sectionId: params.targetSectionId,
+            status: 'enrolled' as const,
+            enrolledAt: new Date(),
+          })),
+        );
+      }
+
+      await tx
+        .update(studentProfiles)
+        .set({ gradeLevel: params.targetGradeLevel as any })
+        .where(inArray(studentProfiles.userId, uniqueStudentIds));
+    });
+
+    return uniqueStudentIds.length;
+  }
+
+  async moveUpStudents(
+    dto: {
+      fromSectionId: string;
+      targetSectionId: string;
+      studentIds: string[];
+      allowFailingPromotion?: boolean;
+    },
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    if (dto.fromSectionId === dto.targetSectionId) {
+      throw new BadRequestException(
+        'Source and target sections must be different.',
+      );
+    }
+
+    const [fromSection, targetSection] = await Promise.all([
+      this.db.query.sections.findFirst({
+        where: eq(sections.id, dto.fromSectionId),
+        columns: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          schoolYear: true,
+        },
+      }),
+      this.db.query.sections.findFirst({
+        where: eq(sections.id, dto.targetSectionId),
+        columns: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          schoolYear: true,
+        },
+      }),
+    ]);
+
+    if (!fromSection) throw new NotFoundException('Source section not found');
+    if (!targetSection) throw new NotFoundException('Target section not found');
+
+    const fromGradeLevel = this.parseGradeLevelAsNumber(fromSection.gradeLevel);
+    if (fromGradeLevel >= 10) {
+      throw new BadRequestException(
+        'Grade 10 students cannot be promoted to the next grade level.',
+      );
+    }
+
+    const expectedTargetGradeLevel = String(fromGradeLevel + 1);
+    if (targetSection.gradeLevel !== expectedTargetGradeLevel) {
+      throw new BadRequestException(
+        `Target section must be Grade ${expectedTargetGradeLevel} for promotion from Grade ${fromSection.gradeLevel}.`,
+      );
+    }
+
+    if (targetSection.schoolYear === fromSection.schoolYear) {
+      throw new BadRequestException(
+        'Target section must belong to a new school year for promotion.',
+      );
+    }
+
+    const uniqueStudentIds = [...new Set(dto.studentIds)];
+    await this.validateStudentAssignmentTransfer(
+      fromSection.id,
+      targetSection.id,
+      uniqueStudentIds,
+    );
+
+    const finalGradeByStudentId = await this.computeSectionStudentFinalGrades(
+      fromSection.id,
+      uniqueStudentIds,
+    );
+
+    const failingStudents = uniqueStudentIds
+      .map((studentId) => ({
+        studentId,
+        finalGrade: finalGradeByStudentId.get(studentId) ?? null,
+      }))
+      .filter(
+        (student) =>
+          student.finalGrade !== null && Number(student.finalGrade) < 75,
+      );
+
+    if (failingStudents.length > 0 && !dto.allowFailingPromotion) {
+      throw new BadRequestException({
+        message:
+          'Some selected students have final grades below 75. Confirm promotion to proceed.',
+        failingStudents,
+      });
+    }
+
+    const movedCount = await this.transferStudentsBetweenSections({
+      fromSectionId: fromSection.id,
+      targetSectionId: targetSection.id,
+      studentIds: uniqueStudentIds,
+      targetGradeLevel: targetSection.gradeLevel,
+    });
+
+    await this.auditService.log({
+      actorId: actorId ?? 'system',
+      action: 'section.students.promoted',
+      targetType: 'section',
+      targetId: targetSection.id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        fromSectionId: fromSection.id,
+        targetSectionId: targetSection.id,
+        movedCount,
+        failingStudentsConfirmed: failingStudents.length,
+      },
+    });
+
+    return {
+      movedCount,
+      failingStudents,
+      fromSection,
+      targetSection,
+    };
+  }
+
+  async failStudents(
+    dto: {
+      fromSectionId: string;
+      targetSectionId: string;
+      studentIds: string[];
+    },
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    if (dto.fromSectionId === dto.targetSectionId) {
+      throw new BadRequestException(
+        'Source and target sections must be different.',
+      );
+    }
+
+    const [fromSection, targetSection] = await Promise.all([
+      this.db.query.sections.findFirst({
+        where: eq(sections.id, dto.fromSectionId),
+        columns: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          schoolYear: true,
+        },
+      }),
+      this.db.query.sections.findFirst({
+        where: eq(sections.id, dto.targetSectionId),
+        columns: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          schoolYear: true,
+        },
+      }),
+    ]);
+
+    if (!fromSection) throw new NotFoundException('Source section not found');
+    if (!targetSection) throw new NotFoundException('Target section not found');
+
+    if (targetSection.gradeLevel !== fromSection.gradeLevel) {
+      throw new BadRequestException(
+        `Retained students must stay in Grade ${fromSection.gradeLevel}.`,
+      );
+    }
+
+    if (targetSection.schoolYear === fromSection.schoolYear) {
+      throw new BadRequestException(
+        'Target section must belong to a new school year for retention.',
+      );
+    }
+
+    const uniqueStudentIds = [...new Set(dto.studentIds)];
+    await this.validateStudentAssignmentTransfer(
+      fromSection.id,
+      targetSection.id,
+      uniqueStudentIds,
+    );
+
+    const retainedCount = await this.transferStudentsBetweenSections({
+      fromSectionId: fromSection.id,
+      targetSectionId: targetSection.id,
+      studentIds: uniqueStudentIds,
+      targetGradeLevel: targetSection.gradeLevel,
+    });
+
+    await this.auditService.log({
+      actorId: actorId ?? 'system',
+      action: 'section.students.retained',
+      targetType: 'section',
+      targetId: targetSection.id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        fromSectionId: fromSection.id,
+        targetSectionId: targetSection.id,
+        retainedCount,
+      },
+    });
+
+    return {
+      retainedCount,
+      fromSection,
+      targetSection,
+    };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

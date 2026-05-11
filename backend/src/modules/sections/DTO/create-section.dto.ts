@@ -14,10 +14,13 @@ import {
 import { Transform } from 'class-transformer';
 import { IsValidSchoolYearConstraint } from '../../classes/DTO/validators';
 import {
-  ROOM_LABEL_REGEX,
   SECTION_NAME_REGEX,
   trimValue,
 } from '../../../common/validation/input-policy';
+import {
+  ALLOWED_ROOM_NUMBERS,
+  ALLOWED_ROOM_NUMBERS_MESSAGE,
+} from '../../../common/constants/room-options';
 
 const VALID_GRADE_LEVELS = ['7', '8', '9', '10'] as const;
 
@@ -53,11 +56,9 @@ export class CreateSectionDto {
 
   @IsString()
   @IsOptional()
-  @MaxLength(50, { message: 'Room number must not exceed 50 characters' })
   @Transform(({ value }) => trimValue(value))
-  @Matches(ROOM_LABEL_REGEX, {
-    message:
-      'Room number may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+  @IsIn([...ALLOWED_ROOM_NUMBERS], {
+    message: ALLOWED_ROOM_NUMBERS_MESSAGE,
   })
   roomNumber?: string;
 

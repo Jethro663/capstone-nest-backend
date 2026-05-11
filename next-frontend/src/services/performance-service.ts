@@ -3,6 +3,7 @@ import type {
   AdminPerformanceAnalyticsResponse,
   ClassDiagnosticsResponse,
   ClassAtRiskResponse,
+  ClassInterventionQuizComparisonResponse,
   ClassPerformanceLogsResponse,
   ClassPerformanceSummary,
   PerformanceAnalysisJob,
@@ -49,6 +50,16 @@ export const performanceService = {
   async getAtRiskStudents(classId: string): Promise<Envelope<ClassAtRiskResponse>> {
     const { data } = await api.get(`/performance/classes/${classId}/at-risk`);
     return normalizeEnvelope<ClassAtRiskResponse>(data);
+  },
+
+  /** GET /performance/classes/:classId/intervention-quiz-comparison */
+  async getInterventionQuizComparison(
+    classId: string,
+  ): Promise<Envelope<ClassInterventionQuizComparisonResponse>> {
+    const { data } = await api.get(
+      `/performance/classes/${classId}/intervention-quiz-comparison`,
+    );
+    return normalizeEnvelope<ClassInterventionQuizComparisonResponse>(data);
   },
 
   /** GET /performance/classes/:classId/logs */

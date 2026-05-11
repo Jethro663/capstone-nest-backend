@@ -1,6 +1,5 @@
 import { api } from '@/lib/api-client';
 import type {
-  AcademicQuarter,
   AcademicStateCurrent,
   AcademicStateImpactPreview,
 } from '@/types/academic-state';
@@ -15,7 +14,7 @@ export const academicStateService = {
     };
   },
 
-  async getImpactPreview(payload: { schoolYear: string; quarter: AcademicQuarter }) {
+  async getImpactPreview(payload: { schoolYear: string }) {
     const { data } = await api.get('/academic-state/impact-preview', {
       params: payload,
     });
@@ -28,7 +27,6 @@ export const academicStateService = {
 
   async transition(payload: {
     schoolYear: string;
-    quarter: AcademicQuarter;
     currentPassword: string;
     confirmationText: string;
   }) {

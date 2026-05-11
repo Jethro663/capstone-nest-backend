@@ -10,6 +10,7 @@ import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageSh
 import { classService } from '@/services/class-service';
 import { sectionService } from '@/services/section-service';
 import { userService } from '@/services/user-service';
+import { getApiErrorMessage } from '@/lib/api-error';
 import type { ClassItem, ClassSchedule } from '@/types/class';
 import type { Section } from '@/types/section';
 import type { User } from '@/types/user';
@@ -84,8 +85,8 @@ export default function EditClassPage() {
       setClassItem(classRes.data || null);
       setSections(sectionsRes.data || []);
       setTeachers(teachersRes.users || []);
-    } catch {
-      toast.error('Failed to load class');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load class'));
       router.push('/dashboard/admin/classes');
     } finally {
       setLoading(false);
@@ -113,8 +114,8 @@ export default function EditClassPage() {
       });
       toast.success('Class updated');
       router.push('/dashboard/admin/classes');
-    } catch {
-      toast.error('Failed to update class');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to update class'));
     } finally {
       setSaving(false);
     }

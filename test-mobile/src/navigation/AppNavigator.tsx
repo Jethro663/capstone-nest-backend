@@ -1,5 +1,5 @@
-import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+﻿import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
+import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -31,15 +31,27 @@ import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
 import { TeacherAnnouncementsScreen } from "../screens/TeacherAnnouncementsScreen";
 import { TeacherAssessmentDetailScreen } from "../screens/TeacherAssessmentDetailScreen";
+import { TeacherAssessmentEditorScreen } from "../screens/TeacherAssessmentEditorScreen";
 import { TeacherAssessmentReviewScreen } from "../screens/TeacherAssessmentReviewScreen";
 import { TeacherAssessmentsScreen } from "../screens/TeacherAssessmentsScreen";
 import { TeacherCalendarScreen } from "../screens/TeacherCalendarScreen";
 import { TeacherClassDetailScreen } from "../screens/TeacherClassDetailScreen";
+import { TeacherClassRecordScreen } from "../screens/TeacherClassRecordScreen";
 import { TeacherClassesScreen } from "../screens/TeacherClassesScreen";
+import { TeacherCreateAssessmentScreen } from "../screens/TeacherCreateAssessmentScreen";
+import { TeacherCreateModuleScreen } from "../screens/TeacherCreateModuleScreen";
+import { TeacherEvaluationsScreen } from "../screens/TeacherEvaluationsScreen";
 import { TeacherHomeScreen } from "../screens/TeacherHomeScreen";
+import { TeacherInterventionsScreen } from "../screens/TeacherInterventionsScreen";
 import { TeacherLessonDetailScreen } from "../screens/TeacherLessonDetailScreen";
+import { TeacherLibraryScreen } from "../screens/TeacherLibraryScreen";
+import { TeacherMoreScreen } from "../screens/TeacherMoreScreen";
 import { TeacherModuleDetailScreen } from "../screens/TeacherModuleDetailScreen";
+import { TeacherPerformanceScreen } from "../screens/TeacherPerformanceScreen";
 import { TeacherProfileScreen } from "../screens/TeacherProfileScreen";
+import { TeacherReportsScreen } from "../screens/TeacherReportsScreen";
+import { TeacherSectionDetailScreen } from "../screens/TeacherSectionDetailScreen";
+import { TeacherSectionsScreen } from "../screens/TeacherSectionsScreen";
 import { colors } from "../theme/tokens";
 import {
   studentStackRouteNames,
@@ -344,8 +356,9 @@ function AuthNavigator() {
 }
 
 function StudentTabs() {
+  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       {studentTabRouteNames.map(renderStudentTabScreen)}
     </Tab.Navigator>
   );
@@ -363,12 +376,13 @@ function StudentNavigator() {
 }
 
 function TeacherTabs() {
+  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       <Tab.Screen name="Home" component={TeacherHomeScreen} />
-      <Tab.Screen name="Classes" component={TeacherClassesScreen} />
       <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
-      <Tab.Screen name="Announcements" component={TeacherAnnouncementsScreen} />
+      <Tab.Screen name="Classes" component={TeacherClassesScreen} />
+      <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
       <Tab.Screen name="Profile" component={TeacherProfileScreen} />
     </Tab.Navigator>
   );
@@ -382,8 +396,20 @@ function TeacherNavigator() {
       <RootStack.Screen name="TeacherModuleDetail" component={TeacherModuleDetailScreen} />
       <RootStack.Screen name="TeacherLessonDetail" component={TeacherLessonDetailScreen} />
       <RootStack.Screen name="TeacherAssessmentDetail" component={TeacherAssessmentDetailScreen} />
+      <RootStack.Screen name="TeacherAssessmentEditor" component={TeacherAssessmentEditorScreen} />
       <RootStack.Screen name="TeacherAssessmentReview" component={TeacherAssessmentReviewScreen} />
       <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
+      <RootStack.Screen name="TeacherCreateModule" component={TeacherCreateModuleScreen} />
+      <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} />
+      <RootStack.Screen name="TeacherSectionDetail" component={TeacherSectionDetailScreen} />
+      <RootStack.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
+      <RootStack.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
+      <RootStack.Screen name="TeacherReports" component={TeacherReportsScreen} />
+      <RootStack.Screen name="TeacherInterventions" component={TeacherInterventionsScreen} />
+      <RootStack.Screen name="TeacherPerformance" component={TeacherPerformanceScreen} />
+      <RootStack.Screen name="TeacherEvaluations" component={TeacherEvaluationsScreen} />
+      <RootStack.Screen name="TeacherAnnouncements" component={TeacherAnnouncementsScreen} />
+      <RootStack.Screen name="TeacherMore" component={TeacherMoreScreen} />
     </RootStack.Navigator>
   );
 }
@@ -393,8 +419,10 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
     return <TeacherNavigator />;
   }
 
+  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
+
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       <Tab.Screen name="Home">{() => <RoleWorkspaceScreen role={role} section="overview" />}</Tab.Screen>
       <Tab.Screen name="Classes">{() => <RoleWorkspaceScreen role={role} section="classes" />}</Tab.Screen>
       <Tab.Screen name="Assessments">{() => <RoleWorkspaceScreen role={role} section="assessments" />}</Tab.Screen>
@@ -442,7 +470,9 @@ export function AppNavigator() {
           <StudentNavigator />
         </NavigationErrorBoundary>
       ) : (
-        <RoleTabs role={mobileRole} />
+        <NavigationErrorBoundary currentRouteName={currentRouteName}>
+          <RoleTabs role={mobileRole} />
+        </NavigationErrorBoundary>
       );
   }
 
@@ -462,3 +492,8 @@ export function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+
+
+
+

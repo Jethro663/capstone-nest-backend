@@ -3,6 +3,16 @@ const { getDefaultConfig } = require("expo/metro-config");
 const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
+const metroBlockList = [
+  /[\/\\]node_modules[\/\\]expo-modules-autolinking[\/\\]android[\/\\].*/,
+];
+const existingBlockList = config.resolver.blockList;
+config.resolver.blockList = Array.isArray(existingBlockList)
+  ? existingBlockList.concat(metroBlockList)
+  : existingBlockList
+    ? [existingBlockList, ...metroBlockList]
+    : metroBlockList;
+
 const svgSourceEntry = path.resolve(
   __dirname,
   "node_modules/react-native-svg/src/index.ts",

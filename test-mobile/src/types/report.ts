@@ -76,3 +76,28 @@ export interface AssessmentHistoryResponse {
   total: number;
   totalPages: number;
 }
+
+export interface TeacherReportQuery {
+  classId?: string;
+  sectionId?: string;
+  gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4";
+  studentId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
+}
+
+export type TeacherReportRow = Record<string, unknown>;
+
+export interface TeacherPaginatedReportResponse<T> {
+  success?: boolean;
+  data: T;
+  count?: number;
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  generatedAt?: string;
+  csv?: string;
+}

@@ -26,7 +26,8 @@ function buildMockDb() {
       classRecords: { findMany: jest.fn() },
       studentConceptMastery: { findMany: jest.fn() },
       aiGenerationOutputs: { findMany: jest.fn() },
-      interventionCases: { findFirst: jest.fn() },
+      interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
+      interventionAssignments: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       enrollments: { findMany: jest.fn() },
@@ -477,6 +478,81 @@ describe('PerformanceService', () => {
     await expect(
       service.getClassSummary('class-1', 'teacher-1', ['teacher']),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('getInterventionQuizComparison should return before-vs-after quiz scores for intervention retries', async () => {
+    db.query.classes.findFirst.mockResolvedValue({
+      id: 'class-1',
+      teacherId: 'teacher-1',
+    });
+    db.query.interventionCases.findMany.mockResolvedValue([
+      {
+        id: 'case-1',
+        studentId: 'student-1',
+        status: 'active',
+        openedAt: new Date('2026-05-01T08:00:00Z'),
+        student: {
+          id: 'student-1',
+          firstName: 'Ana',
+          lastName: 'Reyes',
+          email: 'ana@test.com',
+        },
+      },
+    ]);
+    db.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-1',
+        caseId: 'case-1',
+        assessmentId: 'assessment-1',
+        createdAt: new Date('2026-05-01T08:05:00Z'),
+        assessment: {
+          id: 'assessment-1',
+          title: 'Fractions Quiz',
+          type: 'quiz',
+        },
+      },
+    ]);
+    db.query.assessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-after',
+        studentId: 'student-1',
+        assessmentId: 'assessment-1',
+        score: 78,
+        submittedAt: new Date('2026-05-03T09:00:00Z'),
+        attemptNumber: 2,
+      },
+      {
+        id: 'attempt-before',
+        studentId: 'student-1',
+        assessmentId: 'assessment-1',
+        score: 54,
+        submittedAt: new Date('2026-04-28T09:00:00Z'),
+        attemptNumber: 1,
+      },
+    ]);
+
+    const result = await service.getInterventionQuizComparison(
+      'class-1',
+      'teacher-1',
+      ['teacher'],
+    );
+
+    expect(result.classId).toBe('class-1');
+    expect(result.count).toBe(1);
+    expect(result.improvedCount).toBe(1);
+    expect(result.awaitingRetryCount).toBe(0);
+    expect(result.comparisons[0]).toMatchObject({
+      caseId: 'case-1',
+      studentId: 'student-1',
+      assessmentId: 'assessment-1',
+      assessmentTitle: 'Fractions Quiz',
+      beforeAttemptId: 'attempt-before',
+      beforeScorePercent: 54,
+      afterAttemptId: 'attempt-after',
+      afterScorePercent: 78,
+      deltaScorePercent: 24,
+      trend: 'improved',
+    });
   });
 
   it('recomputeClass should write manual recompute audit metadata', async () => {

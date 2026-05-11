@@ -22,9 +22,9 @@ export interface CategoryBreakdown {
   totalRaw: number;
   /** Total HPS across all items in this category */
   totalHPS: number;
-  /** Percentage Score = (totalRaw / totalHPS) × 100 */
+  /** Percentage Score = (totalRaw / totalHPS) x 100 */
   percentageScore: number;
-  /** Weighted Score = PS × (weight / 100) */
+  /** Weighted Score = PS x (weight / 100) */
   weightedScore: number;
 }
 
@@ -32,11 +32,60 @@ export interface StudentGradeResult {
   studentId: string;
   /** Sum of all weighted scores */
   initialGrade: number;
-  /** DepEd transmuted quarterly grade = max(60, round(IG × 0.4 + 60)) */
+  /** DepEd transmuted quarterly grade from the official transmutation table */
   quarterlyGrade: number;
   remarks: 'Passed' | 'For Intervention';
   categoryBreakdown: CategoryBreakdown[];
 }
+
+interface DepEdTransmutationBand {
+  minInitialGrade: number;
+  transmutedGrade: number;
+}
+
+const DEPED_TRANSMUTATION_TABLE: readonly DepEdTransmutationBand[] = [
+  { minInitialGrade: 100, transmutedGrade: 100 },
+  { minInitialGrade: 98.4, transmutedGrade: 99 },
+  { minInitialGrade: 96.8, transmutedGrade: 98 },
+  { minInitialGrade: 95.2, transmutedGrade: 97 },
+  { minInitialGrade: 93.6, transmutedGrade: 96 },
+  { minInitialGrade: 92, transmutedGrade: 95 },
+  { minInitialGrade: 90.4, transmutedGrade: 94 },
+  { minInitialGrade: 88.8, transmutedGrade: 93 },
+  { minInitialGrade: 87.2, transmutedGrade: 92 },
+  { minInitialGrade: 85.6, transmutedGrade: 91 },
+  { minInitialGrade: 84, transmutedGrade: 90 },
+  { minInitialGrade: 82.4, transmutedGrade: 89 },
+  { minInitialGrade: 80.8, transmutedGrade: 88 },
+  { minInitialGrade: 79.2, transmutedGrade: 87 },
+  { minInitialGrade: 77.6, transmutedGrade: 86 },
+  { minInitialGrade: 76, transmutedGrade: 85 },
+  { minInitialGrade: 74.4, transmutedGrade: 84 },
+  { minInitialGrade: 72.8, transmutedGrade: 83 },
+  { minInitialGrade: 71.2, transmutedGrade: 82 },
+  { minInitialGrade: 69.6, transmutedGrade: 81 },
+  { minInitialGrade: 68, transmutedGrade: 80 },
+  { minInitialGrade: 66.4, transmutedGrade: 79 },
+  { minInitialGrade: 64.8, transmutedGrade: 78 },
+  { minInitialGrade: 63.2, transmutedGrade: 77 },
+  { minInitialGrade: 61.6, transmutedGrade: 76 },
+  { minInitialGrade: 60, transmutedGrade: 75 },
+  { minInitialGrade: 56, transmutedGrade: 74 },
+  { minInitialGrade: 52, transmutedGrade: 73 },
+  { minInitialGrade: 48, transmutedGrade: 72 },
+  { minInitialGrade: 44, transmutedGrade: 71 },
+  { minInitialGrade: 40, transmutedGrade: 70 },
+  { minInitialGrade: 36, transmutedGrade: 69 },
+  { minInitialGrade: 32, transmutedGrade: 68 },
+  { minInitialGrade: 28, transmutedGrade: 67 },
+  { minInitialGrade: 24, transmutedGrade: 66 },
+  { minInitialGrade: 20, transmutedGrade: 65 },
+  { minInitialGrade: 16, transmutedGrade: 64 },
+  { minInitialGrade: 12, transmutedGrade: 63 },
+  { minInitialGrade: 8, transmutedGrade: 62 },
+  { minInitialGrade: 4, transmutedGrade: 61 },
+  { minInitialGrade: 0, transmutedGrade: 60 },
+];
 
 @Injectable()
 export class ClassRecordComputationService {
@@ -49,7 +98,7 @@ export class ClassRecordComputationService {
   }
 
   /**
-   * Validates that the sum of category weights equals 100 (±0.001 tolerance).
+   * Validates that the sum of category weights equals 100 (+/-0.001 tolerance).
    */
   async validateCategoryWeights(
     classRecordId: string,
@@ -74,11 +123,21 @@ export class ClassRecordComputationService {
   }
 
   /**
-   * DepEd transmutation formula.
-   * Quarterly Grade = max(60, round(Initial Grade × 0.4 + 60))
+   * Converts initial grade to transmuted grade based on official DepEd table.
+   * Thresholds follow the DepEd transmutation table.
    */
   transmute(initialGrade: number): number {
-    return Math.max(60, Math.round(initialGrade * 0.4 + 60));
+    const safeInitialGrade = Number.isFinite(initialGrade) ? initialGrade : 0;
+    const normalizedInitialGrade = Math.min(100, Math.max(0, safeInitialGrade));
+    const epsilon = 1e-9;
+
+    for (const band of DEPED_TRANSMUTATION_TABLE) {
+      if (normalizedInitialGrade + epsilon >= band.minInitialGrade) {
+        return band.transmutedGrade;
+      }
+    }
+
+    return 60;
   }
 
   /**
@@ -86,10 +145,10 @@ export class ClassRecordComputationService {
    * who already have class-record history (scores and/or finalized grades).
    *
    * Formula:
-   *   PS (Percentage Score) = (total raw / total HPS) × 100
-   *   WS (Weighted Score)   = PS × (weight / 100)
+   *   PS (Percentage Score) = (total raw / total HPS) x 100
+   *   WS (Weighted Score)   = PS x (weight / 100)
    *   Initial Grade         = sum(WS across all categories)
-   *   Quarterly Grade       = max(60, round(IG × 0.4 + 60))
+   *   Quarterly Grade       = DepEd transmuted value from table
    *
    * Missing scores are treated as 0. Items with no HPS are skipped.
    */
@@ -159,7 +218,7 @@ export class ClassRecordComputationService {
       with: { scores: true },
     });
 
-    // Index: categoryId → items
+    // Index: categoryId -> items
     const itemsByCategory = new Map<string, typeof items>();
     for (const item of items) {
       if (!itemsByCategory.has(item.categoryId)) {
@@ -212,10 +271,10 @@ export class ClassRecordComputationService {
           totalRaw += score;
         }
 
-        // PS = (totalRaw / totalHPS) × 100
+        // PS = (totalRaw / totalHPS) x 100
         const percentageScore = totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
 
-        // WS = PS × (weight / 100)
+        // WS = PS x (weight / 100)
         const weightedScore = percentageScore * (weight / 100);
 
         categoryBreakdown.push({
@@ -254,3 +313,4 @@ export class ClassRecordComputationService {
     return results;
   }
 }
+

@@ -627,9 +627,9 @@ describe('SectionsService', () => {
     };
 
     const setupHappyPath = () => {
-      // No duplicate section
       mockDb.query.sections.findFirst
         .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce(null) // adviser availability check
         .mockResolvedValueOnce(makeSection()); // findById after insert
       // Adviser exists
       mockDb.query.users.findFirst.mockResolvedValue({ id: ADVISER_ID });
@@ -708,6 +708,46 @@ describe('SectionsService', () => {
       // No user or role lookups needed
       expect(mockDb.query.users.findFirst).not.toHaveBeenCalled();
     });
+
+    it('throws ConflictException when adviser is already assigned to another active section', async () => {
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce(
+          makeSection({
+            id: 'section-uuid-2',
+            name: 'Bonifacio',
+            gradeLevel: '8',
+            schoolYear: SCHOOL_YEAR,
+            adviserId: ADVISER_ID,
+          }),
+        ); // adviser availability check
+      mockDb.query.users.findFirst.mockResolvedValue({ id: ADVISER_ID });
+      mockDb.select.mockReturnValue(makeSelectChain([{ roleName: 'teacher' }]));
+
+      await expect(service.createSection(dto as any)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(mockDb.insert).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when room is already assigned to another active section', async () => {
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce(
+          makeSection({
+            id: 'section-uuid-2',
+            name: 'Bonifacio',
+            gradeLevel: '8',
+            schoolYear: SCHOOL_YEAR,
+            roomNumber: '101',
+          }),
+        ); // room availability check
+
+      await expect(
+        service.createSection({ ...dto, adviserId: undefined, roomNumber: '101' } as any),
+      ).rejects.toThrow(ConflictException);
+      expect(mockDb.insert).not.toHaveBeenCalled();
+    });
   });
 
   // =========================================================================
@@ -779,6 +819,47 @@ describe('SectionsService', () => {
       await expect(
         service.updateSection(SECTION_ID, { adviserId: newAdviserId }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ConflictException when the new adviser is already assigned to another active section', async () => {
+      const newAdviserId = 'assigned-adviser-uuid';
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(makeSection()) // findById
+        .mockResolvedValueOnce(
+          makeSection({
+            id: 'section-uuid-2',
+            name: 'Mabini',
+            gradeLevel: '9',
+            schoolYear: SCHOOL_YEAR,
+            adviserId: newAdviserId,
+          }),
+        ); // adviser availability check
+      mockDb.query.users.findFirst.mockResolvedValue({ id: newAdviserId });
+      mockDb.select.mockReturnValue(makeSelectChain([{ roleName: 'teacher' }]));
+
+      await expect(
+        service.updateSection(SECTION_ID, { adviserId: newAdviserId }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when updating to a room used by another active section', async () => {
+      mockDb.query.sections.findFirst
+        .mockResolvedValueOnce(makeSection()) // findById
+        .mockResolvedValueOnce(
+          makeSection({
+            id: 'section-uuid-2',
+            name: 'Mabini',
+            gradeLevel: '9',
+            schoolYear: SCHOOL_YEAR,
+            roomNumber: '201',
+          }),
+        ); // room availability check
+
+      await expect(
+        service.updateSection(SECTION_ID, { roomNumber: '201' }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when the section to update does not exist', async () => {
@@ -1268,13 +1349,13 @@ describe('SectionsService', () => {
 
   describe('verifyAdviserHasTeacherRole (internal helper – tested via createSection)', () => {
     it('does not throw when the user has the teacher role', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue(null);
       mockDb.query.users.findFirst.mockResolvedValue({ id: ADVISER_ID });
       mockDb.select.mockReturnValue(makeSelectChain([{ roleName: 'teacher' }]));
       mockDb.insert.mockReturnValue(makeInsertChain([{ id: SECTION_ID }]));
       mockDb.query.sections.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(makeSection());
+        .mockResolvedValueOnce(null) // duplicate check
+        .mockResolvedValueOnce(null) // adviser availability check
+        .mockResolvedValueOnce(makeSection()); // findById after insert
 
       await expect(
         service.createSection({

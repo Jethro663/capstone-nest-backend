@@ -3,12 +3,14 @@ import { useQueries } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { queryKeys, useTeacherClasses } from "../api/hooks";
+import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
+  TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
   TeacherPanel,
@@ -40,6 +42,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterMode>("all");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
   const assessmentQueries = useQueries({
@@ -75,6 +78,31 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       return true;
     });
   }, [filter, records, search, selectedClassId]);
+
+  const handleCreateAssessment = async (targetClassId?: string) => {
+    if (creatingAssessment) return;
+    const classId = targetClassId || (selectedClassId !== "all" ? selectedClassId : classesQuery.data?.[0]?.id);
+    if (!classId) {
+      Alert.alert("No class selected", "Choose a class first so the assessment can be created in the correct workspace.");
+      return;
+    }
+
+    try {
+      setCreatingAssessment(true);
+      const created = await assessmentsApi.create({
+        title: "Untitled Assessment",
+        classId,
+      });
+      navigation.navigate("TeacherAssessmentEditor", {
+        assessmentId: created.id,
+        classId: created.classId,
+      });
+    } catch (error) {
+      Alert.alert("Unable to create assessment", toAppError(error).message);
+    } finally {
+      setCreatingAssessment(false);
+    }
+  };
 
   return (
     <TeacherScreen
@@ -114,6 +142,32 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         ))}
       </View>
 
+      <TeacherPanel
+        title="Create and edit"
+        subtitle="Like web behavior, creating an assessment starts a draft and opens the editor immediately."
+      >
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <TeacherActionButton
+            label={creatingAssessment ? "Creating..." : "Create assessment"}
+            icon="file-plus-outline"
+            tone="green"
+            disabled={creatingAssessment || !classesQuery.data?.length}
+            onPress={() => void handleCreateAssessment()}
+          />
+          <TeacherActionButton
+            label="Open class workspace"
+            icon="google-classroom"
+            tone="blue"
+            disabled={!classesQuery.data?.length}
+            onPress={() => {
+              const classId = selectedClassId !== "all" ? selectedClassId : classesQuery.data?.[0]?.id;
+              if (!classId) return;
+              navigation.navigate("TeacherClassDetail", { classId, initialTab: "assessments" });
+            }}
+          />
+        </View>
+      </TeacherPanel>
+
       <TeacherPanel title="Assessment list" subtitle="This is the mobile entry point for reviewing submissions and publish state.">
         {filtered.length ? (
           filtered.map((assessment) => (
@@ -135,6 +189,17 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                   <Text style={{ fontSize: 10, color: theme.muted }}>
                     {assessment.questions?.length ?? 0} questions
                   </Text>
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate("TeacherAssessmentEditor", {
+                        assessmentId: assessment.id,
+                        classId: assessment.classId,
+                      })
+                    }
+                    style={{ marginTop: 4, borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 8, paddingVertical: 4 }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                  </Pressable>
                 </View>
               }
             />

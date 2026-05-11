@@ -1,13 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  sanitizeRoomLabelInput,
-  sanitizeSectionNameInput,
-} from '@/lib/input-policy';
+import { sanitizeSectionNameInput } from '@/lib/input-policy';
+import { ROOM_OPTIONS, ROOM_OPTIONS_HELP_TEXT } from '@/lib/room-options';
 import type { User } from '@/types/user';
 
 const SELECT_CLS =
@@ -36,7 +34,10 @@ export function createEmptySectionForm(defaultSchoolYear: string): SectionFormVa
 type SectionFormProps = {
   initialValues: SectionFormValues;
   teachers: User[];
+  adviserDisabledReasonById?: Record<string, string>;
+  roomDisabledReasonByNumber?: Record<string, string>;
   schoolYears: string[];
+  lockSchoolYear?: boolean;
   saving?: boolean;
   onSubmit: (values: SectionFormValues) => Promise<void>;
   onCancel: () => void;
@@ -46,13 +47,28 @@ type SectionFormProps = {
 export default function SectionForm({
   initialValues,
   teachers,
+  adviserDisabledReasonById = {},
+  roomDisabledReasonByNumber = {},
   schoolYears,
+  lockSchoolYear = false,
   saving = false,
   onSubmit,
   onCancel,
   submitLabel,
 }: SectionFormProps) {
   const [form, setForm] = useState<SectionFormValues>(initialValues);
+  const roomOptions = useMemo(() => {
+    if (!form.roomNumber) return [...ROOM_OPTIONS];
+    if (ROOM_OPTIONS.includes(form.roomNumber as (typeof ROOM_OPTIONS)[number])) {
+      return [...ROOM_OPTIONS];
+    }
+
+    return [form.roomNumber, ...ROOM_OPTIONS];
+  }, [form.roomNumber]);
+  const hasUnavailableRooms = useMemo(
+    () => Object.keys(roomDisabledReasonByNumber).length > 0,
+    [roomDisabledReasonByNumber],
+  );
 
   useEffect(() => {
     setForm(initialValues);
@@ -63,7 +79,6 @@ export default function SectionForm({
     await onSubmit({
       ...form,
       name: sanitizeSectionNameInput(form.name, 100),
-      roomNumber: sanitizeRoomLabelInput(form.roomNumber, 50),
     });
   };
 
@@ -121,8 +136,9 @@ export default function SectionForm({
             value={form.schoolYear}
             onChange={(event) => setForm((current) => ({ ...current, schoolYear: event.target.value }))}
             className={SELECT_CLS}
+            disabled={lockSchoolYear}
           >
-            <option value="">Select school year</option>
+            <option value="">{lockSchoolYear ? 'Locked by transition state' : 'Select school year'}</option>
             {schoolYears.map((year) => (
               <option key={year} value={year}>
                 {year}
@@ -151,18 +167,34 @@ export default function SectionForm({
 
         <div className="space-y-2">
           <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Room</Label>
-          <Input
+          <select
             value={form.roomNumber}
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
-                roomNumber: sanitizeRoomLabelInput(event.target.value, 50),
+                roomNumber: event.target.value,
               }))
             }
-            placeholder="e.g. 201"
-            maxLength={50}
-            className="admin-input h-10 rounded-xl"
-          />
+            className={SELECT_CLS}
+            aria-label="Room"
+          >
+            <option value="">Select room</option>
+            {roomOptions.map((room) => {
+              const disabledReason = roomDisabledReasonByNumber[room];
+              const disabled = Boolean(disabledReason) && room !== form.roomNumber;
+              return (
+                <option key={room} value={room} disabled={disabled}>
+                  Room {room}
+                  {disabledReason ? ` - ${disabledReason}` : ''}
+                </option>
+              );
+            })}
+          </select>
+          <p className="text-[11px] text-[var(--admin-text-muted)]">
+            {hasUnavailableRooms
+              ? `${ROOM_OPTIONS_HELP_TEXT}. Some rooms are unavailable because they are already assigned to active sections.`
+              : ROOM_OPTIONS_HELP_TEXT}
+          </p>
         </div>
       </div>
 
@@ -172,11 +204,19 @@ export default function SectionForm({
           value={form.adviserId}
           onChange={(event) => setForm((current) => ({ ...current, adviserId: event.target.value }))}
           className={SELECT_CLS}
+          aria-label="Adviser"
         >
           <option value="">No adviser</option>
           {teachers.map((teacher) => (
-            <option key={teacher.id} value={teacher.id}>
+            <option
+              key={teacher.id}
+              value={teacher.id}
+              disabled={Boolean(adviserDisabledReasonById[teacher.id]) && teacher.id !== form.adviserId}
+            >
               {teacher.firstName} {teacher.lastName}
+              {adviserDisabledReasonById[teacher.id]
+                ? ` - ${adviserDisabledReasonById[teacher.id]}`
+                : ''}
             </option>
           ))}
         </select>
@@ -186,7 +226,7 @@ export default function SectionForm({
         <div className="space-y-1">
           <p className="text-sm font-black text-[var(--admin-text-strong)]">Save Section</p>
           <p className="text-xs leading-5 text-[var(--admin-text-muted)]">
-            Confirm the name, year, capacity, and room before saving.
+            Confirm the name, year, room, capacity, and adviser before saving.
           </p>
         </div>
         <div className="flex items-center justify-end gap-2">
@@ -196,7 +236,13 @@ export default function SectionForm({
           <Button
             className="admin-button-solid rounded-xl font-black"
             onClick={handleSubmit}
-            disabled={saving || !form.name.trim() || !form.schoolYear || form.capacity < 1}
+            disabled={
+              saving ||
+              !form.name.trim() ||
+              !form.schoolYear ||
+              form.capacity < 1 ||
+              !form.roomNumber
+            }
           >
             {saving ? 'Saving...' : submitLabel}
           </Button>

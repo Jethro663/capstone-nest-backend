@@ -54,7 +54,11 @@ describe('RosterImportController', () => {
       const file = makeFile();
       const result = await controller.preview('sec-123', file, TEACHER);
 
-      expect(result).toBe(resp);
+      expect(result).toEqual({
+        success: true,
+        message: 'Roster file parsed successfully.',
+        data: resp,
+      });
       expect(mockService.parseAndPreview).toHaveBeenCalledWith(
         'sec-123',
         file,
@@ -83,7 +87,11 @@ describe('RosterImportController', () => {
       };
       mockService.commitRoster.mockResolvedValue(resp);
 
-      expect(await controller.commit('sec-1', dto as any, ADMIN)).toBe(resp);
+      expect(await controller.commit('sec-1', dto as any, ADMIN)).toEqual({
+        success: true,
+        message: 'Roster import committed successfully.',
+        data: resp,
+      });
       expect(mockService.commitRoster).toHaveBeenCalledWith(
         'sec-1',
         dto,
@@ -105,7 +113,12 @@ describe('RosterImportController', () => {
     it('returns array from service', async () => {
       const arr = [{ id: 'p1' }];
       mockService.getPendingRoster.mockResolvedValue(arr);
-      expect(await controller.getPending('sec', TEACHER)).toBe(arr);
+      expect(await controller.getPending('sec', TEACHER)).toEqual({
+        success: true,
+        message: 'Roster import history loaded.',
+        data: arr,
+        count: arr.length,
+      });
       expect(mockService.getPendingRoster).toHaveBeenCalledWith('sec', TEACHER);
     });
   });
@@ -115,9 +128,11 @@ describe('RosterImportController', () => {
       const row = { id: 'p1' };
       mockService.resolvePendingRow.mockResolvedValue(row);
       const dto = { resolvedUserId: null };
-      expect(await controller.resolvePending('p1', dto as any, ADMIN)).toBe(
-        row,
-      );
+      expect(await controller.resolvePending('p1', dto as any, ADMIN)).toEqual({
+        success: true,
+        message: 'Pending roster row updated.',
+        data: row,
+      });
       expect(mockService.resolvePendingRow).toHaveBeenCalledWith(
         'p1',
         null,

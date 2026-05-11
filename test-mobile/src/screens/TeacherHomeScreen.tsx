@@ -93,6 +93,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
 
   const draftCount = flattenedAssessments.filter((assessment) => !assessment.isPublished).length;
   const publishedCount = flattenedAssessments.length - draftCount;
+  const firstClassId = classesQuery.data?.[0]?.id;
   const refreshing =
     classesQuery.isRefetching ||
     assessmentQueries.some((query) => query.isRefetching) ||
@@ -122,14 +123,27 @@ export function TeacherHomeScreen({ navigation }: Props) {
       />
 
       <TeacherPanel
-        title="Quick actions"
-        subtitle="Jump straight into the high-traffic teacher flows."
+        title="Updates and more"
+        subtitle="Moved high-frequency actions out of the bottom bar for a cleaner teacher navigation."
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Open Calendar" icon="calendar-month-outline" onPress={() => navigation.navigate("TeacherCalendar")} />
+          <TeacherActionButton
+            label="Updates"
+            icon="bullhorn-outline"
+            tone="amber"
+            disabled={!firstClassId}
+            onPress={() => {
+              if (!firstClassId) return;
+              navigation.navigate("TeacherClassDetail", { classId: firstClassId, initialTab: "announcements" });
+            }}
+          />
+          <TeacherActionButton label="Calendar" icon="calendar-month-outline" onPress={() => navigation.navigate("TeacherCalendar")} />
+          <TeacherActionButton label="More" icon="dots-horizontal-circle-outline" tone="blue" onPress={() => navigation.navigate("TeacherMore")} />
+        </View>
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <TeacherActionButton label="Classes" icon="book-open-variant-outline" tone="blue" onPress={() => navigation.navigate("Classes")} />
           <TeacherActionButton label="Assessments" icon="clipboard-text-outline" tone="green" onPress={() => navigation.navigate("Assessments")} />
-          <TeacherActionButton label="Announcements" icon="bullhorn-outline" tone="amber" onPress={() => navigation.navigate("Announcements")} />
+          <TeacherActionButton label="Profile" icon="account-circle-outline" tone="red" onPress={() => navigation.navigate("Profile")} />
         </View>
       </TeacherPanel>
 
@@ -207,7 +221,14 @@ export function TeacherHomeScreen({ navigation }: Props) {
               key={announcement.id}
               title={announcement.title}
               subtitle={`${announcement.subjectName} · ${announcement.isPinned ? "Pinned" : "Post"}${announcement.createdAt ? ` · ${formatDate(announcement.createdAt)}` : ""}`}
-              onPress={() => navigation.navigate("Announcements")}
+              onPress={() => {
+                const targetClassId = announcement.classId || firstClassId;
+                if (!targetClassId) return;
+                navigation.navigate("TeacherClassDetail", {
+                  classId: targetClassId,
+                  initialTab: "announcements",
+                });
+              }}
             />
           ))
         ) : (

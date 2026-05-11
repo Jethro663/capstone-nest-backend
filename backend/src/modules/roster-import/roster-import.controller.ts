@@ -93,7 +93,16 @@ export class RosterImportController {
     @UploadedFile(new RosterFileValidationPipe()) file: Express.Multer.File,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.rosterImportService.parseAndPreview(sectionId, file, user);
+    const data = await this.rosterImportService.parseAndPreview(
+      sectionId,
+      file,
+      user,
+    );
+    return {
+      success: true,
+      message: 'Roster file parsed successfully.',
+      data,
+    };
   }
 
   /**
@@ -112,7 +121,16 @@ export class RosterImportController {
     @Body() dto: RosterImportCommitDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.rosterImportService.commitRoster(sectionId, dto, user);
+    const data = await this.rosterImportService.commitRoster(
+      sectionId,
+      dto,
+      user,
+    );
+    return {
+      success: true,
+      message: 'Roster import committed successfully.',
+      data,
+    };
   }
 
   /**
@@ -125,7 +143,13 @@ export class RosterImportController {
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.rosterImportService.getPendingRoster(sectionId, user);
+    const data = await this.rosterImportService.getPendingRoster(sectionId, user);
+    return {
+      success: true,
+      message: 'Roster import history loaded.',
+      data,
+      count: data.length,
+    };
   }
 
   /**
@@ -140,10 +164,15 @@ export class RosterImportController {
     @Body() dto: ResolvePendingRowDto,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    return this.rosterImportService.resolvePendingRow(
+    const data = await this.rosterImportService.resolvePendingRow(
       id,
       dto.resolvedUserId,
       user,
     );
+    return {
+      success: true,
+      message: 'Pending roster row updated.',
+      data,
+    };
   }
 }

@@ -19,6 +19,7 @@ import {
   classes,
   contentChunks,
   enrollments,
+  interventionAssignments,
   interventionCases,
   performanceLogs,
   performanceSnapshots,
@@ -46,6 +47,36 @@ type ClassPerformanceRow = {
   isAtRisk: boolean;
   thresholdApplied: number;
   lastComputedAt: Date;
+};
+
+type InterventionQuizTrend =
+  | 'improved'
+  | 'declined'
+  | 'unchanged'
+  | 'awaiting_retry';
+
+type InterventionQuizComparisonRow = {
+  caseId: string;
+  caseStatus: 'pending' | 'active' | 'completed' | 'dismissed';
+  caseOpenedAt: Date;
+  studentId: string;
+  student: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  assignmentId: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  beforeAttemptId: string | null;
+  beforeScorePercent: number | null;
+  beforeSubmittedAt: Date | null;
+  afterAttemptId: string | null;
+  afterScorePercent: number | null;
+  afterSubmittedAt: Date | null;
+  deltaScorePercent: number | null;
+  trend: InterventionQuizTrend;
 };
 
 type SnapshotData = {
@@ -105,6 +136,18 @@ export class PerformanceService {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     const parsed = parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private toInterventionQuizTrend(
+    beforeScore: number | null,
+    afterScore: number | null,
+  ): InterventionQuizTrend {
+    if (afterScore === null || beforeScore === null) {
+      return 'awaiting_retry';
+    }
+    if (afterScore > beforeScore) return 'improved';
+    if (afterScore < beforeScore) return 'declined';
+    return 'unchanged';
   }
 
   private async assertClassAccess(
@@ -663,6 +706,243 @@ export class PerformanceService {
       threshold: summary.threshold,
       count: summary.students.filter((student) => student.isAtRisk).length,
       students: summary.students.filter((student) => student.isAtRisk),
+    };
+  }
+
+  async getInterventionQuizComparison(
+    classId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    await this.assertClassAccess(classId, userId, roles);
+
+    const cases = await this.db.query.interventionCases.findMany({
+      where: and(
+        eq(interventionCases.classId, classId),
+        inArray(interventionCases.status, ['pending', 'active', 'completed']),
+      ),
+      columns: {
+        id: true,
+        studentId: true,
+        status: true,
+        openedAt: true,
+      },
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    if (cases.length === 0) {
+      return {
+        classId,
+        count: 0,
+        improvedCount: 0,
+        declinedCount: 0,
+        unchangedCount: 0,
+        awaitingRetryCount: 0,
+        comparisons: [] as InterventionQuizComparisonRow[],
+      };
+    }
+
+    const caseIds = cases.map((entry) => entry.id);
+    const caseById = new Map(cases.map((entry) => [entry.id, entry] as const));
+
+    const retryAssignments = await this.db.query.interventionAssignments.findMany(
+      {
+        where: and(
+          inArray(interventionAssignments.caseId, caseIds),
+          eq(interventionAssignments.assignmentType, 'assessment_retry'),
+        ),
+        columns: {
+          id: true,
+          caseId: true,
+          assessmentId: true,
+          createdAt: true,
+        },
+        with: {
+          assessment: {
+            columns: {
+              id: true,
+              title: true,
+              type: true,
+            },
+          },
+        },
+        orderBy: [desc(interventionAssignments.createdAt)],
+      },
+    );
+
+    const uniqueComparables = new Map<string, (typeof retryAssignments)[number]>();
+    for (const assignment of retryAssignments) {
+      if (!assignment.assessmentId) continue;
+      if (assignment.assessment?.type !== 'quiz') continue;
+      const caseRow = caseById.get(assignment.caseId);
+      if (!caseRow) continue;
+      const key = `${assignment.caseId}:${assignment.assessmentId}`;
+      if (!uniqueComparables.has(key)) {
+        uniqueComparables.set(key, assignment);
+      }
+    }
+
+    if (uniqueComparables.size === 0) {
+      return {
+        classId,
+        count: 0,
+        improvedCount: 0,
+        declinedCount: 0,
+        unchangedCount: 0,
+        awaitingRetryCount: 0,
+        comparisons: [] as InterventionQuizComparisonRow[],
+      };
+    }
+
+    const comparisonsSeed = [...uniqueComparables.values()];
+    const assessmentIds = Array.from(
+      new Set(comparisonsSeed.map((entry) => entry.assessmentId as string)),
+    );
+    const studentIds = Array.from(
+      new Set(
+        comparisonsSeed
+          .map((entry) => caseById.get(entry.caseId)?.studentId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+
+    const attempts =
+      assessmentIds.length > 0 && studentIds.length > 0
+        ? await this.db.query.assessmentAttempts.findMany({
+            where: and(
+              inArray(assessmentAttempts.assessmentId, assessmentIds),
+              inArray(assessmentAttempts.studentId, studentIds),
+              eq(assessmentAttempts.isSubmitted, true),
+            ),
+            columns: {
+              id: true,
+              studentId: true,
+              assessmentId: true,
+              score: true,
+              submittedAt: true,
+              attemptNumber: true,
+            },
+            orderBy: [
+              desc(assessmentAttempts.submittedAt),
+              desc(assessmentAttempts.attemptNumber),
+            ],
+          })
+        : [];
+
+    const attemptsByAssessmentAndStudent = new Map<
+      string,
+      typeof attempts
+    >();
+    for (const attempt of attempts) {
+      if (!attempt.submittedAt) continue;
+      const key = `${attempt.assessmentId}:${attempt.studentId}`;
+      const bucket = attemptsByAssessmentAndStudent.get(key) ?? [];
+      bucket.push(attempt);
+      attemptsByAssessmentAndStudent.set(key, bucket);
+    }
+
+    const comparisons: InterventionQuizComparisonRow[] = comparisonsSeed
+      .map((assignment) => {
+        if (!assignment.assessmentId || !assignment.assessment) return null;
+        const caseRow = caseById.get(assignment.caseId);
+        if (!caseRow) return null;
+
+        const attemptBucket =
+          attemptsByAssessmentAndStudent.get(
+            `${assignment.assessmentId}:${caseRow.studentId}`,
+          ) ?? [];
+
+        const beforeAttempt =
+          attemptBucket.find(
+            (attempt) =>
+              Boolean(attempt.submittedAt) &&
+              new Date(attempt.submittedAt as Date).getTime() <
+                new Date(caseRow.openedAt).getTime(),
+          ) ?? null;
+        const afterAttempt =
+          attemptBucket.find(
+            (attempt) =>
+              Boolean(attempt.submittedAt) &&
+              new Date(attempt.submittedAt as Date).getTime() >=
+                new Date(caseRow.openedAt).getTime(),
+          ) ?? null;
+
+        const beforeScore = this.toNumber(beforeAttempt?.score);
+        const afterScore = this.toNumber(afterAttempt?.score);
+        const deltaScore =
+          beforeScore !== null && afterScore !== null
+            ? this.round(afterScore - beforeScore)
+            : null;
+
+        return {
+          caseId: caseRow.id,
+          caseStatus: caseRow.status,
+          caseOpenedAt: caseRow.openedAt,
+          studentId: caseRow.studentId,
+          student: caseRow.student
+            ? {
+                id: caseRow.student.id,
+                firstName: caseRow.student.firstName,
+                lastName: caseRow.student.lastName,
+                email: caseRow.student.email,
+              }
+            : null,
+          assignmentId: assignment.id,
+          assessmentId: assignment.assessmentId,
+          assessmentTitle: assignment.assessment.title,
+          beforeAttemptId: beforeAttempt?.id ?? null,
+          beforeScorePercent: beforeScore,
+          beforeSubmittedAt: beforeAttempt?.submittedAt ?? null,
+          afterAttemptId: afterAttempt?.id ?? null,
+          afterScorePercent: afterScore,
+          afterSubmittedAt: afterAttempt?.submittedAt ?? null,
+          deltaScorePercent: deltaScore,
+          trend: this.toInterventionQuizTrend(beforeScore, afterScore),
+        } as InterventionQuizComparisonRow;
+      })
+      .filter(
+        (entry): entry is InterventionQuizComparisonRow =>
+          entry !== null,
+      )
+      .sort((left, right) => {
+        const leftAfter = left.afterSubmittedAt
+          ? new Date(left.afterSubmittedAt).getTime()
+          : 0;
+        const rightAfter = right.afterSubmittedAt
+          ? new Date(right.afterSubmittedAt).getTime()
+          : 0;
+        if (leftAfter !== rightAfter) {
+          return rightAfter - leftAfter;
+        }
+        return (
+          new Date(right.caseOpenedAt).getTime() -
+          new Date(left.caseOpenedAt).getTime()
+        );
+      });
+
+    return {
+      classId,
+      count: comparisons.length,
+      improvedCount: comparisons.filter((entry) => entry.trend === 'improved')
+        .length,
+      declinedCount: comparisons.filter((entry) => entry.trend === 'declined')
+        .length,
+      unchangedCount: comparisons.filter((entry) => entry.trend === 'unchanged')
+        .length,
+      awaitingRetryCount: comparisons.filter(
+        (entry) => entry.trend === 'awaiting_retry',
+      ).length,
+      comparisons,
     };
   }
 

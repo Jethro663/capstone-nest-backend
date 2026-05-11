@@ -36,7 +36,7 @@ const makeClass = (overrides: Partial<any> = {}) => ({
   teacherId: TEACHER_ID,
   schoolYear: SCHOOL_YEAR,
   schedules: [] as any[],
-  room: 'Room 101',
+  room: '101',
   isActive: true,
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
@@ -194,6 +194,12 @@ describe('ClassesService', () => {
     mockDb.query.classRecordScores.findMany.mockResolvedValue([]);
     mockDb.query.classRecordFinalGrades.findFirst.mockResolvedValue(null);
     mockDb.query.assessmentAttempts.findMany.mockResolvedValue([]);
+    mockDb.query.sections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      name: 'Sampaguita',
+      gradeLevel: '7',
+      roomNumber: '101',
+    });
     mockClassRecordService.generateClassRecord.mockResolvedValue({});
     mockAcademicStateService.getCurrentState.mockResolvedValue({
       schoolYear: SCHOOL_YEAR,
@@ -345,12 +351,17 @@ describe('ClassesService', () => {
       sectionId: SECTION_ID,
       teacherId: TEACHER_ID,
       schoolYear: SCHOOL_YEAR,
-      room: 'Room 101',
+      room: '101',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
     };
 
     const setupHappyPath = () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
@@ -698,7 +709,12 @@ describe('ClassesService', () => {
     });
 
     it('throws BadRequestException when the teacher user does not exist', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(null);
 
       await expect(service.create(dto as any)).rejects.toThrow(
@@ -707,7 +723,12 @@ describe('ClassesService', () => {
     });
 
     it('throws BadRequestException when the user exists but is not a teacher/admin', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(
         makeTeacher({ userRoles: [{ role: { name: 'student' } }] }),
       );
@@ -718,7 +739,12 @@ describe('ClassesService', () => {
     });
 
     it('allows an admin user to be assigned as teacher', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(
         makeTeacher({ userRoles: [{ role: { name: 'admin' } }] }),
       );
@@ -731,7 +757,12 @@ describe('ClassesService', () => {
     });
 
     it('throws ConflictException when the same subject+section+year already exists', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([
         { id: CLASS_ID, subjectCode: 'MATH-7' },
@@ -767,14 +798,19 @@ describe('ClassesService', () => {
       sectionId: SECTION_ID,
       teacherId: TEACHER_ID,
       schoolYear: SCHOOL_YEAR,
-      room: 'Room 101',
+      room: '101',
       schedules: [
         { days: ['M', 'W', 'F'], startTime: '09:00', endTime: '10:00' },
       ],
     };
 
     it('inserts schedule slots into class_schedules when schedules are provided', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
@@ -792,7 +828,12 @@ describe('ClassesService', () => {
     });
 
     it('throws ConflictException when a slot collides with another class in the same section', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
@@ -824,7 +865,12 @@ describe('ClassesService', () => {
     });
 
     it('throws ConflictException when a slot collides on the same teacher across sections', async () => {
-      mockDb.query.sections.findFirst.mockResolvedValue({ id: SECTION_ID });
+      mockDb.query.sections.findFirst.mockResolvedValue({
+        id: SECTION_ID,
+        name: 'Sampaguita',
+        gradeLevel: '7',
+        roomNumber: '101',
+      });
       mockDb.query.users.findFirst.mockResolvedValue(makeTeacher());
       mockDb.query.classes.findMany.mockResolvedValue([]);
       mockDb.insert.mockReturnValueOnce(makeInsertChain([{ id: CLASS_ID }]));
@@ -859,7 +905,7 @@ describe('ClassesService', () => {
         sectionId: SECTION_ID,
         teacherId: TEACHER_ID,
         schoolYear: SCHOOL_YEAR,
-        room: 'Room 101',
+        room: '101',
       };
 
       await expect(service.create(dtoNoSlots as any)).rejects.toThrow(
@@ -911,13 +957,13 @@ describe('ClassesService', () => {
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass())
         .mockResolvedValueOnce(
-          makeClass({ subjectName: 'Updated Math', room: 'Lab 2' }),
+          makeClass({ subjectName: 'Updated Math', room: '101' }),
         );
       mockDb.update.mockReturnValue(makeUpdateChain());
 
       await service.update(
         CLASS_ID,
-        { subjectName: 'Updated Math', room: 'Lab 2' } as any,
+        { subjectName: 'Updated Math', room: '101' } as any,
         'admin-actor-1',
         ['admin'],
       );
@@ -994,7 +1040,7 @@ describe('ClassesService', () => {
         .mockResolvedValueOnce(makeClass());
       mockDb.update.mockReturnValue(makeUpdateChain());
 
-      await service.update(CLASS_ID, { room: 'Lab 2' } as any);
+      await service.update(CLASS_ID, { room: '101' } as any);
 
       expect(mockDb.delete).not.toHaveBeenCalled();
       expect(mockDb.insert).not.toHaveBeenCalled();

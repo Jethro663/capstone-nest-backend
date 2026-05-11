@@ -1,4 +1,10 @@
 export type DiscussionReactionType = "like" | "heart" | "wow";
+export type DiscussionCommentReportReason =
+  | "inappropriate"
+  | "spam"
+  | "off_topic"
+  | "harassment"
+  | "academic_dishonesty";
 
 export interface DiscussionAttachmentResource {
   id: string;
@@ -18,6 +24,13 @@ export interface DiscussionAuthor {
   firstName?: string;
   lastName?: string;
   email?: string;
+  profilePicture?: string | null;
+}
+
+export interface DiscussionReactor {
+  userId: string;
+  reactionType: DiscussionReactionType;
+  user?: DiscussionAuthor;
 }
 
 export interface DiscussionCommentReactions {
@@ -26,6 +39,7 @@ export interface DiscussionCommentReactions {
   wow: number;
   total: number;
   userReaction: DiscussionReactionType | null;
+  reactors?: DiscussionReactor[];
 }
 
 export interface DiscussionComment {
@@ -72,7 +86,34 @@ export interface DiscussionThreadListResponse {
   total: number;
 }
 
+export interface CreateDiscussionThreadDto {
+  title: string;
+  bodyHtml: string;
+  themeId?: string;
+  commentLimitPerStudent?: number;
+  allowComments?: boolean;
+  isPinned?: boolean;
+  fileAttachmentIds?: string[];
+  linkAttachments?: Array<{ url: string; label?: string }>;
+}
+
+export interface UpdateDiscussionThreadDto {
+  title?: string;
+  bodyHtml?: string;
+  themeId?: string;
+  commentLimitPerStudent?: number | null;
+  allowComments?: boolean;
+  isPinned?: boolean;
+  fileAttachmentIds?: string[];
+  linkAttachments?: Array<{ url: string; label?: string }>;
+}
+
 export interface CreateDiscussionCommentDto {
   bodyHtml?: string;
   attachmentFileIds?: string[];
+}
+
+export interface ReportDiscussionCommentDto {
+  reasonCode: DiscussionCommentReportReason;
+  notes?: string;
 }
