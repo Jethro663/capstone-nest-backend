@@ -10,6 +10,7 @@ import {
 import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
+import type { AttemptResult } from "../types/assessment";
 import {
   TeacherActionButton,
   TeacherPanel,
@@ -20,6 +21,34 @@ import {
 } from "../components/teacher/TeacherMobilePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherAssessmentReview">;
+
+function resolveStudentAnswer(response: AttemptResult["responses"][number]) {
+  const options = response.question?.options ?? [];
+  const optionLabel = (optionId?: string | null) => {
+    if (!optionId) return null;
+    return options.find((option) => option.id === optionId)?.text ?? null;
+  };
+
+  const selectedOptionIds = response.selectedOptionIds?.length
+    ? response.selectedOptionIds
+    : response.selectedOptionId
+      ? [response.selectedOptionId]
+      : [];
+
+  const selectedLabels = selectedOptionIds
+    .map(optionLabel)
+    .filter((label): label is string => Boolean(label));
+
+  if (selectedLabels.length) {
+    return selectedLabels.map(stripRichText).join(", ");
+  }
+
+  if (response.studentAnswer) {
+    return stripRichText(optionLabel(response.studentAnswer) ?? response.studentAnswer);
+  }
+
+  return "No captured answer";
+}
 
 export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
   const { attemptId, assessmentId } = route.params;
@@ -231,7 +260,7 @@ export function TeacherAssessmentReviewScreen({ navigation, route }: Props) {
                   />
                 ) : null}
                 <Text style={{ marginTop: 8, fontSize: 11, lineHeight: 17, color: "#9D9D9D" }}>
-                  Student answer: {response.studentAnswer || response.selectedOptionId || response.selectedOptionIds?.join(", ") || "No captured answer"}
+                  Student answer: {resolveStudentAnswer(response)}
                 </Text>
               </View>
             ))}

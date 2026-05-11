@@ -4,6 +4,7 @@ import type { ApiEnvelope } from "../../types/api";
 import type { EligibilityResponse, EligibleClass, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary, PlaylistResponse } from "../../types/lxp";
 import type {
   TeacherEvaluationSummaryResponse,
+  TeacherInterventionCase,
   TeacherInterventionCaseDetail,
   TeacherEvaluationType,
   TeacherInterventionQueueResponse,
@@ -33,6 +34,29 @@ const emptyPlaylist = (): PlaylistResponse => ({
   },
   checkpoints: [],
 });
+
+function normalizeTeacherInterventionQueue(
+  payload: TeacherInterventionQueueResponse,
+): TeacherInterventionQueueResponse {
+  return {
+    ...payload,
+    queue: normalizeArray<TeacherInterventionCase>(payload.queue).map((entry) => {
+      const studentName =
+        entry.studentName ||
+        [entry.student?.firstName, entry.student?.lastName]
+          .map((value) => (typeof value === "string" ? value.trim() : ""))
+          .filter(Boolean)
+          .join(" ") ||
+        entry.student?.email ||
+        "Student";
+
+      return {
+        ...entry,
+        studentName,
+      };
+    }),
+  };
+}
 
 export const lxpApi = {
   async getEligibility() {
@@ -80,10 +104,7 @@ export const lxpApi = {
       `/lxp/teacher/classes/${classId}/interventions`,
     );
     const payload = normalizeObject(unwrapEnvelope(response.data), { queue: [] });
-    return {
-      ...payload,
-      queue: normalizeArray(payload.queue),
-    } as TeacherInterventionQueueResponse;
+    return normalizeTeacherInterventionQueue(payload as TeacherInterventionQueueResponse);
   },
 
   async getTeacherInterventionHistory(classId: string) {
@@ -91,10 +112,7 @@ export const lxpApi = {
       `/lxp/teacher/classes/${classId}/interventions/history`,
     );
     const payload = normalizeObject(unwrapEnvelope(response.data), { queue: [] });
-    return {
-      ...payload,
-      queue: normalizeArray(payload.queue),
-    } as TeacherInterventionQueueResponse;
+    return normalizeTeacherInterventionQueue(payload as TeacherInterventionQueueResponse);
   },
 
   async getTeacherPendingInterventionCount() {

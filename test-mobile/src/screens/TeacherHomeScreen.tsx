@@ -256,7 +256,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
               justifyContent: "space-between",
             }}
           >
-            <View>
+            <View style={{ flex: 1, paddingRight: 12 }}>
               <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>Open Calendar</Text>
               <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#999999" }}>
                 Review schedules, announcements, school events, and due assessments in one feed.

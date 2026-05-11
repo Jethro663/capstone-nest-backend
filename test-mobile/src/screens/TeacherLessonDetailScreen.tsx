@@ -11,6 +11,7 @@ import {
   TeacherPanel,
   TeacherScreen,
   TeacherStats,
+  stripRichText,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
@@ -26,6 +27,12 @@ function resolveBlockUrl(block: { content?: unknown; metadata?: unknown }) {
     if (typeof metadata.url === "string") return metadata.url;
   }
   return null;
+}
+
+function buildLessonSubtitle(description?: string | null) {
+  const stripped = stripRichText(description || "").replace(/\s+/g, " ").trim();
+  if (!stripped) return "Read lesson blocks and change draft or published state from mobile.";
+  return stripped.length > 180 ? `${stripped.slice(0, 177).trim()}...` : stripped;
 }
 
 export function TeacherLessonDetailScreen({ navigation, route }: Props) {
@@ -55,7 +62,7 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
   return (
     <TeacherScreen
       title={lesson?.title || "Lesson detail"}
-      subtitle={lesson?.description || "Read lesson blocks and change draft or published state from mobile."}
+      subtitle={buildLessonSubtitle(lesson?.description)}
       icon="text-box-outline"
       rightAction={
         <Pressable

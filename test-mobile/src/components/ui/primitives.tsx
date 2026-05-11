@@ -166,6 +166,7 @@ export function ScreenScroll({
 }>) {
   const refreshState = resolveRefreshControlState(refreshControl);
   const isAndroidCustomRefresh = Platform.OS === "android" && !!refreshState?.onRefresh;
+  const nativeRefreshControl = Platform.OS !== "web" && !isAndroidCustomRefresh ? refreshControl : undefined;
   const resolvedBackground = backgroundColor ?? colors.surface;
   const [pullDistance, setPullDistance] = useState(0);
   const scrollOffsetRef = useRef(0);
@@ -217,7 +218,7 @@ export function ScreenScroll({
           bounces
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 112 }}
-          refreshControl={isAndroidCustomRefresh ? undefined : refreshControl}
+          refreshControl={nativeRefreshControl}
           style={{ flex: 1, backgroundColor: resolvedBackground }}
           onScroll={
             isAndroidCustomRefresh

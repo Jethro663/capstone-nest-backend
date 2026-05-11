@@ -12,6 +12,7 @@ import type {
   OngoingAttemptResult,
   RemovedAssessmentSubmissionFiles,
   SubmitAssessmentDto,
+  TeacherAssessmentSubmission,
   TeacherAssessmentSubmissionsResponse,
   UpdateAssessmentDto,
   UpdateAttemptProgressDto,
@@ -27,6 +28,66 @@ import type {
 export type AssessmentAttemptList = AssessmentAttempt[];
 export type AssessmentAttemptDetail = AttemptResult;
 export type AssessmentHistoryList = AssessmentHistoryResponse;
+
+type TeacherSubmissionAttemptPayload = {
+  id?: string | null;
+  attemptNumber?: number | null;
+  score?: number | null;
+  directScore?: number | null;
+  submittedAt?: string | null;
+  returnedAt?: string | null;
+  teacherFeedback?: string | null;
+  submittedFiles?: TeacherAssessmentSubmission["submittedFiles"];
+  submittedFile?: TeacherAssessmentSubmission["submittedFile"];
+};
+
+type TeacherSubmissionPayload = Partial<TeacherAssessmentSubmission> & {
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  attempt?: TeacherSubmissionAttemptPayload | null;
+};
+
+function normalizeTeacherSubmission(entry: TeacherSubmissionPayload): TeacherAssessmentSubmission {
+  const attempt = entry.attempt;
+  const studentName =
+    entry.studentName ||
+    [entry.firstName, entry.lastName]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+      .join(" ") ||
+    entry.studentEmail ||
+    entry.email ||
+    "Student";
+
+  return {
+    studentId: entry.studentId || "",
+    studentName,
+    studentEmail: entry.studentEmail || entry.email || undefined,
+    status: entry.status || "not_started",
+    latestAttemptId: entry.latestAttemptId ?? attempt?.id ?? null,
+    latestAttemptNumber: entry.latestAttemptNumber ?? attempt?.attemptNumber ?? null,
+    latestAttemptScore: entry.latestAttemptScore ?? attempt?.score ?? null,
+    latestAttemptSubmittedAt: entry.latestAttemptSubmittedAt ?? attempt?.submittedAt ?? null,
+    latestAttemptReturnedAt: entry.latestAttemptReturnedAt ?? attempt?.returnedAt ?? null,
+    teacherFeedback: entry.teacherFeedback ?? attempt?.teacherFeedback ?? null,
+    directScore: entry.directScore ?? attempt?.directScore ?? null,
+    submittedFiles: entry.submittedFiles ?? attempt?.submittedFiles ?? null,
+    submittedFile: entry.submittedFile ?? attempt?.submittedFile ?? null,
+    timeline: entry.timeline ?? null,
+  };
+}
+
+function normalizeTeacherSubmissionsResponse(
+  data: TeacherAssessmentSubmissionsResponse,
+): TeacherAssessmentSubmissionsResponse {
+  return {
+    ...data,
+    submissions: data.submissions.map((entry) =>
+      normalizeTeacherSubmission(entry as TeacherSubmissionPayload),
+    ),
+  };
+}
 
 export const assessmentsApi = {
   async create(payload: CreateAssessmentDto) {
@@ -157,7 +218,7 @@ export const assessmentsApi = {
     const response = await apiClient.get<ApiEnvelope<TeacherAssessmentSubmissionsResponse>>(
       `/assessments/${assessmentId}/submissions`,
     );
-    return unwrapEnvelope(response.data);
+    return normalizeTeacherSubmissionsResponse(unwrapEnvelope(response.data));
   },
 
   async returnGrade(

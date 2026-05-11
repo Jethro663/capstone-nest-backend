@@ -168,6 +168,12 @@ export interface TeacherInterventionCase {
   classCode?: string;
   studentId?: string;
   studentName?: string;
+  student?: {
+    id?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  } | null;
   status?: string;
   triggerScore?: number | null;
   thresholdApplied?: number | null;
