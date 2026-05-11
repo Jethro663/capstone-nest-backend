@@ -37,6 +37,9 @@ venv
 tmp-*
 ~$*
 
+!next-frontend/public/**
+!public/**
+
 .env
 .env.*
 !.env.example
