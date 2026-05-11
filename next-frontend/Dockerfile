@@ -54,7 +54,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 # Copy standalone build output and keep runtime assets beside server.js.
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./.next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/standalone/.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public ./.next/standalone/public
+COPY --from=builder --chown=nextjs:nodejs /app/public/ ./.next/standalone/public/
 RUN test -f ./.next/standalone/public/NexoraHome.png && \
     test -f ./.next/standalone/public/taguigpic.png
 
