@@ -442,7 +442,7 @@ export function CalendarScreen({ navigation, route }: Props) {
                         justifyContent: "center",
                         backgroundColor: isSelected ? theme.blueSoft : isToday ? theme.red : "transparent",
                         borderWidth: isSelected ? 1 : 0,
-                        borderColor: isSelected ? "rgba(74,140,247,0.45)" : "transparent",
+                        borderColor: isSelected ? "rgba(0,217,255,0.45)" : "transparent",
                       }}
                     >
                       <Text

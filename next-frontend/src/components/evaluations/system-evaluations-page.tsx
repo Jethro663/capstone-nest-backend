@@ -4,8 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Gauge, MessageSquareQuote, SlidersHorizontal, Star } from 'lucide-react';
 import { lxpService } from '@/services/lxp-service';
 import type {
+  CreateSystemEvaluationCampaignPayload,
+  SystemEvaluationCampaign,
   SystemEvaluationListResponse,
   SystemEvaluationRow,
+  SystemEvaluationAudienceRole,
+  SystemEvaluationFormType,
   SystemEvaluationTargetModule,
 } from '@/types/lxp';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,11 +79,21 @@ export function SystemEvaluationsPage({
   const isAdmin = variant === 'admin';
   const [targetModule, setTargetModule] = useState<'' | SystemEvaluationTargetModule>('');
   const [rows, setRows] = useState<SystemEvaluationRow[]>([]);
+  const [campaigns, setCampaigns] = useState<SystemEvaluationCampaign[]>([]);
   const [count, setCount] = useState(0);
   const [summary, setSummary] = useState<
     SystemEvaluationListResponse['summary'] | null
   >(null);
   const [loading, setLoading] = useState(true);
+  const [campaignSubmitting, setCampaignSubmitting] = useState(false);
+  const [campaignForm, setCampaignForm] = useState({
+    formType: 'system' as SystemEvaluationFormType,
+    audienceRole: 'student' as SystemEvaluationAudienceRole,
+    title: '',
+    classId: '',
+    startsAt: '',
+    endsAt: '',
+  });
 
   const fetchEvaluations = useCallback(async () => {
     try {
@@ -103,6 +117,52 @@ export function SystemEvaluationsPage({
   useEffect(() => {
     fetchEvaluations();
   }, [fetchEvaluations]);
+
+  const fetchCampaigns = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const response = await lxpService.getSystemEvaluationCampaigns();
+      setCampaigns(response.data.campaigns ?? []);
+    } catch {
+      toast.error('Failed to load evaluation campaigns');
+      setCampaigns([]);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    void fetchCampaigns();
+  }, [fetchCampaigns]);
+
+  const handleCreateCampaign = async () => {
+    if (!campaignForm.title.trim() || !campaignForm.startsAt || !campaignForm.endsAt) {
+      toast.error('Campaign title and dates are required');
+      return;
+    }
+
+    const payload: CreateSystemEvaluationCampaignPayload = {
+      formType: campaignForm.formType,
+      audienceRole: campaignForm.audienceRole,
+      title: campaignForm.title.trim(),
+      startsAt: new Date(campaignForm.startsAt).toISOString(),
+      endsAt: new Date(campaignForm.endsAt).toISOString(),
+      status: 'active',
+    };
+    if (campaignForm.classId.trim()) {
+      payload.classId = campaignForm.classId.trim();
+    }
+
+    try {
+      setCampaignSubmitting(true);
+      await lxpService.createSystemEvaluationCampaign(payload);
+      toast.success('Evaluation campaign created');
+      setCampaignForm((current) => ({ ...current, title: '', classId: '' }));
+      await Promise.all([fetchCampaigns(), fetchEvaluations()]);
+    } catch {
+      toast.error('Failed to create evaluation campaign');
+    } finally {
+      setCampaignSubmitting(false);
+    }
+  };
 
   const averageScores = useMemo(() => {
     if (summary?.averages) {
@@ -150,6 +210,144 @@ export function SystemEvaluationsPage({
 
   const content = (
     <>
+      {isAdmin ? (
+        <AdminSectionCard
+          title="Campaign Builder"
+          description="Create active evaluation windows that assign forms to students or teachers."
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Form type</span>
+              <select
+                value={campaignForm.formType}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    formType: event.target.value as SystemEvaluationFormType,
+                    audienceRole:
+                      event.target.value === 'ja_hub' ? 'student' : current.audienceRole,
+                  }))
+                }
+                className="admin-select w-full text-sm"
+              >
+                <option value="system">System</option>
+                <option value="ja_hub">JA Hub</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Audience</span>
+              <select
+                value={campaignForm.audienceRole}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    audienceRole: event.target.value as SystemEvaluationAudienceRole,
+                  }))
+                }
+                className="admin-select w-full text-sm"
+                disabled={campaignForm.formType === 'ja_hub'}
+              >
+                <option value="student">Students</option>
+                <option value="teacher">Teachers</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Campaign title</span>
+              <input
+                aria-label="Campaign title"
+                value={campaignForm.title}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    title: event.target.value,
+                  }))
+                }
+                className="admin-input w-full text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Class ID optional</span>
+              <input
+                aria-label="Class ID optional"
+                value={campaignForm.classId}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    classId: event.target.value,
+                  }))
+                }
+                className="admin-input w-full text-sm"
+                placeholder="Leave blank for role-wide"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Starts at</span>
+              <input
+                aria-label="Starts at"
+                type="datetime-local"
+                value={campaignForm.startsAt}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    startsAt: event.target.value,
+                  }))
+                }
+                className="admin-input w-full text-sm"
+              />
+            </label>
+            <label className="space-y-1 text-sm font-semibold text-[var(--admin-text-strong)]">
+              <span>Ends at</span>
+              <input
+                aria-label="Ends at"
+                type="datetime-local"
+                value={campaignForm.endsAt}
+                onChange={(event) =>
+                  setCampaignForm((current) => ({
+                    ...current,
+                    endsAt: event.target.value,
+                  }))
+                }
+                className="admin-input w-full text-sm"
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void handleCreateCampaign()}
+              disabled={campaignSubmitting}
+              className="admin-button"
+            >
+              {campaignSubmitting ? 'Creating...' : 'Create Campaign'}
+            </button>
+            <span className="admin-pill px-4 py-2 text-sm font-semibold">
+              {campaigns.length} campaign{campaigns.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {campaigns.length > 0 ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {campaigns.slice(0, 6).map((campaign) => (
+                <div
+                  key={campaign.id}
+                  className="rounded-[14px] border border-[var(--admin-outline)] bg-white px-4 py-4"
+                >
+                  <p className="text-sm font-black text-[var(--admin-text-strong)]">
+                    {campaign.title}
+                  </p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.14em] text-[var(--admin-text-muted)]">
+                    {formatModuleName(campaign.targetModule)} | {campaign.audienceRole}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between text-sm text-[var(--admin-text-muted)]">
+                    <span>{campaign.submittedCount} submitted</span>
+                    <span>{campaign.assignmentCount} assigned</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </AdminSectionCard>
+      ) : null}
+
       {isAdmin ? (
         <AdminSectionCard
           title="Evaluation Filters"

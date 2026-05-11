@@ -16,12 +16,15 @@ import { IsValidSchoolYearConstraint } from './validators';
 import { GRADE_LEVELS } from '../../../common/utils/grade-level.util';
 import { ScheduleSlotDto } from './schedule-slot.dto';
 import {
-  ROOM_LABEL_REGEX,
   SUBJECT_CODE_REGEX,
   SUBJECT_NAME_REGEX,
   trimValue,
   upperTrimmedValue,
 } from '../../../common/validation/input-policy';
+import {
+  ALLOWED_ROOM_NUMBERS,
+  ALLOWED_ROOM_NUMBERS_MESSAGE,
+} from '../../../common/constants/room-options';
 
 export class UpdateClassDto {
   @IsOptional()
@@ -75,9 +78,8 @@ export class UpdateClassDto {
   @IsString({ message: 'room must be a string' })
   @Transform(({ value }: { value?: string }) => trimValue(value))
   @MinLength(1, { message: 'room cannot be empty' })
-  @Matches(ROOM_LABEL_REGEX, {
-    message:
-      'room may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+  @IsIn([...ALLOWED_ROOM_NUMBERS], {
+    message: ALLOWED_ROOM_NUMBERS_MESSAGE,
   })
   room?: string;
 

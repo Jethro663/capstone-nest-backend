@@ -38,6 +38,7 @@ export default function EditSectionPage() {
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
   const [teachers, setTeachers] = useState<User[]>([]);
+  const [allSections, setAllSections] = useState<Section[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,15 +69,17 @@ export default function EditSectionPage() {
 
     try {
       setLoading(true);
-      const [sectionRes, rosterRes, teachersRes] = await Promise.all([
+      const [sectionRes, rosterRes, teachersRes, sectionsRes] = await Promise.all([
         sectionService.getById(sectionId),
         sectionService.getRoster(sectionId),
         userService.getAll({ role: 'teacher', limit: 200 }),
+        sectionService.getAll({ limit: 100 }),
       ]);
 
       setSection(sectionRes.data);
       setRoster(rosterRes.data || []);
       setTeachers(teachersRes.users || []);
+      setAllSections(sectionsRes.data || []);
       setSelectedStudentIds([]);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to load section details'));
@@ -89,6 +92,33 @@ export default function EditSectionPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const adviserDisabledReasonById = useMemo(() => {
+    const byTeacher: Record<string, string> = {};
+
+    for (const entry of allSections) {
+      if (!entry.adviserId || !entry.isActive) continue;
+      if (entry.id === sectionId) continue;
+      if (byTeacher[entry.adviserId]) continue;
+      byTeacher[entry.adviserId] =
+        `Already assigned to Grade ${entry.gradeLevel} - ${entry.name}`;
+    }
+
+    return byTeacher;
+  }, [allSections, sectionId]);
+  const roomDisabledReasonByNumber = useMemo(() => {
+    const byRoom: Record<string, string> = {};
+
+    for (const entry of allSections) {
+      const room = entry.roomNumber?.trim();
+      if (!entry.isActive || !room) continue;
+      if (entry.id === sectionId) continue;
+      if (byRoom[room]) continue;
+      byRoom[room] = `Assigned to Grade ${entry.gradeLevel} - ${entry.name}`;
+    }
+
+    return byRoom;
+  }, [allSections, sectionId]);
 
   const handleSave = async (values: SectionFormValues) => {
     if (!sectionId) return;
@@ -217,6 +247,8 @@ export default function EditSectionPage() {
         <SectionForm
           initialValues={initialValues}
           teachers={teachers}
+          adviserDisabledReasonById={adviserDisabledReasonById}
+          roomDisabledReasonByNumber={roomDisabledReasonByNumber}
           schoolYears={availableSchoolYears}
           saving={saving}
           submitLabel="Save Changes"

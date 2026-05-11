@@ -17,7 +17,8 @@ class _FakeResponse:
 
 class _FakeAsyncClient:
     def __init__(self, body):
-        self._body = body
+        self._bodies = body if isinstance(body, list) else [body]
+        self.requests = []
 
     async def __aenter__(self):
         return self
@@ -26,7 +27,9 @@ class _FakeAsyncClient:
         return False
 
     async def post(self, *args, **kwargs):
-        return _FakeResponse(self._body)
+        self.requests.append({"args": args, "kwargs": kwargs})
+        body = self._bodies.pop(0)
+        return _FakeResponse(body)
 
 
 class CloudFallbackEmbeddingTests(unittest.IsolatedAsyncioTestCase):
@@ -77,6 +80,30 @@ class CloudFallbackEmbeddingTests(unittest.IsolatedAsyncioTestCase):
             result = await cloud_fallback.embed_texts(["first", "second"])
 
         self.assertEqual(result, [[0.1, 0.2], [0.4, 0.5]])
+
+    async def test_embed_texts_retries_missing_batch_vectors_one_by_one(self) -> None:
+        fake_client = _FakeAsyncClient(
+            [
+                {"data": [{"index": 0, "embedding": [0.1, 0.2]}]},
+                {"data": [{"index": 0, "embedding": [0.9, 1.0]}]},
+            ]
+        )
+
+        with (
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_enabled", True),
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_api_key", "test-key"),
+            patch.object(
+                cloud_fallback.settings,
+                "ai_cloud_fallback_embedding_model",
+                "google/gemini-embedding-2-preview",
+            ),
+            patch("app.cloud_fallback.httpx.AsyncClient", return_value=fake_client),
+        ):
+            result = await cloud_fallback.embed_texts(["first", "second"])
+
+        self.assertEqual(result, [[0.1, 0.2], [0.9, 1.0]])
+        self.assertEqual(fake_client.requests[0]["kwargs"]["json"]["input"], ["first", "second"])
+        self.assertEqual(fake_client.requests[1]["kwargs"]["json"]["input"], ["second"])
 
 
 if __name__ == "__main__":

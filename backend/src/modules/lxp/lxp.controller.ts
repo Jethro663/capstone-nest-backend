@@ -15,12 +15,16 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import {
   ApproveGeneratedArtifactsDto,
   AssignInterventionDto,
+  CreateSystemEvaluationCampaignDto,
+  ListSystemEvaluationCampaignsQueryDto,
   ListTeacherEvaluationSummaryQueryDto,
   ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
+  SubmitAssignedSystemEvaluationDto,
   SubmitGuidedAssessmentDto,
   SubmitSystemEvaluationDto,
   SubmitTeacherEvaluationDto,
+  UpdateSystemEvaluationCampaignStatusDto,
   UpdateGuidedAssessmentProgressDto,
 } from './dto/lxp.dto';
 import { LxpService } from './lxp.service';
@@ -184,6 +188,19 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('teacher/classes/:classId/interventions/history')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getTeacherInterventionHistory(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getTeacherInterventionHistory(
+      classId,
+      user,
+    );
+    return { success: true, data };
+  }
+
   @Get('teacher/interventions/pending-count')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getTeacherPendingInterventionCount(
@@ -222,6 +239,16 @@ export class LxpController {
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.lxpService.activateIntervention(caseId, user);
+    return { success: true, data };
+  }
+
+  @Post('teacher/interventions/:caseId/regenerate')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async regenerateInterventionPath(
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.regenerateInterventionPath(caseId, user);
     return { success: true, data };
   }
 
@@ -269,12 +296,77 @@ export class LxpController {
   }
 
   @Get('evaluations')
-  @Roles(RoleName.Teacher, RoleName.Admin)
+  @Roles(RoleName.Admin)
   async listEvaluations(
     @CurrentUser() user: { userId: string; roles: string[] },
     @Query() query?: ListSystemEvaluationsQueryDto,
   ) {
     const data = await this.lxpService.listSystemEvaluations(user, query);
+    return { success: true, data };
+  }
+
+  @Get('me/system-evaluations')
+  @Roles(RoleName.Student, RoleName.Teacher)
+  async getMySystemEvaluations(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getMySystemEvaluationDashboard(user);
+    return { success: true, data };
+  }
+
+  @Post('me/system-evaluations/:assignmentId/submit')
+  @Roles(RoleName.Student, RoleName.Teacher)
+  async submitAssignedSystemEvaluation(
+    @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() dto: SubmitAssignedSystemEvaluationDto,
+  ) {
+    const data = await this.lxpService.submitAssignedSystemEvaluation(
+      assignmentId,
+      user,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Post('system-evaluation-campaigns')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async createSystemEvaluationCampaign(
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() dto: CreateSystemEvaluationCampaignDto,
+  ) {
+    const data = await this.lxpService.createSystemEvaluationCampaign(
+      user,
+      dto,
+    );
+    return { success: true, data };
+  }
+
+  @Get('system-evaluation-campaigns')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async listSystemEvaluationCampaigns(
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Query() query?: ListSystemEvaluationCampaignsQueryDto,
+  ) {
+    const data = await this.lxpService.listSystemEvaluationCampaigns(
+      user,
+      query,
+    );
+    return { success: true, data };
+  }
+
+  @Patch('system-evaluation-campaigns/:campaignId/status')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async updateSystemEvaluationCampaignStatus(
+    @Param('campaignId', ParseUUIDPipe) campaignId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() dto: UpdateSystemEvaluationCampaignStatusDto,
+  ) {
+    const data = await this.lxpService.updateSystemEvaluationCampaignStatus(
+      campaignId,
+      user,
+      dto,
+    );
     return { success: true, data };
   }
 

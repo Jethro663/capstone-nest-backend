@@ -1,7 +1,14 @@
 import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { ClassItem, ClassVisibilityStatus, EnrollmentRecord } from "../../types/class";
+import type {
+  ClassItem,
+  ClassVisibilityStatus,
+  EnrollmentRecord,
+  EnrollStudentDto,
+  StudentMasterlistItem,
+  StudentMasterlistQuery,
+} from "../../types/class";
 
 export const classesApi = {
   async getStudentClasses(studentId: string) {
@@ -24,5 +31,18 @@ export const classesApi = {
   async getEnrollments(classId: string) {
     const response = await apiClient.get<ApiEnvelope<EnrollmentRecord[]>>(`/classes/${classId}/enrollments`);
     return normalizeArray<EnrollmentRecord>(unwrapEnvelope(response.data));
+  },
+
+  async getStudentsMasterlist(classId: string, query?: StudentMasterlistQuery) {
+    const response = await apiClient.get<ApiEnvelope<StudentMasterlistItem[]>>(
+      `/classes/${classId}/students/masterlist`,
+      { params: query },
+    );
+    return normalizeArray<StudentMasterlistItem>(unwrapEnvelope(response.data));
+  },
+
+  async enrollStudent(classId: string, dto: EnrollStudentDto) {
+    const response = await apiClient.post<ApiEnvelope<EnrollmentRecord>>(`/classes/${classId}/enrollments`, dto);
+    return unwrapEnvelope(response.data);
   },
 };

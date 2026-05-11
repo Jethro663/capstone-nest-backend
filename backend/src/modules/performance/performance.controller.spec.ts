@@ -11,6 +11,7 @@ describe('PerformanceController', () => {
       recomputeClass: jest.fn(),
       getClassSummary: jest.fn(),
       getAtRiskStudents: jest.fn(),
+      getInterventionQuizComparison: jest.fn(),
       getClassLogs: jest.fn(),
       createPerformanceAnalysisJob: jest.fn(),
       getPerformanceAnalysisJobStatus: jest.fn(),
@@ -69,5 +70,30 @@ describe('PerformanceController', () => {
     expect(result.success).toBe(true);
     expect(result.data.threshold).toBe(74);
     expect(service.getStudentOwnSummary).toHaveBeenCalledWith('student-1');
+  });
+
+  it('should wrap intervention quiz comparison in success envelope', async () => {
+    service.getInterventionQuizComparison.mockResolvedValue({
+      classId: 'class-1',
+      count: 1,
+      improvedCount: 1,
+      declinedCount: 0,
+      unchangedCount: 0,
+      awaitingRetryCount: 0,
+      comparisons: [],
+    } as any);
+
+    const result = await controller.getInterventionQuizComparison('class-1', {
+      userId: 'teacher-1',
+      roles: ['teacher'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data.classId).toBe('class-1');
+    expect(service.getInterventionQuizComparison).toHaveBeenCalledWith(
+      'class-1',
+      'teacher-1',
+      ['teacher'],
+    );
   });
 });

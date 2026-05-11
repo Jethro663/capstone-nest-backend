@@ -56,8 +56,16 @@ export const authApi = {
   },
 
   async validateCredentials(payload: ValidateCredentialsPayload) {
-    const response = await publicClient.post<ApiEnvelope<{ valid: boolean }>>("/auth/validate-credentials", payload);
-    return unwrapEnvelope(response.data).valid;
+    const response = await publicClient.post<ApiEnvelope<{ valid?: boolean }> & { success?: boolean }>(
+      "/auth/validate-credentials",
+      payload,
+    );
+    const data = unwrapEnvelope(response.data);
+    if (typeof data.valid === "boolean") {
+      return data.valid;
+    }
+
+    return response.data.success === true;
   },
 
   async verifyEmail(payload: VerifyOtpPayload) {

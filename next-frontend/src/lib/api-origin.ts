@@ -46,6 +46,13 @@ export function getBrowserSocketOrigin(
   }
 
   if (typeof window !== 'undefined') {
+    if (
+      (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1') &&
+      window.location.port === '3001'
+    ) {
+      return LOCAL_BACKEND_ORIGIN;
+    }
     return window.location.origin;
   }
 

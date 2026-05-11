@@ -197,6 +197,51 @@ describe('StudentLxpDetailExperience', () => {
     );
   });
 
+  it('does not show an outside Mark Complete action for generated remedial lesson cards', async () => {
+    mockedLxpService.getPlaylist.mockResolvedValue({
+      data: {
+        ...activePlaylistResponse.data,
+        progress: {
+          ...activePlaylistResponse.data.progress,
+          checkpointsCompleted: 0,
+          completionPercent: 0,
+        },
+        checkpoints: [
+          {
+            id: 'checkpoint-generated-lesson',
+            type: 'generated_lesson_review',
+            label: 'Simplified Remedial Lesson',
+            order: 1,
+            isCompleted: false,
+            completedAt: null,
+            xpAwarded: 20,
+            lesson: null,
+            assessment: null,
+            generatedLesson: {
+              id: 'generated-lesson-1',
+              title: 'Simplified Remedial Lesson',
+              summary: 'Review the weak concept in simpler terms.',
+              lessonBody: 'Read this inside the generated lesson viewer.',
+              weakConcepts: ['Equivalent fractions'],
+              sourceLessonIds: ['lesson-1'],
+              sourceReferences: [],
+              status: 'approved',
+            },
+          },
+        ],
+      },
+    } as never);
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByText('Simplified Remedial Lesson')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Remedial Lesson' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/lxp/class-active/generated-lessons/checkpoint-generated-lesson',
+    );
+    expect(screen.queryByRole('button', { name: 'Mark Complete' })).not.toBeInTheDocument();
+  });
+
   it('opens JA review when the replay card itself is clicked', async () => {
     searchParamsState.tab = 'replays';
 

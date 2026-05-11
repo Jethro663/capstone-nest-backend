@@ -149,6 +149,111 @@ export interface SectionCandidatesResponse {
   totalPages: number;
 }
 
+export interface AccessStudentsOverviewQuery {
+  schoolYear?: string;
+  gradeLevel?: '7' | '8' | '9' | '10';
+  sectionId?: string;
+  search?: string;
+}
+
+export interface AccessStudentsOverviewStudent {
+  id: string;
+  firstName: string | null;
+  middleName: string | null;
+  lastName: string | null;
+  email: string;
+  lrn: string | null;
+  gradeLevel: string | null;
+  finalGrade: number | null;
+  isFailing: boolean;
+}
+
+export interface AccessStudentsOverviewSection {
+  id: string;
+  name: string;
+  gradeLevel: string;
+  schoolYear: string;
+  roomNumber: string | null;
+  capacity: number;
+  adviser: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+  } | null;
+  classRecordCount: number;
+  finalizedClassRecordCount: number;
+  studentCount: number;
+  students: AccessStudentsOverviewStudent[];
+}
+
+export interface AccessStudentsOverviewGradeBucket {
+  gradeLevel: string;
+  sections: AccessStudentsOverviewSection[];
+}
+
+export interface AccessStudentsOverviewResponse {
+  success: boolean;
+  data: AccessStudentsOverviewGradeBucket[];
+  totalStudents: number;
+  totalSections: number;
+}
+
+export interface AccessStudentsTargetSectionsQuery {
+  fromSectionId: string;
+  mode: 'promote' | 'retain';
+  schoolYear?: string;
+}
+
+export interface AccessStudentsTargetSectionsResponse {
+  success: boolean;
+  data: {
+    mode: 'promote' | 'retain';
+    fromSection: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+      schoolYear: string;
+    };
+    targetGradeLevel: string;
+    targetSchoolYear: string;
+    sections: Array<{
+      id: string;
+      name: string;
+      gradeLevel: string;
+      schoolYear: string;
+      roomNumber: string | null;
+      capacity: number;
+    }>;
+  };
+}
+
+export interface MoveUpStudentsDto {
+  fromSectionId: string;
+  targetSectionId: string;
+  studentIds: string[];
+  allowFailingPromotion?: boolean;
+}
+
+export interface FailStudentsDto {
+  fromSectionId: string;
+  targetSectionId: string;
+  studentIds: string[];
+}
+
+export type BulkStudentTransferResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    movedCount?: number;
+    retainedCount?: number;
+    failingStudents?: Array<{
+      studentId: string;
+      finalGrade: number | null;
+    }>;
+  };
+};
+
 export type BulkSectionLifecycleAction = 'archive' | 'restore' | 'purge';
 
 export interface BulkSectionLifecycleDto {
@@ -304,6 +409,34 @@ export const sectionService = {
     studentId: string,
   ): Promise<{ success: boolean; message: string; data: TeacherSectionStudentProfile }> {
     const { data } = await api.get(`/sections/${sectionId}/students/${studentId}/profile`);
+    return data;
+  },
+
+  async getAccessStudentsOverview(
+    query?: AccessStudentsOverviewQuery,
+  ): Promise<AccessStudentsOverviewResponse> {
+    const { data } = await api.get('/sections/access-students/overview', {
+      params: query,
+    });
+    return data;
+  },
+
+  async getAccessStudentsTargetSections(
+    query: AccessStudentsTargetSectionsQuery,
+  ): Promise<AccessStudentsTargetSectionsResponse> {
+    const { data } = await api.get('/sections/access-students/target-sections', {
+      params: query,
+    });
+    return data;
+  },
+
+  async moveUpStudents(dto: MoveUpStudentsDto): Promise<BulkStudentTransferResponse> {
+    const { data } = await api.post('/sections/access-students/move-up', dto);
+    return data;
+  },
+
+  async failStudents(dto: FailStudentsDto): Promise<BulkStudentTransferResponse> {
+    const { data } = await api.post('/sections/access-students/fail', dto);
     return data;
   },
 

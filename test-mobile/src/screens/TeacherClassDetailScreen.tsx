@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Pressable, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import {
-  queryKeys,
   useAnnouncements,
   useAssessments,
   useClassDetail,
@@ -11,11 +10,14 @@ import {
   useSchoolEvents,
   useTeacherEnrollments,
 } from "../api/hooks";
-import { announcementsApi } from "../api/services/announcements";
 import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/types";
+import { TeacherClassRecordBoard } from "../components/teacher/TeacherClassRecordBoard";
+import { TeacherDiscussionBoard } from "../components/teacher/TeacherDiscussionBoard";
+import { TeacherExtractionBoard } from "../components/teacher/TeacherExtractionBoard";
 import {
+  TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
   TeacherPanel,
@@ -35,9 +37,22 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+const CLASS_TABS: Array<{ key: TeacherClassDetailTab; label: string }> = [
+  { key: "modules", label: "Modules" },
+  { key: "assessments", label: "Assessments" },
+  { key: "announcements", label: "Announcements" },
+  { key: "extraction", label: "Extraction" },
+  { key: "discussion", label: "Discussion Board" },
+  { key: "classRecord", label: "Class Record" },
+  { key: "calendar", label: "Calendar" },
+  { key: "students", label: "Students" },
+];
+
 export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const { classId, initialTab } = route.params;
   const [activeTab, setActiveTab] = useState<TeacherClassDetailTab>(initialTab ?? "modules");
+  const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const tabRefetchersRef = useRef<Partial<Record<TeacherClassDetailTab, () => Promise<unknown>>>>({});
   const classQuery = useClassDetail(classId);
   const modulesQuery = useClassModules(classId);
   const assessmentsQuery = useAssessments(classId);
@@ -49,7 +64,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
     const assessmentItems = (assessmentsQuery.data ?? []).map((assessment) => ({
       id: `assessment-${assessment.id}`,
       title: assessment.title,
-      subtitle: `Assessment · Due ${formatDate(assessment.dueDate)}`,
+      subtitle: `Assessment - Due ${formatDate(assessment.dueDate)}`,
       sortAt: new Date(assessment.dueDate || 0).getTime(),
       action: () => navigation.navigate("TeacherAssessmentDetail", { assessmentId: assessment.id, classId }),
     }));
@@ -60,7 +75,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       .map((entry) => ({
         id: `event-${entry.id}`,
         title: entry.title,
-        subtitle: `School event · ${formatDate(entry.startsAt)}`,
+        subtitle: `School event - ${formatDate(entry.startsAt)}`,
         sortAt: new Date(entry.startsAt).getTime(),
         action: () => navigation.navigate("TeacherCalendar", { classId }),
       }));
@@ -71,13 +86,37 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   }, [assessmentsQuery.data, classQuery.data?.schoolYear, classId, navigation, schoolEventsQuery.data]);
 
   const topError = classQuery.error || modulesQuery.error || assessmentsQuery.error || announcementsQuery.error || rosterQuery.error;
+  const registerTabRefetcher =
+    (tab: TeacherClassDetailTab) =>
+    (refetcher: () => Promise<unknown>) => {
+      tabRefetchersRef.current[tab] = refetcher;
+    };
+
+  const handleCreateAssessment = async () => {
+    if (creatingAssessment) return;
+    try {
+      setCreatingAssessment(true);
+      const created = await assessmentsApi.create({
+        title: "Untitled Assessment",
+        classId,
+      });
+      navigation.navigate("TeacherAssessmentEditor", {
+        assessmentId: created.id,
+        classId: created.classId,
+      });
+    } catch (error) {
+      Alert.alert("Unable to create assessment", toAppError(error).message);
+    } finally {
+      setCreatingAssessment(false);
+    }
+  };
 
   return (
     <TeacherScreen
-      title={classQuery.data ? `${classQuery.data.subjectCode} · ${classQuery.data.subjectName}` : "Class workspace"}
+      title={classQuery.data ? `${classQuery.data.subjectCode} - ${classQuery.data.subjectName}` : "Class workspace"}
       subtitle={
         classQuery.data
-          ? `${classQuery.data.section?.name || "Section pending"} · ${classQuery.data.schoolYear}`
+          ? `${classQuery.data.section?.name || "Section pending"} - ${classQuery.data.schoolYear}`
           : "Teacher class shell"
       }
       icon="google-classroom"
@@ -97,14 +136,19 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         rosterQuery.isRefetching
       }
       onRefresh={() => {
-        void Promise.all([
+        const tasks: Array<Promise<unknown>> = [
           classQuery.refetch(),
           modulesQuery.refetch(),
           assessmentsQuery.refetch(),
           announcementsQuery.refetch(),
           rosterQuery.refetch(),
           schoolEventsQuery.refetch(),
-        ]);
+        ];
+        const activeTabRefetcher = tabRefetchersRef.current[activeTab];
+        if (activeTabRefetcher) {
+          tasks.push(activeTabRefetcher());
+        }
+        void Promise.all(tasks);
       }}
     >
       <TeacherStats
@@ -116,16 +160,23 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         ]}
       />
 
-      <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-        {(["modules", "assessments", "announcements", "calendar", "students"] as const).map((entry) => (
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 10, paddingRight: 20, gap: 6 }}
+      >
+        {CLASS_TABS.map((entry) => (
           <TeacherChip
-            key={entry}
-            label={entry[0].toUpperCase() + entry.slice(1)}
-            active={activeTab === entry}
-            onPress={() => setActiveTab(entry)}
+            key={entry.key}
+            label={entry.label}
+            active={activeTab === entry.key}
+            onPress={() => setActiveTab(entry.key)}
           />
         ))}
-      </View>
+      </ScrollView>
+      <Text style={{ marginTop: 6, marginHorizontal: 16, fontSize: 11, color: theme.muted }}>
+        Swipe tabs to view all class tools, including Extraction, Discussion Board, and Class Record.
+      </Text>
 
       {topError ? (
         <TeacherPanel title="Class data issue" subtitle={toAppError(topError).message}>
@@ -140,7 +191,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
               <TeacherRow
                 key={module.id}
                 title={module.title}
-                subtitle={`${module.sections?.length ?? 0} sections · ${module.isLocked ? "Locked" : "Unlocked"} · ${module.isVisible === false ? "Hidden" : "Visible"}`}
+                subtitle={`${module.sections?.length ?? 0} sections - ${module.isLocked ? "Locked" : "Unlocked"} - ${module.isVisible === false ? "Hidden" : "Visible"}`}
                 onPress={() => navigation.navigate("TeacherModuleDetail", { classId, moduleId: module.id })}
               />
             ))
@@ -151,18 +202,50 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       ) : null}
 
       {activeTab === "assessments" ? (
-        <TeacherPanel title="Assessments" subtitle="Open an assessment to review submissions, grade attempts, or change publish state.">
+        <TeacherPanel
+          title="Assessments"
+          subtitle="Open an assessment to review submissions, grade attempts, edit questions, or create new drafts."
+          action={
+            <TeacherActionButton
+              label={creatingAssessment ? "Creating..." : "Create"}
+              icon="plus"
+              tone="green"
+              disabled={creatingAssessment}
+              onPress={() => void handleCreateAssessment()}
+            />
+          }
+        >
           {assessmentsQuery.data?.length ? (
             assessmentsQuery.data.map((assessment) => (
               <TeacherRow
                 key={assessment.id}
                 title={assessment.title}
-                subtitle={`${assessment.isPublished ? "Published" : "Draft"} · ${assessment.type.replace(/_/g, " ")} · Due ${formatDate(assessment.dueDate)}`}
+                subtitle={`${assessment.isPublished ? "Published" : "Draft"} - ${assessment.type.replace(/_/g, " ")} - Due ${formatDate(assessment.dueDate)}`}
                 onPress={() =>
                   navigation.navigate("TeacherAssessmentDetail", {
                     assessmentId: assessment.id,
                     classId,
                   })
+                }
+                right={
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate("TeacherAssessmentEditor", {
+                        assessmentId: assessment.id,
+                        classId,
+                      })
+                    }
+                    style={{
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                  </Pressable>
                 }
               />
             ))
@@ -179,7 +262,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
               <TeacherRow
                 key={announcement.id}
                 title={announcement.title}
-                subtitle={`${announcement.isPinned ? "Pinned" : "Post"} · ${stripRichText(announcement.content).slice(0, 110) || "No content preview available."}`}
+                subtitle={`${announcement.isPinned ? "Pinned" : "Post"} - ${stripRichText(announcement.content).slice(0, 110) || "No content preview available."}`}
                 onPress={() => navigation.getParent()?.navigate("Announcements" as never)}
               />
             ))
@@ -187,6 +270,28 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
             <TeacherEmpty title="No announcements yet" subtitle="Use the announcements tab to publish quick class updates." icon="bullhorn-outline" />
           )}
         </TeacherPanel>
+      ) : null}
+
+      {activeTab === "extraction" ? (
+        <TeacherExtractionBoard
+          classId={classId}
+          classItem={classQuery.data}
+          registerRefetch={registerTabRefetcher("extraction")}
+        />
+      ) : null}
+
+      {activeTab === "discussion" ? (
+        <TeacherDiscussionBoard
+          classId={classId}
+          registerRefetch={registerTabRefetcher("discussion")}
+        />
+      ) : null}
+
+      {activeTab === "classRecord" ? (
+        <TeacherClassRecordBoard
+          classId={classId}
+          registerRefetch={registerTabRefetcher("classRecord")}
+        />
       ) : null}
 
       {activeTab === "calendar" ? (

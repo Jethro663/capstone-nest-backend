@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
-import { and, countDistinct, eq, inArray } from 'drizzle-orm';
+import * as bcrypt from 'bcrypt';
+import { and, countDistinct, desc, eq, inArray } from 'drizzle-orm';
 
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -16,6 +17,7 @@ import {
   userRoles,
   roles,
   pendingRoster,
+  studentProfiles,
 } from '../../drizzle/schema';
 
 import { parseXlsx } from './parsers/xlsx.parser';
@@ -23,7 +25,6 @@ import { parseCsv } from './parsers/csv.parser';
 import {
   findSectionHeaderRow,
   findColumnHeaderRow,
-  parseNameCell,
   validateLrn,
   validateEmail,
 } from './parsers/roster-row.parser';
@@ -46,13 +47,23 @@ export interface RosterRequestingUser {
 
 @Injectable()
 export class RosterImportService {
+  private static readonly BULK_STUDENT_PASSWORD = 'Student123!';
+  private static readonly PASSWORD_HASH_ROUNDS = 10;
+
   constructor(private readonly databaseService: DatabaseService) {}
 
   private get db() {
     return this.databaseService.db;
   }
 
-  // ─── parseAndPreview ──────────────────────────────────────────────────────
+  private toMiddleInitial(middleName: string | null | undefined): string | null {
+    if (!middleName) return null;
+    const trimmed = middleName.trim();
+    if (!trimmed) return null;
+    return trimmed.charAt(0).toUpperCase();
+  }
+
+  // â”€â”€â”€ parseAndPreview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Accepts a temporarily uploaded file (CSV or XLSX), parses it, validates each
@@ -66,7 +77,6 @@ export class RosterImportService {
     file: Express.Multer.File,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportPreviewResponseDto> {
-    // ── 1. Verify section exists ───────────────────────────────────────────
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
     });
@@ -83,7 +93,6 @@ export class RosterImportService {
       );
     }
 
-    // ── 2. Access control: teachers can only import into their own sections ─
     const isTeacherOnly =
       requestingUser.roles.includes('teacher') &&
       !requestingUser.roles.includes('admin');
@@ -95,7 +104,6 @@ export class RosterImportService {
       );
     }
 
-    // ── 3. Parse the file ──────────────────────────────────────────────────
     let rows: string[][];
     try {
       const ext = path.extname(file.originalname).toLowerCase();
@@ -119,7 +127,6 @@ export class RosterImportService {
       );
     }
 
-    // ── 4. Find section-header row ─────────────────────────────────────────
     const headerInfo = findSectionHeaderRow(rows);
     if (!headerInfo) {
       throw new BadRequestException(
@@ -128,9 +135,8 @@ export class RosterImportService {
       );
     }
 
-    // ── 5. Validate section header matches route param ─────────────────────
-    const fileGradeLevel = headerInfo.gradeLevel; // e.g. "7"
-    const fileSectionName = headerInfo.sectionName; // e.g. "HUMSS-A"
+    const fileGradeLevel = headerInfo.gradeLevel;
+    const fileSectionName = headerInfo.sectionName;
 
     const gradeMatch = fileGradeLevel === String(section.gradeLevel);
     const nameMatch =
@@ -140,59 +146,83 @@ export class RosterImportService {
     if (!gradeMatch || !nameMatch) {
       throw new BadRequestException(
         `File header "${headerInfo.rawHeader}" does not match the target section ` +
-          `(Grade ${section.gradeLevel} – ${section.name}). ` +
-          `Please verify you are uploading the correct file.`,
+          `(Grade ${section.gradeLevel} - ${section.name}). ` +
+          'Please verify you are uploading the correct file.',
       );
     }
 
-    // ── 6. Find column-header row ──────────────────────────────────────────
     const colHeader = findColumnHeaderRow(rows, headerInfo.rowIndex + 1);
     if (!colHeader) {
       throw new BadRequestException(
-        'Could not find a column header row with "Name", "LRN", and "Email" columns after the section header.',
+        'Could not find a column header row with "Last Name", "First Name", "Middle Name", "LRN", and "Email" columns after the section header.',
       );
     }
 
-    // ── 7. Parse data rows ─────────────────────────────────────────────────
     const registeredRows: PreviewStudentRowDto[] = [];
     const pendingRows: PreviewPendingRowDto[] = [];
     const errorRows: RowErrorDto[] = [];
     const emailsCollected: string[] = [];
+    const lrnsCollected: string[] = [];
 
     type ParsedRow = {
       rowNumber: number;
-      name: ReturnType<typeof parseNameCell>;
+      name: {
+        lastName: string;
+        firstName: string;
+        middleName: string;
+      };
       lrn: string;
       email: string;
     };
-    const validParsedRows: ParsedRow[] = [];
 
+    const validParsedRows: ParsedRow[] = [];
+    const seenEmails = new Set<string>();
+    const seenLrns = new Set<string>();
     const dataStartIndex = colHeader.rowIndex + 1;
 
     for (let i = dataStartIndex; i < rows.length; i++) {
       const row = rows[i];
-      const rowNumber = i + 1; // 1-based for human readability
+      const rowNumber = i + 1;
       const issues: string[] = [];
 
-      const nameRaw = (row[colHeader.nameCol] ?? '').trim();
+      const lastNameRaw = (row[colHeader.lastNameCol] ?? '').trim();
+      const firstNameRaw = (row[colHeader.firstNameCol] ?? '').trim();
+      const middleNameRaw = (row[colHeader.middleNameCol] ?? '').trim();
       const lrnRaw = (row[colHeader.lrnCol] ?? '').trim();
       const emailRaw = (row[colHeader.emailCol] ?? '').trim();
 
-      // Skip completely empty rows
-      if (!nameRaw && !lrnRaw && !emailRaw) continue;
+      if (
+        !lastNameRaw &&
+        !firstNameRaw &&
+        !middleNameRaw &&
+        !lrnRaw &&
+        !emailRaw
+      ) {
+        continue;
+      }
 
-      if (!nameRaw) issues.push('Name is empty');
+      if (!lastNameRaw) issues.push('Last Name is empty');
+      if (!firstNameRaw) issues.push('First Name is empty');
       if (!validateLrn(lrnRaw)) {
         issues.push(
           lrnRaw
-            ? `LRN "${lrnRaw}" is invalid — must be exactly 12 numeric digits`
+            ? `LRN "${lrnRaw}" is invalid - must be exactly 12 numeric digits`
             : 'LRN is empty',
         );
       }
+
       if (!emailRaw) {
         issues.push('Email is empty');
       } else if (!validateEmail(emailRaw)) {
         issues.push(`Email "${emailRaw}" is not a valid email address`);
+      }
+
+      const normalizedEmail = emailRaw.toLowerCase();
+      if (normalizedEmail && seenEmails.has(normalizedEmail)) {
+        issues.push(`Duplicate email "${normalizedEmail}" in file`);
+      }
+      if (lrnRaw && seenLrns.has(lrnRaw)) {
+        issues.push(`Duplicate LRN "${lrnRaw}" in file`);
       }
 
       if (issues.length > 0) {
@@ -200,17 +230,23 @@ export class RosterImportService {
         continue;
       }
 
-      const parsedName = parseNameCell(nameRaw);
+      seenEmails.add(normalizedEmail);
+      seenLrns.add(lrnRaw);
+
       validParsedRows.push({
         rowNumber,
-        name: parsedName,
+        name: {
+          lastName: lastNameRaw,
+          firstName: firstNameRaw,
+          middleName: middleNameRaw,
+        },
         lrn: lrnRaw,
-        email: emailRaw.toLowerCase(),
+        email: normalizedEmail,
       });
-      emailsCollected.push(emailRaw.toLowerCase());
+      emailsCollected.push(normalizedEmail);
+      lrnsCollected.push(lrnRaw);
     }
 
-    // ── 8. Batch-look up users by email ────────────────────────────────────
     const emailToUser = new Map<string, { id: string; email: string }>();
     if (emailsCollected.length > 0) {
       const found = await this.db
@@ -223,7 +259,18 @@ export class RosterImportService {
       }
     }
 
-    // ── 9. Check existing enrollments in this section ──────────────────────
+    const lrnToUserId = new Map<string, string>();
+    if (lrnsCollected.length > 0) {
+      const existingProfiles = await this.db
+        .select({ lrn: studentProfiles.lrn, userId: studentProfiles.userId })
+        .from(studentProfiles)
+        .where(inArray(studentProfiles.lrn, lrnsCollected));
+
+      for (const profile of existingProfiles) {
+        if (profile.lrn) lrnToUserId.set(profile.lrn, profile.userId);
+      }
+    }
+
     const foundUserIds = [...emailToUser.values()].map((u) => u.id);
     const alreadyEnrolledIds = new Set<string>();
 
@@ -238,14 +285,37 @@ export class RosterImportService {
             inArray(enrollments.studentId, foundUserIds),
           ),
         );
+
       for (const e of enrolled) {
         if (e.studentId) alreadyEnrolledIds.add(e.studentId);
       }
     }
 
-    // ── 10. Split into registered vs pending ──────────────────────────────
     for (const parsed of validParsedRows) {
       const matchedUser = emailToUser.get(parsed.email);
+      const lrnOwnerId = lrnToUserId.get(parsed.lrn);
+
+      if (!matchedUser && lrnOwnerId) {
+        errorRows.push({
+          rowNumber: parsed.rowNumber,
+          rawData: [],
+          issues: [
+            `LRN "${parsed.lrn}" is already registered to another account`,
+          ],
+        });
+        continue;
+      }
+
+      if (matchedUser && lrnOwnerId && lrnOwnerId !== matchedUser.id) {
+        errorRows.push({
+          rowNumber: parsed.rowNumber,
+          rawData: [],
+          issues: [
+            `LRN "${parsed.lrn}" is already linked to a different user account`,
+          ],
+        });
+        continue;
+      }
 
       if (matchedUser) {
         registeredRows.push({
@@ -284,7 +354,7 @@ export class RosterImportService {
       errors: errorRows,
       summary: {
         totalDataRows: validParsedRows.length + errorRows.length,
-        validRows: validParsedRows.length,
+        validRows: registeredRows.length + pendingRows.length,
         registeredCount: registeredRows.length,
         alreadyEnrolledCount,
         pendingCount: pendingRows.length,
@@ -293,19 +363,19 @@ export class RosterImportService {
     };
   }
 
-  // ─── commitRoster ─────────────────────────────────────────────────────────
+  // commitRoster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Commits the approved roster:
    *  - Enrolls registered students into the section (skips already-enrolled ones).
-   *  - Inserts unregistered students into pending_roster.
+   *  - Auto-creates active student accounts for unmatched rows and enrolls them.
    */
   async commitRoster(
     sectionId: string,
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
-    // ── 1. Verify section ──────────────────────────────────────────────────
+    // â”€â”€ 1. Verify section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
     });
@@ -326,7 +396,7 @@ export class RosterImportService {
       );
     }
 
-    // ── 2. Validate dto.sectionId matches route param ──────────────────────
+    // â”€â”€ 2. Validate dto.sectionId matches route param â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (dto.sectionId !== sectionId) {
       throw new BadRequestException(
         `Payload sectionId "${dto.sectionId}" does not match route parameter "${sectionId}"`,
@@ -336,9 +406,10 @@ export class RosterImportService {
     const enrolledUserIds: string[] = [];
     let alreadyEnrolledSkipped = 0;
     const pendingRosterIds: string[] = [];
+    const importHistoryRows: Array<typeof pendingRoster.$inferInsert> = [];
 
     await this.db.transaction(async (tx) => {
-      // ── 3. Enroll registered students ────────────────────────────────────
+      // â”€â”€ 3. Enroll registered students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (dto.enrolledRows.length > 0) {
         const toEnrollIds = dto.enrolledRows.map((r) => r.userId);
 
@@ -417,27 +488,195 @@ export class RosterImportService {
 
           enrolledUserIds.push(...inserted.map((r) => r.studentId));
         }
+
+        importHistoryRows.push(
+          ...dto.enrolledRows.map((row) => ({
+            sectionId,
+            lastName: row.name.lastName,
+            firstName: row.name.firstName,
+            middleInitial: this.toMiddleInitial(row.name.middleName),
+            lrn: row.lrn,
+            rosterEmail: row.email.toLowerCase(),
+            resolvedUserId: row.userId,
+            resolvedAt: new Date(),
+            importedAt: new Date(),
+          })),
+        );
       }
 
-      // ── 4. Insert pending roster rows ─────────────────────────────────────
+      // â”€â”€ 4. Auto-create accounts from pending rows and enroll them â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (dto.pendingRows.length > 0) {
-        const pendingValues = dto.pendingRows.map((r) => ({
-          sectionId,
-          lastName: r.name.lastName,
-          firstName: r.name.firstName,
-          middleInitial: r.name.middleInitial ?? null,
-          lrn: r.lrn,
-          rosterEmail: r.email.toLowerCase(),
-          importedAt: new Date(),
-        }));
+        const [cap] = await tx
+          .select({ count: countDistinct(enrollments.studentId) })
+          .from(enrollments)
+          .where(
+            and(
+              eq(enrollments.sectionId, sectionId),
+              eq(enrollments.status, 'enrolled'),
+            ),
+          );
 
-        const insertedPending = await tx
-          .insert(pendingRoster)
-          .values(pendingValues)
-          .onConflictDoNothing()
-          .returning({ id: pendingRoster.id });
+        const currentCount = Number(cap?.count ?? 0);
+        if (currentCount + dto.pendingRows.length > section.capacity) {
+          throw new BadRequestException(
+            `Adding ${dto.pendingRows.length} new student(s) would exceed the section capacity of ${section.capacity} ` +
+              `(currently ${currentCount} enrolled)`,
+          );
+        }
 
-        pendingRosterIds.push(...insertedPending.map((r) => r.id));
+        const pendingEmails = dto.pendingRows.map((r) => r.email.toLowerCase());
+        const pendingLrns = dto.pendingRows.map((r) => r.lrn);
+
+        const existingUsersByEmail = await tx
+          .select({ email: users.email })
+          .from(users)
+          .where(inArray(users.email, pendingEmails));
+        if (existingUsersByEmail.length > 0) {
+          throw new BadRequestException(
+            `These emails are already registered: ${existingUsersByEmail.map((u) => u.email).join(', ')}`,
+          );
+        }
+
+        const existingProfilesByLrn = await tx
+          .select({ lrn: studentProfiles.lrn })
+          .from(studentProfiles)
+          .where(inArray(studentProfiles.lrn, pendingLrns));
+        const conflictLrns = existingProfilesByLrn
+          .map((p) => p.lrn)
+          .filter((lrn): lrn is string => Boolean(lrn));
+
+        if (conflictLrns.length > 0) {
+          throw new BadRequestException(
+            `These LRNs are already registered: ${conflictLrns.join(', ')}`,
+          );
+        }
+
+        let studentRole =
+          tx.query?.roles
+            ? await tx.query.roles.findFirst({
+                where: eq(roles.name, 'student'),
+              })
+            : (
+                await tx
+                  .select({ id: roles.id })
+                  .from(roles)
+                  .where(eq(roles.name, 'student'))
+              )[0];
+
+        if (!studentRole) {
+          try {
+            const createdRoles = await tx
+              .insert(roles)
+              .values({
+                name: 'student',
+                description: 'Auto-created for roster import',
+              })
+              .returning({ id: roles.id });
+            studentRole = createdRoles[0] ?? null;
+          } catch {
+            studentRole =
+              tx.query?.roles
+                ? await tx.query.roles.findFirst({
+                    where: eq(roles.name, 'student'),
+                  })
+                : (
+                    await tx
+                      .select({ id: roles.id })
+                      .from(roles)
+                      .where(eq(roles.name, 'student'))
+                  )[0];
+          }
+        }
+
+        if (!studentRole) {
+          throw new BadRequestException(
+            'Student role is not configured. Run seed-database.js once, then retry roster import.',
+          );
+        }
+
+        const hashedPassword = await bcrypt.hash(
+          RosterImportService.BULK_STUDENT_PASSWORD,
+          RosterImportService.PASSWORD_HASH_ROUNDS,
+        );
+
+        const createdUsers = await tx
+          .insert(users)
+          .values(
+            dto.pendingRows.map((row) => ({
+              email: row.email.toLowerCase(),
+              password: hashedPassword,
+              firstName: row.name.firstName,
+              middleName: row.name.middleName,
+              lastName: row.name.lastName,
+              status: 'ACTIVE' as const,
+              isEmailVerified: true,
+            })),
+          )
+          .returning({ id: users.id, email: users.email });
+        pendingRosterIds.push(...createdUsers.map((user) => user.id));
+
+        await tx.insert(userRoles).values(
+          createdUsers.map((user) => ({
+            userId: user.id,
+            roleId: studentRole.id,
+            assignedBy: 'SYSTEM',
+          })),
+        );
+
+        const pendingByEmail = new Map(
+          dto.pendingRows.map((row) => [row.email.toLowerCase(), row]),
+        );
+
+        await tx.insert(studentProfiles).values(
+          createdUsers.map((user) => {
+            const row = pendingByEmail.get(user.email.toLowerCase());
+            return {
+              userId: user.id,
+              lrn: row?.lrn ?? null,
+              gradeLevel:
+                (section.gradeLevel as '7' | '8' | '9' | '10' | undefined) ??
+                null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          }),
+        );
+
+        const insertedEnrollments = await tx
+          .insert(enrollments)
+          .values(
+            createdUsers.map((user) => ({
+              studentId: user.id,
+              classId: null as string | null,
+              sectionId,
+              status: 'enrolled' as const,
+              enrolledAt: new Date(),
+            })),
+          )
+          .returning({ studentId: enrollments.studentId });
+
+        enrolledUserIds.push(...insertedEnrollments.map((e) => e.studentId));
+
+        importHistoryRows.push(
+          ...createdUsers.map((user) => {
+            const row = pendingByEmail.get(user.email.toLowerCase());
+            return {
+              sectionId,
+              lastName: row?.name.lastName ?? '',
+              firstName: row?.name.firstName ?? '',
+              middleInitial: this.toMiddleInitial(row?.name.middleName),
+              lrn: row?.lrn ?? '',
+              rosterEmail: user.email.toLowerCase(),
+              resolvedUserId: user.id,
+              resolvedAt: new Date(),
+              importedAt: new Date(),
+            };
+          }),
+        );
+      }
+
+      if (importHistoryRows.length > 0) {
+        await tx.insert(pendingRoster).values(importHistoryRows);
       }
     });
 
@@ -453,10 +692,10 @@ export class RosterImportService {
     };
   }
 
-  // ─── getPendingRoster ─────────────────────────────────────────────────────
+  // â”€â”€â”€ getPendingRoster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
-   * Returns all pending (unregistered) roster rows for a given section.
+   * Returns recent roster import history rows for a given section.
    */
   async getPendingRoster(
     sectionId: string,
@@ -481,7 +720,7 @@ export class RosterImportService {
       .select()
       .from(pendingRoster)
       .where(eq(pendingRoster.sectionId, sectionId))
-      .orderBy(pendingRoster.importedAt);
+      .orderBy(desc(pendingRoster.importedAt));
 
     return rows.map((r) => ({
       id: r.id,
@@ -497,7 +736,7 @@ export class RosterImportService {
     }));
   }
 
-  // ─── resolvePendingRow ────────────────────────────────────────────────────
+  // â”€â”€â”€ resolvePendingRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Marks a pending roster row as resolved by linking it to a registered user.
@@ -518,7 +757,7 @@ export class RosterImportService {
         `Pending roster row "${pendingRowId}" not found`,
       );
 
-    // Access check — load section
+    // Access check â€” load section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, row.sectionId),
     });
@@ -565,7 +804,7 @@ export class RosterImportService {
     };
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private async cleanupFile(filePath: string): Promise<void> {
     try {

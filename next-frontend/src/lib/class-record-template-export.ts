@@ -4,6 +4,8 @@ import { downloadXlsxBuffer } from '@/lib/download-xlsx-buffer';
 
 const TEMPLATE_URL = '/templates/Master.xlsx';
 const INPUT_DATA_SHEET = 'INPUT DATA';
+const MASTERLIST_SHEET = 'Masterlist';
+const GRADES_SHEET = 'Grades';
 const DEFAULT_VISIBLE_SHEET = 'MUSIC _Q1';
 const TEMPLATE_LAST_STUDENT_ROW = 112;
 
@@ -298,7 +300,7 @@ function cellXml(ref: string, value: CellValue, existingCellXml?: string) {
 function patchCellInRow(rowXml: string, row: number, col: number, value: CellValue) {
   const ref = cellRef(row, col);
   const cellPattern = new RegExp(
-    `<c\\b(?=[^>]*\\br="${ref}")[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)`,
+    `<c\\b(?=[^>]*\\br="${ref}")[^>]*\\/>|<c\\b(?=[^>]*\\br="${ref}")[^>]*>[\\s\\S]*?<\\/c>`,
   );
   const existingCell = rowXml.match(cellPattern)?.[0];
   const replacement = cellXml(ref, value, existingCell);
@@ -310,8 +312,10 @@ function patchCellInRow(rowXml: string, row: number, col: number, value: CellVal
   const openingEnd = rowXml.indexOf('>') + 1;
   const closingStart = rowXml.lastIndexOf('</row>');
   const body = rowXml.slice(openingEnd, closingStart);
-  const cellMatches = [...body.matchAll(/<c\b[^>]*\br="([A-Z]+)\d+"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g)];
-  const nextCell = cellMatches.find((match) => columnNumber(match[1]) > col);
+  const cellMatches = [
+    ...body.matchAll(/<c\b[^>]*\br="([A-Z]+)\d+"[^>]*\/>|<c\b[^>]*\br="([A-Z]+)\d+"[^>]*>[\s\S]*?<\/c>/g),
+  ];
+  const nextCell = cellMatches.find((match) => columnNumber(match[1] || match[2]) > col);
 
   if (nextCell?.index !== undefined) {
     const insertAt = openingEnd + nextCell.index;
@@ -339,7 +343,12 @@ function patchSheetXml(xml: string, writes: TemplateWrite[]) {
   }, xml);
 }
 
-async function getWorksheetPaths(zip: JSZip) {
+interface WorksheetPathInfo {
+  paths: Map<string, string>;
+  sheetOrder: string[];
+}
+
+async function getWorksheetPaths(zip: JSZip): Promise<WorksheetPathInfo> {
   const workbookXml = await zip.file('xl/workbook.xml')?.async('string');
   const relsXml = await zip.file('xl/_rels/workbook.xml.rels')?.async('string');
 
@@ -354,18 +363,21 @@ async function getWorksheetPaths(zip: JSZip) {
   }
 
   const paths = new Map<string, string>();
+  const sheetOrder: string[] = [];
   for (const match of workbookXml.matchAll(/<sheet\b[^>]*name="([^"]+)"[^>]*r:id="([^"]+)"[^>]*\/>/g)) {
+    const sheetName = unescapeXml(match[1]);
     const target = rels.get(match[2]);
     if (target) {
-      paths.set(unescapeXml(match[1]), target);
+      paths.set(sheetName, target);
+      sheetOrder.push(sheetName);
     }
   }
 
-  return paths;
+  return { paths, sheetOrder };
 }
 
 async function writeTemplateCells(zip: JSZip, writes: TemplateWrite[]) {
-  const worksheetPaths = await getWorksheetPaths(zip);
+  const { paths: worksheetPaths } = await getWorksheetPaths(zip);
   const writesBySheet = new Map<string, TemplateWrite[]>();
 
   writes.forEach((write) => {
@@ -387,6 +399,103 @@ async function writeTemplateCells(zip: JSZip, writes: TemplateWrite[]) {
     }
 
     zip.file(path, patchSheetXml(sheetXml, sheetWrites));
+  }
+}
+
+function replaceInputDataFormulaReferences(xml: string) {
+  return xml.replace(/'INPUT DATA'!/g, `'${MASTERLIST_SHEET}'!`);
+}
+
+function withSheetState(sheetXml: string, state: 'visible' | 'veryHidden') {
+  const withoutState = sheetXml.replace(/\sstate="[^"]*"/, '');
+  if (state === 'visible') return withoutState;
+  return withoutState.replace(/\s*\/>$/, ` state="veryHidden"/>`);
+}
+
+function withSheetName(sheetXml: string, nextName: string) {
+  return sheetXml.replace(/\bname="[^"]*"/, `name="${escapeXml(nextName)}"`);
+}
+
+function markSelectedSheet(xml: string, selected: boolean) {
+  return xml.replace(/<sheetView\b([^>]*)>/, (match, attributes: string) => {
+    const cleanAttributes = attributes
+      .replace(/\stabSelected="[^"]*"/, '')
+      .replace(/\sview="pageBreakPreview"/, '')
+      .replace(/\szoomScaleSheetLayoutView="[^"]*"/, '');
+    return `<sheetView${cleanAttributes}${selected ? ' tabSelected="1"' : ''}>`;
+  });
+}
+
+function setActiveWorkbookTab(workbookXml: string, activeTab: number) {
+  return workbookXml.replace(
+    /<workbookView\b([^>]*)\/>/,
+    (match, attributes: string) => {
+      const cleanAttributes = attributes.replace(/\s(?:activeTab|firstSheet)="[^"]*"/g, '');
+      return `<workbookView${cleanAttributes} activeTab="${activeTab}" firstSheet="0"/>`;
+    },
+  );
+}
+
+async function simplifyWorkbookPresentation(zip: JSZip, targetSheet: string) {
+  const workbookXml = await zip.file('xl/workbook.xml')?.async('string');
+  if (!workbookXml) {
+    throw new Error('Template workbook metadata not found');
+  }
+
+  const { paths, sheetOrder } = await getWorksheetPaths(zip);
+  const activeTab = Math.max(0, sheetOrder.indexOf(targetSheet));
+  const updatedWorkbookXml = setActiveWorkbookTab(
+    workbookXml.replace(/<sheet\b[^>]*\/>/g, (sheetXml) => {
+      const nameMatch = sheetXml.match(/\bname="([^"]*)"/);
+      const sheetName = nameMatch ? unescapeXml(nameMatch[1]) : '';
+
+      if (sheetName === INPUT_DATA_SHEET) {
+        return withSheetName(withSheetState(sheetXml, 'visible'), MASTERLIST_SHEET);
+      }
+
+      if (sheetName === targetSheet) {
+        return withSheetName(withSheetState(sheetXml, 'visible'), GRADES_SHEET);
+      }
+
+      return withSheetState(sheetXml, 'veryHidden');
+    }),
+    activeTab,
+  );
+  zip.file('xl/workbook.xml', updatedWorkbookXml);
+
+  for (const [sheetName, path] of paths) {
+    const sheetFile = zip.file(path);
+    const sheetXml = await sheetFile?.async('string');
+    if (!sheetFile || !sheetXml) continue;
+
+    const shouldSelect = sheetName === targetSheet;
+    zip.file(path, markSelectedSheet(replaceInputDataFormulaReferences(sheetXml), shouldSelect));
+  }
+}
+
+async function removeStaleCalculationChain(zip: JSZip) {
+  zip.remove('xl/calcChain.xml');
+
+  const workbookRelsXml = await zip.file('xl/_rels/workbook.xml.rels')?.async('string');
+  if (workbookRelsXml) {
+    zip.file(
+      'xl/_rels/workbook.xml.rels',
+      workbookRelsXml.replace(
+        /<Relationship\b[^>]*Type="http:\/\/schemas\.openxmlformats\.org\/officeDocument\/2006\/relationships\/calcChain"[^>]*\/>/g,
+        '',
+      ),
+    );
+  }
+
+  const contentTypesXml = await zip.file('[Content_Types].xml')?.async('string');
+  if (contentTypesXml) {
+    zip.file(
+      '[Content_Types].xml',
+      contentTypesXml.replace(
+        /<Override\b[^>]*PartName="\/xl\/calcChain\.xml"[^>]*\/>/g,
+        '',
+      ),
+    );
   }
 }
 
@@ -421,8 +530,11 @@ export async function exportClassRecordTemplateWorkbook(
 
   const templateBuffer = await response.arrayBuffer();
   const workbookZip = await JSZip.loadAsync(templateBuffer);
-  const { writes } = buildTemplateWrites(spreadsheet, selectedRecord);
+  const targetSheet = resolveVisibleSheetName(spreadsheet);
+  const { writes } = buildTemplateWrites(spreadsheet, selectedRecord, targetSheet);
   await writeTemplateCells(workbookZip, writes);
+  await simplifyWorkbookPresentation(workbookZip, targetSheet);
+  await removeStaleCalculationChain(workbookZip);
   await markWorkbookForRecalculation(workbookZip);
 
   const output = await workbookZip.generateAsync({

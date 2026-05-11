@@ -31,8 +31,13 @@ export class AiProxyService {
       10,
     );
     this.sharedSecret =
-      this.config.get<string>('AI_SERVICE_SHARED_SECRET') || '';
+      this.config.get<string>('AI_SERVICE_SHARED_SECRET')?.trim() || '';
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
+    if (!this.sharedSecret) {
+      this.logger.warn(
+        'AI_SERVICE_SHARED_SECRET is empty. If ai-service expects a shared secret, proxied AI requests will fail with 401.',
+      );
+    }
   }
 
   private resolveTimeoutMs(path: string): number {

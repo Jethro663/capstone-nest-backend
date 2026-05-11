@@ -29,7 +29,9 @@ export const SECTION_HEADER_REGEX = /GRADE[\s_]*(\d{1,2})\s+(.+)/i;
 
 /** Column-header keywords used to auto-detect the header row (case-insensitive). */
 export const HEADER_KEYWORDS = {
-  name: ['name', 'student'],
+  lastName: ['last name', 'lastname', 'surname'],
+  firstName: ['first name', 'firstname', 'given name'],
+  middleName: ['middle name', 'middlename', 'middle'],
   lrn: ['lrn', 'learner reference', 'learner ref'],
   email: ['email', 'e-mail', 'mail'],
 } as const;

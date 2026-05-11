@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { peekAppError, toAppError } from "../api/http";
 import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
@@ -32,19 +32,19 @@ type ActivityFilter = "all" | Extract<JaMode, "ask" | "review">;
 type AnswerState = Record<string, string[]>;
 
 const dark = {
-  bg: "#141414",
-  header: "#1C1C1C",
-  surface: "#1E1E1E",
-  surface2: "#232323",
-  active: "#252525",
-  border: "rgba(255,255,255,0.08)",
-  border2: "rgba(255,255,255,0.12)",
-  text: "#E8E8E8",
-  muted: "#7A7A7A",
-  dim: "#4B4B4B",
+  bg: "#0A1630",
+  header: "#0B1833",
+  surface: "#0F2438",
+  surface2: "#132D45",
+  active: "#173A59",
+  border: "rgba(0,217,255,0.18)",
+  border2: "rgba(0,217,255,0.28)",
+  text: "#E0F7FF",
+  muted: "#7AA3B8",
+  dim: "#426478",
   red: "#E8294E",
-  blue: "#4A8CF7",
-  blueSoft: "rgba(74,140,247,0.13)",
+  blue: "#00D9FF",
+  blueSoft: "rgba(0,217,255,0.14)",
   green: "#22C97A",
   greenSoft: "rgba(34,201,122,0.12)",
   amber: "#FBBF24",
@@ -57,13 +57,43 @@ const MODE_ORDER: Array<{ key: VisibleJaPanel; label: string; icon: string }> = 
   { key: "lxp", label: "Learners Path", icon: "map-marker-path" },
 ];
 
-const ASK_ACTIONS = [
-  "Explain the lesson",
-  "Summarize main idea",
-  "What should I study next?",
-  "Give me a question",
-  "Quiz me on this lesson",
-  "Make a study plan",
+type JaAskPresetAction = {
+  id: string;
+  label: string;
+};
+
+const ASK_PRESET_GROUPS: Array<{
+  id: string;
+  label: string;
+  items: JaAskPresetAction[];
+}> = [
+  {
+    id: "ask",
+    label: "Ask",
+    items: [
+      { id: "explain-lesson", label: "Explain the lesson" },
+      { id: "summarize-main-idea", label: "Summarize main idea" },
+      { id: "study-next", label: "What should I study next?" },
+    ],
+  },
+  {
+    id: "question",
+    label: "Question",
+    items: [
+      { id: "give-question", label: "Give me a question" },
+      { id: "quiz-me", label: "Quiz me on this lesson" },
+      { id: "unclear-parts", label: "Unclear parts check" },
+    ],
+  },
+  {
+    id: "review",
+    label: "Review",
+    items: [
+      { id: "key-concepts", label: "Key concepts review" },
+      { id: "study-plan", label: "Make a study plan" },
+      { id: "vocabulary-review", label: "Vocabulary review" },
+    ],
+  },
 ];
 
 function classLabel(item?: { subjectName: string; subjectCode: string } | null) {
@@ -153,7 +183,6 @@ export function JaScreen({ navigation, route }: Props) {
   const [askThreadId, setAskThreadId] = useState<string | undefined>();
   const [askThreadClassId, setAskThreadClassId] = useState<string | undefined>();
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
-  const [askDraft, setAskDraft] = useState("");
   const [selectedLesson, setSelectedLesson] = useState<JaAskLessonContextSummary | null>(null);
   const [askError, setAskError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -229,7 +258,6 @@ export function JaScreen({ navigation, route }: Props) {
     setAskThreadId(undefined);
     setAskThreadClassId(undefined);
     setAskMessages([]);
-    setAskDraft("");
     setSelectedLesson(null);
     setAskError("");
     setPracticeSession(null);
@@ -263,7 +291,6 @@ export function JaScreen({ navigation, route }: Props) {
     setAskThreadId(undefined);
     setAskThreadClassId(resolvedClassId);
     setAskMessages([]);
-    setAskDraft("");
     setSelectedLesson(null);
     setAskError("");
     setClassPickerOpen(false);
@@ -316,7 +343,6 @@ export function JaScreen({ navigation, route }: Props) {
       quickAction,
       createdAt: new Date().toISOString(),
     };
-    setAskDraft("");
     setAskMessages((current) => [...current, studentMessage]);
     try {
       let threadId = askThreadId;
@@ -458,7 +484,7 @@ export function JaScreen({ navigation, route }: Props) {
     gap: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: classPickerOpen ? "rgba(74,140,247,0.32)" : dark.border2,
+    borderColor: classPickerOpen ? "rgba(0,217,255,0.32)" : dark.border2,
     backgroundColor: classPickerOpen ? dark.blueSoft : "rgba(255,255,255,0.05)",
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -480,7 +506,7 @@ export function JaScreen({ navigation, route }: Props) {
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>Activity History</Text>
           </View>
           {panel === "ask" ? (
-            <Pressable onPress={startNewChat} style={{ backgroundColor: dark.blueSoft, borderColor: "rgba(74,140,247,0.25)", borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
+            <Pressable onPress={startNewChat} style={{ backgroundColor: dark.blueSoft, borderColor: "rgba(0,217,255,0.25)", borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
               <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "800" }}>New chat</Text>
             </Pressable>
           ) : null}
@@ -529,7 +555,7 @@ export function JaScreen({ navigation, route }: Props) {
                     style={{
                       borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: active ? "rgba(74,140,247,0.32)" : dark.border2,
+                      borderColor: active ? "rgba(0,217,255,0.32)" : dark.border2,
                       backgroundColor: active ? dark.blueSoft : "rgba(255,255,255,0.03)",
                       paddingHorizontal: 11,
                       paddingVertical: 10,
@@ -563,14 +589,14 @@ export function JaScreen({ navigation, route }: Props) {
         </ScrollView>
       </View>
 
-      <View style={{ backgroundColor: "#191919", borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
+      <View style={{ backgroundColor: "#0D1F36", borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
         <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>Activity Filter</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {(["all", "ask", "review"] as ActivityFilter[]).map((filter) => (
             <Pressable
               key={filter}
               onPress={() => setActivityFilter(filter)}
-              style={{ borderRadius: 20, borderWidth: 1, borderColor: activityFilter === filter ? "rgba(74,140,247,0.32)" : dark.border2, backgroundColor: activityFilter === filter ? dark.blueSoft : "transparent", paddingHorizontal: 11, paddingVertical: 5 }}
+              style={{ borderRadius: 20, borderWidth: 1, borderColor: activityFilter === filter ? "rgba(0,217,255,0.32)" : dark.border2, backgroundColor: activityFilter === filter ? dark.blueSoft : "transparent", paddingHorizontal: 11, paddingVertical: 5 }}
             >
               <Text style={{ color: activityFilter === filter ? dark.blue : dark.muted, fontSize: 10, fontWeight: "700" }}>
                 {filter === "all" ? "All" : filter === "review" ? "Replay" : filter[0].toUpperCase() + filter.slice(1)}
@@ -599,8 +625,6 @@ export function JaScreen({ navigation, route }: Props) {
             messages={askMessages}
             threads={jaHubQuery.data?.ask.threads ?? []}
             activeThreadId={askThreadId}
-            draft={askDraft}
-            onDraftChange={setAskDraft}
             onSendAction={sendAskAction}
             onOpenThread={(threadId) => void openAskThread(threadId)}
             busy={busy}
@@ -709,8 +733,6 @@ function AskPanel({
   messages,
   threads,
   activeThreadId,
-  draft,
-  onDraftChange,
   onSendAction,
   onOpenThread,
   busy,
@@ -722,13 +744,12 @@ function AskPanel({
   messages: JaAskMessage[];
   threads: Array<{ id: string; title: string; contextLessonTitle?: string | null; lastMessageAt?: string | null; updatedAt: string }>;
   activeThreadId?: string;
-  draft: string;
-  onDraftChange: (value: string) => void;
   onSendAction: (label: string, quickAction?: string) => Promise<void>;
   onOpenThread: (threadId: string) => void;
   busy: boolean;
   error: string;
 }) {
+  const [promptMenuOpen, setPromptMenuOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const chatScrollRef = useRef<ScrollView | null>(null);
@@ -743,6 +764,15 @@ function AskPanel({
     const timer = setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 0);
     return () => clearTimeout(timer);
   }, [busy, messages]);
+
+  useEffect(() => {
+    if (busy) setPromptMenuOpen(false);
+  }, [busy]);
+
+  const handlePresetPress = async (preset: JaAskPresetAction) => {
+    setPromptMenuOpen(false);
+    await onSendAction(preset.label, preset.label);
+  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -873,32 +903,80 @@ function AskPanel({
             </ScrollView>
           </View>
 
-          <View style={{ paddingHorizontal: 14, paddingBottom: Math.max(18, insets.bottom + 14), gap: 8 }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {ASK_ACTIONS.map((label) => (
-                <Pressable key={label} onPress={() => void onSendAction(label, label)} disabled={busy} style={{ borderRadius: 999, borderWidth: 1, borderColor: dark.border2, backgroundColor: dark.surface2, paddingHorizontal: 12, paddingVertical: 8 }}>
-                  <Text style={{ color: dark.text, fontSize: 11, fontWeight: "800" }}>{label}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 9, borderRadius: 18, borderWidth: 1, borderColor: dark.border2, backgroundColor: "#151515", paddingHorizontal: 10, paddingVertical: 9 }}>
-              <TextInput
-                value={draft}
-                onChangeText={onDraftChange}
-                placeholder={selectedLesson ? "Message JA..." : "Select a lesson first"}
-                placeholderTextColor={dark.dim}
-                multiline
-                editable={!busy && Boolean(selectedLesson)}
-                style={{ flex: 1, maxHeight: 140, minHeight: 44, color: dark.text, fontSize: 13, lineHeight: 20, padding: 0, textAlignVertical: "top" }}
-              />
-              <Pressable
-                disabled={busy || !draft.trim() || !selectedLesson}
-                onPress={() => void onSendAction(draft, "free_text")}
-                style={{ width: 38, height: 38, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: busy || !draft.trim() || !selectedLesson ? dark.active : dark.blue }}
+          <View style={{ paddingHorizontal: 14, paddingBottom: Math.max(18, insets.bottom + 14), gap: 10 }}>
+            {promptMenuOpen ? (
+              <View
+                accessibilityRole="menu"
+                style={{
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: dark.border2,
+                  backgroundColor: "#111827",
+                  padding: 10,
+                  gap: 10,
+                }}
               >
-                <MaterialCommunityIcons name={busy ? "stop" : "send"} size={17} color="#fff" />
-              </Pressable>
-            </View>
+                {ASK_PRESET_GROUPS.map((group) => (
+                  <View key={group.id} style={{ gap: 7 }}>
+                    <View
+                      style={{
+                        borderRadius: 12,
+                        backgroundColor: "rgba(255,255,255,0.06)",
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text style={{ color: "#F8FAFC", fontSize: 12, fontWeight: "900" }}>{group.label}</Text>
+                    </View>
+                    <View style={{ gap: 7 }}>
+                      {group.items.map((item) => (
+                        <Pressable
+                          key={item.id}
+                          disabled={busy}
+                          onPress={() => void handlePresetPress(item)}
+                          style={{
+                            minHeight: 44,
+                            borderRadius: 13,
+                            borderWidth: 1,
+                            borderColor: "rgba(148,163,184,0.2)",
+                            backgroundColor: dark.header,
+                            justifyContent: "center",
+                            paddingHorizontal: 12,
+                            paddingVertical: 10,
+                            opacity: busy ? 0.55 : 1,
+                          }}
+                        >
+                          <Text style={{ color: "#DBEAFE", fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
+                            {item.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <Pressable
+              disabled={busy}
+              onPress={() => setPromptMenuOpen((current) => !current)}
+              style={{
+                minHeight: 48,
+                borderRadius: 999,
+                backgroundColor: busy ? dark.active : dark.blue,
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "row",
+                gap: 8,
+                paddingHorizontal: 16,
+                paddingVertical: 12,
+                opacity: busy ? 0.65 : 1,
+              }}
+            >
+              <MaterialCommunityIcons name={promptMenuOpen ? "chevron-down" : "message-question-outline"} size={17} color={busy ? dark.muted : "#081422"} />
+              <Text style={{ color: busy ? dark.muted : "#081422", fontSize: 13, fontWeight: "900" }}>
+                {promptMenuOpen ? "Close prompt list" : "Ask JA about this lesson"}
+              </Text>
+            </Pressable>
             {error ? <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "800" }}>{error}</Text> : null}
           </View>
         </DarkPanel>

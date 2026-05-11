@@ -90,6 +90,7 @@ export class ClassesController {
     @Query('schoolYear') schoolYear?: string,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
+    @Query('room') room?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -100,6 +101,7 @@ export class ClassesController {
       schoolYear,
       isActive,
       search,
+      room,
       page,
       limit,
     );
@@ -118,6 +120,7 @@ export class ClassesController {
     @Query('schoolYear') schoolYear?: string,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
+    @Query('room') room?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -130,6 +133,7 @@ export class ClassesController {
     if (sectionId) filters.sectionId = sectionId;
     if (teacherId) filters.teacherId = teacherId;
     if (schoolYear) filters.schoolYear = schoolYear;
+    if (room) filters.room = room;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
     if (search) filters.search = search;
     filters.page = parsePositiveIntQuery(page, 'page');

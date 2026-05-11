@@ -36,6 +36,46 @@ export interface ClassAtRiskResponse {
   students: PerformanceStudentRow[];
 }
 
+export type InterventionQuizTrend =
+  | 'improved'
+  | 'declined'
+  | 'unchanged'
+  | 'awaiting_retry';
+
+export interface InterventionQuizComparisonRow {
+  caseId: string;
+  caseStatus: 'pending' | 'active' | 'completed' | 'dismissed';
+  caseOpenedAt: string | Date;
+  studentId: string;
+  student: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  assignmentId: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  beforeAttemptId: string | null;
+  beforeScorePercent: number | null;
+  beforeSubmittedAt: string | Date | null;
+  afterAttemptId: string | null;
+  afterScorePercent: number | null;
+  afterSubmittedAt: string | Date | null;
+  deltaScorePercent: number | null;
+  trend: InterventionQuizTrend;
+}
+
+export interface ClassInterventionQuizComparisonResponse {
+  classId: string;
+  count: number;
+  improvedCount: number;
+  declinedCount: number;
+  unchangedCount: number;
+  awaitingRetryCount: number;
+  comparisons: InterventionQuizComparisonRow[];
+}
+
 export interface PerformanceLogEntry {
   id: string;
   studentId: string;

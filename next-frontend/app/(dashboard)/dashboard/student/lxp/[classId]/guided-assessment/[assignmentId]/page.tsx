@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Lightbulb, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StudentObjectiveAssessmentSurface } from '@/components/student/assessment/StudentObjectiveAssessmentSurface';
+import { StudentStatusChip } from '@/components/student/student-primitives';
 import { lxpService } from '@/services/lxp-service';
 import type { SharedQuestionType } from '@/components/assessment/shared-answer-input';
+import type { GuidedAssessmentQuestion } from '@/types/lxp';
+import '../../../../assessments/[id]/take/take-page.css';
 
 function resolveParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
@@ -19,9 +21,36 @@ function resolveParam(value: string | string[] | undefined) {
 
 function promptToHtml(value: string) {
   return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .split('\n')
     .map((line) => `<p>${line}</p>`)
     .join('');
+}
+
+function isAnswered(answer: string | string[] | undefined) {
+  return Array.isArray(answer) ? answer.length > 0 : Boolean(answer);
+}
+
+function formatAnswer(
+  question: GuidedAssessmentQuestion | undefined,
+  answer: string | string[] | undefined,
+) {
+  if (!question || answer === undefined || answer === null) return 'No answer';
+  const ids = Array.isArray(answer) ? answer : [answer];
+  const labels = ids
+    .map((id) => question.options.find((option) => option.id === id)?.text ?? String(id))
+    .filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : 'No answer';
+}
+
+function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
+  const labels = question.options
+    .filter((option) => option.isCorrect)
+    .map((option) => option.text)
+    .filter(Boolean);
+  return labels.length > 0 ? labels.join(', ') : 'Answer key unavailable';
 }
 
 export default function StudentGuidedAssessmentPage() {
@@ -32,7 +61,7 @@ export default function StudentGuidedAssessmentPage() {
   const returnHref = `/dashboard/student/lxp/${encodeURIComponent(classId)}?tab=replays`;
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<Awaited<
@@ -84,12 +113,9 @@ export default function StudentGuidedAssessmentPage() {
   const activeQuestion = questions[currentIdx];
   const questionIds = questions.map((question) => question.id);
   const answeredById = Object.fromEntries(
-    questionIds.map((id) => {
-      const answer = responses[id];
-      const answered = Array.isArray(answer) ? answer.length > 0 : Boolean(answer);
-      return [id, answered];
-    }),
+    questionIds.map((id) => [id, isAnswered(responses[id])]),
   );
+  const answeredCount = Object.values(answeredById).filter(Boolean).length;
 
   const persistProgress = useCallback(async () => {
     if (!session || result) return;
@@ -184,14 +210,53 @@ export default function StudentGuidedAssessmentPage() {
   }
 
   if (result && session) {
+    const correctQuestions = (session.guidedAssessment.questions ?? []).filter(
+      (question) => Boolean(resultByQuestionId[question.id]?.isCorrect),
+    );
+    const reviewQuestions = (session.guidedAssessment.questions ?? []).filter(
+      (question) => !resultByQuestionId[question.id]?.isCorrect,
+    );
+
+    const renderResultQuestion = (question: GuidedAssessmentQuestion, index: number) => {
+      const response = resultByQuestionId[question.id];
+      return (
+        <article key={question.id} className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <strong className="block min-w-0 text-sm text-[var(--student-text-strong)]">
+              Q{index + 1}. {question.stem}
+            </strong>
+            <StudentStatusChip tone={response?.isCorrect ? 'success' : 'warning'}>
+              {response?.isCorrect ? 'Correct' : 'Review'}
+            </StudentStatusChip>
+          </div>
+          <div className="mt-3 grid gap-2 text-sm text-[var(--student-text-soft)] sm:grid-cols-2">
+            <p className="font-semibold text-[var(--student-text-strong)]">
+              Your answer: {formatAnswer(question, response?.answer)}
+            </p>
+            {!response?.isCorrect ? (
+              <p className="font-semibold text-[var(--student-text-strong)]">
+                Correct answer: {formatCorrectAnswer(question)}
+              </p>
+            ) : null}
+          </div>
+          <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">{question.explanation}</p>
+          {question.weakConceptTag ? (
+            <p className="mt-2 text-xs font-semibold text-[var(--student-text-muted)]">
+              Focus concept: {question.weakConceptTag}
+            </p>
+          ) : null}
+        </article>
+      );
+    };
+
     return (
-      <div className="space-y-5">
+      <div className="student-assessment-take-theme space-y-5">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => router.push(returnHref)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Learners Path
           </Button>
-          <Badge variant="secondary">Submitted</Badge>
+          <StudentStatusChip tone="success">Submitted</StudentStatusChip>
         </header>
 
         <Card className="student-card">
@@ -220,24 +285,41 @@ export default function StudentGuidedAssessmentPage() {
                 ) : null}
               </div>
             ) : null}
-            <div className="space-y-3">
-              {(session.guidedAssessment.questions ?? []).map((question, index) => {
-                const response = resultByQuestionId[question.id];
-                return (
-                  <article key={question.id} className="rounded-2xl border border-[#d9e3f0] bg-white p-4">
-                    <strong className="block text-sm text-[#102744]">
-                      Q{index + 1}. {question.stem}
-                    </strong>
-                    {response ? (
-                      <p className="mt-2 text-xs font-medium text-[#5f6b84]">
-                        {response.isCorrect ? 'Correct' : 'Needs review'}
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-sm text-[#5f6b84]">{question.explanation}</p>
-                  </article>
-                );
-              })}
-            </div>
+            <section
+              role="region"
+              aria-label="Correct answers"
+              className="space-y-3 rounded-2xl border border-[var(--student-success-border)] bg-[var(--student-success-bg)] p-4"
+            >
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Correct Answers</h2>
+                <p className="text-sm text-[var(--student-text-soft)]">
+                  These items show concepts you handled correctly in this guided retry.
+                </p>
+              </div>
+              {correctQuestions.length > 0 ? (
+                correctQuestions.map((question, index) => renderResultQuestion(question, index))
+              ) : (
+                <p className="text-sm text-[var(--student-text-soft)]">No correct answers yet.</p>
+              )}
+            </section>
+
+            <section
+              role="region"
+              aria-label="Review these answers"
+              className="space-y-3 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4"
+            >
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Review These Answers</h2>
+                <p className="text-sm text-[var(--student-text-soft)]">
+                  Recheck these items with the explanation and correct answer before returning to the source lesson.
+                </p>
+              </div>
+              {reviewQuestions.length > 0 ? (
+                reviewQuestions.map((question, index) => renderResultQuestion(question, index))
+              ) : (
+                <p className="text-sm text-[var(--student-text-soft)]">No review items left from this attempt.</p>
+              )}
+            </section>
           </CardContent>
         </Card>
       </div>
@@ -249,15 +331,15 @@ export default function StudentGuidedAssessmentPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="student-assessment-take-theme space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => router.push(returnHref)}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Learners Path
         </Button>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{saving ? 'Saving progress...' : 'LXP-only guided attempt'}</Badge>
-          <Badge variant="secondary">{session.attempt.status}</Badge>
+          <StudentStatusChip tone="neutral">Guided remediation</StudentStatusChip>
+          <StudentStatusChip tone="info">{session.attempt.status.replace('_', ' ')}</StudentStatusChip>
         </div>
       </header>
 
@@ -288,21 +370,26 @@ export default function StudentGuidedAssessmentPage() {
         onNavigate={(index) => setCurrentIdx(index)}
         statusChips={
           <>
-            <Badge variant="outline">Hints on demand</Badge>
-            <Badge variant="secondary">Explanation after answer</Badge>
+            <StudentStatusChip tone="info">
+              {answeredCount}/{questions.length} answered
+            </StudentStatusChip>
+            <StudentStatusChip tone="neutral">Hints optional</StudentStatusChip>
           </>
         }
         metaBadges={
           <>
-            <Badge variant="outline">{activeQuestion.type.replace('_', ' ')}</Badge>
+            <StudentStatusChip tone="neutral">{activeQuestion.type.replace('_', ' ')}</StudentStatusChip>
             {activeQuestion.weakConceptTag ? (
-              <Badge variant="secondary">{activeQuestion.weakConceptTag}</Badge>
+              <StudentStatusChip tone="info">{activeQuestion.weakConceptTag}</StudentStatusChip>
             ) : null}
           </>
         }
         promptSupplement={
           hintVisible && activeQuestion.hint ? (
-            <div className="rounded-2xl border border-[#f0d7df] bg-[#fff7f9] p-4 text-sm text-[#6a4f5b]">
+            <div
+              data-testid="guided-hint-panel"
+              className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]"
+            >
               <strong className="block text-[#102744]">Hint</strong>
               <p className="mt-2">{activeQuestion.hint}</p>
             </div>
@@ -310,7 +397,7 @@ export default function StudentGuidedAssessmentPage() {
         }
         feedback={
           explanationVisible ? (
-            <div className="rounded-2xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm text-[#30415d]">
+            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]">
               <strong className="block text-[#102744]">Explanation</strong>
               <p className="mt-2">{activeQuestion.explanation}</p>
             </div>
@@ -356,7 +443,7 @@ export default function StudentGuidedAssessmentPage() {
         }
       />
 
-      <div className="rounded-2xl border border-[#f0d7df] bg-[#fff7f9] px-4 py-3 text-sm font-medium text-[#6a4f5b]">
+      <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-3 text-sm font-medium text-[var(--student-text-soft)]">
         This guided remedial assessment is part of your Learners Path only. It supports remediation and teacher reference, not an official class-record grade.
       </div>
     </div>

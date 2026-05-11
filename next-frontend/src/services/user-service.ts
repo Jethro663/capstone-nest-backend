@@ -9,6 +9,36 @@ export interface UsersQuery {
   includeStatusCounts?: boolean;
 }
 
+export interface UserMonitoringReportQuery {
+  role?: string;
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface UserMonitoringReportItem extends User {
+  lastLogoutAt?: string | null;
+  lastActivityAt?: string | null;
+  activityIp?: string | null;
+  inactiveFor: string;
+  isCurrentlyActive: boolean;
+  isSuspended: boolean;
+  isArchived: boolean;
+}
+
+export interface UserMonitoringReportResponse {
+  success: boolean;
+  message: string;
+  data: {
+    data: UserMonitoringReportItem[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export interface UsersListResponse {
   success: boolean;
   users: User[];
@@ -58,6 +88,16 @@ export const userService = {
   /** GET /users/all - Admin only */
   async getAll(query?: UsersQuery): Promise<UsersListResponse> {
     const { data } = await api.get('/users/all', { params: query });
+    return data;
+  },
+
+  /** GET /users/reports/monitoring - Admin only */
+  async getMonitoringReport(
+    query?: UserMonitoringReportQuery,
+  ): Promise<UserMonitoringReportResponse> {
+    const { data } = await api.get('/users/reports/monitoring', {
+      params: query,
+    });
     return data;
   },
 

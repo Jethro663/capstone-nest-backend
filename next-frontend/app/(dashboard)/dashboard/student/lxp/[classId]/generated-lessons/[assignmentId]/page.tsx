@@ -7,10 +7,116 @@ import { ArrowLeft, CheckCircle2, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LessonBlockStudentRenderer } from '@/features/lesson-blocks/LessonBlockStudentRenderer';
 import { lxpService } from '@/services/lxp-service';
+import type { ContentBlock } from '@/types/lesson';
+import type { GeneratedLessonContent } from '@/types/lxp';
 
 function resolveParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatInlineMarkdown(value: string) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+}
+
+function closeList(activeList: 'ul' | 'ol' | null, parts: string[]) {
+  if (activeList) {
+    parts.push(`</${activeList}>`);
+  }
+  return null;
+}
+
+function lessonBodyToHtml(value: string) {
+  const lines = value.replace(/\r\n/g, '\n').split('\n');
+  const parts: string[] = [];
+  let activeList: 'ul' | 'ol' | null = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      activeList = closeList(activeList, parts);
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    if (headingMatch) {
+      activeList = closeList(activeList, parts);
+      const level = Math.min(headingMatch[1].length, 4);
+      parts.push(`<h${level}>${formatInlineMarkdown(headingMatch[2])}</h${level}>`);
+      continue;
+    }
+
+    const unorderedMatch = line.match(/^[-*]\s+(.+)$/);
+    if (unorderedMatch) {
+      if (activeList !== 'ul') {
+        activeList = closeList(activeList, parts);
+        activeList = 'ul';
+        parts.push('<ul>');
+      }
+      parts.push(`<li>${formatInlineMarkdown(unorderedMatch[1])}</li>`);
+      continue;
+    }
+
+    const orderedMatch = line.match(/^\d+[.)]\s+(.+)$/);
+    if (orderedMatch) {
+      if (activeList !== 'ol') {
+        activeList = closeList(activeList, parts);
+        activeList = 'ol';
+        parts.push('<ol>');
+      }
+      parts.push(`<li>${formatInlineMarkdown(orderedMatch[1])}</li>`);
+      continue;
+    }
+
+    activeList = closeList(activeList, parts);
+    parts.push(`<p>${formatInlineMarkdown(line)}</p>`);
+  }
+
+  closeList(activeList, parts);
+  return parts.join('');
+}
+
+function generatedLessonToBlocks(lesson: GeneratedLessonContent): ContentBlock[] {
+  const blocks: ContentBlock[] = [];
+  if (lesson.summary?.trim()) {
+    blocks.push({
+      id: `${lesson.id}-summary`,
+      lessonId: lesson.id,
+      type: 'text',
+      order: 1,
+      metadata: { variant: 'recap' },
+      content: {
+        heading: 'Before you start',
+        takeawayHtml: `<p>${formatInlineMarkdown(lesson.summary)}</p>`,
+      },
+    });
+  }
+
+  blocks.push({
+    id: `${lesson.id}-body`,
+    lessonId: lesson.id,
+    type: 'text',
+    order: 2,
+    metadata: { variant: 'body' },
+    content: {
+      heading: '',
+      html: lessonBodyToHtml(lesson.lessonBody || '<p>No remedial lesson content was generated.</p>'),
+    },
+  });
+
+  return blocks;
 }
 
 export default function StudentGeneratedLessonPage() {
@@ -53,6 +159,10 @@ export default function StudentGeneratedLessonPage() {
   }, [fetchData]);
 
   const generatedLesson = lessonPayload?.generatedLesson;
+  const generatedLessonBlocks = useMemo(
+    () => (generatedLesson ? generatedLessonToBlocks(generatedLesson) : []),
+    [generatedLesson],
+  );
   const sourceTitles = useMemo(
     () =>
       (generatedLesson?.sourceReferences ?? [])
@@ -103,29 +213,33 @@ export default function StudentGeneratedLessonPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <Button variant="ghost" onClick={() => router.push(returnHref)}>
+    <div className="student-module-view">
+      <header className="student-module-view__hero">
+        <button
+          type="button"
+          className="student-module-view__back"
+          onClick={() => router.push(returnHref)}
+        >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Learners Path
-        </Button>
-        <Badge variant={isCompleted ? 'secondary' : 'outline'}>
-          {isCompleted ? 'Completed' : 'Generated review step'}
-        </Badge>
-      </header>
+        </button>
 
-      <section className="rounded-3xl border border-[#d9e3f0] bg-white p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7b8aa5]">
-              AI-guided remedial lesson
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold text-[#102744]">
+        <div className="student-module-view__hero-row">
+          <span className="student-module-view__pill">LXP</span>
+          <div className="student-module-view__hero-copy">
+            <h1>
               {generatedLesson.title}
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5f6b84]">
+            <p>
               {generatedLesson.summary || 'Simplified review generated from the recommended class lesson evidence.'}
             </p>
+            <div className="student-module-view__meta">
+              <span>
+                <Sparkles className="h-3.5 w-3.5" />
+                AI-guided review
+              </span>
+              <span>{isCompleted ? 'Completed' : 'Remedial step'}</span>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {(generatedLesson.weakConcepts ?? []).map((concept) => (
@@ -135,54 +249,64 @@ export default function StudentGeneratedLessonPage() {
             ))}
           </div>
         </div>
-      </section>
+      </header>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <article className="rounded-3xl border border-[#d9e3f0] bg-white p-6">
-          <div className="mb-4 flex items-center gap-2 text-[#102744]">
-            <Sparkles className="h-4 w-4" />
-            <strong>Simplified review</strong>
-          </div>
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-[#30415d]">
-            {generatedLesson.lessonBody}
-          </pre>
-        </article>
+      <section className="student-module-view__body">
+        <div className="student-module-view__lesson">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(returnHref)}
+            className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+          >
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back to Learners Path
+          </Button>
 
-        <aside className="space-y-4">
-          <article className="rounded-3xl border border-[#d9e3f0] bg-white p-5">
-            <h2 className="text-base font-semibold text-[#102744]">Grounded on class materials</h2>
-            <div className="mt-3 space-y-2 text-sm text-[#5f6b84]">
-              {sourceTitles.length === 0 ? (
-                <p>No source lesson titles were attached to this draft.</p>
-              ) : (
-                sourceTitles.map((title) => (
-                  <div key={title} className="rounded-lg bg-[#f8fbff] px-3 py-2">
-                    {title}
-                  </div>
-                ))
-              )}
+          <article className="student-module-view__reader">
+            <div className="space-y-6">
+              {generatedLessonBlocks.map((block) => (
+                <LessonBlockStudentRenderer key={block.id} block={block} />
+              ))}
             </div>
           </article>
 
-          <article className="rounded-3xl border border-[#f0d7df] bg-[#fff7f9] p-5 text-sm font-medium text-[#6a4f5b]">
-            This generated lesson is part of your Learners Path only. It supports remediation and does not create an official class-record grade.
-          </article>
+          {sourceTitles.length > 0 ? (
+            <article className="student-module-view__attachments">
+              <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Grounded on class materials</h2>
+              {sourceTitles.map((title) => (
+                <div key={title} className="student-module-view__attachment-row">
+                  <div>
+                    <p className="font-medium text-[var(--student-text-strong)]">{title}</p>
+                    <p className="text-xs text-[var(--student-text-muted)]">Source lesson reference</p>
+                  </div>
+                </div>
+              ))}
+            </article>
+          ) : null}
 
-          <Button
-            className="w-full bg-[#e70012] text-white hover:bg-[#c90010]"
-            onClick={() => void handleComplete()}
-            disabled={completing}
-          >
-            {isCompleted ? (
-              <>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Back to Path
-              </>
-            ) : (
-              `${completing ? 'Saving...' : 'Mark review complete'}`
-            )}
-          </Button>
-        </aside>
+          <footer className="student-module-view__lesson-footer">
+            <div className="student-module-view__lesson-progress">
+              <p>
+                This generated lesson supports Learners Path remediation only and does not create an official class-record grade.
+              </p>
+            </div>
+            <Button
+              className="student-button-solid student-module-view__complete-button"
+              onClick={() => void handleComplete()}
+              disabled={completing}
+            >
+              {isCompleted ? (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Back to Path
+                </>
+              ) : (
+                `${completing ? 'Saving...' : 'Mark Complete'}`
+              )}
+            </Button>
+          </footer>
+        </div>
       </section>
     </div>
   );

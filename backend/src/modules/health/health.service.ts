@@ -19,7 +19,13 @@ type ReadinessStatus = {
   dependencies: {
     database: DependencyStatus;
     redis: DependencyStatus;
-    aiService: DependencyStatus & { degraded?: boolean; version?: string; runtimeProvider?: string };
+    aiService: DependencyStatus & {
+      degraded?: boolean;
+      version?: string;
+      runtimeProvider?: string;
+      embeddingRuntime?: unknown;
+      uploadMaterialization?: unknown;
+    };
   };
   timestamp: string;
 };
@@ -83,7 +89,13 @@ export class HealthService {
   }
 
   private async checkAiService(): Promise<
-    DependencyStatus & { degraded?: boolean; version?: string; runtimeProvider?: string }
+    DependencyStatus & {
+      degraded?: boolean;
+      version?: string;
+      runtimeProvider?: string;
+      embeddingRuntime?: unknown;
+      uploadMaterialization?: unknown;
+    }
   > {
     const aiServiceUrl =
       this.configService.get<string>('AI_SERVICE_URL') ??
@@ -111,6 +123,8 @@ export class HealthService {
           runtimeProvider?: string;
           ollamaAvailable?: boolean;
           version?: string;
+          embeddingRuntime?: { ok?: boolean };
+          uploadMaterialization?: { ok?: boolean };
         };
       };
       const runtimeAvailable =
@@ -118,6 +132,8 @@ export class HealthService {
         payload?.data?.ollamaAvailable !== false;
       const version = payload?.data?.version;
       const runtimeProvider = payload?.data?.runtimeProvider;
+      const embeddingRuntime = payload?.data?.embeddingRuntime;
+      const uploadMaterialization = payload?.data?.uploadMaterialization;
 
       if (!runtimeAvailable) {
         return {
@@ -125,21 +141,58 @@ export class HealthService {
           degraded: true,
           version,
           runtimeProvider,
+          embeddingRuntime,
+          uploadMaterialization,
           message: allowDegradedAi
             ? 'AI service reachable but running without an available AI runtime'
             : 'AI service reachable but no AI runtime is available',
         };
       }
 
-      return { ok: true, version, runtimeProvider };
+      if (embeddingRuntime?.ok === false) {
+        return {
+          ok: true,
+          degraded: true,
+          version,
+          runtimeProvider,
+          embeddingRuntime,
+          uploadMaterialization,
+          message: 'AI service reachable but embedding runtime is degraded',
+        };
+      }
+
+      if (uploadMaterialization?.ok === false) {
+        return {
+          ok: true,
+          degraded: true,
+          version,
+          runtimeProvider,
+          embeddingRuntime,
+          uploadMaterialization,
+          message: 'AI service reachable but upload materialization is degraded',
+        };
+      }
+
+      return {
+        ok: true,
+        version,
+        runtimeProvider,
+        embeddingRuntime,
+        uploadMaterialization,
+      };
     } catch (error) {
+      const rawMessage =
+        error instanceof Error ? error.message : 'AI service health check failed';
+      const connectivityFailure = /fetch failed|econnrefused|enotfound|ehostunreach|socket hang up/i.test(
+        rawMessage,
+      );
+
       return {
         ok: allowDegradedAi,
         degraded: allowDegradedAi,
-        message:
-          error instanceof Error
-            ? error.message
-            : 'AI service health check failed',
+        message: connectivityFailure
+          ? `Cannot reach AI service at ${aiServiceUrl}. Ensure the service is running and reachable from backend.`
+          : rawMessage,
       };
     }
   }

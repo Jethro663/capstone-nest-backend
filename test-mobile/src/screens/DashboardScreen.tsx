@@ -88,20 +88,20 @@ type TimelineItem = {
 };
 
 const theme = {
-  bg: "#141414",
-  pageBg: "#0E0E0E",
-  topbar: "#1C1C1C",
-  surface: "#1E1E1E",
-  active: "#252525",
-  border: "rgba(255,255,255,0.07)",
-  text: "#E8E8E8",
-  muted: "#777777",
-  dim: "#444444",
-  subtext: "rgba(255,255,255,0.45)",
-  deepBlue: "#1A2A4A",
-  deepNavy: "#1E1E2E",
+  bg: "#0A1630",
+  pageBg: "#071225",
+  topbar: "#0B1833",
+  surface: "#0F2438",
+  active: "#132D45",
+  border: "rgba(0,217,255,0.18)",
+  text: "#E0F7FF",
+  muted: "#7AA3B8",
+  dim: "#426478",
+  subtext: "rgba(224,247,255,0.56)",
+  deepBlue: "#113456",
+  deepNavy: "#0A1630",
   red: "#E8294E",
-  blue: "#4A8CF7",
+  blue: "#00D9FF",
   green: "#22C97A",
   purple: "#A78BFA",
   amber: "#FBBF24",
@@ -1120,7 +1120,7 @@ export function DashboardScreen({ navigation }: Props) {
               marginHorizontal: 16,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: "rgba(74,140,247,0.2)",
+              borderColor: "rgba(0,217,255,0.2)",
               padding: 16,
               overflow: "hidden",
               backgroundColor: theme.surface,
@@ -1134,7 +1134,7 @@ export function DashboardScreen({ navigation }: Props) {
                 width: 120,
                 height: 120,
                 borderRadius: 999,
-                backgroundColor: "rgba(74,140,247,0.08)",
+                backgroundColor: "rgba(0,217,255,0.08)",
               }}
             />
             <View
@@ -1327,7 +1327,7 @@ export function DashboardScreen({ navigation }: Props) {
                       style={{
                         width: 1,
                         height: 32,
-                        backgroundColor: "rgba(74,140,247,0.25)",
+                        backgroundColor: "rgba(0,217,255,0.25)",
                         flexShrink: 0,
                       }}
                     />
@@ -1342,7 +1342,7 @@ export function DashboardScreen({ navigation }: Props) {
                     <View
                       style={{
                         borderRadius: 4,
-                        backgroundColor: "rgba(74,140,247,0.14)",
+                        backgroundColor: "rgba(0,217,255,0.14)",
                         paddingHorizontal: 8,
                         paddingVertical: 2,
                       }}
@@ -1484,7 +1484,7 @@ export function DashboardScreen({ navigation }: Props) {
                           borderRadius: 6,
                           paddingHorizontal: 10,
                           paddingVertical: 4,
-                          backgroundColor: completed ? "rgba(34,201,122,0.1)" : "rgba(74,140,247,0.1)",
+                          backgroundColor: completed ? "rgba(34,201,122,0.1)" : "rgba(0,217,255,0.1)",
                         }}
                       >
                         <Text
@@ -1606,7 +1606,7 @@ export function DashboardScreen({ navigation }: Props) {
                             color: cell.isToday
                               ? "#FFFFFF"
                               : cell.isClassDay
-                                ? "rgba(74,140,247,0.8)"
+                                ? "rgba(0,217,255,0.8)"
                                 : cell.inMonth
                                   ? cell.hasEvent
                                     ? theme.text

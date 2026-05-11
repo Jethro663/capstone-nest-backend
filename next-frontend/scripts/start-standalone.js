@@ -16,6 +16,7 @@ const port = resolvePort(process.argv.slice(2));
 const projectRoot = path.join(__dirname, '..');
 const standaloneRoot = path.join(projectRoot, '.next', 'standalone');
 const serverEntry = path.join(standaloneRoot, 'server.js');
+const localNextCli = path.join(projectRoot, 'node_modules', 'next', 'dist', 'bin', 'next');
 
 function syncDirectory(source, destination) {
   if (!fs.existsSync(source)) return;
@@ -26,18 +27,66 @@ function syncDirectory(source, destination) {
 syncDirectory(path.join(projectRoot, '.next', 'static'), path.join(standaloneRoot, '.next', 'static'));
 syncDirectory(path.join(projectRoot, 'public'), path.join(standaloneRoot, 'public'));
 
-const child = spawn(process.execPath, [serverEntry], {
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    PORT: port,
-  },
-});
+function run(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      ...options,
+    });
 
-child.on('exit', (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
+    child.on('error', reject);
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        reject(new Error(`Process exited due to signal: ${signal}`));
+        return;
+      }
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`Process exited with code ${code}`));
+    });
+  });
+}
+
+async function ensureStandaloneBuild() {
+  if (fs.existsSync(serverEntry)) return;
+  console.log('[start] Missing .next/standalone/server.js, running build...');
+  await run('cmd.exe', ['/c', 'npm.cmd', 'run', 'build'], { cwd: projectRoot });
+  if (!fs.existsSync(serverEntry)) {
+    throw new Error(
+      'Build completed but .next/standalone/server.js was not generated. ' +
+        'Check next.config output settings and build logs.',
+    );
   }
-  process.exit(code ?? 0);
-});
+}
+
+async function main() {
+  try {
+    await ensureStandaloneBuild();
+  } catch (error) {
+    console.error(`[start] ${error.message}`);
+    process.exit(1);
+  }
+
+  syncDirectory(path.join(projectRoot, '.next', 'static'), path.join(standaloneRoot, '.next', 'static'));
+  syncDirectory(path.join(projectRoot, 'public'), path.join(standaloneRoot, 'public'));
+
+  const child = spawn(process.execPath, [serverEntry], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PORT: port,
+    },
+  });
+
+  child.on('exit', (code, signal) => {
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? 0);
+  });
+}
+
+main();

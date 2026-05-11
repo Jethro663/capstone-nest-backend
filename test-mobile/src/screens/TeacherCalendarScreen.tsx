@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { queryKeys, useSchoolEvents, useTeacherClasses } from "../api/hooks";
@@ -135,7 +134,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
               id: `schedule-${classItem.id}-${slot.id}-${dateKey}`,
               dateKey,
               title: `${classItem.subjectCode} class`,
-              subtitle: `${slot.startTime} - ${slot.endTime}${classItem.room ? ` · ${classItem.room}` : ""}`,
+              subtitle: `${slot.startTime} - ${slot.endTime}${classItem.room ? ` | ${classItem.room}` : ""}`,
               kind: "class_schedule",
               action: () => navigation.navigate("TeacherClassDetail", { classId: classItem.id, initialTab: "calendar" }),
             });
@@ -153,7 +152,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
           id: `assessment-${assessment.id}`,
           dateKey: toDateKey(date),
           title: assessment.title,
-          subtitle: `${classItem.subjectCode} · Assessment`,
+          subtitle: `${classItem.subjectCode} | Assessment`,
           kind: "assessment",
           action: () =>
             navigation.navigate("TeacherAssessmentDetail", { assessmentId: assessment.id, classId: classItem.id }),
@@ -171,7 +170,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
           id: `announcement-${announcement.id}`,
           dateKey: toDateKey(new Date(createdAt)),
           title: announcement.title,
-          subtitle: `${classItem.subjectCode} · Announcement`,
+          subtitle: `${classItem.subjectCode} | Announcement`,
           kind: "announcement",
           action: () => navigation.getParent()?.navigate("Announcements" as never),
         });
@@ -208,14 +207,8 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
       title="Calendar"
       subtitle="Unified feed from class schedules, assessments, announcements, and school events."
       icon="calendar-month-outline"
-      rightAction={
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
-        >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
-        </Pressable>
-      }
+      showBackButton
+      onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || schoolEventsQuery.isRefetching}
       onRefresh={() => {
         void Promise.all([
@@ -239,10 +232,10 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
         action={
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable onPress={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
-              <Text style={{ color: theme.red, fontSize: 16 }}>‹</Text>
+              <Text style={{ color: theme.red, fontSize: 16 }}>{"<"}</Text>
             </Pressable>
             <Pressable onPress={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
-              <Text style={{ color: theme.red, fontSize: 16 }}>›</Text>
+              <Text style={{ color: theme.red, fontSize: 16 }}>{">"}</Text>
             </Pressable>
           </View>
         }
@@ -292,7 +285,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
         </View>
       </TeacherPanel>
 
-      <TeacherPanel title={`Selected day · ${formatShortDate(selectedDateKey)}`} subtitle="Tap a feed item to open the linked mobile route when it exists.">
+      <TeacherPanel title={`Selected day | ${formatShortDate(selectedDateKey)}`} subtitle="Tap a feed item to open the linked mobile route when it exists.">
         {selectedItems.length ? (
           selectedItems.map((item) => (
             <TeacherRow

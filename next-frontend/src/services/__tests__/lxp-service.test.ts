@@ -109,6 +109,100 @@ describe('lxpService', () => {
     });
   });
 
+  it('requests assigned system evaluations for the current respondent', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { pending: [], completed: [] },
+      },
+    });
+
+    const result = await lxpService.getMySystemEvaluations();
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/lxp/me/system-evaluations');
+    expect(result.data.pending).toEqual([]);
+  });
+
+  it('submits assigned system evaluation responses', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: 'evaluation-1' },
+      },
+    });
+
+    await lxpService.submitAssignedSystemEvaluation('assignment-1', {
+      questionRatings: {
+        system_navigation: 0,
+        system_features: 5,
+        system_speed: 4,
+        system_efficiency: 5,
+        system_satisfaction: 4,
+      },
+      feedback: 'Useful',
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/lxp/me/system-evaluations/assignment-1/submit',
+      {
+        questionRatings: {
+          system_navigation: 0,
+          system_features: 5,
+          system_speed: 4,
+          system_efficiency: 5,
+          system_satisfaction: 4,
+        },
+        feedback: 'Useful',
+      },
+    );
+  });
+
+  it('creates a system evaluation campaign', async () => {
+    mockedApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: 'campaign-1', assignmentCount: 3 },
+      },
+    });
+
+    await lxpService.createSystemEvaluationCampaign({
+      formType: 'system',
+      audienceRole: 'student',
+      title: 'System Pulse',
+      startsAt: '2026-05-01T00:00:00.000Z',
+      endsAt: '2026-05-20T00:00:00.000Z',
+      status: 'active',
+    });
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/lxp/system-evaluation-campaigns',
+      {
+        formType: 'system',
+        audienceRole: 'student',
+        title: 'System Pulse',
+        startsAt: '2026-05-01T00:00:00.000Z',
+        endsAt: '2026-05-20T00:00:00.000Z',
+        status: 'active',
+      },
+    );
+  });
+
+  it('lists system evaluation campaigns', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: { campaigns: [], count: 0 },
+      },
+    });
+
+    await lxpService.getSystemEvaluationCampaigns({ status: 'active' });
+
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/lxp/system-evaluation-campaigns',
+      { params: { status: 'active' } },
+    );
+  });
+
   it('normalizes non-envelope evaluation submit responses', async () => {
     mockedApi.post.mockResolvedValue({
       data: {

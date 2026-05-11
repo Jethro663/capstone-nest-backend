@@ -1493,7 +1493,7 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Generate Practice Run");
   });
 
-  it("renders JA Ask with a chat composer and requires lesson context before sending", async () => {
+  it("renders JA Ask with the fixed prompt picker and requires lesson context before sending", async () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1510,8 +1510,26 @@ describe("mobile rendered screen flows", () => {
         (node) => node.type === "Text" && flattenText(node).includes("Pick a visible lesson"),
       ),
     ).toBeTruthy();
-    const composer = testRenderer!.root.find((node) => node.type === "TextInput");
-    expect(composer.props.placeholder).toBe("Select a lesson first");
+    expect(testRenderer!.root.findAll((node) => node.type === "TextInput")).toHaveLength(0);
+
+    const promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    await act(async () => {
+      promptButton.props.onPress();
+    });
+
+    [
+      "Explain the lesson",
+      "Summarize main idea",
+      "What should I study next?",
+      "Give me a question",
+      "Quiz me on this lesson",
+      "Unclear parts check",
+      "Key concepts review",
+      "Make a study plan",
+      "Vocabulary review",
+    ].forEach((label) => {
+      expect(findPressableByText(testRenderer!.root, label)).toBeTruthy();
+    });
 
     const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
     await act(async () => {
@@ -1531,10 +1549,11 @@ describe("mobile rendered screen flows", () => {
       lessonChip.props.onPress();
     });
     await act(async () => {
-      composer.props.onChangeText("Can you explain this like I am reviewing?");
+      promptButton.props.onPress();
     });
     await act(async () => {
-      await explainAction.props.onPress();
+      const explainActionWithLesson = findPressableByText(testRenderer!.root, "Explain the lesson");
+      await explainActionWithLesson.props.onPress();
       await Promise.resolve();
     });
 
@@ -1625,6 +1644,10 @@ describe("mobile rendered screen flows", () => {
       lessonChip.props.onPress();
     });
 
+    let promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    await act(async () => {
+      promptButton.props.onPress();
+    });
     const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
     await act(async () => {
       await explainAction.props.onPress();
@@ -1655,6 +1678,10 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Science (SCI-1)");
     expect(renderedText).not.toContain("Here is a grounded explanation.");
 
+    promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
+    await act(async () => {
+      promptButton.props.onPress();
+    });
     const explainAgain = findPressableByText(testRenderer!.root, "Explain the lesson");
     await act(async () => {
       await explainAgain.props.onPress();
@@ -4857,11 +4884,17 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    expect(
-      testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Transcript"),
-      ),
-    ).toBeTruthy();
+    const renderedText = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+
+    expect(renderedText).toContain("Student Records");
+    expect(renderedText).toContain("Subject Enrollment Transcript");
+    expect(renderedText).toContain("Every class you have enrolled in, grouped by school year.");
+    expect(renderedText).toContain("1 enrollment");
+    expect(renderedText).toContain("Mathematics (MATH-1)");
+    expect(renderedText).toContain("2025-2026");
   });
 
   it("renders Progress screen and surfaces backend error state", () => {

@@ -167,6 +167,7 @@ function createDeferred<T>() {
 describe('TeacherAiDraftQuizPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-25T12:00:00.000Z'));
     window.localStorage.clear();
 
     mockedClassService.getById.mockResolvedValue({
@@ -381,6 +382,45 @@ describe('TeacherAiDraftQuizPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Sources indexed')).toBeInTheDocument();
+    });
+  });
+
+  it('shows degraded retrieval success when reindex falls back to degraded embeddings', async () => {
+    mockedAiService.reindexClass.mockResolvedValue({
+      data: {
+        classId: 'class-1',
+        chunksIndexed: 6,
+        lessonChunks: 4,
+        extractionChunks: 2,
+        questionChunks: 0,
+        degraded: true,
+        warnings: ['Embedding provider failed; using degraded deterministic vectors.'],
+        embeddingProvider: 'degraded',
+        embeddingModel: 'degraded:hash-embedding-v1',
+      },
+    } as any);
+    mockedAiService.getClassIndexStatus
+      .mockResolvedValueOnce({ data: buildIndexStatus() } as any)
+      .mockResolvedValueOnce({
+        data: buildIndexStatus({
+          chunksIndexed: 6,
+          lessonChunks: 4,
+          extractionChunks: 2,
+          isStale: false,
+          needsReindex: false,
+          reason: null,
+        }),
+      } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Reindex Sources');
+    fireEvent.click(screen.getByText('Reindex Sources'));
+
+    await waitFor(() => {
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        'Indexed with degraded retrieval (6 class chunk(s)).',
+      );
     });
   });
 

@@ -224,6 +224,25 @@ describe('ExtractionReviewPage', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('text-[#12284a]');
   });
 
+  it('keeps generated content blocks in a visible scroll region', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    const contentTab = await screen.findByRole('tab', { name: 'Content' });
+    fireEvent.mouseDown(contentTab);
+    fireEvent.click(contentTab);
+
+    const generatedContentRegion = await screen.findByTestId('extraction-content-scroll-region');
+    expect(generatedContentRegion).toHaveClass('max-h-[calc(100vh-18rem)]');
+    expect(generatedContentRegion).toHaveClass('overflow-y-auto');
+    expect(generatedContentRegion).toHaveClass('pr-2');
+  });
+
   it('renders load error state and retries fetching extraction', async () => {
     mockedExtractionService.getById
       .mockRejectedValueOnce({

@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "./services/ai";
 import { announcementsApi } from "./services/announcements";
 import { assessmentsApi } from "./services/assessments";
+import { classRecordApi } from "./services/class-record";
 import { classesApi } from "./services/classes";
 import { discussionBoardApi } from "./services/discussion-board";
+import { extractionsApi } from "./services/extractions";
 import { jaApi } from "./services/ja";
 import { lessonsApi } from "./services/lessons";
 import { lxpApi } from "./services/lxp";
@@ -12,12 +14,16 @@ import { performanceApi } from "./services/performance";
 import { profileApi } from "./services/profile";
 import { reportsApi } from "./services/reports";
 import { schoolEventsApi } from "./services/school-events";
+import { sectionsApi } from "./services/sections";
 import { teacherProfileApi } from "./services/teacher-profile";
-import type { AssessmentHistoryQuery, TranscriptQuery } from "../types/report";
-import type { CreateDiscussionCommentDto, DiscussionReactionType } from "../types/discussion";
+import type { AssessmentHistoryQuery, TeacherReportQuery, TranscriptQuery } from "../types/report";
+import type { CreateDiscussionCommentDto, CreateDiscussionThreadDto, DiscussionReactionType, ReportDiscussionCommentDto, UpdateDiscussionThreadDto } from "../types/discussion";
 import type { BulkLessonDraftStateDto } from "../types/lesson";
 import type { UpdateTeacherProfileDto } from "../types/profile";
 import type { SchoolEventQuery } from "../types/school-event";
+import type { CreateClassRecordDto } from "../types/class-record";
+import type { ExtractModuleDto } from "../types/extraction";
+import type { TeacherEvaluationType } from "../types/teacher";
 
 export const queryKeys = {
   classes: (studentId: string) => ["classes", studentId] as const,
@@ -41,6 +47,16 @@ export const queryKeys = {
   assessmentHistory: (query?: AssessmentHistoryQuery) =>
     ["assessment-history", query ?? "all"] as const,
   announcements: (classId: string) => ["announcements", classId] as const,
+  extractionsByClass: (classId: string) => ["extractions", classId] as const,
+  classRecordsByClass: (classId: string) => ["class-records", classId] as const,
+  teacherClassRecords: (classId: string) => ["class-records", classId] as const,
+  classRecordSpreadsheet: (recordId?: string) => ["class-record-spreadsheet", recordId ?? "missing"] as const,
+  classRecordPreviewGrades: (recordId?: string) => ["class-record-preview-grades", recordId ?? "missing"] as const,
+  classRecordAverageReport: (recordId?: string) => ["class-record-average-report", recordId ?? "missing"] as const,
+  classRecordDistributionReport: (recordId?: string) =>
+    ["class-record-distribution-report", recordId ?? "missing"] as const,
+  classRecordInterventionReport: (recordId?: string) =>
+    ["class-record-intervention-report", recordId ?? "missing"] as const,
   discussionThreads: (classId?: string) => ["discussion-threads", classId ?? "missing"] as const,
   discussionThread: (classId?: string, threadId?: string) =>
     ["discussion-thread", classId ?? "missing", threadId ?? "missing"] as const,
@@ -58,6 +74,36 @@ export const queryKeys = {
   jaAskThread: (threadId?: string) => ["ja-ask-thread", threadId ?? "missing"] as const,
   moduleDetail: (classId?: string, moduleId?: string) =>
     ["module-detail", classId ?? "missing", moduleId ?? "missing"] as const,
+  teacherSections: (status: "all" | "active" | "archived" | "hidden" = "all") =>
+    ["teacher-sections", status] as const,
+  teacherSectionDetail: (sectionId?: string) => ["teacher-section-detail", sectionId ?? "missing"] as const,
+  teacherSectionRoster: (sectionId?: string) => ["teacher-section-roster", sectionId ?? "missing"] as const,
+  teacherSectionCandidates: (sectionId?: string, search?: string) =>
+    ["teacher-section-candidates", sectionId ?? "missing", (search ?? "").trim().toLowerCase() || "all"] as const,
+  teacherSectionSchedule: (sectionId?: string) => ["teacher-section-schedule", sectionId ?? "missing"] as const,
+  teacherClassPerformanceSummary: (classId?: string) =>
+    ["teacher-class-performance-summary", classId ?? "missing"] as const,
+  teacherClassAtRisk: (classId?: string) => ["teacher-class-at-risk", classId ?? "missing"] as const,
+  teacherInterventionQuizComparison: (classId?: string) =>
+    ["teacher-intervention-quiz-comparison", classId ?? "missing"] as const,
+  teacherInterventionsQueue: (classId?: string) => ["teacher-interventions-queue", classId ?? "missing"] as const,
+  teacherInterventionsHistory: (classId?: string) => ["teacher-interventions-history", classId ?? "missing"] as const,
+  teacherPendingInterventions: ["teacher-pending-interventions"] as const,
+  teacherEvaluationSummary: (
+    evaluationType: TeacherEvaluationType,
+    classId?: string,
+    gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4",
+  ) => ["teacher-evaluation-summary", evaluationType, classId ?? "all", gradingPeriod ?? "all"] as const,
+  teacherReportClassEnrollment: (query?: TeacherReportQuery) =>
+    ["teacher-report-class-enrollment", query ?? "all"] as const,
+  teacherReportStudentPerformance: (query?: TeacherReportQuery) =>
+    ["teacher-report-student-performance", query ?? "all"] as const,
+  teacherReportAssessmentSummary: (query?: TeacherReportQuery) =>
+    ["teacher-report-assessment-summary", query ?? "all"] as const,
+  teacherReportInterventionParticipation: (query?: TeacherReportQuery) =>
+    ["teacher-report-intervention-participation", query ?? "all"] as const,
+  teacherReportSystemUsage: (query?: TeacherReportQuery) =>
+    ["teacher-report-system-usage", query ?? "all"] as const,
 };
 
 export const useStudentClasses = (studentId?: string) =>
@@ -192,6 +238,55 @@ export const useAnnouncements = (classId?: string) =>
     enabled: !!classId,
   });
 
+export const useExtractionsByClass = (classId?: string) =>
+  useQuery({
+    queryKey: classId ? queryKeys.extractionsByClass(classId) : ["extractions", "missing"],
+    queryFn: () => extractionsApi.listByClass(classId!),
+    enabled: !!classId,
+  });
+
+export const useClassRecordsByClass = (classId?: string) =>
+  useQuery({
+    queryKey: classId ? queryKeys.classRecordsByClass(classId) : ["class-records", "missing"],
+    queryFn: () => classRecordApi.getByClass(classId!),
+    enabled: !!classId,
+  });
+
+export const useClassRecordSpreadsheet = (recordId?: string) =>
+  useQuery({
+    queryKey: queryKeys.classRecordSpreadsheet(recordId),
+    queryFn: () => classRecordApi.getSpreadsheet(recordId!),
+    enabled: !!recordId,
+  });
+
+export const useClassRecordPreviewGrades = (recordId?: string) =>
+  useQuery({
+    queryKey: queryKeys.classRecordPreviewGrades(recordId),
+    queryFn: () => classRecordApi.previewGrades(recordId!),
+    enabled: !!recordId,
+  });
+
+export const useClassRecordAverageReport = (recordId?: string) =>
+  useQuery({
+    queryKey: queryKeys.classRecordAverageReport(recordId),
+    queryFn: () => classRecordApi.getClassAverageReport(recordId!),
+    enabled: !!recordId,
+  });
+
+export const useClassRecordDistributionReport = (recordId?: string) =>
+  useQuery({
+    queryKey: queryKeys.classRecordDistributionReport(recordId),
+    queryFn: () => classRecordApi.getDistributionReport(recordId!),
+    enabled: !!recordId,
+  });
+
+export const useClassRecordInterventionReport = (recordId?: string) =>
+  useQuery({
+    queryKey: queryKeys.classRecordInterventionReport(recordId),
+    queryFn: () => classRecordApi.getInterventionReport(recordId!),
+    enabled: !!recordId,
+  });
+
 export const useDiscussionThreads = (classId?: string) =>
   useQuery({
     queryKey: queryKeys.discussionThreads(classId),
@@ -270,6 +365,125 @@ export const useJaAskThread = (threadId?: string) =>
     enabled: !!threadId,
   });
 
+
+export const useTeacherSections = (status: "all" | "active" | "archived" | "hidden" = "all") =>
+  useQuery({
+    queryKey: queryKeys.teacherSections(status),
+    queryFn: () => sectionsApi.getMy(status),
+  });
+
+export const useTeacherSectionDetail = (sectionId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherSectionDetail(sectionId),
+    queryFn: () => sectionsApi.getById(sectionId!),
+    enabled: !!sectionId,
+  });
+
+export const useTeacherSectionRoster = (sectionId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherSectionRoster(sectionId),
+    queryFn: () => sectionsApi.getRoster(sectionId!),
+    enabled: !!sectionId,
+  });
+
+export const useTeacherSectionCandidates = (sectionId?: string, search?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherSectionCandidates(sectionId, search?.trim() || undefined),
+    queryFn: () => sectionsApi.getCandidates(sectionId!, search),
+    enabled: !!sectionId,
+  });
+
+export const useTeacherSectionSchedule = (sectionId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherSectionSchedule(sectionId),
+    queryFn: () => sectionsApi.getSchedule(sectionId!),
+    enabled: !!sectionId,
+  });
+
+export const useTeacherClassPerformanceSummary = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherClassPerformanceSummary(classId),
+    queryFn: () => performanceApi.getClassSummary(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherClassAtRisk = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherClassAtRisk(classId),
+    queryFn: () => performanceApi.getClassAtRisk(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherInterventionQuizComparison = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherInterventionQuizComparison(classId),
+    queryFn: () => performanceApi.getInterventionQuizComparison(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherInterventionsQueue = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherInterventionsQueue(classId),
+    queryFn: () => lxpApi.getTeacherQueue(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherInterventionsHistory = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherInterventionsHistory(classId),
+    queryFn: () => lxpApi.getTeacherInterventionHistory(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherPendingInterventions = () =>
+  useQuery({
+    queryKey: queryKeys.teacherPendingInterventions,
+    queryFn: () => lxpApi.getTeacherPendingInterventionCount(),
+  });
+
+export const useTeacherEvaluationSummary = (
+  evaluationType: TeacherEvaluationType,
+  filters?: { classId?: string; gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4" },
+) =>
+  useQuery({
+    queryKey: queryKeys.teacherEvaluationSummary(evaluationType, filters?.classId, filters?.gradingPeriod),
+    queryFn: () =>
+      lxpApi.getTeacherEvaluationSummary({
+        evaluationType,
+        classId: filters?.classId,
+        gradingPeriod: filters?.gradingPeriod,
+      }),
+  });
+
+export const useTeacherReportClassEnrollment = (query?: TeacherReportQuery) =>
+  useQuery({
+    queryKey: queryKeys.teacherReportClassEnrollment(query),
+    queryFn: () => reportsApi.getClassEnrollment(query),
+  });
+
+export const useTeacherReportStudentPerformance = (query?: TeacherReportQuery) =>
+  useQuery({
+    queryKey: queryKeys.teacherReportStudentPerformance(query),
+    queryFn: () => reportsApi.getStudentPerformance(query),
+  });
+
+export const useTeacherReportAssessmentSummary = (query?: TeacherReportQuery) =>
+  useQuery({
+    queryKey: queryKeys.teacherReportAssessmentSummary(query),
+    queryFn: () => reportsApi.getAssessmentSummary(query),
+  });
+
+export const useTeacherReportInterventionParticipation = (query?: TeacherReportQuery) =>
+  useQuery({
+    queryKey: queryKeys.teacherReportInterventionParticipation(query),
+    queryFn: () => reportsApi.getInterventionParticipation(query),
+  });
+
+export const useTeacherReportSystemUsage = (query?: TeacherReportQuery) =>
+  useQuery({
+    queryKey: queryKeys.teacherReportSystemUsage(query),
+    queryFn: () => reportsApi.getSystemUsage(query),
+  });
 export function useLessonCompleteMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -478,6 +692,125 @@ export function useTeacherUnreturnGradeMutation(assessmentId?: string, attemptId
   });
 }
 
+
+export function useTeacherCreateModuleMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof modulesApi.create>[0]) => modulesApi.create(payload),
+    onSuccess: async (data) => {
+      const targetClassId = classId || data.classId;
+      if (targetClassId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(targetClassId) });
+      }
+    },
+  });
+}
+
+export function useTeacherCreateAssessmentMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof assessmentsApi.create>[0]) => assessmentsApi.create(payload),
+    onSuccess: async (data) => {
+      const targetClassId = classId || data.classId;
+      if (targetClassId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.assessments(targetClassId) });
+      }
+    },
+  });
+}
+
+export function useTeacherAddSectionStudentsMutation(sectionId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (studentIds: string[]) => sectionsApi.addStudents(sectionId!, studentIds),
+    onSuccess: async () => {
+      if (sectionId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionRoster(sectionId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionCandidates(sectionId, undefined) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(sectionId) });
+      }
+    },
+  });
+}
+export function useExtractionStartMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ExtractModuleDto) => extractionsApi.start(payload),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useExtractionApplyMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ extractionId }: { extractionId: string }) => extractionsApi.apply(extractionId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useExtractionDeleteMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (extractionId: string) => extractionsApi.delete(extractionId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useClassRecordGenerateMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateClassRecordDto) => classRecordApi.generate(payload),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useClassRecordFinalizeMutation(classId?: string, recordId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => classRecordApi.finalize(recordId!),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+      }
+      if (recordId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordSpreadsheet(recordId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordPreviewGrades(recordId) });
+      }
+    },
+  });
+}
+
+export function useClassRecordReopenMutation(classId?: string, recordId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => classRecordApi.reopen(recordId!),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+      }
+      if (recordId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordSpreadsheet(recordId) });
+      }
+    },
+  });
+}
+
 export function useDiscussionCommentMutation(classId?: string, threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -512,6 +845,63 @@ export function useDiscussionReactionMutation(classId?: string, threadId?: strin
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+    },
+  });
+}
+
+export function useDiscussionCreateThreadMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: CreateDiscussionThreadDto) => discussionBoardApi.createThread(classId!, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+    },
+  });
+}
+
+export function useDiscussionUpdateThreadMutation(classId?: string, threadId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: UpdateDiscussionThreadDto) =>
+      discussionBoardApi.updateThread(classId!, threadId!, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+    },
+  });
+}
+
+export function useDiscussionThreadActionMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      threadId,
+      action,
+    }: {
+      threadId: string;
+      action: "publish" | "close" | "reopen" | "archive";
+    }) => {
+      if (action === "publish") return discussionBoardApi.publishThread(classId!, threadId);
+      if (action === "close") return discussionBoardApi.closeThread(classId!, threadId);
+      if (action === "reopen") return discussionBoardApi.reopenThread(classId!, threadId);
+      return discussionBoardApi.archiveThread(classId!, threadId);
+    },
+    onSuccess: async (_value, variables) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, variables.threadId),
+      });
+    },
+  });
+}
+
+export function useDiscussionReportCommentMutation(classId?: string, threadId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, payload }: { commentId: string; payload: ReportDiscussionCommentDto }) =>
+      discussionBoardApi.reportComment(classId!, threadId!, commentId, payload),
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
     },
   });

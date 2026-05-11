@@ -8,7 +8,17 @@ import type { MainTabParamList } from "../../navigation/types";
 import { colors, gradients } from "../../theme/tokens";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+type TabRouteItem = { name: string; key: string };
+
 const studentTabOrder: Array<keyof MainTabParamList> = ["Dashboard", "Classes", "JA", "Assessments", "Profile"];
+const teacherTabOrder: Array<keyof MainTabParamList> = [
+  "Home",
+  "Assessments",
+  "Classes",
+  "Sections",
+  "Profile",
+];
 
 const routeConfig: Record<
   keyof MainTabParamList,
@@ -28,6 +38,11 @@ const routeConfig: Record<
     label: "Classes",
     activeIcon: "book-open-variant",
     inactiveIcon: "book-open-variant-outline",
+  },
+  Sections: {
+    label: "Sections",
+    activeIcon: "account-group",
+    inactiveIcon: "account-group-outline",
   },
   Assessments: {
     label: "Assessment",
@@ -49,6 +64,11 @@ const routeConfig: Record<
     activeIcon: "account-circle",
     inactiveIcon: "account-circle-outline",
   },
+  More: {
+    label: "More",
+    activeIcon: "view-grid-plus",
+    inactiveIcon: "view-grid-plus-outline",
+  },
   LXP: {
     label: "LXP",
     activeIcon: "rocket-launch",
@@ -66,28 +86,43 @@ const routeConfig: Record<
   },
 };
 
+function orderRouteByName(routes: TabRouteItem[], routeOrder: Array<keyof MainTabParamList>) {
+  return [...routes].sort((a, b) => {
+    const leftIndex = routeOrder.indexOf(a.name as keyof MainTabParamList);
+    const rightIndex = routeOrder.indexOf(b.name as keyof MainTabParamList);
+    return (leftIndex < 0 ? Number.MAX_SAFE_INTEGER : leftIndex) - (rightIndex < 0 ? Number.MAX_SAFE_INTEGER : rightIndex);
+  });
+}
+
 export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const activeRouteKey = state.routes[state.index]?.key;
   const isStudentTabSet = state.routes.some((route) => route.name === "JA");
+  const isTeacherTabSet =
+    !isStudentTabSet &&
+    state.routes.some((route) => route.name === "Home") &&
+    state.routes.some((route) => route.name === "Classes") &&
+    state.routes.some((route) => route.name === "Sections") &&
+    state.routes.some((route) => route.name === "Assessments") &&
+    state.routes.some((route) => route.name === "Profile");
+
   const visibleRoutes = state.routes.filter((route) => {
     if (isStudentTabSet && route.name === "Announcements") {
       return false;
     }
     return Boolean(routeConfig[route.name as keyof MainTabParamList]);
   });
+
   const orderedRoutes = isStudentTabSet
-    ? [...visibleRoutes].sort((a, b) => {
-        const leftIndex = studentTabOrder.indexOf(a.name as keyof MainTabParamList);
-        const rightIndex = studentTabOrder.indexOf(b.name as keyof MainTabParamList);
-        return (leftIndex < 0 ? Number.MAX_SAFE_INTEGER : leftIndex) - (rightIndex < 0 ? Number.MAX_SAFE_INTEGER : rightIndex);
-      })
-    : visibleRoutes;
+    ? orderRouteByName(visibleRoutes as TabRouteItem[], studentTabOrder)
+    : isTeacherTabSet
+      ? orderRouteByName(visibleRoutes as TabRouteItem[], teacherTabOrder)
+      : visibleRoutes;
 
   return (
     <View
-      pointerEvents="box-none"
       style={{
+        pointerEvents: "box-none",
         position: "absolute",
         left: 0,
         right: 0,
@@ -98,9 +133,9 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       <View
         style={{
           minHeight: 72,
-          backgroundColor: "#1C1C1C",
+          backgroundColor: "#0B1833",
           borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.07)",
+          borderTopColor: "rgba(255,255,255,0.08)",
           flexDirection: "row",
           alignItems: "flex-end",
           paddingHorizontal: 8,
@@ -110,7 +145,10 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         {orderedRoutes.map((route) => {
           const focused = activeRouteKey === route.key;
           const config = routeConfig[route.name as keyof MainTabParamList];
-          const isCenter = isStudentTabSet && route.name === "JA";
+          const isStudentCenter = isStudentTabSet && route.name === "JA";
+          const isTeacherCenter = isTeacherTabSet && route.name === "Classes";
+          const isCenter = isStudentCenter || isTeacherCenter;
+
           const onPress = () => {
             const event = navigation.emit({
               type: "tabPress",
@@ -142,7 +180,13 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   style={{ alignItems: "center", width: "100%" }}
                 >
                   <LinearGradient
-                    colors={focused ? gradients.ja : [darkRed(), "#C81E43"]}
+                    colors={
+                      focused
+                        ? isTeacherCenter
+                          ? gradients.classes
+                          : gradients.ja
+                        : [darkRed(), "#C81E43"]
+                    }
                     style={{
                       width: 72,
                       height: 72,
@@ -151,7 +195,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: 4,
-                      borderColor: "#1C1C1C",
+                      borderColor: "#0B1833",
                     }}
                   >
                     <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
@@ -162,10 +206,10 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       marginBottom: 10,
                       fontSize: 10,
                       fontWeight: focused ? "800" : "600",
-                      color: focused ? darkRed() : "#777777",
+                      color: focused ? darkRed() : "#8EA0BC",
                     }}
                   >
-                    {config.label}
+                    {isTeacherCenter ? "My Classes" : config.label}
                   </Text>
                 </Pressable>
               </View>
@@ -185,13 +229,13 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}
                 size={20}
-                color={focused ? darkRed() : "#555555"}
+                color={focused ? darkRed() : "#7890B3"}
               />
               <Text
                 style={{
                   fontSize: 10,
                   fontWeight: focused ? "800" : "600",
-                  color: focused ? darkRed() : "#777777",
+                  color: focused ? darkRed() : "#8EA0BC",
                 }}
               >
                 {config.label}

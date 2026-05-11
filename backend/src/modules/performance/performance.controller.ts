@@ -62,6 +62,20 @@ export class PerformanceController {
     return { success: true, data };
   }
 
+  @Get('classes/:classId/intervention-quiz-comparison')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getInterventionQuizComparison(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.performanceService.getInterventionQuizComparison(
+      classId,
+      user.userId,
+      user.roles,
+    );
+    return { success: true, data };
+  }
+
   @Get('classes/:classId/logs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async getClassLogs(

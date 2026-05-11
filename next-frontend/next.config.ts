@@ -5,9 +5,14 @@ const RAILWAY_BACKEND_PUBLIC_ORIGIN =
     ? `https://${process.env.RAILWAY_SERVICE_CAPSTONE_BACKEND_V2_URL}`
     : undefined;
 
+const EXPLICIT_API_ORIGIN =
+  process.env.BACKEND_INTERNAL_URL ??
+  process.env.API_INTERNAL_URL ??
+  process.env.NEXT_PUBLIC_API_URL;
+
 const DEFAULT_SERVER_API_ORIGIN =
   process.env.NODE_ENV === 'production'
-    ? 'https://capstone-backend-v2-production.up.railway.app'
+    ? RAILWAY_BACKEND_PUBLIC_ORIGIN ?? 'http://127.0.0.1:3000'
     : 'http://127.0.0.1:3000';
 
 const nextConfig: NextConfig = {
@@ -20,13 +25,7 @@ const nextConfig: NextConfig = {
     'localhost',
   ],
   async rewrites() {
-    const apiOrigin =
-      process.env.NODE_ENV === 'production'
-        ? RAILWAY_BACKEND_PUBLIC_ORIGIN ?? DEFAULT_SERVER_API_ORIGIN
-        : process.env.BACKEND_INTERNAL_URL ??
-          process.env.API_INTERNAL_URL ??
-          process.env.NEXT_PUBLIC_API_URL ??
-          DEFAULT_SERVER_API_ORIGIN;
+    const apiOrigin = EXPLICIT_API_ORIGIN ?? DEFAULT_SERVER_API_ORIGIN;
 
     return [
       {

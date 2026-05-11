@@ -17,22 +17,20 @@ describe('SectionForm', () => {
     jest.clearAllMocks();
   });
 
-  it('sanitizes section name and room before submit', async () => {
+  it('sanitizes section name and submits selected room', async () => {
     render(<SectionForm {...baseProps} />);
 
     fireEvent.change(screen.getByPlaceholderText('e.g. Kamia'), {
       target: { value: "  Kamia @🙂 Section  " },
     });
-    fireEvent.change(screen.getByPlaceholderText('e.g. 201'), {
-      target: { value: ' Room #201/<A>🙂 ' },
-    });
+    fireEvent.change(screen.getByLabelText('Room'), { target: { value: '201' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Section' }));
 
     expect(baseProps.onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'Kamia Section',
-        roomNumber: 'Room #201/A',
+        roomNumber: '201',
       }),
     );
   });

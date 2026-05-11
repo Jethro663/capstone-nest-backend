@@ -166,7 +166,7 @@ function ReactionButton({
       style={{
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? "rgba(74,140,247,0.45)" : theme.border,
+        borderColor: active ? "rgba(0,217,255,0.45)" : theme.border,
         backgroundColor: active ? theme.blueSoft : theme.surface,
         paddingHorizontal: 10,
         paddingVertical: 6,
@@ -192,6 +192,15 @@ function CommentCard({
   onOpenAttachment: (attachment: DiscussionAttachmentResource) => void;
   onDownloadAttachment: (attachment: DiscussionAttachmentResource) => void;
 }) {
+  const commentAttachments = Array.isArray(comment.attachments) ? comment.attachments : [];
+  const reactions = comment.reactions ?? {
+    like: 0,
+    heart: 0,
+    wow: 0,
+    total: 0,
+    userReaction: null,
+  };
+
   return (
     <View
       style={{
@@ -238,7 +247,7 @@ function CommentCard({
         </Text>
       ) : null}
 
-      {comment.attachments.map((attachment) => (
+      {commentAttachments.map((attachment) => (
         <DiscussionAttachmentPreview
           key={attachment.id}
           attachment={attachment}
@@ -250,20 +259,20 @@ function CommentCard({
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
         <ReactionButton
           label="Like"
-          active={comment.reactions.userReaction === "like"}
-          count={comment.reactions.like}
+          active={reactions.userReaction === "like"}
+          count={reactions.like}
           onPress={() => onReaction("like")}
         />
         <ReactionButton
           label="Heart"
-          active={comment.reactions.userReaction === "heart"}
-          count={comment.reactions.heart}
+          active={reactions.userReaction === "heart"}
+          count={reactions.heart}
           onPress={() => onReaction("heart")}
         />
         <ReactionButton
           label="Wow"
-          active={comment.reactions.userReaction === "wow"}
-          count={comment.reactions.wow}
+          active={reactions.userReaction === "wow"}
+          count={reactions.wow}
           onPress={() => onReaction("wow")}
         />
       </View>
@@ -278,9 +287,11 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const threadsQuery = useDiscussionThreads(classId);
-  const threads = threadsQuery.data?.items ?? [];
+  const threads = Array.isArray(threadsQuery.data?.items) ? threadsQuery.data.items : [];
   const threadQuery = useDiscussionThread(classId, selectedThreadId ?? undefined);
   const selectedThread = threadQuery.data;
+  const selectedThreadComments = Array.isArray(selectedThread?.comments) ? selectedThread.comments : [];
+  const selectedThreadAttachments = Array.isArray(selectedThread?.attachments) ? selectedThread.attachments : [];
   const commentMutation = useDiscussionCommentMutation(classId, selectedThreadId ?? undefined);
   const deleteCommentMutation = useDiscussionDeleteCommentMutation(classId, selectedThreadId ?? undefined);
   const reactionMutation = useDiscussionReactionMutation(classId, selectedThreadId ?? undefined);
@@ -538,7 +549,9 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
 
               <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
                 <ToneTag label={`${thread.commentCount} comments`} tone="blue" />
-                {thread.attachments.length > 0 ? <ToneTag label={`${thread.attachments.length} files`} tone="green" /> : null}
+                {(thread.attachments?.length ?? 0) > 0 ? (
+                  <ToneTag label={`${thread.attachments?.length ?? 0} files`} tone="green" />
+                ) : null}
               </View>
             </Pressable>
           ))}
@@ -608,7 +621,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                   <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 19, color: "#C9C9C9" }}>
                     {stripRichText(selectedThread.bodyHtml)}
                   </Text>
-                  {selectedThread.attachments.map((attachment) => (
+                  {selectedThreadAttachments.map((attachment) => (
                     <DiscussionAttachmentPreview
                       key={attachment.id}
                       attachment={attachment}
@@ -622,7 +635,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                   <Text style={{ fontSize: 11, fontWeight: "700", color: theme.muted, textTransform: "uppercase" }}>
                     Replies
                   </Text>
-                  {selectedThread.comments.length === 0 ? (
+                  {selectedThreadComments.length === 0 ? (
                     <View
                       style={{
                         marginTop: 8,
@@ -640,7 +653,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                       </Text>
                     </View>
                   ) : (
-                    selectedThread.comments.map((comment) => (
+                    selectedThreadComments.map((comment) => (
                       <CommentCard
                         key={comment.id}
                         comment={comment}

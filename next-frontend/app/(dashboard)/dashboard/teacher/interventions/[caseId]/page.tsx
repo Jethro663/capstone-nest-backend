@@ -265,6 +265,30 @@ function normalizeSuggestedAssignmentPayload(
   };
 }
 
+function normalizeStringList(payload: unknown): string[] {
+  return Array.isArray(payload)
+    ? payload.filter((value): value is string => typeof value === 'string')
+    : [];
+}
+
+function normalizeAiSummary(
+  payload: unknown,
+): InterventionStructuredOutput['aiSummary'] {
+  const payloadObject =
+    payload && typeof payload === 'object'
+      ? (payload as Record<string, unknown>)
+      : {};
+
+  return {
+    summary:
+      typeof payloadObject.summary === 'string'
+        ? payloadObject.summary
+        : 'AI intervention result loaded with degraded fields. Review and adjust before assigning.',
+    teacherActions: normalizeStringList(payloadObject.teacherActions),
+    studentFocus: normalizeStringList(payloadObject.studentFocus),
+  };
+}
+
 function normalizeStructuredOutput(
   payload: InterventionStructuredOutput,
 ): InterventionStructuredOutput {
@@ -277,15 +301,10 @@ function normalizeStructuredOutput(
 
   return {
     ...payload,
-    weakConcepts: Array.isArray(payload?.weakConcepts) ? payload.weakConcepts : [],
+    weakConcepts: normalizeStringList(payload?.weakConcepts),
     recommendedLessons,
     recommendedAssessments,
-    aiSummary: payload?.aiSummary ?? {
-      summary:
-        'AI intervention result loaded with degraded fields. Review and adjust before assigning.',
-      teacherActions: [],
-      studentFocus: [],
-    },
+    aiSummary: normalizeAiSummary(payload?.aiSummary),
     suggestedAssignmentPayload: normalizeSuggestedAssignmentPayload(
       payload?.suggestedAssignmentPayload,
       recommendedLessons.map((lesson) => lesson.lessonId),
@@ -296,12 +315,8 @@ function normalizeStructuredOutput(
       typeof payload.generatedLessonDraft === 'object'
         ? {
             ...payload.generatedLessonDraft,
-            weakConcepts: Array.isArray(payload.generatedLessonDraft.weakConcepts)
-              ? payload.generatedLessonDraft.weakConcepts
-              : [],
-            sourceLessonIds: Array.isArray(payload.generatedLessonDraft.sourceLessonIds)
-              ? payload.generatedLessonDraft.sourceLessonIds
-              : [],
+            weakConcepts: normalizeStringList(payload.generatedLessonDraft.weakConcepts),
+            sourceLessonIds: normalizeStringList(payload.generatedLessonDraft.sourceLessonIds),
             sourceReferences: Array.isArray(payload.generatedLessonDraft.sourceReferences)
               ? payload.generatedLessonDraft.sourceReferences
               : [],
@@ -312,9 +327,7 @@ function normalizeStructuredOutput(
       typeof payload.generatedGuidedAssessmentDraft === 'object'
         ? {
             ...payload.generatedGuidedAssessmentDraft,
-            weakConcepts: Array.isArray(payload.generatedGuidedAssessmentDraft.weakConcepts)
-              ? payload.generatedGuidedAssessmentDraft.weakConcepts
-              : [],
+            weakConcepts: normalizeStringList(payload.generatedGuidedAssessmentDraft.weakConcepts),
             sourceReferences: Array.isArray(payload.generatedGuidedAssessmentDraft.sourceReferences)
               ? payload.generatedGuidedAssessmentDraft.sourceReferences
               : [],

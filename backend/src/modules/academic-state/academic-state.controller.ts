@@ -30,7 +30,6 @@ export class AcademicStateController {
   async getImpactPreview(@Query() query: ImpactPreviewQueryDto) {
     const data = await this.academicStateService.getImpactPreview(
       query.schoolYear,
-      query.quarter,
     );
     return {
       success: true,

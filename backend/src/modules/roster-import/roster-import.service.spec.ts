@@ -34,11 +34,18 @@ function makeFileObj(originalname: string, mimetype: string) {
 
 // create a fake section row + header
 const SECTION_HEADER = ['GRADE_7 HUMSS-A'];
-const HEADER_ROW = ['Student Name', 'LRN', 'Email'];
+const HEADER_ROW = [
+  'Last Name',
+  'First Name',
+  'Middle Name',
+  'Grade Level',
+  'LRN',
+  'Email',
+];
 
 const SAMPLE_DATA = [
-  ['Dela Cruz, Juan A.', '123456780001', 'juan@example.com'],
-  ['Unreg, Person', '000000000000', 'nobody@nowhere.com'],
+  ['Dela Cruz', 'Juan', 'Andres', '7', '123456780001', 'juan@example.com'],
+  ['Unreg', 'Person', 'Middle', '7', '000000000000', 'nobody@nowhere.com'],
 ];
 
 // minimal stubbed db object; methods return chainable mocks
@@ -124,6 +131,12 @@ describe('parseAndPreview', () => {
       where: jest
         .fn()
         .mockResolvedValue([{ id: 'u1', email: 'juan@example.com' }]),
+    });
+
+    // no conflicting LRN query
+    dbStub.select.mockReturnValueOnce({
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockResolvedValue([]),
     });
 
     // simulate enrollments query
@@ -218,8 +231,9 @@ describe('commitRoster', () => {
           name: {
             lastName: 'Dela Cruz',
             firstName: 'Juan',
-            middleInitial: 'A',
+            middleName: 'Andres',
           },
+          gradeLevel: '7',
           lrn: '123456780001',
           email: 'a@b.com',
         },
@@ -267,18 +281,25 @@ describe('commitRoster', () => {
     dbStub.select.mockReturnValueOnce(chainForRole);
     // override transaction to simulate inserts for enrollments then pending rows
     const enrollResult = [{ studentId: STUDENT_USER_ID }];
-    const pendingResult = [{ id: 'p1' }];
+    const createdUsers = [{ id: 'new-student-id', email: 'x@y.com' }];
+    const insertedPendingEnrollment = [{ studentId: 'new-student-id' }];
     dbStub.transaction = jest.fn(async (cb: any) => {
       const tx = {
         select: dbStub.select,
         update: dbStub.update,
+        query: {
+          roles: {
+            findFirst: jest.fn().mockResolvedValue({ id: 'student-role-id' }),
+          },
+        },
         insert: jest.fn().mockReturnValue({
           values: jest.fn().mockReturnThis(),
-          // returning invoked twice: first for enroll, then for pending
+          // returning call order: enrolled existing row, created users, enroll created users
           returning: jest
             .fn()
             .mockResolvedValueOnce(enrollResult)
-            .mockResolvedValueOnce(pendingResult),
+            .mockResolvedValueOnce(createdUsers)
+            .mockResolvedValueOnce(insertedPendingEnrollment),
           onConflictDoNothing: jest.fn().mockReturnThis(),
         }),
       } as any;
@@ -293,15 +314,21 @@ describe('commitRoster', () => {
           name: {
             lastName: 'Dela Cruz',
             firstName: 'Juan',
-            middleInitial: 'A',
+            middleName: 'Andres',
           },
+          gradeLevel: '7',
           lrn: '123456780001',
           email: 'a@b.com',
         },
       ],
       pendingRows: [
         {
-          name: { lastName: 'Unreg', firstName: 'Person', middleInitial: null },
+          name: {
+            lastName: 'Unreg',
+            firstName: 'Person',
+            middleName: 'Middle',
+          },
+          gradeLevel: '7',
           lrn: '000000000000',
           email: 'x@y.com',
         },
@@ -309,9 +336,9 @@ describe('commitRoster', () => {
     };
 
     const res = await service.commitRoster(SECTION_ID, dto as any, ADMIN_USER);
-    expect(res.enrolledUserIds).toEqual([STUDENT_USER_ID]);
-    expect(res.pendingRosterIds).toEqual(['p1']);
-    expect(res.summary.enrolled).toBe(1);
+    expect(res.enrolledUserIds).toEqual([STUDENT_USER_ID, 'new-student-id']);
+    expect(res.pendingRosterIds).toEqual(['new-student-id']);
+    expect(res.summary.enrolled).toBe(2);
     expect(res.summary.pending).toBe(1);
   });
 });

@@ -31,11 +31,18 @@ describe('LxpController', () => {
     resolveIntervention: jest.fn(),
     getTeacherInterventionCase: jest.fn(),
     getTeacherInterventionCaseDetail: jest.fn(),
+    getTeacherInterventionHistory: jest.fn(),
+    regenerateInterventionPath: jest.fn(),
     getClassReport: jest.fn(),
     getStudentTeacherEvaluationDashboard: jest.fn(),
     submitTeacherEvaluation: jest.fn(),
     submitSystemEvaluation: jest.fn(),
     listSystemEvaluations: jest.fn(),
+    getMySystemEvaluationDashboard: jest.fn(),
+    submitAssignedSystemEvaluation: jest.fn(),
+    createSystemEvaluationCampaign: jest.fn(),
+    listSystemEvaluationCampaigns: jest.fn(),
+    updateSystemEvaluationCampaignStatus: jest.fn(),
     getTeacherEvaluationSummary: jest.fn(),
   };
 
@@ -217,7 +224,49 @@ describe('LxpController', () => {
     expect(res).toEqual({ success: true, data });
   });
 
-  it('lists system evaluations for teachers/admins with optional module filter', async () => {
+  it('returns teacher intervention history in a success envelope', async () => {
+    const data = {
+      classId: '00000000-0000-0000-0000-000000000201',
+      scoreThreshold: 60,
+      history: [],
+    };
+    mockLxpService.getTeacherInterventionHistory.mockResolvedValue(data);
+
+    const res = await controller.getTeacherInterventionHistory(
+      '00000000-0000-0000-0000-000000000201',
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.getTeacherInterventionHistory).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000201',
+      TEACHER_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('regenerates an intervention path in a success envelope', async () => {
+    const data = {
+      sourceCaseId: '00000000-0000-0000-0000-000000000501',
+      reusedExisting: false,
+      scoreThreshold: 60,
+      pathScore: { scorePercent: 58 },
+      case: { id: '00000000-0000-0000-0000-000000000601' },
+    };
+    mockLxpService.regenerateInterventionPath.mockResolvedValue(data);
+
+    const res = await controller.regenerateInterventionPath(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
+    );
+
+    expect(mockLxpService.regenerateInterventionPath).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000501',
+      TEACHER_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('lists system evaluations for admins with optional module filter', async () => {
     const data = { targetModule: 'lxp', evaluations: [], count: 0 };
     mockLxpService.listSystemEvaluations.mockResolvedValue(data);
 
@@ -229,6 +278,107 @@ describe('LxpController', () => {
       ADMIN_USER,
       { targetModule: 'lxp' },
     );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns assigned system evaluations for the current respondent', async () => {
+    const data = {
+      pending: [{ id: 'assignment-1', formType: 'system' }],
+      completed: [],
+    };
+    mockLxpService.getMySystemEvaluationDashboard.mockResolvedValue(data);
+
+    const res = await controller.getMySystemEvaluations(STUDENT_USER);
+
+    expect(mockLxpService.getMySystemEvaluationDashboard).toHaveBeenCalledWith(
+      STUDENT_USER,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('submits an assigned system evaluation using the current respondent', async () => {
+    const dto = {
+      questionRatings: {
+        system_navigation: 0,
+        system_features: 5,
+        system_speed: 4,
+        system_efficiency: 5,
+        system_satisfaction: 4,
+      },
+      feedback: 'Works well enough',
+    };
+    const data = { id: 'evaluation-1' };
+    mockLxpService.submitAssignedSystemEvaluation.mockResolvedValue(data);
+
+    const res = await controller.submitAssignedSystemEvaluation(
+      '00000000-0000-0000-0000-000000000701',
+      STUDENT_USER,
+      dto,
+    );
+
+    expect(mockLxpService.submitAssignedSystemEvaluation).toHaveBeenCalledWith(
+      '00000000-0000-0000-0000-000000000701',
+      STUDENT_USER,
+      dto,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('creates a system evaluation campaign for admin/teacher users', async () => {
+    const dto = {
+      formType: 'system',
+      audienceRole: 'student',
+      classId: '00000000-0000-0000-0000-000000000201',
+      title: 'Quarter System Pulse',
+      startsAt: '2026-05-01T00:00:00.000Z',
+      endsAt: '2026-05-10T00:00:00.000Z',
+      status: 'active',
+    };
+    const data = { id: 'campaign-1', assignmentCount: 2 };
+    mockLxpService.createSystemEvaluationCampaign.mockResolvedValue(data);
+
+    const res = await controller.createSystemEvaluationCampaign(
+      TEACHER_USER,
+      dto as any,
+    );
+
+    expect(mockLxpService.createSystemEvaluationCampaign).toHaveBeenCalledWith(
+      TEACHER_USER,
+      dto,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('lists system evaluation campaigns for admin/teacher users', async () => {
+    const data = { campaigns: [], count: 0 };
+    mockLxpService.listSystemEvaluationCampaigns.mockResolvedValue(data);
+
+    const res = await controller.listSystemEvaluationCampaigns(ADMIN_USER, {
+      status: 'active',
+    } as any);
+
+    expect(mockLxpService.listSystemEvaluationCampaigns).toHaveBeenCalledWith(
+      ADMIN_USER,
+      { status: 'active' },
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('updates a system evaluation campaign status', async () => {
+    const data = { id: 'campaign-1', status: 'closed' };
+    mockLxpService.updateSystemEvaluationCampaignStatus.mockResolvedValue(data);
+
+    const res = await controller.updateSystemEvaluationCampaignStatus(
+      '00000000-0000-0000-0000-000000000801',
+      ADMIN_USER,
+      { status: 'closed' } as any,
+    );
+
+    expect(
+      mockLxpService.updateSystemEvaluationCampaignStatus,
+    ).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000801', ADMIN_USER, {
+      status: 'closed',
+    });
     expect(res).toEqual({ success: true, data });
   });
 
@@ -245,7 +395,10 @@ describe('LxpController', () => {
     const query = { evaluationType: 'teacher_class', classId: undefined };
     mockLxpService.getTeacherEvaluationSummary.mockResolvedValue(data);
 
-    const res = await controller.getTeacherEvaluationSummary(TEACHER_USER, query as any);
+    const res = await controller.getTeacherEvaluationSummary(
+      TEACHER_USER,
+      query as any,
+    );
 
     expect(mockLxpService.getTeacherEvaluationSummary).toHaveBeenCalledWith(
       TEACHER_USER,

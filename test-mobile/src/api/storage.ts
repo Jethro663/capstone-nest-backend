@@ -1,20 +1,31 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 import type { AuthSession } from "../types/auth";
 import { AUTH_STORAGE_KEYS } from "./config";
 
 async function setStoredValue(key: string, value: string | null) {
-  const secureOperation = value === null
-    ? SecureStore.deleteItemAsync(key)
-    : SecureStore.setItemAsync(key, value);
   const asyncOperation = value === null
     ? AsyncStorage.removeItem(key)
     : AsyncStorage.setItem(key, value);
+
+  if (Platform.OS === "web") {
+    await asyncOperation;
+    return;
+  }
+
+  const secureOperation = value === null
+    ? SecureStore.deleteItemAsync(key)
+    : SecureStore.setItemAsync(key, value);
 
   await Promise.all([secureOperation, asyncOperation]);
 }
 
 async function getStoredValue(key: string) {
+  if (Platform.OS === "web") {
+    return AsyncStorage.getItem(key);
+  }
+
   const secureValue = await SecureStore.getItemAsync(key);
   if (secureValue) {
     return secureValue;

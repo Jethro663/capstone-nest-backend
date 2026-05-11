@@ -3,7 +3,7 @@ import { api } from '@/lib/api-client';
 export interface RosterParsedName {
   lastName: string;
   firstName: string;
-  middleInitial: string | null;
+  middleName: string;
 }
 
 export interface RosterImportPreview {

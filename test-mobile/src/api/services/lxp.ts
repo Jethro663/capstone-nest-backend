@@ -2,6 +2,12 @@ import { apiClient } from "../client";
 import { normalizeArray, normalizeObject, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type { EligibilityResponse, EligibleClass, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary, PlaylistResponse } from "../../types/lxp";
+import type {
+  TeacherEvaluationSummaryResponse,
+  TeacherEvaluationType,
+  TeacherInterventionQueueResponse,
+  TeacherPendingInterventionCountResponse,
+} from "../../types/teacher";
 
 const emptyEligibility = (): EligibilityResponse => ({
   threshold: 0,
@@ -66,5 +72,54 @@ export const lxpApi = {
   async getOverview(classId: string) {
     const response = await apiClient.get<ApiEnvelope<LxpOverviewResponse>>(`/lxp/me/overview/${classId}`);
     return unwrapEnvelope(response.data);
+  },
+
+  async getTeacherQueue(classId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherInterventionQueueResponse>>(
+      `/lxp/teacher/classes/${classId}/interventions`,
+    );
+    const payload = normalizeObject(unwrapEnvelope(response.data), { queue: [] });
+    return {
+      ...payload,
+      queue: normalizeArray(payload.queue),
+    } as TeacherInterventionQueueResponse;
+  },
+
+  async getTeacherInterventionHistory(classId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherInterventionQueueResponse>>(
+      `/lxp/teacher/classes/${classId}/interventions/history`,
+    );
+    const payload = normalizeObject(unwrapEnvelope(response.data), { queue: [] });
+    return {
+      ...payload,
+      queue: normalizeArray(payload.queue),
+    } as TeacherInterventionQueueResponse;
+  },
+
+  async getTeacherPendingInterventionCount() {
+    const response = await apiClient.get<ApiEnvelope<TeacherPendingInterventionCountResponse>>(
+      "/lxp/teacher/interventions/pending-count",
+    );
+    return normalizeObject(unwrapEnvelope(response.data), { pendingCount: 0 });
+  },
+
+  async getTeacherEvaluationSummary(
+    filters: {
+      evaluationType: TeacherEvaluationType;
+      classId?: string;
+      gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4";
+    },
+  ) {
+    const response = await apiClient.get<ApiEnvelope<TeacherEvaluationSummaryResponse>>(
+      "/lxp/teacher/evaluations/summary",
+      { params: filters },
+    );
+    return normalizeObject<TeacherEvaluationSummaryResponse>(unwrapEnvelope(response.data), {
+      evaluationType: filters.evaluationType,
+      overallAverage: null,
+      responseCount: 0,
+      classAverages: [] as TeacherEvaluationSummaryResponse["classAverages"],
+      gradingPeriodBreakdown: [] as TeacherEvaluationSummaryResponse["gradingPeriodBreakdown"],
+    });
   },
 };

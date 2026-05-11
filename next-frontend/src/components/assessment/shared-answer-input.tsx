@@ -26,6 +26,26 @@ export interface SharedAssessmentQuestion {
   options?: SharedQuestionOption[];
 }
 
+function getOptionAccessibleText(text: string) {
+  const withoutTags = text.replace(/<[^>]*>/g, ' ');
+  const decoded =
+    typeof document === 'undefined'
+      ? withoutTags
+          .replace(/&nbsp;/gi, ' ')
+          .replace(/&amp;/gi, '&')
+          .replace(/&lt;/gi, '<')
+          .replace(/&gt;/gi, '>')
+          .replace(/&quot;/gi, '"')
+          .replace(/&#39;/gi, "'")
+      : (() => {
+          const textArea = document.createElement('textarea');
+          textArea.innerHTML = withoutTags;
+          return textArea.value;
+        })();
+
+  return decoded.replace(/\s+/g, ' ').trim() || 'Option';
+}
+
 export function SharedAnswerInput({
   question,
   value,
@@ -94,7 +114,7 @@ export function SharedAnswerInput({
           {options.map((opt) => (
             <label
               key={opt.id}
-              aria-label={opt.text}
+              aria-label={getOptionAccessibleText(opt.text)}
               className={`flex cursor-pointer flex-col gap-3 rounded-xl border p-3 transition ${
                 value === opt.id
                   ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]'
@@ -122,10 +142,11 @@ export function SharedAnswerInput({
         <div className="space-y-2">
           {options.map((opt) => {
             const selected = Array.isArray(value) ? value.includes(opt.id) : false;
+            const optionLabel = getOptionAccessibleText(opt.text);
             return (
               <label
                 key={opt.id}
-                aria-label={opt.text}
+                aria-label={optionLabel}
                 className={`flex cursor-pointer flex-col gap-3 rounded-xl border p-3 transition ${
                   selected
                     ? 'border-[var(--student-accent-soft-strong)] bg-[var(--student-accent-soft)]'

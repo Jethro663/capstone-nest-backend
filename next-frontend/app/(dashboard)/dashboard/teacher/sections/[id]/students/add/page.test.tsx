@@ -1,21 +1,25 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import TeacherAddSectionStudentsPage from './page';
 import { sectionService } from '@/services/section-service';
 
 const pushMock = jest.fn();
+const replaceMock = jest.fn();
 const toastSuccessMock = jest.fn();
 const toastErrorMock = jest.fn();
+let searchParamsMock = new URLSearchParams('gradeLevel=10');
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'section-1' }),
-  useRouter: () => ({ push: pushMock }),
+  useRouter: () => ({ push: pushMock, replace: replaceMock }),
+  useSearchParams: () => searchParamsMock,
 }));
 
 jest.mock('@/services/section-service', () => ({
   sectionService: {
     getById: jest.fn(),
+    getAll: jest.fn(),
     getCandidates: jest.fn(),
     addStudents: jest.fn(),
   },
@@ -41,6 +45,8 @@ function buildCandidates() {
       email: `a${padded}@nexora.edu`,
       gradeLevel: '10',
       profilePicture: null,
+      isEligible: true,
+      eligibilityReason: null,
       hasActiveSectionEnrollment: false,
       enrolledSectionId: null,
       enrolledSectionName: null,
@@ -56,6 +62,8 @@ function buildCandidates() {
       email: 'creyes@nexora.edu',
       gradeLevel: '10',
       profilePicture: null,
+      isEligible: false,
+      eligibilityReason: 'Already in section Grade 10 - Rizal B',
       hasActiveSectionEnrollment: true,
       enrolledSectionId: 'section-2',
       enrolledSectionName: 'Grade 10 - Rizal B',
@@ -67,6 +75,8 @@ function buildCandidates() {
       email: 'ltorres@nexora.edu',
       gradeLevel: '9',
       profilePicture: null,
+      isEligible: false,
+      eligibilityReason: 'Grade mismatch (9 vs 10)',
       hasActiveSectionEnrollment: false,
       enrolledSectionId: null,
       enrolledSectionName: null,
@@ -77,6 +87,7 @@ function buildCandidates() {
 describe('Teacher Add Section Students Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    searchParamsMock = new URLSearchParams('gradeLevel=10');
 
     mockedSectionService.getById.mockResolvedValue({
       success: true,
@@ -89,11 +100,27 @@ describe('Teacher Add Section Students Page', () => {
         isActive: true,
       },
     });
+    mockedSectionService.getAll.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'section-1',
+          name: 'Grade 10 - Rizal',
+          gradeLevel: '10',
+          schoolYear: '2025-2026',
+          capacity: 45,
+          isActive: true,
+        },
+      ],
+      count: 1,
+    } as never);
 
     mockedSectionService.getCandidates.mockResolvedValue({
       success: true,
       data: buildCandidates(),
       count: 16,
+      total: 16,
+      totalPages: 1,
     });
 
     mockedSectionService.addStudents.mockResolvedValue({
@@ -107,25 +134,13 @@ describe('Teacher Add Section Students Page', () => {
     jest.useRealTimers();
   });
 
-  it('defaults to Available segment and hides unavailable rows', async () => {
+  it('renders the masterlist with disabled reasons for ineligible rows', async () => {
     render(<TeacherAddSectionStudentsPage />);
 
-    await screen.findByRole('tab', { name: /^Available\b/i });
     await screen.findByText('A01 Student');
 
-    expect(screen.getByRole('tab', { name: /^Available\b/i })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /^Unavailable\b/i })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.queryByText('Carlos Reyes')).not.toBeInTheDocument();
-    expect(screen.queryByText('Lia Torres')).not.toBeInTheDocument();
-  });
-
-  it('renders both unavailable categories as disabled when switching segment', async () => {
-    render(<TeacherAddSectionStudentsPage />);
-
-    await screen.findByRole('tab', { name: /^Available\b/i });
-    await screen.findByText('A01 Student');
-    fireEvent.click(screen.getByRole('tab', { name: /^Unavailable\b/i }));
-
+    expect(screen.getByText('Modern Masterlist')).toBeInTheDocument();
+    expect(screen.getByText('16 total')).toBeInTheDocument();
     expect(screen.getByText('Carlos Reyes')).toBeInTheDocument();
     expect(screen.getByText('Lia Torres')).toBeInTheDocument();
     expect(screen.getByText('Already in section Grade 10 - Rizal B')).toBeInTheDocument();
@@ -134,70 +149,45 @@ describe('Teacher Add Section Students Page', () => {
     expect(screen.getByLabelText('Select Lia Torres')).toBeDisabled();
   });
 
-  it('uses 12-row pagination, page-only select all, and keeps selections across view changes', async () => {
+  it('updates query filters from the masterlist controls', async () => {
     render(<TeacherAddSectionStudentsPage />);
-    await screen.findByRole('tab', { name: /^Available\b/i });
+
     await screen.findByText('A01 Student');
-
-    fireEvent.click(screen.getByLabelText('Select all visible students'));
-    expect(screen.getByRole('button', { name: /Add Selected \(12\)/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add Selected \(12\)/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByLabelText('Select all visible students'));
-    expect(screen.getByRole('button', { name: /Add Selected \(14\)/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('tab', { name: /^Unavailable\b/i }));
-    fireEvent.click(screen.getByRole('tab', { name: /^Available\b/i }));
-    expect(screen.getByRole('button', { name: /Add Selected \(14\)/i })).toBeInTheDocument();
-
-    fireEvent.change(screen.getByPlaceholderText('Search by name, email, or LRN...'), {
-      target: { value: 'A14' },
+    fireEvent.change(screen.getByDisplayValue('All eligibility'), {
+      target: { value: 'eligible' },
     });
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Add Selected \(14\)/i })).toBeInTheDocument();
-    });
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringContaining('eligibility=eligible'),
+      { scroll: false },
+    );
+    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('page=1'), { scroll: false });
   });
 
-  it('navigates to profile only through the student name link', async () => {
+  it('selects only eligible students on the current page', async () => {
     render(<TeacherAddSectionStudentsPage />);
-    await screen.findByRole('tab', { name: /^Available\b/i });
     await screen.findByText('A01 Student');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open A01 Student profile' }));
+    fireEvent.click(screen.getByRole('button', { name: /Select Eligible on Page/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: /Add 14 Student\(s\)/i }).length).toBeGreaterThan(0);
+    });
+    expect(screen.getByLabelText('Select Carlos Reyes')).toBeDisabled();
+    expect(screen.getByLabelText('Select Lia Torres')).toBeDisabled();
+  });
+
+  it('navigates to profile only through the student name button', async () => {
+    render(<TeacherAddSectionStudentsPage />);
+    await screen.findByText('A01 Student');
+
+    fireEvent.click(screen.getByRole('button', { name: 'A01 Student' }));
     expect(pushMock).toHaveBeenCalledWith(
       '/dashboard/teacher/sections/section-1/students/available-01',
     );
 
     fireEvent.click(screen.getByText('a02@nexora.edu'));
     expect(pushMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens and closes basic profile modal from right-side action without profile navigation', async () => {
-    render(<TeacherAddSectionStudentsPage />);
-    await screen.findByRole('tab', { name: /^Available\b/i });
-    await screen.findByText('A01 Student');
-
-    fireEvent.click(screen.getByRole('button', { name: 'View profile for A01 Student' }));
-
-    const dialog = screen.getByRole('dialog');
-    expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText('Student Profile')).toBeInTheDocument();
-    expect(
-      within(dialog).getByText('Basic profile details for this section candidate.'),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText('A01 Student')).toBeInTheDocument();
-    expect(within(dialog).getByText('a01@nexora.edu')).toBeInTheDocument();
-    expect(pushMock).toHaveBeenCalledTimes(0);
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Close Profile' }));
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    });
-    expect(pushMock).toHaveBeenCalledTimes(0);
   });
 
   it('retries 429 on add and succeeds on the next attempt', async () => {
@@ -210,11 +200,10 @@ describe('Teacher Add Section Students Page', () => {
       });
 
     render(<TeacherAddSectionStudentsPage />);
-    await screen.findByRole('tab', { name: /^Available\b/i });
     await screen.findByText('A01 Student');
 
     fireEvent.click(screen.getByLabelText('Select A01 Student'));
-    fireEvent.click(screen.getByRole('button', { name: /Add Selected \(1\)/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0]);
 
     await waitFor(() => {
       expect(mockedSectionService.addStudents).toHaveBeenCalledTimes(2);
@@ -230,11 +219,10 @@ describe('Teacher Add Section Students Page', () => {
       .mockRejectedValueOnce({ response: { status: 429 } } as never);
 
     render(<TeacherAddSectionStudentsPage />);
-    await screen.findByRole('tab', { name: /^Available\b/i });
     await screen.findByText('A01 Student');
 
     fireEvent.click(screen.getByLabelText('Select A01 Student'));
-    fireEvent.click(screen.getByRole('button', { name: /Add Selected \(1\)/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0]);
 
     await waitFor(
       () => {

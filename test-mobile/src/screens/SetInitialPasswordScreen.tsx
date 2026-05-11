@@ -16,6 +16,7 @@ import {
   authTheme,
 } from "../components/auth/MobileAuthPrimitives";
 import type { AuthStackParamList } from "../navigation/types";
+import { useAuth } from "../providers/AuthProvider";
 import {
   buildPasswordRuleStates,
   getConfirmPasswordMessage,
@@ -27,6 +28,7 @@ import {
 type Props = NativeStackScreenProps<AuthStackParamList, "SetInitialPassword">;
 
 export function SetInitialPasswordScreen({ navigation, route }: Props) {
+  const { login } = useAuth();
   const email = normalizeAuthEmail(route.params.email);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -61,7 +63,7 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
         email,
         newPassword,
       });
-      finishToLogin("Password set. Sign in with your updated password.");
+      await login(email, newPassword);
     } catch (rawError) {
       setError(toAppError(rawError).message);
     } finally {

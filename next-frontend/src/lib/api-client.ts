@@ -29,6 +29,21 @@ export type ApiRequestOptions = Pick<
   'skipAuthRefresh' | 'skipSessionExpiredRedirect'
 >;
 
+function expireClientSession(shouldRedirect: boolean) {
+  accessToken = null;
+
+  if (typeof window === 'undefined' || !shouldRedirect) {
+    return;
+  }
+
+  import('sonner').then(({ toast }) => {
+    toast.error('Session expired. Please log in again.');
+  });
+  setTimeout(() => {
+    window.location.href = '/login';
+  }, 1500);
+}
+
 /**
  * Create axios instance with base configuration
  */
@@ -43,21 +58,38 @@ export function createApiClient(): AxiosInstance {
     timeout: 30000,
   });
 
-  // Request interceptor: add authorization header
+  // Response interceptor: handle 401 and token refresh
+  let refreshPromise: Promise<string | null> | null = null;
+  let bootstrapPromise: Promise<string | null> | null = null;
+
+  // Request interceptor: ensure auth header is present before protected calls.
   api.interceptors.request.use(
-    (config: InternalAxiosRequestConfig) => {
+    async (config: InternalAxiosRequestConfig) => {
+      const requestUrl = typeof config.url === 'string' ? config.url : '';
+      const isAuthRefreshRequest = requestUrl.includes('/auth/refresh');
+
+      if (!accessToken && !isAuthRefreshRequest) {
+        if (!bootstrapPromise) {
+          bootstrapPromise = refreshSessionAccessToken()
+            .catch(() => null)
+            .finally(() => {
+              bootstrapPromise = null;
+            });
+        }
+
+        const bootstrappedToken = await bootstrapPromise;
+        if (bootstrappedToken) {
+          accessToken = bootstrappedToken;
+        }
+      }
+
       if (accessToken) {
         config.headers.Authorization = `Bearer ${accessToken}`;
       }
       return config;
     },
-    (error: AxiosError) => {
-      return Promise.reject(error);
-    }
+    (error: AxiosError) => Promise.reject(error),
   );
-
-  // Response interceptor: handle 401 and token refresh
-  let refreshPromise: Promise<string | null> | null = null;
 
   api.interceptors.response.use(
     (response) => response,
@@ -105,23 +137,13 @@ export function createApiClient(): AxiosInstance {
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
             return api(originalRequest);
           } else {
-            // Refresh failed (expired/invalid refresh token) → force re-login
-            accessToken = null;
-            if (
-              typeof window !== 'undefined' &&
-              !originalRequest.skipSessionExpiredRedirect
-            ) {
-              import('sonner').then(({ toast }) => {
-                toast.error('Session expired. Please log in again.');
-              });
-              setTimeout(() => {
-                window.location.href = '/login';
-              }, 1500);
-            }
+            // Refresh returned no usable token, so force re-login.
+            expireClientSession(!originalRequest.skipSessionExpiredRedirect);
             return Promise.reject(error);
           }
         } catch (refreshError) {
           refreshPromise = null;
+          expireClientSession(!originalRequest.skipSessionExpiredRedirect);
           return Promise.reject(refreshError);
         }
       }

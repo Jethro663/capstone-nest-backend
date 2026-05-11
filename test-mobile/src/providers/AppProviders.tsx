@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "../api/queryClient";
 import { AuthProvider } from "./AuthProvider";
 import { ErrorModalProvider } from "./ErrorModalProvider";
+import { LiveNotificationProvider } from "./LiveNotificationProvider";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -12,7 +13,9 @@ export function AppProviders({ children }: PropsWithChildren) {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ErrorModalProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <LiveNotificationProvider>{children}</LiveNotificationProvider>
+            </AuthProvider>
           </ErrorModalProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

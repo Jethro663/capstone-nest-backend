@@ -66,17 +66,6 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function blockText(block: ExtractionBlock): string {
-  if (typeof block.content === 'string') return block.content;
-  if (block.content && typeof block.content === 'object') {
-    const html = (block.content as Record<string, unknown>).html;
-    if (typeof html === 'string' && html.trim().length > 0) return html;
-    const text = (block.content as Record<string, unknown>).text;
-    return typeof text === 'string' ? text : '';
-  }
-  return '';
-}
-
 function toLessonBlock(
   block: ExtractionBlock,
   sectionIndex: number,
@@ -657,7 +646,10 @@ export default function ExtractionReviewPage() {
                 description="Review one section at a time. Click a block card to edit it in place and keep the page focused."
                 className="rounded-[1.55rem]"
               >
-                <div className="space-y-4">
+                <div
+                  data-testid="extraction-content-scroll-region"
+                  className="max-h-[calc(100vh-18rem)] space-y-4 overflow-y-auto pr-2"
+                >
                   {visibleSections.map((section, sectionIndex) => (
                     <div
                       key={`section-${sectionIndex}`}

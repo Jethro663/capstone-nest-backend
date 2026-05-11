@@ -16,6 +16,7 @@ import {
   isTemplateCompatibleWithClass,
   matchesTemplateToSubject,
 } from '@/lib/class-template-compat';
+import { getApiErrorMessage } from '@/lib/api-error';
 import type { Section } from '@/types/section';
 import type { ClassTemplate } from '@/types/class-template';
 import type { User } from '@/types/user';
@@ -28,6 +29,13 @@ type TemplateSeed = {
   subjectGradeLevel: string;
 };
 
+function getFallbackSchoolYear() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const startYear = now.getMonth() >= 5 ? year : year - 1;
+  return `${startYear}-${startYear + 1}`;
+}
+
 export default function CreateClassPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,17 +47,10 @@ export default function CreateClassPage() {
     subjectGradeLevel: searchParams.get('subjectGradeLevel')?.trim() ?? '',
   }), [searchParams]);
 
-  const schoolYears = useMemo(() => {
-    const resolved = activeSchoolYear?.match(/^(\d{4})-(\d{4})$/);
-    const startYear = resolved
-      ? Number(resolved[1])
-      : (() => {
-          const now = new Date();
-          const year = now.getFullYear();
-          return now.getMonth() >= 5 ? year : year - 1;
-        })();
-    return Array.from({ length: 4 }, (_, i) => `${startYear + i}-${startYear + i + 1}`);
-  }, [activeSchoolYear]);
+  const schoolYears = useMemo(
+    () => [activeSchoolYear || getFallbackSchoolYear()],
+    [activeSchoolYear],
+  );
 
   const initialValues = useMemo(
     () => ({
@@ -90,8 +91,8 @@ export default function CreateClassPage() {
       } catch {
         setActiveSchoolYear(null);
       }
-    } catch {
-      toast.error('Failed to load class form data');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load class form data'));
     } finally {
       setLoading(false);
     }
@@ -133,10 +134,10 @@ export default function CreateClassPage() {
         );
 
         setCompatibleTemplates(filtered);
-      } catch {
+      } catch (error) {
         if (mounted) {
           setCompatibleTemplates([]);
-          toast.error('Failed to load compatible templates');
+          toast.error(getApiErrorMessage(error, 'Failed to load compatible templates'));
         }
       } finally {
         if (mounted) {
@@ -220,8 +221,8 @@ export default function CreateClassPage() {
       });
       toast.success('Class created');
       router.push('/dashboard/admin/classes');
-    } catch {
-      toast.error('Failed to create class');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to create class'));
     } finally {
       setSaving(false);
     }
@@ -280,6 +281,7 @@ export default function CreateClassPage() {
           sections={sections}
           teachers={teachers}
           schoolYears={schoolYears}
+          lockSchoolYear
           saving={saving}
           templateOptions={compatibleTemplates}
           selectedTemplateId={selectedTemplateId}

@@ -228,26 +228,36 @@ async def chat(
         return _normalize_response_text(body)
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    if not supports_embeddings():
-        raise CloudFallbackUnavailable("Cloud fallback embedding model is not configured.")
-    if not texts:
-        return []
-
+def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": get_embedding_model(),
         "input": texts,
         "dimensions": settings.embedding_dimensions,
         "encoding_format": "float",
     }
+    return payload
 
+
+async def _post_embedding_payload(
+    client: httpx.AsyncClient,
+    texts: list[str],
+) -> dict[str, Any]:
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/embeddings"
-    async with httpx.AsyncClient(timeout=settings.ollama_timeout_chat_s) as client:
-        response = await client.post(endpoint, headers=_headers(), json=payload)
-        response.raise_for_status()
-        body = response.json()
+    response = await client.post(
+        endpoint,
+        headers=_headers(),
+        json=_build_embedding_payload(texts),
+    )
+    response.raise_for_status()
+    return response.json()
 
-    ordered_embeddings: list[list[float] | None] = [None] * len(texts)
+
+def _collect_embedding_response(
+    body: dict[str, Any],
+    *,
+    text_count: int,
+) -> list[list[float] | None]:
+    ordered_embeddings: list[list[float] | None] = [None] * text_count
     fallback_embeddings: list[list[float]] = []
 
     data = body.get("data", [])
@@ -259,12 +269,12 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
             if embedding is None:
                 continue
             index = item.get("index")
-            if isinstance(index, int) and 0 <= index < len(texts):
+            if isinstance(index, int) and 0 <= index < text_count:
                 ordered_embeddings[index] = embedding
             else:
                 fallback_embeddings.append(embedding)
 
-    if len(texts) == 1 and ordered_embeddings[0] is None:
+    if text_count == 1 and ordered_embeddings[0] is None:
         single_embedding = _coerce_embedding_values(body.get("embedding"))
         if single_embedding is not None:
             ordered_embeddings[0] = single_embedding
@@ -280,6 +290,28 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     for index, embedding in enumerate(ordered_embeddings):
         if embedding is None and fallback_embeddings:
             ordered_embeddings[index] = fallback_embeddings.pop(0)
+
+    return ordered_embeddings
+
+
+async def embed_texts(texts: list[str]) -> list[list[float]]:
+    if not supports_embeddings():
+        raise CloudFallbackUnavailable("Cloud fallback embedding model is not configured.")
+    if not texts:
+        return []
+
+    async with httpx.AsyncClient(timeout=settings.ollama_timeout_chat_s) as client:
+        body = await _post_embedding_payload(client, texts)
+        ordered_embeddings = _collect_embedding_response(body, text_count=len(texts))
+
+        missing_indexes = [
+            index for index, embedding in enumerate(ordered_embeddings) if embedding is None
+        ]
+        for index in missing_indexes:
+            retry_body = await _post_embedding_payload(client, [texts[index]])
+            retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
+            if retry_embeddings and retry_embeddings[0] is not None:
+                ordered_embeddings[index] = retry_embeddings[0]
 
     if any(item is None for item in ordered_embeddings):
         raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")

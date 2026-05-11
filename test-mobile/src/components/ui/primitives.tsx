@@ -63,12 +63,12 @@ function RefreshActivityOverlay({
       Animated.timing(opacity, {
         toValue: 1,
         duration: 160,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(translateY, {
         toValue: refreshing ? 0 : Math.min(20, pullDistance / 5),
         duration: refreshing ? 180 : 80,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
 
@@ -82,7 +82,7 @@ function RefreshActivityOverlay({
       Animated.timing(rotate, {
         toValue: 1,
         duration: 900,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     );
     spin.start();
@@ -104,8 +104,8 @@ function RefreshActivityOverlay({
 
   return (
     <View
-      pointerEvents="none"
       style={{
+        pointerEvents: "none",
         position: "absolute",
         top: 12,
         left: 0,
@@ -488,13 +488,13 @@ export function AnimatedEntrance({
         toValue: 1,
         duration: 360,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 360,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
   }, [delay, opacity, translateY]);

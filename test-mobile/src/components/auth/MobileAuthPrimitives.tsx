@@ -80,7 +80,7 @@ const loadingGradient = ["#c85a58", authTheme.red, authTheme.orange] as const;
 export function AuthScreenFrame({ children }: PropsWithChildren) {
   return (
     <LinearGradient colors={[authTheme.background, authTheme.backgroundAlt, authTheme.background]} style={{ flex: 1 }}>
-      <View pointerEvents="none" style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
+      <View style={{ pointerEvents: "none", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
         {backgroundBlobs.map((blob, index) => (
           <View
             key={`blob-${index}`}

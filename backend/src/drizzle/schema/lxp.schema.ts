@@ -18,7 +18,6 @@ import {
   classes,
   gradingPeriodEnum,
   lessons,
-  questionTypeEnum,
   users,
 } from './base.schema';
 
@@ -53,6 +52,26 @@ export const systemEvaluationTargetEnum = pgEnum('system_evaluation_target', [
   'intervention',
   'overall',
 ]);
+
+export const systemEvaluationFormTypeEnum = pgEnum(
+  'system_evaluation_form_type',
+  ['system', 'ja_hub'],
+);
+
+export const systemEvaluationAudienceRoleEnum = pgEnum(
+  'system_evaluation_audience_role',
+  ['student', 'teacher'],
+);
+
+export const systemEvaluationCampaignStatusEnum = pgEnum(
+  'system_evaluation_campaign_status',
+  ['draft', 'active', 'closed'],
+);
+
+export const systemEvaluationAssignmentStatusEnum = pgEnum(
+  'system_evaluation_assignment_status',
+  ['pending', 'submitted', 'expired'],
+);
 
 export const teacherEvaluationTypeEnum = pgEnum('teacher_evaluation_type', [
   'teacher_class',
@@ -188,9 +207,15 @@ export const generatedRemedialLessons = pgTable(
   },
   (table) => ({
     caseIdx: index('lxp_generated_remedial_lessons_case_idx').on(table.caseId),
-    classIdx: index('lxp_generated_remedial_lessons_class_idx').on(table.classId),
-    studentIdx: index('lxp_generated_remedial_lessons_student_idx').on(table.studentId),
-    statusIdx: index('lxp_generated_remedial_lessons_status_idx').on(table.approvalStatus),
+    classIdx: index('lxp_generated_remedial_lessons_class_idx').on(
+      table.classId,
+    ),
+    studentIdx: index('lxp_generated_remedial_lessons_student_idx').on(
+      table.studentId,
+    ),
+    statusIdx: index('lxp_generated_remedial_lessons_status_idx').on(
+      table.approvalStatus,
+    ),
   }),
 );
 
@@ -229,10 +254,18 @@ export const generatedGuidedAssessments = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    caseIdx: index('lxp_generated_guided_assessments_case_idx').on(table.caseId),
-    classIdx: index('lxp_generated_guided_assessments_class_idx').on(table.classId),
-    studentIdx: index('lxp_generated_guided_assessments_student_idx').on(table.studentId),
-    statusIdx: index('lxp_generated_guided_assessments_status_idx').on(table.approvalStatus),
+    caseIdx: index('lxp_generated_guided_assessments_case_idx').on(
+      table.caseId,
+    ),
+    classIdx: index('lxp_generated_guided_assessments_class_idx').on(
+      table.classId,
+    ),
+    studentIdx: index('lxp_generated_guided_assessments_student_idx').on(
+      table.studentId,
+    ),
+    statusIdx: index('lxp_generated_guided_assessments_status_idx').on(
+      table.approvalStatus,
+    ),
   }),
 );
 
@@ -255,8 +288,12 @@ export const generatedGuidedAssessmentAttempts = pgTable(
     assignmentId: uuid('assignment_id')
       .notNull()
       .references(() => interventionAssignments.id, { onDelete: 'cascade' }),
-    status: lxpGuidedAttemptStatusEnum('status').notNull().default('in_progress'),
-    currentQuestionIndex: integer('current_question_index').notNull().default(0),
+    status: lxpGuidedAttemptStatusEnum('status')
+      .notNull()
+      .default('in_progress'),
+    currentQuestionIndex: integer('current_question_index')
+      .notNull()
+      .default(0),
     responses: json('responses').notNull().default([]),
     hintUsage: json('hint_usage').notNull().default([]),
     score: integer('score'),
@@ -270,17 +307,16 @@ export const generatedGuidedAssessmentAttempts = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    guidedAssessmentIdx: index('lxp_generated_guided_attempts_guided_assessment_idx').on(
-      table.guidedAssessmentId,
-    ),
+    guidedAssessmentIdx: index(
+      'lxp_generated_guided_attempts_guided_assessment_idx',
+    ).on(table.guidedAssessmentId),
     caseStudentIdx: index('lxp_generated_guided_attempts_case_student_idx').on(
       table.caseId,
       table.studentId,
     ),
-    assignmentIdx: uniqueIndex('lxp_generated_guided_attempts_assignment_unique').on(
-      table.assignmentId,
-      table.studentId,
-    ),
+    assignmentIdx: uniqueIndex(
+      'lxp_generated_guided_attempts_assignment_unique',
+    ).on(table.assignmentId, table.studentId),
   }),
 );
 
@@ -310,6 +346,10 @@ export const systemEvaluations = pgTable(
   'system_evaluations',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id').references(
+      () => systemEvaluationCampaigns.id,
+      { onDelete: 'set null' },
+    ),
     submittedBy: uuid('submitted_by')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -318,6 +358,8 @@ export const systemEvaluations = pgTable(
     functionalityScore: integer('functionality_score').notNull(),
     performanceScore: integer('performance_score').notNull(),
     satisfactionScore: integer('satisfaction_score').notNull(),
+    overallScore: integer('overall_score'),
+    questionRatingsJson: json('question_ratings_json'),
     feedback: text('feedback'),
     aiContextMetadata: json('ai_context_metadata'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -328,6 +370,79 @@ export const systemEvaluations = pgTable(
       table.createdAt,
     ),
     userIdx: index('system_evaluations_submitted_by_idx').on(table.submittedBy),
+    campaignIdx: index('system_evaluations_campaign_idx').on(table.campaignId),
+  }),
+);
+
+export const systemEvaluationCampaigns = pgTable(
+  'system_evaluation_campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    formType: systemEvaluationFormTypeEnum('form_type').notNull(),
+    targetModule: systemEvaluationTargetEnum('target_module').notNull(),
+    audienceRole: systemEvaluationAudienceRoleEnum('audience_role').notNull(),
+    classId: uuid('class_id').references(() => classes.id, {
+      onDelete: 'cascade',
+    }),
+    title: text('title').notNull(),
+    startsAt: timestamp('starts_at').notNull(),
+    endsAt: timestamp('ends_at').notNull(),
+    status: systemEvaluationCampaignStatusEnum('status')
+      .notNull()
+      .default('draft'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    statusIdx: index('system_evaluation_campaigns_status_idx').on(table.status),
+    formAudienceIdx: index('system_evaluation_campaigns_form_audience_idx').on(
+      table.formType,
+      table.audienceRole,
+    ),
+    classIdx: index('system_evaluation_campaigns_class_idx').on(table.classId),
+    createdByIdx: index('system_evaluation_campaigns_created_by_idx').on(
+      table.createdBy,
+    ),
+  }),
+);
+
+export const systemEvaluationAssignments = pgTable(
+  'system_evaluation_assignments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => systemEvaluationCampaigns.id, { onDelete: 'cascade' }),
+    respondentId: uuid('respondent_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    respondentRole:
+      systemEvaluationAudienceRoleEnum('respondent_role').notNull(),
+    status: systemEvaluationAssignmentStatusEnum('status')
+      .notNull()
+      .default('pending'),
+    submittedEvaluationId: uuid('submitted_evaluation_id').references(
+      () => systemEvaluations.id,
+      { onDelete: 'set null' },
+    ),
+    submittedAt: timestamp('submitted_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => ({
+    campaignRespondentUnique: uniqueIndex(
+      'system_evaluation_assignments_campaign_respondent_unique',
+    ).on(table.campaignId, table.respondentId),
+    respondentIdx: index('system_evaluation_assignments_respondent_idx').on(
+      table.respondentId,
+      table.status,
+    ),
+    campaignIdx: index('system_evaluation_assignments_campaign_idx').on(
+      table.campaignId,
+    ),
   }),
 );
 
@@ -577,6 +692,44 @@ export const systemEvaluationsRelations = relations(
     submitter: one(users, {
       fields: [systemEvaluations.submittedBy],
       references: [users.id],
+    }),
+    campaign: one(systemEvaluationCampaigns, {
+      fields: [systemEvaluations.campaignId],
+      references: [systemEvaluationCampaigns.id],
+    }),
+  }),
+);
+
+export const systemEvaluationCampaignsRelations = relations(
+  systemEvaluationCampaigns,
+  ({ one, many }) => ({
+    creator: one(users, {
+      fields: [systemEvaluationCampaigns.createdBy],
+      references: [users.id],
+    }),
+    class: one(classes, {
+      fields: [systemEvaluationCampaigns.classId],
+      references: [classes.id],
+    }),
+    assignments: many(systemEvaluationAssignments),
+    evaluations: many(systemEvaluations),
+  }),
+);
+
+export const systemEvaluationAssignmentsRelations = relations(
+  systemEvaluationAssignments,
+  ({ one }) => ({
+    campaign: one(systemEvaluationCampaigns, {
+      fields: [systemEvaluationAssignments.campaignId],
+      references: [systemEvaluationCampaigns.id],
+    }),
+    respondent: one(users, {
+      fields: [systemEvaluationAssignments.respondentId],
+      references: [users.id],
+    }),
+    submittedEvaluation: one(systemEvaluations, {
+      fields: [systemEvaluationAssignments.submittedEvaluationId],
+      references: [systemEvaluations.id],
     }),
   }),
 );

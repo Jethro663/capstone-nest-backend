@@ -124,7 +124,7 @@ export function LxpScreen({ navigation }: Props) {
       }
     >
       {showConfetti ? (
-        <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, zIndex: 30 }}>
+        <View style={{ pointerEvents: "none", position: "absolute", top: 0, left: 0, right: 0, height: 220, zIndex: 30 }}>
           {Array.from({ length: 16 }).map((_, index) => (
             <View
               key={index}

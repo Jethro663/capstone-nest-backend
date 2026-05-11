@@ -27,6 +27,10 @@ import { UpdateSectionDto } from './DTO/update-section.dto';
 import { UpdateSectionPresentationDto } from './DTO/update-section-presentation.dto';
 import { BulkStudentsDto } from './DTO/bulk-students.dto';
 import { BulkSectionLifecycleDto } from './DTO/bulk-section-lifecycle.dto';
+import { AccessStudentsOverviewQueryDto } from './DTO/access-students-overview.dto';
+import { AccessStudentsTargetSectionsQueryDto } from './DTO/access-students-target-sections.dto';
+import { MoveUpStudentsDto } from './DTO/move-up-students.dto';
+import { FailStudentsDto } from './DTO/fail-students.dto';
 import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -124,6 +128,63 @@ export class SectionsController {
     });
 
     return { success: true, ...result };
+  }
+
+  @Get('access-students/overview')
+  @Roles(RoleName.Admin)
+  async getAccessStudentsOverview(
+    @Query() query: AccessStudentsOverviewQueryDto,
+  ) {
+    const result = await this.sectionsService.getAccessStudentsOverview(query);
+    return { success: true, ...result };
+  }
+
+  @Get('access-students/target-sections')
+  @Roles(RoleName.Admin)
+  async getAccessStudentsTargetSections(
+    @Query() query: AccessStudentsTargetSectionsQueryDto,
+  ) {
+    const data = await this.sectionsService.getAccessStudentsTargetSections(
+      query,
+    );
+    return { success: true, data };
+  }
+
+  @Post('access-students/move-up')
+  @Roles(RoleName.Admin)
+  async moveUpStudents(
+    @Body() dto: MoveUpStudentsDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.sectionsService.moveUpStudents(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+    return {
+      success: true,
+      message: `${data.movedCount} student(s) moved up successfully`,
+      data,
+    };
+  }
+
+  @Post('access-students/fail')
+  @Roles(RoleName.Admin)
+  async failStudents(
+    @Body() dto: FailStudentsDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.sectionsService.failStudents(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: `${data.retainedCount} student(s) retained successfully`,
+      data,
+    };
   }
 
   /**

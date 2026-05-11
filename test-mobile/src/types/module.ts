@@ -79,6 +79,15 @@ export interface UpdateClassModuleDto {
   coverImageUrl?: string | null;
 }
 
+export interface CreateClassModuleDto {
+  classId: string;
+  title: string;
+  description?: string;
+  order?: number;
+  isVisible?: boolean;
+  isLocked?: boolean;
+}
+
 export interface UpdateModuleItemDto {
   order?: number;
   isVisible?: boolean;

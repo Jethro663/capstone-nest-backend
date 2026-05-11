@@ -1,22 +1,58 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardCheck, MessageSquareQuote } from 'lucide-react';
+import { CheckCircle2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  StudentActionCard,
-  StudentEmptyState,
-  StudentSectionHeader,
-  StudentStatusChip,
-} from '@/components/student/student-primitives';
 import { lxpService } from '@/services/lxp-service';
 import type {
+  AssignedSystemEvaluationItem,
   StudentTeacherEvaluationCompletedItem,
   StudentTeacherEvaluationDashboardResponse,
   StudentTeacherEvaluationItem,
+  TeacherEvaluationType,
 } from '@/types/lxp';
 import { toast } from 'sonner';
+import { cn } from '@/utils/cn';
+
+type EvaluationFilter = 'all' | 'system' | 'ja_hub' | 'teacher';
+
+type UnifiedPendingEvaluation =
+  | {
+      kind: 'system';
+      filter: 'system' | 'ja_hub';
+      id: string;
+      title: string;
+      description: string;
+      subtitle: string;
+      questions: Array<{ key: string; label: string }>;
+      source: AssignedSystemEvaluationItem;
+    }
+  | {
+      kind: 'teacher';
+      filter: 'teacher';
+      id: string;
+      title: string;
+      description: string;
+      subtitle: string;
+      questions: Array<{ key: string; label: string }>;
+      source: StudentTeacherEvaluationItem;
+    };
+
+type UnifiedCompletedEvaluation = {
+  id: string;
+  filter: EvaluationFilter;
+  title: string;
+  subtitle: string;
+  submittedAt?: string | null;
+};
+
+const FILTERS: Array<{ value: EvaluationFilter; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'system', label: 'System' },
+  { value: 'ja_hub', label: 'JA Hub' },
+  { value: 'teacher', label: 'Teachers' },
+];
 
 function classLabel(item: StudentTeacherEvaluationItem | StudentTeacherEvaluationCompletedItem) {
   if (!item.class) return 'Class not available';
@@ -26,22 +62,92 @@ function classLabel(item: StudentTeacherEvaluationItem | StudentTeacherEvaluatio
   return `${item.class.subjectCode} | ${item.class.subjectName} | ${section}`;
 }
 
+function systemSubtitle(item: AssignedSystemEvaluationItem) {
+  const classPart = item.class
+    ? `${item.class.subjectCode} | ${item.class.subjectName}`
+    : item.audienceRole === 'teacher'
+      ? 'Teacher system evaluation'
+      : 'Student system evaluation';
+  return `${classPart} | due ${new Date(item.endsAt).toLocaleDateString('en-US')}`;
+}
+
+function formatTeacherType(type: TeacherEvaluationType) {
+  if (type === 'ja_hub') return 'JA Hub';
+  if (type === 'learners_path') return 'Learners Path';
+  return 'Teachers';
+}
+
+function filterLabel(value: EvaluationFilter) {
+  if (value === 'ja_hub') return 'JA Hub';
+  if (value === 'teacher') return 'Teachers';
+  if (value === 'system') return 'System';
+  return 'All';
+}
+
+function StarRating({
+  questionKey,
+  value,
+  onChange,
+}: {
+  questionKey: string;
+  value: number | null;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="inline-flex flex-wrap gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
+      {[0, 1, 2, 3, 4, 5].map((rating) => (
+        <button
+          key={rating}
+          type="button"
+          aria-label={`${questionKey} ${rating} stars`}
+          onClick={() => onChange(rating)}
+          className={
+            value === rating
+              ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-900 px-2.5 text-xs font-semibold text-white shadow-sm'
+              : 'inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2.5 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-950'
+          }
+        >
+          {rating === 0 ? (
+            '0'
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              {rating}
+              <Star className="h-3 w-3" />
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function StudentTeacherEvaluationsPage() {
   const [loading, setLoading] = useState(true);
-  const [dashboard, setDashboard] = useState<StudentTeacherEvaluationDashboardResponse | null>(null);
+  const [systemDashboard, setSystemDashboard] = useState<{
+    pending: AssignedSystemEvaluationItem[];
+    completed: AssignedSystemEvaluationItem[];
+  } | null>(null);
+  const [teacherDashboard, setTeacherDashboard] =
+    useState<StudentTeacherEvaluationDashboardResponse | null>(null);
+  const [filter, setFilter] = useState<EvaluationFilter>('all');
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [ratings, setRatings] = useState<Record<string, number | null>>({});
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      const response = await lxpService.getStudentTeacherEvaluationDashboard();
-      setDashboard(response.data);
+      const [systemResponse, teacherResponse] = await Promise.all([
+        lxpService.getMySystemEvaluations(),
+        lxpService.getStudentTeacherEvaluationDashboard(),
+      ]);
+      setSystemDashboard(systemResponse.data);
+      setTeacherDashboard(teacherResponse.data);
     } catch {
       toast.error('Failed to load evaluation dashboard');
-      setDashboard(null);
+      setSystemDashboard(null);
+      setTeacherDashboard(null);
     } finally {
       setLoading(false);
     }
@@ -51,16 +157,69 @@ export function StudentTeacherEvaluationsPage() {
     void fetchDashboard();
   }, []);
 
+  const pendingItems = useMemo<UnifiedPendingEvaluation[]>(() => {
+    const systemItems =
+      systemDashboard?.pending.map((item) => ({
+        kind: 'system' as const,
+        filter: item.formType,
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        subtitle: systemSubtitle(item),
+        questions: item.questions,
+        source: item,
+      })) ?? [];
+
+    const teacherItems =
+      teacherDashboard?.pending.map((item) => ({
+        kind: 'teacher' as const,
+        filter: 'teacher' as const,
+        id: `${item.classId}:${item.gradingPeriod}:${item.evaluationType}`,
+        title: formatTeacherType(item.evaluationType),
+        description: item.description,
+        subtitle: `${classLabel(item)} | ${item.gradingPeriod}`,
+        questions: item.questions,
+        source: item,
+      })) ?? [];
+
+    const combined = [...systemItems, ...teacherItems];
+    return filter === 'all'
+      ? combined
+      : combined.filter((item) => item.filter === filter);
+  }, [filter, systemDashboard, teacherDashboard]);
+
+  const completedItems = useMemo<UnifiedCompletedEvaluation[]>(() => {
+    const systemItems =
+      systemDashboard?.completed.map((item) => ({
+        id: item.id,
+        filter: item.formType,
+        title: item.title,
+        subtitle: systemSubtitle(item),
+        submittedAt: item.submittedAt,
+      })) ?? [];
+    const teacherItems =
+      teacherDashboard?.completed.map((item) => ({
+        id: item.id,
+        filter: 'teacher' as const,
+        title: item.title,
+        subtitle: classLabel(item),
+        submittedAt: item.submittedAt,
+      })) ?? [];
+    const combined = [...systemItems, ...teacherItems];
+    return filter === 'all'
+      ? combined
+      : combined.filter((item) => item.filter === filter);
+  }, [filter, systemDashboard, teacherDashboard]);
+
   const activeItem = useMemo(() => {
-    if (!dashboard || !activeKey) return null;
-    return (
-      dashboard.pending.find(
-        (item) =>
-          `${item.classId}:${item.gradingPeriod}:${item.evaluationType}` ===
-          activeKey,
-      ) ?? null
-    );
-  }, [activeKey, dashboard]);
+    if (!activeKey) return null;
+    return pendingItems.find((item) => item.id === activeKey) ?? null;
+  }, [activeKey, pendingItems]);
+  const hasMissingRating = activeItem
+    ? activeItem.questions.some(
+        (question) => ratings[question.key] === null || ratings[question.key] === undefined,
+      )
+    : true;
 
   useEffect(() => {
     if (!activeItem) {
@@ -69,28 +228,41 @@ export function StudentTeacherEvaluationsPage() {
       return;
     }
     setRatings(
-      Object.fromEntries(activeItem.questions.map((question) => [question.key, 0])),
+      Object.fromEntries(activeItem.questions.map((question) => [question.key, null])),
     );
     setComment('');
   }, [activeItem]);
 
   const handleSubmit = async () => {
     if (!activeItem) return;
-    const hasMissing = activeItem.questions.some((question) => !ratings[question.key]);
+    const hasMissing = activeItem.questions.some(
+      (question) => ratings[question.key] === null || ratings[question.key] === undefined,
+    );
     if (hasMissing) {
       toast.error('Complete every rating before submitting.');
       return;
     }
 
+    const questionRatings = Object.fromEntries(
+      Object.entries(ratings).map(([key, value]) => [key, Number(value)]),
+    );
+
     try {
       setSubmitting(true);
-      await lxpService.submitTeacherEvaluation({
-        classId: activeItem.classId,
-        gradingPeriod: activeItem.gradingPeriod,
-        evaluationType: activeItem.evaluationType,
-        ratings,
-        comment: comment.trim() || undefined,
-      });
+      if (activeItem.kind === 'system') {
+        await lxpService.submitAssignedSystemEvaluation(activeItem.source.id, {
+          questionRatings,
+          feedback: comment.trim() || undefined,
+        });
+      } else {
+        await lxpService.submitTeacherEvaluation({
+          classId: activeItem.source.classId,
+          gradingPeriod: activeItem.source.gradingPeriod,
+          evaluationType: activeItem.source.evaluationType,
+          ratings: questionRatings,
+          comment: comment.trim() || undefined,
+        });
+      }
       toast.success('Evaluation submitted.');
       setActiveKey(null);
       await fetchDashboard();
@@ -102,159 +274,230 @@ export function StudentTeacherEvaluationsPage() {
   };
 
   return (
-    <main className="student-results-neutral-theme mx-auto max-w-6xl space-y-6 px-4 pb-10 pt-3">
-      <StudentActionCard>
-        <StudentSectionHeader
-          title="Evaluations"
-          subtitle="Submit anonymous feedback only when a class, JA Hub, or Learners Path window is available for you."
-          action={
-            dashboard ? (
-              <StudentStatusChip tone="info">
-                Current quarter {dashboard.currentAcademicState.quarter}
-              </StudentStatusChip>
-            ) : null
-          }
-        />
-      </StudentActionCard>
+    <main className="mx-auto max-w-7xl space-y-6 px-4 pb-10 pt-3 text-[var(--student-text-strong)]">
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Evaluation Inbox
+          </p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Evaluations</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Answer assigned forms for the system, JA Hub, and teachers.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:items-end">
+          {teacherDashboard ? (
+            <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+              Current quarter {teacherDashboard.currentAcademicState.quarter}
+            </span>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {FILTERS.map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                aria-pressed={filter === item.value}
+                onClick={() => {
+                  setFilter(item.value);
+                  setActiveKey(null);
+                }}
+                className={
+                  filter === item.value
+                    ? 'rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm'
+                    : 'rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                }
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="space-y-4">
-          <StudentActionCard>
-            <StudentSectionHeader
-              title="Pending Evaluations"
-              subtitle="Each evaluation can be submitted once per class and grading period."
-            />
-            <div className="mt-4 space-y-3">
+      <div className="grid gap-5 xl:grid-cols-[24rem_minmax(0,1fr)]">
+        <aside className="space-y-5">
+          <section>
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-slate-950">Pending Evaluations</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Filters only show assigned forms. They do not create new forms.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               {loading ? (
-                <p className="text-sm text-slate-500">Loading pending evaluations...</p>
-              ) : !dashboard || dashboard.pending.length === 0 ? (
-                <StudentEmptyState
-                  title="No pending evaluations"
-                  description="You do not have any open teacher evaluation windows right now."
-                  icon={<ClipboardCheck className="h-5 w-5" />}
-                />
+                <p className="px-4 py-5 text-sm text-slate-500">Loading pending evaluations...</p>
+              ) : pendingItems.length === 0 ? (
+                <div className="px-4 py-8 text-sm text-slate-500">
+                  No assigned forms for the selected filter.
+                </div>
               ) : (
-                dashboard.pending.map((item) => {
-                  const itemKey = `${item.classId}:${item.gradingPeriod}:${item.evaluationType}`;
-                  const selected = itemKey === activeKey;
+                pendingItems.map((item) => {
+                  const selected = item.id === activeKey;
                   return (
                     <button
-                      key={itemKey}
+                      key={item.id}
                       type="button"
-                      onClick={() => setActiveKey(itemKey)}
-                      className={
-                        selected
-                          ? 'w-full rounded-2xl border border-slate-900 bg-slate-900 px-4 py-4 text-left text-white'
-                          : 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left'
-                      }
+                      onClick={() => setActiveKey(item.id)}
+                      className={cn(
+                        'block w-full border-b border-slate-100 px-4 py-4 text-left last:border-b-0',
+                        selected ? 'bg-slate-900 text-white' : 'bg-white hover:bg-slate-50',
+                      )}
                     >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StudentStatusChip tone={selected ? 'warning' : 'info'}>
-                          {item.gradingPeriod}
-                        </StudentStatusChip>
-                        <StudentStatusChip tone={selected ? 'warning' : 'neutral'}>
-                          {item.title}
-                        </StudentStatusChip>
+                      <div className="flex items-center justify-between gap-3">
+                        <span
+                          className={cn(
+                            'rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em]',
+                            selected
+                              ? 'bg-white/10 text-white'
+                              : 'bg-slate-100 text-slate-600',
+                          )}
+                        >
+                          {filterLabel(item.filter)}
+                        </span>
+                        <span
+                          className={cn(
+                            'text-[11px] font-semibold',
+                            selected ? 'text-slate-300' : 'text-slate-500',
+                          )}
+                        >
+                          Open
+                        </span>
                       </div>
-                      <p className="mt-3 text-sm font-semibold">{classLabel(item)}</p>
-                      <p className="mt-2 text-sm opacity-90">{item.description}</p>
+                      <p className="mt-3 text-sm font-semibold">{item.title}</p>
+                      <p className={cn('mt-1 text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
+                        {item.subtitle}
+                      </p>
+                      <p className={cn('mt-2 line-clamp-2 text-sm', selected ? 'text-slate-200' : 'text-slate-600')}>
+                        {item.description}
+                      </p>
                     </button>
                   );
                 })
               )}
             </div>
-          </StudentActionCard>
+          </section>
 
-          <StudentActionCard>
-            <StudentSectionHeader
-              title="Completed Evaluations"
-              subtitle="This is your evaluation history for current eligible teacher-facing modules."
-            />
-            <div className="mt-4 space-y-3">
-              {!dashboard || dashboard.completed.length === 0 ? (
-                <p className="text-sm text-slate-500">No completed evaluations yet.</p>
+          <section>
+            <div className="mb-3">
+              <h2 className="text-base font-bold text-slate-950">Completed Evaluations</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Submitted forms remain visible for your history.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              {completedItems.length === 0 ? (
+                <p className="px-4 py-5 text-sm text-slate-500">No completed evaluations yet.</p>
               ) : (
-                dashboard.completed.map((item) => (
+                completedItems.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4"
+                    className="border-b border-slate-100 px-4 py-4 last:border-b-0"
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StudentStatusChip tone="success">
-                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                        Submitted
-                      </StudentStatusChip>
-                      <StudentStatusChip tone="info">{item.gradingPeriod}</StudentStatusChip>
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Submitted
                     </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{item.title}</p>
-                    <p className="mt-1 text-sm text-slate-600">{classLabel(item)}</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{item.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.subtitle}</p>
                   </div>
                 ))
               )}
             </div>
-          </StudentActionCard>
-        </div>
+          </section>
+        </aside>
 
-        <StudentActionCard>
-          <StudentSectionHeader
-            title={activeItem ? activeItem.title : 'Choose an Evaluation'}
-            subtitle={
-              activeItem
-                ? `${classLabel(activeItem)} | ${activeItem.gradingPeriod}`
-                : 'Select a pending evaluation from the list to open the form.'
-            }
-          />
+        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-950">
+                {activeItem ? activeItem.title : 'Choose an Evaluation'}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {activeItem ? activeItem.subtitle : 'Select a pending form to start rating.'}
+              </p>
+            </div>
+            {activeItem ? (
+              <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-600">
+                {filterLabel(activeItem.filter)}
+              </span>
+            ) : null}
+          </div>
           {!activeItem ? (
-            <div className="mt-6">
-              <StudentEmptyState
-                title="No evaluation selected"
-                description="Select one pending evaluation on the left to start rating the class experience."
-                icon={<MessageSquareQuote className="h-5 w-5" />}
-              />
+            <div className="flex min-h-[26rem] items-center justify-center px-6 py-10">
+              <div className="max-w-sm rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center">
+                <p className="text-base font-semibold text-slate-950">No evaluation selected</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Select one assigned evaluation on the left to open the form.
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="mt-5 space-y-5">
-              {activeItem.questions.map((question) => (
-                <div key={question.key} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                  <p className="text-sm font-semibold text-slate-900">{question.label}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {[1, 2, 3, 4, 5].map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() =>
-                          setRatings((current) => ({ ...current, [question.key]: value }))
-                        }
-                        className={
-                          ratings[question.key] === value
-                            ? 'rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white'
-                            : 'rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700'
-                        }
-                      >
-                        {value}
-                      </button>
+            <div>
+              <div className="max-h-[30rem] overflow-auto">
+                <table className="w-full min-w-[720px] border-separate border-spacing-0">
+                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <tr>
+                      <th className="border-b border-slate-200 px-5 py-3">Question</th>
+                      <th className="w-[19rem] border-b border-slate-200 px-5 py-3">Rating</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeItem.questions.map((question, index) => (
+                      <tr key={question.key} className="border-b border-slate-100">
+                        <td className="border-b border-slate-100 px-5 py-4 align-top">
+                          <div className="flex gap-3">
+                            <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                              {index + 1}
+                            </span>
+                            <p className="text-sm font-semibold leading-6 text-slate-950">
+                              {question.label}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="border-b border-slate-100 px-5 py-4 align-top">
+                          <StarRating
+                            questionKey={question.key}
+                            value={ratings[question.key] ?? null}
+                            onChange={(value) =>
+                              setRatings((current) => ({ ...current, [question.key]: value }))
+                            }
+                          />
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-              ))}
-
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Optional comment</p>
-                <Textarea
-                  value={comment}
-                  onChange={(event) => setComment(event.target.value)}
-                  rows={5}
-                  className="mt-3"
-                  placeholder="Share a short anonymous comment about this class experience."
-                />
+                  </tbody>
+                </table>
               </div>
 
-              <Button onClick={() => void handleSubmit()} disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Evaluation'}
-              </Button>
+              <div className="border-t border-slate-200 px-5 py-4">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Optional comment</p>
+                    <Textarea
+                      value={comment}
+                      onChange={(event) => setComment(event.target.value)}
+                      rows={4}
+                      className="mt-2 border-slate-200 bg-slate-50 focus-visible:ring-slate-300"
+                      placeholder="Share a short comment about this evaluation."
+                    />
+                  </div>
+                  <Button
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting || hasMissingRating}
+                    className="min-w-[11rem] bg-slate-900 text-white hover:bg-slate-800"
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Evaluation'}
+                  </Button>
+                </div>
+                {hasMissingRating ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Rate every question before submitting. A 0-star answer is allowed.
+                  </p>
+                ) : null}
+              </div>
             </div>
           )}
-        </StudentActionCard>
+        </section>
       </div>
     </main>
   );

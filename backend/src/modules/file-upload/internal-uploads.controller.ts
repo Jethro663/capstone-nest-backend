@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import { Public } from '../auth/decorators/public.decorator';
 
 @Controller('internal/uploads')
 export class InternalUploadsController {
@@ -25,6 +26,7 @@ export class InternalUploadsController {
     }
   }
 
+  @Public()
   @Get('raw')
   async readUpload(
     @Query('path') requestedPath: string,
@@ -38,10 +40,20 @@ export class InternalUploadsController {
       throw new NotFoundException('Upload path is required');
     }
 
-    const absolutePath = path.resolve(normalized);
     const uploadsRoot = path.resolve('uploads');
+    const normalizedSlashes = normalized.replace(/\\/g, '/');
+    const uploadRelativePath = normalizedSlashes
+      .replace(/^\.\//, '')
+      .replace(/^uploads\//, '');
+    const absolutePath = path.isAbsolute(normalized)
+      ? path.resolve(normalized)
+      : path.resolve(uploadsRoot, uploadRelativePath);
+    const relativeToUploads = path.relative(uploadsRoot, absolutePath);
 
-    if (!absolutePath.startsWith(uploadsRoot)) {
+    if (
+      relativeToUploads.startsWith('..') ||
+      path.isAbsolute(relativeToUploads)
+    ) {
       throw new ForbiddenException('Upload path must stay inside uploads');
     }
 

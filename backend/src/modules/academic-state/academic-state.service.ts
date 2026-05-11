@@ -112,9 +112,7 @@ export class AcademicStateService {
     fromState: AcademicStateRow,
     toState: { schoolYear: string; quarter: QuarterKey },
   ) {
-    const noTransition =
-      fromState.schoolYear === toState.schoolYear &&
-      fromState.quarter === toState.quarter;
+    const noTransition = fromState.schoolYear === toState.schoolYear;
     if (noTransition) {
       return {
         classRecordIdsToFinalize: [] as string[],
@@ -136,20 +134,17 @@ export class AcademicStateService {
 
     const classRecordIdsToFinalize = draftRecords.map((record) => record.id);
 
-    const schoolEventIdsToArchive =
-      fromState.schoolYear === toState.schoolYear
-        ? []
-        : (
-            await this.db
-              .select({ id: schoolEvents.id })
-              .from(schoolEvents)
-              .where(
-                and(
-                  isNull(schoolEvents.archivedAt),
-                  ne(schoolEvents.schoolYear, toState.schoolYear),
-                ),
-              )
-          ).map((event) => event.id);
+    const schoolEventIdsToArchive = (
+      await this.db
+        .select({ id: schoolEvents.id })
+        .from(schoolEvents)
+        .where(
+          and(
+            isNull(schoolEvents.archivedAt),
+            ne(schoolEvents.schoolYear, toState.schoolYear),
+          ),
+        )
+    ).map((event) => event.id);
 
     return {
       classRecordIdsToFinalize,
@@ -169,12 +164,12 @@ export class AcademicStateService {
     };
   }
 
-  async getImpactPreview(schoolYear: string, quarter: QuarterKey) {
+  async getImpactPreview(schoolYear: string) {
     this.assertValidSchoolYear(schoolYear);
     const current = await this.ensureCurrentState();
     const target = {
       schoolYear,
-      quarter,
+      quarter: current.quarter,
     };
     const impact = await this.getTransitionTargets(current, target);
 
@@ -209,7 +204,7 @@ export class AcademicStateService {
     const current = await this.ensureCurrentState();
     const target = {
       schoolYear: dto.schoolYear,
-      quarter: dto.quarter,
+      quarter: current.quarter,
     };
     const impactTargets = await this.getTransitionTargets(current, target);
     const now = new Date();

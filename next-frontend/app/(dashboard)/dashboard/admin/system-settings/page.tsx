@@ -17,9 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { academicStateService } from '@/services/academic-state-service';
-import type { AcademicQuarter, AcademicStateCurrent, AcademicStateImpactPreview } from '@/types/academic-state';
-
-const QUARTER_OPTIONS: AcademicQuarter[] = ['Q1', 'Q2', 'Q3', 'Q4'];
+import type { AcademicStateCurrent, AcademicStateImpactPreview } from '@/types/academic-state';
 
 function deriveSchoolYearChoices(current: string) {
   const match = current.match(/^(\d{4})-(\d{4})$/);
@@ -40,7 +38,6 @@ export default function AdminSystemSettingsPage() {
   const [submittingTransition, setSubmittingTransition] = useState(false);
   const [currentState, setCurrentState] = useState<AcademicStateCurrent | null>(null);
   const [targetSchoolYear, setTargetSchoolYear] = useState('');
-  const [targetQuarter, setTargetQuarter] = useState<AcademicQuarter>('Q1');
   const [preview, setPreview] = useState<AcademicStateImpactPreview | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [transitionStep, setTransitionStep] = useState<1 | 2>(1);
@@ -57,18 +54,13 @@ export default function AdminSystemSettingsPage() {
     const current = response.data;
     setCurrentState(current);
     setTargetSchoolYear((prev) => prev || current.schoolYear);
-    setTargetQuarter((prev) => prev || current.quarter);
   }, []);
 
-  const loadImpactPreview = useCallback(async (
-    schoolYear: string,
-    quarter: AcademicQuarter,
-  ) => {
+  const loadImpactPreview = useCallback(async (schoolYear: string) => {
     setRefreshingPreview(true);
     try {
       const response = await academicStateService.getImpactPreview({
         schoolYear,
-        quarter,
       });
       setPreview(response.data);
     } catch {
@@ -94,9 +86,9 @@ export default function AdminSystemSettingsPage() {
   }, [loadCurrentState]);
 
   useEffect(() => {
-    if (!targetSchoolYear || !targetQuarter) return;
-    void loadImpactPreview(targetSchoolYear, targetQuarter);
-  }, [loadImpactPreview, targetQuarter, targetSchoolYear]);
+    if (!targetSchoolYear) return;
+    void loadImpactPreview(targetSchoolYear);
+  }, [loadImpactPreview, targetSchoolYear]);
 
   const openTransitionDialog = () => {
     if (!preview) {
@@ -125,12 +117,11 @@ export default function AdminSystemSettingsPage() {
       setSubmittingTransition(true);
       const response = await academicStateService.transition({
         schoolYear: targetSchoolYear,
-        quarter: targetQuarter,
         currentPassword,
         confirmationText,
       });
       setCurrentState(response.data.state);
-      await loadImpactPreview(targetSchoolYear, targetQuarter);
+      await loadImpactPreview(targetSchoolYear);
       toast.success(
         `Academic state updated. ${response.data.impact.classRecordsFinalized} class records finalized, ${response.data.impact.schoolEventsArchived} events archived.`,
       );
@@ -155,7 +146,7 @@ export default function AdminSystemSettingsPage() {
     <AdminPageShell
       badge="Admin Settings"
       title="System Settings"
-      description="Set the active school year and quarter for the whole LMS with guarded transition flow."
+      description="Set the active school year for the whole LMS with a guarded transition flow."
       icon={ShieldCheck}
       stats={(
         <>
@@ -169,7 +160,7 @@ export default function AdminSystemSettingsPage() {
           <AdminStatCard
             label="Active Quarter"
             value={currentState?.quarter ?? '--'}
-            caption="Used by class records and assessments"
+            caption="Informational only"
             icon={ArrowRightLeft}
             accent="emerald"
           />
@@ -189,7 +180,7 @@ export default function AdminSystemSettingsPage() {
           </Button>
         )}
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
             <span className="text-sm font-black text-[var(--admin-text-strong)]">Target School Year</span>
             <select
@@ -200,21 +191,6 @@ export default function AdminSystemSettingsPage() {
               {schoolYearOptions.map((schoolYear) => (
                 <option key={schoolYear} value={schoolYear}>
                   {schoolYear}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-black text-[var(--admin-text-strong)]">Target Quarter</span>
-            <select
-              value={targetQuarter}
-              onChange={(event) => setTargetQuarter(event.target.value as AcademicQuarter)}
-              className="admin-input h-11 w-full rounded-xl"
-            >
-              {QUARTER_OPTIONS.map((quarter) => (
-                <option key={quarter} value={quarter}>
-                  {quarter}
                 </option>
               ))}
             </select>
@@ -254,12 +230,9 @@ export default function AdminSystemSettingsPage() {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
                 <div className="space-y-1 text-sm text-amber-900">
-                  <p>
-                    Current: {preview?.current.schoolYear} / {preview?.current.quarter}
-                  </p>
-                  <p>
-                    Target: {targetSchoolYear} / {targetQuarter}
-                  </p>
+                  <p>Current School Year: {preview?.current.schoolYear}</p>
+                  <p>Target School Year: {targetSchoolYear}</p>
+                  <p>Current Quarter: {preview?.current.quarter}</p>
                   <p>
                     {preview?.impact.classRecordsToFinalize ?? 0} draft class records will be finalized.
                   </p>
@@ -297,7 +270,7 @@ export default function AdminSystemSettingsPage() {
           <DialogFooter>
             {transitionStep === 1 ? (
               <Button
-                className="admin-button-solid rounded-xl font-black"
+                className="rounded-xl bg-red-600 font-black text-white hover:bg-red-700"
                 onClick={() => setTransitionStep(2)}
               >
                 Continue

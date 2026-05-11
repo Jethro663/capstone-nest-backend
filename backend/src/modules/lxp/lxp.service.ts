@@ -4,7 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { SQL, and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm';
+import {
+  SQL,
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
@@ -25,29 +36,38 @@ import {
   lxpProgress,
   performanceSnapshots,
   performanceLogs,
+  roles,
   studentConceptMastery,
+  systemEvaluationAssignments,
+  systemEvaluationCampaigns,
   systemEvaluationTargetEnum,
   systemEvaluations,
   teacherEvaluationSubmissions,
   teacherEvaluationTypeEnum,
   teacherEvaluationWindows,
+  userRoles,
   users,
 } from '../../drizzle/schema';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import {
   ApproveGeneratedArtifactsDto,
   AssignInterventionDto,
+  CreateSystemEvaluationCampaignDto,
+  ListSystemEvaluationCampaignsQueryDto,
   SubmitGuidedAssessmentDto,
   UpdateGuidedAssessmentProgressDto,
   ListTeacherEvaluationSummaryQueryDto,
   ListSystemEvaluationsQueryDto,
   ResolveInterventionDto,
+  SubmitAssignedSystemEvaluationDto,
   SubmitSystemEvaluationDto,
   SubmitTeacherEvaluationDto,
+  UpdateSystemEvaluationCampaignStatusDto,
 } from './dto/lxp.dto';
 import { AuditService } from '../audit/audit.service';
 
 const INTERVENTION_THRESHOLD = 74;
+const PATH_REGENERATION_SCORE_THRESHOLD = 60;
 const LESSON_XP = 20;
 const ASSESSMENT_XP = 30;
 const STAR_XP = 1000;
@@ -63,10 +83,113 @@ type UserContext = {
   roles: string[];
 };
 
+type TeacherPathScoreSource = 'guided_assessment' | 'assessment_retry';
+
+type TeacherPathScore = {
+  source: TeacherPathScoreSource;
+  assignmentId: string | null;
+  attemptId: string;
+  scorePercent: number;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
+  passed?: boolean | null;
+  submittedAt: Date | null;
+};
+
+type TeacherPathScoreCase = {
+  id: string;
+  studentId: string;
+};
+
+type TeacherPathScoreAssignment = {
+  id: string;
+  caseId: string;
+  assignmentType: string;
+  assessmentId?: string | null;
+};
+
 type SystemEvaluationTarget =
   (typeof systemEvaluationTargetEnum.enumValues)[number];
+type SystemEvaluationFormType = 'system' | 'ja_hub';
+type SystemEvaluationAudienceRole = 'student' | 'teacher';
+type SystemEvaluationCampaignStatus = 'draft' | 'active' | 'closed';
 type TeacherEvaluationType =
   (typeof teacherEvaluationTypeEnum.enumValues)[number];
+
+type SystemEvaluationDefinition = {
+  title: string;
+  description: string;
+  targetModule: Extract<SystemEvaluationTarget, 'overall' | 'ai_mentor'>;
+  audienceRoles: SystemEvaluationAudienceRole[];
+  questions: Array<{
+    key: string;
+    label: string;
+  }>;
+};
+
+const SYSTEM_EVALUATION_DEFINITIONS: Record<
+  SystemEvaluationFormType,
+  SystemEvaluationDefinition
+> = {
+  system: {
+    title: 'System Evaluation',
+    description: 'Rate the overall LMS experience.',
+    targetModule: 'overall',
+    audienceRoles: ['student', 'teacher'],
+    questions: [
+      {
+        key: 'system_navigation',
+        label: 'The system is easy to navigate and I can find what I need.',
+      },
+      {
+        key: 'system_features',
+        label: 'The features I use work correctly.',
+      },
+      {
+        key: 'system_speed',
+        label:
+          'Pages, submissions, and dashboards load fast enough during normal use.',
+      },
+      {
+        key: 'system_efficiency',
+        label: 'The system helps me complete school tasks more efficiently.',
+      },
+      {
+        key: 'system_satisfaction',
+        label: 'Overall, I am satisfied with my experience using the system.',
+      },
+    ],
+  },
+  ja_hub: {
+    title: 'JA Hub Evaluation',
+    description: 'Rate the JA Hub support experience.',
+    targetModule: 'ai_mentor',
+    audienceRoles: ['student'],
+    questions: [
+      {
+        key: 'ja_access',
+        label: 'JA Hub is easy to open and use when I need help.',
+      },
+      {
+        key: 'ja_clarity',
+        label: 'JA Hub explains answers clearly.',
+      },
+      {
+        key: 'ja_relevance',
+        label:
+          'JA Hub gives responses that match my lesson, assessment, or question.',
+      },
+      {
+        key: 'ja_speed',
+        label: 'JA Hub responds quickly enough for studying.',
+      },
+      {
+        key: 'ja_helpfulness',
+        label: 'Overall, JA Hub helps me understand topics better.',
+      },
+    ],
+  },
+};
 
 type TeacherEvaluationDefinition = {
   title: string;
@@ -87,11 +210,10 @@ const TEACHER_EVALUATION_DEFINITIONS: Record<
       'Share feedback about teaching clarity, support, fairness, and learning materials.',
     categories: [
       { key: 'teaching_clarity', label: 'Teaching Clarity' },
-      { key: 'subject_mastery', label: 'Subject Mastery' },
-      { key: 'pacing', label: 'Pacing' },
-      { key: 'fairness', label: 'Fairness' },
-      { key: 'responsiveness', label: 'Responsiveness and Support' },
-      { key: 'materials', label: 'Materials and Activities' },
+      { key: 'learning_materials', label: 'Learning Materials and Activities' },
+      { key: 'fairness_feedback', label: 'Fair Instructions and Feedback' },
+      { key: 'teacher_support', label: 'Supportiveness' },
+      { key: 'learning_engagement', label: 'Learning and Engagement' },
     ],
   },
   ja_hub: {
@@ -134,6 +256,238 @@ export class LxpService {
     return this.databaseService.db;
   }
 
+  private isTeacher(userRoles: string[]) {
+    return userRoles.includes('teacher');
+  }
+
+  private getSystemEvaluationDefinition(formType: SystemEvaluationFormType) {
+    const definition = SYSTEM_EVALUATION_DEFINITIONS[formType];
+    if (!definition) {
+      throw new BadRequestException('Unsupported evaluation form type.');
+    }
+    return definition;
+  }
+
+  private normalizeDateRange(startsAt: string, endsAt: string) {
+    const start = new Date(startsAt);
+    const end = new Date(endsAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw new BadRequestException('Campaign dates must be valid ISO dates.');
+    }
+    if (start >= end) {
+      throw new BadRequestException(
+        'Campaign end date must be after start date.',
+      );
+    }
+    return { start, end };
+  }
+
+  private normalizeSystemEvaluationQuestionRatings(
+    formType: SystemEvaluationFormType,
+    questionRatings: Record<string, unknown>,
+  ) {
+    const definition = this.getSystemEvaluationDefinition(formType);
+    const normalized: Record<string, number> = {};
+    const expectedKeys = definition.questions.map((question) => question.key);
+
+    for (const key of expectedKeys) {
+      const rawValue = questionRatings[key];
+      const parsedValue =
+        typeof rawValue === 'number'
+          ? rawValue
+          : Number.parseInt(String(rawValue), 10);
+      if (
+        !Number.isInteger(parsedValue) ||
+        parsedValue < 0 ||
+        parsedValue > 5
+      ) {
+        throw new BadRequestException(
+          `Rating "${key}" must be an integer from 0 to 5.`,
+        );
+      }
+      normalized[key] = parsedValue;
+    }
+
+    const unknownKeys = Object.keys(questionRatings).filter(
+      (key) => !expectedKeys.includes(key),
+    );
+    if (unknownKeys.length > 0) {
+      throw new BadRequestException(
+        `Unexpected rating keys: ${unknownKeys.join(', ')}`,
+      );
+    }
+
+    const average = Math.round(
+      Object.values(normalized).reduce((sum, value) => sum + value, 0) /
+        expectedKeys.length,
+    );
+
+    if (formType === 'ja_hub') {
+      return {
+        normalized,
+        legacyScores: {
+          usabilityScore: normalized.ja_access,
+          functionalityScore: normalized.ja_relevance,
+          performanceScore: normalized.ja_speed,
+          satisfactionScore: normalized.ja_helpfulness,
+          overallScore: average,
+        },
+      };
+    }
+
+    return {
+      normalized,
+      legacyScores: {
+        usabilityScore: normalized.system_navigation,
+        functionalityScore: normalized.system_features,
+        performanceScore: normalized.system_speed,
+        satisfactionScore: normalized.system_satisfaction,
+        overallScore: average,
+      },
+    };
+  }
+
+  private isSystemCampaignOpen(campaign: {
+    status: SystemEvaluationCampaignStatus;
+    startsAt: Date | string;
+    endsAt: Date | string;
+  }) {
+    const now = new Date();
+    const startsAt = new Date(campaign.startsAt);
+    const endsAt = new Date(campaign.endsAt);
+    return campaign.status === 'active' && startsAt <= now && endsAt >= now;
+  }
+
+  private formatSystemEvaluationAssignment(row: {
+    id: string;
+    status: 'pending' | 'submitted' | 'expired';
+    submittedAt?: Date | string | null;
+    campaign: {
+      id: string;
+      formType: SystemEvaluationFormType;
+      targetModule: SystemEvaluationTarget;
+      title: string;
+      audienceRole: SystemEvaluationAudienceRole;
+      classId?: string | null;
+      startsAt: Date | string;
+      endsAt: Date | string;
+      status: SystemEvaluationCampaignStatus;
+      class?: {
+        id: string;
+        subjectName: string;
+        subjectCode: string;
+        section?: { id: string; name: string; gradeLevel: string } | null;
+      } | null;
+    };
+  }) {
+    const definition = this.getSystemEvaluationDefinition(
+      row.campaign.formType,
+    );
+    return {
+      id: row.id,
+      campaignId: row.campaign.id,
+      formType: row.campaign.formType,
+      targetModule: row.campaign.targetModule,
+      title: row.campaign.title || definition.title,
+      description: definition.description,
+      audienceRole: row.campaign.audienceRole,
+      classId: row.campaign.classId ?? null,
+      class: row.campaign.class ?? null,
+      startsAt: row.campaign.startsAt,
+      endsAt: row.campaign.endsAt,
+      status: row.status,
+      submittedAt: row.submittedAt ?? null,
+      questions: definition.questions,
+    };
+  }
+
+  private async resolveSystemEvaluationRespondents(input: {
+    audienceRole: SystemEvaluationAudienceRole;
+    classId?: string | null;
+  }) {
+    if (input.classId) {
+      if (input.audienceRole === 'teacher') {
+        const cls = await this.db.query.classes.findFirst({
+          where: eq(classes.id, input.classId),
+          columns: { teacherId: true },
+        });
+        return cls?.teacherId ? [cls.teacherId] : [];
+      }
+
+      const enrollmentRows = await this.db.query.enrollments.findMany({
+        where: and(
+          eq(enrollments.classId, input.classId),
+          eq(enrollments.status, 'enrolled'),
+        ),
+        columns: { studentId: true },
+      });
+      return enrollmentRows.map((row) => row.studentId);
+    }
+
+    const roleRows = await this.db
+      .select({ userId: users.id })
+      .from(users)
+      .innerJoin(userRoles, eq(users.id, userRoles.userId))
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .where(
+        and(eq(roles.name, input.audienceRole), eq(users.status, 'ACTIVE')),
+      );
+
+    return roleRows.map((row) => row.userId);
+  }
+
+  private async createAssignmentsForSystemCampaign(campaign: {
+    id: string;
+    audienceRole: SystemEvaluationAudienceRole;
+    classId?: string | null;
+  }) {
+    const respondentIds = Array.from(
+      new Set(
+        await this.resolveSystemEvaluationRespondents({
+          audienceRole: campaign.audienceRole,
+          classId: campaign.classId,
+        }),
+      ),
+    );
+
+    if (respondentIds.length === 0) return 0;
+
+    await this.db
+      .insert(systemEvaluationAssignments)
+      .values(
+        respondentIds.map((respondentId) => ({
+          campaignId: campaign.id,
+          respondentId,
+          respondentRole: campaign.audienceRole,
+          status: 'pending' as const,
+          updatedAt: new Date(),
+        })),
+      )
+      .onConflictDoNothing();
+
+    return respondentIds.length;
+  }
+
+  private async assertSystemEvaluationCampaignAccess(
+    campaign: {
+      createdBy: string;
+      classId?: string | null;
+    },
+    user: UserContext,
+  ) {
+    if (this.isAdmin(user.roles)) return;
+    if (!this.isTeacher(user.roles)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can manage evaluation campaigns.',
+      );
+    }
+    if (campaign.createdBy === user.userId) return;
+    if (!campaign.classId) {
+      throw new ForbiddenException('You can only manage your own campaigns.');
+    }
+    await this.assertTeacherClassAccess(campaign.classId, user);
+  }
+
   private getDefaultSchoolYear() {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -163,7 +517,9 @@ export class LxpService {
   }
 
   private quarterSortValue(value: string) {
-    const index = GRADING_PERIOD_ORDER.indexOf(value as (typeof GRADING_PERIOD_ORDER)[number]);
+    const index = GRADING_PERIOD_ORDER.indexOf(
+      value as (typeof GRADING_PERIOD_ORDER)[number],
+    );
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
   }
 
@@ -185,8 +541,14 @@ export class LxpService {
     for (const category of definition.categories) {
       const rawValue = ratings[category.key];
       const parsedValue =
-        typeof rawValue === 'number' ? rawValue : Number.parseInt(String(rawValue), 10);
-      if (!Number.isInteger(parsedValue) || parsedValue < 1 || parsedValue > 5) {
+        typeof rawValue === 'number'
+          ? rawValue
+          : Number.parseInt(String(rawValue), 10);
+      if (
+        !Number.isInteger(parsedValue) ||
+        parsedValue < 1 ||
+        parsedValue > 5
+      ) {
         throw new BadRequestException(
           `Rating "${category.key}" must be an integer from 1 to 5.`,
         );
@@ -277,7 +639,10 @@ export class LxpService {
             },
           })
         : Promise.resolve<
-            Array<{ classId: string | null; checkpointsCompleted: number | null }>
+            Array<{
+              classId: string | null;
+              checkpointsCompleted: number | null;
+            }>
           >([]),
       classIds.length > 0
         ? this.db.query.interventionCases.findMany({
@@ -300,8 +665,11 @@ export class LxpService {
     );
     const lxpCheckpointMap = new Map<string, number>(
       lxpUsageRows
-        .filter((row): row is { classId: string; checkpointsCompleted: number | null } =>
-          Boolean(row.classId),
+        .filter(
+          (
+            row,
+          ): row is { classId: string; checkpointsCompleted: number | null } =>
+            Boolean(row.classId),
         )
         .map((row) => [row.classId, row.checkpointsCompleted ?? 0] as const),
     );
@@ -515,6 +883,220 @@ export class LxpService {
     };
   }
 
+  private toDate(value: Date | string | null | undefined): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private isNewerScore(
+    candidate: TeacherPathScore,
+    current: TeacherPathScore | undefined,
+  ) {
+    if (!current) return true;
+    const candidateTime = this.toDate(candidate.submittedAt)?.getTime() ?? 0;
+    const currentTime = this.toDate(current.submittedAt)?.getTime() ?? 0;
+    return candidateTime > currentTime;
+  }
+
+  private serializeTeacherPathScore(
+    score: TeacherPathScore | null | undefined,
+  ) {
+    if (!score) return null;
+    return {
+      source: score.source,
+      assignmentId: score.assignmentId,
+      attemptId: score.attemptId,
+      scorePercent: score.scorePercent,
+      correctCount: score.correctCount ?? null,
+      totalQuestions: score.totalQuestions ?? null,
+      passed: score.passed ?? null,
+      submittedAt: score.submittedAt,
+    };
+  }
+
+  private serializeTeacherInterventionAssignment(
+    row: any,
+    score: TeacherPathScore | null | undefined,
+  ) {
+    return {
+      id: row.id,
+      type: row.assignmentType,
+      label: row.checkpointLabel,
+      order: row.orderIndex,
+      isCompleted: row.isCompleted,
+      completedAt: row.completedAt,
+      xpAwarded: row.xpAwarded,
+      lesson: row.lesson ?? null,
+      assessment: row.assessment ?? null,
+      generatedLesson: this.serializeGeneratedLesson(
+        row.generatedRemedialLesson,
+      ),
+      guidedAssessment: this.serializeGeneratedGuidedAssessment(
+        row.generatedGuidedAssessment,
+      ),
+      score: this.serializeTeacherPathScore(score),
+    };
+  }
+
+  private async resolveTeacherPathScores(
+    cases: TeacherPathScoreCase[],
+    assignments: TeacherPathScoreAssignment[],
+  ) {
+    const caseIds = cases.map((row) => row.id);
+    const studentIds = Array.from(new Set(cases.map((row) => row.studentId)));
+    const assessmentIds = Array.from(
+      new Set(
+        assignments
+          .filter(
+            (row) =>
+              row.assignmentType === 'assessment_retry' && row.assessmentId,
+          )
+          .map((row) => row.assessmentId as string),
+      ),
+    );
+    const caseById = new Map(cases.map((row) => [row.id, row] as const));
+    const guidedAssignmentIds = new Set(
+      assignments
+        .filter((row) => row.assignmentType === 'guided_assessment')
+        .map((row) => row.id),
+    );
+
+    const retryAssignmentsByAssessmentAndStudent = new Map<
+      string,
+      TeacherPathScoreAssignment[]
+    >();
+    for (const assignment of assignments) {
+      if (
+        assignment.assignmentType !== 'assessment_retry' ||
+        !assignment.assessmentId
+      ) {
+        continue;
+      }
+
+      const relatedCase = caseById.get(assignment.caseId);
+      if (!relatedCase) continue;
+      const key = `${assignment.assessmentId}:${relatedCase.studentId}`;
+      const existing = retryAssignmentsByAssessmentAndStudent.get(key) ?? [];
+      existing.push(assignment);
+      retryAssignmentsByAssessmentAndStudent.set(key, existing);
+    }
+
+    const [guidedAttempts, retryAttempts] = await Promise.all([
+      caseIds.length > 0
+        ? this.db.query.generatedGuidedAssessmentAttempts.findMany({
+            where: and(
+              inArray(generatedGuidedAssessmentAttempts.caseId, caseIds),
+              eq(generatedGuidedAssessmentAttempts.status, 'submitted'),
+            ),
+            columns: {
+              id: true,
+              caseId: true,
+              assignmentId: true,
+              score: true,
+              correctCount: true,
+              totalQuestions: true,
+              submittedAt: true,
+            },
+            orderBy: [desc(generatedGuidedAssessmentAttempts.submittedAt)],
+          })
+        : Promise.resolve([]),
+      assessmentIds.length > 0 && studentIds.length > 0
+        ? this.db.query.assessmentAttempts.findMany({
+            where: and(
+              inArray(assessmentAttempts.assessmentId, assessmentIds),
+              inArray(assessmentAttempts.studentId, studentIds),
+              eq(assessmentAttempts.isSubmitted, true),
+            ),
+            columns: {
+              id: true,
+              studentId: true,
+              assessmentId: true,
+              score: true,
+              passed: true,
+              submittedAt: true,
+            },
+            orderBy: [desc(assessmentAttempts.submittedAt)],
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const guidedScoreByCase = new Map<string, TeacherPathScore>();
+    const retryScoreByCase = new Map<string, TeacherPathScore>();
+    const assignmentScores = new Map<string, TeacherPathScore>();
+
+    for (const attempt of guidedAttempts) {
+      const scorePercent = this.toNumber(attempt.score);
+      if (
+        scorePercent === null ||
+        !guidedAssignmentIds.has(attempt.assignmentId)
+      ) {
+        continue;
+      }
+
+      const score: TeacherPathScore = {
+        source: 'guided_assessment',
+        assignmentId: attempt.assignmentId,
+        attemptId: attempt.id,
+        scorePercent,
+        correctCount: attempt.correctCount ?? null,
+        totalQuestions: attempt.totalQuestions ?? null,
+        submittedAt: attempt.submittedAt ?? null,
+      };
+
+      if (
+        this.isNewerScore(score, assignmentScores.get(attempt.assignmentId))
+      ) {
+        assignmentScores.set(attempt.assignmentId, score);
+      }
+      if (this.isNewerScore(score, guidedScoreByCase.get(attempt.caseId))) {
+        guidedScoreByCase.set(attempt.caseId, score);
+      }
+    }
+
+    for (const attempt of retryAttempts) {
+      const scorePercent = this.toNumber(attempt.score);
+      if (scorePercent === null) continue;
+
+      const retryAssignments =
+        retryAssignmentsByAssessmentAndStudent.get(
+          `${attempt.assessmentId}:${attempt.studentId}`,
+        ) ?? [];
+
+      for (const assignment of retryAssignments) {
+        const score: TeacherPathScore = {
+          source: 'assessment_retry',
+          assignmentId: assignment.id,
+          attemptId: attempt.id,
+          scorePercent,
+          passed: attempt.passed ?? null,
+          submittedAt: attempt.submittedAt ?? null,
+        };
+
+        if (this.isNewerScore(score, assignmentScores.get(assignment.id))) {
+          assignmentScores.set(assignment.id, score);
+        }
+        if (this.isNewerScore(score, retryScoreByCase.get(assignment.caseId))) {
+          retryScoreByCase.set(assignment.caseId, score);
+        }
+      }
+    }
+
+    const pathScores = new Map<string, TeacherPathScore>();
+    for (const row of cases) {
+      const guidedScore = guidedScoreByCase.get(row.id);
+      const retryScore = retryScoreByCase.get(row.id);
+      if (guidedScore) {
+        pathScores.set(row.id, guidedScore);
+      } else if (retryScore) {
+        pathScores.set(row.id, retryScore);
+      }
+    }
+
+    return { assignmentScores, pathScores };
+  }
+
   private normalizeGuidedResponseAnswer(answer: unknown) {
     if (Array.isArray(answer)) {
       return answer
@@ -550,19 +1132,21 @@ export class LxpService {
     let isCorrect = false;
 
     if (questionType === 'multiple_select') {
-      const selectedIds = Array.isArray(normalizedAnswer) ? normalizedAnswer : [];
+      const selectedIds = Array.isArray(normalizedAnswer)
+        ? normalizedAnswer
+        : [];
       isCorrect =
         selectedIds.length > 0 &&
         selectedIds.length === correctOptionIds.length &&
         selectedIds.every((value, index) => value === correctOptionIds[index]);
     } else {
       const selectedId = Array.isArray(normalizedAnswer)
-        ? normalizedAnswer[0] ?? null
+        ? (normalizedAnswer[0] ?? null)
         : normalizedAnswer;
       isCorrect = Boolean(
         selectedId &&
-          correctOptionIds.length === 1 &&
-          selectedId === correctOptionIds[0],
+        correctOptionIds.length === 1 &&
+        selectedId === correctOptionIds[0],
       );
     }
 
@@ -581,14 +1165,20 @@ export class LxpService {
     totalQuestions: number;
     score: number;
   }) {
-    const weakConceptCounts = new Map<string, { total: number; correct: number }>();
+    const weakConceptCounts = new Map<
+      string,
+      { total: number; correct: number }
+    >();
     for (const response of input.responses) {
       const concept =
         typeof response.weakConceptTag === 'string'
           ? response.weakConceptTag
           : null;
       if (!concept) continue;
-      const current = weakConceptCounts.get(concept) ?? { total: 0, correct: 0 };
+      const current = weakConceptCounts.get(concept) ?? {
+        total: 0,
+        correct: 0,
+      };
       current.total += 1;
       if (response.isCorrect === true) {
         current.correct += 1;
@@ -677,7 +1267,9 @@ export class LxpService {
       await tx
         .update(lxpProgress)
         .set({
-          xpTotal: progress.xpTotal + (assignmentRow.isCompleted ? 0 : input.xpAwarded),
+          xpTotal:
+            progress.xpTotal +
+            (assignmentRow.isCompleted ? 0 : input.xpAwarded),
           streakDays,
           checkpointsCompleted:
             progress.checkpointsCompleted + (assignmentRow.isCompleted ? 0 : 1),
@@ -899,13 +1491,29 @@ export class LxpService {
       classId,
       'active',
     );
-    if (activeCase) return activeCase;
+    if (activeCase && (await this.caseHasAssignments(activeCase.id))) {
+      return activeCase;
+    }
 
-    return this.getStudentInterventionCaseByStatus(
+    const completedCase = await this.getStudentInterventionCaseByStatus(
       studentId,
       classId,
       'completed',
     );
+    if (completedCase && (await this.caseHasAssignments(completedCase.id))) {
+      return completedCase;
+    }
+
+    return null;
+  }
+
+  private async caseHasAssignments(caseId: string) {
+    const assignment = await this.db.query.interventionAssignments.findFirst({
+      where: eq(interventionAssignments.caseId, caseId),
+      columns: { id: true },
+    });
+
+    return Boolean(assignment?.id);
   }
 
   private async getOrCreateCaseForStudent(
@@ -1073,28 +1681,6 @@ export class LxpService {
     }
   }
 
-  private async notifyInterventionActivated(
-    studentId: string,
-    classId: string,
-  ) {
-    const cls = await this.db.query.classes.findFirst({
-      where: eq(classes.id, classId),
-      columns: { teacherId: true, subjectName: true, subjectCode: true },
-    });
-    if (!cls) return;
-
-    const notifications = [
-      {
-        userId: studentId,
-        type: 'grade_updated' as const,
-        title: 'Learners Path unlocked',
-        body: `Your Learners Path plan in ${cls.subjectName} (${cls.subjectCode}) is now active.`,
-      },
-    ];
-
-    await this.notificationsService.createBulk(notifications);
-  }
-
   async handlePerformanceStatusChanged(event: PerformanceStatusChangedEvent) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, event.classId),
@@ -1109,12 +1695,6 @@ export class LxpService {
         'performance_status_changed',
       );
 
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        event.classId,
-        event.studentId,
-      );
-      await this.getOrCreateProgress(event.studentId, event.classId);
       await this.notifyInterventionPending(event.studentId, event.classId);
 
       if (auditActorId) {
@@ -1221,7 +1801,11 @@ export class LxpService {
       .filter((id): id is string => !!id);
 
     if (classIds.length === 0) {
-      return { threshold: INTERVENTION_THRESHOLD, eligibleClasses: [], paths: [] };
+      return {
+        threshold: INTERVENTION_THRESHOLD,
+        eligibleClasses: [],
+        paths: [],
+      };
     }
 
     const snapshots = await this.db.query.performanceSnapshots.findMany({
@@ -1239,19 +1823,19 @@ export class LxpService {
 
     const pathCases = (
       await this.db.query.interventionCases.findMany({
-      where: and(
-        eq(interventionCases.studentId, userId),
-        inArray(interventionCases.classId, classIds),
-        inArray(interventionCases.status, ['active', 'completed']),
-      ),
-      columns: {
-        classId: true,
-        id: true,
-        status: true,
-        openedAt: true,
-        closedAt: true,
-      },
-    })
+        where: and(
+          eq(interventionCases.studentId, userId),
+          inArray(interventionCases.classId, classIds),
+          inArray(interventionCases.status, ['active', 'completed']),
+        ),
+        columns: {
+          classId: true,
+          id: true,
+          status: true,
+          openedAt: true,
+          closedAt: true,
+        },
+      })
     ).filter((row) => row.status === 'active' || row.status === 'completed');
 
     const sortedPathCases = [...pathCases].sort((a, b) => {
@@ -1299,8 +1883,11 @@ export class LxpService {
         if (!enrollment?.class) return null;
         const snapshot = snapshotByClass.get(entry.classId);
         const caseAssignments = assignmentsByCase.get(entry.id) ?? [];
+        if (caseAssignments.length === 0) return null;
         const total = caseAssignments.length;
-        const completed = caseAssignments.filter((item) => item.isCompleted).length;
+        const completed = caseAssignments.filter(
+          (item) => item.isCompleted,
+        ).length;
         const completionPercent =
           total > 0
             ? Math.round((completed / total) * 100)
@@ -1383,19 +1970,22 @@ export class LxpService {
           'Learners Path access is pending teacher approval.',
         );
       }
+      const activeCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'active',
+      );
+      if (activeCase) {
+        throw new ForbiddenException(
+          'Learners Path is only available after your teacher assigns checkpoints.',
+        );
+      }
       throw new ForbiddenException(
         'Learners Path is only available for active intervention students.',
       );
     }
 
     const isCompletedCase = interventionCase.status === 'completed';
-    if (!isCompletedCase) {
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        classId,
-        studentId,
-      );
-    }
     const progress = isCompletedCase
       ? await this.getProgressSnapshot(studentId, classId)
       : await this.getOrCreateProgress(studentId, classId);
@@ -1525,19 +2115,22 @@ export class LxpService {
           'Learners Path access is pending teacher approval.',
         );
       }
+      const activeCase = await this.getStudentInterventionCaseByStatus(
+        studentId,
+        classId,
+        'active',
+      );
+      if (activeCase) {
+        throw new ForbiddenException(
+          'Learners Path is only available after your teacher assigns checkpoints.',
+        );
+      }
       throw new ForbiddenException(
         'Learners Path is only available for active intervention students.',
       );
     }
 
     const isCompletedCase = interventionCase.status === 'completed';
-    if (!isCompletedCase) {
-      await this.ensureDefaultAssignments(
-        interventionCase.id,
-        classId,
-        studentId,
-      );
-    }
     const progress = isCompletedCase
       ? await this.getProgressSnapshot(studentId, classId)
       : await this.getOrCreateProgress(studentId, classId);
@@ -1874,14 +2467,14 @@ export class LxpService {
             title: item.checkpointLabel,
             subtitle:
               item.assignmentType === 'generated_lesson_review'
-                ? item.generatedRemedialLesson?.summary ??
-                  'Review this simplified remedial lesson before moving forward.'
+                ? (item.generatedRemedialLesson?.summary ??
+                  'Review this simplified remedial lesson before moving forward.')
                 : item.assignmentType === 'lesson_review'
-                ? lessonSummary
-                : item.assignmentType === 'guided_assessment'
-                  ? item.generatedGuidedAssessment?.description ??
-                    'Use hints when needed and review explanations after each answer.'
-                  : assessmentSubtitle,
+                  ? lessonSummary
+                  : item.assignmentType === 'guided_assessment'
+                    ? (item.generatedGuidedAssessment?.description ??
+                      'Use hints when needed and review explanations after each answer.')
+                    : assessmentSubtitle,
             masteryPercent: null,
             href:
               item.assignmentType === 'generated_lesson_review'
@@ -2125,7 +2718,9 @@ export class LxpService {
             )[0]
           : null;
 
-        const filteredQuestions = (generatedGuidedAssessmentDraft?.questions ?? [])
+        const filteredQuestions = (
+          generatedGuidedAssessmentDraft?.questions ?? []
+        )
           .filter((question) =>
             GUIDED_ASSESSMENT_SUPPORTED_TYPES.has(question.type),
           )
@@ -2146,7 +2741,8 @@ export class LxpService {
 
         if (
           generatedGuidedAssessmentDraft &&
-          filteredQuestions.length !== generatedGuidedAssessmentDraft.questions.length
+          filteredQuestions.length !==
+            generatedGuidedAssessmentDraft.questions.length
         ) {
           throw new BadRequestException(
             'Guided remedial assessment v1 only supports objective question types.',
@@ -2201,9 +2797,8 @@ export class LxpService {
     return {
       caseId,
       generatedLesson: this.serializeGeneratedLesson(generatedLesson),
-      guidedAssessment: this.serializeGeneratedGuidedAssessment(
-        guidedAssessment,
-      ),
+      guidedAssessment:
+        this.serializeGeneratedGuidedAssessment(guidedAssessment),
     };
   }
 
@@ -2228,62 +2823,57 @@ export class LxpService {
     const rejectedAt = new Date();
     const [generatedLesson, guidedAssessment] = await this.db.transaction(
       async (tx) => {
-        const rejectedLesson =
-          dto.generatedLessonDraft
-            ? (
-                await tx
-                  .insert(generatedRemedialLessons)
-                  .values({
-                    caseId,
-                    classId: interventionCase.classId,
-                    studentId: interventionCase.studentId,
-                    title: dto.generatedLessonDraft.title,
-                    summary: dto.generatedLessonDraft.summary ?? null,
-                    lessonBody: dto.generatedLessonDraft.lessonBody,
-                    weakConcepts: dto.generatedLessonDraft.weakConcepts,
-                    sourceLessonIds: dto.generatedLessonDraft.sourceLessonIds,
-                    sourceReferences: dto.generatedLessonDraft.sourceReferences,
-                    approvalStatus: 'rejected',
-                    approvedBy: user.userId,
-                    approvedAt: null,
-                    rejectedAt,
-                  })
-                  .returning()
-              )[0]
-            : null;
+        const rejectedLesson = dto.generatedLessonDraft
+          ? (
+              await tx
+                .insert(generatedRemedialLessons)
+                .values({
+                  caseId,
+                  classId: interventionCase.classId,
+                  studentId: interventionCase.studentId,
+                  title: dto.generatedLessonDraft.title,
+                  summary: dto.generatedLessonDraft.summary ?? null,
+                  lessonBody: dto.generatedLessonDraft.lessonBody,
+                  weakConcepts: dto.generatedLessonDraft.weakConcepts,
+                  sourceLessonIds: dto.generatedLessonDraft.sourceLessonIds,
+                  sourceReferences: dto.generatedLessonDraft.sourceReferences,
+                  approvalStatus: 'rejected',
+                  approvedBy: user.userId,
+                  approvedAt: null,
+                  rejectedAt,
+                })
+                .returning()
+            )[0]
+          : null;
 
-        const rejectedAssessment =
-          dto.generatedGuidedAssessmentDraft
-            ? (
-                await tx
-                  .insert(generatedGuidedAssessments)
-                  .values({
-                    caseId,
-                    classId: interventionCase.classId,
-                    studentId: interventionCase.studentId,
-                    sourceAssessmentId:
-                      dto.generatedGuidedAssessmentDraft.sourceAssessmentId ??
-                      null,
-                    title: dto.generatedGuidedAssessmentDraft.title,
-                    description:
-                      dto.generatedGuidedAssessmentDraft.description ?? null,
-                    weakConcepts:
-                      dto.generatedGuidedAssessmentDraft.weakConcepts,
-                    formativeSummary:
-                      dto.generatedGuidedAssessmentDraft.formativeSummary ??
-                      null,
-                    sourceReferences:
-                      dto.generatedGuidedAssessmentDraft.sourceReferences,
-                    questions:
-                      dto.generatedGuidedAssessmentDraft.questions ?? [],
-                    approvalStatus: 'rejected',
-                    approvedBy: user.userId,
-                    approvedAt: null,
-                    rejectedAt,
-                  })
-                  .returning()
-              )[0]
-            : null;
+        const rejectedAssessment = dto.generatedGuidedAssessmentDraft
+          ? (
+              await tx
+                .insert(generatedGuidedAssessments)
+                .values({
+                  caseId,
+                  classId: interventionCase.classId,
+                  studentId: interventionCase.studentId,
+                  sourceAssessmentId:
+                    dto.generatedGuidedAssessmentDraft.sourceAssessmentId ??
+                    null,
+                  title: dto.generatedGuidedAssessmentDraft.title,
+                  description:
+                    dto.generatedGuidedAssessmentDraft.description ?? null,
+                  weakConcepts: dto.generatedGuidedAssessmentDraft.weakConcepts,
+                  formativeSummary:
+                    dto.generatedGuidedAssessmentDraft.formativeSummary ?? null,
+                  sourceReferences:
+                    dto.generatedGuidedAssessmentDraft.sourceReferences,
+                  questions: dto.generatedGuidedAssessmentDraft.questions ?? [],
+                  approvalStatus: 'rejected',
+                  approvedBy: user.userId,
+                  approvedAt: null,
+                  rejectedAt,
+                })
+                .returning()
+            )[0]
+          : null;
 
         return [rejectedLesson, rejectedAssessment] as const;
       },
@@ -2305,9 +2895,8 @@ export class LxpService {
     return {
       caseId,
       generatedLesson: this.serializeGeneratedLesson(generatedLesson),
-      guidedAssessment: this.serializeGeneratedGuidedAssessment(
-        guidedAssessment,
-      ),
+      guidedAssessment:
+        this.serializeGeneratedGuidedAssessment(guidedAssessment),
     };
   }
 
@@ -2337,13 +2926,17 @@ export class LxpService {
       throw new NotFoundException('Generated lesson checkpoint not found');
     }
     if (assignment.interventionCase.studentId !== studentId) {
-      throw new ForbiddenException('Checkpoint does not belong to current student');
+      throw new ForbiddenException(
+        'Checkpoint does not belong to current student',
+      );
     }
     if (assignment.interventionCase.classId !== classId) {
       throw new BadRequestException('Checkpoint does not belong to this class');
     }
     if (assignment.assignmentType !== 'generated_lesson_review') {
-      throw new BadRequestException('Checkpoint is not a generated remedial lesson');
+      throw new BadRequestException(
+        'Checkpoint is not a generated remedial lesson',
+      );
     }
     if (!assignment.generatedRemedialLesson) {
       throw new NotFoundException('Generated remedial lesson is missing');
@@ -2386,7 +2979,9 @@ export class LxpService {
       throw new NotFoundException('Guided assessment checkpoint not found');
     }
     if (assignment.interventionCase.studentId !== studentId) {
-      throw new ForbiddenException('Checkpoint does not belong to current student');
+      throw new ForbiddenException(
+        'Checkpoint does not belong to current student',
+      );
     }
     if (assignment.interventionCase.classId !== classId) {
       throw new BadRequestException('Checkpoint does not belong to this class');
@@ -2450,7 +3045,11 @@ export class LxpService {
     assignmentId: string,
     dto: UpdateGuidedAssessmentProgressDto,
   ) {
-    const session = await this.startGuidedAssessment(studentId, classId, assignmentId);
+    const session = await this.startGuidedAssessment(
+      studentId,
+      classId,
+      assignmentId,
+    );
     if (session.attempt.status === 'submitted') {
       throw new BadRequestException(
         'This guided remedial assessment has already been submitted.',
@@ -2530,7 +3129,11 @@ export class LxpService {
     assignmentId: string,
     dto: SubmitGuidedAssessmentDto,
   ) {
-    const session = await this.startGuidedAssessment(studentId, classId, assignmentId);
+    const session = await this.startGuidedAssessment(
+      studentId,
+      classId,
+      assignmentId,
+    );
     if (session.attempt.status === 'submitted') {
       throw new BadRequestException(
         'This guided remedial assessment has already been submitted.',
@@ -2551,7 +3154,10 @@ export class LxpService {
         generatedGuidedAssessment: true,
       },
     });
-    if (!assignment?.interventionCase || !assignment.generatedGuidedAssessment) {
+    if (
+      !assignment?.interventionCase ||
+      !assignment.generatedGuidedAssessment
+    ) {
       throw new NotFoundException('Guided assessment checkpoint not found');
     }
 
@@ -2672,7 +3278,9 @@ export class LxpService {
       throw new NotFoundException('Guided assessment checkpoint not found');
     }
     if (assignment.interventionCase.studentId !== studentId) {
-      throw new ForbiddenException('Checkpoint does not belong to current student');
+      throw new ForbiddenException(
+        'Checkpoint does not belong to current student',
+      );
     }
     if (assignment.interventionCase.classId !== classId) {
       throw new BadRequestException('Checkpoint does not belong to this class');
@@ -2788,6 +3396,8 @@ export class LxpService {
       const progress = progressByStudentId.get(row.studentId);
       const snapshot = snapshotByStudentId.get(row.studentId);
       const isCurrentlyAtRisk = Boolean(snapshot?.isAtRisk);
+      const isPathScoreRegeneration =
+        row.triggerSource === 'path_score_below_threshold';
       const latestBlendedScore = this.toNumber(snapshot?.blendedScore);
       const latestThreshold =
         this.toNumber(snapshot?.thresholdApplied) ??
@@ -2810,7 +3420,12 @@ export class LxpService {
         isCurrentlyAtRisk,
         latestBlendedScore,
         latestThreshold,
-        aiPlanEligible: isCurrentlyAtRisk,
+        aiPlanEligible: isCurrentlyAtRisk || isPathScoreRegeneration,
+        aiPlanEligibilityReason: isCurrentlyAtRisk
+          ? 'at_risk'
+          : isPathScoreRegeneration
+            ? 'path_score_below_threshold'
+            : null,
         totalCheckpoints,
         completedCheckpoints: completed,
         completionPercent:
@@ -2837,6 +3452,266 @@ export class LxpService {
       threshold: INTERVENTION_THRESHOLD,
       count: queue.length,
       queue,
+    };
+  }
+
+  async getTeacherInterventionHistory(classId: string, user: UserContext) {
+    await this.assertTeacherClassAccess(classId, user);
+
+    const cases = await this.db.query.interventionCases.findMany({
+      where: eq(interventionCases.classId, classId),
+      with: {
+        student: {
+          columns: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    const caseIds = cases.map((row) => row.id);
+    const assignmentRows =
+      caseIds.length > 0
+        ? await this.db.query.interventionAssignments.findMany({
+            where: inArray(interventionAssignments.caseId, caseIds),
+            columns: {
+              id: true,
+              caseId: true,
+              assignmentType: true,
+              lessonId: true,
+              assessmentId: true,
+              generatedRemedialLessonId: true,
+              generatedGuidedAssessmentId: true,
+              checkpointLabel: true,
+              orderIndex: true,
+              isCompleted: true,
+              completedAt: true,
+              xpAwarded: true,
+            },
+            with: {
+              lesson: {
+                columns: {
+                  id: true,
+                  title: true,
+                  description: true,
+                },
+              },
+              assessment: {
+                columns: {
+                  id: true,
+                  title: true,
+                  type: true,
+                  passingScore: true,
+                  dueDate: true,
+                },
+              },
+              generatedRemedialLesson: {
+                columns: {
+                  id: true,
+                  title: true,
+                  summary: true,
+                  lessonBody: true,
+                  weakConcepts: true,
+                  sourceLessonIds: true,
+                  sourceReferences: true,
+                  approvalStatus: true,
+                  approvedAt: true,
+                  rejectedAt: true,
+                },
+              },
+              generatedGuidedAssessment: {
+                columns: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  weakConcepts: true,
+                  sourceAssessmentId: true,
+                  sourceReferences: true,
+                  formativeSummary: true,
+                  questions: true,
+                  approvalStatus: true,
+                  approvedAt: true,
+                  rejectedAt: true,
+                },
+              },
+            },
+            orderBy: [asc(interventionAssignments.orderIndex)],
+          })
+        : [];
+
+    const assignmentsByCaseId = new Map<string, typeof assignmentRows>();
+    for (const row of assignmentRows) {
+      const items = assignmentsByCaseId.get(row.caseId) ?? [];
+      items.push(row);
+      assignmentsByCaseId.set(row.caseId, items);
+    }
+
+    const { assignmentScores, pathScores } =
+      await this.resolveTeacherPathScores(
+        cases.map((row) => ({ id: row.id, studentId: row.studentId })),
+        assignmentRows,
+      );
+
+    const history = cases.map((row) => {
+      const assignments = assignmentsByCaseId.get(row.id) ?? [];
+      const completedCheckpoints = assignments.filter(
+        (item) => item.isCompleted,
+      ).length;
+      const pathScore = pathScores.get(row.id) ?? null;
+
+      return {
+        id: row.id,
+        classId: row.classId,
+        studentId: row.studentId,
+        student: row.student,
+        status: row.status,
+        openedAt: row.openedAt,
+        closedAt: row.closedAt,
+        triggerSource: row.triggerSource,
+        triggerScore: this.toNumber(row.triggerScore),
+        thresholdApplied:
+          this.toNumber(row.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+        note: row.note,
+        completion: {
+          totalCheckpoints: assignments.length,
+          completedCheckpoints,
+          completionPercent:
+            assignments.length > 0
+              ? Math.round((completedCheckpoints / assignments.length) * 100)
+              : 0,
+        },
+        pathScore: this.serializeTeacherPathScore(pathScore),
+        canRegenerate:
+          row.status === 'completed' &&
+          pathScore !== null &&
+          pathScore.scorePercent < PATH_REGENERATION_SCORE_THRESHOLD,
+        assignments: assignments.map((assignment) =>
+          this.serializeTeacherInterventionAssignment(
+            assignment,
+            assignmentScores.get(assignment.id),
+          ),
+        ),
+      };
+    });
+
+    return {
+      classId,
+      scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      history,
+    };
+  }
+
+  async regenerateInterventionPath(caseId: string, user: UserContext) {
+    const sourceCase = await this.db.query.interventionCases.findFirst({
+      where: eq(interventionCases.id, caseId),
+      columns: {
+        id: true,
+        classId: true,
+        studentId: true,
+        status: true,
+        note: true,
+      },
+    });
+    if (!sourceCase) throw new NotFoundException('Intervention case not found');
+    await this.assertTeacherClassAccess(sourceCase.classId, user);
+
+    if (sourceCase.status !== 'completed') {
+      throw new BadRequestException(
+        'Only completed intervention paths can be regenerated.',
+      );
+    }
+
+    const assignmentRows = await this.db.query.interventionAssignments.findMany(
+      {
+        where: eq(interventionAssignments.caseId, sourceCase.id),
+        columns: {
+          id: true,
+          caseId: true,
+          assignmentType: true,
+          assessmentId: true,
+        },
+      },
+    );
+    const { pathScores } = await this.resolveTeacherPathScores(
+      [{ id: sourceCase.id, studentId: sourceCase.studentId }],
+      assignmentRows,
+    );
+    const pathScore = pathScores.get(sourceCase.id) ?? null;
+
+    if (!pathScore) {
+      throw new BadRequestException(
+        'A submitted path assessment score is required before regenerating this path.',
+      );
+    }
+
+    if (pathScore.scorePercent >= PATH_REGENERATION_SCORE_THRESHOLD) {
+      throw new BadRequestException(
+        'Only paths scored below 60% can be regenerated.',
+      );
+    }
+
+    const existingOpenCase = await this.db.query.interventionCases.findFirst({
+      where: and(
+        eq(interventionCases.studentId, sourceCase.studentId),
+        eq(interventionCases.classId, sourceCase.classId),
+        or(
+          eq(interventionCases.status, 'pending'),
+          eq(interventionCases.status, 'active'),
+        ),
+      ),
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    if (existingOpenCase) {
+      return {
+        sourceCaseId: sourceCase.id,
+        reusedExisting: true,
+        scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+        pathScore: this.serializeTeacherPathScore(pathScore),
+        case: await this.getTeacherInterventionCase(existingOpenCase.id, user),
+      };
+    }
+
+    const [created] = await this.db
+      .insert(interventionCases)
+      .values({
+        studentId: sourceCase.studentId,
+        classId: sourceCase.classId,
+        status: 'active',
+        triggerSource: 'path_score_below_threshold',
+        triggerScore: pathScore.scorePercent.toString(),
+        thresholdApplied: PATH_REGENERATION_SCORE_THRESHOLD.toString(),
+        note: this.appendInterventionNote(
+          null,
+          `Regenerated from completed Learners Path ${sourceCase.id}.`,
+        ),
+      })
+      .returning();
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.intervention.regenerated',
+      targetType: 'intervention_case',
+      targetId: created.id,
+      metadata: {
+        sourceCaseId: sourceCase.id,
+        classId: sourceCase.classId,
+        studentId: sourceCase.studentId,
+        pathScore: pathScore.scorePercent,
+        scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      },
+    });
+
+    return {
+      sourceCaseId: sourceCase.id,
+      reusedExisting: false,
+      scoreThreshold: PATH_REGENERATION_SCORE_THRESHOLD,
+      pathScore: this.serializeTeacherPathScore(pathScore),
+      case: await this.getTeacherInterventionCase(created.id, user),
     };
   }
 
@@ -3218,15 +4093,6 @@ export class LxpService {
       })
       .where(eq(interventionCases.id, caseId));
 
-    await this.getOrCreateProgress(
-      interventionCase.studentId,
-      interventionCase.classId,
-    );
-    await this.notifyInterventionActivated(
-      interventionCase.studentId,
-      interventionCase.classId,
-    );
-
     await this.auditService.log({
       actorId: user.userId,
       action: 'lxp.intervention.approved',
@@ -3342,150 +4208,157 @@ export class LxpService {
       recentLogs,
       generatedLessonDraft,
       generatedGuidedAssessmentDraft,
-    ] =
-      await Promise.all([
-        this.db.query.interventionAssignments.findMany({
-          where: eq(interventionAssignments.caseId, interventionCase.id),
-          columns: {
-            id: true,
-            assignmentType: true,
-            checkpointLabel: true,
-            orderIndex: true,
-            isCompleted: true,
-            completedAt: true,
-            xpAwarded: true,
-          },
-          with: {
-            lesson: {
-              columns: {
-                id: true,
-                title: true,
-                description: true,
-              },
-            },
-            assessment: {
-              columns: {
-                id: true,
-                title: true,
-                type: true,
-                passingScore: true,
-                dueDate: true,
-              },
-            },
-            generatedRemedialLesson: {
-              columns: {
-                id: true,
-                title: true,
-                summary: true,
-                lessonBody: true,
-                weakConcepts: true,
-                sourceLessonIds: true,
-                sourceReferences: true,
-                approvalStatus: true,
-                approvedAt: true,
-                rejectedAt: true,
-              },
-            },
-            generatedGuidedAssessment: {
-              columns: {
-                id: true,
-                title: true,
-                description: true,
-                weakConcepts: true,
-                sourceAssessmentId: true,
-                sourceReferences: true,
-                formativeSummary: true,
-                questions: true,
-                approvalStatus: true,
-                approvedAt: true,
-                rejectedAt: true,
-              },
+    ] = await Promise.all([
+      this.db.query.interventionAssignments.findMany({
+        where: eq(interventionAssignments.caseId, interventionCase.id),
+        columns: {
+          id: true,
+          caseId: true,
+          assignmentType: true,
+          assessmentId: true,
+          checkpointLabel: true,
+          orderIndex: true,
+          isCompleted: true,
+          completedAt: true,
+          xpAwarded: true,
+        },
+        with: {
+          lesson: {
+            columns: {
+              id: true,
+              title: true,
+              description: true,
             },
           },
-          orderBy: [asc(interventionAssignments.orderIndex)],
-        }),
-        this.db.query.lxpProgress.findFirst({
-          where: and(
-            eq(lxpProgress.classId, interventionCase.classId),
-            eq(lxpProgress.studentId, interventionCase.studentId),
-          ),
-          columns: {
-            xpTotal: true,
-            streakDays: true,
-            checkpointsCompleted: true,
-            lastActivityAt: true,
+          assessment: {
+            columns: {
+              id: true,
+              title: true,
+              type: true,
+              passingScore: true,
+              dueDate: true,
+            },
           },
-        }),
-        this.db.query.performanceSnapshots.findFirst({
-          where: and(
-            eq(performanceSnapshots.classId, interventionCase.classId),
-            eq(performanceSnapshots.studentId, interventionCase.studentId),
-          ),
-          columns: {
-            assessmentAverage: true,
-            classRecordAverage: true,
-            blendedScore: true,
-            isAtRisk: true,
-            thresholdApplied: true,
-            lastComputedAt: true,
+          generatedRemedialLesson: {
+            columns: {
+              id: true,
+              title: true,
+              summary: true,
+              lessonBody: true,
+              weakConcepts: true,
+              sourceLessonIds: true,
+              sourceReferences: true,
+              approvalStatus: true,
+              approvedAt: true,
+              rejectedAt: true,
+            },
           },
-        }),
-        this.db.query.studentConceptMastery.findMany({
-          where: and(
-            eq(studentConceptMastery.classId, interventionCase.classId),
-            eq(studentConceptMastery.studentId, interventionCase.studentId),
-          ),
-          columns: {
-            conceptKey: true,
-            evidenceCount: true,
-            errorCount: true,
-            masteryScore: true,
-            updatedAt: true,
+          generatedGuidedAssessment: {
+            columns: {
+              id: true,
+              title: true,
+              description: true,
+              weakConcepts: true,
+              sourceAssessmentId: true,
+              sourceReferences: true,
+              formativeSummary: true,
+              questions: true,
+              approvalStatus: true,
+              approvedAt: true,
+              rejectedAt: true,
+            },
           },
-          orderBy: [
-            asc(studentConceptMastery.masteryScore),
-            desc(studentConceptMastery.errorCount),
-            desc(studentConceptMastery.updatedAt),
-          ],
-          limit: 6,
-        }),
-        this.db.query.performanceLogs.findMany({
-          where: and(
-            eq(performanceLogs.classId, interventionCase.classId),
-            eq(performanceLogs.studentId, interventionCase.studentId),
-          ),
-          columns: {
-            id: true,
-            previousIsAtRisk: true,
-            currentIsAtRisk: true,
-            blendedScore: true,
-            thresholdApplied: true,
-            triggerSource: true,
-            createdAt: true,
-          },
-          orderBy: [desc(performanceLogs.createdAt)],
-          limit: 6,
-        }),
-        this.db.query.generatedRemedialLessons.findFirst({
-          where: eq(generatedRemedialLessons.caseId, interventionCase.id),
-          orderBy: [
-            desc(generatedRemedialLessons.updatedAt),
-            desc(generatedRemedialLessons.createdAt),
-          ],
-        }),
-        this.db.query.generatedGuidedAssessments.findFirst({
-          where: eq(generatedGuidedAssessments.caseId, interventionCase.id),
-          orderBy: [
-            desc(generatedGuidedAssessments.updatedAt),
-            desc(generatedGuidedAssessments.createdAt),
-          ],
-        }),
-      ]);
+        },
+        orderBy: [asc(interventionAssignments.orderIndex)],
+      }),
+      this.db.query.lxpProgress.findFirst({
+        where: and(
+          eq(lxpProgress.classId, interventionCase.classId),
+          eq(lxpProgress.studentId, interventionCase.studentId),
+        ),
+        columns: {
+          xpTotal: true,
+          streakDays: true,
+          checkpointsCompleted: true,
+          lastActivityAt: true,
+        },
+      }),
+      this.db.query.performanceSnapshots.findFirst({
+        where: and(
+          eq(performanceSnapshots.classId, interventionCase.classId),
+          eq(performanceSnapshots.studentId, interventionCase.studentId),
+        ),
+        columns: {
+          assessmentAverage: true,
+          classRecordAverage: true,
+          blendedScore: true,
+          isAtRisk: true,
+          thresholdApplied: true,
+          lastComputedAt: true,
+        },
+      }),
+      this.db.query.studentConceptMastery.findMany({
+        where: and(
+          eq(studentConceptMastery.classId, interventionCase.classId),
+          eq(studentConceptMastery.studentId, interventionCase.studentId),
+        ),
+        columns: {
+          conceptKey: true,
+          evidenceCount: true,
+          errorCount: true,
+          masteryScore: true,
+          updatedAt: true,
+        },
+        orderBy: [
+          asc(studentConceptMastery.masteryScore),
+          desc(studentConceptMastery.errorCount),
+          desc(studentConceptMastery.updatedAt),
+        ],
+        limit: 6,
+      }),
+      this.db.query.performanceLogs.findMany({
+        where: and(
+          eq(performanceLogs.classId, interventionCase.classId),
+          eq(performanceLogs.studentId, interventionCase.studentId),
+        ),
+        columns: {
+          id: true,
+          previousIsAtRisk: true,
+          currentIsAtRisk: true,
+          blendedScore: true,
+          thresholdApplied: true,
+          triggerSource: true,
+          createdAt: true,
+        },
+        orderBy: [desc(performanceLogs.createdAt)],
+        limit: 6,
+      }),
+      this.db.query.generatedRemedialLessons.findFirst({
+        where: eq(generatedRemedialLessons.caseId, interventionCase.id),
+        orderBy: [
+          desc(generatedRemedialLessons.updatedAt),
+          desc(generatedRemedialLessons.createdAt),
+        ],
+      }),
+      this.db.query.generatedGuidedAssessments.findFirst({
+        where: eq(generatedGuidedAssessments.caseId, interventionCase.id),
+        orderBy: [
+          desc(generatedGuidedAssessments.updatedAt),
+          desc(generatedGuidedAssessments.createdAt),
+        ],
+      }),
+    ]);
 
     const totalCheckpoints = assignmentRows.length;
     const completedCheckpoints = assignmentRows.filter(
       (row) => row.isCompleted,
     ).length;
+    const { assignmentScores, pathScores } =
+      await this.resolveTeacherPathScores(
+        [{ id: interventionCase.id, studentId: interventionCase.studentId }],
+        assignmentRows,
+      );
+    const pathScore = pathScores.get(interventionCase.id) ?? null;
 
     return {
       id: interventionCase.id,
@@ -3500,6 +4373,11 @@ export class LxpService {
         this.toNumber(interventionCase.thresholdApplied) ??
         INTERVENTION_THRESHOLD,
       note: interventionCase.note,
+      pathScore: this.serializeTeacherPathScore(pathScore),
+      canRegenerate:
+        interventionCase.status === 'completed' &&
+        pathScore !== null &&
+        pathScore.scorePercent < PATH_REGENERATION_SCORE_THRESHOLD,
       completion: {
         totalCheckpoints,
         completedCheckpoints,
@@ -3520,23 +4398,12 @@ export class LxpService {
             checkpointsCompleted: 0,
             lastActivityAt: null,
           },
-      assignments: assignmentRows.map((row) => ({
-        id: row.id,
-        type: row.assignmentType,
-        label: row.checkpointLabel,
-        order: row.orderIndex,
-        isCompleted: row.isCompleted,
-        completedAt: row.completedAt,
-        xpAwarded: row.xpAwarded,
-        lesson: row.lesson,
-        assessment: row.assessment,
-        generatedLesson: this.serializeGeneratedLesson(
-          row.generatedRemedialLesson,
+      assignments: assignmentRows.map((row) =>
+        this.serializeTeacherInterventionAssignment(
+          row,
+          assignmentScores.get(row.id),
         ),
-        guidedAssessment: this.serializeGeneratedGuidedAssessment(
-          row.generatedGuidedAssessment,
-        ),
-      })),
+      ),
       generatedArtifacts: {
         generatedLesson: this.serializeGeneratedLesson(generatedLessonDraft),
         guidedAssessment: this.serializeGeneratedGuidedAssessment(
@@ -3837,9 +4704,9 @@ export class LxpService {
     await this.assertStudentEnrollment(user.userId, dto.classId);
 
     const candidateKeys = new Set(
-      (
-        await this.getStudentTeacherEvaluationCandidates(user.userId)
-      ).map((candidate) => this.buildTeacherEvaluationScopeKey(candidate)),
+      (await this.getStudentTeacherEvaluationCandidates(user.userId)).map(
+        (candidate) => this.buildTeacherEvaluationScopeKey(candidate),
+      ),
     );
     const targetKey = this.buildTeacherEvaluationScopeKey({
       classId: dto.classId,
@@ -3858,10 +4725,7 @@ export class LxpService {
           eq(teacherEvaluationSubmissions.studentId, user.userId),
           eq(teacherEvaluationSubmissions.classId, dto.classId),
           eq(teacherEvaluationSubmissions.gradingPeriod, dto.gradingPeriod),
-          eq(
-            teacherEvaluationSubmissions.evaluationType,
-            dto.evaluationType,
-          ),
+          eq(teacherEvaluationSubmissions.evaluationType, dto.evaluationType),
         ),
         columns: { id: true },
       });
@@ -4001,9 +4865,7 @@ export class LxpService {
     });
     const classIds = teacherClassRows.map((row) => row.id);
 
-    const classRecordConditions: SQL[] = [
-      eq(classRecords.status, 'finalized'),
-    ];
+    const classRecordConditions: SQL[] = [eq(classRecords.status, 'finalized')];
     if (classIds.length > 0) {
       classRecordConditions.push(inArray(classRecords.classId, classIds));
     }
@@ -4036,91 +4898,92 @@ export class LxpService {
     const relevantClassIds = Array.from(
       new Set(classRecordRows.map((row) => row.classId)),
     );
-    const [jaRows, lxpRows, completedCaseRows, submissionRows] = await Promise.all([
-      relevantClassIds.length > 0
-        ? this.db.query.jaSessions.findMany({
-            where: and(
-              inArray(jaSessions.classId, relevantClassIds),
-              eq(jaSessions.status, 'completed'),
-            ),
-            columns: {
-              classId: true,
-              studentId: true,
-            },
-          })
-        : Promise.resolve<Array<{ classId: string | null; studentId: string | null }>>([]),
-      relevantClassIds.length > 0
-        ? this.db.query.lxpProgress.findMany({
-            where: inArray(lxpProgress.classId, relevantClassIds),
-            columns: {
-              classId: true,
-              studentId: true,
-              checkpointsCompleted: true,
-            },
-          })
-        : Promise.resolve<
-            Array<{
-              classId: string | null;
-              studentId: string | null;
-              checkpointsCompleted: number | null;
-            }>
-          >([]),
-      relevantClassIds.length > 0
-        ? this.db.query.interventionCases.findMany({
-            where: and(
-              inArray(interventionCases.classId, relevantClassIds),
-              eq(interventionCases.status, 'completed'),
-            ),
-            columns: {
-              classId: true,
-              studentId: true,
-            },
-          })
-        : Promise.resolve<Array<{ classId: string | null; studentId: string | null }>>([]),
-      classIds.length > 0
-        ? this.db.query.teacherEvaluationSubmissions.findMany({
-            where: and(
-              inArray(teacherEvaluationSubmissions.classId, classIds),
-              eq(
-                teacherEvaluationSubmissions.evaluationType,
-                query.evaluationType,
+    const [jaRows, lxpRows, completedCaseRows, submissionRows] =
+      await Promise.all([
+        relevantClassIds.length > 0
+          ? this.db.query.jaSessions.findMany({
+              where: and(
+                inArray(jaSessions.classId, relevantClassIds),
+                eq(jaSessions.status, 'completed'),
               ),
-              ...(
-                query.classId
+              columns: {
+                classId: true,
+                studentId: true,
+              },
+            })
+          : Promise.resolve<
+              Array<{ classId: string | null; studentId: string | null }>
+            >([]),
+        relevantClassIds.length > 0
+          ? this.db.query.lxpProgress.findMany({
+              where: inArray(lxpProgress.classId, relevantClassIds),
+              columns: {
+                classId: true,
+                studentId: true,
+                checkpointsCompleted: true,
+              },
+            })
+          : Promise.resolve<
+              Array<{
+                classId: string | null;
+                studentId: string | null;
+                checkpointsCompleted: number | null;
+              }>
+            >([]),
+        relevantClassIds.length > 0
+          ? this.db.query.interventionCases.findMany({
+              where: and(
+                inArray(interventionCases.classId, relevantClassIds),
+                eq(interventionCases.status, 'completed'),
+              ),
+              columns: {
+                classId: true,
+                studentId: true,
+              },
+            })
+          : Promise.resolve<
+              Array<{ classId: string | null; studentId: string | null }>
+            >([]),
+        classIds.length > 0
+          ? this.db.query.teacherEvaluationSubmissions.findMany({
+              where: and(
+                inArray(teacherEvaluationSubmissions.classId, classIds),
+                eq(
+                  teacherEvaluationSubmissions.evaluationType,
+                  query.evaluationType,
+                ),
+                ...(query.classId
                   ? [eq(teacherEvaluationSubmissions.classId, query.classId)]
-                  : []
-              ),
-              ...(
-                query.gradingPeriod
+                  : []),
+                ...(query.gradingPeriod
                   ? [
                       eq(
                         teacherEvaluationSubmissions.gradingPeriod,
                         query.gradingPeriod,
                       ),
                     ]
-                  : []
+                  : []),
               ),
-            ),
-            columns: {
-              id: true,
-              classId: true,
-              gradingPeriod: true,
-              ratingsJson: true,
-              comment: true,
-              submittedAt: true,
-            },
-          })
-        : Promise.resolve<
-            Array<{
-              id: string;
-              classId: string;
-              gradingPeriod: string;
-              ratingsJson: Record<string, unknown> | null;
-              comment: string | null;
-              submittedAt: Date;
-            }>
-          >([]),
-    ]);
+              columns: {
+                id: true,
+                classId: true,
+                gradingPeriod: true,
+                ratingsJson: true,
+                comment: true,
+                submittedAt: true,
+              },
+            })
+          : Promise.resolve<
+              Array<{
+                id: string;
+                classId: string;
+                gradingPeriod: string;
+                ratingsJson: Record<string, unknown> | null;
+                comment: string | null;
+                submittedAt: Date;
+              }>
+            >([]),
+      ]);
 
     const jaUsageMap = new Map<string, Set<string>>();
     for (const row of jaRows) {
@@ -4160,7 +5023,8 @@ export class LxpService {
             jaUsedIds.has(studentId),
           );
         } else if (query.evaluationType === 'learners_path') {
-          const lxpUsedIds = lxpUsageMap.get(record.classId) ?? new Set<string>();
+          const lxpUsedIds =
+            lxpUsageMap.get(record.classId) ?? new Set<string>();
           eligibleStudentIds = studentIds.filter((studentId) =>
             lxpUsedIds.has(studentId),
           );
@@ -4182,7 +5046,9 @@ export class LxpService {
         (!query.gradingPeriod || row.gradingPeriod === query.gradingPeriod),
     );
 
-    const definition = this.getTeacherEvaluationDefinition(query.evaluationType);
+    const definition = this.getTeacherEvaluationDefinition(
+      query.evaluationType,
+    );
     const ratingTotals = Object.fromEntries(
       definition.categories.map((category) => [category.key, 0]),
     ) as Record<string, number>;
@@ -4277,7 +5143,10 @@ export class LxpService {
       })),
       periods: Array.from(
         new Set(classRecordRows.map((row) => row.gradingPeriod)),
-      ).sort((left, right) => this.quarterSortValue(left) - this.quarterSortValue(right)),
+      ).sort(
+        (left, right) =>
+          this.quarterSortValue(left) - this.quarterSortValue(right),
+      ),
       evaluationType: query.evaluationType,
       tabTitle: definition.title,
       tabDescription: definition.description,
@@ -4308,6 +5177,366 @@ export class LxpService {
       comments,
       trends,
     };
+  }
+
+  async getMySystemEvaluationDashboard(user: UserContext) {
+    if (!user.roles.includes('student') && !user.roles.includes('teacher')) {
+      throw new ForbiddenException(
+        'Only students and teachers can view assigned evaluations.',
+      );
+    }
+
+    const respondentRole: SystemEvaluationAudienceRole = user.roles.includes(
+      'teacher',
+    )
+      ? 'teacher'
+      : 'student';
+
+    const assignmentRows =
+      await this.db.query.systemEvaluationAssignments.findMany({
+        where: and(
+          eq(systemEvaluationAssignments.respondentId, user.userId),
+          eq(systemEvaluationAssignments.respondentRole, respondentRole),
+        ),
+        with: {
+          campaign: {
+            columns: {
+              id: true,
+              formType: true,
+              targetModule: true,
+              title: true,
+              audienceRole: true,
+              classId: true,
+              startsAt: true,
+              endsAt: true,
+              status: true,
+            },
+            with: {
+              class: {
+                columns: {
+                  id: true,
+                  subjectName: true,
+                  subjectCode: true,
+                },
+                with: {
+                  section: {
+                    columns: {
+                      id: true,
+                      name: true,
+                      gradeLevel: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [desc(systemEvaluationAssignments.createdAt)],
+      });
+
+    const allowedRows = assignmentRows.filter((row) => {
+      if (!row.campaign) return false;
+      if (respondentRole === 'teacher' && row.campaign.formType !== 'system') {
+        return false;
+      }
+      return true;
+    });
+
+    const pending = allowedRows
+      .filter(
+        (row) =>
+          row.status === 'pending' && this.isSystemCampaignOpen(row.campaign),
+      )
+      .map((row) => this.formatSystemEvaluationAssignment(row));
+
+    const completed = allowedRows
+      .filter((row) => row.status === 'submitted')
+      .map((row) => this.formatSystemEvaluationAssignment(row));
+
+    return { pending, completed };
+  }
+
+  async submitAssignedSystemEvaluation(
+    assignmentId: string,
+    user: UserContext,
+    dto: SubmitAssignedSystemEvaluationDto,
+  ) {
+    const assignment =
+      await this.db.query.systemEvaluationAssignments.findFirst({
+        where: eq(systemEvaluationAssignments.id, assignmentId),
+        with: {
+          campaign: true,
+        },
+      });
+
+    if (!assignment?.campaign) {
+      throw new NotFoundException('Evaluation assignment not found.');
+    }
+    if (assignment.respondentId !== user.userId) {
+      throw new ForbiddenException('This evaluation is not assigned to you.');
+    }
+    if (!user.roles.includes(assignment.respondentRole)) {
+      throw new ForbiddenException(
+        'Your role cannot submit this evaluation assignment.',
+      );
+    }
+    if (assignment.status === 'submitted') {
+      throw new BadRequestException('This evaluation was already submitted.');
+    }
+    if (!this.isSystemCampaignOpen(assignment.campaign)) {
+      throw new BadRequestException('This evaluation campaign is not open.');
+    }
+    if (
+      assignment.respondentRole === 'teacher' &&
+      assignment.campaign.formType !== 'system'
+    ) {
+      throw new ForbiddenException(
+        'Teachers can only answer system evaluations.',
+      );
+    }
+
+    const definition = this.getSystemEvaluationDefinition(
+      assignment.campaign.formType,
+    );
+    if (!definition.audienceRoles.includes(assignment.respondentRole)) {
+      throw new ForbiddenException(
+        'This role is not allowed to answer this evaluation form.',
+      );
+    }
+
+    const { normalized, legacyScores } =
+      this.normalizeSystemEvaluationQuestionRatings(
+        assignment.campaign.formType,
+        dto.questionRatings ?? {},
+      );
+
+    const [created] = await this.db
+      .insert(systemEvaluations)
+      .values({
+        campaignId: assignment.campaign.id,
+        submittedBy: user.userId,
+        targetModule: assignment.campaign.targetModule,
+        usabilityScore: legacyScores.usabilityScore,
+        functionalityScore: legacyScores.functionalityScore,
+        performanceScore: legacyScores.performanceScore,
+        satisfactionScore: legacyScores.satisfactionScore,
+        overallScore: legacyScores.overallScore,
+        questionRatingsJson: normalized,
+        feedback: dto.feedback?.trim() ? dto.feedback.trim() : null,
+      })
+      .returning();
+
+    await this.db
+      .update(systemEvaluationAssignments)
+      .set({
+        status: 'submitted',
+        submittedEvaluationId: created.id,
+        submittedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(systemEvaluationAssignments.id, assignmentId));
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.system_evaluation_assignment.submitted',
+      targetType: 'system_evaluation_assignment',
+      targetId: assignmentId,
+      metadata: {
+        campaignId: assignment.campaign.id,
+        formType: assignment.campaign.formType,
+        targetModule: assignment.campaign.targetModule,
+        hasFeedback: Boolean(dto.feedback?.trim()),
+      },
+    });
+
+    return created;
+  }
+
+  async createSystemEvaluationCampaign(
+    user: UserContext,
+    dto: CreateSystemEvaluationCampaignDto,
+  ) {
+    if (!this.isAdmin(user.roles) && !this.isTeacher(user.roles)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can create evaluation campaigns.',
+      );
+    }
+
+    const definition = this.getSystemEvaluationDefinition(dto.formType);
+    if (!definition.audienceRoles.includes(dto.audienceRole)) {
+      throw new BadRequestException(
+        `${dto.formType} evaluations cannot target ${dto.audienceRole} respondents.`,
+      );
+    }
+    const { start, end } = this.normalizeDateRange(dto.startsAt, dto.endsAt);
+    const status = dto.status ?? 'draft';
+
+    if (!this.isAdmin(user.roles)) {
+      if (dto.audienceRole !== 'student' || !dto.classId) {
+        throw new ForbiddenException(
+          'Teachers can only launch class-scoped student campaigns.',
+        );
+      }
+      await this.assertTeacherClassAccess(dto.classId, user);
+    }
+
+    const [created] = await this.db
+      .insert(systemEvaluationCampaigns)
+      .values({
+        createdBy: user.userId,
+        formType: dto.formType,
+        targetModule: definition.targetModule,
+        audienceRole: dto.audienceRole,
+        classId: dto.classId ?? null,
+        title: dto.title.trim(),
+        startsAt: start,
+        endsAt: end,
+        status,
+        updatedAt: new Date(),
+      })
+      .returning();
+
+    const assignmentCount =
+      status === 'active'
+        ? await this.createAssignmentsForSystemCampaign(created)
+        : 0;
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.system_evaluation_campaign.created',
+      targetType: 'system_evaluation_campaign',
+      targetId: created.id,
+      metadata: {
+        formType: created.formType,
+        audienceRole: created.audienceRole,
+        classId: created.classId,
+        status: created.status,
+        assignmentCount,
+      },
+    });
+
+    return { ...created, assignmentCount };
+  }
+
+  async listSystemEvaluationCampaigns(
+    user: UserContext,
+    query: ListSystemEvaluationCampaignsQueryDto = {},
+  ) {
+    if (!this.isAdmin(user.roles) && !this.isTeacher(user.roles)) {
+      throw new ForbiddenException(
+        'Only teachers and admins can view evaluation campaigns.',
+      );
+    }
+
+    const conditions: SQL[] = [];
+    if (query.formType) {
+      conditions.push(eq(systemEvaluationCampaigns.formType, query.formType));
+    }
+    if (query.audienceRole) {
+      conditions.push(
+        eq(systemEvaluationCampaigns.audienceRole, query.audienceRole),
+      );
+    }
+    if (query.status) {
+      conditions.push(eq(systemEvaluationCampaigns.status, query.status));
+    }
+    if (query.classId) {
+      conditions.push(eq(systemEvaluationCampaigns.classId, query.classId));
+    }
+    if (!this.isAdmin(user.roles)) {
+      const teacherClasses = await this.db.query.classes.findMany({
+        where: eq(classes.teacherId, user.userId),
+        columns: { id: true },
+      });
+      const teacherClassIds = teacherClasses.map((cls) => cls.id);
+      conditions.push(
+        teacherClassIds.length > 0
+          ? or(
+              eq(systemEvaluationCampaigns.createdBy, user.userId),
+              inArray(systemEvaluationCampaigns.classId, teacherClassIds),
+            )!
+          : eq(systemEvaluationCampaigns.createdBy, user.userId),
+      );
+    }
+
+    const campaigns = await this.db.query.systemEvaluationCampaigns.findMany({
+      where: conditions.length > 0 ? and(...conditions) : undefined,
+      with: {
+        class: {
+          columns: { id: true, subjectName: true, subjectCode: true },
+          with: {
+            section: { columns: { id: true, name: true, gradeLevel: true } },
+          },
+        },
+        assignments: {
+          columns: { id: true, status: true },
+        },
+      },
+      orderBy: [desc(systemEvaluationCampaigns.createdAt)],
+    });
+
+    const mapped = campaigns.map((campaign) => ({
+      id: campaign.id,
+      formType: campaign.formType,
+      targetModule: campaign.targetModule,
+      audienceRole: campaign.audienceRole,
+      classId: campaign.classId,
+      class: campaign.class ?? null,
+      title: campaign.title,
+      startsAt: campaign.startsAt,
+      endsAt: campaign.endsAt,
+      status: campaign.status,
+      createdAt: campaign.createdAt,
+      updatedAt: campaign.updatedAt,
+      assignmentCount: campaign.assignments?.length ?? 0,
+      submittedCount:
+        campaign.assignments?.filter((item) => item.status === 'submitted')
+          .length ?? 0,
+    }));
+
+    return { campaigns: mapped, count: mapped.length };
+  }
+
+  async updateSystemEvaluationCampaignStatus(
+    campaignId: string,
+    user: UserContext,
+    dto: UpdateSystemEvaluationCampaignStatusDto,
+  ) {
+    const campaign = await this.db.query.systemEvaluationCampaigns.findFirst({
+      where: eq(systemEvaluationCampaigns.id, campaignId),
+      columns: {
+        id: true,
+        createdBy: true,
+        classId: true,
+        audienceRole: true,
+        status: true,
+      },
+    });
+    if (!campaign) {
+      throw new NotFoundException('System evaluation campaign not found.');
+    }
+    await this.assertSystemEvaluationCampaignAccess(campaign, user);
+
+    const [updated] = await this.db
+      .update(systemEvaluationCampaigns)
+      .set({ status: dto.status, updatedAt: new Date() })
+      .where(eq(systemEvaluationCampaigns.id, campaignId))
+      .returning();
+
+    const assignmentCount =
+      dto.status === 'active'
+        ? await this.createAssignmentsForSystemCampaign(updated)
+        : 0;
+
+    await this.auditService.log({
+      actorId: user.userId,
+      action: 'lxp.system_evaluation_campaign.status_updated',
+      targetType: 'system_evaluation_campaign',
+      targetId: campaignId,
+      metadata: { status: dto.status, assignmentCount },
+    });
+
+    return { ...updated, assignmentCount };
   }
 
   async submitSystemEvaluation(
@@ -4351,9 +5580,9 @@ export class LxpService {
     user: UserContext,
     query: ListSystemEvaluationsQueryDto = {},
   ) {
-    if (!this.isAdmin(user.roles) && !user.roles.includes('teacher')) {
+    if (!this.isAdmin(user.roles)) {
       throw new ForbiddenException(
-        'Only teachers and admins can view evaluation results.',
+        'Only admins can view platform evaluation results.',
       );
     }
 
@@ -4387,12 +5616,35 @@ export class LxpService {
         sql`${systemEvaluations.aiContextMetadata} ->> 'sourceFlow' = ${query.aiSourceFlow}`,
       );
     }
+    if (query.campaignId) {
+      conditions.push(eq(systemEvaluations.campaignId, query.campaignId));
+    }
+    if (query.audienceRole) {
+      conditions.push(
+        sql`${systemEvaluations.campaignId} in (select id from system_evaluation_campaigns where audience_role = ${query.audienceRole})`,
+      );
+    }
+    if (query.from) {
+      conditions.push(gte(systemEvaluations.createdAt, new Date(query.from)));
+    }
+    if (query.to) {
+      conditions.push(lte(systemEvaluations.createdAt, new Date(query.to)));
+    }
 
     const rows = await this.db.query.systemEvaluations.findMany({
       where: conditions.length > 0 ? and(...conditions) : undefined,
       with: {
         submitter: {
           columns: { id: true, firstName: true, lastName: true, email: true },
+        },
+        campaign: {
+          columns: {
+            id: true,
+            title: true,
+            formType: true,
+            audienceRole: true,
+            status: true,
+          },
         },
       },
       orderBy: [desc(systemEvaluations.createdAt)],

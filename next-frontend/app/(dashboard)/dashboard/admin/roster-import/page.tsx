@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileUp, Upload } from 'lucide-react';
+import { Download, FileUp, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   rosterImportService,
@@ -11,6 +11,7 @@ import {
 } from '@/services/roster-import-service';
 import { sectionService } from '@/services/section-service';
 import type { Section } from '@/types/section';
+import { downloadRosterImportTemplate } from '@/lib/roster-import-template';
 import { AdminEmptyState, AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,11 +25,29 @@ function formatFileLabel(file: File | null): string {
 }
 
 function formatRosterName(name: RosterParsedName): string {
-  return [name.firstName, name.middleInitial, name.lastName].filter(Boolean).join(' ');
+  return [name.firstName, name.middleName, name.lastName].filter(Boolean).join(' ');
 }
 
-function pendingRowName(row: PendingImportRow): string {
+function importHistoryRowName(row: PendingImportRow): string {
   return [row.firstName, row.middleInitial, row.lastName].filter(Boolean).join(' ');
+}
+
+function getApiErrorMessage(error: unknown): string | null {
+  const maybeError = error as {
+    response?: { data?: { message?: string | string[] } };
+    message?: string;
+  };
+  const message = maybeError?.response?.data?.message;
+  if (Array.isArray(message)) {
+    return message.join(', ');
+  }
+  if (typeof message === 'string' && message.trim().length > 0) {
+    return message;
+  }
+  if (typeof maybeError?.message === 'string' && maybeError.message.trim().length > 0) {
+    return maybeError.message;
+  }
+  return null;
 }
 
 export default function RosterImportPage() {
@@ -41,6 +60,8 @@ export default function RosterImportPage() {
   const [loadingPending, setLoadingPending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
+  const selectedSection = sections.find((section) => section.id === sectionId) ?? null;
 
   useEffect(() => {
     sectionService
@@ -78,12 +99,44 @@ export default function RosterImportPage() {
     try {
       setUploading(true);
       const response = await rosterImportService.preview(sectionId, selectedFile);
-      setPreview(response.data);
-      toast.success('Roster file uploaded and preview generated.');
-    } catch {
-      toast.error('Failed to upload and preview roster file.');
+      const previewData = response.data;
+      setPreview(previewData);
+
+      const validRows =
+        (previewData?.summary?.registeredCount ?? 0) +
+        (previewData?.summary?.pendingCount ?? 0);
+      if (validRows <= 0) {
+        toast.error('No valid rows found in the file. Please check the template and try again.');
+        return;
+      }
+
+      setCommitting(true);
+      await rosterImportService.commit(sectionId, {
+        sectionId,
+        enrolledRows: previewData.registered.map((row) => ({
+          userId: row.userId,
+          name: row.name,
+          lrn: row.lrn,
+          email: row.email,
+        })),
+        pendingRows: previewData.pending.map((row) => ({
+          name: row.name,
+          lrn: row.lrn,
+          email: row.email,
+        })),
+      });
+
+      toast.success(`Import completed. ${validRows} account(s) processed.`);
+      setPreview(null);
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      fetchPending();
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message ?? 'Failed to import roster file.');
     } finally {
       setUploading(false);
+      setCommitting(false);
     }
   };
 
@@ -111,10 +164,28 @@ export default function RosterImportPage() {
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       fetchPending();
-    } catch {
-      toast.error('Failed to commit roster import.');
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      toast.error(message ?? 'Failed to commit roster import.');
     } finally {
       setCommitting(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    if (!selectedSection) {
+      toast.error('Select a target section before downloading the template.');
+      return;
+    }
+
+    try {
+      setDownloadingTemplate(true);
+      await downloadRosterImportTemplate(selectedSection);
+      toast.success('Roster template downloaded.');
+    } catch {
+      toast.error('Failed to create the roster template.');
+    } finally {
+      setDownloadingTemplate(false);
     }
   };
 
@@ -184,10 +255,21 @@ export default function RosterImportPage() {
           <Button
             className="admin-roster-upload-button"
             onClick={handleUploadPreview}
-            disabled={!sectionId || !selectedFile || uploading}
+            disabled={!sectionId || !selectedFile || uploading || committing}
           >
             <Upload className="h-4 w-4" />
-            {uploading ? 'Uploading...' : 'Upload & Preview'}
+            {uploading || committing ? 'Importing...' : 'Upload & Import'}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="admin-button-outline rounded-xl font-black"
+            onClick={handleDownloadTemplate}
+            disabled={!selectedSection || downloadingTemplate}
+          >
+            <Download className="h-4 w-4" />
+            {downloadingTemplate ? 'Creating Template...' : 'Download Excel Template'}
           </Button>
         </div>
       </AdminSectionCard>
@@ -199,7 +281,7 @@ export default function RosterImportPage() {
           action={(
             <div className="admin-controls">
               <Badge variant="default">{preview.summary.registeredCount} registered</Badge>
-              <Badge variant="secondary">{preview.summary.pendingCount} pending</Badge>
+              <Badge variant="secondary">{preview.summary.pendingCount} to create</Badge>
               {preview.summary.errorCount > 0 ? <Badge variant="destructive">{preview.summary.errorCount} errors</Badge> : null}
               <Button
                 size="sm"
@@ -243,8 +325,8 @@ export default function RosterImportPage() {
                     <TableCell>{formatRosterName(row.name)}</TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>{row.lrn || '-'}</TableCell>
-                    <TableCell><Badge variant="secondary">Pending</Badge></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{row.reason || 'Pending account match'}</TableCell>
+                    <TableCell><Badge variant="secondary">To Create</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{row.reason || 'Will auto-create active student account'}</TableCell>
                   </TableRow>
                 ))}
                 {preview.errors.map((row) => (
@@ -263,13 +345,13 @@ export default function RosterImportPage() {
       ) : null}
 
       {sectionId ? (
-        <AdminSectionCard title="Pending Import Rows" description="Rows waiting to be resolved for the selected section.">
+        <AdminSectionCard title="Import History" description="Recent students imported through roster import for the selected section.">
           {loadingPending ? (
             <Skeleton className="h-24 rounded-xl" />
           ) : pending.length === 0 ? (
             <AdminEmptyState
-              title="No pending import rows"
-              description="This section currently has no unresolved imported student rows."
+              title="No import history yet"
+              description="Imported students will appear here after a successful roster commit."
             />
           ) : (
             <div className="admin-table-shell">
@@ -286,12 +368,12 @@ export default function RosterImportPage() {
                 <TableBody>
                   {pending.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell>{pendingRowName(row)}</TableCell>
+                      <TableCell>{importHistoryRowName(row)}</TableCell>
                       <TableCell>{row.email || row.rosterEmail || '-'}</TableCell>
                       <TableCell>{row.lrn || '-'}</TableCell>
                       <TableCell>
                         <Badge variant={row.resolvedAt || row.status === 'resolved' ? 'default' : 'secondary'}>
-                          {row.status || (row.resolvedAt ? 'resolved' : 'pending')}
+                          {row.status || (row.resolvedAt ? 'imported' : 'unresolved')}
                         </Badge>
                       </TableCell>
                       <TableCell>{new Date(row.createdAt || row.importedAt || Date.now()).toLocaleDateString()}</TableCell>
@@ -303,10 +385,10 @@ export default function RosterImportPage() {
           )}
         </AdminSectionCard>
       ) : (
-        <AdminSectionCard title="Pending Import Rows" description="Select a section to load unresolved rows.">
+        <AdminSectionCard title="Import History" description="Select a section to load recent roster imports.">
           <AdminEmptyState
-            title="Select a section to view pending rows"
-            description="Pending import rows will appear after selecting a section."
+            title="Select a section to view import history"
+            description="Recent roster import records will appear after selecting a section."
           />
         </AdminSectionCard>
       )}

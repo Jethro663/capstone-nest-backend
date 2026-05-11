@@ -1,4 +1,4 @@
-export type {
+﻿export type {
   StudentParityRouteName,
   StudentSupportRouteName,
 } from "./student-route-manifest";
@@ -6,7 +6,15 @@ export type {
 export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "discussion" | "calendar";
 export type JaPanel = "practice" | "ask" | "review" | "lxp";
 export type LxpMobileTab = "paths" | "steps" | "replays" | "case" | "overview";
-export type TeacherClassDetailTab = "modules" | "assessments" | "announcements" | "calendar" | "students";
+export type TeacherClassDetailTab =
+  | "modules"
+  | "assessments"
+  | "announcements"
+  | "extraction"
+  | "discussion"
+  | "classRecord"
+  | "calendar"
+  | "students";
 
 export type JaRouteParams = {
   panel?: JaPanel;
@@ -37,18 +45,32 @@ export type RootStackParamList = {
   TeacherModuleDetail: { classId: string; moduleId: string };
   TeacherLessonDetail: { lessonId: string; classId?: string };
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
+  TeacherAssessmentEditor: { assessmentId?: string; classId?: string } | undefined;
   TeacherAssessmentReview: { attemptId: string; assessmentId?: string; classId?: string };
   TeacherCalendar: { classId?: string } | undefined;
+  TeacherCreateModule: { classId: string };
+  TeacherCreateAssessment: { classId: string };
+  TeacherSectionDetail: { sectionId: string };
+  TeacherLibrary: undefined;
+  TeacherClassRecord: undefined;
+  TeacherReports: undefined;
+  TeacherInterventions: undefined;
+  TeacherPerformance: undefined;
+  TeacherEvaluations: undefined;
+  TeacherAnnouncements: undefined;
+  TeacherMore: undefined;
 };
 
 export type MainTabParamList = {
   Home: undefined;
   Dashboard: undefined;
   Classes: undefined;
+  Sections: undefined;
   Assessments: undefined;
   JA: JaRouteParams | undefined;
   Announcements: undefined;
   Profile: undefined;
+  More: undefined;
   // Deprecated keys kept temporarily for migration-only screen compatibility.
   LXP: undefined;
   Progress: undefined;

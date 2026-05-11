@@ -43,6 +43,20 @@ describe('ClassRecordComputationService', () => {
     );
   });
 
+  it('maps initial grades using official DepEd transmutation thresholds', () => {
+    expect(service.transmute(100)).toBe(100);
+    expect(service.transmute(99.99)).toBe(99);
+    expect(service.transmute(98.4)).toBe(99);
+    expect(service.transmute(98.39)).toBe(98);
+    expect(service.transmute(61.6)).toBe(76);
+    expect(service.transmute(61.59)).toBe(75);
+    expect(service.transmute(4)).toBe(61);
+    expect(service.transmute(3.99)).toBe(60);
+    expect(service.transmute(0)).toBe(60);
+    expect(service.transmute(-5)).toBe(60);
+    expect(service.transmute(120)).toBe(100);
+  });
+
   it('includes removed students with history in grade computation', async () => {
     db.query.classRecords.findFirst.mockResolvedValue({
       classId: 'class-1',

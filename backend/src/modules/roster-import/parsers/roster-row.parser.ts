@@ -3,20 +3,19 @@ import {
   SECTION_HEADER_REGEX,
   HEADER_KEYWORDS,
 } from '../constants/roster-import.constants';
-import { ParsedNameDto } from '../dto/roster-import.dto';
 
-// ─── Section-header detection ─────────────────────────────────────────────────
+// Section-header detection
 
 export interface SectionHeaderInfo {
-  gradeLevel: string; // e.g. "7"
-  sectionName: string; // e.g. "HUMSS-A"
-  rawHeader: string; // full original cell text
-  rowIndex: number; // 0-based index into the parsed rows array
+  gradeLevel: string;
+  sectionName: string;
+  rawHeader: string;
+  rowIndex: number;
 }
 
 /**
- * Scans all rows for one that matches the SECTION_HEADER_REGEX pattern
- * (e.g. "GRADE_7 HUMSS-A").  Returns metadata about the first match found.
+ * Scans all rows for one that matches the section header pattern,
+ * e.g. "GRADE_7 HUMSS-A".
  */
 export function findSectionHeaderRow(
   rows: string[][],
@@ -38,18 +37,19 @@ export function findSectionHeaderRow(
   return null;
 }
 
-// ─── Column-header detection ──────────────────────────────────────────────────
+// Column-header detection
 
 export interface ColumnHeaderInfo {
-  nameCol: number;
+  lastNameCol: number;
+  firstNameCol: number;
+  middleNameCol: number;
   lrnCol: number;
   emailCol: number;
   rowIndex: number;
 }
 
 /**
- * Scans rows starting at `startIndex` for a header row that contains all three
- * required column keywords (name, lrn, email).  Returns the first match.
+ * Finds a header row containing all required roster columns.
  */
 export function findColumnHeaderRow(
   rows: string[][],
@@ -57,76 +57,46 @@ export function findColumnHeaderRow(
 ): ColumnHeaderInfo | null {
   for (let i = startIndex; i < rows.length; i++) {
     const row = rows[i].map((c) => c.toLowerCase());
-    const nameCol = findKeywordIndex(row, HEADER_KEYWORDS.name);
+
+    const lastNameCol = findKeywordIndex(row, HEADER_KEYWORDS.lastName);
+    const firstNameCol = findKeywordIndex(row, HEADER_KEYWORDS.firstName);
+    const middleNameCol = findKeywordIndex(row, HEADER_KEYWORDS.middleName);
     const lrnCol = findKeywordIndex(row, HEADER_KEYWORDS.lrn);
     const emailCol = findKeywordIndex(row, HEADER_KEYWORDS.email);
 
-    if (nameCol !== -1 && lrnCol !== -1 && emailCol !== -1) {
-      return { nameCol, lrnCol, emailCol, rowIndex: i };
+    if (
+      lastNameCol !== -1 &&
+      firstNameCol !== -1 &&
+      middleNameCol !== -1 &&
+      lrnCol !== -1 &&
+      emailCol !== -1
+    ) {
+      return {
+        lastNameCol,
+        firstNameCol,
+        middleNameCol,
+        lrnCol,
+        emailCol,
+        rowIndex: i,
+      };
     }
   }
+
   return null;
 }
 
-function findKeywordIndex(
-  rowLower: string[],
-  keywords: readonly string[],
-): number {
+function findKeywordIndex(rowLower: string[], keywords: readonly string[]): number {
   return rowLower.findIndex((cell) => keywords.some((kw) => cell.includes(kw)));
 }
 
-// ─── Name parsing ─────────────────────────────────────────────────────────────
+// Validation helpers
 
-/**
- * Parses a name cell in "LastName, FirstName M.I." format.
- * The comma is the delimiter between last name and the rest.
- *
- * Examples:
- *   "Dela Cruz, Juan A."  → { lastName: "Dela Cruz", firstName: "Juan", middleInitial: "A" }
- *   "Santos, Maria"       → { lastName: "Santos", firstName: "Maria", middleInitial: null }
- *   "Garcia"              → { lastName: "Garcia", firstName: "", middleInitial: null }
- */
-export function parseNameCell(cell: string): ParsedNameDto {
-  const trimmed = cell.trim();
-  const commaIndex = trimmed.indexOf(',');
-
-  if (commaIndex === -1) {
-    return { lastName: trimmed, firstName: '', middleInitial: null };
-  }
-
-  const lastName = trimmed.slice(0, commaIndex).trim();
-  const rest = trimmed.slice(commaIndex + 1).trim();
-
-  // Split the rest on spaces; last token is the M.I. if it's 1-2 characters (optionally ending in .)
-  const parts = rest.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) {
-    return { lastName, firstName: '', middleInitial: null };
-  }
-
-  // The last token is treated as M.I. if it matches: one or two letters, optional trailing dot
-  const lastPart = parts[parts.length - 1];
-  const miMatch = /^([A-Za-z]{1,2})\.?$/.exec(lastPart);
-
-  if (miMatch && parts.length > 1) {
-    const firstName = parts.slice(0, -1).join(' ');
-    const middleInitial = miMatch[1].toUpperCase();
-    return { lastName, firstName, middleInitial };
-  }
-
-  return { lastName, firstName: parts.join(' '), middleInitial: null };
-}
-
-// ─── Validation helpers ───────────────────────────────────────────────────────
-
-/** Returns true if the LRN is exactly 12 numeric digits. */
 export function validateLrn(value: string): boolean {
   return LRN_REGEX.test(value.trim());
 }
 
-// Basic RFC 5322–inspired email check (intentionally simple for roster data).
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Returns true if the value looks like a valid email address. */
 export function validateEmail(value: string): boolean {
   return EMAIL_REGEX.test(value.trim());
 }

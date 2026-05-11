@@ -65,21 +65,21 @@ type BreakdownSummary = {
 type ClassScheduleItem = NonNullable<ClassItem["schedules"]>[number];
 
 const theme = {
-  bg: "#141414",
-  header: "#1A1A1A",
-  surface: "#1E1E1E",
-  active: "#252525",
-  border: "rgba(255,255,255,0.07)",
-  text: "#E8E8E8",
-  muted: "#777777",
-  dim: "#444444",
+  bg: "#0A1630",
+  header: "#0B1833",
+  surface: "#0F2438",
+  active: "#132D45",
+  border: "rgba(0,217,255,0.18)",
+  text: "#E0F7FF",
+  muted: "#7AA3B8",
+  dim: "#426478",
   red: "#E8294E",
-  blue: "#4A8CF7",
+  blue: "#00D9FF",
   green: "#22C97A",
   purple: "#A78BFA",
   amber: "#FBBF24",
   redSoft: "rgba(232,41,78,0.14)",
-  blueSoft: "rgba(74,140,247,0.14)",
+  blueSoft: "rgba(0,217,255,0.14)",
   greenSoft: "rgba(34,201,122,0.14)",
   purpleSoft: "rgba(167,139,250,0.14)",
   amberSoft: "rgba(251,191,36,0.14)",
@@ -1527,7 +1527,7 @@ export function StudentClassDetailContent({
                           : cell.isToday
                             ? "#FFFFFF"
                             : cell.isClassDay
-                              ? "rgba(74,140,247,0.85)"
+                              ? "rgba(0,217,255,0.85)"
                               : theme.muted,
                       }}
                     >

@@ -1,6 +1,23 @@
 import { render, screen } from '@testing-library/react';
 import LandingPage from './page';
 
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: jest.fn(),
+    replace: jest.fn(),
+    prefetch: jest.fn(),
+  }),
+}));
+
+jest.mock('@/providers/AuthProvider', () => ({
+  useAuth: () => ({
+    isAuthenticated: false,
+    loading: false,
+    role: null,
+    refreshAuth: jest.fn(),
+  }),
+}));
+
 jest.mock('framer-motion', () => {
   const stripMotionProps = (props: Record<string, unknown>) => {
     const rest = { ...props };

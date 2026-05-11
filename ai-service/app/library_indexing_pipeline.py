@@ -10,11 +10,14 @@ from sqlalchemy import bindparam, text as sa_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from . import ollama_client
 from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .content_sanitizer import sanitize_extracted_text
-from .embedding_provider import embed_texts, embedding_to_vector_literal
+from .embedding_provider import (
+    embed_texts,
+    embedding_to_vector_literal,
+    get_embedding_model_label,
+)
 from .indexing_pipeline import chunk_text_for_indexing, estimate_token_count
 
 logger = logging.getLogger(__name__)
@@ -178,6 +181,9 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
     try:
         materialized_path = await materialize_backend_upload(str(file_row["file_path"]))
         if not materialized_path:
+            legacy_path = _resolve_uploaded_path(str(file_row["file_path"]))
+            materialized_path = str(legacy_path) if legacy_path.exists() else None
+        if not materialized_path:
             raise FileNotFoundError(
                 f"File could not be materialized from backend storage: {file_row['file_path']}"
             )
@@ -199,6 +205,7 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
             raise ValueError("No indexable text was extracted from the library file")
 
         embeddings = await embed_texts(chunks)
+        embedding_model = get_embedding_model_label(embeddings)
         created = 0
         for chunk_order, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
             content_hash = hashlib.sha256(
@@ -291,7 +298,7 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
                 {
                     "chunkId": chunk_id,
                     "embedding": embedding_to_vector_literal(embedding),
-                    "embeddingModel": "ollama:" + ollama_client.get_embedding_model_name(),
+                    "embeddingModel": embedding_model,
                 },
             )
             created += 1

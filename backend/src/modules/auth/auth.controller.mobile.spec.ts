@@ -8,6 +8,7 @@ describe('AuthController mobile endpoints', () => {
     login: jest.fn(),
     refreshToken: jest.fn(),
     logout: jest.fn(),
+    validateCredentials: jest.fn(),
   } as unknown as jest.Mocked<AuthService>;
 
   const configService = {
@@ -77,5 +78,24 @@ describe('AuthController mobile endpoints', () => {
 
     expect(authService.logout).toHaveBeenCalledWith('refresh-1');
     expect(result.message).toBe('Mobile logout successful');
+  });
+
+  it('returns a valid flag for first-login credential validation', async () => {
+    (authService.validateCredentials as jest.Mock).mockResolvedValue(true);
+
+    const result = await controller.validateCredentials({
+      email: 'student@example.com',
+      password: 'Password123!',
+    });
+
+    expect(authService.validateCredentials).toHaveBeenCalledWith(
+      'student@example.com',
+      'Password123!',
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'Credentials valid',
+      data: { valid: true },
+    });
   });
 });

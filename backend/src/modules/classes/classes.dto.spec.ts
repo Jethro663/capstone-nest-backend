@@ -55,7 +55,7 @@ describe('Classes DTOs', () => {
 
   it('rejects unsupported characters in class identifiers and room labels', async () => {
     const createMessages = await messagesFor(CreateClassDto, {
-      subjectName: 'Mathematics🙂',
+      subjectName: 'Mathematics@',
       subjectCode: 'MATH-7/ROOM',
       subjectGradeLevel: '7',
       sectionId: '11111111-1111-4111-8111-111111111111',
@@ -72,7 +72,7 @@ describe('Classes DTOs', () => {
       'subjectCode may only contain uppercase letters, numbers, and hyphens',
     );
     expect(createMessages).toContain(
-      'room may only contain letters, numbers, spaces, number signs, hyphens, and slashes',
+      'Room must be one of: 101-105, 201-205, 301-305, 401-405',
     );
   });
 
@@ -84,7 +84,7 @@ describe('Classes DTOs', () => {
       sectionId: '11111111-1111-4111-8111-111111111111',
       teacherId: '22222222-2222-4222-8222-222222222222',
       schoolYear: '2026-2027',
-      room: 'Room 201',
+      room: '201',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
       gradingProfile: {},
     });
@@ -102,7 +102,7 @@ describe('Classes DTOs', () => {
       sectionId: '11111111-1111-4111-8111-111111111111',
       teacherId: '22222222-2222-4222-8222-222222222222',
       schoolYear: '2026-2027',
-      room: 'Room 201',
+      room: '201',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
       gradingProfile: {
         writtenWork: 0,
@@ -124,7 +124,7 @@ describe('Classes DTOs', () => {
       sectionId: '11111111-1111-4111-8111-111111111111',
       teacherId: '22222222-2222-4222-8222-222222222222',
       schoolYear: '2026-2027',
-      room: 'Room 201',
+      room: '201',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
       gradingProfile: {
         writtenWork: -10,
@@ -145,7 +145,7 @@ describe('Classes DTOs', () => {
       sectionId: '11111111-1111-4111-8111-111111111111',
       teacherId: '22222222-2222-4222-8222-222222222222',
       schoolYear: '2026-2027',
-      room: 'Room 201',
+      room: '201',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
       gradingProfile: {
         writtenWork: 10,
@@ -165,7 +165,7 @@ describe('Classes DTOs', () => {
       sectionId: '11111111-1111-4111-8111-111111111111',
       teacherId: '22222222-2222-4222-8222-222222222222',
       schoolYear: '2026-2027',
-      room: 'Room 201',
+      room: '201',
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
     });
 
