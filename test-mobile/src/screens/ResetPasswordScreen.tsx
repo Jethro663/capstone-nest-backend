@@ -134,7 +134,7 @@ export function ResetPasswordScreen({ navigation, route }: Props) {
             accessibilityLabel={showNewPassword ? "Hide password" : "Show password"}
             hitSlop={10}
             onPress={() => setShowNewPassword((current) => !current)}
-            style={{ paddingHorizontal: 12, paddingVertical: 10 }}
+            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 10 }}
           >
             <MaterialCommunityIcons color={authTheme.textLight} name={showNewPassword ? "eye-off-outline" : "eye-outline"} size={17} />
           </Pressable>
@@ -163,7 +163,7 @@ export function ResetPasswordScreen({ navigation, route }: Props) {
             accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
             hitSlop={10}
             onPress={() => setShowConfirmPassword((current) => !current)}
-            style={{ paddingHorizontal: 12, paddingVertical: 10 }}
+            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 10 }}
           >
             <MaterialCommunityIcons
               color={authTheme.textLight}

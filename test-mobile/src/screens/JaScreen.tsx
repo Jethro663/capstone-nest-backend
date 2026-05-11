@@ -12,6 +12,7 @@ import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSession
 import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
+import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = {
   navigation: {
@@ -31,25 +32,7 @@ type VisibleJaPanel = "ask" | "review" | "lxp";
 type ActivityFilter = "all" | Extract<JaMode, "ask" | "review">;
 type AnswerState = Record<string, string[]>;
 
-const dark = {
-  bg: "#0A1630",
-  header: "#0B1833",
-  surface: "#0F2438",
-  surface2: "#132D45",
-  active: "#173A59",
-  border: "rgba(0,217,255,0.18)",
-  border2: "rgba(0,217,255,0.28)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  dim: "#426478",
-  red: "#E8294E",
-  blue: "#00D9FF",
-  blueSoft: "rgba(0,217,255,0.14)",
-  green: "#22C97A",
-  greenSoft: "rgba(34,201,122,0.12)",
-  amber: "#FBBF24",
-  amberSoft: "rgba(251,191,36,0.12)",
-};
+const dark = studentDarkTheme;
 
 const MODE_ORDER: Array<{ key: VisibleJaPanel; label: string; icon: string }> = [
   { key: "ask", label: "Ask", icon: "message-text-outline" },
@@ -484,8 +467,8 @@ export function JaScreen({ navigation, route }: Props) {
     gap: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: classPickerOpen ? "rgba(0,217,255,0.32)" : dark.border2,
-    backgroundColor: classPickerOpen ? dark.blueSoft : "rgba(255,255,255,0.05)",
+    borderColor: classPickerOpen ? dark.blueLine : dark.border2,
+    backgroundColor: classPickerOpen ? dark.blueSoft : dark.surface,
     paddingHorizontal: 10,
     paddingVertical: 6,
     opacity: busy ? 0.65 : 1,
@@ -506,7 +489,7 @@ export function JaScreen({ navigation, route }: Props) {
             <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>Activity History</Text>
           </View>
           {panel === "ask" ? (
-            <Pressable onPress={startNewChat} style={{ backgroundColor: dark.blueSoft, borderColor: "rgba(0,217,255,0.25)", borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
+            <Pressable onPress={startNewChat} style={{ backgroundColor: dark.blueSoft, borderColor: dark.blueLine, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
               <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "800" }}>New chat</Text>
             </Pressable>
           ) : null}
@@ -555,8 +538,8 @@ export function JaScreen({ navigation, route }: Props) {
                     style={{
                       borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: active ? "rgba(0,217,255,0.32)" : dark.border2,
-                      backgroundColor: active ? dark.blueSoft : "rgba(255,255,255,0.03)",
+                      borderColor: active ? dark.blueLine : dark.border2,
+                      backgroundColor: active ? dark.blueSoft : dark.surface,
                       paddingHorizontal: 11,
                       paddingVertical: 10,
                     }}
@@ -589,14 +572,14 @@ export function JaScreen({ navigation, route }: Props) {
         </ScrollView>
       </View>
 
-      <View style={{ backgroundColor: "#0D1F36", borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
+      <View style={{ backgroundColor: dark.surface, borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
         <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>Activity Filter</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
           {(["all", "ask", "review"] as ActivityFilter[]).map((filter) => (
             <Pressable
               key={filter}
               onPress={() => setActivityFilter(filter)}
-              style={{ borderRadius: 20, borderWidth: 1, borderColor: activityFilter === filter ? "rgba(0,217,255,0.32)" : dark.border2, backgroundColor: activityFilter === filter ? dark.blueSoft : "transparent", paddingHorizontal: 11, paddingVertical: 5 }}
+              style={{ borderRadius: 20, borderWidth: 1, borderColor: activityFilter === filter ? dark.blueLine : dark.border2, backgroundColor: activityFilter === filter ? dark.blueSoft : "transparent", paddingHorizontal: 11, paddingVertical: 5 }}
             >
               <Text style={{ color: activityFilter === filter ? dark.blue : dark.muted, fontSize: 10, fontWeight: "700" }}>
                 {filter === "all" ? "All" : filter === "review" ? "Replay" : filter[0].toUpperCase() + filter.slice(1)}
@@ -718,7 +701,7 @@ function PracticePanel({
           recommendation?.reason || "JA tunes questions to your current learning focus.",
           "Completed runs appear in your activity history above.",
         ].map((line) => (
-          <Text key={line} style={{ color: "rgba(255,255,255,0.52)", fontSize: 12, lineHeight: 19, marginTop: 5 }}>- {line}</Text>
+          <Text key={line} style={{ color: dark.muted, fontSize: 12, lineHeight: 19, marginTop: 5 }}>- {line}</Text>
         ))}
       </DarkPanel>
       {session ? <SessionPanel session={session} answers={answers} setAnswers={setAnswers} onSubmit={onSubmit} onComplete={onComplete} canComplete={completeReady} submitLabel="Submit Answer" /> : null}
@@ -815,7 +798,7 @@ function AskPanel({
                         borderRadius: 14,
                         borderWidth: 1,
                         borderColor: active ? dark.blue : dark.border2,
-                        backgroundColor: active ? dark.blueSoft : "rgba(255,255,255,0.035)",
+                        backgroundColor: active ? dark.blueSoft : dark.surface,
                         paddingHorizontal: 11,
                         paddingVertical: 10,
                       }}
@@ -842,7 +825,7 @@ function AskPanel({
                     key={context.lessonId}
                     onPress={() => onSelectLesson(context)}
                     disabled={busy}
-                    style={{ width: 190, borderRadius: 14, borderWidth: 1, borderColor: selected ? dark.blue : dark.border2, backgroundColor: selected ? dark.blueSoft : "rgba(255,255,255,0.03)", padding: 11 }}
+                    style={{ width: 190, borderRadius: 14, borderWidth: 1, borderColor: selected ? dark.blue : dark.border2, backgroundColor: selected ? dark.blueSoft : dark.surface, padding: 11 }}
                   >
                     <Text numberOfLines={1} style={{ color: dark.text, fontSize: 12, fontWeight: "900" }}>{context.title}</Text>
                     <Text numberOfLines={1} style={{ marginTop: 3, color: dark.muted, fontSize: 10 }}>{[context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ") || "Visible lesson"}</Text>
@@ -873,15 +856,15 @@ function AskPanel({
                     borderTopRightRadius: message.role === "student" ? 6 : 18,
                     borderBottomLeftRadius: 18,
                     borderBottomRightRadius: 18,
-                    borderWidth: message.role === "student" ? 0 : 1,
-                    borderColor: message.blocked ? dark.amber : dark.border2,
-                    backgroundColor: message.role === "student" ? dark.blue : dark.surface2,
+                    borderWidth: 1,
+                    borderColor: message.role === "student" ? dark.redLine : message.blocked ? dark.amber : dark.border2,
+                    backgroundColor: message.role === "student" ? dark.redSoft : dark.surface2,
                     paddingHorizontal: 13,
                     paddingVertical: 11,
                   }}
                 >
                   {message.role === "student" ? (
-                    <Text style={{ color: "#fff", fontSize: 13, lineHeight: 20 }}>{message.content}</Text>
+                    <Text style={{ color: dark.text, fontSize: 13, lineHeight: 20 }}>{message.content}</Text>
                   ) : (
                     <RichTextContent html={message.content} color={dark.text} mutedColor={dark.muted} accentColor={dark.blue} />
                   )}
@@ -910,8 +893,8 @@ function AskPanel({
                 style={{
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: dark.border2,
-                  backgroundColor: "#111827",
+                  borderColor: dark.red,
+                  backgroundColor: dark.red,
                   padding: 10,
                   gap: 10,
                 }}
@@ -921,12 +904,12 @@ function AskPanel({
                     <View
                       style={{
                         borderRadius: 12,
-                        backgroundColor: "rgba(255,255,255,0.06)",
+                        backgroundColor: "rgba(255,255,255,0.14)",
                         paddingHorizontal: 10,
                         paddingVertical: 8,
                       }}
                     >
-                      <Text style={{ color: "#F8FAFC", fontSize: 12, fontWeight: "900" }}>{group.label}</Text>
+                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "900" }}>{group.label}</Text>
                     </View>
                     <View style={{ gap: 7 }}>
                       {group.items.map((item) => (
@@ -938,15 +921,15 @@ function AskPanel({
                             minHeight: 44,
                             borderRadius: 13,
                             borderWidth: 1,
-                            borderColor: "rgba(148,163,184,0.2)",
-                            backgroundColor: dark.header,
+                            borderColor: "rgba(255,255,255,0.35)",
+                            backgroundColor: "rgba(255,255,255,0.12)",
                             justifyContent: "center",
                             paddingHorizontal: 12,
                             paddingVertical: 10,
                             opacity: busy ? 0.55 : 1,
                           }}
                         >
-                          <Text style={{ color: "#DBEAFE", fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
+                          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
                             {item.label}
                           </Text>
                         </Pressable>
@@ -962,7 +945,9 @@ function AskPanel({
               style={{
                 minHeight: 48,
                 borderRadius: 999,
-                backgroundColor: busy ? dark.active : dark.blue,
+                backgroundColor: busy ? dark.active : dark.red,
+                borderWidth: 1,
+                borderColor: busy ? dark.border : dark.red,
                 alignItems: "center",
                 justifyContent: "center",
                 flexDirection: "row",
@@ -972,8 +957,8 @@ function AskPanel({
                 opacity: busy ? 0.65 : 1,
               }}
             >
-              <MaterialCommunityIcons name={promptMenuOpen ? "chevron-down" : "message-question-outline"} size={17} color={busy ? dark.muted : "#081422"} />
-              <Text style={{ color: busy ? dark.muted : "#081422", fontSize: 13, fontWeight: "900" }}>
+              <MaterialCommunityIcons name={promptMenuOpen ? "chevron-down" : "message-question-outline"} size={17} color={busy ? dark.text : "#FFFFFF"} />
+              <Text style={{ color: busy ? dark.text : "#FFFFFF", fontSize: 13, fontWeight: "900" }}>
                 {promptMenuOpen ? "Close prompt list" : "Ask JA about this lesson"}
               </Text>
             </Pressable>
@@ -1072,10 +1057,10 @@ function SessionPanel({
         ))}
       </View>
       <View style={{ marginTop: 14, flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
-        <Pressable onPress={onSubmit} style={{ borderRadius: 10, backgroundColor: canComplete ? dark.blue : dark.surface2, paddingHorizontal: 14, paddingVertical: 10 }}>
+        <Pressable onPress={onSubmit} style={{ minHeight: 44, borderRadius: 10, backgroundColor: canComplete ? dark.blue : dark.surface2, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }}>
           <Text style={{ color: canComplete ? "#fff" : dark.muted, fontSize: 12, fontWeight: "800" }}>{submitLabel}</Text>
         </Pressable>
-        <Pressable onPress={onComplete} disabled={!canComplete} style={{ borderRadius: 10, backgroundColor: canComplete ? dark.green : dark.surface2, paddingHorizontal: 14, paddingVertical: 10 }}>
+        <Pressable onPress={onComplete} disabled={!canComplete} style={{ minHeight: 44, borderRadius: 10, backgroundColor: canComplete ? dark.green : dark.surface2, paddingHorizontal: 14, paddingVertical: 10, justifyContent: "center" }}>
           <Text style={{ color: canComplete ? "#fff" : dark.muted, fontSize: 12, fontWeight: "800" }}>Complete</Text>
         </Pressable>
       </View>
@@ -1195,7 +1180,7 @@ function LearnersPathPanel({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ flex: 1, borderRadius: 10, borderWidth: 1, borderColor: dark.border, backgroundColor: "rgba(255,255,255,0.03)", padding: 10 }}>
+    <View style={{ flex: 1, borderRadius: 10, borderWidth: 1, borderColor: dark.border, backgroundColor: dark.surface2, padding: 10 }}>
       <Text style={{ color: dark.text, fontSize: 15, fontWeight: "900" }}>{value}</Text>
       <Text style={{ marginTop: 2, color: dark.muted, fontSize: 9 }}>{label}</Text>
     </View>

@@ -132,6 +132,9 @@ export function TeacherClassRecordBoard({ classId, registerRefetch }: Props) {
     (student) => student.remarks !== "For Intervention" && student.quarterlyGrade >= 75,
   ).length;
   const interventionCount = students.length - passedCount;
+  const nextMissingQuarter = QUARTERS.find(
+    (quarter) => !classRecords.some((record) => record.gradingPeriod === quarter),
+  );
 
   const generateQuarter = async (quarter: GradingPeriod) => {
     try {
@@ -175,32 +178,33 @@ export function TeacherClassRecordBoard({ classId, registerRefetch }: Props) {
       <TeacherPanel title="Class Record Quarters" subtitle="Generate quarter workbooks, review grades, and finalize records.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {QUARTERS.map((quarter) => {
-              const record = classRecords.find((entry) => entry.gradingPeriod === quarter);
-              if (record) {
-                return (
-                  <TeacherChip
-                    key={quarter}
-                    label={`${quarter} (${record.status})`}
-                    active={selectedRecordId === record.id}
-                    onPress={() => setSelectedRecordId(record.id)}
-                  />
-                );
-              }
-              return (
-                <TeacherActionButton
-                  key={quarter}
-                  label={`Create ${quarter}`}
-                  icon="plus"
-                  tone="neutral"
-                  disabled={generateMutation.isPending}
-                  onPress={() => void generateQuarter(quarter)}
+            {classRecords.length ? (
+              classRecords.map((record) => (
+                <TeacherChip
+                  key={record.id}
+                  label={`${record.gradingPeriod} (${record.status})`}
+                  active={selectedRecordId === record.id}
+                  onPress={() => setSelectedRecordId(record.id)}
                 />
-              );
-            })}
+              ))
+            ) : (
+              <Text style={{ fontSize: 12, lineHeight: 18, color: theme.subtext }}>
+                No quarter workbooks created yet.
+              </Text>
+            )}
           </View>
 
           <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <TeacherActionButton
+              label={generateMutation.isPending ? "Creating..." : "Add Quarter"}
+              icon="plus"
+              tone="red"
+              disabled={!nextMissingQuarter || generateMutation.isPending}
+              onPress={() => {
+                if (!nextMissingQuarter) return;
+                void generateQuarter(nextMissingQuarter);
+              }}
+            />
             <TeacherActionButton
               label={finalizeMutation.isPending ? "Finalizing..." : "Finalize"}
               icon="check-decagram-outline"

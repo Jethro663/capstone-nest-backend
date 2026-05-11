@@ -99,7 +99,7 @@ export function AnnouncementsScreen(_: Props) {
               <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "800", color: theme.text }}>Announcements</Text>
             </View>
           </View>
-          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.muted }}>
             Read teacher posts from all enrolled classes in one compact feed.
           </Text>
         </View>
@@ -133,7 +133,7 @@ export function AnnouncementsScreen(_: Props) {
                 style={{
                   borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: active ? "rgba(232,41,78,0.55)" : theme.border,
+                  borderColor: active ? theme.redLine : theme.border,
                   backgroundColor: active ? theme.redSoft : theme.surface,
                   paddingHorizontal: 11,
                   paddingVertical: 7,
@@ -177,7 +177,7 @@ export function AnnouncementsScreen(_: Props) {
           <Text style={{ marginTop: 12, fontSize: 14, fontWeight: "800", color: theme.text }}>
             {announcements.length === 0 ? "No announcements yet" : "No pinned announcements"}
           </Text>
-          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, lineHeight: 18, color: theme.muted }}>
             {announcements.length === 0
               ? "Your class updates will appear here."
               : "Switch back to All to see every class update."}
@@ -232,7 +232,7 @@ export function AnnouncementsScreen(_: Props) {
                   </Text>
                 </View>
               </View>
-              <Text style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: "#BDBDBD" }}>
+              <Text style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: theme.subtext }}>
                 {stripRichText(announcement.content)}
               </Text>
             </View>

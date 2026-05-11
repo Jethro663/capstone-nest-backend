@@ -20,6 +20,7 @@ import { useAuth } from "../providers/AuthProvider";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import type { ClassModule } from "../types/module";
+import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ClassDetail">;
 type DetailNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -64,26 +65,7 @@ type BreakdownSummary = {
 
 type ClassScheduleItem = NonNullable<ClassItem["schedules"]>[number];
 
-const theme = {
-  bg: "#0A1630",
-  header: "#0B1833",
-  surface: "#0F2438",
-  active: "#132D45",
-  border: "rgba(0,217,255,0.18)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  dim: "#426478",
-  red: "#E8294E",
-  blue: "#00D9FF",
-  green: "#22C97A",
-  purple: "#A78BFA",
-  amber: "#FBBF24",
-  redSoft: "rgba(232,41,78,0.14)",
-  blueSoft: "rgba(0,217,255,0.14)",
-  greenSoft: "rgba(34,201,122,0.14)",
-  purpleSoft: "rgba(167,139,250,0.14)",
-  amberSoft: "rgba(251,191,36,0.14)",
-} as const;
+const theme = studentDarkTheme;
 
 const primaryTabs: DetailTab[] = ["modules", "assignments", "announcements", "discussion"];
 const overflowTabs: DetailTab[] = ["classmates", "grades", "calendar"];
@@ -424,11 +406,11 @@ function ToneTag({
   tone: "blue" | "green" | "red" | "amber" | "purple";
 }) {
   const toneStyles = {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
-    green: { backgroundColor: theme.greenSoft, color: "#4EDD9C" },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
+    green: { backgroundColor: theme.greenSoft, color: theme.green },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    purple: { backgroundColor: theme.purpleSoft, color: "#C4B0FF" },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 
   return (
@@ -459,7 +441,7 @@ function DarkEmptyPanel({
       }}
     >
       <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{title}</Text>
-      <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>{subtitle}</Text>
+      <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>{subtitle}</Text>
     </View>
   );
 }
@@ -777,15 +759,17 @@ export function StudentClassDetailContent({
                 accessibilityLabel="Go back"
                 onPress={() => navigation.goBack()}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 8,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: theme.active,
+                  borderWidth: 1,
+                  borderColor: theme.border,
                 }}
               >
-                <MaterialCommunityIcons name="chevron-left" size={18} color="rgba(255,255,255,0.7)" />
+                <MaterialCommunityIcons name="chevron-left" size={20} color={theme.text} />
               </Pressable>
 
               <View
@@ -814,18 +798,20 @@ export function StudentClassDetailContent({
                 accessibilityLabel="Open class overflow"
                 onPress={() => setSheetOpen(true)}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: theme.active,
+                  borderWidth: 1,
+                  borderColor: theme.border,
                 }}
               >
                 <MaterialCommunityIcons
                   name="dots-horizontal"
                   size={16}
-                  color={showOverflowActive ? theme.red : "rgba(255,255,255,0.6)"}
+                  color={showOverflowActive ? theme.red : theme.text}
                 />
               </Pressable>
             </View>
@@ -851,7 +837,7 @@ export function StudentClassDetailContent({
                   height: 3,
                   borderRadius: 2,
                   overflow: "hidden",
-                  backgroundColor: "rgba(255,255,255,0.08)",
+                  backgroundColor: theme.active,
                 }}
               >
                 <View
@@ -948,7 +934,7 @@ export function StudentClassDetailContent({
                 <Text style={{ fontSize: 12, fontWeight: "600", color: theme.text }}>Class Snapshot</Text>
                 <Text style={{ fontSize: 11, fontWeight: "600", color: theme.green }}>{lessonProgress}% progress</Text>
               </View>
-              <View style={{ height: 2, backgroundColor: "rgba(255,255,255,0.07)" }}>
+              <View style={{ height: 2, backgroundColor: theme.active }}>
                 <View style={{ width: `${Math.max(0, Math.min(100, lessonProgress))}%`, height: "100%", backgroundColor: theme.green }} />
               </View>
               <View style={{ flexDirection: "row", paddingHorizontal: 14, paddingVertical: 12 }}>
@@ -1024,7 +1010,7 @@ export function StudentClassDetailContent({
                             borderRadius: 8,
                             alignItems: "center",
                             justifyContent: "center",
-                            backgroundColor: "rgba(232,41,78,0.15)",
+                            backgroundColor: theme.redSoft,
                           }}
                         >
                           <Text style={{ fontSize: 12, fontWeight: "700", color: theme.red }}>{index + 1}</Text>
@@ -1058,7 +1044,7 @@ export function StudentClassDetailContent({
                       <View style={{ borderTopWidth: 1, borderTopColor: theme.border }}>
                         {summary.lessons.length === 0 ? (
                           <View style={{ paddingHorizontal: 46, paddingVertical: 14 }}>
-                            <Text style={{ fontSize: 12, color: "#999999" }}>This module does not have visible lessons yet.</Text>
+                            <Text style={{ fontSize: 12, color: theme.muted }}>This module does not have visible lessons yet.</Text>
                           </View>
                         ) : (
                           summary.lessons.map((lesson, lessonIndex) => {
@@ -1075,7 +1061,7 @@ export function StudentClassDetailContent({
                                   paddingRight: 14,
                                   paddingVertical: 10,
                                   borderBottomWidth: lessonIndex === summary.lessons.length - 1 ? 0 : 1,
-                                  borderBottomColor: "rgba(255,255,255,0.04)",
+                                  borderBottomColor: theme.border,
                                 }}
                               >
                                 <View
@@ -1088,7 +1074,7 @@ export function StudentClassDetailContent({
                                     backgroundColor: completed ? theme.green : "transparent",
                                   }}
                                 />
-                                <Text style={{ flex: 1, fontSize: 12, color: "#999999" }}>{lesson.title}</Text>
+                                <Text style={{ flex: 1, fontSize: 12, color: theme.subtext }}>{lesson.title}</Text>
                                 <Text style={{ fontSize: 10, color: completed ? theme.green : theme.muted }}>
                                   {completed ? "Done" : "Open"}
                                 </Text>
@@ -1201,7 +1187,7 @@ export function StudentClassDetailContent({
                         borderRadius: 999,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: "#B91C1C",
+                        backgroundColor: theme.red,
                       }}
                     >
                       <Text style={{ fontSize: 11, fontWeight: "700", color: "#FFFFFF" }}>
@@ -1220,7 +1206,7 @@ export function StudentClassDetailContent({
                   </View>
 
                   <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{entry.title}</Text>
-                  <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 19, color: "#999999" }}>{entry.content}</Text>
+                  <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 19, color: theme.muted }}>{entry.content}</Text>
                 </View>
               ))
             )}
@@ -1254,7 +1240,7 @@ export function StudentClassDetailContent({
                     borderRadius: 999,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: "#B91C1C",
+                    backgroundColor: theme.red,
                   }}
                 >
                   <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>
@@ -1297,7 +1283,7 @@ export function StudentClassDetailContent({
                         borderRadius: 999,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: isCurrentStudent ? "#1D4ED8" : "#15803D",
+                        backgroundColor: isCurrentStudent ? theme.blue : theme.green,
                       }}
                     >
                       <Text style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}>
@@ -1473,12 +1459,12 @@ export function StudentClassDetailContent({
                   accessibilityLabel="Previous month"
                   onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
                   style={{
-                    width: 26,
-                    height: 26,
+                    width: 44,
+                    height: 44,
                     borderRadius: 6,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: "rgba(255,255,255,0.07)",
+                    backgroundColor: theme.active,
                   }}
                 >
                   <MaterialCommunityIcons name="chevron-left" size={14} color={theme.muted} />
@@ -1487,12 +1473,12 @@ export function StudentClassDetailContent({
                   accessibilityLabel="Next month"
                   onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
                   style={{
-                    width: 26,
-                    height: 26,
+                    width: 44,
+                    height: 44,
                     borderRadius: 6,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: "rgba(255,255,255,0.07)",
+                    backgroundColor: theme.active,
                   }}
                 >
                   <MaterialCommunityIcons name="chevron-right" size={14} color={theme.muted} />
@@ -1500,7 +1486,7 @@ export function StudentClassDetailContent({
               </View>
             </View>
 
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 2, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 14 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 12, paddingTop: 8, paddingBottom: 14 }}>
               {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((label) => (
                 <View key={label} style={{ width: "14.2857%", paddingVertical: 4, alignItems: "center" }}>
                   <Text style={{ fontSize: 9, fontWeight: "600", letterSpacing: 0.5, color: theme.dim }}>{label}</Text>
@@ -1527,7 +1513,7 @@ export function StudentClassDetailContent({
                           : cell.isToday
                             ? "#FFFFFF"
                             : cell.isClassDay
-                              ? "rgba(0,217,255,0.85)"
+                              ? theme.blue
                               : theme.muted,
                       }}
                     >
@@ -1590,7 +1576,7 @@ export function StudentClassDetailContent({
               bottom: 0,
               left: 0,
               borderTopWidth: 1,
-              borderTopColor: "rgba(255,255,255,0.1)",
+              borderTopColor: theme.border,
               borderTopLeftRadius: 18,
               borderTopRightRadius: 18,
               backgroundColor: theme.surface,
@@ -1605,7 +1591,7 @@ export function StudentClassDetailContent({
                 alignSelf: "center",
                 marginTop: 10,
                 marginBottom: 4,
-                backgroundColor: "rgba(255,255,255,0.15)",
+                backgroundColor: theme.border,
               }}
             />
 

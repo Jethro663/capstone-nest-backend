@@ -27,6 +27,8 @@ import type { Announcement } from "../types/announcement";
 import type { ClassItem } from "../types/class";
 import type { LessonCompletion } from "../types/lesson";
 import type { ClassModule, ModuleItem } from "../types/module";
+import { studentDarkTheme } from "../theme/studentDark";
+import { shadow } from "../theme/tokens";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Classes">,
@@ -58,23 +60,7 @@ type DerivedClassItem = {
   status: "inProgress" | "completed";
 };
 
-const darkTheme = {
-  bg: "#0A1630",
-  topbar: "#0B1833",
-  surface: "#0F2438",
-  active: "#132D45",
-  channel: "#0D1F36",
-  border: "rgba(0,217,255,0.18)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  subtext: "rgba(224,247,255,0.56)",
-  dim: "#426478",
-  red: "#E8294E",
-  blue: "#00D9FF",
-  green: "#22C97A",
-  purple: "#A78BFA",
-  amber: "#FBBF24",
-} as const;
+const darkTheme = studentDarkTheme;
 
 const avatarColors = ["#1D4ED8", "#15803D", "#6D28D9"] as const;
 
@@ -97,26 +83,26 @@ const channelConfig: Record<
   modules: {
     label: "Modules",
     icon: "book-open-page-variant-outline",
-    background: "rgba(0,217,255,0.14)",
-    color: "#00D9FF",
+    background: darkTheme.blueSoft,
+    color: darkTheme.blue,
   },
   assignments: {
     label: "Assignments",
     icon: "file-document-outline",
-    background: "rgba(251,191,36,0.14)",
+    background: darkTheme.amberSoft,
     color: darkTheme.amber,
   },
   announcements: {
     label: "Announcements",
     icon: "bell-outline",
-    background: "rgba(232,41,78,0.14)",
-    color: "#FF6B87",
+    background: darkTheme.redSoft,
+    color: darkTheme.red,
   },
   calendar: {
     label: "Calendar",
     icon: "calendar-blank-outline",
-    background: "rgba(34,201,122,0.14)",
-    color: "#4EDD9C",
+    background: darkTheme.greenSoft,
+    color: darkTheme.green,
   },
 };
 
@@ -456,36 +442,40 @@ export function LessonsScreen({ navigation }: Props) {
                 accessibilityLabel="Open class search"
                 onPress={() => setSearchOpen((current) => !current)}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: darkTheme.surface,
+                  borderWidth: 1,
+                  borderColor: darkTheme.border,
                 }}
               >
-                <MaterialCommunityIcons name="magnify" size={15} color="rgba(255,255,255,0.5)" />
+                <MaterialCommunityIcons name="magnify" size={18} color={darkTheme.text} />
               </Pressable>
 
               <Pressable
                 accessibilityLabel="Refresh class data"
                 onPress={handleRefresh}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: darkTheme.surface,
+                  borderWidth: 1,
+                  borderColor: darkTheme.border,
                 }}
               >
-                <MaterialCommunityIcons name="bell-outline" size={15} color="rgba(255,255,255,0.5)" />
+                <MaterialCommunityIcons name="refresh" size={18} color={darkTheme.text} />
               </Pressable>
 
               <View
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
                   alignItems: "center",
                   justifyContent: "center",
@@ -537,6 +527,8 @@ export function LessonsScreen({ navigation }: Props) {
                   onPress={() => setActiveFilter(tab.key)}
                   style={{
                     paddingHorizontal: 13,
+                    minHeight: 44,
+                    justifyContent: "center",
                     paddingVertical: 8,
                     borderBottomWidth: 2,
                     borderBottomColor: focused ? darkTheme.red : "transparent",
@@ -621,18 +613,23 @@ export function LessonsScreen({ navigation }: Props) {
                           flexDirection: "row",
                           alignItems: "center",
                           gap: 12,
-                          paddingHorizontal: 16,
-                          paddingVertical: 11,
-                          borderBottomWidth: 1,
-                          borderBottomColor: darkTheme.border,
+                          marginHorizontal: 16,
+                          marginBottom: 10,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: darkTheme.border,
+                          paddingHorizontal: 14,
+                          paddingVertical: 14,
+                          minHeight: 72,
                           backgroundColor: expanded ? darkTheme.surface : darkTheme.bg,
+                          ...shadow.card,
                         }}
                       >
                         <View
                           style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 10,
+                            width: 48,
+                            height: 48,
+                            borderRadius: 14,
                             alignItems: "center",
                             justifyContent: "center",
                             backgroundColor: classItem.avatarColor,
@@ -661,11 +658,11 @@ export function LessonsScreen({ navigation }: Props) {
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <View
                             style={{
-                              width: 38,
-                              height: 3,
+                            width: 46,
+                            height: 5,
                               borderRadius: 2,
                               overflow: "hidden",
-                              backgroundColor: "rgba(255,255,255,0.1)",
+                            backgroundColor: darkTheme.active,
                             }}
                           >
                             <View
@@ -711,9 +708,16 @@ export function LessonsScreen({ navigation }: Props) {
                       {expanded ? (
                         <View
                           style={{
+                            marginHorizontal: 16,
+                            marginTop: -10,
+                            marginBottom: 10,
                             backgroundColor: darkTheme.channel,
-                            borderBottomWidth: 1,
-                            borderBottomColor: darkTheme.border,
+                            borderWidth: 1,
+                            borderTopWidth: 0,
+                            borderColor: darkTheme.border,
+                            borderBottomLeftRadius: 16,
+                            borderBottomRightRadius: 16,
+                            overflow: "hidden",
                           }}
                         >
                           {(["modules", "assignments", "announcements", "calendar"] as ChannelKey[]).map((channel, channelIndex, channels) => {
@@ -733,14 +737,14 @@ export function LessonsScreen({ navigation }: Props) {
                                   paddingLeft: 58,
                                   paddingRight: 16,
                                   borderBottomWidth: channelIndex === channels.length - 1 ? 0 : 1,
-                                  borderBottomColor: "rgba(255,255,255,0.04)",
+                                  borderBottomColor: darkTheme.border,
                                 }}
                               >
-                                <MaterialCommunityIcons name={config.icon} size={15} color="#AAAAAA" style={{ opacity: 0.55 }} />
+                                <MaterialCommunityIcons name={config.icon} size={16} color={darkTheme.text} style={{ opacity: 0.8 }} />
                                 <Text
                                   style={{
                                     flex: 1,
-                                    color: "#999999",
+                                    color: darkTheme.subtext,
                                     fontSize: 13,
                                   }}
                                 >

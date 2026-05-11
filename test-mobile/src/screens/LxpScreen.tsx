@@ -388,7 +388,7 @@ export function LxpScreen({ navigation }: Props) {
                   <ProgressBar
                     value={checkpoint.isCompleted ? 100 : 0}
                     color={checkpoint.isCompleted ? colors.green : colors.indigo}
-                    trackColor="rgba(255,255,255,0.7)"
+                    trackColor={colors.border}
                     height={8}
                   />
                 </View>

@@ -139,7 +139,7 @@ export function TeacherProfileScreen(_: Props) {
             )}
           </View>
           <Text style={{ marginTop: 12, fontSize: 16, fontWeight: "800", color: theme.text }}>{fullName}</Text>
-          <Text style={{ marginTop: 4, fontSize: 12, color: "#999999" }}>{user?.email}</Text>
+          <Text style={{ marginTop: 4, fontSize: 12, color: theme.muted }}>{user?.email}</Text>
           <View style={{ marginTop: 12 }}>
             <TeacherActionButton label="Change photo" icon="image-edit-outline" tone="blue" onPress={() => void uploadAvatar()} disabled={avatarMutation.isPending} />
           </View>

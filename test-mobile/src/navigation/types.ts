@@ -54,7 +54,7 @@ export type RootStackParamList = {
   TeacherLibrary: undefined;
   TeacherClassRecord: undefined;
   TeacherReports: undefined;
-  TeacherInterventions: undefined;
+  TeacherInterventions: { classId?: string } | undefined;
   TeacherPerformance: undefined;
   TeacherEvaluations: undefined;
   TeacherAnnouncements: undefined;

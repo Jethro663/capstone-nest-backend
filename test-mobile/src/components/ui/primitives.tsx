@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Line, Rect, Text as SvgText } from "react-native-svg";
-import { colors, radii, shadow } from "../../theme/tokens";
+import { colors, modernAcademic, radii, shadow, skillStream } from "../../theme/tokens";
 
 type RefreshControlState = {
   refreshing: boolean;
@@ -122,8 +122,8 @@ function RefreshActivityOverlay({
           gap: 10,
           borderRadius: 999,
           borderWidth: 1,
-          borderColor: refreshing ? "rgba(255,255,255,0.08)" : colors.border,
-          backgroundColor: refreshing ? "rgba(20,20,20,0.94)" : colors.white,
+          borderColor: refreshing ? modernAcademic.primary : colors.border,
+          backgroundColor: skillStream.elevated,
           paddingHorizontal: 14,
           paddingVertical: 10,
           opacity,
@@ -132,20 +132,20 @@ function RefreshActivityOverlay({
       >
         {refreshing ? (
           <Animated.View style={{ transform: [{ rotate: rotateInterpolate }] }}>
-            <MaterialCommunityIcons name="sync" size={15} color={colors.amber} />
+            <MaterialCommunityIcons name="sync" size={15} color={colors.primary} />
           </Animated.View>
         ) : (
           <MaterialCommunityIcons
             name={armed ? "arrow-down-bold-circle" : "arrow-down-circle-outline"}
             size={15}
-            color={armed ? colors.amber : colors.muted}
+            color={armed ? modernAcademic.primary : colors.muted}
           />
         )}
         <Text
           style={{
             fontSize: 11,
             fontWeight: "800",
-            color: refreshing ? colors.white : colors.textSecondary,
+            color: colors.textSecondary,
             letterSpacing: 0.3,
           }}
         >
@@ -259,42 +259,20 @@ export function GradientHeader({
 
   return (
     <LinearGradient
-      colors={[gradientColors[0] ?? colors.indigo, gradientColors[1] ?? colors.violet]}
+      colors={[gradientColors[0] ?? colors.primary, gradientColors[1] ?? colors.primaryContainer]}
       style={{
         paddingTop: Math.max(insets.top, 24) + 8,
-        paddingBottom: 24,
+        paddingBottom: 22,
         paddingHorizontal: 20,
         borderBottomLeftRadius: radii.header,
         borderBottomRightRadius: radii.header,
         overflow: "hidden",
       }}
     >
-      <View
-        style={{
-          position: "absolute",
-          top: -36,
-          right: -36,
-          width: 144,
-          height: 144,
-          borderRadius: 999,
-          backgroundColor: "rgba(255,255,255,0.18)",
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: -28,
-          left: -24,
-          width: 96,
-          height: 96,
-          borderRadius: 999,
-          backgroundColor: "rgba(255,255,255,0.1)",
-        }}
-      />
       <View className="flex-row items-start justify-between">
         <View className="flex-1 pr-3">
           {eyebrow ? (
-            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 14, fontWeight: "700" }}>{eyebrow}</Text>
+            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "900", letterSpacing: 1.4, textTransform: "uppercase" }}>{eyebrow}</Text>
           ) : null}
           {title ? (
             <Text style={{ color: colors.white, fontSize: 24, fontWeight: "900", marginTop: eyebrow ? 2 : 0 }}>
@@ -322,12 +300,16 @@ export function FloatingIconButton({
     <Pressable
       onPress={onPress}
       style={{
-        width: 40,
-        height: 40,
+        minWidth: 44,
+        minHeight: 44,
+        width: 44,
+        height: 44,
         borderRadius: 999,
         alignItems: "center",
         justifyContent: "center",
         backgroundColor: "rgba(255,255,255,0.2)",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.28)",
       }}
     >
       <MaterialCommunityIcons name={icon} size={18} color={colors.white} />
@@ -341,11 +323,13 @@ export function Card({ children, style }: PropsWithChildren<{ style?: object }>)
     <View
       style={[
         {
-          backgroundColor: colors.white,
+          backgroundColor: colors.card,
           borderRadius: radii.xl,
+          borderWidth: 1,
+          borderColor: colors.border,
           padding: 16,
+          ...shadow.card,
         },
-        shadow.card,
         style,
       ]}
     >
@@ -397,7 +381,7 @@ export function ProgressBar({
   height?: number;
 }) {
   return (
-    <View style={{ height, borderRadius: 999, backgroundColor: trackColor, overflow: "hidden" }}>
+    <View style={{ height, borderRadius: 999, backgroundColor: trackColor === "#E5E7EB" ? modernAcademic.surfaceContainerHigh : trackColor, overflow: "hidden" }}>
       <View
         style={{
           width: `${Math.max(0, Math.min(100, value))}%`,
@@ -422,12 +406,15 @@ export function SearchField({
   return (
     <View
       style={{
+        minHeight: 48,
         marginTop: 16,
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
-        borderRadius: 18,
-        backgroundColor: colors.white,
+        borderRadius: radii.md,
+        backgroundColor: colors.card,
+        borderWidth: 1,
+        borderColor: colors.border,
         paddingHorizontal: 16,
         paddingVertical: 12,
       }}
@@ -467,9 +454,9 @@ export function Refreshable({ refreshing, onRefresh }: { refreshing: boolean; on
     <RefreshControl
       refreshing={refreshing}
       onRefresh={onRefresh}
-      tintColor={colors.amber}
-      colors={[colors.amber, colors.orange]}
-      progressBackgroundColor={colors.white}
+      tintColor={colors.primary}
+      colors={[colors.primary, colors.primaryContainer]}
+      progressBackgroundColor={colors.card}
     />
   );
 }
@@ -509,9 +496,10 @@ export function LoadingCard({ height = 120 }: { height?: number }) {
         {
           height,
           borderRadius: radii.xl,
-          backgroundColor: "#ECEFF6",
+          backgroundColor: modernAcademic.surfaceContainer,
+          borderWidth: 1,
+          borderColor: colors.border,
         },
-        shadow.card,
       ]}
     />
   );
@@ -535,10 +523,13 @@ export function StatCard({
       style={{
         flex: 1,
         borderRadius: radii.xl,
+        borderWidth: translucent ? 0 : 1,
+        borderColor: colors.border,
         paddingVertical: 12,
         paddingHorizontal: 10,
         alignItems: "center",
-        backgroundColor: translucent ? "rgba(255,255,255,0.2)" : colors.white,
+        backgroundColor: translucent ? "rgba(255,255,255,0.2)" : colors.card,
+        ...(!translucent ? shadow.card : {}),
       }}
     >
       <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
@@ -550,7 +541,7 @@ export function StatCard({
           marginTop: 2,
           fontSize: 11,
           fontWeight: "700",
-          color: translucent ? "rgba(255,255,255,0.85)" : colors.muted,
+          color: translucent ? "rgba(255,255,255,0.82)" : colors.muted,
         }}
       >
         {label}

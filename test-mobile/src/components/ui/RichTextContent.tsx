@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Linking, Text, View } from "react-native";
+import { colors } from "../../theme/tokens";
 
 type Block =
   | { type: "paragraph" | "blockquote" | "code"; content: string }
@@ -250,7 +251,7 @@ function renderInline(
                   fontSize: 12,
                   lineHeight: 19,
                   fontFamily: "monospace",
-                  backgroundColor: "rgba(255,255,255,0.08)",
+                  backgroundColor: colors.containerLow,
                 }
               : tag === "a"
                 ? { color: accentColor, fontSize: 13, lineHeight: 20, textDecorationLine: "underline" as const }
@@ -288,7 +289,7 @@ export function RichTextContent({ html, color, mutedColor, accentColor }: Props)
       {blocks.map((block, index) => {
         const key = `block-${index}`;
         if (block.type === "divider") {
-          return <View key={key} style={{ height: 1, backgroundColor: "rgba(255,255,255,0.08)", marginVertical: 4 }} />;
+          return <View key={key} style={{ height: 1, backgroundColor: colors.border, marginVertical: 4 }} />;
         }
 
         if (block.type === "unordered-list" || block.type === "ordered-list") {
@@ -328,7 +329,7 @@ export function RichTextContent({ html, color, mutedColor, accentColor }: Props)
                     fontSize: 12,
                     lineHeight: 19,
                     fontFamily: "monospace",
-                    backgroundColor: "rgba(255,255,255,0.06)",
+                    backgroundColor: colors.containerLow,
                     paddingHorizontal: 10,
                     paddingVertical: 8,
                     borderRadius: 10,

@@ -632,8 +632,8 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         <Pressable
           onPress={() => navigation.goBack()}
           style={{
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             borderRadius: 10,
             alignItems: "center",
             justifyContent: "center",
@@ -1072,7 +1072,7 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                             height: 28,
                             borderRadius: 14,
                             borderWidth: 1,
-                            borderColor: option.isCorrect ? "rgba(232,41,78,0.55)" : theme.border,
+                            borderColor: option.isCorrect ? theme.redLine : theme.border,
                             backgroundColor: option.isCorrect ? theme.redSoft : theme.surface,
                             alignItems: "center",
                             justifyContent: "center",

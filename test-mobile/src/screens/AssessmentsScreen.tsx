@@ -15,9 +15,11 @@ import { useAuth } from "../providers/AuthProvider";
 import type { MainTabParamList } from "../navigation/types";
 import type { Assessment, AssessmentAttempt, AssessmentType } from "../types/assessment";
 import type { ClassItem } from "../types/class";
+import { studentDarkTheme } from "../theme/studentDark";
+import { shadow } from "../theme/tokens";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Assessments">;
-type AssessmentFilterKey = "allAssessments" | "pending" | "completed" | "late" | "missing";
+type AssessmentFilterKey = "allAssessments" | "pending" | "completed" | "past_due";
 type AssessmentStatus = Exclude<AssessmentRecord["status"], never>;
 type AssessmentActionKey = "details" | "history" | "results" | "class";
 
@@ -30,7 +32,7 @@ type AssessmentRecord = {
   typeLabel: string;
   badgeText: string;
   badgeColor: string;
-  status: "pending" | "completed" | "late" | "missing";
+  status: "pending" | "completed" | "past_due";
   statusLabel: string;
   dueLabel: string;
   dueTime: number | null;
@@ -39,30 +41,13 @@ type AssessmentRecord = {
   latestAttempt: AssessmentAttempt | null;
 };
 
-const darkTheme = {
-  bg: "#0A1630",
-  topbar: "#0B1833",
-  surface: "#0F2438",
-  active: "#132D45",
-  channel: "#0D1F36",
-  border: "rgba(0,217,255,0.18)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  subtext: "rgba(224,247,255,0.56)",
-  dim: "#426478",
-  red: "#E8294E",
-  blue: "#00D9FF",
-  green: "#22C97A",
-  purple: "#A78BFA",
-  amber: "#FBBF24",
-} as const;
+const darkTheme = studentDarkTheme;
 
 const filterTabs: Array<{ key: AssessmentFilterKey; label: string }> = [
   { key: "allAssessments", label: "All Assessments" },
   { key: "pending", label: "Pending" },
   { key: "completed", label: "Completed" },
-  { key: "late", label: "Late" },
-  { key: "missing", label: "Missing" },
+  { key: "past_due", label: "Past Due" },
 ];
 
 const assessmentTypeBadge: Record<AssessmentType, string> = {
@@ -76,15 +61,13 @@ const assessmentTypeBadge: Record<AssessmentType, string> = {
 };
 
 const statusPriority: Record<AssessmentRecord["status"], number> = {
-  missing: 0,
-  late: 1,
+  past_due: 0,
   pending: 2,
   completed: 3,
 };
 
 const statusProgress: Record<AssessmentRecord["status"], number> = {
-  missing: 14,
-  late: 36,
+  past_due: 28,
   pending: 68,
   completed: 100,
 };
@@ -101,26 +84,26 @@ const actionConfig: Record<
   details: {
     defaultLabel: "Open Assessment",
     icon: "clipboard-text-outline",
-    background: "rgba(0,217,255,0.14)",
-    color: "#00D9FF",
+    background: darkTheme.blueSoft,
+    color: darkTheme.blue,
   },
   history: {
     defaultLabel: "Assessment History",
     icon: "history",
-    background: "rgba(167,139,250,0.14)",
+    background: darkTheme.purpleSoft,
     color: darkTheme.purple,
   },
   results: {
     defaultLabel: "Latest Status",
     icon: "chart-box-outline",
-    background: "rgba(251,191,36,0.14)",
+    background: darkTheme.amberSoft,
     color: darkTheme.amber,
   },
   class: {
     defaultLabel: "Open Class",
     icon: "book-open-page-variant-outline",
-    background: "rgba(34,201,122,0.14)",
-    color: "#4EDD9C",
+    background: darkTheme.greenSoft,
+    color: darkTheme.green,
   },
 };
 
@@ -154,9 +137,7 @@ function resolveBadgeColor(status: AssessmentRecord["status"]) {
   switch (status) {
     case "completed":
       return darkTheme.green;
-    case "late":
-      return darkTheme.amber;
-    case "missing":
+    case "past_due":
       return darkTheme.red;
     case "pending":
     default:
@@ -168,10 +149,8 @@ function resolveStatusLabel(status: AssessmentRecord["status"]) {
   switch (status) {
     case "completed":
       return "Completed";
-    case "late":
-      return "Late";
-    case "missing":
-      return "Missing";
+    case "past_due":
+      return "Past Due";
     case "pending":
     default:
       return "Pending";
@@ -225,7 +204,7 @@ function resolveAssessmentStatus(assessment: Assessment, attempts: AssessmentAtt
   if (latestAttempt?.isSubmitted) {
     status = "completed";
   } else if (dueTime && dueTime < Date.now()) {
-    status = latestAttempt ? "late" : "missing";
+    status = "past_due";
   }
 
   return { latestAttempt, dueTime, status };
@@ -520,14 +499,16 @@ export function AssessmentsScreen({ navigation }: Props) {
                 onPress={() => setSearchOpen((current) => !current)}
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: darkTheme.surface,
+                  borderWidth: 1,
+                  borderColor: darkTheme.border,
                   borderRadius: 999,
-                  height: 30,
+                  height: 44,
                   justifyContent: "center",
-                  width: 30,
+                  width: 44,
                 }}
               >
-                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="magnify" size={15} />
+                <MaterialCommunityIcons color={darkTheme.text} name="magnify" size={18} />
               </Pressable>
 
               <Pressable
@@ -535,14 +516,16 @@ export function AssessmentsScreen({ navigation }: Props) {
                 onPress={() => (navigation as any).navigate("AssessmentHistory")}
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: darkTheme.surface,
+                  borderWidth: 1,
+                  borderColor: darkTheme.border,
                   borderRadius: 999,
-                  height: 30,
+                  height: 44,
                   justifyContent: "center",
-                  width: 30,
+                  width: 44,
                 }}
               >
-                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="history" size={15} />
+                <MaterialCommunityIcons color={darkTheme.text} name="history" size={18} />
               </Pressable>
 
               <View
@@ -550,9 +533,9 @@ export function AssessmentsScreen({ navigation }: Props) {
                   alignItems: "center",
                   backgroundColor: darkTheme.red,
                   borderRadius: 999,
-                  height: 30,
+                  height: 44,
                   justifyContent: "center",
-                  width: 30,
+                  width: 44,
                 }}
               >
                 <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "700" }}>{userInitials}</Text>
@@ -602,6 +585,8 @@ export function AssessmentsScreen({ navigation }: Props) {
                     borderBottomColor: focused ? darkTheme.red : "transparent",
                     borderBottomWidth: 2,
                     paddingHorizontal: 13,
+                    minHeight: 44,
+                    justifyContent: "center",
                     paddingVertical: 8,
                   }}
                 >
@@ -682,22 +667,27 @@ export function AssessmentsScreen({ navigation }: Props) {
                         style={{
                           alignItems: "center",
                           backgroundColor: expanded ? darkTheme.surface : darkTheme.bg,
-                          borderBottomColor: darkTheme.border,
-                          borderBottomWidth: 1,
+                          borderColor: darkTheme.border,
+                          borderRadius: 16,
+                          borderWidth: 1,
                           flexDirection: "row",
                           gap: 12,
-                          paddingHorizontal: 16,
-                          paddingVertical: 11,
+                          marginHorizontal: 16,
+                          marginBottom: 10,
+                          minHeight: 72,
+                          paddingHorizontal: 14,
+                          paddingVertical: 14,
+                          ...shadow.card,
                         }}
                       >
                         <View
                           style={{
                             alignItems: "center",
                             backgroundColor: assessment.badgeColor,
-                            borderRadius: 10,
-                            height: 40,
+                            borderRadius: 14,
+                            height: 48,
                             justifyContent: "center",
-                            width: 40,
+                            width: 48,
                           }}
                         >
                           <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "700" }}>
@@ -723,11 +713,11 @@ export function AssessmentsScreen({ navigation }: Props) {
                         <View style={{ alignItems: "center", flexDirection: "row", gap: 8 }}>
                           <View
                             style={{
-                              backgroundColor: "rgba(255,255,255,0.1)",
+                              backgroundColor: darkTheme.active,
                               borderRadius: 2,
-                              height: 3,
+                              height: 5,
                               overflow: "hidden",
-                              width: 38,
+                              width: 46,
                             }}
                           >
                             <View
@@ -774,8 +764,15 @@ export function AssessmentsScreen({ navigation }: Props) {
                         <View
                           style={{
                             backgroundColor: darkTheme.channel,
-                            borderBottomColor: darkTheme.border,
-                            borderBottomWidth: 1,
+                            borderColor: darkTheme.border,
+                            borderBottomLeftRadius: 16,
+                            borderBottomRightRadius: 16,
+                            borderTopWidth: 0,
+                            borderWidth: 1,
+                            marginHorizontal: 16,
+                            marginTop: -10,
+                            marginBottom: 10,
+                            overflow: "hidden",
                           }}
                         >
                           {(["details", "history", "results", "class"] as AssessmentActionKey[]).map(
@@ -791,7 +788,7 @@ export function AssessmentsScreen({ navigation }: Props) {
                                     borderBottomColor:
                                       actionIndex === actions.length - 1
                                         ? "transparent"
-                                        : "rgba(255,255,255,0.04)",
+                                        : darkTheme.border,
                                     borderBottomWidth: actionIndex === actions.length - 1 ? 0 : 1,
                                     flexDirection: "row",
                                     gap: 10,
@@ -802,14 +799,14 @@ export function AssessmentsScreen({ navigation }: Props) {
                                   }}
                                 >
                                   <MaterialCommunityIcons
-                                    color="#AAAAAA"
+                                    color={darkTheme.text}
                                     name={config.icon}
                                     size={15}
                                     style={{ opacity: 0.55 }}
                                   />
                                   <Text
                                     style={{
-                                      color: "#999999",
+                                      color: darkTheme.subtext,
                                       flex: 1,
                                       fontSize: 13,
                                     }}

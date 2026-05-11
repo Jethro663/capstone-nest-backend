@@ -677,7 +677,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                 paddingVertical: 5,
               }}
             >
-              <Text style={{ color: "#6AABFF", fontSize: 11, fontWeight: "800" }}>Q{currentIndex + 1}</Text>
+              <Text style={{ color: theme.blue, fontSize: 11, fontWeight: "800" }}>Q{currentIndex + 1}</Text>
             </View>
             <Text style={{ fontSize: 11, color: theme.muted, fontWeight: "700" }}>
               {String(currentQuestion.type || "question").replace(/_/g, " ")}
@@ -917,7 +917,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
           {isFileUploadAssessment ? (
             <Card style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }}>
               <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>Upload your work</Text>
-              <Text style={{ marginTop: 8, color: "#BDBDBD", fontSize: 12, lineHeight: 18 }}>
+              <Text style={{ marginTop: 8, color: theme.subtext, fontSize: 12, lineHeight: 18 }}>
                 {stripRichText(assessment?.fileUploadInstructions) ||
                   "Attach images, PDFs, or documents. You can add or remove files before you submit."}
               </Text>

@@ -107,11 +107,11 @@ function DarkSectionLabel({ title, meta, metaColor = theme.red }: { title: strin
 
 function ToneTag({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "red" | "purple" }) {
   const toneStyle = {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
-    purple: { backgroundColor: theme.purpleSoft, color: "#C4B0FF" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 
   return (
@@ -211,7 +211,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       <ScreenScroll backgroundColor={theme.bg}>
         <DarkPanel style={{ marginTop: 40 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Module data is partially unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{peekAppError(primaryError).message}</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
         </DarkPanel>
       </ScreenScroll>
     );
@@ -255,8 +255,8 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 36,
-                height: 36,
+                width: 44,
+                height: 44,
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
@@ -267,7 +267,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
             </Pressable>
           </View>
 
-          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
             {stripRichText(moduleEntry.description) || "Explore lessons, assessments, and required checkpoints."}
           </Text>
 
@@ -283,14 +283,14 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       {primaryError ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Module data is partially unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{peekAppError(primaryError).message}</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
         </DarkPanel>
       ) : null}
 
       {fileActionError ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Attachment action unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{fileActionError}</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{fileActionError}</Text>
         </DarkPanel>
       ) : null}
 
@@ -310,7 +310,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
           <Text style={{ fontSize: 12, fontWeight: "600", color: theme.text }}>Module Snapshot</Text>
           <Text style={{ fontSize: 11, fontWeight: "600", color: theme.green }}>{progress}% complete</Text>
         </View>
-        <View style={{ height: 2, backgroundColor: "rgba(255,255,255,0.07)" }}>
+        <View style={{ height: 2, backgroundColor: theme.border }}>
           <View style={{ width: `${Math.max(0, Math.min(100, progress))}%`, height: "100%", backgroundColor: theme.green }} />
         </View>
         <View style={{ flexDirection: "row", paddingHorizontal: 14, paddingVertical: 12 }}>
@@ -338,7 +338,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       {moduleEntry.isLocked ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Module locked</Text>
-          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
             Your teacher still needs to unlock this module before students can open its learning items.
           </Text>
         </DarkPanel>
@@ -347,7 +347,7 @@ export function ModuleDetailScreen({ route, navigation }: Props) {
       {visibleSections.length === 0 ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>No module items yet</Text>
-          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
             This module does not have published content yet.
           </Text>
         </DarkPanel>

@@ -89,7 +89,7 @@ function FilterChip({
       style={{
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? "rgba(232,41,78,0.55)" : theme.border,
+        borderColor: active ? theme.redLine : theme.border,
         backgroundColor: active ? theme.redSoft : theme.surface,
         paddingHorizontal: 12,
         paddingVertical: 8,
@@ -278,8 +278,8 @@ export function CalendarScreen({ navigation, route }: Props) {
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 36,
-                height: 36,
+                width: 44,
+                height: 44,
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
@@ -289,7 +289,7 @@ export function CalendarScreen({ navigation, route }: Props) {
               <MaterialCommunityIcons name="chevron-left" size={18} color={theme.text} />
             </Pressable>
           </View>
-          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.muted }}>
             Review class schedules, assessment deadlines, announcements, and school-wide events in one timeline.
           </Text>
         </View>
@@ -308,7 +308,7 @@ export function CalendarScreen({ navigation, route }: Props) {
             }}
           >
             <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Calendar data is partially unavailable</Text>
-            <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>{peekAppError(primaryError).message}</Text>
+            <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
           </View>
         ) : null}
 
@@ -435,14 +435,14 @@ export function CalendarScreen({ navigation, route }: Props) {
                   >
                     <View
                       style={{
-                        width: 36,
-                        minHeight: 40,
+                        width: 44,
+                        minHeight: 44,
                         borderRadius: isToday || isSelected ? 14 : 10,
                         alignItems: "center",
                         justifyContent: "center",
                         backgroundColor: isSelected ? theme.blueSoft : isToday ? theme.red : "transparent",
                         borderWidth: isSelected ? 1 : 0,
-                        borderColor: isSelected ? "rgba(0,217,255,0.45)" : "transparent",
+                        borderColor: isSelected ? theme.blueLine : "transparent",
                       }}
                     >
                       <Text
@@ -501,7 +501,7 @@ export function CalendarScreen({ navigation, route }: Props) {
           {selectedDayItems.length === 0 ? (
             <View style={{ paddingVertical: 16 }}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Nothing scheduled</Text>
-              <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+              <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                 Choose another day or switch the class filter to see more activity.
               </Text>
             </View>
@@ -552,7 +552,7 @@ export function CalendarScreen({ navigation, route }: Props) {
                         <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
                           {formatTimeWindow(item)}{item.classId ? ` - ${getClassLabel(item.classId, classes)}` : ""}
                         </Text>
-                        <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#BDBDBD" }}>
+                        <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
                           {getSupportingCopy(item)}
                         </Text>
                       </View>

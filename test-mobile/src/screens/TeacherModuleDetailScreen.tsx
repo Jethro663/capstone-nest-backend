@@ -74,7 +74,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
       rightAction={
         <Pressable
           onPress={() => navigation.goBack()}
-          style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
+          style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
         >
           <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
         </Pressable>
@@ -120,7 +120,7 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                   <View style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8 }}>
                     <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{section.title}</Text>
                     {section.description ? (
-                      <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: "#999999" }}>{section.description}</Text>
+                      <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>{section.description}</Text>
                     ) : null}
                   </View>
                   {section.items.length ? (
