@@ -6,6 +6,7 @@ from app.extraction_pipeline import (
     _cleanup_text_first_sections,
     _derive_section_assessment_draft,
     _detect_structure_with_rules,
+    _evaluate_extraction_against_golden,
     _merge_structured_chunks,
     run_extraction,
 )
@@ -90,6 +91,9 @@ class ExtractionPipelineTests(unittest.TestCase):
         self.assertIn("confidenceBreakdown", merged["audit"])
         first_block = merged["sections"][0]["lessonBlocks"][0]
         self.assertEqual(first_block["metadata"]["sectionId"], "chunk-01-section-01-intro")
+        self.assertIn("sourceSnippet", first_block["metadata"]["provenance"])
+        self.assertIn("instructionalRole", first_block["metadata"])
+        self.assertTrue(merged["audit"]["reviewIssues"])
 
     def test_merge_structured_chunks_is_text_first_and_ignores_page_images(self) -> None:
         merged = _merge_structured_chunks(
@@ -214,6 +218,65 @@ class ExtractionPipelineTests(unittest.TestCase):
         self.assertEqual(merged["audit"]["finalSectionCount"], 2)
         self.assertTrue(merged["audit"]["coherenceCleanup"]["actions"])
 
+    def test_merge_structured_chunks_honors_student_friendly_style_and_review_issues(self) -> None:
+        merged = _merge_structured_chunks(
+            [
+                {
+                    "title": "Module A",
+                    "description": "Demo module",
+                    "sections": [
+                        {
+                            "sectionId": "chunk-01-section-01-intro",
+                            "sectionTitle": "Introduction",
+                            "sectionDescription": "",
+                            "sectionBody": "Objectives\nExplain cells.\nExample: A cell is like a small factory.",
+                            "sectionKind": "lesson",
+                            "chunkIndex": 1,
+                            "pageStart": 1,
+                            "pageEnd": 1,
+                            "sourceMethod": "text",
+                            "confidence": 0.52,
+                        }
+                    ],
+                }
+            ],
+            target_section_count=4,
+            extraction_style="student_friendly",
+        )
+
+        first_block = merged["sections"][0]["lessonBlocks"][0]
+        self.assertEqual(first_block["metadata"]["extractionStyle"], "student_friendly")
+        self.assertIn(first_block["metadata"]["instructionalRole"], {"objective", "example", "explanation"})
+        self.assertEqual(merged["audit"]["reviewState"], "needs_review")
+        self.assertTrue(
+            any(issue["code"] == "low-section-confidence" for issue in merged["audit"]["reviewIssues"])
+        )
+
+    def test_golden_eval_scores_required_text_and_hallucinations(self) -> None:
+        output = {
+            "sections": [
+                {
+                    "title": "Cells",
+                    "lessonBlocks": [
+                        {"type": "text", "content": {"text": "Cells are the basic unit of life."}}
+                    ],
+                }
+            ],
+            "audit": {"reviewIssues": [{"code": "low-section-confidence"}]},
+        }
+        expected = {
+            "sectionCount": 1,
+            "requiredText": ["basic unit of life"],
+            "forbiddenText": ["mitochondria is magic"],
+            "issueCodes": ["low-section-confidence"],
+        }
+
+        score = _evaluate_extraction_against_golden(output, expected)
+
+        self.assertTrue(score["passed"])
+        self.assertEqual(score["missingRequiredText"], [])
+        self.assertEqual(score["hallucinatedText"], [])
+
     def test_assessment_media_attaches_only_when_question_references_figure(self) -> None:
         draft = _derive_section_assessment_draft(
             section_title="Section 1",
@@ -279,7 +342,50 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         render_pages.assert_not_called()
         doc.close.assert_called_once()
 
-    async def test_run_extraction_rejects_scanned_pdf_without_text(self) -> None:
+    async def test_run_extraction_uses_vision_fallback_for_scanned_pdf(self) -> None:
+        db = MagicMock()
+        upload_row = MagicMock()
+        upload_row.mappings.return_value.first.return_value = {
+            "file_path": "uploads/test.pdf",
+            "original_name": "Scanned.pdf",
+        }
+        db.execute = AsyncMock(return_value=upload_row)
+        db.commit = AsyncMock()
+
+        doc = MagicMock()
+
+        with (
+            patch("app.extraction_pipeline._update_extraction", new=AsyncMock()),
+            patch(
+                "app.extraction_pipeline.materialize_backend_upload",
+                new=AsyncMock(return_value="uploads/test.pdf"),
+            ),
+            patch("app.extraction_pipeline.os.path.exists", return_value=True),
+            patch("app.extraction_pipeline.fitz.open", return_value=doc),
+            patch(
+                "app.extraction_pipeline._extract_pdf_pages",
+                return_value=[{"pageNumber": 1, "text": "", "charCount": 0}],
+            ),
+            patch(
+                "app.extraction_pipeline._render_pdf_pages_to_images",
+                return_value=[{"base64Data": "ZmFrZQ==", "mimeType": "image/png"}],
+            ) as render_pages,
+            patch(
+                "app.extraction_pipeline.ollama_client.is_available",
+                new=AsyncMock(return_value={"available": True}),
+            ),
+            patch(
+                "app.extraction_pipeline.ollama_client.generate",
+                new=AsyncMock(
+                    return_value='{"title":"Scanned Module","description":"","sections":[{"title":"Page 1","blocks":[{"type":"text","order":0,"content":{"text":"Scanned lesson text"}}]}],"audit":{}}'
+                ),
+            ),
+        ):
+            await run_extraction(db, "extract-1", "file-1", "user-1")
+
+        render_pages.assert_called_once()
+
+    async def test_run_extraction_rejects_scanned_pdf_without_vision(self) -> None:
         db = MagicMock()
         upload_row = MagicMock()
         upload_row.mappings.return_value.first.return_value = {
@@ -303,12 +409,51 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "app.extraction_pipeline._extract_pdf_pages",
                 return_value=[{"pageNumber": 1, "text": "", "charCount": 0}],
             ),
+            patch(
+                "app.extraction_pipeline.ollama_client.is_available",
+                new=AsyncMock(return_value={"available": False}),
+            ),
         ):
             await run_extraction(db, "extract-1", "file-1", "user-1")
 
         final_update = update_extraction.await_args_list[-1].args[2]
         self.assertEqual(final_update["extraction_status"], "failed")
-        self.assertIn("text-based pdf", final_update["error_message"].lower())
+        self.assertIn("vision extraction is unavailable", final_update["error_message"].lower())
+
+    async def test_run_extraction_stops_when_cancel_requested(self) -> None:
+        db = MagicMock()
+        upload_row = MagicMock()
+        upload_row.mappings.return_value.first.return_value = {
+            "file_path": "uploads/test.pdf",
+            "original_name": "Biology.pdf",
+        }
+        cancel_row = MagicMock()
+        cancel_row.mappings.return_value.first.return_value = {
+            "structured_content": {"audit": {"cancelRequested": True}},
+        }
+        db.execute = AsyncMock(side_effect=[upload_row, cancel_row])
+        db.commit = AsyncMock()
+
+        doc = MagicMock()
+
+        with (
+            patch("app.extraction_pipeline._update_extraction", new=AsyncMock()) as update_extraction,
+            patch(
+                "app.extraction_pipeline.materialize_backend_upload",
+                new=AsyncMock(return_value="uploads/test.pdf"),
+            ),
+            patch("app.extraction_pipeline.os.path.exists", return_value=True),
+            patch("app.extraction_pipeline.fitz.open", return_value=doc),
+            patch(
+                "app.extraction_pipeline._extract_pdf_pages",
+                return_value=[{"pageNumber": 1, "text": "Enough selectable text for extraction.", "charCount": 38}],
+            ),
+        ):
+            await run_extraction(db, "extract-1", "file-1", "user-1")
+
+        final_update = update_extraction.await_args_list[-1].args[2]
+        self.assertEqual(final_update["extraction_status"], "failed")
+        self.assertIn("cancelled", final_update["error_message"].lower())
 
 
 if __name__ == "__main__":

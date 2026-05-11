@@ -74,6 +74,7 @@ from .schemas import (
     InterventionRecommendationRequest,
     MentorExplainRequest,
     RequestUser,
+    RetryExtractionRequest,
     StudentTutorAnswerRequest,
     StudentTutorMessageRequest,
     StudentTutorStartRequest,
@@ -3194,6 +3195,7 @@ def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
         "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
         "graphKeywords": _normalize_string_list(section.get("graphKeywords")),
         "figureReferences": _normalize_string_list(section.get("figureReferences")),
+        "reviewState": str(section.get("reviewState") or "").strip() or None,
     }
 
 
@@ -3251,6 +3253,15 @@ def _normalize_structured_content(payload: Any) -> dict[str, Any]:
         "mediaAssets": media_assets,
     }
     _refresh_media_review_state(structured_content)
+    audit = structured_content.get("audit") if isinstance(structured_content.get("audit"), dict) else {}
+    if not isinstance(audit.get("reviewIssues"), list):
+        audit["reviewIssues"] = []
+    audit["reviewState"] = str(audit.get("reviewState") or "").strip() or (
+        "needs_review"
+        if any(isinstance(issue, dict) and not issue.get("resolved") for issue in audit.get("reviewIssues", []))
+        else "ready"
+    )
+    structured_content["audit"] = audit
     return structured_content
 
 
@@ -3291,6 +3302,9 @@ async def extract_module(
             "requestedSectionCount": body.target_section_count,
             "finalSectionCount": 0,
             "sectionCountAdjustmentReason": None,
+            "extractionStyle": body.extraction_style,
+            "reviewIssues": [],
+            "reviewState": "pending",
         },
     }
     result = await db.execute(
@@ -3322,6 +3336,7 @@ async def extract_module(
                 body.file_id,
                 user.id,
                 target_section_count=body.target_section_count,
+                extraction_style=body.extraction_style,
             )
 
     try:
@@ -3571,6 +3586,30 @@ async def update_extraction(
     else:
         raw_media_assets = existing_content.get("mediaAssets") or []
 
+    audit = existing_content.get("audit") if isinstance(existing_content.get("audit"), dict) else {}
+    audit = dict(audit)
+    if body.review_issues is not None:
+        audit["reviewIssues"] = [
+            issue
+            for issue in body.review_issues
+            if isinstance(issue, dict) and str(issue.get("id") or "").strip()
+        ]
+    if body.review_state is not None:
+        audit["reviewState"] = str(body.review_state or "").strip() or None
+    if body.review_issues is not None or body.review_state is not None:
+        unresolved_blocking = any(
+            isinstance(issue, dict)
+            and not issue.get("resolved")
+            and str(issue.get("severity") or "").strip().lower() == "blocking"
+            for issue in audit.get("reviewIssues", [])
+        )
+        review_state = str(audit.get("reviewState") or "").strip().lower()
+        audit["reviewRequired"] = (
+            str(audit.get("qualityGate") or "").strip().lower() == "fail"
+            or unresolved_blocking
+            or review_state in {"blocked", "needs_review"}
+        )
+
     structured_content = _normalize_structured_content(
         {
             "title": body.title if body.title is not None else existing_content.get("title"),
@@ -3580,7 +3619,7 @@ async def update_extraction(
                 else existing_content.get("description")
             ),
             "sections": raw_sections,
-            "audit": existing_content.get("audit") or {},
+            "audit": audit,
             "mediaAssets": raw_media_assets,
         }
     )
@@ -3601,6 +3640,130 @@ async def update_extraction(
 # ---------------------------------------------------------------------------
 # POST /extractions/:id/apply
 # ---------------------------------------------------------------------------
+
+def _unresolved_blocking_review_issues(content: dict[str, Any]) -> list[dict[str, Any]]:
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    issues = audit.get("reviewIssues") if isinstance(audit.get("reviewIssues"), list) else []
+    return [
+        issue
+        for issue in issues
+        if isinstance(issue, dict)
+        and not issue.get("resolved")
+        and str(issue.get("severity") or "").lower() == "blocking"
+    ]
+
+
+def _select_sections_for_apply(
+    content: dict[str, Any],
+    body: ApplyExtractionRequest,
+) -> list[tuple[dict[str, Any], int]]:
+    all_sections = content.get("sections") or []
+    if not all_sections:
+        raise HTTPException(400, "No sections found in extraction result")
+
+    selected_indices = (
+        body.section_indices
+        if body.section_indices is not None
+        else body.lesson_indices
+    )
+    if selected_indices:
+        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
+        if invalid:
+            raise HTTPException(
+                400,
+                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
+            )
+        return [(all_sections[i], i) for i in selected_indices]
+    return [(section, i) for i, section in enumerate(all_sections)]
+
+
+def _validate_apply_ready(content: dict[str, Any]) -> None:
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    if quality_gate == "fail":
+        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
+    if bool(audit.get("reviewRequired")):
+        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
+    unresolved = _unresolved_blocking_review_issues(content)
+    if unresolved:
+        raise HTTPException(400, "Extraction has unresolved blocking review issues before it can be applied.")
+
+
+def _build_apply_preview(content: dict[str, Any], body: ApplyExtractionRequest) -> dict[str, Any]:
+    sections_to_apply = _select_sections_for_apply(content, body)
+    prepared = [
+        (
+            _prepare_section_for_apply(
+                section_data,
+                fallback_title=f"Section {source_section_index + 1}",
+            ),
+            source_section_index,
+        )
+        for section_data, source_section_index in sections_to_apply
+    ]
+    preview_sections = []
+    assessment_count = 0
+    for section, source_index in prepared:
+        question_count = len(section.get("assessmentDraft", {}).get("questions", [])) if isinstance(section.get("assessmentDraft"), dict) else 0
+        if question_count > 0:
+            assessment_count += 1
+        preview_sections.append(
+            {
+                "title": section["title"],
+                "sourceSectionIndex": source_index,
+                "lessonBlocks": len(section.get("lessonBlocks") or []),
+                "assessmentQuestions": question_count,
+            }
+        )
+    return {
+        "moduleTitle": str(content.get("title") or "Extracted Module"),
+        "moduleDescription": str(content.get("description") or ""),
+        "sectionsCreated": len(prepared),
+        "lessonsCreated": len(prepared),
+        "assessmentsCreated": assessment_count,
+        "blockedReasons": [],
+        "sections": preview_sections,
+    }
+
+
+@app.post("/extractions/{extraction_id}/apply/preview")
+async def preview_apply_extraction(
+    extraction_id: str,
+    body: ApplyExtractionRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, extraction_status, is_applied, teacher_id, "
+            "class_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only view your own extractions")
+    if extraction["extraction_status"] not in {"completed", "applied"}:
+        raise HTTPException(
+            400,
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be previewed',
+        )
+
+    content = _normalize_structured_content(extraction["structured_content"])
+    if not extraction["is_applied"]:
+        _validate_apply_ready(content)
+    preview = _build_apply_preview(content, body)
+    preview["alreadyApplied"] = bool(extraction["is_applied"])
+    return {
+        "success": True,
+        "message": "Extraction apply preview",
+        "data": preview,
+    }
 
 
 @app.post("/extractions/{extraction_id}/apply", status_code=201)
@@ -3626,40 +3789,34 @@ async def apply_extraction(
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
 
+    content = _normalize_structured_content(extraction["structured_content"])
+    if extraction["is_applied"]:
+        audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+        apply_result = audit.get("applyResult") if isinstance(audit.get("applyResult"), dict) else {}
+        return {
+            "success": True,
+            "message": "Extraction was already applied earlier.",
+            "data": {
+                "alreadyApplied": True,
+                "sectionsCreated": _safe_int(apply_result.get("sectionsCreated"), 0),
+                "lessonsCreated": _safe_int(apply_result.get("lessonsCreated"), 0),
+                "assessmentsCreated": _safe_int(apply_result.get("assessmentsCreated"), 0),
+                "sections": apply_result.get("sections") if isinstance(apply_result.get("sections"), list) else [],
+                "lessons": apply_result.get("lessons") if isinstance(apply_result.get("lessons"), list) else [],
+                "assessments": apply_result.get("assessments") if isinstance(apply_result.get("assessments"), list) else [],
+                "moduleId": apply_result.get("moduleId"),
+            },
+        }
+
     if extraction["extraction_status"] != "completed":
         raise HTTPException(
             400,
             f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be applied',
         )
-    if extraction["is_applied"]:
-        raise HTTPException(400, "This extraction has already been applied")
 
-    content = _normalize_structured_content(extraction["structured_content"])
-    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
-    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
-    if quality_gate == "fail":
-        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
-    if bool(audit.get("reviewRequired")):
-        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
+    _validate_apply_ready(content)
     all_sections = content.get("sections") or []
-    if not all_sections:
-        raise HTTPException(400, "No sections found in extraction result")
-
-    selected_indices = (
-        body.section_indices
-        if body.section_indices is not None
-        else body.lesson_indices
-    )
-    if selected_indices:
-        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
-        if invalid:
-            raise HTTPException(
-                400,
-                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
-            )
-        sections_to_apply = [(all_sections[i], i) for i in selected_indices]
-    else:
-        sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
+    sections_to_apply = _select_sections_for_apply(content, body)
 
     prepared_sections = [
         (
@@ -3993,6 +4150,22 @@ async def apply_extraction(
                     {"id": assessment_id, "title": str(assessment_row["title"])}
                 )
 
+    apply_result = {
+        "alreadyApplied": False,
+        "classId": class_id,
+        "extractionId": extraction_id,
+        "moduleId": module_id,
+        "sectionsCreated": len(created_sections),
+        "lessonsCreated": len(created_lessons),
+        "assessmentsCreated": len(created_assessments),
+        "totalSectionsAvailable": len(all_sections),
+        "totalLessonsAvailable": len(all_sections),
+        "sections": created_sections,
+        "lessons": created_lessons,
+        "assessments": created_assessments,
+    }
+    content.setdefault("audit", {})["applyResult"] = apply_result
+
     await db.execute(
         sa_text(
             "UPDATE extracted_modules "
@@ -4002,7 +4175,11 @@ async def apply_extraction(
         {"id": extraction_id, "sc": content},
     )
     await db.commit()
-    index_result = await reindex_class_content(db, str(class_id))
+    try:
+        index_result = await reindex_class_content(db, str(class_id))
+    except Exception as err:
+        logger.warning("[extraction] Reindex failed after apply %s: %s", extraction_id, err)
+        index_result = {"ok": False, "message": str(err)}
 
     return {
         "success": True,
@@ -4014,6 +4191,7 @@ async def apply_extraction(
             "classId": class_id,
             "extractionId": extraction_id,
             "moduleId": module_id,
+            "alreadyApplied": False,
             "sectionsCreated": len(created_sections),
             "lessonsCreated": len(created_lessons),
             "assessmentsCreated": len(created_assessments),
@@ -4023,6 +4201,137 @@ async def apply_extraction(
             "lessons": created_lessons,
             "assessments": created_assessments,
             "indexing": index_result,
+        },
+    }
+
+
+@app.post("/extractions/{extraction_id}/cancel")
+async def cancel_extraction(
+    extraction_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, extraction_status, is_applied, teacher_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only cancel your own extractions")
+    if extraction["is_applied"]:
+        raise HTTPException(400, "Cannot cancel an extraction that has already been applied")
+
+    content = _normalize_structured_content(extraction.get("structured_content"))
+    content.setdefault("audit", {}).update(
+        {
+            "cancelRequested": True,
+            "cancelledByTeacher": True,
+            "reviewState": "cancelled",
+        }
+    )
+    await db.execute(
+        sa_text(
+            "UPDATE extracted_modules "
+            "SET extraction_status = 'failed', error_message = :message, structured_content = :sc, updated_at = NOW() "
+            "WHERE id = :id"
+        ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+        {
+            "id": extraction_id,
+            "message": "Extraction cancelled by teacher.",
+            "sc": content,
+        },
+    )
+    await db.commit()
+    return {
+        "success": True,
+        "message": "Extraction cancelled",
+        "data": {"id": extraction_id, "status": "failed", "cancelledByTeacher": True},
+    }
+
+
+@app.post("/extractions/{extraction_id}/retry", status_code=202)
+async def retry_extraction(
+    extraction_id: str,
+    body: RetryExtractionRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, file_id, class_id, teacher_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only retry your own extractions")
+
+    existing_content = _normalize_structured_content(extraction.get("structured_content"))
+    audit = existing_content.get("audit") if isinstance(existing_content.get("audit"), dict) else {}
+    target_section_count = body.target_section_count or _safe_int(audit.get("requestedSectionCount"), 4)
+    if target_section_count not in {3, 4, 5}:
+        target_section_count = 4
+    extraction_style = body.extraction_style or str(audit.get("extractionStyle") or "clean")
+    initial_structured_content = {
+        "title": "",
+        "description": "",
+        "sections": [],
+        "mediaAssets": [],
+        "audit": {
+            "requestedSectionCount": target_section_count,
+            "finalSectionCount": 0,
+            "retryOfExtractionId": extraction_id,
+            "extractionStyle": extraction_style,
+            "reviewIssues": [],
+            "reviewState": "pending",
+        },
+    }
+    result = await db.execute(
+        sa_text(
+            "INSERT INTO extracted_modules "
+            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
+            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
+            "RETURNING id"
+        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
+        {
+            "fileId": extraction["file_id"],
+            "classId": extraction["class_id"],
+            "teacherId": user.id,
+            "structuredContent": initial_structured_content,
+        },
+    )
+    await db.commit()
+    new_extraction_id = result.scalar_one()
+
+    async def _run():
+        async with AsyncSessionLocal() as bg_db:
+            await run_extraction(
+                bg_db,
+                str(new_extraction_id),
+                str(extraction["file_id"]),
+                user.id,
+                target_section_count=target_section_count,
+                extraction_style=extraction_style,
+            )
+
+    asyncio.get_running_loop().create_task(_run())
+    return {
+        "success": True,
+        "message": "Extraction retry queued",
+        "data": {
+            "extractionId": new_extraction_id,
+            "status": "pending",
+            "retryOfExtractionId": extraction_id,
         },
     }
 

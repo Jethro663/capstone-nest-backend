@@ -291,7 +291,11 @@ describe('AiMentorController', () => {
 
   describe('extractModule()', () => {
     it('should forward POST /extract with dto and user', async () => {
-      const dto = { fileId: 'file-uuid-1', targetSectionCount: 4 };
+      const dto = {
+        fileId: 'file-uuid-1',
+        targetSectionCount: 4,
+        extractionStyle: 'student_friendly',
+      };
       mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
 
       const result = await controller.extractModule(dto, TEACHER_USER);
@@ -310,6 +314,7 @@ describe('AiMentorController', () => {
           targetId: dto.fileId,
           metadata: expect.objectContaining({
             extractionId: EXTRACTION_ID,
+            extractionStyle: 'student_friendly',
           }),
         }),
       );
@@ -666,9 +671,40 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('applyExtraction()', () => {
+    it('should forward POST /extractions/:id/apply/preview with dto', async () => {
+      const dto = { sectionIndices: [0] };
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { sectionsCreated: 1, lessonsCreated: 1 },
+      });
+
+      const result = await controller.previewApplyExtraction(
+        EXTRACTION_ID,
+        dto,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/apply/preview`,
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'ai.extraction.applied' }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { sectionsCreated: 1, lessonsCreated: 1 },
+      });
+    });
+
     it('should forward POST /extractions/:id/apply with dto', async () => {
       const dto = { sectionIndices: [0] };
-      mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { lessonsCreated: 3, alreadyApplied: false },
+      });
 
       const result = await controller.applyExtraction(
         EXTRACTION_ID,
@@ -690,10 +726,14 @@ describe('AiMentorController', () => {
           targetId: EXTRACTION_ID,
           metadata: expect.objectContaining({
             lessonsCreated: 3,
+            alreadyApplied: false,
           }),
         }),
       );
-      expect(result).toEqual({ lessonsCreated: 3 });
+      expect(result).toEqual({
+        success: true,
+        data: { lessonsCreated: 3, alreadyApplied: false },
+      });
     });
 
     it('should return cached applied fallback when apply endpoint is unreachable but extraction is already applied', async () => {
@@ -747,6 +787,73 @@ describe('AiMentorController', () => {
       ).rejects.toThrow(
         'AI extraction apply is temporarily unavailable. Please retry shortly.',
       );
+    });
+  });
+
+  describe('cancelExtraction()', () => {
+    it('should forward POST /extractions/:id/cancel with ownership check', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { id: EXTRACTION_ID, status: 'failed', cancelledByTeacher: true },
+      });
+
+      const result = await controller.cancelExtraction(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/cancel`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.cancelled',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
+    });
+  });
+
+  describe('retryExtraction()', () => {
+    it('should forward POST /extractions/:id/retry with style override', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          extractionId: 'retry-extraction-1',
+          retryOfExtractionId: EXTRACTION_ID,
+        },
+      });
+
+      const result = await controller.retryExtraction(
+        EXTRACTION_ID,
+        { extractionStyle: 'faithful' } as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/retry`,
+        TEACHER_USER,
+        { extractionStyle: 'faithful' },
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.retry_queued',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+          metadata: expect.objectContaining({
+            retryExtractionId: 'retry-extraction-1',
+          }),
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
     });
   });
 

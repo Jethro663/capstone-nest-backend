@@ -3,12 +3,25 @@
  */
 
 export type ExtractionStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'applied';
+export type ExtractionStyle = 'faithful' | 'clean' | 'student_friendly';
 
 export interface ExtractionBlock {
   type: 'text' | 'image' | 'video' | 'question' | 'file' | 'divider';
   content: Record<string, unknown> | string;
   order: number;
   metadata?: Record<string, unknown>;
+}
+
+export interface ExtractionReviewIssue {
+  id: string;
+  code: string;
+  severity: 'info' | 'warning' | 'blocking';
+  scope: 'module' | 'section' | 'block';
+  message: string;
+  sectionIndex?: number | null;
+  blockIndex?: number | null;
+  resolved: boolean;
+  resolution?: string | null;
 }
 
 export interface ExtractionLesson {
@@ -53,6 +66,7 @@ export interface ExtractionSection {
   confidence?: number | null;
   graphKeywords?: string[];
   figureReferences?: string[];
+  reviewState?: string | null;
 }
 
 export interface ExtractionMediaCandidate {
@@ -116,6 +130,11 @@ export interface ExtractionStructuredContent {
     requestedSectionCount?: number;
     finalSectionCount?: number;
     sectionCountAdjustmentReason?: string | null;
+    extractionStyle?: ExtractionStyle;
+    reviewState?: string;
+    reviewIssues?: ExtractionReviewIssue[];
+    applyResult?: ApplyExtractionResult;
+    retryOfExtractionId?: string;
   };
 }
 
@@ -144,6 +163,7 @@ export interface Extraction {
 export interface ExtractModuleDto {
   fileId: string;
   targetSectionCount: 3 | 4 | 5;
+  extractionStyle?: ExtractionStyle;
 }
 
 export interface ApplyExtractionDto {
@@ -151,10 +171,41 @@ export interface ApplyExtractionDto {
   lessonIndices?: number[];
 }
 
+export interface RetryExtractionDto {
+  targetSectionCount?: 3 | 4 | 5;
+  extractionStyle?: ExtractionStyle;
+}
+
+export interface ApplyExtractionPreviewSection {
+  title: string;
+  sourceSectionIndex?: number;
+  lessonBlocks?: number;
+  assessmentQuestions?: number;
+}
+
+export interface ApplyExtractionResult {
+  alreadyApplied?: boolean;
+  moduleId?: string;
+  moduleTitle?: string;
+  moduleDescription?: string;
+  sectionsCreated?: number;
+  lessonsCreated: number;
+  assessmentsCreated?: number;
+  totalSectionsAvailable?: number;
+  totalLessonsAvailable?: number;
+  blockedReasons?: string[];
+  sections?: ApplyExtractionPreviewSection[];
+  lessons?: unknown[];
+  assessments?: unknown[];
+  indexing?: Record<string, unknown>;
+}
+
 export interface UpdateExtractionDto {
   title?: string;
   description?: string;
   sections?: ExtractionSection[];
   lessons?: ExtractionLesson[];
+  reviewIssues?: ExtractionReviewIssue[];
+  reviewState?: string;
   mediaAssets?: ExtractionMediaAsset[];
 }

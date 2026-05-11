@@ -24,6 +24,7 @@ jest.mock('@/services/extraction-service', () => ({
     getById: jest.fn(),
     getStatus: jest.fn(),
     update: jest.fn(),
+    previewApply: jest.fn(),
     apply: jest.fn(),
     delete: jest.fn(),
   },
@@ -99,11 +100,24 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                 order: 1,
                 graphKeywords: ['photosynthesis'],
                 figureReferences: ['figure:1'],
+                reviewState: 'needs_review',
                 lessonBlocks: [
                   {
                     type: 'text',
                     content: { html: '<p>Lesson content</p>' },
                     order: 0,
+                    metadata: {
+                      instructionalRole: 'explanation',
+                      reviewIssueIds: ['issue-1'],
+                      provenance: {
+                        pageStart: 1,
+                        pageEnd: 1,
+                        sourceMethod: 'text',
+                        confidence: 0.68,
+                        sourceSnippet: 'Lesson content',
+                        chunkIndex: 1,
+                      },
+                    },
                   },
                   {
                     type: 'image',
@@ -145,6 +159,20 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
               coherenceWarnings: ['A short fragment was merged into Section 1.'],
               repairNotes: ['Coherence cleanup merged a micro-fragment into the previous section.'],
               confidenceBreakdown: { overallConfidence: 0.8, warningCount: 1 },
+              reviewState: 'needs_review',
+              reviewIssues: [
+                {
+                  id: 'issue-1',
+                  code: 'low-section-confidence',
+                  severity: 'blocking',
+                  scope: 'section',
+                  message: 'Review Section 1 before applying.',
+                  sectionIndex: 0,
+                  blockIndex: 0,
+                  resolved: false,
+                  resolution: null,
+                },
+              ],
               pipelineStages: ['ingest', 'classify', 'segment', 'structure', 'coherence_cleanup', 'validate', 'persist'],
               requestedSectionCount: 4,
               finalSectionCount: 3,
@@ -340,6 +368,128 @@ describe('ExtractionReviewPage', () => {
 
     expect(screen.getByRole('button', { name: 'Apply Extraction' })).toBeDisabled();
     expect(mockedExtractionService.apply).not.toHaveBeenCalled();
+  });
+
+  it('shows a problem-first review queue with source provenance and resolves issues', async () => {
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: buildExtraction('completed'),
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Review queue')).toBeInTheDocument();
+    expect(screen.getByText('Review Section 1 before applying.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /View source for issue-1/i }));
+    expect(screen.getByText(/Lesson content/i)).toBeInTheDocument();
+    expect(screen.getByText(/Page 1/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Mark issue-1 reviewed/i }));
+    expect(screen.getByText(/Resolved/i)).toBeInTheDocument();
+  });
+
+  it('supports section and block repair actions from the review workspace', async () => {
+    const extraction = buildExtraction('completed');
+    extraction.structuredContent?.sections.push({
+      title: 'Section 2',
+      description: 'Follow-up',
+      order: 2,
+      lessonBlocks: [
+        {
+          type: 'text',
+          content: { html: '<p>Second section</p>' },
+          order: 0,
+        },
+      ],
+      assessmentDraft: null,
+    });
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: extraction,
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    const contentTab = await screen.findByRole('tab', { name: 'Content' });
+    fireEvent.mouseDown(contentTab);
+    fireEvent.click(contentTab);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Convert block 1 to list/i }));
+    expect(screen.getByText(/list/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Split section 1 at block 1/i }));
+    expect(screen.getByText(/Section 1 split/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove block 1/i }));
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+  });
+
+  it('loads apply preview before confirming apply', async () => {
+    const extraction = buildExtraction('completed');
+    if (extraction.structuredContent?.audit) {
+      extraction.structuredContent.audit.reviewIssues = [
+        {
+          id: 'issue-1',
+          code: 'low-section-confidence',
+          severity: 'blocking',
+          scope: 'section',
+          message: 'Review Section 1 before applying.',
+          sectionIndex: 0,
+          blockIndex: 0,
+          resolved: true,
+          resolution: 'teacher-reviewed',
+        },
+      ];
+      extraction.structuredContent.audit.reviewState = 'ready';
+    }
+    extraction.reviewRequired = false;
+    extraction.qualityGate = 'pass';
+    mockedExtractionService.getById.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: extraction,
+    } as never);
+    mockedExtractionService.previewApply.mockResolvedValue({
+      success: true,
+      message: 'preview',
+      data: {
+        moduleTitle: 'Module Title',
+        sectionsCreated: 1,
+        lessonsCreated: 1,
+        assessmentsCreated: 1,
+        blockedReasons: [],
+        sections: [{ title: 'Section 1', lessonBlocks: 2, assessmentQuestions: 1 }],
+      },
+    } as never);
+    mockedExtractionService.apply.mockResolvedValue({
+      success: true,
+      message: 'applied',
+      data: { lessonsCreated: 1 },
+    } as never);
+
+    render(<ExtractionReviewPage />);
+
+    expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply Extraction' }));
+
+    await waitFor(() => {
+      expect(mockedExtractionService.previewApply).toHaveBeenCalledWith('extraction-1', {
+        sectionIndices: [0],
+      });
+    });
+    expect(screen.getByText(/Module Title/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 lesson/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
+    await waitFor(() => {
+      expect(mockedExtractionService.apply).toHaveBeenCalledWith('extraction-1', {
+        sectionIndices: [0],
+      });
+    });
   });
 
   it('lets the teacher edit a block and save the extraction draft', async () => {

@@ -1,6 +1,7 @@
 import { api } from '@/lib/api-client';
 import type {
   ApplyExtractionDto,
+  ApplyExtractionResult,
   Extraction,
   ExtractModuleDto,
   ExtractionAssessmentDraft,
@@ -11,6 +12,7 @@ import type {
   ExtractionMediaCandidate,
   ExtractionSection,
   ExtractionStructuredContent,
+  RetryExtractionDto,
   UpdateExtractionDto,
 } from '@/types/extraction';
 
@@ -187,6 +189,7 @@ function normalizeSection(raw: unknown, fallbackOrder: number): ExtractionSectio
           .map((item) => readString(item).trim())
           .filter((item) => item.length > 0)
       : undefined,
+    reviewState: readNullableString(section.reviewState),
   };
 }
 
@@ -415,17 +418,38 @@ export const extractionService = {
   ): Promise<{
     success: boolean;
     message: string;
-    data: {
-      moduleId?: string;
-      sectionsCreated?: number;
-      lessonsCreated: number;
-      assessmentsCreated?: number;
-      sections?: unknown[];
-      lessons: unknown[];
-      assessments?: unknown[];
-    };
+    data: ApplyExtractionResult;
   }> {
     const { data } = await api.post(`/ai/extractions/${id}/apply`, dto || {});
+    return data;
+  },
+
+  async previewApply(
+    id: string,
+    dto?: ApplyExtractionDto,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: ApplyExtractionResult;
+  }> {
+    const { data } = await api.post(`/ai/extractions/${id}/apply/preview`, dto || {});
+    return data;
+  },
+
+  async cancel(id: string): Promise<{ success: boolean; message: string; data?: unknown }> {
+    const { data } = await api.post(`/ai/extractions/${id}/cancel`, {});
+    return data;
+  },
+
+  async retry(
+    id: string,
+    dto?: RetryExtractionDto,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    data: { extractionId: string; status?: string; retryOfExtractionId?: string };
+  }> {
+    const { data } = await api.post(`/ai/extractions/${id}/retry`, dto || {});
     return data;
   },
 

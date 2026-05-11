@@ -34,6 +34,36 @@ export class ExtractModuleDto {
   @IsInt()
   @IsIn([3, 4, 5])
   targetSectionCount: 3 | 4 | 5;
+
+  @ApiPropertyOptional({
+    description: 'Extraction output style.',
+    enum: ['faithful', 'clean', 'student_friendly'],
+    default: 'clean',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['faithful', 'clean', 'student_friendly'])
+  extractionStyle?: 'faithful' | 'clean' | 'student_friendly';
+}
+
+export class RetryExtractionDto {
+  @ApiPropertyOptional({
+    description: 'Optional target section count override for retry.',
+    enum: [3, 4, 5],
+  })
+  @IsOptional()
+  @IsInt()
+  @IsIn([3, 4, 5])
+  targetSectionCount?: 3 | 4 | 5;
+
+  @ApiPropertyOptional({
+    description: 'Optional extraction style override for retry.',
+    enum: ['faithful', 'clean', 'student_friendly'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['faithful', 'clean', 'student_friendly'])
+  extractionStyle?: 'faithful' | 'clean' | 'student_friendly';
 }
 
 /**
@@ -378,6 +408,22 @@ export class UpdateExtractionDto {
   @ValidateNested({ each: true })
   @Type(() => ExtractionSectionDto)
   sections?: ExtractionSectionDto[];
+
+  @ApiPropertyOptional({
+    description: 'Teacher review issue state from the extraction review workspace',
+    type: [Object],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  reviewIssues?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({
+    description: 'Teacher review state after local issue resolution',
+  })
+  @IsOptional()
+  @IsString()
+  reviewState?: string;
 
   @ApiPropertyOptional({
     description: 'Legacy lessons payload alias (accepted for compatibility)',

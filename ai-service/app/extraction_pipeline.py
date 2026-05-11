@@ -88,10 +88,89 @@ STRUCTURE_SYSTEM_PROMPT = (
 IMAGE_ASSIGNMENT_THRESHOLD = 0.75
 IMAGE_REVIEW_THRESHOLD = 0.85
 MICRO_FRAGMENT_CHAR_THRESHOLD = 250
+VALID_EXTRACTION_STYLES = {"faithful", "clean", "student_friendly"}
 FIGURE_CUE_PATTERN = re.compile(
     r"\b(?:fig(?:ure)?|diagram|chart|graph|illustration|table|image)\b",
     re.I,
 )
+
+
+class ExtractionCancelled(RuntimeError):
+    pass
+
+
+def _normalize_extraction_style(value: str | None) -> str:
+    normalized = str(value or "clean").strip().lower()
+    return normalized if normalized in VALID_EXTRACTION_STYLES else "clean"
+
+
+def _block_text(block: dict[str, Any]) -> str:
+    content = block.get("content")
+    if isinstance(content, dict):
+        return str(content.get("html") or content.get("text") or "").strip()
+    if isinstance(content, str):
+        return content.strip()
+    return ""
+
+
+def _source_snippet(text: str, *, max_chars: int = 220) -> str:
+    compact = re.sub(r"\s+", " ", str(text or "")).strip()
+    return compact[:max_chars]
+
+
+def _infer_instructional_role(block: dict[str, Any], section_kind: str | None = None) -> str:
+    block_type = str(block.get("type") or "").lower()
+    text = _block_text(block).lower()
+    if block_type == "question" or text.endswith("?"):
+        return "question"
+    if "objective" in text or "learning target" in text or "at the end" in text:
+        return "objective"
+    if "example" in text or "for instance" in text:
+        return "example"
+    if "activity" in text or "try this" in text or section_kind == "activity":
+        return "activity"
+    if "figure" in text or "reference" in text:
+        return "reference"
+    return "explanation"
+
+
+def _make_review_issue(
+    *,
+    code: str,
+    severity: str,
+    scope: str,
+    message: str,
+    section_index: int | None = None,
+    block_index: int | None = None,
+    resolved: bool = False,
+    resolution: str | None = None,
+) -> dict[str, Any]:
+    suffix = "-".join(
+        str(part)
+        for part in [section_index if section_index is not None else "all", block_index if block_index is not None else "section"]
+    )
+    return {
+        "id": f"{code}-{suffix}",
+        "code": code,
+        "severity": severity if severity in {"info", "warning", "blocking"} else "warning",
+        "scope": scope,
+        "message": message,
+        "sectionIndex": section_index,
+        "blockIndex": block_index,
+        "resolved": bool(resolved),
+        "resolution": resolution,
+    }
+
+
+def _derive_review_state(review_issues: list[dict[str, Any]], quality_gate: str) -> str:
+    unresolved = [issue for issue in review_issues if not issue.get("resolved")]
+    if quality_gate == "fail":
+        return "blocked"
+    if any(issue.get("severity") == "blocking" for issue in unresolved):
+        return "needs_review"
+    if unresolved:
+        return "review_recommended"
+    return "ready"
 FIGURE_LABEL_PATTERN = re.compile(
     r"\b(?:fig(?:ure)?|diagram|chart|graph|table)\s*([0-9]{1,3}|[A-Za-z])\b",
     re.I,
@@ -1058,6 +1137,17 @@ def _section_to_module_section(section: dict[str, Any]) -> dict[str, Any]:
                 "sectionId": section["sectionId"],
                 "sectionKind": section.get("sectionKind"),
                 "sourceMethod": section.get("sourceMethod"),
+                "chunkIndex": section.get("chunkIndex"),
+                "instructionalRole": _infer_instructional_role(block, section.get("sectionKind")),
+                "provenance": {
+                    "pageStart": section.get("pageStart"),
+                    "pageEnd": section.get("pageEnd"),
+                    "sourceMethod": section.get("sourceMethod"),
+                    "confidence": float(section.get("confidence") or 0.55),
+                    "sourceSnippet": _source_snippet(section.get("sectionBody", "")),
+                    "chunkIndex": section.get("chunkIndex"),
+                },
+                "reviewIssueIds": [],
             }
         )
 
@@ -1613,7 +1703,9 @@ def _merge_structured_chunks(
     *,
     page_images: list[dict[str, Any]] | None = None,
     target_section_count: int | None = None,
+    extraction_style: str = "clean",
 ) -> dict[str, Any]:
+    extraction_style = _normalize_extraction_style(extraction_style)
     if not structured_chunks:
         return {
             "title": "Extracted Module",
@@ -1649,6 +1741,16 @@ def _merge_structured_chunks(
                     else None
                 ),
                 "repairNotes": ["No structured sections were produced from extracted chunks."],
+                "extractionStyle": extraction_style,
+                "reviewState": "blocked",
+                "reviewIssues": [
+                    _make_review_issue(
+                        code="empty-sections",
+                        severity="blocking",
+                        scope="module",
+                        message="No structured sections were produced from the source document.",
+                    )
+                ],
             },
         }
 
@@ -1751,9 +1853,60 @@ def _merge_structured_chunks(
             "confidence": section.get("confidence"),
             "graphKeywords": section.get("graphKeywords") or [],
             "figureReferences": section.get("figureReferences") or [],
+            "reviewState": "ready",
         }
         for index, section in enumerate(merged_sections)
     ]
+
+    review_issues: list[dict[str, Any]] = []
+    if quality_gate == "fail":
+        review_issues.append(
+            _make_review_issue(
+                code="quality-gate-failed",
+                severity="blocking",
+                scope="module",
+                message="Extraction quality is too low to apply without rerun or repair.",
+            )
+        )
+    if target_section_count and final_section_count != target_section_count:
+        review_issues.append(
+            _make_review_issue(
+                code="section-count-adjusted",
+                severity="warning",
+                scope="module",
+                message=section_count_adjustment_reason or "The final section count differs from the requested count.",
+            )
+        )
+    for section_index, section in enumerate(normalized_sections):
+        confidence = section.get("confidence")
+        if isinstance(confidence, (int, float)) and confidence < 0.78:
+            severity = "blocking" if confidence < 0.6 else "warning"
+            issue = _make_review_issue(
+                code="low-section-confidence",
+                severity=severity,
+                scope="section",
+                message=f"Review {section.get('title') or f'Section {section_index + 1}'} before applying.",
+                section_index=section_index,
+            )
+            review_issues.append(issue)
+            section["reviewState"] = "needs_review"
+            for block_index, block in enumerate(section.get("lessonBlocks") or []):
+                if not isinstance(block, dict):
+                    continue
+                metadata = block.setdefault("metadata", {})
+                metadata["extractionStyle"] = extraction_style
+                metadata.setdefault("reviewIssueIds", [])
+                if block_index == 0 and issue["id"] not in metadata["reviewIssueIds"]:
+                    metadata["reviewIssueIds"].append(issue["id"])
+        else:
+            for block in section.get("lessonBlocks") or []:
+                if isinstance(block, dict):
+                    metadata = block.setdefault("metadata", {})
+                    metadata["extractionStyle"] = extraction_style
+                    metadata.setdefault("reviewIssueIds", [])
+
+    review_state = _derive_review_state(review_issues, quality_gate)
+    review_required = review_required or review_state in {"blocked", "needs_review"}
 
     return {
         "title": merged_title,
@@ -1781,6 +1934,9 @@ def _merge_structured_chunks(
             "coherenceCleanup": coherence_cleanup,
             "qualityGate": quality_gate,
             "reviewRequired": review_required,
+            "reviewState": review_state,
+            "reviewIssues": review_issues,
+            "extractionStyle": extraction_style,
             "requestedSectionCount": target_section_count,
             "finalSectionCount": final_section_count,
             "sectionCountAdjustmentReason": section_count_adjustment_reason,
@@ -1799,11 +1955,61 @@ def _merge_structured_chunks(
     }
 
 
+def _evaluate_extraction_against_golden(output: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
+    sections = output.get("sections") if isinstance(output.get("sections"), list) else []
+    text_parts: list[str] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        for block in section.get("lessonBlocks") if isinstance(section.get("lessonBlocks"), list) else []:
+            if isinstance(block, dict):
+                text_parts.append(_block_text(block))
+    full_text = " ".join(text_parts).lower()
+    required = [str(item).lower() for item in expected.get("requiredText", []) if str(item).strip()]
+    forbidden = [str(item).lower() for item in expected.get("forbiddenText", []) if str(item).strip()]
+    expected_issue_codes = {str(item) for item in expected.get("issueCodes", []) if str(item).strip()}
+    actual_issue_codes = {
+        str(issue.get("code"))
+        for issue in (output.get("audit", {}).get("reviewIssues", []) if isinstance(output.get("audit"), dict) else [])
+        if isinstance(issue, dict)
+    }
+    missing_required = [item for item in required if item not in full_text]
+    hallucinated = [item for item in forbidden if item in full_text]
+    missing_issue_codes = sorted(expected_issue_codes - actual_issue_codes)
+    expected_section_count = expected.get("sectionCount")
+    section_count_ok = not isinstance(expected_section_count, int) or len(sections) == expected_section_count
+    return {
+        "passed": section_count_ok and not missing_required and not hallucinated and not missing_issue_codes,
+        "sectionCount": len(sections),
+        "expectedSectionCount": expected_section_count,
+        "missingRequiredText": missing_required,
+        "hallucinatedText": hallucinated,
+        "missingIssueCodes": missing_issue_codes,
+    }
+
+
 async def _update_extraction(db: AsyncSession, extraction_id: str, data: dict[str, Any]) -> None:
     sets = ", ".join(f"{key} = :{key}" for key in data)
     sets += ", updated_at = NOW()"
     await db.execute(sa_text(f"UPDATE extracted_modules SET {sets} WHERE id = :id"), {**data, "id": extraction_id})
     await db.commit()
+
+
+async def _raise_if_cancelled(db: AsyncSession, extraction_id: str) -> None:
+    row = await db.execute(
+        sa_text("SELECT structured_content FROM extracted_modules WHERE id = :id"),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    content = extraction.get("structured_content") if hasattr(extraction, "get") else None
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except json.JSONDecodeError:
+            content = {}
+    audit = content.get("audit") if isinstance(content, dict) and isinstance(content.get("audit"), dict) else {}
+    if bool(audit.get("cancelRequested")):
+        raise ExtractionCancelled("Extraction was cancelled by the teacher.")
 
 
 async def _classify_content(text: str) -> ContentClassification:
@@ -1828,7 +2034,9 @@ async def run_extraction(
     user_id: str,
     *,
     target_section_count: int = 4,
+    extraction_style: str = "clean",
 ) -> None:
+    extraction_style = _normalize_extraction_style(extraction_style)
     try:
         await _update_extraction(
             db,
@@ -1853,16 +2061,124 @@ async def run_extraction(
         doc = fitz.open(file_path)
         pages = _extract_pdf_pages(doc)
         raw_text = "\f".join(page["text"] for page in pages if page["text"])
-        doc.close()
 
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
 
         await _update_extraction(db, extraction_id, {"raw_text": raw_text, "progress_percent": 15})
         if len(raw_text.strip()) < 20:
-            raise ValueError(
-                "This extraction flow currently supports text-based PDFs only. Upload a PDF with selectable text."
+            health = await ollama_client.is_available()
+            if not health["available"]:
+                doc.close()
+                raise ValueError(
+                    "Scanned PDF detected, but vision extraction is unavailable. Upload a text-based PDF or start the vision model."
+                )
+            vision_images = _render_pdf_pages_to_images(doc)
+            doc.close()
+            if not vision_images:
+                raise ValueError("Scanned PDF detected, but no renderable pages were available for vision extraction.")
+            start_time = time.time()
+            await _raise_if_cancelled(db, extraction_id)
+            raw = await ollama_client.generate(
+                _build_vision_extraction_prompt(original_name),
+                EXTRACTION_SYSTEM_PROMPT,
+                task="vision_extraction",
+                response_format=EXTRACTION_OUTPUT_FORMAT,
+                images=vision_images,
             )
+            parsed = _parse_json_object(raw)
+            final_result = _normalize_vision_output(parsed)
+            final_result.setdefault("audit", {})
+            final_result["audit"].update(
+                {
+                    "pipelineVersion": "2.0",
+                    "pipelineStages": ["ingest", "vision_structure", "validate", "persist"],
+                    "sourceMethods": ["vision"],
+                    "requestedSectionCount": target_section_count,
+                    "finalSectionCount": len(final_result.get("sections", [])),
+                    "extractionStyle": extraction_style,
+                    "pageCount": len(pages),
+                    "sourceDocument": original_name,
+                    "embeddedImages": 0,
+                }
+            )
+            final_result = _merge_structured_chunks(
+                [
+                    {
+                        "title": final_result.get("title") or "Extracted Module",
+                        "description": final_result.get("description") or "",
+                        "sections": [
+                            {
+                                "sectionId": f"vision-section-{index + 1:02d}-{_slug(section.get('title', 'section'))}",
+                                "sectionTitle": section.get("title") or f"Section {index + 1}",
+                                "sectionDescription": section.get("description") or "",
+                                "sectionBody": _section_search_text({"lessonBlocks": section.get("lessonBlocks") or []}),
+                                "sectionKind": "lesson",
+                                "chunkIndex": 1,
+                                "pageStart": 1,
+                                "pageEnd": len(pages) or 1,
+                                "sourceMethod": "vision",
+                                "confidence": 0.62,
+                            }
+                            for index, section in enumerate(final_result.get("sections", []))
+                            if isinstance(section, dict)
+                        ],
+                    }
+                ],
+                target_section_count=target_section_count,
+                extraction_style=extraction_style,
+            )
+            final_result["audit"]["sourceMethods"] = ["vision"]
+            final_result["audit"]["pipelineStages"] = ["ingest", "vision_structure", "validate", "persist"]
+            final_result["audit"]["pageCount"] = len(pages)
+            final_result["audit"]["sourceDocument"] = original_name
+            validation = validate_extraction_output(final_result)
+            if validation.errors:
+                final_result.setdefault("audit", {}).setdefault("warnings", []).extend(validation.errors)
+            final_result = validation.sanitized_output or final_result
+            response_time_ms = int((time.time() - start_time) * 1000)
+            model_used = ollama_client.get_task_model_name("vision_extraction")
+            await _raise_if_cancelled(db, extraction_id)
+            await _update_extraction(
+                db,
+                extraction_id,
+                {
+                    "extraction_status": "completed",
+                    "model_used": model_used,
+                    "progress_percent": 100,
+                },
+            )
+            await db.execute(
+                sa_text("UPDATE extracted_modules SET structured_content = :sc, updated_at = NOW() WHERE id = :id").bindparams(
+                    bindparam("sc", type_=postgresql.JSONB)
+                ),
+                {"sc": final_result, "id": extraction_id},
+            )
+            await db.commit()
+            await db.execute(
+                sa_text(
+                    "INSERT INTO ai_interaction_logs "
+                    "(user_id, session_type, input_text, output_text, model_used, response_time_ms, context_metadata) "
+                    "VALUES (:userId, 'module_extraction', :inputText, :outputText, :modelUsed, :responseTimeMs, :ctx)"
+                ).bindparams(bindparam("ctx", type_=postgresql.JSONB)),
+                {
+                    "userId": user_id,
+                    "inputText": "[scanned-pdf-vision]",
+                    "outputText": json.dumps(final_result)[:5000],
+                    "modelUsed": model_used,
+                    "responseTimeMs": response_time_ms,
+                    "ctx": {
+                        "fileId": str(file_id),
+                        "extractionId": str(extraction_id),
+                        "originalFileName": original_name,
+                        "audit": final_result.get("audit") or {},
+                    },
+                },
+            )
+            await db.commit()
+            return
+        doc.close()
+        await _raise_if_cancelled(db, extraction_id)
         start_time = time.time()
         health = await ollama_client.is_available()
 
@@ -1896,6 +2212,7 @@ async def run_extraction(
         progress_per_chunk = 45 / max(len(chunks), 1)
 
         for index, chunk in enumerate(chunks, start=1):
+            await _raise_if_cancelled(db, extraction_id)
             try:
                 structured = (
                     await _detect_structure_with_ai(
@@ -1936,6 +2253,7 @@ async def run_extraction(
         final_result = _merge_structured_chunks(
             structured_chunks,
             target_section_count=target_section_count,
+            extraction_style=extraction_style,
         )
         final_result["audit"].update(
             {
@@ -1996,6 +2314,7 @@ async def run_extraction(
         response_time_ms = int((time.time() - start_time) * 1000)
         model_used = ollama_client.get_task_model_name("text_extraction") if health["available"] else "rule-based"
 
+        await _raise_if_cancelled(db, extraction_id)
         await _update_extraction(
             db,
             extraction_id,
@@ -2037,6 +2356,17 @@ async def run_extraction(
             },
         )
         await db.commit()
+    except ExtractionCancelled as exc:
+        logger.info("[extraction] Cancelled extraction %s: %s", extraction_id, exc)
+        await _update_extraction(
+            db,
+            extraction_id,
+            {
+                "extraction_status": "failed",
+                "error_message": str(exc),
+                "progress_percent": 0,
+            },
+        )
     except Exception as exc:
         logger.error("[extraction] Failed for extraction %s: %s", extraction_id, exc)
         await _update_extraction(

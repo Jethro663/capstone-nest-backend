@@ -33,6 +33,7 @@ import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
   ApplyExtractionDto,
+  RetryExtractionDto,
   UpdateExtractionDto,
 } from './DTO/extract-module.dto';
 import {
@@ -1566,6 +1567,7 @@ export class AiMentorController {
         targetId: dto.fileId,
         metadata: {
           extractionId: this.extractStringField(result, 'extractionId'),
+          extractionStyle: dto.extractionStyle ?? 'clean',
         },
       });
       return result;
@@ -1846,6 +1848,37 @@ export class AiMentorController {
 
   // â”€â”€â”€ Apply extraction â†’ create lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  @Post('extractions/:id/apply/preview')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Preview extraction apply result before writing draft content' })
+  async previewApplyExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApplyExtractionDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/apply/preview`,
+        user,
+        dto,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction apply preview error';
+      this.logger.warn(`AI extraction apply preview unavailable for ${id}: ${message}`);
+      throw new ServiceUnavailableException(
+        'AI extraction apply preview is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
   /**
    * POST /api/ai/extractions/:id/apply
    * Takes a completed extraction and creates hidden module sections
@@ -1894,6 +1927,11 @@ export class AiMentorController {
             'assessmentsCreated',
           ),
           moduleId: this.readStringField(result, 'moduleId'),
+          alreadyApplied: Boolean(
+            (result as { data?: { alreadyApplied?: unknown }; alreadyApplied?: unknown })
+              ?.data?.alreadyApplied ??
+              (result as { alreadyApplied?: unknown })?.alreadyApplied,
+          ),
         },
       });
       return result;
@@ -1938,6 +1976,86 @@ export class AiMentorController {
 
       throw new ServiceUnavailableException(
         'AI extraction apply is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
+  @Post('extractions/:id/cancel')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Cancel a queued or running extraction' })
+  async cancelExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/cancel`,
+        user,
+        {},
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.cancelled',
+        targetType: 'extraction',
+        targetId: id,
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.warn(
+        `AI extraction cancel unavailable for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction cancel is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
+  @Post('extractions/:id/retry')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Retry an extraction from the same uploaded file' })
+  async retryExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RetryExtractionDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/retry`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.retry_queued',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          retryExtractionId: this.extractStringField(result, 'extractionId'),
+          extractionStyle: dto.extractionStyle ?? null,
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.warn(
+        `AI extraction retry unavailable for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction retry is temporarily unavailable. Please retry shortly.',
       );
     }
   }

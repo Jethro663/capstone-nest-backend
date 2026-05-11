@@ -99,7 +99,7 @@ import type {
   DiscussionThreadDetail,
   DiscussionThreadSummary,
 } from '@/types/discussion';
-import type { Extraction } from '@/types/extraction';
+import type { Extraction, ExtractionStyle } from '@/types/extraction';
 import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
@@ -1250,6 +1250,7 @@ export default function TeacherClassDetailPage() {
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
   const [targetSectionCount, setTargetSectionCount] = useState<ExtractionTargetSectionCount>(4);
+  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyle>('clean');
   const extractionInputRef = useRef<HTMLInputElement | null>(null);
   const aiUnavailable = aiAvailability.status === 'degraded';
 
@@ -2283,6 +2284,7 @@ export default function TeacherClassDetailPage() {
       const extractionRes = await extractionService.extractModule({
         fileId: uploadRes.data.id,
         targetSectionCount,
+        extractionStyle,
       });
       upsertTrackedExtractionNotification(classId, {
         extractionId: extractionRes.data.extractionId,
@@ -2290,6 +2292,7 @@ export default function TeacherClassDetailPage() {
         createdAt: new Date().toISOString(),
         originalName: file.name,
         targetSectionCount,
+        extractionStyle,
         lastKnownStatus: 'pending',
         lastKnownProgress: 0,
         updatedAt: null,
@@ -2323,6 +2326,48 @@ export default function TeacherClassDetailPage() {
       details: 'This action cannot be undone.',
       onConfirm: () => performDeleteExtraction(extractionId),
     });
+  };
+
+  const handleRetryExtraction = async (extraction: Extraction) => {
+    try {
+      const retryStyle = extractionStyle;
+      const retryTarget =
+        extraction.structuredContent?.audit?.requestedSectionCount === 3 ||
+        extraction.structuredContent?.audit?.requestedSectionCount === 4 ||
+        extraction.structuredContent?.audit?.requestedSectionCount === 5
+          ? extraction.structuredContent.audit.requestedSectionCount
+          : targetSectionCount;
+      const response = await extractionService.retry(extraction.id, {
+        extractionStyle: retryStyle,
+        targetSectionCount: retryTarget,
+      });
+      upsertTrackedExtractionNotification(classId, {
+        extractionId: response.data.extractionId,
+        classId,
+        createdAt: new Date().toISOString(),
+        originalName: extraction.originalName || extraction.structuredContent?.title || 'Retried extraction',
+        targetSectionCount: retryTarget,
+        extractionStyle: retryStyle,
+        lastKnownStatus: 'pending',
+        lastKnownProgress: 0,
+        updatedAt: null,
+        notifiedAt: null,
+      });
+      toast.success('Extraction retry started');
+      await fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to retry extraction'));
+    }
+  };
+
+  const handleCancelExtraction = async (extraction: Extraction) => {
+    try {
+      await extractionService.cancel(extraction.id);
+      toast.success('Extraction cancelled');
+      await fetchData();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to cancel extraction'));
+    }
   };
 
   const handleCreateAnnouncement = async () => {
@@ -3147,20 +3192,36 @@ export default function TeacherClassDetailPage() {
                       Choose how many sections the extraction should target. This shapes coherence, not output length.
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-sm font-semibold text-[#435f86]">
-                    <span>Target</span>
-                    <select
-                      value={String(targetSectionCount)}
-                      onChange={(event) => setTargetSectionCount(Number(event.target.value) as ExtractionTargetSectionCount)}
-                      disabled={uploadingExtraction || aiUnavailable}
-                      className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
-                      aria-label="Target section count"
-                    >
-                      <option value="3">3 sections</option>
-                      <option value="4">4 sections</option>
-                      <option value="5">5 sections</option>
-                    </select>
-                  </label>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-[#435f86]">
+                      <span>Target</span>
+                      <select
+                        value={String(targetSectionCount)}
+                        onChange={(event) => setTargetSectionCount(Number(event.target.value) as ExtractionTargetSectionCount)}
+                        disabled={uploadingExtraction || aiUnavailable}
+                        className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
+                        aria-label="Target section count"
+                      >
+                        <option value="3">3 sections</option>
+                        <option value="4">4 sections</option>
+                        <option value="5">5 sections</option>
+                      </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-semibold text-[#435f86]">
+                      <span>Style</span>
+                      <select
+                        value={extractionStyle}
+                        onChange={(event) => setExtractionStyle(event.target.value as ExtractionStyle)}
+                        disabled={uploadingExtraction || aiUnavailable}
+                        className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
+                        aria-label="Extraction style"
+                      >
+                        <option value="faithful">Faithful</option>
+                        <option value="clean">Clean</option>
+                        <option value="student_friendly">Student friendly</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
               <button
@@ -3191,14 +3252,39 @@ export default function TeacherClassDetailPage() {
                         {typeof extraction.structuredContent?.audit?.requestedSectionCount === 'number'
                           ? ` · Requested sections: ${extraction.structuredContent.audit.requestedSectionCount}`
                           : ''}
+                        {extraction.structuredContent?.audit?.extractionStyle
+                          ? ` - Style: ${extraction.structuredContent.audit.extractionStyle.replace('_', ' ')}`
+                          : ''}
                       </p>
                     </div>
                     <div className="teacher-class-workspace__extract-item-actions">
                       <span data-status={extraction.extractionStatus}>{getExtractionStatusLabel(extraction)}</span>
-                      <Link href={`/dashboard/teacher/extractions/${extraction.id}`} className="teacher-class-workspace__outline">
-                        <Eye className="h-4 w-4" />
-                        View
-                      </Link>
+                      {extraction.extractionStatus === 'processing' || extraction.extractionStatus === 'pending' ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => void handleCancelExtraction(extraction)}
+                          aria-label={`Cancel ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
+                      {extraction.extractionStatus === 'failed' || extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'applied' ? (
+                        <button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => void handleRetryExtraction(extraction)}
+                          aria-label={`Retry ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                        >
+                          Retry
+                        </button>
+                      ) : null}
+                      {extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'failed' || extraction.extractionStatus === 'applied' ? (
+                        <Link href={`/dashboard/teacher/extractions/${extraction.id}`} className="teacher-class-workspace__outline">
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Link>
+                      ) : null}
                       <button
                         type="button"
                         className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"

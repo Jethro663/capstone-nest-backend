@@ -72,6 +72,8 @@ jest.mock('@/services/extraction-service', () => ({
   extractionService: {
     listByClass: jest.fn(),
     extractModule: jest.fn(),
+    cancel: jest.fn(),
+    retry: jest.fn(),
     delete: jest.fn(),
   },
 }));
@@ -151,6 +153,22 @@ describe('TeacherClassDetailPage extraction view', () => {
             audit: {
               requestedSectionCount: 4,
               finalSectionCount: 4,
+              reviewState: 'needs_review',
+            },
+          },
+        },
+        {
+          id: 'extraction-2',
+          originalName: 'Quarter 2 Module.pdf',
+          extractionStatus: 'processing',
+          qualityGate: null,
+          reviewRequired: false,
+          createdAt: '2026-04-30T00:05:00.000Z',
+          structuredContent: {
+            title: 'Forces and Motion',
+            audit: {
+              requestedSectionCount: 3,
+              extractionStyle: 'faithful',
             },
           },
         },
@@ -231,6 +249,9 @@ describe('TeacherClassDetailPage extraction view', () => {
     expect(selector).toHaveValue('4');
 
     fireEvent.change(selector, { target: { value: '5' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Extraction style' }), {
+      target: { value: 'student_friendly' },
+    });
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     const file = new File(['module'], 'module.pdf', { type: 'application/pdf' });
@@ -240,6 +261,7 @@ describe('TeacherClassDetailPage extraction view', () => {
       expect(mockedExtractionService.extractModule).toHaveBeenCalledWith({
         fileId: 'file-uploaded-1',
         targetSectionCount: 5,
+        extractionStyle: 'student_friendly',
       });
     });
 
@@ -253,9 +275,41 @@ describe('TeacherClassDetailPage extraction view', () => {
           classId,
           originalName: 'module.pdf',
           targetSectionCount: 5,
+          extractionStyle: 'student_friendly',
           lastKnownStatus: 'pending',
         }),
       ]),
     );
+  });
+
+  it('shows extraction style in history and supports retry and cancel actions', async () => {
+    mockedExtractionService.retry.mockResolvedValue({
+      success: true,
+      message: 'retry queued',
+      data: { extractionId: 'retry-1', status: 'pending' },
+    } as Awaited<ReturnType<typeof extractionService.retry>>);
+    mockedExtractionService.cancel.mockResolvedValue({
+      success: true,
+      message: 'cancelled',
+      data: { id: 'extraction-2', status: 'failed' },
+    } as Awaited<ReturnType<typeof extractionService.cancel>>);
+
+    render(<TeacherClassDetailPage />);
+
+    expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
+    expect(screen.getByText(/Style: faithful/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry Cells and Systems/i }));
+    await waitFor(() => {
+      expect(mockedExtractionService.retry).toHaveBeenCalledWith('extraction-1', {
+        extractionStyle: 'clean',
+        targetSectionCount: 4,
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel Forces and Motion/i }));
+    await waitFor(() => {
+      expect(mockedExtractionService.cancel).toHaveBeenCalledWith('extraction-2');
+    });
   });
 });
