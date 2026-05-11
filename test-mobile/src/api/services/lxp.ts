@@ -4,6 +4,7 @@ import type { ApiEnvelope } from "../../types/api";
 import type { EligibilityResponse, EligibleClass, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary, PlaylistResponse } from "../../types/lxp";
 import type {
   TeacherEvaluationSummaryResponse,
+  TeacherInterventionCaseDetail,
   TeacherEvaluationType,
   TeacherInterventionQueueResponse,
   TeacherPendingInterventionCountResponse,
@@ -101,6 +102,49 @@ export const lxpApi = {
       "/lxp/teacher/interventions/pending-count",
     );
     return normalizeObject(unwrapEnvelope(response.data), { pendingCount: 0 });
+  },
+
+  async getTeacherCase(caseId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherInterventionQueueResponse["queue"][number]>>(
+      `/lxp/teacher/interventions/${caseId}`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async getTeacherCaseDetail(caseId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherInterventionCaseDetail>>(
+      `/lxp/teacher/interventions/${caseId}/detail`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async activateIntervention(caseId: string) {
+    const response = await apiClient.post<ApiEnvelope<TeacherInterventionQueueResponse>>(
+      `/lxp/teacher/interventions/${caseId}/activate`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async regenerateInterventionPath(caseId: string) {
+    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(
+      `/lxp/teacher/interventions/${caseId}/regenerate`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async assignIntervention(
+    caseId: string,
+    payload: {
+      lessonIds?: string[];
+      assessmentIds?: string[];
+      note?: string;
+    },
+  ) {
+    const response = await apiClient.post<ApiEnvelope<TeacherInterventionQueueResponse>>(
+      `/lxp/teacher/interventions/${caseId}/assign`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
   },
 
   async getTeacherEvaluationSummary(

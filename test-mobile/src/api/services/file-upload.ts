@@ -1,5 +1,6 @@
 import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
+import { downloadProtectedFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
 import type { LibraryGradeLevel, LibrarySubjectKey, UploadedLibraryFile } from "../../types/extraction";
 
@@ -30,6 +31,54 @@ export const fileUploadApi = {
       timeout: 120000,
     });
 
+    return unwrapEnvelope(response.data);
+  },
+
+  async getById(id: string) {
+    const response = await apiClient.get<ApiEnvelope<UploadedLibraryFile & {
+      scope?: "private" | "general";
+      uploadedAt?: string;
+      indexStatus?: string | null;
+      teacherVisible?: boolean;
+    }>>(`/files/${id}`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async update(
+    id: string,
+    payload: {
+      originalName?: string;
+      classId?: string | null;
+      scope?: "private" | "general";
+      subjectKey?: LibrarySubjectKey;
+      gradeLevel?: LibraryGradeLevel;
+      teacherVisible?: boolean;
+      aiEnabled?: boolean;
+    },
+  ) {
+    const response = await apiClient.patch<ApiEnvelope<UploadedLibraryFile>>(`/files/${id}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async open(id: string, fallbackName = "module-file") {
+    return downloadProtectedFile({
+      pathname: `/files/${id}/download`,
+      fallbackName,
+      openAfterDownload: true,
+    });
+  },
+
+  async download(id: string, fallbackName = "module-file") {
+    return downloadProtectedFile({
+      pathname: `/files/${id}/download`,
+      fallbackName,
+      persistent: true,
+      openAfterDownload: true,
+    });
+  },
+
+  async delete(id: string) {
+    const response = await apiClient.delete<ApiEnvelope<unknown>>(`/files/${id}`);
     return unwrapEnvelope(response.data);
   },
 };

@@ -9,6 +9,7 @@ import {
   useTeacherSectionRoster,
   useTeacherSectionSchedule,
 } from "../api/hooks";
+import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import {
@@ -104,10 +105,10 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
           subtitle="Students enrolled in this advisory section."
           action={
             <TeacherActionButton
-              label={showAddStudents ? "Hide add" : "Add students"}
-              icon={showAddStudents ? "chevron-up" : "account-plus-outline"}
+              label="Add students"
+              icon="account-plus-outline"
               tone="blue"
-              onPress={() => setShowAddStudents((current) => !current)}
+              onPress={() => navigation.navigate("TeacherSectionAddStudents", { sectionId })}
             />
           }
         >
@@ -229,6 +230,19 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
                   key={student.id}
                   title={name}
                   subtitle={student.email || student.lrn || "No profile details"}
+                  onPress={() => navigation.navigate("TeacherSectionStudentProfile", { sectionId, studentId: student.studentId || student.id })}
+                  right={
+                    <TeacherActionButton
+                      label="Remove"
+                      tone="neutral"
+                      onPress={() => {
+                        void sectionsApi
+                          .removeStudent(sectionId, student.studentId || student.id)
+                          .then(() => rosterQuery.refetch())
+                          .catch((error) => Alert.alert("Unable to remove student", toAppError(error).message));
+                      }}
+                    />
+                  }
                 />
               );
             })

@@ -81,7 +81,13 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
           />
 
           <TeacherPanel title="Lesson controls" subtitle="This screen stays read-manage only and avoids deeper authoring UI.">
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <TeacherActionButton
+                label="Edit lesson"
+                icon="notebook-edit-outline"
+                tone="blue"
+                onPress={() => navigation.navigate("TeacherLessonEditor", { lessonId: lesson.id, classId: classId || lesson.classId })}
+              />
               <TeacherActionButton
                 label={lesson.isDraft ? "Publish lesson" : "Move back to draft"}
                 icon={lesson.isDraft ? "publish" : "file-hidden"}

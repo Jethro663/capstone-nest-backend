@@ -27,6 +27,7 @@ type Props = {
   classId: string;
   classItem?: ClassItem | null;
   registerRefetch?: (refetcher: () => Promise<unknown>) => void;
+  onOpenExtraction?: (extractionId: string) => void;
 };
 
 const EXTRACTION_FILTERS: ExtractionFilter[] = ["all", "processing", "completed", "failed", "applied", "review"];
@@ -77,7 +78,7 @@ function canApplyExtraction(extraction: Extraction) {
   );
 }
 
-export function TeacherExtractionBoard({ classId, classItem, registerRefetch }: Props) {
+export function TeacherExtractionBoard({ classId, classItem, registerRefetch, onOpenExtraction }: Props) {
   const extractionsQuery = useExtractionsByClass(classId);
   const startMutation = useExtractionStartMutation(classId);
   const applyMutation = useExtractionApplyMutation(classId);
@@ -336,6 +337,14 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch }: 
                   tone="blue"
                   onPress={() => setSelectedExtractionId(extraction.id)}
                 />
+                {onOpenExtraction ? (
+                  <TeacherActionButton
+                    label="Detail"
+                    icon="file-document-edit-outline"
+                    tone="purple"
+                    onPress={() => onOpenExtraction(extraction.id)}
+                  />
+                ) : null}
                 {canApplyExtraction(extraction) ? (
                   <TeacherActionButton
                     label={applyMutation.isPending ? "Applying..." : "Apply"}

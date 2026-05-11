@@ -2,6 +2,11 @@
   StudentParityRouteName,
   StudentSupportRouteName,
 } from "./student-route-manifest";
+export type {
+  TeacherParityRouteName,
+  TeacherStackRouteName,
+  TeacherTabRouteName,
+} from "./teacher-route-manifest";
 
 export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "discussion" | "calendar";
 export type JaPanel = "practice" | "ask" | "review" | "lxp";
@@ -43,14 +48,24 @@ export type RootStackParamList = {
   AiTutor: { classId?: string } | undefined;
   TeacherClassDetail: { classId: string; initialTab?: TeacherClassDetailTab };
   TeacherModuleDetail: { classId: string; moduleId: string };
+  TeacherModuleFileDetail: { classId: string; moduleId: string; fileId: string; itemId?: string };
   TeacherLessonDetail: { lessonId: string; classId?: string };
+  TeacherLessonEditor: { lessonId: string; classId?: string };
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
   TeacherAssessmentEditor: { assessmentId?: string; classId?: string } | undefined;
   TeacherAssessmentReview: { attemptId: string; assessmentId?: string; classId?: string };
+  TeacherAssessmentAttemptResult: { attemptId: string; assessmentId?: string; classId?: string };
   TeacherCalendar: { classId?: string } | undefined;
   TeacherCreateModule: { classId: string };
   TeacherCreateAssessment: { classId: string };
+  TeacherClassAddStudents: { classId: string };
+  TeacherClassStudentOverview: { classId: string; studentId: string };
   TeacherSectionDetail: { sectionId: string };
+  TeacherSectionAddStudents: { sectionId: string };
+  TeacherSectionStudentProfile: { sectionId: string; studentId: string };
+  TeacherExtractionDetail: { extractionId: string; classId?: string };
+  TeacherAiDraft: { classId: string };
+  TeacherInterventionDetail: { caseId: string; classId?: string };
   TeacherLibrary: undefined;
   TeacherClassRecord: undefined;
   TeacherReports: undefined;

@@ -149,7 +149,15 @@ export function TeacherInterventionsScreen({ navigation }: Props) {
                 key={`${entry.caseId || entry.id || mode}-${index}`}
                 title={entry.studentName || "Student"}
                 subtitle={`Status: ${statusText} | Trigger: ${asScore(entry.triggerScore)} | Threshold: ${asScore(entry.thresholdApplied)} | ${mode === "history" ? `Closed: ${entry.closedAt || "N/A"}` : "Awaiting action"}`}
-                onPress={() => navigation.navigate("TeacherPerformance")}
+                onPress={
+                  entry.caseId || entry.id
+                    ? () =>
+                        navigation.navigate("TeacherInterventionDetail", {
+                          caseId: entry.caseId || entry.id || "",
+                          classId: selectedClassId || entry.classId,
+                        })
+                    : () => navigation.navigate("TeacherPerformance")
+                }
                 right={
                   <View
                     style={{

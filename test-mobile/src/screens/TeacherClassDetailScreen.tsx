@@ -178,6 +178,23 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
         Swipe tabs to view all class tools, including Extraction, Discussion Board, and Class Record.
       </Text>
 
+      <TeacherPanel title="Class actions" subtitle="Mobile shortcuts for web teacher deep workflows.">
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <TeacherActionButton
+            label="AI draft"
+            icon="robot-outline"
+            tone="purple"
+            onPress={() => navigation.navigate("TeacherAiDraft", { classId })}
+          />
+          <TeacherActionButton
+            label="Add students"
+            icon="account-multiple-plus-outline"
+            tone="green"
+            onPress={() => navigation.navigate("TeacherClassAddStudents", { classId })}
+          />
+        </View>
+      </TeacherPanel>
+
       {topError ? (
         <TeacherPanel title="Class data issue" subtitle={toAppError(topError).message}>
           <TeacherEmpty title="Unable to render the full class" subtitle="Pull to refresh once the class APIs are stable again." />
@@ -277,6 +294,9 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           classId={classId}
           classItem={classQuery.data}
           registerRefetch={registerTabRefetcher("extraction")}
+          onOpenExtraction={(extractionId) =>
+            navigation.navigate("TeacherExtractionDetail", { extractionId, classId })
+          }
         />
       ) : null}
 
@@ -325,11 +345,21 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           {rosterQuery.data?.length ? (
             rosterQuery.data.map((entry) => {
               const name = [entry.student?.firstName, entry.student?.lastName].filter(Boolean).join(" ").trim() || entry.student?.email || "Learner";
+              const studentId = entry.student?.id || entry.studentId || entry.userId;
               return (
                 <TeacherRow
                   key={entry.id}
                   title={name}
                   subtitle={entry.student?.email || "No email available"}
+                  onPress={
+                    studentId
+                      ? () =>
+                          navigation.navigate("TeacherClassStudentOverview", {
+                            classId,
+                            studentId,
+                          })
+                      : undefined
+                  }
                 />
               );
             })

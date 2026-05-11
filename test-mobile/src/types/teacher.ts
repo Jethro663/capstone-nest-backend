@@ -40,6 +40,44 @@ export interface TeacherSectionRosterStudent {
   profilePicture?: string | null;
 }
 
+export interface TeacherSectionStudentProfile {
+  student: {
+    id: string;
+    firstName?: string | null;
+    middleName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    status?: string | null;
+    profile?: {
+      lrn?: string | null;
+      gradeLevel?: string | null;
+      profilePicture?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      familyName?: string | null;
+      familyRelationship?: string | null;
+      familyContact?: string | null;
+    } | null;
+  };
+  section: {
+    id: string;
+    name: string;
+    gradeLevel?: string | null;
+    schoolYear?: string | null;
+  };
+  enrollments?: Array<{
+    id: string;
+    classId?: string | null;
+    enrolledAt?: string | null;
+    status?: string | null;
+    class?: {
+      id: string;
+      subjectCode?: string | null;
+      subjectName?: string | null;
+    } | null;
+  }>;
+}
+
 export interface TeacherSectionCandidate {
   id: string;
   firstName?: string;
@@ -135,6 +173,43 @@ export interface TeacherInterventionCase {
   thresholdApplied?: number | null;
   openedAt?: string | null;
   closedAt?: string | null;
+  aiPlanEligible?: boolean;
+}
+
+export interface TeacherInterventionCaseDetail {
+  case?: TeacherInterventionCase;
+  student?: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  } | null;
+  class?: {
+    id: string;
+    subjectName?: string | null;
+    subjectCode?: string | null;
+  } | null;
+  assignments?: Array<{
+    assignmentId?: string;
+    id?: string;
+    type?: string;
+    label?: string;
+    status?: string;
+    xpAwarded?: number;
+    lesson?: { id: string; title?: string | null } | null;
+    assessment?: { id: string; title?: string | null } | null;
+  }>;
+  generatedArtifacts?: Array<{
+    id?: string;
+    type?: string;
+    status?: string;
+    title?: string | null;
+  }>;
+  progress?: {
+    completionPercent?: number;
+    completedCheckpoints?: number;
+    totalCheckpoints?: number;
+  };
 }
 
 export interface TeacherInterventionQueueResponse {

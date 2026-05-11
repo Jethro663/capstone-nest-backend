@@ -58,6 +58,58 @@ export interface EnrollStudentDto {
   studentId: string;
 }
 
+export interface TeacherStudentAssessmentHistoryItem {
+  assessmentId: string;
+  title: string;
+  type: string;
+  dueDate?: string | null;
+  statusLabel: string;
+  submittedAt?: string | null;
+  score?: number | null;
+  totalPoints?: number | null;
+}
+
+export interface TeacherClassStudentOverview {
+  student: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    status?: string | null;
+    profile?: {
+      lrn?: string | null;
+      profilePicture?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      gradeLevel?: string | null;
+    } | null;
+  };
+  classInfo: {
+    classId: string;
+    subjectName?: string | null;
+    subjectCode?: string | null;
+    sectionLabel?: string | null;
+  };
+  standing: {
+    gradingPeriod?: string | null;
+    overallGradePercent?: number | null;
+    components: {
+      writtenWorkPercent?: number | null;
+      performanceTaskPercent?: number | null;
+      quarterlyExamPercent?: number | null;
+    };
+  };
+  history: {
+    finished: TeacherStudentAssessmentHistoryItem[];
+    late: TeacherStudentAssessmentHistoryItem[];
+    pending: TeacherStudentAssessmentHistoryItem[];
+  };
+}
+
+export type TeacherClassStudentProfile = TeacherClassStudentOverview["student"] & {
+  profile?: TeacherClassStudentOverview["student"]["profile"];
+};
+
 export interface StudentMasterlistSection {
   id: string;
   name: string;
@@ -90,4 +142,17 @@ export interface StudentMasterlistQuery {
   prioritizeEligible?: boolean;
   page?: number;
   limit?: number;
+}
+
+export interface StudentMasterlistResponse {
+  data: StudentMasterlistItem[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  classContext?: {
+    classId: string;
+    sectionId?: string;
+    classGradeLevel?: string;
+  };
 }

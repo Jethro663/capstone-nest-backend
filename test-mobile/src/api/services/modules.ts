@@ -38,6 +38,11 @@ export const modulesApi = {
     return unwrapEnvelope(response.data);
   },
 
+  async detachItem(itemId: string) {
+    const response = await apiClient.delete<ApiEnvelope<unknown>>(`/modules/items/${itemId}`);
+    return unwrapEnvelope(response.data);
+  },
+
   async downloadAttachedFile(itemId: string, fallbackName = "module-attachment") {
     return downloadProtectedFile({
       pathname: `/modules/items/${itemId}/file/download`,

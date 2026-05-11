@@ -100,3 +100,57 @@ export interface AiTutorAnswersResult {
   questions: AiTutorQuestion[];
   retryLesson?: string;
 }
+
+export interface AiGenerationJob {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled" | string;
+  progressPercent?: number | null;
+  message?: string | null;
+  errorMessage?: string | null;
+  outputId?: string | null;
+  outputType?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface AiClassIndexStatus {
+  classId: string;
+  sourceSummary?: {
+    lessons?: { total?: number; ready?: number; blocked?: number };
+    extractions?: { total?: number; ready?: number; blocked?: number };
+  };
+  lessons?: Array<{
+    id: string;
+    title?: string | null;
+    state?: string | null;
+    blockerReason?: string | null;
+    updatedAt?: string | null;
+  }>;
+  extractions?: Array<{
+    id: string;
+    title?: string | null;
+    state?: string | null;
+    blockerReason?: string | null;
+    updatedAt?: string | null;
+  }>;
+}
+
+export interface QuizDraftStructuredOutput {
+  title?: string;
+  description?: string;
+  questions?: Array<{
+    content?: string;
+    type?: string;
+    points?: number;
+    options?: Array<{ text?: string; isCorrect?: boolean }>;
+  }>;
+}
+
+export interface AiGenerationJobResult<TOutput> {
+  job: AiGenerationJob;
+  result?: {
+    outputId?: string;
+    outputType?: string;
+    structuredOutput?: TOutput;
+  } | null;
+}

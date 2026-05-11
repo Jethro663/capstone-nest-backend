@@ -6,7 +6,6 @@ import {
   useTeacherModuleItemUpdateMutation,
   useTeacherModuleUpdateMutation,
 } from "../api/hooks";
-import { modulesApi } from "../api/services/modules";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import {
@@ -58,11 +57,12 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
       return;
     }
     if (item.itemType === "file") {
-      try {
-        await modulesApi.openAttachedFile(item.id, item.file?.originalName || "module-file");
-      } catch (error) {
-        Alert.alert("Unable to open file", toAppError(error).message);
-      }
+      navigation.navigate("TeacherModuleFileDetail", {
+        classId,
+        moduleId,
+        fileId: item.fileId || item.file?.id || item.id,
+        itemId: item.id,
+      });
     }
   };
 

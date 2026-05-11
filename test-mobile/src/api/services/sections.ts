@@ -6,6 +6,7 @@ import type {
   TeacherSection,
   TeacherSectionRosterStudent,
   TeacherSectionSchedulePayload,
+  TeacherSectionStudentProfile,
   TeacherSectionsListResponse,
   TeacherSectionVisibilityStatus,
 } from "../../types/teacher";
@@ -50,6 +51,20 @@ export const sectionsApi = {
     const response = await apiClient.post<ApiEnvelope<{ createdCount?: number }>>(
       `/sections/${sectionId}/roster`,
       { studentIds },
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async removeStudent(sectionId: string, studentId: string) {
+    const response = await apiClient.delete<ApiEnvelope<unknown>>(
+      `/sections/${sectionId}/roster/${studentId}`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async getStudentProfileForSection(sectionId: string, studentId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherSectionStudentProfile>>(
+      `/sections/${sectionId}/students/${studentId}/profile`,
     );
     return unwrapEnvelope(response.data);
   },

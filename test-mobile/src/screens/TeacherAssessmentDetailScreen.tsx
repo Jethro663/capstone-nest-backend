@@ -137,7 +137,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                   onPress={
                     submission.latestAttemptId
                       ? () =>
-                          navigation.navigate("TeacherAssessmentReview", {
+                          navigation.navigate("TeacherAssessmentAttemptResult", {
                             attemptId: submission.latestAttemptId!,
                             assessmentId,
                             classId,

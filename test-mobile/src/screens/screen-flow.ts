@@ -5,6 +5,16 @@ import {
   type StudentParityRouteName,
   type StudentSupportRouteName,
 } from "../navigation/student-route-manifest";
+import {
+  teacherParityRouteNames,
+  teacherRouteManifest,
+  teacherStackRouteNames,
+  teacherTabRouteNames,
+  teacherWebRouteMappings,
+  type TeacherParityRouteName,
+  type TeacherStackRouteName,
+  type TeacherTabRouteName,
+} from "../navigation/teacher-route-manifest";
 
 export type StudentParityRouteInventoryEntry = {
   name: StudentParityRouteName;
@@ -28,6 +38,26 @@ export const studentSupportRouteInventory = [
 ] as const satisfies ReadonlyArray<StudentSupportRouteInventoryEntry>;
 
 export const studentSupportRouteInventoryNames = studentSupportRouteNames;
+
+export type TeacherParityRouteInventoryEntry =
+  | {
+      name: TeacherTabRouteName;
+      kind: "tab";
+    }
+  | {
+      name: TeacherStackRouteName;
+      kind: "stack";
+    };
+
+export const teacherParityRouteInventory = [
+  ...teacherRouteManifest.tabs.map((name) => ({ name, kind: "tab" as const })),
+  ...teacherRouteManifest.stack.map((name) => ({ name, kind: "stack" as const })),
+] as const satisfies ReadonlyArray<TeacherParityRouteInventoryEntry>;
+
+export const teacherParityRouteInventoryNames = teacherParityRouteNames;
+export const teacherMountedTabRouteNames = teacherTabRouteNames;
+export const teacherMountedStackRouteNames = teacherStackRouteNames;
+export const teacherWebParityMappings = teacherWebRouteMappings;
 
 export function resolveInitialLxpClassId(params: {
   selectedClassId?: string | null;

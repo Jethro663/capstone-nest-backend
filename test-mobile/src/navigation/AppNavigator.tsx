@@ -52,6 +52,18 @@ import { TeacherProfileScreen } from "../screens/TeacherProfileScreen";
 import { TeacherReportsScreen } from "../screens/TeacherReportsScreen";
 import { TeacherSectionDetailScreen } from "../screens/TeacherSectionDetailScreen";
 import { TeacherSectionsScreen } from "../screens/TeacherSectionsScreen";
+import {
+  TeacherAiDraftScreen,
+  TeacherAssessmentAttemptResultScreen,
+  TeacherClassAddStudentsScreen,
+  TeacherClassStudentOverviewScreen,
+  TeacherExtractionDetailScreen,
+  TeacherInterventionDetailScreen,
+  TeacherLessonEditorScreen,
+  TeacherModuleFileDetailScreen,
+  TeacherSectionAddStudentsScreen,
+  TeacherSectionStudentProfileScreen,
+} from "../screens/TeacherDeepParityScreens";
 import { colors } from "../theme/tokens";
 import {
   studentStackRouteNames,
@@ -394,14 +406,24 @@ function TeacherNavigator() {
       <RootStack.Screen name="MainTabs" component={TeacherTabs} />
       <RootStack.Screen name="TeacherClassDetail" component={TeacherClassDetailScreen} />
       <RootStack.Screen name="TeacherModuleDetail" component={TeacherModuleDetailScreen} />
+      <RootStack.Screen name="TeacherModuleFileDetail" component={TeacherModuleFileDetailScreen} />
       <RootStack.Screen name="TeacherLessonDetail" component={TeacherLessonDetailScreen} />
+      <RootStack.Screen name="TeacherLessonEditor" component={TeacherLessonEditorScreen} />
       <RootStack.Screen name="TeacherAssessmentDetail" component={TeacherAssessmentDetailScreen} />
       <RootStack.Screen name="TeacherAssessmentEditor" component={TeacherAssessmentEditorScreen} />
       <RootStack.Screen name="TeacherAssessmentReview" component={TeacherAssessmentReviewScreen} />
+      <RootStack.Screen name="TeacherAssessmentAttemptResult" component={TeacherAssessmentAttemptResultScreen} />
       <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
       <RootStack.Screen name="TeacherCreateModule" component={TeacherCreateModuleScreen} />
       <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} />
+      <RootStack.Screen name="TeacherClassAddStudents" component={TeacherClassAddStudentsScreen} />
+      <RootStack.Screen name="TeacherClassStudentOverview" component={TeacherClassStudentOverviewScreen} />
       <RootStack.Screen name="TeacherSectionDetail" component={TeacherSectionDetailScreen} />
+      <RootStack.Screen name="TeacherSectionAddStudents" component={TeacherSectionAddStudentsScreen} />
+      <RootStack.Screen name="TeacherSectionStudentProfile" component={TeacherSectionStudentProfileScreen} />
+      <RootStack.Screen name="TeacherExtractionDetail" component={TeacherExtractionDetailScreen} />
+      <RootStack.Screen name="TeacherAiDraft" component={TeacherAiDraftScreen} />
+      <RootStack.Screen name="TeacherInterventionDetail" component={TeacherInterventionDetailScreen} />
       <RootStack.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
       <RootStack.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
       <RootStack.Screen name="TeacherReports" component={TeacherReportsScreen} />

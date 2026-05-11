@@ -8,6 +8,9 @@ import type {
   EnrollStudentDto,
   StudentMasterlistItem,
   StudentMasterlistQuery,
+  StudentMasterlistResponse,
+  TeacherClassStudentOverview,
+  TeacherClassStudentProfile,
 } from "../../types/class";
 
 export const classesApi = {
@@ -34,15 +37,44 @@ export const classesApi = {
   },
 
   async getStudentsMasterlist(classId: string, query?: StudentMasterlistQuery) {
-    const response = await apiClient.get<ApiEnvelope<StudentMasterlistItem[]>>(
+    const response = await apiClient.get<ApiEnvelope<StudentMasterlistItem[]> | StudentMasterlistResponse>(
       `/classes/${classId}/students/masterlist`,
       { params: query },
     );
-    return normalizeArray<StudentMasterlistItem>(unwrapEnvelope(response.data));
+    const payload = response.data as StudentMasterlistResponse;
+    return {
+      data: normalizeArray<StudentMasterlistItem>(unwrapEnvelope(response.data as ApiEnvelope<StudentMasterlistItem[]>)),
+      total: payload.total,
+      page: payload.page,
+      limit: payload.limit,
+      totalPages: payload.totalPages,
+      classContext: payload.classContext,
+    };
+  },
+
+  async getStudentProfileForClass(classId: string, studentId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherClassStudentProfile>>(
+      `/classes/${classId}/students/${studentId}/profile`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async getStudentOverviewForClass(classId: string, studentId: string) {
+    const response = await apiClient.get<ApiEnvelope<TeacherClassStudentOverview>>(
+      `/classes/${classId}/students/${studentId}/overview`,
+    );
+    return unwrapEnvelope(response.data);
   },
 
   async enrollStudent(classId: string, dto: EnrollStudentDto) {
     const response = await apiClient.post<ApiEnvelope<EnrollmentRecord>>(`/classes/${classId}/enrollments`, dto);
+    return unwrapEnvelope(response.data);
+  },
+
+  async unenrollStudent(classId: string, studentId: string) {
+    const response = await apiClient.delete<ApiEnvelope<{ id?: string }>>(
+      `/classes/${classId}/enrollments/${studentId}`,
+    );
     return unwrapEnvelope(response.data);
   },
 };
