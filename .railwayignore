@@ -26,13 +26,8 @@ venv
 /test-mobile
 /monitoring
 
-*.xlsx
 *.docx
 *.pdf
-*.png
-*.jpg
-*.jpeg
-*.webp
 *.log
 tmp-*
 ~$*
