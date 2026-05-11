@@ -1,30 +1,32 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { colors, modernAcademic, radii, shadow, skillStream } from "../../theme/tokens";
 
 export const authTheme = {
-  background: "#0f1117",
-  backgroundAlt: "#151922",
-  card: "#f2f2f0",
-  cardInner: "#ffffff",
-  textDark: "#12141a",
-  textMid: "#5a5e6e",
-  textLight: "#9498a8",
-  border: "rgba(0,0,0,0.09)",
-  badgeBorder: "rgba(255,255,255,0.12)",
-  badgeFill: "rgba(255,255,255,0.08)",
-  badgeIconFill: "rgba(255,255,255,0.1)",
-  badgeIconBorder: "rgba(255,255,255,0.15)",
-  errorFill: "rgba(232,41,78,0.1)",
-  errorBorder: "rgba(232,41,78,0.18)",
-  successFill: "rgba(34,197,94,0.12)",
-  successBorder: "rgba(34,197,94,0.24)",
-  white: "#ffffff",
-  red: "#e8294e",
-  orange: "#f97316",
-  blue: "#4a8cf7",
-  green: "#22c55e",
+  background: skillStream.background,
+  backgroundAlt: modernAcademic.surfaceContainerLow,
+  card: skillStream.card,
+  cardInner: skillStream.elevated,
+  textDark: modernAcademic.onSurface,
+  textMid: modernAcademic.onSurfaceVariant,
+  textLight: skillStream.muted,
+  border: colors.border,
+  badgeBorder: colors.border,
+  badgeFill: skillStream.elevated,
+  badgeIconFill: "#DDE1FF",
+  badgeIconBorder: modernAcademic.outlineVariant,
+  errorFill: modernAcademic.errorContainer,
+  errorBorder: "rgba(255,180,171,0.28)",
+  successFill: "rgba(159,214,184,0.12)",
+  successBorder: "rgba(159,214,184,0.28)",
+  white: modernAcademic.onPrimary,
+  red: modernAcademic.error,
+  orange: colors.amber,
+  blue: modernAcademic.primary,
+  green: colors.green,
 } as const;
 
 type BackgroundBlob = {
@@ -37,49 +39,17 @@ type BackgroundBlob = {
   left?: number;
 };
 
-const backgroundBlobs: BackgroundBlob[] = [
-  {
-    color: "rgba(232,41,78,0.32)",
-    height: 220,
-    left: -72,
-    top: -64,
-    width: 220,
-  },
-  {
-    color: "rgba(249,115,22,0.24)",
-    height: 200,
-    right: -56,
-    top: -28,
-    width: 200,
-  },
-  {
-    color: "rgba(74,48,128,0.24)",
-    bottom: 160,
-    height: 190,
-    left: -58,
-    width: 190,
-  },
-  {
-    color: "rgba(26,48,96,0.26)",
-    bottom: 68,
-    height: 150,
-    right: -34,
-    width: 150,
-  },
-];
+const backgroundBlobs: BackgroundBlob[] = [];
 
-const titleFontFamily = Platform.select({
-  ios: "Georgia",
-  android: "serif",
-  default: undefined,
-});
+const titleFontFamily = Platform.select({ default: undefined });
 
-const cardGradient = [authTheme.orange, authTheme.red] as const;
-const loadingGradient = ["#c85a58", authTheme.red, authTheme.orange] as const;
+const cardGradient = [modernAcademic.primary, modernAcademic.primaryContainer] as const;
+const loadingGradient = [modernAcademic.primaryContainer, modernAcademic.primary] as const;
 
 export function AuthScreenFrame({ children }: PropsWithChildren) {
   return (
     <LinearGradient colors={[authTheme.background, authTheme.backgroundAlt, authTheme.background]} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }}>
       <View style={{ pointerEvents: "none", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}>
         {backgroundBlobs.map((blob, index) => (
           <View
@@ -100,7 +70,7 @@ export function AuthScreenFrame({ children }: PropsWithChildren) {
         ))}
         <View
           style={{
-            backgroundColor: "rgba(255,255,255,0.02)",
+            backgroundColor: "rgba(30,64,175,0.03)",
             bottom: 0,
             left: 0,
             position: "absolute",
@@ -121,13 +91,14 @@ export function AuthScreenFrame({ children }: PropsWithChildren) {
           contentContainerStyle={{
             flexGrow: 1,
             justifyContent: "center",
-            paddingHorizontal: 26,
+            paddingHorizontal: 20,
             paddingVertical: 34,
           }}
         >
           <View style={{ alignItems: "center" }}>{children}</View>
         </ScrollView>
       </KeyboardAvoidingView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
@@ -141,6 +112,7 @@ export function AuthBrandBadge() {
         borderColor: authTheme.badgeBorder,
         borderRadius: 14,
         borderWidth: 1,
+        ...shadow.card,
         flexDirection: "row",
         gap: 10,
         marginBottom: 24,
@@ -162,12 +134,12 @@ export function AuthBrandBadge() {
           width: 38,
         }}
       >
-        <MaterialCommunityIcons color={authTheme.white} name="school-outline" size={18} />
+        <MaterialCommunityIcons color={authTheme.blue} name="school-outline" size={18} />
       </View>
       <View>
         <Text
           style={{
-            color: "rgba(255,255,255,0.5)",
+            color: authTheme.textLight,
             fontSize: 9,
             fontWeight: "700",
             letterSpacing: 1.5,
@@ -176,7 +148,7 @@ export function AuthBrandBadge() {
         >
           GABHS Digital Campus
         </Text>
-        <Text style={{ color: "rgba(255,255,255,0.92)", fontSize: 14, fontWeight: "700", marginTop: 2 }}>
+        <Text style={{ color: authTheme.textDark, fontSize: 14, fontWeight: "700", marginTop: 2 }}>
           Nexora Portal
         </Text>
       </View>
@@ -194,13 +166,12 @@ export function AuthCard({
     <View
       style={{
         backgroundColor: authTheme.card,
-        borderRadius: 22,
+        borderRadius: radii.xxl,
+        borderWidth: 1,
+        borderColor: colors.border,
         overflow: "hidden",
-        shadowColor: "#000000",
-        shadowOffset: { width: 0, height: 18 },
-        shadowOpacity: 0.42,
-        shadowRadius: 28,
         width: "100%",
+        ...shadow.card,
       }}
     >
       <LinearGradient colors={cardGradient} end={{ x: 1, y: 0 }} start={{ x: 0, y: 0 }} style={{ height: 4 }} />
@@ -210,8 +181,8 @@ export function AuthCard({
           style={{
             color: authTheme.textDark,
             fontFamily: titleFontFamily,
-            fontSize: 29,
-            fontWeight: "400",
+            fontSize: 28,
+            fontWeight: "700",
             lineHeight: 34,
           }}
         >
@@ -234,7 +205,7 @@ export function AuthCard({
       {footer ? (
         <View
           style={{
-            borderTopColor: "rgba(0,0,0,0.06)",
+            borderTopColor: colors.border,
             borderTopWidth: 1,
             paddingBottom: 18,
             paddingHorizontal: 24,
@@ -262,7 +233,7 @@ export function AuthScreenShell({
       </AuthCard>
       <Text
         style={{
-          color: "rgba(255,255,255,0.25)",
+          color: authTheme.textLight,
           fontSize: 10,
           letterSpacing: 0.3,
           marginTop: 20,
@@ -309,7 +280,7 @@ export function AuthInputField({
           alignItems: "center",
           backgroundColor: authTheme.cardInner,
           borderColor: authTheme.border,
-          borderRadius: 11,
+          borderRadius: radii.md,
           borderWidth: 1.5,
           flexDirection: "row",
           paddingLeft: 12,
@@ -319,13 +290,14 @@ export function AuthInputField({
     >
       <MaterialCommunityIcons color={authTheme.textLight} name={icon as never} size={16} />
       <TextInput
-        keyboardAppearance="dark"
+        keyboardAppearance="light"
         placeholderTextColor={authTheme.textLight}
         style={[
           {
             color: authTheme.textDark,
             flex: 1,
-            fontSize: 13,
+            fontSize: 14,
+            minHeight: 44,
             paddingHorizontal: 10,
             paddingVertical: 12,
           },
@@ -371,22 +343,19 @@ export function AuthPrimaryButton({
   disabled?: boolean;
 }) {
   return (
-    <Pressable disabled={disabled || loading} onPress={onPress} style={{ marginTop: 18 }}>
+    <Pressable disabled={disabled || loading} onPress={onPress} style={{ marginTop: 18, minHeight: 48 }}>
       <LinearGradient
         colors={loading ? loadingGradient : cardGradient}
         end={{ x: 1, y: 0 }}
         start={{ x: 0, y: 0 }}
         style={{
           alignItems: "center",
-          borderRadius: 11,
+          borderRadius: radii.md,
           flexDirection: "row",
           justifyContent: "center",
           opacity: disabled && !loading ? 0.65 : 1,
+          minHeight: 48,
           paddingVertical: 13,
-          shadowColor: authTheme.red,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.24,
-          shadowRadius: 18,
         }}
       >
         {loading ? <MaterialCommunityIcons color={authTheme.white} name="loading" size={16} style={{ marginRight: 8 }} /> : null}
@@ -414,11 +383,12 @@ export function AuthSecondaryButton({
       style={{
         alignItems: "center",
         borderColor: authTheme.border,
-        borderRadius: 11,
+        borderRadius: radii.md,
         borderWidth: 1.5,
         justifyContent: "center",
         marginTop: 10,
         opacity: disabled ? 0.6 : 1,
+        minHeight: 48,
         paddingVertical: 13,
       }}
     >
@@ -429,7 +399,7 @@ export function AuthSecondaryButton({
 
 export function AuthFooterLink({ label, onPress }: { label: string; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress}>
+    <Pressable onPress={onPress} style={{ minHeight: 44, justifyContent: "center" }}>
       <Text style={{ color: authTheme.textMid, fontSize: 11, textAlign: "center" }}>{label}</Text>
     </Pressable>
   );
@@ -443,7 +413,7 @@ export function AuthRulePills({ rules }: { rules: Array<{ label: string; passed:
           key={rule.label}
           style={{
             alignItems: "center",
-            backgroundColor: rule.passed ? "rgba(34,197,94,0.09)" : "rgba(255,255,255,0.04)",
+            backgroundColor: rule.passed ? "rgba(34,197,94,0.09)" : authTheme.cardInner,
             borderColor: rule.passed ? "rgba(34,197,94,0.28)" : authTheme.border,
             borderRadius: 4,
             borderWidth: 1,

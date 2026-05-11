@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-primary-container": "#a8b8ff",
+                "secondary-container": "#d0e1fb",
+                "surface-container-low": "#f2f4f6",
+                "error": "#ba1a1a",
+                "surface-container-lowest": "#ffffff",
+                "primary-fixed-dim": "#b8c4ff",
+                "outline-variant": "#c4c5d5",
+                "tertiary-fixed": "#dae2fd",
+                "on-error-container": "#93000a",
+                "background": "#f7f9fb",
+                "tertiary-container": "#434b60",
+                "secondary-fixed-dim": "#b7c8e1",
+                "outline": "#757684",
+                "on-secondary-fixed-variant": "#38485d",
+                "on-surface-variant": "#444653",
+                "surface-container": "#eceef0",
+                "on-background": "#191c1e",
+                "on-surface": "#191c1e",
+                "on-secondary": "#ffffff",
+                "error-container": "#ffdad6",
+                "primary-container": "#1e40af",
+                "on-primary-fixed-variant": "#173bab",
+                "on-tertiary": "#ffffff",
+                "surface-container-high": "#e6e8ea",
+                "inverse-surface": "#2d3133",
+                "surface-container-highest": "#e0e3e5",
+                "secondary-fixed": "#d3e4fe",
+                "on-tertiary-fixed": "#131b2e",
+                "on-tertiary-fixed-variant": "#3f465c",
+                "tertiary-fixed-dim": "#bec6e0",
+                "surface-tint": "#3755c3",
+                "on-tertiary-container": "#b4bbd5",
+                "primary-fixed": "#dde1ff",
+                "on-secondary-fixed": "#0b1c30",
+                "surface-dim": "#d8dadc",
+                "on-secondary-container": "#54647a",
+                "tertiary": "#2d3449",
+                "on-primary": "#ffffff",
+                "inverse-on-surface": "#eff1f3",
+                "on-primary-fixed": "#001453",
+                "surface-variant": "#e0e3e5",
+                "surface-bright": "#f7f9fb",
+                "on-error": "#ffffff",
+                "inverse-primary": "#b8c4ff",
+                "surface": "#f7f9fb",
+                "secondary": "#505f76",
+                "primary": "#00288e"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "base": "4px",
+                "xs": "4px",
+                "xl": "32px",
+                "md": "16px",
+                "gutter-mobile": "12px",
+                "margin-mobile": "20px",
+                "lg": "24px",
+                "sm": "8px"
+            },
+            "fontFamily": {
+                "label-md": ["Inter"],
+                "label-sm": ["Inter"],
+                "body-md": ["Inter"],
+                "headline-sm": ["Inter"],
+                "headline-md": ["Inter"],
+                "body-lg": ["Inter"],
+                "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                "headline-sm": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                "headline-md": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                "headline-lg": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface">
+<!-- TopAppBar -->
+<header class="bg-surface dark:bg-on-background border-b border-outline-variant dark:border-outline w-full sticky top-0 z-40">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-md">
+<img alt="Student Profile" class="w-10 h-10 rounded-full object-cover border border-outline-variant" data-alt="A professional, clean-cut portrait of a university student against a neutral background. The lighting is bright and even, fitting a high-end corporate academic environment. The aesthetic is modern and minimalist, utilizing soft focus and a clear, high-key light mode palette with professional blue accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCf8Ild0KBT2QVFMcOansamxs04nNM0C920BmZHsfV6nwhgLbtFsckrLZ3guMOLhWS3pxzghvgkA34nsrGI6YOheH-hEV8hVhOCi-0ngbD0h4pIhsnnp-xcEbOHPPQs5X239aPpWOdiRHt_xNfwdJOUPLMY6xQNCD4JIxFvgY0DZX445ERj7o-F9ZCrhkcNu0lOy2ISHGwFTNkEeZremku87lMRlUxSmCw8nXa1jmCeYpcLielb1Km6VSPGplzym0EhfiSCXRUgVJw"/>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">EduFlow</span>
+</div>
+<button class="active:opacity-80 transition-opacity p-2 hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined text-primary" data-icon="notifications">notifications</span>
+</button>
+</div>
+</header>
+<main class="pb-24">
+<!-- Course Header & Progress -->
+<section class="px-margin-mobile pt-lg pb-md">
+<div class="mb-sm">
+<span class="text-label-md font-label-md text-secondary uppercase tracking-wider">Current Course</span>
+<h1 class="font-headline-lg text-headline-lg text-on-surface mt-base">Advanced Web Development</h1>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md">
+<div class="flex justify-between items-center mb-sm">
+<span class="font-label-md text-label-md text-on-surface">Overall Completion</span>
+<span class="font-label-md text-label-md text-primary">64%</span>
+</div>
+<div class="w-full h-2 bg-outline-variant rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[64%]"></div>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mt-sm">16 of 25 lessons completed</p>
+</div>
+</section>
+<!-- Syllabus Content -->
+<section class="px-margin-mobile space-y-lg">
+<!-- Module 1 -->
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Module 1: React Fundamentals</h2>
+<span class="font-label-sm text-label-sm px-2 py-1 bg-surface-container-high text-on-surface-variant rounded">4 Lessons</span>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl divide-y divide-outline-variant overflow-hidden">
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="w-10 h-10 rounded-lg bg-primary-fixed flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="play_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">play_circle</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">Component Lifecycle Deep Dive</div>
+<div class="flex items-center gap-xs mt-1 text-on-surface-variant">
+<span class="font-label-sm text-label-sm">Video</span>
+<span class="text-[10px]">•</span>
+<span class="font-label-sm text-label-sm">18 mins</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="w-10 h-10 rounded-lg bg-secondary-fixed flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">Hooks Design Patterns</div>
+<div class="flex items-center gap-xs mt-1 text-on-surface-variant">
+<span class="font-label-sm text-label-sm">PDF Guide</span>
+<span class="text-[10px]">•</span>
+<span class="font-label-sm text-label-sm">1.2 MB</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div class="p-md flex items-center gap-md hover:bg-surface-container-low transition-colors group cursor-pointer">
+<div class="w-10 h-10 rounded-lg bg-tertiary-fixed flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="quiz">quiz</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">State Management Quiz</div>
+<div class="flex items-center gap-xs mt-1 text-on-surface-variant">
+<span class="font-label-sm text-label-sm">Quiz</span>
+<span class="text-[10px]">•</span>
+<span class="font-label-sm text-label-sm">10 Questions</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline-variant" data-icon="radio_button_unchecked">radio_button_unchecked</span>
+</div>
+</div>
+</div>
+<!-- Module 2 -->
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Module 2: Advanced State</h2>
+<span class="font-label-sm text-label-sm px-2 py-1 bg-surface-container-high text-on-surface-variant rounded">Locked</span>
+</div>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl divide-y divide-outline-variant opacity-60 overflow-hidden">
+<div class="p-md flex items-center gap-md grayscale">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="lock">lock</span>
+</div>
+<div class="flex-1">
+<div class="font-label-md text-label-md text-on-surface">Server-Side State with React Query</div>
+<div class="flex items-center gap-xs mt-1 text-on-surface-variant">
+<span class="font-label-sm text-label-sm">Video</span>
+<span class="text-[10px]">•</span>
+<span class="font-label-sm text-label-sm">24 mins</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Instructor Support Section -->
+<div class="bg-primary-container text-on-primary rounded-xl p-lg relative overflow-hidden">
+<!-- Background visual element -->
+<div class="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+<div class="relative z-10">
+<h3 class="font-headline-sm text-headline-sm mb-xs">Instructor Support</h3>
+<p class="font-body-md text-body-md opacity-90 mb-md">Have questions about the material? Connect with Dr. Sarah Chen for direct guidance.</p>
+<div class="flex items-center gap-md bg-white/10 p-sm rounded-lg backdrop-blur-sm border border-white/20">
+<img alt="Instructor Sarah Chen" class="w-12 h-12 rounded-full object-cover border-2 border-white/40" data-alt="A portrait of a confident female computer science professor in a professional academic setting. She is smiling warmly at the camera, wearing a professional blazer. The lighting is sophisticated and bright, following a clean light-mode aesthetic with a palette of whites and deep blues." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAD8vkc6pqDJW36_8gNCvOFp5EzfIsq820clt2EZzwu2ASBUkmWt6EwhJRbpTNrT-gJYXXObuytnXiXtiCK_rxJciSmLaGWO_pjX1oR88fmW2NqP-GS6_UNr78SwCb3-Ca8sGFd4XA7M63e_e76EbFArupBWVyULUPAsfc_OfPWyBVFsWMIPb7YDnfVbsMM8faYePGIpKlDSn-WQUA8m53u69ymkqaoQdWCI3yH21xJGkRD-ISaaBsLVDz9ddbZfg6VshuehkQF95M"/>
+<div class="flex-1">
+<div class="font-label-md text-label-md">Dr. Sarah Chen</div>
+<div class="font-label-sm text-label-sm opacity-80">Online • Typically responds in 2h</div>
+</div>
+<button class="bg-white text-primary px-4 py-2 rounded-lg font-label-md text-label-md shadow-sm active:scale-95 transition-transform">
+                            Message
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 border-t border-outline-variant dark:border-outline bg-surface dark:bg-on-background">
+<div class="flex justify-around items-center w-full h-16 px-4 pb-safe">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-2 py-1 active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-label-md text-label-md mt-1">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-2 py-1 active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="explore">explore</span>
+<span class="font-label-md text-label-md mt-1">Courses</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-2 py-1 active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="menu_book" data-weight="fill" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+<span class="font-label-md text-label-md mt-1">Syllabus</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-2 py-1 active:scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

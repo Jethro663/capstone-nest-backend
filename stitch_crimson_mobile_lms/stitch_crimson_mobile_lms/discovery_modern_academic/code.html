@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EduFlow - Course Discovery</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-primary-container": "#a8b8ff",
+                    "secondary-container": "#d0e1fb",
+                    "surface-container-low": "#f2f4f6",
+                    "error": "#ba1a1a",
+                    "surface-container-lowest": "#ffffff",
+                    "primary-fixed-dim": "#b8c4ff",
+                    "outline-variant": "#c4c5d5",
+                    "tertiary-fixed": "#dae2fd",
+                    "on-error-container": "#93000a",
+                    "background": "#f7f9fb",
+                    "tertiary-container": "#434b60",
+                    "secondary-fixed-dim": "#b7c8e1",
+                    "outline": "#757684",
+                    "on-secondary-fixed-variant": "#38485d",
+                    "on-surface-variant": "#444653",
+                    "surface-container": "#eceef0",
+                    "on-background": "#191c1e",
+                    "on-surface": "#191c1e",
+                    "on-secondary": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "primary-container": "#1e40af",
+                    "on-primary-fixed-variant": "#173bab",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-high": "#e6e8ea",
+                    "inverse-surface": "#2d3133",
+                    "surface-container-highest": "#e0e3e5",
+                    "secondary-fixed": "#d3e4fe",
+                    "on-tertiary-fixed": "#131b2e",
+                    "on-tertiary-fixed-variant": "#3f465c",
+                    "tertiary-fixed-dim": "#bec6e0",
+                    "surface-tint": "#3755c3",
+                    "on-tertiary-container": "#b4bbd5",
+                    "primary-fixed": "#dde1ff",
+                    "on-secondary-fixed": "#0b1c30",
+                    "surface-dim": "#d8dadc",
+                    "on-secondary-container": "#54647a",
+                    "tertiary": "#2d3449",
+                    "on-primary": "#ffffff",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-primary-fixed": "#001453",
+                    "surface-variant": "#e0e3e5",
+                    "surface-bright": "#f7f9fb",
+                    "on-error": "#ffffff",
+                    "inverse-primary": "#b8c4ff",
+                    "surface": "#f7f9fb",
+                    "secondary": "#505f76",
+                    "primary": "#00288e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "base": "4px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "gutter-mobile": "12px",
+                    "margin-mobile": "20px",
+                    "lg": "24px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-sm": ["18px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-md": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface">
+<!-- TopAppBar Shell -->
+<header class="bg-surface dark:bg-on-background w-full sticky top-0 z-40 border-b border-outline-variant dark:border-outline">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant">
+<img alt="Student Profile Photo" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCW5KVwSN-NJZuYetv9itTRbfDJVG4X1xwydv4Qm0vlxbixIR7MYTw5uRpYcZwy7EOojawd02oqTAceEYPy895CCaDNyTxWSz7UmIvqNOSRx4ZHdUz4yu94nML-H7uQi6gMFu9H7J0I7Xx5GGhHwplgI5dWyQVlL8kAl69fLBKfFO1ULyJZnghUpIsDACQmTQK5tZdOTw4sPvlw-CgILH9xQB9QgZOM2D_cW4SELQZuI47XI-9sN17KmHH8TH9UODDdkj5EyrpIiVs"/>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">EduFlow</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-low dark:hover:bg-tertiary-container transition-colors active:opacity-80">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">notifications</span>
+</button>
+</div>
+</header>
+<main class="px-margin-mobile py-lg pb-32">
+<!-- Search Section -->
+<section class="mb-xl">
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-md flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline">search</span>
+</div>
+<input class="block w-full h-12 pl-12 pr-md bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md focus:ring-2 focus:ring-primary focus:border-primary transition-all outline-none" placeholder="Search courses, instructors, or skills..." type="text"/>
+</div>
+</section>
+<!-- Categories / Filters -->
+<section class="mb-xl">
+<div class="flex items-center justify-between mb-md">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Top Categories</h2>
+<button class="font-label-md text-label-md text-primary">View All</button>
+</div>
+<div class="flex overflow-x-auto gap-sm pb-xs no-scrollbar">
+<button class="flex items-center gap-xs px-md py-sm bg-primary text-on-primary rounded-full font-label-md text-label-md shrink-0">
+<span class="material-symbols-outlined text-[18px]">psychology</span>
+                    Engineering
+                </button>
+<button class="flex items-center gap-xs px-md py-sm bg-surface-container-high text-on-surface-variant border border-outline-variant rounded-full font-label-md text-label-md shrink-0 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">palette</span>
+                    Arts
+                </button>
+<button class="flex items-center gap-xs px-md py-sm bg-surface-container-high text-on-surface-variant border border-outline-variant rounded-full font-label-md text-label-md shrink-0 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">database</span>
+                    Data Science
+                </button>
+<button class="flex items-center gap-xs px-md py-sm bg-surface-container-high text-on-surface-variant border border-outline-variant rounded-full font-label-md text-label-md shrink-0 hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-[18px]">business_center</span>
+                    Business
+                </button>
+</div>
+</section>
+<!-- Featured Bento Grid -->
+<section class="mb-xl">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-md">Featured Courses</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Large Feature Card -->
+<div class="relative rounded-xl overflow-hidden bg-white border border-outline-variant md:row-span-2 group">
+<div class="h-48 md:h-64 relative">
+<img class="w-full h-full object-cover" data-alt="A clean, minimalist high-key educational workspace with a high-end laptop, a cup of specialty coffee, and professional textbooks on a pristine white desk. The lighting is soft and natural, emphasizing a productive academic mood with subtle professional blue accents in the background. The aesthetic is corporate yet modern and inviting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXcgdM306HiSlQ5-I4-aG1fU93_xav1vu0PhmHTmqTn2uXehmCx9DgQUIQckCmzGcuBzyG9iK8ffhfV4HAgmpVfFtfYCB8uvgw17ULy7SA-6BmGncirQPptoVLFRzINoTxdhn0nIl_IPL2vUsAuBnWJ4gGg_STefOxa8tUpnHRyG0eLQONqz-viywZ-NtLT6oje9mZ5wwkXKjCjFlIP8dIgObbOlyD_YtbLqBH8afAzWPAFR-I9vJHLHDTh6frSM2zt7PdsMfsNz0"/>
+<div class="absolute top-md right-md bg-white/90 backdrop-blur-sm px-sm py-xs rounded-lg flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md text-on-surface">4.9</span>
+</div>
+</div>
+<div class="p-md">
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider">Engineering</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mt-xs">Advanced Systems Architecture</h3>
+<p class="font-body-md text-body-md text-secondary mt-xs">Dr. Julian Vance</p>
+<div class="flex items-center gap-md mt-md pt-md border-t border-outline-variant">
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span class="font-label-md text-label-md">12 Weeks</span>
+</div>
+<div class="flex items-center gap-xs text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">group</span>
+<span class="font-label-md text-label-md">2.4k Students</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Secondary Cards -->
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between group hover:border-primary transition-colors">
+<div>
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm px-sm py-1 bg-surface-container-high rounded-full">Arts</span>
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md">4.7</span>
+</div>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Modernist Design History</h3>
+<p class="font-body-md text-body-md text-secondary mt-xs">Elena Rodriguez</p>
+</div>
+<div class="flex items-center justify-between mt-lg">
+<span class="font-label-md text-label-md text-on-surface-variant">8 Weeks</span>
+<button class="w-8 h-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+<div class="bg-white border border-outline-variant rounded-xl p-md flex flex-col justify-between group hover:border-primary transition-colors">
+<div>
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm px-sm py-1 bg-surface-container-high rounded-full">Data Science</span>
+<div class="flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[16px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md">4.8</span>
+</div>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Neural Networks 101</h3>
+<p class="font-body-md text-body-md text-secondary mt-xs">Prof. Alan Turing Jr.</p>
+</div>
+<div class="flex items-center justify-between mt-lg">
+<span class="font-label-md text-label-md text-on-surface-variant">10 Weeks</span>
+<button class="w-8 h-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- New Arrivals List -->
+<section class="mb-xl">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-md">New Arrivals</h2>
+<div class="space-y-sm">
+<div class="bg-white border border-outline-variant rounded-xl p-md flex items-center gap-md">
+<div class="w-16 h-16 rounded-lg bg-surface-container-high flex-shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A macro shot of architectural blueprints and sleek drafting tools on a minimalist designer's desk. The color scheme is a professional palette of cool grays and deep blues, with sharp focus on the precision of the tools. The mood is highly academic and focused, evoking a sense of engineering mastery." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDo-ANzvb1GfMvZp9p5Vdrcsc2WOgM-Aw08vsyJ_BLY2rT2lZO9I9BBNj3yxdS0wv3DXSA1HBvW7nfkuvEmvWuMg3Lds8kTBZQupvapSEf-peOG_4zY0zBZSzEbL0b-mCu2ghbjaHd0xQ7DGU3nGlP9kodasx7aejKRyvexK5t_kc1inOdabtDE435pb75gazB0DUG8yQ7q8uWDzMjk8e9cMLsIzDKSgDm2759LVKtzAZ6HCiZfmJ1Oek_siF0bO14Un6zGXeyK3eg"/>
+</div>
+<div class="flex-grow">
+<h4 class="font-body-lg font-semibold text-on-surface leading-tight">Sustainable Urban Planning</h4>
+<p class="font-label-md text-secondary">Sarah Jenkins • 6 Weeks</p>
+</div>
+<div class="text-right shrink-0">
+<div class="flex items-center gap-xs justify-end">
+<span class="material-symbols-outlined text-primary text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-sm text-on-surface">4.5</span>
+</div>
+<span class="font-label-sm text-primary">New</span>
+</div>
+</div>
+<div class="bg-white border border-outline-variant rounded-xl p-md flex items-center gap-md">
+<div class="w-16 h-16 rounded-lg bg-surface-container-high flex-shrink-0 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Modern data visualization dashboard displayed on a high-resolution screen in a dimly lit, professional corporate office. Vibrant blue and teal data points glow against a dark interface, representing complex analytics and growth. The overall aesthetic is futuristic, sophisticated, and deeply academic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPSvyXGVLUhemK90CEcZf4SxxgIeMofUz_XeynNXDwqdzkHb8wEDjiErU9Ip0djvFlRsPntMyhu4Uar1ocE4rT29aBFomlfdltLY61XmeQOnJb74iQG0EXJRyH79Y8AS1Mce1_mggYNdeRebcOPTJIi7WZd2oSHln3Qt822-EqlLkJ_9jaUUIaZPvIffiLwme8norSMWumDHo-hOoN72_hGiuA25FAE4-g9Bm8C2CxJL9S6DEVTjVAKWed_RDjjb1IJnZlnT1SyyE"/>
+</div>
+<div class="flex-grow">
+<h4 class="font-body-lg font-semibold text-on-surface leading-tight">Quantitative Finance</h4>
+<p class="font-label-md text-secondary">Markus Weber • 14 Weeks</p>
+</div>
+<div class="text-right shrink-0">
+<div class="flex items-center gap-xs justify-end">
+<span class="material-symbols-outlined text-primary text-[14px]" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-sm text-on-surface">4.9</span>
+</div>
+<span class="font-label-sm text-primary">Best Seller</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar Shell -->
+<nav class="bg-surface dark:bg-on-background fixed bottom-0 w-full z-50 border-t border-outline-variant dark:border-outline">
+<div class="flex justify-around items-center w-full h-16 px-4 pb-safe bg-surface dark:bg-on-background">
+<!-- Dashboard -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-md transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<!-- Courses (Active - Intent Fallback for Discovery) -->
+<a class="flex flex-col items-center justify-center text-primary dark:text-primary-fixed font-semibold hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-md transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">explore</span>
+<span class="font-label-md text-label-md">Courses</span>
+</a>
+<!-- Syllabus -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-md transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="font-label-md text-label-md">Syllabus</span>
+</a>
+<!-- Profile -->
+<a class="flex flex-col items-center justify-center text-secondary dark:text-secondary-fixed-dim hover:bg-surface-container dark:hover:bg-tertiary-container rounded-lg px-md transition-all active:scale-95" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

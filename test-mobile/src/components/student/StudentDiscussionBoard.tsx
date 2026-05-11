@@ -64,11 +64,11 @@ function toPlainHtml(value: string) {
 
 function ToneTag({ label, tone }: { label: string; tone: "red" | "blue" | "green" | "amber" | "purple" }) {
   const toneStyle = {
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    purple: { backgroundColor: theme.purpleSoft, color: "#C4B0FF" },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 
   return (
@@ -166,7 +166,7 @@ function ReactionButton({
       style={{
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? "rgba(0,217,255,0.45)" : theme.border,
+        borderColor: active ? theme.blueLine : theme.border,
         backgroundColor: active ? theme.blueSoft : theme.surface,
         paddingHorizontal: 10,
         paddingVertical: 6,
@@ -236,7 +236,7 @@ function CommentCard({
         </View>
         {comment.canDelete ? (
           <Pressable onPress={onDelete} style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: "#FF6B87" }}>Delete</Text>
+            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.red }}>Delete</Text>
           </Pressable>
         ) : null}
       </View>
@@ -451,8 +451,8 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
             paddingVertical: 12,
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: "700", color: "#FF6B87" }}>Discussion action unavailable</Text>
-          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>{actionError}</Text>
+          <Text style={{ fontSize: 12, fontWeight: "700", color: theme.red }}>Discussion action unavailable</Text>
+          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>{actionError}</Text>
         </View>
       ) : null}
 
@@ -472,7 +472,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
               }}
             >
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Discussion data is partially unavailable</Text>
-              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                 {peekAppError(threadsQuery.error).message}
               </Text>
             </View>
@@ -492,7 +492,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>No discussion threads yet</Text>
-              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                 Teacher discussion prompts will appear here once they are published for this class.
               </Text>
             </View>
@@ -543,7 +543,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                 <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} />
               </View>
 
-              <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "#BDBDBD" }} numberOfLines={3}>
+              <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: theme.subtext }} numberOfLines={3}>
                 {stripRichText(thread.bodyHtml)}
               </Text>
 
@@ -596,7 +596,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
           {threadQuery.error ? (
             <View style={{ paddingHorizontal: 14, paddingVertical: 14 }}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Thread unavailable</Text>
-              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+              <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                 {peekAppError(threadQuery.error).message}
               </Text>
             </View>
@@ -648,7 +648,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                       }}
                     >
                       <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>No replies yet</Text>
-                      <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+                      <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                         Start the discussion with a clear class-related response.
                       </Text>
                     </View>
@@ -759,7 +759,7 @@ export function StudentDiscussionBoard({ classId, registerRefetch }: Props) {
                     </View>
                   </>
                 ) : (
-                  <Text style={{ fontSize: 12, lineHeight: 18, color: "#999999" }}>
+                  <Text style={{ fontSize: 12, lineHeight: 18, color: theme.muted }}>
                     This thread is closed for new student replies.
                   </Text>
                 )}

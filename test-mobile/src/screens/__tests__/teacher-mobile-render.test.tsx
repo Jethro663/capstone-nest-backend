@@ -68,22 +68,26 @@ jest.mock("../../components/teacher/TeacherMobilePrimitives", () => {
 
   return {
     teacherTheme: {
-      red: "#E8294E",
-      green: "#22C97A",
-      amber: "#FBBF24",
-      blue: "#4A8CF7",
-      muted: "#777777",
-      dim: "#444444",
-      text: "#E8E8E8",
-      border: "rgba(255,255,255,0.07)",
-      surface: "#1E1E1E",
-      redSoft: "rgba(232,41,78,0.14)",
-      greenSoft: "rgba(34,201,122,0.14)",
-      amberSoft: "rgba(251,191,36,0.14)",
-      blueSoft: "rgba(74,140,247,0.14)",
-      purpleSoft: "rgba(167,139,250,0.14)",
-      active: "#252525",
-      header: "#1A1A1A",
+      red: "#00288E",
+      green: "#166534",
+      amber: "#B45309",
+      blue: "#1E40AF",
+      muted: "#64748B",
+      dim: "#757684",
+      text: "#191C1E",
+      border: "#E2E8F0",
+      border2: "#C4C5D5",
+      surface: "#FFFFFF",
+      surface2: "#F2F4F6",
+      redSoft: "#DDE1FF",
+      redLine: "rgba(0,40,142,0.22)",
+      greenSoft: "#DCFCE7",
+      greenLine: "rgba(22,101,52,0.22)",
+      amberSoft: "#FEF3C7",
+      blueSoft: "#D0E1FB",
+      purpleSoft: "#DAE2FD",
+      active: "#F2F4F6",
+      header: "#FFFFFF",
     },
     stripRichText: (value?: string) => value || "",
     TeacherScreen: ({ title, subtitle, children }: any) =>
@@ -118,6 +122,12 @@ jest.mock("../../api/services/assessments", () => ({
   },
 }));
 
+jest.mock("../../api/services/performance", () => ({
+  performanceApi: {
+    getClassAtRisk: jest.fn(),
+  },
+}));
+
 jest.mock("../../providers/AuthProvider", () => ({
   useAuth: jest.fn(),
 }));
@@ -126,6 +136,7 @@ jest.mock("../../api/hooks", () => ({
   queryKeys: {
     assessments: (classId: string) => ["assessments", classId],
     announcements: (classId: string) => ["announcements", classId],
+    teacherClassAtRisk: (classId: string) => ["teacher-class-at-risk", classId],
   },
   useTeacherClasses: jest.fn(),
   useAssessmentDetail: jest.fn(),

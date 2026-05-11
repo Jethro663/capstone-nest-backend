@@ -96,10 +96,10 @@ function getAttemptFiles(attempt?: AssessmentAttempt | null): AssessmentFileReco
 
 function resolveToneStyle(tone: Tone) {
   return {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
     purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 }
@@ -204,7 +204,7 @@ function MetricTile({
       <Text style={{ marginTop: 8, fontSize: 24, lineHeight: 28, fontWeight: "900", color: toneStyle.color }}>
         {value}
       </Text>
-      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: "#BDBDBD" }}>{caption}</Text>
+      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: theme.subtext }}>{caption}</Text>
     </View>
   );
 }
@@ -573,8 +573,8 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
@@ -726,7 +726,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
             />
           </View>
 
-          <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 21, color: "#BDBDBD" }}>
+          <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 21, color: theme.subtext }}>
             {instructions || "No instructions were provided for this assessment."}
           </Text>
         </DarkPanel>
@@ -885,7 +885,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
             <ToneTag label={latestState.label} tone={latestState.tone} />
           </View>
 
-          <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+          <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
             {latestState.summary}
           </Text>
 
@@ -969,7 +969,7 @@ export function AssessmentDetailScreen({ route, navigation }: Props) {
                       </View>
 
                       {attempt.score !== undefined && attempt.score !== null ? (
-                        <Text style={{ marginTop: 8, fontSize: 12, color: "#BDBDBD" }}>
+                        <Text style={{ marginTop: 8, fontSize: 12, color: theme.subtext }}>
                           Score: <Text style={{ color: theme.text, fontWeight: "700" }}>{Math.round(attempt.score)}%</Text>
                         </Text>
                       ) : null}

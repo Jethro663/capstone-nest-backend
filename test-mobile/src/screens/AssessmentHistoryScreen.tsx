@@ -28,10 +28,10 @@ function formatDate(value?: string | null) {
 
 function resolveToneStyle(tone: Tone) {
   return {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
     purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 }
@@ -267,6 +267,69 @@ export function AssessmentHistoryScreen({ route, navigation }: Props) {
               row.assessment?.class?.subjectName && row.assessment?.class?.subjectCode
                 ? `${row.assessment.class.subjectName} (${row.assessment.class.subjectCode})`
                 : row.assessment?.class?.subjectName || "Class";
+            const rawScore = typeof row.score === "number" ? Math.round(row.score) : null;
+            const totalPoints = row.assessment?.totalPoints ?? 100;
+            const scoreLabel = rawScore !== null ? `${rawScore}/${totalPoints}` : "Checking";
+
+            if (isSubmitted) {
+              return (
+                <DarkPanel key={row.id}>
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate("AssessmentResults", {
+                        attemptId: row.id,
+                        assessmentId: row.assessmentId,
+                      } as never)
+                    }
+                    style={{
+                      minHeight: 72,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 68,
+                        minHeight: 58,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: theme.greenLine,
+                        backgroundColor: theme.greenSoft,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        paddingHorizontal: 8,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "800", letterSpacing: 0.5, color: theme.green }}>
+                        RESULT
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 18, fontWeight: "900", color: theme.green }}>
+                        {scoreLabel}
+                      </Text>
+                    </View>
+
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>
+                        {subjectLabel}
+                      </Text>
+                      <Text numberOfLines={2} style={{ marginTop: 3, fontSize: 15, lineHeight: 20, fontWeight: "900", color: theme.text }}>
+                        {row.assessment?.title || "Quiz"}
+                      </Text>
+                      <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
+                        Submitted {formatDate(row.submittedAt)} · Attempt #{row.attemptNumber}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: "flex-end", gap: 6 }}>
+                      <ToneTag label="Submitted" tone="green" />
+                      <Text style={{ fontSize: 11, fontWeight: "800", color: theme.blue }}>View Results</Text>
+                      <MaterialCommunityIcons name="chevron-right" size={18} color={theme.dim} />
+                    </View>
+                  </Pressable>
+                </DarkPanel>
+              );
+            }
 
             return (
               <DarkPanel key={row.id}>

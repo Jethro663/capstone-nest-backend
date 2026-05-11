@@ -15,10 +15,10 @@ type Tone = "blue" | "green" | "amber" | "red" | "purple";
 
 function resolveToneStyle(tone: Tone) {
   return {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
     purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 }
@@ -156,7 +156,7 @@ function MetricTile({
       <Text style={{ marginTop: 8, fontSize: 24, lineHeight: 28, fontWeight: "900", color: toneStyle.color }}>
         {value}
       </Text>
-      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: "#BDBDBD" }}>{caption}</Text>
+      <Text style={{ marginTop: 6, fontSize: 11, lineHeight: 16, color: theme.subtext }}>{caption}</Text>
     </View>
   );
 }
@@ -195,7 +195,7 @@ function FileRow({
             backgroundColor: theme.blueSoft,
           }}
         >
-          <MaterialCommunityIcons name="paperclip" size={15} color="#6AABFF" />
+          <MaterialCommunityIcons name="paperclip" size={15} color={theme.blue} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
@@ -301,8 +301,8 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
@@ -356,7 +356,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
                 Awaiting Teacher Review
               </Text>
-              <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+              <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
                 Your submission is recorded. Results and teacher feedback will appear here once they are returned.
               </Text>
               <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -432,7 +432,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
                 {result.assessment?.title || "Assessment"}
               </Text>
-              <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+              <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
                 Review your score, teacher feedback, and the files or answers attached to this attempt.
               </Text>
 
@@ -458,7 +458,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               </View>
 
               {result.teacherFeedback ? (
-                <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 20, color: "#BDBDBD" }}>
+                <Text style={{ marginTop: 14, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
                   Teacher feedback: <Text style={{ color: theme.text }}>{result.teacherFeedback}</Text>
                 </Text>
               ) : null}
@@ -552,7 +552,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                     <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, fontWeight: "800", color: theme.text }}>
                       {stripRichText(response.question?.content || "Question content unavailable")}
                     </Text>
-                    <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: "#BDBDBD" }}>
+                    <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
                       Your answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
                     </Text>
                     {!response.isCorrect && correctAnswer ? (

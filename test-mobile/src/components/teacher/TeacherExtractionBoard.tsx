@@ -17,6 +17,7 @@ import {
   TeacherEmpty,
   TeacherPanel,
   TeacherSearch,
+  teacherTheme,
   stripRichText,
 } from "./TeacherMobilePrimitives";
 
@@ -93,6 +94,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
   const [gradeLevel, setGradeLevel] = useState<LibraryGradeLevel | undefined>(() =>
     normalizeLibraryGradeLevel(classItem?.subjectGradeLevel ?? classItem?.section?.gradeLevel),
   );
+  const [quarters, setQuarters] = useState(["Quarter 1"]);
   const [selectedExtractionId, setSelectedExtractionId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -222,6 +224,48 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
         ))}
       </View>
 
+      <TeacherPanel
+        title="Quarters management"
+        subtitle="Organize extracted lessons and assessment drafts by grading period before applying them to the class."
+        action={
+          <TeacherActionButton
+            label="Create Quarter"
+            icon="plus"
+            tone="green"
+            disabled={quarters.length >= 4}
+            onPress={() => setQuarters((current) => (current.length >= 4 ? current : [...current, `Quarter ${current.length + 1}`]))}
+          />
+        }
+      >
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+          {quarters.map((quarter, index) => (
+            <View
+              key={quarter}
+              style={{
+                minHeight: 48,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: teacherTheme.border,
+                backgroundColor: teacherTheme.surface2,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: "800", color: teacherTheme.text }}>{quarter}</Text>
+                <Text style={{ marginTop: 2, fontSize: 11, color: teacherTheme.muted }}>
+                  {index === 0 ? "Default extraction target" : "Ready for extraction grouping"}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, fontWeight: "800", color: teacherTheme.blue }}>Q{index + 1}</Text>
+            </View>
+          ))}
+        </View>
+      </TeacherPanel>
+
       <TeacherPanel title="Start AI Extraction" subtitle="Upload a PDF and convert it into structured lesson and assessment drafts.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <Text style={{ fontSize: 10, fontWeight: "700", color: "#8C8C8C", textTransform: "uppercase", letterSpacing: 0.7 }}>
@@ -319,7 +363,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
       <TeacherPanel title={`Extraction History (${filteredExtractions.length})`} subtitle="Open an extraction to inspect section output and apply it into this class.">
         {filteredExtractions.length ? (
           filteredExtractions.map((extraction) => (
-            <View key={extraction.id} style={{ borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)", paddingHorizontal: 14, paddingVertical: 11 }}>
+            <View key={extraction.id} style={{ borderTopWidth: 1, borderTopColor: teacherTheme.border, paddingHorizontal: 14, paddingVertical: 11 }}>
               <Text style={{ fontSize: 13, fontWeight: "700", color: "#ECECEC" }}>
                 {extraction.structuredContent?.title || extraction.originalName || "PDF Extraction"}
               </Text>
@@ -393,8 +437,8 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
                   marginTop: 10,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.08)",
-                  backgroundColor: "rgba(255,255,255,0.03)",
+                  borderColor: teacherTheme.border,
+                  backgroundColor: teacherTheme.surface2,
                   paddingHorizontal: 11,
                   paddingVertical: 9,
                 }}

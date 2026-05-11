@@ -10,6 +10,7 @@ import { peekAppError, toAppError } from "../api/http";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { buildProfileFullName } from "./screen-flow";
+import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -20,30 +21,7 @@ type ProfileStatusItem = {
 
 const assetBaseUrl = API_BASE_URL.replace(/\/api$/, "");
 
-const theme = {
-  pageBg: "#071225",
-  bg: "#0A1630",
-  topbar: "#0B1833",
-  surface: "#0F2438",
-  surface2: "#132D45",
-  border: "rgba(0,217,255,0.18)",
-  border2: "rgba(0,217,255,0.28)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  dim: "#426478",
-  red: "#E8294E",
-  redSoft: "rgba(232,41,78,0.12)",
-  redLine: "rgba(232,41,78,0.2)",
-  redText: "#FF8A9B",
-  blue: "#00D9FF",
-  blueLine: "rgba(0,217,255,0.25)",
-  green: "#22C97A",
-  greenSoft: "rgba(34,201,122,0.12)",
-  greenLine: "rgba(34,201,122,0.2)",
-  purple: "#A78BFA",
-  amber: "#FBBF24",
-  amberSoft: "rgba(251,191,36,0.12)",
-} as const;
+const theme = studentDarkTheme;
 
 function hasValue(value?: string | null) {
   return typeof value === "string" ? value.trim().length > 0 : false;
@@ -119,7 +97,7 @@ function SectionHeader({
             paddingVertical: 3,
           }}
         >
-          <Text style={{ color: "#FF6B87", fontSize: 10, fontWeight: "600" }}>{badge}</Text>
+          <Text style={{ color: theme.red, fontSize: 10, fontWeight: "600" }}>{badge}</Text>
         </View>
       ) : null}
     </View>
@@ -269,6 +247,7 @@ function QuickLink({
         borderWidth: 1,
         flex: 1,
         flexDirection: "row",
+        minHeight: 44,
         paddingHorizontal: 12,
         paddingVertical: 11,
       }}
@@ -277,10 +256,10 @@ function QuickLink({
       <Text
         numberOfLines={2}
         style={{
-          color: "rgba(255,255,255,0.55)",
+          color: theme.text,
           flex: 1,
           fontSize: 12,
-          fontWeight: "500",
+          fontWeight: "700",
           marginLeft: 8,
         }}
       >
@@ -440,9 +419,9 @@ export function ProfileScreen(props: Props) {
             backgroundColor: theme.topbar,
             borderBottomColor: theme.border,
             borderBottomWidth: 1,
-            paddingBottom: 12,
-            paddingHorizontal: 16,
-            paddingTop: 14,
+            paddingBottom: 16,
+            paddingHorizontal: 20,
+            paddingTop: 30,
           }}
         >
           <View style={{ alignItems: "center", flexDirection: "row", justifyContent: "space-between" }}>
@@ -467,28 +446,32 @@ export function ProfileScreen(props: Props) {
                 onPress={() => props.navigation.navigate("Announcements")}
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: theme.active,
+                  borderColor: theme.border,
+                  borderWidth: 1,
                   borderRadius: 999,
-                  height: 30,
+                  height: 44,
                   justifyContent: "center",
-                  width: 30,
+                  width: 44,
                 }}
               >
-                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="bell-outline" size={15} />
+                <MaterialCommunityIcons color={theme.text} name="bell-outline" size={18} />
               </Pressable>
               <Pressable
                 onPress={() => void profileQuery.refetch()}
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: theme.active,
+                  borderColor: theme.border,
+                  borderWidth: 1,
                   borderRadius: 999,
-                  height: 30,
+                  height: 44,
                   justifyContent: "center",
                   marginLeft: 9,
-                  width: 30,
+                  width: 44,
                 }}
               >
-                <MaterialCommunityIcons color="rgba(255,255,255,0.5)" name="cog-outline" size={15} />
+                <MaterialCommunityIcons color={theme.text} name="cog-outline" size={18} />
               </Pressable>
             </View>
           </View>
@@ -500,15 +483,15 @@ export function ProfileScreen(props: Props) {
             borderBottomColor: theme.border,
             borderBottomWidth: 1,
             overflow: "hidden",
-            paddingBottom: 16,
-            paddingHorizontal: 16,
-            paddingTop: 20,
+            paddingBottom: 22,
+            paddingHorizontal: 20,
+            paddingTop: 28,
             position: "relative",
           }}
         >
           <View
             style={{
-              backgroundColor: "rgba(0,217,255,0.06)",
+              backgroundColor: theme.blueSoft,
               borderRadius: 999,
               height: 130,
               position: "absolute",
@@ -518,19 +501,19 @@ export function ProfileScreen(props: Props) {
             }}
           />
           <View style={{ alignItems: "flex-start", flexDirection: "row" }}>
-            <View style={{ marginRight: 14, position: "relative" }}>
+            <View style={{ marginRight: 20, paddingBottom: 10, position: "relative" }}>
               <Pressable
                 onPress={() => void handleAvatarPick()}
                 style={{
                   alignItems: "center",
-                  backgroundColor: theme.surface2,
-                  borderColor: "rgba(255,255,255,0.15)",
+                  backgroundColor: theme.red,
+                  borderColor: theme.border,
                   borderRadius: 999,
                   borderWidth: 2,
-                  height: 60,
+                  height: 72,
                   justifyContent: "center",
                   overflow: "hidden",
-                  width: 60,
+                  width: 72,
                 }}
               >
                 {avatarUri ? (
@@ -543,19 +526,19 @@ export function ProfileScreen(props: Props) {
                 onPress={() => void handleAvatarPick()}
                 style={{
                   alignItems: "center",
-                  backgroundColor: theme.surface2,
-                  borderColor: theme.border2,
+                  backgroundColor: theme.active,
+                  borderColor: theme.border,
                   borderRadius: 999,
                   borderWidth: 1.5,
-                  bottom: -2,
-                  height: 20,
+                  bottom: -4,
+                  height: 44,
                   justifyContent: "center",
                   position: "absolute",
-                  right: -2,
-                  width: 20,
+                  right: -8,
+                  width: 44,
                 }}
               >
-                <MaterialCommunityIcons color="rgba(255,255,255,0.6)" name="pencil-outline" size={10} />
+                <MaterialCommunityIcons color={theme.text} name="pencil-outline" size={16} />
               </Pressable>
             </View>
 
@@ -596,24 +579,26 @@ export function ProfileScreen(props: Props) {
               onPress={() => void handleAvatarPick()}
               style={{
                 alignItems: "center",
-                backgroundColor: "rgba(255,255,255,0.07)",
-                borderColor: theme.border2,
+                backgroundColor: theme.active,
+                borderColor: theme.border,
                 borderRadius: 8,
                 borderWidth: 1,
                 flexDirection: "row",
-                paddingHorizontal: 11,
-                paddingVertical: 6,
+                minHeight: 44,
+                paddingHorizontal: 13,
+                paddingVertical: 9,
               }}
             >
-              <MaterialCommunityIcons color="rgba(255,255,255,0.6)" name="image-outline" size={12} />
+              <MaterialCommunityIcons color={theme.text} name="image-outline" size={14} />
               <Text
                 style={{
-                  color: "rgba(255,255,255,0.6)",
+                  color: theme.text,
                   fontSize: 11,
+                  fontWeight: "700",
                   marginLeft: 5,
                 }}
               >
-                Photo
+                Profile Photo
               </Text>
             </Pressable>
           </View>
@@ -623,7 +608,7 @@ export function ProfileScreen(props: Props) {
           <View
             style={{
               alignItems: "flex-start",
-              backgroundColor: "rgba(232,41,78,0.08)",
+              backgroundColor: theme.redSoft,
               borderColor: theme.redLine,
               borderRadius: 10,
               borderWidth: 1,
@@ -634,7 +619,7 @@ export function ProfileScreen(props: Props) {
               paddingVertical: 10,
             }}
           >
-            <MaterialCommunityIcons color="#FF6B87" name="alert-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
+            <MaterialCommunityIcons color={theme.red} name="alert-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
             <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
               {peekAppError(profileQuery.error).message}
             </Text>
@@ -644,7 +629,7 @@ export function ProfileScreen(props: Props) {
         <View
           style={{
             alignItems: "flex-start",
-            backgroundColor: requiredCount === 0 ? theme.greenSoft : "rgba(232,41,78,0.08)",
+            backgroundColor: requiredCount === 0 ? theme.greenSoft : theme.redSoft,
             borderColor: requiredCount === 0 ? theme.greenLine : theme.redLine,
             borderRadius: 10,
             borderWidth: 1,
@@ -656,12 +641,12 @@ export function ProfileScreen(props: Props) {
           }}
         >
           <MaterialCommunityIcons
-            color={requiredCount === 0 ? theme.green : "#FF6B87"}
+            color={requiredCount === 0 ? theme.green : theme.red}
             name={requiredCount === 0 ? "check-circle-outline" : "alert-circle-outline"}
             size={15}
             style={{ marginRight: 9, marginTop: 1 }}
           />
-          <Text style={{ color: requiredCount === 0 ? "rgba(180,255,210,0.92)" : theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
+          <Text style={{ color: requiredCount === 0 ? theme.green : theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>
             <Text style={{ fontWeight: "600" }}>{completionHeadline} </Text>
             {completionSubcopy}
           </Text>
@@ -671,7 +656,7 @@ export function ProfileScreen(props: Props) {
           <View
             style={{
               alignItems: "flex-start",
-              backgroundColor: "rgba(232,41,78,0.08)",
+              backgroundColor: theme.redSoft,
               borderColor: theme.redLine,
               borderRadius: 10,
               borderWidth: 1,
@@ -682,7 +667,7 @@ export function ProfileScreen(props: Props) {
               paddingVertical: 10,
             }}
           >
-            <MaterialCommunityIcons color="#FF6B87" name="close-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
+            <MaterialCommunityIcons color={theme.red} name="close-circle-outline" size={15} style={{ marginRight: 9, marginTop: 1 }} />
             <Text style={{ color: theme.redText, flex: 1, fontSize: 11, lineHeight: 16 }}>{error}</Text>
           </View>
         ) : null}
@@ -902,7 +887,7 @@ export function ProfileScreen(props: Props) {
                 <View
                   style={{
                     alignItems: "center",
-                    backgroundColor: complete ? "rgba(34,201,122,0.1)" : "rgba(232,41,78,0.1)",
+                    backgroundColor: complete ? theme.greenSoft : theme.redSoft,
                     borderColor: complete ? theme.green : theme.red,
                     borderRadius: 999,
                     borderWidth: 1.5,
@@ -915,9 +900,10 @@ export function ProfileScreen(props: Props) {
                 </View>
                 <Text
                   style={{
-                    color: complete ? "rgba(255,255,255,0.55)" : "rgba(255,160,160,0.82)",
+                    color: complete ? theme.text : theme.redText,
                     flex: 1,
                     fontSize: 12,
+                    fontWeight: "600",
                     marginLeft: 10,
                   }}
                 >
@@ -994,8 +980,8 @@ export function ProfileScreen(props: Props) {
               <View
                 style={{
                   alignItems: "center",
-                  backgroundColor: "rgba(255,255,255,0.05)",
-                  borderColor: theme.border2,
+                  backgroundColor: theme.active,
+                  borderColor: theme.border,
                   borderRadius: 8,
                   borderWidth: 1,
                   flexDirection: "row",
@@ -1006,14 +992,14 @@ export function ProfileScreen(props: Props) {
               >
                 <Text
                   style={{
-                    color: theme.dim,
+                    color: theme.text,
                     fontSize: row.label === "Current Password" ? 10 : 12,
                     letterSpacing: row.label === "Current Password" ? 3 : 0,
                   }}
                 >
                   {row.value}
                 </Text>
-                <MaterialCommunityIcons color={theme.dim} name="eye-outline" size={13} />
+                <MaterialCommunityIcons color={theme.text} name="eye-outline" size={13} />
               </View>
 
               {row.label === "New Password" ? (
@@ -1023,7 +1009,7 @@ export function ProfileScreen(props: Props) {
                       key={rule}
                       style={{
                         alignItems: "center",
-                        backgroundColor: "rgba(255,255,255,0.04)",
+                        backgroundColor: theme.active,
                         borderColor: theme.border,
                         borderRadius: 4,
                         borderWidth: 1,
@@ -1034,8 +1020,8 @@ export function ProfileScreen(props: Props) {
                         paddingVertical: 3,
                       }}
                     >
-                      <Text style={{ color: theme.dim, fontSize: 8, marginRight: 4 }}>o</Text>
-                      <Text style={{ color: theme.dim, fontSize: 9 }}>{rule}</Text>
+                      <Text style={{ color: theme.muted, fontSize: 8, marginRight: 4 }}>o</Text>
+                      <Text style={{ color: theme.muted, fontSize: 9 }}>{rule}</Text>
                     </View>
                   ))}
                 </View>

@@ -3,6 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../ui/primitives";
 import { studentDarkTheme as theme, stripRichText } from "../../theme/studentDark";
+import { shadow } from "../../theme/tokens";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -39,8 +40,8 @@ export function TeacherScreen({
         onRefresh ? <Refreshable refreshing={Boolean(refreshing)} onRefresh={onRefresh} /> : undefined
       }
     >
-      <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-        <View style={{ paddingHorizontal: 16, paddingTop: 44, paddingBottom: 16 }}>
+      <View style={{ backgroundColor: theme.topbar, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 44, paddingBottom: 18 }}>
           {canGoBack ? (
             <Pressable
               onPress={onBackPress}
@@ -49,12 +50,13 @@ export function TeacherScreen({
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 6,
-                borderRadius: 10,
+                minHeight: 44,
+                borderRadius: 8,
                 borderWidth: 1,
                 borderColor: theme.border,
                 backgroundColor: theme.active,
                 paddingHorizontal: 10,
-                paddingVertical: 7,
+                paddingVertical: 9,
                 marginBottom: 10,
               }}
             >
@@ -66,9 +68,9 @@ export function TeacherScreen({
             {icon ? (
               <View
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
+                  width: 44,
+                  height: 44,
+                  borderRadius: 8,
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: theme.redSoft,
@@ -81,7 +83,7 @@ export function TeacherScreen({
               <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
                 Teacher workspace
               </Text>
-              <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "800", color: theme.text }}>{title}</Text>
+              <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "900", color: theme.text }}>{title}</Text>
             </View>
             {rightAction || onRefresh ? (
               <View style={{ alignItems: "flex-end", gap: 8 }}>
@@ -95,12 +97,13 @@ export function TeacherScreen({
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 6,
-                      borderRadius: 10,
+                      minHeight: 44,
+                      borderRadius: 8,
                       borderWidth: 1,
                       borderColor: theme.border,
                       backgroundColor: theme.active,
                       paddingHorizontal: 10,
-                      paddingVertical: 7,
+                      paddingVertical: 9,
                     }}
                   >
                     <MaterialCommunityIcons
@@ -117,7 +120,7 @@ export function TeacherScreen({
             ) : null}
           </View>
           {subtitle ? (
-            <Text style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>{subtitle}</Text>
+            <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: theme.subtext }}>{subtitle}</Text>
           ) : null}
         </View>
       </View>
@@ -139,13 +142,14 @@ export function TeacherPanel({
   return (
     <View
       style={{
-        marginHorizontal: 16,
-        marginTop: 12,
-        borderRadius: 14,
+        marginHorizontal: 20,
+        marginTop: 14,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: theme.border,
         backgroundColor: theme.surface,
         overflow: "hidden",
+        ...shadow.card,
       }}
     >
       {title || subtitle || action ? (
@@ -154,7 +158,7 @@ export function TeacherPanel({
             <View style={{ flex: 1 }}>
               {title ? <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>{title}</Text> : null}
               {subtitle ? (
-                <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#9D9D9D" }}>{subtitle}</Text>
+                <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.subtext }}>{subtitle}</Text>
               ) : null}
             </View>
             {action}
@@ -188,18 +192,19 @@ export function TeacherStats({
   };
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingTop: 12 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingTop: 12 }}>
       {items.map((item) => (
         <View
           key={item.label}
           style={{
-            minWidth: 116,
-            borderRadius: 12,
+            minWidth: 128,
+            borderRadius: 16,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surface,
             paddingHorizontal: 12,
             paddingVertical: 11,
+            ...shadow.card,
           }}
         >
           <Text style={{ fontSize: 10, fontWeight: "600", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>
@@ -228,11 +233,12 @@ export function TeacherChip({
       onPress={onPress}
       style={{
         borderRadius: 999,
+        minHeight: 44,
         borderWidth: 1,
-        borderColor: active ? "rgba(232,41,78,0.55)" : theme.border,
+        borderColor: active ? theme.redLine : theme.border,
         backgroundColor: active ? theme.redSoft : theme.surface,
         paddingHorizontal: 11,
-        paddingVertical: 7,
+        paddingVertical: 10,
       }}
     >
       <Text style={{ fontSize: 11, fontWeight: "700", color: active ? theme.red : theme.muted }}>{label}</Text>
@@ -284,7 +290,10 @@ export function TeacherActionButton({
       onPress={onPress}
       style={{
         opacity: disabled ? 0.45 : 1,
-        borderRadius: 10,
+        minHeight: 44,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: color,
         backgroundColor: background,
         paddingHorizontal: 12,
         paddingVertical: 10,
@@ -312,8 +321,8 @@ export function TeacherEmpty({
     <View style={{ alignItems: "center", paddingHorizontal: 18, paddingVertical: 24 }}>
       <View
         style={{
-          width: 42,
-          height: 42,
+          width: 44,
+          height: 44,
           borderRadius: 999,
           alignItems: "center",
           justifyContent: "center",
@@ -323,7 +332,7 @@ export function TeacherEmpty({
         <MaterialCommunityIcons name={icon} size={20} color={theme.red} />
       </View>
       <Text style={{ marginTop: 12, fontSize: 14, fontWeight: "800", color: theme.text }}>{title}</Text>
-      <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, lineHeight: 18, color: "#999999" }}>
+      <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, lineHeight: 18, color: theme.subtext }}>
         {subtitle}
       </Text>
     </View>
@@ -347,7 +356,8 @@ export function TeacherRow({
       onPress={onPress}
       style={{
         paddingHorizontal: 14,
-        paddingVertical: 13,
+        minHeight: 64,
+        paddingVertical: 14,
         borderTopWidth: 1,
         borderTopColor: theme.border,
         flexDirection: "row",
@@ -357,7 +367,7 @@ export function TeacherRow({
     >
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>{title}</Text>
-        {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: "#9D9D9D" }}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: theme.subtext }}>{subtitle}</Text> : null}
       </View>
       {right}
       {onPress ? <MaterialCommunityIcons name="chevron-right" size={16} color={theme.dim} /> : null}
@@ -377,9 +387,10 @@ export function TeacherSearch({
   return (
     <View
       style={{
-        marginHorizontal: 16,
+        marginHorizontal: 20,
         marginTop: 12,
-        borderRadius: 12,
+        minHeight: 48,
+        borderRadius: 8,
         borderWidth: 1,
         borderColor: theme.border,
         backgroundColor: theme.surface,

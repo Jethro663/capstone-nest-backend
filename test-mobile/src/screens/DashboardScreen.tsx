@@ -24,6 +24,8 @@ import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import type { Lesson, LessonCompletion } from "../types/lesson";
 import type { SchoolEvent } from "../types/school-event";
+import { studentDarkTheme } from "../theme/studentDark";
+import { shadow } from "../theme/tokens";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -87,25 +89,7 @@ type TimelineItem = {
   sortValue: number;
 };
 
-const theme = {
-  bg: "#0A1630",
-  pageBg: "#071225",
-  topbar: "#0B1833",
-  surface: "#0F2438",
-  active: "#132D45",
-  border: "rgba(0,217,255,0.18)",
-  text: "#E0F7FF",
-  muted: "#7AA3B8",
-  dim: "#426478",
-  subtext: "rgba(224,247,255,0.56)",
-  deepBlue: "#113456",
-  deepNavy: "#0A1630",
-  red: "#E8294E",
-  blue: "#00D9FF",
-  green: "#22C97A",
-  purple: "#A78BFA",
-  amber: "#FBBF24",
-} as const;
+const theme = studentDarkTheme;
 
 const DAY_TO_INDEX: Record<string, number> = {
   SU: 0,
@@ -713,7 +697,7 @@ function SectionLabel({
         {title}
       </Text>
       {actionLabel ? (
-        <Pressable onPress={onPressAction}>
+        <Pressable onPress={onPressAction} style={{ minHeight: 44, justifyContent: "center" }}>
           <Text style={{ color: actionColor, fontSize: 10, fontWeight: "600" }}>{actionLabel}</Text>
         </Pressable>
       ) : null}
@@ -731,6 +715,7 @@ function DarkPanel({ children }: { children: React.ReactNode }) {
         borderWidth: 1,
         borderColor: theme.border,
         overflow: "hidden",
+        ...shadow.card,
       }}
     >
       {children}
@@ -755,6 +740,7 @@ function DashboardNotice({
         borderColor: theme.border,
         backgroundColor: theme.surface,
         padding: 14,
+        ...shadow.card,
       }}
     >
       <Text style={{ color: theme.text, fontSize: 13, fontWeight: "700" }}>{title}</Text>
@@ -1080,23 +1066,25 @@ export function DashboardScreen({ navigation }: Props) {
                 accessibilityLabel="Open announcements"
                 onPress={handleOpenAnnouncements}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
-                  backgroundColor: "rgba(255,255,255,0.07)",
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <MaterialCommunityIcons name="bell-outline" size={15} color="rgba(255,255,255,0.5)" />
+                <MaterialCommunityIcons name="bell-outline" size={18} color={theme.text} />
               </Pressable>
 
               <Pressable
                 accessibilityLabel="Open profile"
                 onPress={handleOpenProfile}
                 style={{
-                  width: 30,
-                  height: 30,
+                  width: 44,
+                  height: 44,
                   borderRadius: 999,
                   backgroundColor: theme.red,
                   alignItems: "center",
@@ -1120,10 +1108,11 @@ export function DashboardScreen({ navigation }: Props) {
               marginHorizontal: 16,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: "rgba(0,217,255,0.2)",
+              borderColor: theme.border,
               padding: 16,
               overflow: "hidden",
               backgroundColor: theme.surface,
+              ...shadow.card,
             }}
           >
             <View
@@ -1134,7 +1123,7 @@ export function DashboardScreen({ navigation }: Props) {
                 width: 120,
                 height: 120,
                 borderRadius: 999,
-                backgroundColor: "rgba(0,217,255,0.08)",
+                backgroundColor: theme.blueSoft,
               }}
             />
             <View
@@ -1145,30 +1134,14 @@ export function DashboardScreen({ navigation }: Props) {
                 width: 80,
                 height: 80,
                 borderRadius: 999,
-                backgroundColor: "rgba(232,41,78,0.07)",
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: theme.deepBlue,
-                opacity: 0.52,
-              }}
-            />
-            <View
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundColor: theme.deepNavy,
-                opacity: 0.82,
+                backgroundColor: theme.redSoft,
               }}
             />
 
             <View style={{ position: "relative" }}>
-              <Text style={{ color: theme.subtext, fontSize: 11, marginBottom: 3 }}>{resolveGreeting()}</Text>
-              <Text style={{ color: theme.text, fontSize: 20, fontWeight: "700", marginBottom: 4 }}>Your Learning Hub</Text>
-              <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginBottom: 14 }}>
+              <Text style={{ color: theme.red, fontSize: 11, marginBottom: 3, fontWeight: "900", letterSpacing: 1.2, textTransform: "uppercase" }}>Today</Text>
+              <Text style={{ color: theme.text, fontSize: 22, fontWeight: "900", marginBottom: 4 }}>{resolveGreeting()}, {firstName}</Text>
+              <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 14 }}>
                 {heroTaskCount === 0
                   ? "You are all caught up today"
                   : `You have ${heroTaskCount} pending ${heroTaskCount === 1 ? "task" : "tasks"} today`}
@@ -1178,8 +1151,8 @@ export function DashboardScreen({ navigation }: Props) {
                 style={{
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.08)",
-                  backgroundColor: "rgba(255,255,255,0.06)",
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
                   paddingHorizontal: 13,
                   paddingVertical: 11,
                   marginBottom: 13,
@@ -1194,10 +1167,23 @@ export function DashboardScreen({ navigation }: Props) {
                     marginBottom: 4,
                   }}
                 >
-                  Profile & Learning Snapshot
+                  Weekly Progress
                 </Text>
-                <Text style={{ color: theme.text, fontSize: 18, fontWeight: "700" }}>{heroSummaryText}</Text>
-                <Text style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, lineHeight: 16, marginTop: 3 }}>
+                <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
+                  <Text style={{ color: theme.text, fontSize: 18, fontWeight: "800", flex: 1, paddingRight: 10 }}>{heroSummaryText}</Text>
+                  <Text style={{ color: theme.blue, fontSize: 22, fontWeight: "900" }}>{averageScore}%</Text>
+                </View>
+                <View style={{ height: 8, borderRadius: 999, backgroundColor: theme.channel, overflow: "hidden", marginTop: 12 }}>
+                  <View
+                    style={{
+                      height: "100%",
+                      width: `${Math.max(0, Math.min(100, averageScore))}%`,
+                      borderRadius: 999,
+                      backgroundColor: theme.blue,
+                    }}
+                  />
+                </View>
+                <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }}>
                   {hasPendingAssessmentSync && pendingAssessments.length === 0
                     ? "We are syncing your latest assessment submissions before finalizing what still needs attention."
                     : "Keep your streak moving by finishing the next lesson and clearing due work."}
@@ -1212,6 +1198,8 @@ export function DashboardScreen({ navigation }: Props) {
                     borderRadius: 9,
                     backgroundColor: theme.red,
                     alignItems: "center",
+                    minHeight: 44,
+                    justifyContent: "center",
                     paddingVertical: 10,
                   }}
                 >
@@ -1223,9 +1211,11 @@ export function DashboardScreen({ navigation }: Props) {
                     flex: 1,
                     borderRadius: 9,
                     borderWidth: 1,
-                    borderColor: "rgba(255,255,255,0.1)",
-                    backgroundColor: "rgba(255,255,255,0.08)",
+                    borderColor: theme.border,
+                    backgroundColor: theme.active,
                     alignItems: "center",
+                    minHeight: 44,
+                    justifyContent: "center",
                     paddingVertical: 10,
                   }}
                 >
@@ -1273,6 +1263,9 @@ export function DashboardScreen({ navigation }: Props) {
                   paddingVertical: 12,
                   paddingHorizontal: 10,
                   alignItems: "center",
+                  minHeight: 84,
+                  justifyContent: "center",
+                  ...shadow.card,
                 }}
               >
                 <MaterialCommunityIcons name={item.icon} size={16} color={item.color} style={{ opacity: 0.8 }} />
@@ -1312,6 +1305,7 @@ export function DashboardScreen({ navigation }: Props) {
                       gap: 12,
                       paddingHorizontal: 14,
                       paddingVertical: 12,
+                      minHeight: 64,
                       borderBottomWidth: index === todaySchedule.length - 1 ? 0 : 1,
                       borderBottomColor: theme.border,
                     }}
@@ -1327,7 +1321,7 @@ export function DashboardScreen({ navigation }: Props) {
                       style={{
                         width: 1,
                         height: 32,
-                        backgroundColor: "rgba(0,217,255,0.25)",
+                        backgroundColor: theme.blueLine,
                         flexShrink: 0,
                       }}
                     />
@@ -1342,12 +1336,12 @@ export function DashboardScreen({ navigation }: Props) {
                     <View
                       style={{
                         borderRadius: 4,
-                        backgroundColor: "rgba(0,217,255,0.14)",
+                        backgroundColor: theme.blueSoft,
                         paddingHorizontal: 8,
                         paddingVertical: 2,
                       }}
                     >
-                      <Text style={{ color: "#6AABFF", fontSize: 10, fontWeight: "500" }}>{active ? "Now" : "Today"}</Text>
+                      <Text style={{ color: theme.blue, fontSize: 10, fontWeight: "700" }}>{active ? "Now" : "Today"}</Text>
                     </View>
                   </Pressable>
                 );
@@ -1400,6 +1394,8 @@ export function DashboardScreen({ navigation }: Props) {
                       flexDirection: "row",
                       alignItems: "center",
                       gap: 12,
+                      minHeight: 64,
+                      ...shadow.card,
                     }}
                   >
                     <View
@@ -1409,6 +1405,7 @@ export function DashboardScreen({ navigation }: Props) {
                         borderRadius: 6,
                         borderWidth: 1.5,
                         borderColor: assessment.dueDate ? theme.amber : theme.dim,
+                        backgroundColor: assessment.dueDate ? theme.amberSoft : "transparent",
                       }}
                     />
                     <View style={{ flex: 1, minWidth: 0 }}>
@@ -1457,14 +1454,16 @@ export function DashboardScreen({ navigation }: Props) {
                         flexDirection: "row",
                         alignItems: "center",
                         gap: 12,
+                        minHeight: 64,
+                        ...shadow.card,
                       }}
                     >
                       <View
                         style={{
-                          width: 28,
-                          height: 28,
+                        width: 28,
+                        height: 28,
                           borderRadius: 7,
-                          backgroundColor: "rgba(232,41,78,0.12)",
+                          backgroundColor: theme.redSoft,
                           alignItems: "center",
                           justifyContent: "center",
                         }}
@@ -1484,7 +1483,7 @@ export function DashboardScreen({ navigation }: Props) {
                           borderRadius: 6,
                           paddingHorizontal: 10,
                           paddingVertical: 4,
-                          backgroundColor: completed ? "rgba(34,201,122,0.1)" : "rgba(0,217,255,0.1)",
+                          backgroundColor: completed ? theme.greenSoft : theme.blueSoft,
                         }}
                       >
                         <Text
@@ -1532,10 +1531,10 @@ export function DashboardScreen({ navigation }: Props) {
                     setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))
                   }
                   style={{
-                    width: 24,
-                    height: 24,
+                    width: 44,
+                    height: 44,
                     borderRadius: 6,
-                    backgroundColor: "rgba(255,255,255,0.07)",
+                    backgroundColor: theme.active,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -1547,10 +1546,10 @@ export function DashboardScreen({ navigation }: Props) {
                     setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))
                   }
                   style={{
-                    width: 24,
-                    height: 24,
+                    width: 44,
+                    height: 44,
                     borderRadius: 6,
-                    backgroundColor: "rgba(255,255,255,0.07)",
+                    backgroundColor: theme.active,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -1606,7 +1605,7 @@ export function DashboardScreen({ navigation }: Props) {
                             color: cell.isToday
                               ? "#FFFFFF"
                               : cell.isClassDay
-                                ? "rgba(0,217,255,0.8)"
+                                ? theme.blue
                                 : cell.inMonth
                                   ? cell.hasEvent
                                     ? theme.text
@@ -1697,6 +1696,8 @@ export function DashboardScreen({ navigation }: Props) {
               flexDirection: "row",
               alignItems: "center",
               gap: 12,
+              minHeight: 64,
+              ...shadow.card,
             }}
           >
             <View
@@ -1704,7 +1705,7 @@ export function DashboardScreen({ navigation }: Props) {
                 width: 36,
                 height: 36,
                 borderRadius: 10,
-                backgroundColor: "rgba(167,139,250,0.12)",
+                backgroundColor: theme.purpleSoft,
                 alignItems: "center",
                 justifyContent: "center",
               }}

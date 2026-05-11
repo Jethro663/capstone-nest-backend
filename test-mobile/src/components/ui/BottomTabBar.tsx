@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MainTabParamList } from "../../navigation/types";
-import { colors, gradients } from "../../theme/tokens";
+import { colors, gradients, modernAcademic, skillStream } from "../../theme/tokens";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
@@ -132,13 +132,13 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     >
       <View
         style={{
-          minHeight: 72,
-          backgroundColor: "#0B1833",
+          minHeight: 76,
+          backgroundColor: skillStream.elevated,
           borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.08)",
+          borderTopColor: colors.border,
           flexDirection: "row",
           alignItems: "flex-end",
-          paddingHorizontal: 8,
+          paddingHorizontal: 10,
           paddingTop: 8,
         }}
       >
@@ -185,7 +185,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         ? isTeacherCenter
                           ? gradients.classes
                           : gradients.ja
-                        : [darkRed(), "#C81E43"]
+                        : [modernAcademic.primary, modernAcademic.primaryContainer]
                     }
                     style={{
                       width: 72,
@@ -195,10 +195,10 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       alignItems: "center",
                       justifyContent: "center",
                       borderWidth: 4,
-                      borderColor: "#0B1833",
+                      borderColor: skillStream.background,
                     }}
                   >
-                    <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
+                  <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
                   </LinearGradient>
                   <Text
                     style={{
@@ -206,7 +206,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       marginBottom: 10,
                       fontSize: 10,
                       fontWeight: focused ? "800" : "600",
-                      color: focused ? darkRed() : "#8EA0BC",
+                      color: focused ? colors.primary : colors.textSecondary,
                     }}
                   >
                     {isTeacherCenter ? "My Classes" : config.label}
@@ -224,18 +224,18 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel}
               onPress={onPress}
               onLongPress={onLongPress}
-              style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", paddingBottom: 14, gap: 3 }}
+              style={{ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "flex-end", paddingBottom: 14, gap: 3 }}
             >
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}
                 size={20}
-                color={focused ? darkRed() : "#7890B3"}
+                color={focused ? colors.primary : colors.textSecondary}
               />
               <Text
                 style={{
                   fontSize: 10,
                   fontWeight: focused ? "800" : "600",
-                  color: focused ? darkRed() : "#8EA0BC",
+                  color: focused ? colors.primary : colors.textSecondary,
                 }}
               >
                 {config.label}
@@ -246,8 +246,4 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
       </View>
     </View>
   );
-}
-
-function darkRed() {
-  return "#E8294E";
 }

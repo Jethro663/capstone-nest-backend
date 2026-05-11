@@ -49,11 +49,11 @@ function DarkPanel({ children, style }: PropsWithChildren<{ style?: object }>) {
 
 function ToneTag({ label, tone }: { label: string; tone: "blue" | "green" | "amber" | "red" | "purple" }) {
   const toneStyle = {
-    blue: { backgroundColor: theme.blueSoft, color: "#6AABFF" },
+    blue: { backgroundColor: theme.blueSoft, color: theme.blue },
     green: { backgroundColor: theme.greenSoft, color: theme.green },
     amber: { backgroundColor: theme.amberSoft, color: theme.amber },
-    red: { backgroundColor: theme.redSoft, color: "#FF6B87" },
-    purple: { backgroundColor: theme.purpleSoft, color: "#C4B0FF" },
+    red: { backgroundColor: theme.redSoft, color: theme.red },
+    purple: { backgroundColor: theme.purpleSoft, color: theme.purple },
   }[tone];
 
   return (
@@ -131,7 +131,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       <ScreenScroll backgroundColor={theme.bg}>
         <DarkPanel style={{ marginTop: 40 }}>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Lesson data is partially unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{peekAppError(primaryError).message}</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
         </DarkPanel>
       </ScreenScroll>
     );
@@ -175,8 +175,8 @@ export function LessonDetailScreen({ route, navigation }: Props) {
             <Pressable
               onPress={() => navigation.goBack()}
               style={{
-                width: 36,
-                height: 36,
+                width: 44,
+                height: 44,
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
@@ -188,7 +188,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           </View>
 
           {headerDescription ? (
-            <Text numberOfLines={3} style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+            <Text numberOfLines={3} style={{ marginTop: 12, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
               {headerDescription}
             </Text>
           ) : null}
@@ -200,7 +200,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           </View>
           {blocks.length ? (
             <View style={{ marginTop: 14 }}>
-              <ProgressBar value={readingProgress} color={theme.green} trackColor="rgba(255,255,255,0.08)" />
+              <ProgressBar value={readingProgress} color={theme.green} trackColor={theme.border} />
               <Text style={{ marginTop: 6, color: theme.muted, fontSize: 10, fontWeight: "700" }}>
                 {understoodCount}/{blocks.length} blocks checked
               </Text>
@@ -212,14 +212,14 @@ export function LessonDetailScreen({ route, navigation }: Props) {
       {primaryError ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Lesson data is partially unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{peekAppError(primaryError).message}</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{peekAppError(primaryError).message}</Text>
         </DarkPanel>
       ) : null}
 
       {actionError ? (
         <DarkPanel>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: "#FF6B87" }}>Lesson action unavailable</Text>
-          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: "#999999" }}>{actionError}</Text>
+          <Text style={{ fontSize: 13, fontWeight: "700", color: theme.red }}>Lesson action unavailable</Text>
+          <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: theme.muted }}>{actionError}</Text>
         </DarkPanel>
       ) : null}
 
@@ -243,14 +243,14 @@ export function LessonDetailScreen({ route, navigation }: Props) {
               <Text style={{ marginTop: 1, fontSize: 10, color: theme.muted }}>Teacher-provided material</Text>
             </View>
           </View>
-          <Text style={{ fontSize: 13, lineHeight: 21, color: "#BDBDBD" }}>{description}</Text>
+          <Text style={{ fontSize: 13, lineHeight: 21, color: theme.subtext }}>{description}</Text>
         </DarkPanel>
       ) : null}
 
       {blocks.length === 0 ? (
         <DarkPanel>
           <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>No lesson content</Text>
-          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: "#999999" }}>
+          <Text style={{ marginTop: 5, fontSize: 12, lineHeight: 18, color: theme.muted }}>
             This lesson does not have published content blocks yet.
           </Text>
         </DarkPanel>
@@ -263,7 +263,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           const toneColor = meta.tone === "amber" ? theme.amber : meta.tone === "green" ? theme.green : meta.tone === "purple" ? theme.purple : theme.blue;
           const toneBg = meta.tone === "amber" ? theme.amberSoft : meta.tone === "green" ? theme.greenSoft : meta.tone === "purple" ? theme.purpleSoft : theme.blueSoft;
           return (
-          <DarkPanel key={block.id} style={{ marginTop: index === 0 ? 14 : 8, borderColor: understood ? "rgba(34,201,122,0.32)" : theme.border }}>
+          <DarkPanel key={block.id} style={{ marginTop: index === 0 ? 14 : 8, borderColor: understood ? theme.greenLine : theme.border }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
               <View
                 style={{
@@ -294,7 +294,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
                 style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 10, backgroundColor: theme.active }}
               />
             ) : null}
-            <Text style={{ fontSize: 13, lineHeight: 21, color: "#BDBDBD" }}>
+            <Text style={{ fontSize: 13, lineHeight: 21, color: theme.subtext }}>
               {text || (url ? "Open this resource from the linked material above." : "This content block does not contain text that can be rendered in mobile yet.")}
             </Text>
             {meta.interactive ? (
@@ -305,8 +305,8 @@ export function LessonDetailScreen({ route, navigation }: Props) {
                   alignSelf: "flex-start",
                   borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: understood ? "rgba(34,201,122,0.42)" : theme.border,
-                  backgroundColor: understood ? theme.greenSoft : "rgba(255,255,255,0.04)",
+                  borderColor: understood ? theme.greenLine : theme.border,
+                  backgroundColor: understood ? theme.greenSoft : theme.surface2,
                   paddingHorizontal: 12,
                   paddingVertical: 8,
                   flexDirection: "row",
@@ -344,6 +344,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
             alignItems: "center",
             borderRadius: 12,
             backgroundColor: isCompleted ? theme.greenSoft : theme.red,
+            minHeight: 44,
             paddingVertical: 13,
           }}
         >
@@ -356,6 +357,7 @@ export function LessonDetailScreen({ route, navigation }: Props) {
           style={{
             alignItems: "center",
             justifyContent: "center",
+            minHeight: 44,
             borderRadius: 12,
             borderWidth: 1,
             borderColor: theme.border,

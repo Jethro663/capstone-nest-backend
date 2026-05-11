@@ -146,7 +146,7 @@ export function LoginScreen({ navigation }: Props) {
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             hitSlop={10}
             onPress={() => setShowPassword((current) => !current)}
-            style={{ paddingHorizontal: 12, paddingVertical: 10 }}
+            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 10 }}
           >
             <MaterialCommunityIcons
               color={authTheme.textLight}

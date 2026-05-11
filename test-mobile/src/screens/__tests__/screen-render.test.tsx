@@ -1761,7 +1761,7 @@ describe("mobile rendered screen flows", () => {
       .join(" ");
 
     expect(renderedText).toContain("Student Home");
-    expect(renderedText).toContain("Your Learning Hub");
+    expect(renderedText).toContain("Weekly Progress");
     expect(renderedText).toContain("Continue Learning");
     expect(renderedText).toContain("Day Schedule");
     expect(renderedText).toContain("Pending Tasks");

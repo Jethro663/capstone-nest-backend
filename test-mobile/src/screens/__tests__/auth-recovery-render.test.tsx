@@ -30,6 +30,14 @@ jest.mock("react-native", () => {
   };
 });
 
+jest.mock("react-native-safe-area-context", () => {
+  const ReactRuntime = require("react") as typeof React;
+  return {
+    SafeAreaView: (props: Record<string, unknown>) =>
+      ReactRuntime.createElement("SafeAreaView", props, props.children),
+  };
+});
+
 jest.mock("@expo/vector-icons", () => {
   const ReactRuntime = require("react") as typeof React;
   return {

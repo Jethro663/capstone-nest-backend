@@ -267,7 +267,7 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
                       flex: 1,
                       borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: active ? "rgba(232,41,78,0.4)" : theme.border,
+                      borderColor: active ? theme.redLine : theme.border,
                       backgroundColor: active ? theme.redSoft : theme.surface,
                       alignItems: "center",
                       justifyContent: "center",

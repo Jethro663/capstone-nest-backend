@@ -90,7 +90,7 @@ function StudentRoutePlaceholder({ title, subtitle }: { title: string; subtitle:
           borderRadius: 28,
           borderWidth: 1,
           borderColor: colors.border,
-          backgroundColor: colors.white,
+          backgroundColor: colors.card,
           padding: 24,
         }}
       >
@@ -258,10 +258,10 @@ const navigationTheme = {
   colors: {
     ...DefaultTheme.colors,
     background: colors.surface,
-    card: colors.white,
+    card: colors.card,
     text: colors.text,
     border: colors.border,
-    primary: colors.amber,
+    primary: colors.primary,
   },
 };
 
@@ -277,10 +277,10 @@ function RootFallback() {
           justifyContent: "center",
           borderWidth: 2,
           borderColor: colors.paleIndigo,
-          backgroundColor: colors.white,
+          backgroundColor: colors.card,
         }}
       >
-        <ActivityIndicator size="large" color={colors.indigo} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
       <Text style={{ marginTop: 14, fontSize: 14, fontWeight: "900", color: colors.text }}>Warming up Nexora...</Text>
       <Text style={{ marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
@@ -326,7 +326,7 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
             borderRadius: 28,
             borderWidth: 1,
             borderColor: colors.border,
-            backgroundColor: colors.white,
+            backgroundColor: colors.card,
             padding: 20,
           }}
         >
@@ -343,8 +343,9 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
               marginTop: 18,
               alignItems: "center",
               borderRadius: 16,
-              backgroundColor: colors.text,
-              paddingVertical: 14,
+                backgroundColor: colors.primary,
+                minHeight: 48,
+                paddingVertical: 14,
             }}
           >
             <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Try rendering again</Text>

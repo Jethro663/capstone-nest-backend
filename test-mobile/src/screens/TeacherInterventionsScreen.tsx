@@ -28,11 +28,11 @@ function asScore(value: number | null | undefined) {
   return typeof value === "number" ? value.toFixed(2) : "N/A";
 }
 
-export function TeacherInterventionsScreen({ navigation }: Props) {
+export function TeacherInterventionsScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedClassId, setSelectedClassId] = useState<string>(route.params?.classId || "");
   const [mode, setMode] = useState<FeedMode>("queue");
   const [search, setSearch] = useState("");
 
@@ -41,6 +41,12 @@ export function TeacherInterventionsScreen({ navigation }: Props) {
       setSelectedClassId(classesQuery.data[0].id);
     }
   }, [classesQuery.data, selectedClassId]);
+
+  useEffect(() => {
+    if (route.params?.classId && route.params.classId !== selectedClassId) {
+      setSelectedClassId(route.params.classId);
+    }
+  }, [route.params?.classId, selectedClassId]);
 
   const queueQuery = useTeacherInterventionsQueue(selectedClassId || undefined);
   const historyQuery = useTeacherInterventionsHistory(selectedClassId || undefined);

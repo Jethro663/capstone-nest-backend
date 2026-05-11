@@ -67,7 +67,7 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
       rightAction={
         <Pressable
           onPress={() => navigation.goBack()}
-          style={{ width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
+          style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
         >
           <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
         </Pressable>

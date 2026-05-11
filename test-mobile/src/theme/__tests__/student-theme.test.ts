@@ -1,10 +1,11 @@
 import { studentDarkTheme } from "../studentDark";
 
 describe("student mobile theme", () => {
-  it("uses the same navy tint as the current web student sidebar instead of plain black", () => {
-    expect(studentDarkTheme.bg).toBe("#0A1630");
-    expect(studentDarkTheme.header).toBe("#0B1833");
-    expect(studentDarkTheme.surface).toBe("#0F2438");
-    expect(studentDarkTheme.active).toBe("#132D45");
+  it("uses the exact LMS Modern Academic palette from the reference", () => {
+    expect(studentDarkTheme.bg).toBe("#F7F9FB");
+    expect(studentDarkTheme.header).toBe("#FFFFFF");
+    expect(studentDarkTheme.surface).toBe("#FFFFFF");
+    expect(studentDarkTheme.border).toBe("#E2E8F0");
+    expect(studentDarkTheme.red).toBe("#00288E");
   });
 });
