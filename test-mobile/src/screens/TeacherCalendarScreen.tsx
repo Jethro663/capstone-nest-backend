@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
@@ -336,4 +336,3 @@ export function TeacherCalendarScreen({ navigation, route }: Props) {
     </TeacherScreen>
   );
 }
-

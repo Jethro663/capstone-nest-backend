@@ -167,6 +167,7 @@ function createDeferred<T>() {
 describe('TeacherAiDraftQuizPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-25T12:00:00.000Z'));
     window.localStorage.clear();
 
     mockedClassService.getById.mockResolvedValue({

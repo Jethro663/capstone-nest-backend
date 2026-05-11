@@ -46,4 +46,3 @@ export const notificationsApi = {
     await apiClient.patch(`/notifications/${id}/read`);
   },
 };
-

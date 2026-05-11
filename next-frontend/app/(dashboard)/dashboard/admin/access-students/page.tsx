@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowUpCircle, Search, UsersRound, XCircle } from 'lucide-react';
@@ -615,5 +615,3 @@ export default function AdminAccessStudentsPage() {
     </AdminPageShell>
   );
 }
-
-

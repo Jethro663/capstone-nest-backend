@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { OTP_TTL_MINUTES } from '../../common/constants';
 
@@ -272,7 +272,3 @@ export class MailService {
     `;
   }
 }
-
-
-
-

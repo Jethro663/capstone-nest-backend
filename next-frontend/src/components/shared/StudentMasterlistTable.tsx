@@ -230,6 +230,7 @@ export function StudentMasterlistTable({
                     <td className="px-3 py-2 align-top">
                       <input
                         type="checkbox"
+                        aria-label={`Select ${`${row.firstName || ''} ${row.lastName || ''}`.trim() || 'student'}`}
                         checked={selected}
                         disabled={!row.isEligible}
                         onChange={() => onToggleRow(row.id)}

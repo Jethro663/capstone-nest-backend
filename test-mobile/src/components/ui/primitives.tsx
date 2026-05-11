@@ -1,4 +1,4 @@
-﻿import type { PropsWithChildren, ReactNode } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -632,6 +632,3 @@ export function SimpleBarChart({
     </View>
   );
 }
-
-
-

@@ -41,6 +41,30 @@ function toEligibility(value: string | null): MasterlistEligibilityFilter {
   return 'all';
 }
 
+function isRateLimitError(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    (error as { response?: { status?: number } }).response?.status === 429
+  );
+}
+
+async function addStudentsWithRetry(sectionId: string, studentIds: string[]) {
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await sectionService.addStudents(sectionId, studentIds);
+      return;
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+    }
+  }
+}
+
 export default function TeacherAddSectionStudentsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -191,7 +215,7 @@ export default function TeacherAddSectionStudentsPage() {
 
     try {
       setSaving(true);
-      await sectionService.addStudents(sectionId, eligibleIds);
+      await addStudentsWithRetry(sectionId, eligibleIds);
       toast.success(`Added ${eligibleIds.length} student(s)`);
       router.push(`/dashboard/teacher/sections/${sectionId}/roster`);
     } catch {

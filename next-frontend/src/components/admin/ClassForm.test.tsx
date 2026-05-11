@@ -332,4 +332,3 @@ describe('ClassForm', () => {
     expect(createButton).toBeDisabled();
   });
 });
-

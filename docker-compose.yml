@@ -1,4 +1,4 @@
-﻿services:
+services:
   # â”€â”€ PostgreSQL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   postgres:
     image: pgvector/pgvector:pg16
@@ -312,5 +312,3 @@ volumes:
 networks:
   lms-network:
     driver: bridge
-
-

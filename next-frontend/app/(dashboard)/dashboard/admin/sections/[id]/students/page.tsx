@@ -8,4 +8,3 @@ export default async function StudentsLandingPage({ params }: StudentsLandingPag
   const { id } = await params;
   redirect(`/dashboard/admin/sections/${id}/students/add`);
 }
-

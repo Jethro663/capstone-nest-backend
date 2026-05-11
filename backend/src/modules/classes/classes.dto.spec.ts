@@ -172,4 +172,3 @@ describe('Classes DTOs', () => {
     expect(messages).toHaveLength(0);
   });
 });
-

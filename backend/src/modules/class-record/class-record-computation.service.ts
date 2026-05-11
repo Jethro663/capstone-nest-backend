@@ -313,4 +313,3 @@ export class ClassRecordComputationService {
     return results;
   }
 }
-

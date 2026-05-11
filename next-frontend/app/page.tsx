@@ -227,6 +227,10 @@ export default function LandingPage() {
           </nav>
 
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Link href="/demo" className="landing-button-ghost justify-center text-sm">
+              View Demo
+              <ArrowUpRight className="h-4 w-4" />
+            </Link>
             <Link href="/dashboard" className="landing-button-solid justify-center text-sm">
               Access Portal
               <ArrowRight className="h-4 w-4" />
@@ -279,6 +283,10 @@ export default function LandingPage() {
                 <Link href="/dashboard" className="landing-button-solid justify-center text-base">
                   Enter Nexora
                   <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/demo" className="landing-button-ghost justify-center text-base">
+                  Open Demo
+                  <ArrowUpRight className="h-4 w-4" />
                 </Link>
                 <a href="#experience" className="landing-button-ghost justify-center text-base">
                   Explore the platform

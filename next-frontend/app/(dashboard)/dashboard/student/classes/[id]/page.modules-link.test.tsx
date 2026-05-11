@@ -1006,7 +1006,9 @@ describe('StudentClassDetailPage module links', () => {
 
     render(<StudentClassDetailPage />);
 
-    expect(await screen.findByText('Discussion Board')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Discussion Board' }),
+    ).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: /open thread/i }));
 
     await waitFor(() => {

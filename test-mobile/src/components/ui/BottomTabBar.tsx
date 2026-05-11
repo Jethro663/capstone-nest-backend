@@ -1,4 +1,4 @@
-﻿import type { ComponentProps } from "react";
+import type { ComponentProps } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { LinearGradient } from "expo-linear-gradient";
@@ -251,6 +251,3 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 function darkRed() {
   return "#E8294E";
 }
-
-
-

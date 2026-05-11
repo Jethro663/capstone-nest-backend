@@ -19,4 +19,3 @@ export interface MobileNotificationsResponse {
   limit: number;
   totalPages: number;
 }
-

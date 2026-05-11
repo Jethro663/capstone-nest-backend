@@ -257,7 +257,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
             }}
           >
             <View>
-              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>Open full calendar</Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>Open Calendar</Text>
               <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: "#999999" }}>
                 Review schedules, announcements, school events, and due assessments in one feed.
               </Text>

@@ -1,4 +1,4 @@
-﻿import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
+import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -492,8 +492,3 @@ export function AppNavigator() {
     </NavigationContainer>
   );
 }
-
-
-
-
-

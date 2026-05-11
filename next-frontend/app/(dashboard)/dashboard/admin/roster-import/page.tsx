@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Download, FileUp, Upload } from 'lucide-react';
@@ -395,6 +395,3 @@ export default function RosterImportPage() {
     </AdminPageShell>
   );
 }
-
-
-

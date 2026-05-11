@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
@@ -341,5 +341,3 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
     </TeacherScreen>
   );
 }
-
-

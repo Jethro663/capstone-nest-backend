@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiApi } from "./services/ai";
 import { announcementsApi } from "./services/announcements";
 import { assessmentsApi } from "./services/assessments";
@@ -906,9 +906,3 @@ export function useDiscussionReportCommentMutation(classId?: string, threadId?: 
     },
   });
 }
-
-
-
-
-
-

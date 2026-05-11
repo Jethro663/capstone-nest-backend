@@ -1,4 +1,4 @@
-﻿import type { PropsWithChildren, ReactNode } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -463,4 +463,3 @@ export function AuthRulePills({ rules }: { rules: Array<{ label: string; passed:
     </View>
   );
 }
-
