@@ -44,7 +44,12 @@ from .lesson_plan_service import (
     save_lesson_plan_draft,
     _normalize_lesson_plan_output,
 )
-from .quiz_generation_service import generate_quiz_draft, save_quiz_draft
+from .quiz_generation_service import (
+    apply_quiz_draft,
+    generate_quiz_draft,
+    preview_quiz_draft_apply,
+    save_quiz_draft,
+)
 from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
 from .llamaindex_adapter import build_text_node, llamaindex_available
@@ -749,6 +754,7 @@ async def _ensure_quiz_sources_ready(
     job_id: str | None = None,
     lesson_ids: list[str] | None = None,
     extraction_ids: list[str] | None = None,
+    allow_draft_sources: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     if job_id:
         await _record_ai_job_runtime(
@@ -795,6 +801,11 @@ async def _ensure_quiz_sources_ready(
             ready_lessons.get(lesson_id) or lesson_blockers.get(lesson_id)
             for lesson_id in selected_lesson_ids
             if int((ready_lessons.get(lesson_id) or {}).get("chunkCount") or 0) <= 0
+            and not (
+                allow_draft_sources
+                and "draft" in str((lesson_blockers.get(lesson_id) or {}).get("reason") or "").lower()
+                and int((lesson_blockers.get(lesson_id) or {}).get("chunkCount") or 0) > 0
+            )
         ]
         if missing_selected:
             labels = [
@@ -864,6 +875,7 @@ async def _run_quiz_generation_job(
                 job_id=job_id,
                 lesson_ids=body.lesson_ids,
                 extraction_ids=body.extraction_ids,
+                allow_draft_sources=body.allow_draft_sources,
             )
 
             async def _operation(attempt: int) -> dict[str, Any]:
@@ -4568,6 +4580,14 @@ async def queue_teacher_quiz_draft_job(
             "questionType": body.question_type,
             "assessmentType": body.assessment_type,
             "title": body.title,
+            "teacherNote": body.teacher_note,
+            "passingScore": body.passing_score,
+            "feedbackLevel": body.feedback_level,
+            "classRecordCategory": body.class_record_category,
+            "quarter": body.quarter,
+            "sourcePolicy": body.source_policy,
+            "allowDraftSources": body.allow_draft_sources,
+            "retryOfJobId": body.retry_of_job_id,
         },
         max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
     )
@@ -4739,6 +4759,104 @@ async def update_teacher_quiz_draft(
             "outputId": result["outputId"],
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/apply/preview
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/apply/preview")
+async def preview_teacher_quiz_draft_apply(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    preview = await preview_quiz_draft_apply(db, job_id=job_id, user=user)
+    return {
+        "success": True,
+        "message": "Quiz draft apply preview generated",
+        "data": preview,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/apply
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/apply")
+async def apply_teacher_quiz_draft(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await apply_quiz_draft(db, job_id=job_id, user=user)
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft applied",
+        resultSummary={
+            "assessmentId": (result.get("applyResult") or {}).get("assessmentId"),
+            "outputId": result.get("outputId"),
+            "applyResult": result.get("applyResult"),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Quiz draft applied",
+        "data": result,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/retry
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/retry", status_code=202)
+async def retry_teacher_quiz_draft_job(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job, _runtime, _assessment_id = await _load_ai_job_context(db, job_id, user)
+    if job.get("job_type") != "quiz_generation":
+        raise HTTPException(400, "Only quiz generation jobs can be retried here")
+    filters = job.get("source_filters") if isinstance(job.get("source_filters"), dict) else {}
+    body = GenerateQuizDraftRequest(
+        classId=str(job["class_id"]),
+        lessonIds=filters.get("lessonIds"),
+        extractionIds=filters.get("extractionIds"),
+        title=filters.get("title"),
+        questionCount=filters.get("questionCount") or 5,
+        questionType=filters.get("questionType") or "multiple_choice",
+        assessmentType=filters.get("assessmentType") or "quiz",
+        passingScore=filters.get("passingScore") or 60,
+        teacherNote=filters.get("teacherNote"),
+        feedbackLevel=filters.get("feedbackLevel") or "standard",
+        classRecordCategory=filters.get("classRecordCategory"),
+        quarter=filters.get("quarter"),
+        sourcePolicy=filters.get("sourcePolicy") or "published_default",
+        allowDraftSources=bool(filters.get("allowDraftSources")),
+        retryOfJobId=job_id,
+    )
+    return await queue_teacher_quiz_draft_job(body, user=user, db=db)
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/cancel
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/cancel")
+async def cancel_teacher_quiz_draft_job(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await delete_teacher_ai_job(job_id, user=user, db=db)
 
 
 # ---------------------------------------------------------------------------

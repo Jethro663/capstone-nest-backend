@@ -47,6 +47,8 @@ import {
 import type {
   AiClassIndexStatus,
   AiGenerationJob,
+  QuizDraftApplyPreview,
+  QuizDraftReviewIssue,
   QuizDraftStructuredOutput,
 } from '@/types/ai';
 import type { ClassItem } from '@/types/class';
@@ -232,6 +234,39 @@ function buildUnavailableIndexStatus(classId: string): AiClassIndexStatus {
   };
 }
 
+function recomputeReviewState(draft: QuizDraftStructuredOutput): QuizDraftStructuredOutput {
+  const issues = draft.reviewIssues ?? [];
+  const unresolvedBlocking = issues.some(
+    (issue) => issue.severity === 'blocking' && !issue.resolved,
+  );
+  const unresolvedWarnings = issues.some(
+    (issue) => issue.severity === 'warning' && !issue.resolved,
+  );
+  return {
+    ...draft,
+    qualityGate: unresolvedBlocking
+      ? 'fail'
+      : issues.length > 0
+        ? 'warn'
+        : draft.qualityGate ?? 'pass',
+    reviewRequired: unresolvedBlocking || unresolvedWarnings,
+    reviewState:
+      unresolvedBlocking || unresolvedWarnings ? 'needs_review' : 'ready',
+  };
+}
+
+function resolveQuestionIssues(
+  issues: QuizDraftReviewIssue[] | undefined,
+  questionIndex: number,
+  resolution: string,
+) {
+  return (issues ?? []).map((issue) =>
+    issue.questionIndex === questionIndex
+      ? { ...issue, resolved: true, resolution }
+      : issue,
+  );
+}
+
 export default function TeacherAiDraftQuizPage() {
   const params = useParams();
   const router = useRouter();
@@ -243,6 +278,8 @@ export default function TeacherAiDraftQuizPage() {
   const [deleting, setDeleting] = useState(false);
   const [readinessLoading, setReadinessLoading] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
+  const [applyingDraft, setApplyingDraft] = useState(false);
+  const [applyPreview, setApplyPreview] = useState<QuizDraftApplyPreview | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<ConfirmationDialogConfig | null>(null);
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
@@ -257,6 +294,7 @@ export default function TeacherAiDraftQuizPage() {
   const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
   const [selectedExtractionIds, setSelectedExtractionIds] = useState<string[]>([]);
   const [useAllSourcesWhenNoneSelected, setUseAllSourcesWhenNoneSelected] = useState(true);
+  const [draftSourceAcknowledged, setDraftSourceAcknowledged] = useState(false);
 
   const [job, setJob] = useState<AiGenerationJob | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -500,7 +538,10 @@ export default function TeacherAiDraftQuizPage() {
     return lessons.map((lesson) => {
       const ready = readyLessonMap.get(lesson.id);
       const blocker = lessonBlockerMap.get(lesson.id);
-      const selectable = !blocker;
+      const isDraftSource =
+        Boolean(lesson.isDraft) ||
+        String(blocker?.reason || '').toLowerCase().includes('draft');
+      const selectable = !blocker || isDraftSource;
       let stateLabel = 'Status unavailable';
       let tone: 'ready' | 'index' | 'blocked' = 'index';
       if (ready?.status === 'indexed') {
@@ -510,10 +551,10 @@ export default function TeacherAiDraftQuizPage() {
         tone = 'index';
         stateLabel = 'Ready to index';
       } else if (blocker) {
-        tone = 'blocked';
+        tone = isDraftSource ? 'index' : 'blocked';
         stateLabel = blocker.reason;
       } else if (lesson.isDraft) {
-        tone = 'blocked';
+        tone = 'index';
         stateLabel = 'Lesson is still a draft.';
       }
       return {
@@ -525,6 +566,7 @@ export default function TeacherAiDraftQuizPage() {
         tone,
         stateLabel,
         updatedAt: ready?.updatedAt ?? blocker?.updatedAt ?? lesson.updatedAt ?? null,
+        isDraftSource,
       };
     });
   }, [lessonBlockerMap, lessons, readyLessonMap, selectedLessonIds]);
@@ -597,10 +639,14 @@ export default function TeacherAiDraftQuizPage() {
 
   const parsedQuestionCount = Number(questionCount);
   const isQuestionCountValid =
-    Number.isFinite(parsedQuestionCount) && parsedQuestionCount >= 1;
+    Number.isInteger(parsedQuestionCount) &&
+    parsedQuestionCount >= 1 &&
+    parsedQuestionCount <= 15;
   const hasAnySource = lessons.length + extractions.length > 0;
   const hasManualSelection =
     selectedLessonIds.length + selectedExtractionIds.length > 0;
+  const selectedDraftSourceCount = selectedLessons.filter((lesson) => lesson.isDraft).length;
+  const hasDraftSourceSelection = selectedDraftSourceCount > 0;
   const hasRunningJob = Boolean(
     displayJob && !isAiDraftTerminalStatus(displayJob.status),
   );
@@ -619,7 +665,8 @@ export default function TeacherAiDraftQuizPage() {
     generationReady &&
     hasAnySource &&
     isQuestionCountValid &&
-    (useAllSourcesWhenNoneSelected || hasManualSelection);
+    (useAllSourcesWhenNoneSelected || hasManualSelection) &&
+    (!hasDraftSourceSelection || draftSourceAcknowledged);
 
   const readinessBadge = getReadinessBadge(indexStatus);
   const assessmentId =
@@ -630,6 +677,27 @@ export default function TeacherAiDraftQuizPage() {
   const canDeleteCurrentDraft = Boolean(displayJob?.jobId || assessmentId);
   const recentTrackedJobs = trackedJobs.slice(0, 6);
   const selectedSourceCount = selectedLessonIds.length + selectedExtractionIds.length;
+  const reviewIssues = result?.reviewIssues ?? [];
+  const unresolvedBlockingIssues = reviewIssues.filter(
+    (issue) => issue.severity === 'blocking' && !issue.resolved,
+  );
+  const unresolvedWarningIssues = reviewIssues.filter(
+    (issue) => issue.severity === 'warning' && !issue.resolved,
+  );
+  const applyBlockedReasons = [
+    savingDraft ? 'Wait for draft edits to finish saving.' : null,
+    result?.qualityGate === 'fail' ? 'Repair failed-quality questions first.' : null,
+    !result?.questions?.length ? 'Keep at least one question in the draft.' : null,
+    unresolvedBlockingIssues.length > 0 ? 'Resolve blocking review issues.' : null,
+    result?.reviewRequired ? 'Finish the review queue before applying.' : null,
+  ].filter(Boolean) as string[];
+  const canApplyDraft = Boolean(
+    currentJobId &&
+      result &&
+      !savingDraft &&
+      !applyingDraft &&
+      applyBlockedReasons.length === 0,
+  );
   const sourceStepComplete =
     hasAnySource && (useAllSourcesWhenNoneSelected || hasManualSelection);
   const setupStepComplete = isQuestionCountValid;
@@ -718,7 +786,7 @@ export default function TeacherAiDraftQuizPage() {
 
   const handleGenerate = async () => {
     if (!isQuestionCountValid) {
-      toast.error('Question count must be at least 1.');
+      toast.error('Question count must be between 1 and 15.');
       return;
     }
     if (!hasAnySource) {
@@ -727,6 +795,10 @@ export default function TeacherAiDraftQuizPage() {
     }
     if (!useAllSourcesWhenNoneSelected && !hasManualSelection) {
       toast.error('Select at least one lesson or extraction, or enable the fallback option.');
+      return;
+    }
+    if (hasDraftSourceSelection && !draftSourceAcknowledged) {
+      toast.error('Acknowledge selected draft sources before generating.');
       return;
     }
 
@@ -758,6 +830,8 @@ export default function TeacherAiDraftQuizPage() {
         classRecordCategory: 'written_work',
         lessonIds,
         extractionIds,
+        sourcePolicy: 'published_default',
+        allowDraftSources: hasDraftSourceSelection && draftSourceAcknowledged,
       });
       setCurrentJobId(response.data.jobId);
       setJob(response.data);
@@ -939,6 +1013,140 @@ export default function TeacherAiDraftQuizPage() {
         questions: nextQuestions,
       };
     });
+  };
+
+  const handleMarkQuestionReviewed = (questionIndex: number) => {
+    updatePreviewDraft((draft) => {
+      const questions = draft.questions.map((question, index) =>
+        index === questionIndex ? { ...question, reviewed: true } : question,
+      );
+      return recomputeReviewState({
+        ...draft,
+        questions,
+        reviewIssues: resolveQuestionIssues(
+          draft.reviewIssues,
+          questionIndex,
+          'teacher_reviewed',
+        ),
+      });
+    });
+  };
+
+  const handleAcceptWarning = (issueId: string) => {
+    updatePreviewDraft((draft) =>
+      recomputeReviewState({
+        ...draft,
+        reviewIssues: (draft.reviewIssues ?? []).map((issue) =>
+          issue.id === issueId
+            ? { ...issue, resolved: true, resolution: 'teacher_accepted_warning' }
+            : issue,
+        ),
+      }),
+    );
+  };
+
+  const runApplyDraft = useCallback(async () => {
+    if (!currentJobId) {
+      toast.error('No quiz draft job is selected to apply.');
+      return;
+    }
+    try {
+      setApplyingDraft(true);
+      const response = await aiService.applyQuizDraft(currentJobId);
+      const applyResult = response.data.applyResult;
+      setResult((current) =>
+        current
+          ? {
+              ...current,
+              assessmentId: applyResult.assessmentId,
+              audit: {
+                ...(current.audit ?? {}),
+                applyResult,
+              },
+            }
+          : current,
+      );
+      setJob((current) =>
+        current
+          ? {
+              ...current,
+              status: 'approved',
+              assessmentId: applyResult.assessmentId,
+              progressPercent: 100,
+              statusMessage: response.data.alreadyApplied
+                ? 'Draft already applied'
+                : 'Draft applied',
+            }
+          : current,
+      );
+      toast.success(response.data.alreadyApplied ? 'Draft already applied.' : 'Draft applied.');
+      setDeleteDialog(null);
+      setApplyPreview(response.data.preview ?? null);
+      void fetchReadiness({ silent: true });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to apply quiz draft'));
+    } finally {
+      setApplyingDraft(false);
+    }
+  }, [currentJobId, fetchReadiness]);
+
+  const handleApplyPreview = async () => {
+    if (!currentJobId) {
+      toast.error('No quiz draft job is selected to apply.');
+      return;
+    }
+    if (!canApplyDraft) {
+      toast.error(applyBlockedReasons[0] || 'Resolve review issues before applying.');
+      return;
+    }
+    try {
+      setApplyingDraft(true);
+      const response = await aiService.previewQuizDraftApply(currentJobId);
+      setApplyPreview(response.data);
+      if (!response.data.canApply) {
+        toast.error(response.data.blockedReasons[0] || 'Quiz draft is not ready to apply.');
+        return;
+      }
+      setDeleteDialog({
+        title: response.data.alreadyApplied ? 'Draft already applied' : 'Apply quiz draft?',
+        description: `${response.data.assessment.title} - ${response.data.assessment.questionCount} question(s), ${response.data.assessment.totalPoints} point(s). This creates an unpublished assessment draft.`,
+        confirmLabel: response.data.alreadyApplied ? 'Open applied draft' : 'Apply draft',
+        cancelLabel: 'Keep reviewing',
+        tone: 'default',
+        onConfirm: runApplyDraft,
+      });
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to preview quiz draft apply'));
+    } finally {
+      setApplyingDraft(false);
+    }
+  };
+
+  const handleRetryDraft = async (jobIdToRetry: string) => {
+    try {
+      const response = await aiService.retryQuizDraftJob(jobIdToRetry);
+      setCurrentJobId(response.data.jobId);
+      setJob(response.data);
+      setResult(null);
+      setActiveTab('generation');
+      mergeTrackedAiDraftJobFromStatus(classId, response.data, new Date().toISOString());
+      syncTrackedJobs();
+      toast.success('Quiz draft retry started.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to retry quiz draft'));
+    }
+  };
+
+  const handleCancelDraftJob = async (jobIdToCancel: string) => {
+    try {
+      const response = await aiService.cancelQuizDraftJob(jobIdToCancel);
+      setJob(response.data);
+      mergeTrackedAiDraftJobFromStatus(classId, response.data);
+      syncTrackedJobs();
+      toast.success('Quiz draft job cancelled.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to cancel quiz draft job'));
+    }
   };
 
   if (loading) {
@@ -1321,9 +1529,17 @@ export default function TeacherAiDraftQuizPage() {
                 <span>Question count</span>
                 <Input
                   value={questionCount}
-                  onChange={(event) => setQuestionCount(event.target.value)}
+                  onChange={(event) => {
+                    const raw = event.target.value.replace(/[^\d]/g, '');
+                    if (!raw) {
+                      setQuestionCount('');
+                      return;
+                    }
+                    setQuestionCount(String(Math.min(15, Math.max(1, Number(raw)))));
+                  }}
                   inputMode="numeric"
                 />
+                <small>1-15 questions</small>
               </label>
 
               <label className="teacher-ai-draft__field">
@@ -1361,6 +1577,19 @@ export default function TeacherAiDraftQuizPage() {
               <span>Use every ready class source when nothing is selected manually</span>
             </label>
 
+            {hasDraftSourceSelection ? (
+              <label className="teacher-ai-draft__checkbox teacher-ai-draft__checkbox--warning">
+                <input
+                  type="checkbox"
+                  checked={draftSourceAcknowledged}
+                  onChange={(event) => setDraftSourceAcknowledged(event.target.checked)}
+                />
+                <span>
+                  I understand {selectedDraftSourceCount} selected draft source(s) may be less final than published material.
+                </span>
+              </label>
+            ) : null}
+
             <div className="teacher-ai-draft__selection-summary">
               <Badge variant="secondary">{selectedLessonIds.length} lesson(s)</Badge>
               <Badge variant="outline">
@@ -1378,9 +1607,11 @@ export default function TeacherAiDraftQuizPage() {
                   : readinessUnavailable
                     ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
                   : hasAnySource
-                    ? generationReady
-                      ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
-                      : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
+                    ? hasDraftSourceSelection && !draftSourceAcknowledged
+                      ? 'Acknowledge selected draft sources before generating.'
+                      : generationReady
+                        ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
+                        : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
                     : 'No source lessons or extractions are available for this class yet.'}
               </p>
             ) : null}
@@ -1476,6 +1707,26 @@ export default function TeacherAiDraftQuizPage() {
                   >
                     <RefreshCw className="h-4 w-4" />
                     Refresh this job
+                  </Button>
+                ) : null}
+                {displayJob?.jobId && displayJob.status === 'failed' ? (
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => void handleRetryDraft(displayJob.jobId)}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Retry
+                  </Button>
+                ) : null}
+                {displayJob?.jobId && !isAiDraftTerminalStatus(displayJob.status) ? (
+                  <Button
+                    type="button"
+                    className="teacher-ai-draft__danger"
+                    onClick={() => void handleCancelDraftJob(displayJob.jobId)}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Cancel
                   </Button>
                 ) : null}
               </div>
@@ -1600,18 +1851,97 @@ export default function TeacherAiDraftQuizPage() {
 
               <div className="teacher-ai-draft__preview-toolbar">
                 <p>
-                  Remove or reorder questions here, then open the full editor for deeper
-                  content changes.
+                  Resolve review issues, remove weak questions, then apply the reviewed draft
+                  to create an unpublished assessment.
                 </p>
                 <Badge variant={savingDraft ? 'outline' : 'secondary'}>
-                  {savingDraft ? 'Saving draft…' : 'Teacher controls ready'}
+                  {savingDraft
+                    ? 'Saving draft...'
+                    : result.reviewRequired
+                      ? 'Review required'
+                      : result.qualityGate === 'fail'
+                        ? 'Quality failed'
+                        : 'Ready for teacher review'}
                 </Badge>
               </div>
+
+              {reviewIssues.length > 0 || applyBlockedReasons.length > 0 ? (
+                <div className="teacher-ai-draft__review-queue">
+                  <div className="teacher-ai-draft__review-head">
+                    <div>
+                      <strong>Review queue</strong>
+                      <p>
+                        {unresolvedBlockingIssues.length} blocking,{' '}
+                        {unresolvedWarningIssues.length} warning issue(s)
+                      </p>
+                    </div>
+                    <Badge variant={result.qualityGate === 'fail' ? 'destructive' : 'outline'}>
+                      {result.qualityGate || 'unchecked'}
+                    </Badge>
+                  </div>
+                  {applyBlockedReasons.length > 0 ? (
+                    <ul className="teacher-ai-draft__blocked-list">
+                      {applyBlockedReasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <div className="teacher-ai-draft__issue-list">
+                    {reviewIssues.map((issue) => (
+                      <article
+                        key={issue.id}
+                        className={`teacher-ai-draft__issue teacher-ai-draft__issue--${issue.severity}`}
+                      >
+                        <div>
+                          <strong>{issue.code.replace(/_/g, ' ')}</strong>
+                          <p>{issue.message}</p>
+                        </div>
+                        <div className="teacher-ai-draft__issue-actions">
+                          {typeof issue.questionIndex === 'number' ? (
+                            <Button
+                              type="button"
+                              className="teacher-class-workspace__outline"
+                              onClick={() =>
+                                document
+                                  .getElementById(`quiz-question-${issue.questionIndex}`)
+                                  ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              }
+                            >
+                              Jump
+                            </Button>
+                          ) : null}
+                          {issue.severity === 'warning' && !issue.resolved ? (
+                            <Button
+                              type="button"
+                              className="teacher-class-workspace__outline"
+                              onClick={() => handleAcceptWarning(issue.id)}
+                            >
+                              Accept warning
+                            </Button>
+                          ) : null}
+                          {issue.resolved ? <Badge variant="secondary">Resolved</Badge> : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {applyPreview ? (
+                <div className="teacher-ai-draft__apply-preview">
+                  <strong>Apply preview</strong>
+                  <p>
+                    {applyPreview.assessment.title} - {applyPreview.assessment.questionCount}{' '}
+                    question(s), {applyPreview.assessment.totalPoints} point(s)
+                  </p>
+                </div>
+              ) : null}
 
               <div className="teacher-ai-draft__question-list">
                 {result.questions.map((question, index) => (
                   <article
                     key={`${question.content}-${index}`}
+                    id={`quiz-question-${index}`}
                     className="teacher-ai-draft__question"
                   >
                     <div className="teacher-ai-draft__question-head">
@@ -1647,11 +1977,26 @@ export default function TeacherAiDraftQuizPage() {
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        <Button
+                          type="button"
+                          className="teacher-class-workspace__outline"
+                          onClick={() => handleMarkQuestionReviewed(index)}
+                          disabled={savingDraft}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Reviewed
+                        </Button>
                       </div>
                     </div>
                     <RichTextRenderer
                       html={question.content || '<p>Untitled question</p>'}
                     />
+                    {question.provenance?.sourceSnippet ? (
+                      <div className="teacher-ai-draft__provenance">
+                        <strong>{question.provenance.sourceTitle || 'Source'}</strong>
+                        <p>{question.provenance.sourceSnippet}</p>
+                      </div>
+                    ) : null}
                     {question.options && question.options.length > 0 ? (
                       <ul>
                         {question.options.map((option, optionIndex) => (
@@ -1697,6 +2042,21 @@ export default function TeacherAiDraftQuizPage() {
               >
                 <FileText className="h-4 w-4" />
                 Open Assessment Editor
+              </Button>
+            ) : null}
+            {!assessmentId && result ? (
+              <Button
+                type="button"
+                className="teacher-class-workspace__solid"
+                onClick={() => void handleApplyPreview()}
+                disabled={!canApplyDraft}
+              >
+                {applyingDraft ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Apply reviewed draft
               </Button>
             ) : null}
           </div>

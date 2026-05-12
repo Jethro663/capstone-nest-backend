@@ -690,6 +690,95 @@
   color: #475569;
 }
 
+.teacher-ai-draft__checkbox--warning {
+  border: 1px solid #f4c56b;
+  background: #fff8e6;
+  color: #7a4b00;
+}
+
+.teacher-ai-draft__review-queue {
+  display: grid;
+  gap: 0.7rem;
+  border: 1px solid #e3eaf2;
+  border-radius: 0.95rem;
+  background: #fbfcfe;
+  padding: 0.85rem;
+}
+
+.teacher-ai-draft__review-head,
+.teacher-ai-draft__issue,
+.teacher-ai-draft__issue-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.teacher-ai-draft__review-head p,
+.teacher-ai-draft__issue p,
+.teacher-ai-draft__provenance p {
+  margin: 0.18rem 0 0;
+  color: #64748b;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.teacher-ai-draft__blocked-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #9f1239;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.teacher-ai-draft__issue-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.teacher-ai-draft__issue {
+  border: 1px solid #e5eaf0;
+  border-radius: 0.8rem;
+  background: #fff;
+  padding: 0.65rem;
+}
+
+.teacher-ai-draft__issue--blocking {
+  border-color: #fecdd3;
+  background: #fff7f8;
+}
+
+.teacher-ai-draft__issue--warning {
+  border-color: #fde68a;
+  background: #fffdf2;
+}
+
+.teacher-ai-draft__issue-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.teacher-ai-draft__provenance {
+  margin-top: 0.65rem;
+  border-left: 3px solid #cbd5e1;
+  background: #f8fafc;
+  padding: 0.55rem 0.65rem;
+}
+
+.teacher-ai-draft__apply-preview {
+  border: 1px solid #bbf7d0;
+  border-radius: 0.9rem;
+  background: #f0fdf4;
+  padding: 0.75rem 0.85rem;
+}
+
+.teacher-ai-draft__apply-preview p {
+  margin: 0.2rem 0 0;
+  color: #166534;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .teacher-ai-draft__question-head {
   margin-bottom: 0.5rem;
 }

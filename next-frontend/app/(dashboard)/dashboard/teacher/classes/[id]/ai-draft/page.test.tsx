@@ -56,6 +56,10 @@ jest.mock('@/services/ai-service', () => ({
     getQuizDraftJobResult: jest.fn(),
     updateQuizDraft: jest.fn(),
     deleteTeacherJob: jest.fn(),
+    previewQuizDraftApply: jest.fn(),
+    applyQuizDraft: jest.fn(),
+    retryQuizDraftJob: jest.fn(),
+    cancelQuizDraftJob: jest.fn(),
   },
 }));
 
@@ -660,6 +664,172 @@ describe('TeacherAiDraftQuizPage', () => {
     const questionLabels = screen.getAllByText(/Question \d/).map((node) => node.textContent);
     expect(questionLabels).toContain('Question 1');
     expect(questionLabels).toContain('Question 2');
+  });
+
+  it('accepts warning issues, saves review state, and applies only after preview', async () => {
+    seedTrackedJobs([
+      {
+        jobId: 'job-1',
+        jobType: 'quiz_generation',
+        createdAt: '2026-04-24T08:00:00.000Z',
+        lastKnownStatus: 'completed',
+        lastKnownProgress: 100,
+        updatedAt: '2026-04-24T08:10:00.000Z',
+      },
+    ]);
+    const reviewResult = {
+      ...buildResult(),
+      assessmentId: undefined,
+      qualityGate: 'warn',
+      reviewRequired: true,
+      reviewState: 'needs_review',
+      reviewIssues: [
+        {
+          id: 'issue-1',
+          code: 'underfilled_repaired',
+          severity: 'warning',
+          scope: 'question',
+          message: 'Fallback question added.',
+          questionIndex: 0,
+          optionIndex: null,
+          resolved: false,
+          resolution: null,
+        },
+      ],
+      questions: buildResult().questions.map((question, index) => ({
+        ...question,
+        id: `q-${index}`,
+        provenance: {
+          chunkId: 'chunk-1',
+          sourceTitle: 'Fractions',
+          sourceSnippet: 'Fractions represent equal parts of a whole.',
+        },
+        issueIds: index === 0 ? ['issue-1'] : [],
+      })),
+    };
+    mockedAiService.getTeacherJobStatus.mockResolvedValue({
+      data: buildJob({ assessmentId: null }),
+    } as any);
+    mockedAiService.getQuizDraftJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'quiz_generation',
+          status: 'completed',
+          outputId: 'output-1',
+          assessmentId: null,
+        },
+        result: {
+          outputId: 'output-1',
+          outputType: 'assessment_draft',
+          structuredOutput: reviewResult,
+        },
+      },
+    } as any);
+    mockedAiService.updateQuizDraft.mockResolvedValue({
+      data: buildJob({ statusMessage: 'Draft saved' }),
+    } as any);
+    mockedAiService.previewQuizDraftApply.mockResolvedValue({
+      data: {
+        canApply: true,
+        alreadyApplied: false,
+        blockedReasons: [],
+        assessment: {
+          title: 'Fractions AI Draft',
+          totalPoints: 2,
+          questionCount: 2,
+        },
+      },
+    } as any);
+    mockedAiService.applyQuizDraft.mockResolvedValue({
+      data: {
+        jobId: 'job-1',
+        outputId: 'output-1',
+        alreadyApplied: false,
+        applyResult: {
+          assessmentId: 'assessment-1',
+          questionsCreated: 2,
+        },
+      },
+    } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Review queue');
+    expect(screen.getByRole('button', { name: /apply reviewed draft/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /accept warning/i }));
+
+    await waitFor(() => {
+      expect(mockedAiService.updateQuizDraft).toHaveBeenCalledWith(
+        'job-1',
+        expect.objectContaining({
+          structuredOutput: expect.objectContaining({
+            reviewRequired: false,
+            reviewState: 'ready',
+          }),
+        }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /apply reviewed draft/i }));
+    await screen.findByText('Apply quiz draft?');
+    fireEvent.click(screen.getByRole('button', { name: /^apply draft$/i }));
+
+    await waitFor(() => {
+      expect(mockedAiService.previewQuizDraftApply).toHaveBeenCalledWith('job-1');
+      expect(mockedAiService.applyQuizDraft).toHaveBeenCalledWith('job-1');
+    });
+    expect(await screen.findByRole('button', { name: /open assessment editor/i })).toBeInTheDocument();
+  });
+
+  it('clamps question count to 15 before queueing generation', async () => {
+    mockedAiService.getClassIndexStatus.mockResolvedValue({
+      data: buildIndexStatus({
+        chunksIndexed: 6,
+        lessonChunks: 6,
+        isStale: false,
+        needsReindex: false,
+        reason: null,
+        readyLessons: [
+          {
+            lessonId: 'lesson-ready',
+            title: 'Fractions',
+            chunkCount: 6,
+            status: 'indexed',
+          },
+        ],
+        sourceSummary: {
+          lessons: { total: 2, ready: 1, blocked: 1 },
+          extractions: { total: 1, ready: 0, blocked: 1 },
+          questions: {
+            assessments: 0,
+            assessmentsWithQuestions: 0,
+            questionCount: 0,
+            needsIndex: 0,
+          },
+        },
+      }),
+    } as any);
+    mockedAiService.createQuizDraftJob.mockResolvedValue({
+      data: buildJob({ status: 'pending', assessmentId: null }),
+    } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Choose the class sources');
+    fireEvent.click(screen.getByRole('button', { name: /continue to quiz setup/i }));
+    const countInput = screen.getByLabelText(/question count/i);
+    fireEvent.change(countInput, { target: { value: '999' } });
+    fireEvent.click(screen.getByRole('button', { name: /^generate draft$/i }));
+
+    await waitFor(() => {
+      expect(mockedAiService.createQuizDraftJob).toHaveBeenCalledWith(
+        expect.objectContaining({
+          questionCount: 15,
+        }),
+      );
+    });
   });
 
   it('deletes the current assessment draft and cancels the linked AI job', async () => {

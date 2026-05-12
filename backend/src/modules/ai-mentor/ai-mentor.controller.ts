@@ -2375,6 +2375,118 @@ export class AiMentorController {
     return result;
   }
 
+  @Post('teacher/quizzes/jobs/:jobId/apply/preview')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Preview AI quiz draft apply result before assessment creation' })
+  async previewQuizDraftApply(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/apply/preview`,
+      user,
+      {},
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.apply_previewed',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/apply')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Apply reviewed AI quiz draft as an unpublished assessment' })
+  async applyQuizDraft(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/apply`,
+      user,
+      {},
+    );
+    const data =
+      result && typeof result === 'object' && 'data' in result
+        ? (result as { data?: Record<string, unknown> }).data
+        : undefined;
+    const applyResult =
+      data?.applyResult && typeof data.applyResult === 'object'
+        ? (data.applyResult as Record<string, unknown>)
+        : {};
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.applied',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+      metadata: {
+        alreadyApplied: Boolean(data?.alreadyApplied),
+        assessmentId: this.extractStringField(applyResult, 'assessmentId'),
+      },
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/retry')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Retry an AI quiz draft generation job' })
+  async retryQuizDraftJob(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/retry`,
+      user,
+      {},
+    );
+    const retryJobId = this.extractStringField(
+      result && typeof result === 'object' && 'data' in result
+        ? (result as { data?: Record<string, unknown> }).data
+        : result,
+      'jobId',
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.retried',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+      metadata: { retryJobId },
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/cancel')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Cancel an AI quiz draft generation job' })
+  async cancelQuizDraftJob(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/cancel`,
+      user,
+      {},
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.cancelled',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
   @Get('teacher/jobs/:jobId')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @ApiOperation({ summary: 'Poll the status of a teacher AI generation job' })

@@ -203,6 +203,7 @@ describe('TeacherModuleDetailPage', () => {
           originalName: 'General Science File',
           storedName: 'general-science-file.pdf',
           mimeType: 'application/pdf',
+          fileKind: 'pdf',
           sizeBytes: 1024,
           filePath: 'uploads/library/general-science-file.pdf',
           uploadedAt: '2026-04-17T00:00:00.000Z',
@@ -678,7 +679,7 @@ describe('TeacherModuleDetailPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
     const dialog = await screen.findByRole('dialog');
-    const fileTypeButton = within(dialog).getByText('PDF').closest('button');
+    const fileTypeButton = within(dialog).getByText('PDF / PPTX').closest('button');
     if (!fileTypeButton) {
       throw new Error('PDF block type button was not rendered');
     }
@@ -699,6 +700,48 @@ describe('TeacherModuleDetailPage', () => {
       );
     });
     expect(mockedFileService.upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads a PPTX module file block with deck metadata', async () => {
+    const pptxMime =
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    const deck = new File(['deck'], 'quarter-one.pptx', { type: pptxMime });
+    mockedFileService.upload.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: { id: 'deck-file-1', fileKind: 'pptx', mimeType: pptxMime } as never,
+    });
+
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+    const dialog = await screen.findByRole('dialog');
+    const fileTypeButton = within(dialog).getByText('PDF / PPTX').closest('button');
+    if (!fileTypeButton) {
+      throw new Error('File block type button was not rendered');
+    }
+    fireEvent.click(fileTypeButton);
+
+    const fileInput = await screen.findByLabelText('PDF or PowerPoint file') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [deck] } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+
+    await waitFor(() => {
+      expect(mockedFileService.upload).toHaveBeenCalledWith(deck, {
+        classId: 'class-1',
+        scope: 'private',
+      });
+      expect(mockedModuleService.attachItem).toHaveBeenCalledWith(
+        'section-1',
+        expect.objectContaining({
+          itemType: 'file',
+          fileId: 'deck-file-1',
+          metadata: { fileSubtype: 'pptx' },
+        }),
+      );
+    });
   });
 
   it('opens the module guide and navigates through all pages', async () => {

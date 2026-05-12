@@ -326,6 +326,82 @@ describe('aiService', () => {
     expect(result.data.result.structuredOutput.title).toBe('Draft quiz');
   });
 
+  it('calls quiz draft apply preview, apply, retry, and cancel endpoints', async () => {
+    mockedApi.post
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            canApply: false,
+            blockedReasons: ['Resolve blocking review issues before applying.'],
+            assessment: { title: 'Draft quiz', questionCount: 2 },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            alreadyApplied: true,
+            applyResult: { assessmentId: 'assessment-1' },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            jobId: 'retry-job-1',
+            jobType: 'quiz_generation',
+            status: 'pending',
+            progressPercent: 5,
+            retryOfJobId: 'job-1',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            jobId: 'job-1',
+            jobType: 'quiz_generation',
+            status: 'cancelled',
+            progressPercent: 100,
+          },
+        },
+      });
+
+    const preview = await aiService.previewQuizDraftApply('job-1');
+    const apply = await aiService.applyQuizDraft('job-1');
+    const retry = await aiService.retryQuizDraftJob('job-1');
+    const cancel = await aiService.cancelQuizDraftJob('job-1');
+
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      1,
+      '/ai/teacher/quizzes/jobs/job-1/apply/preview',
+      {},
+    );
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      2,
+      '/ai/teacher/quizzes/jobs/job-1/apply',
+      {},
+    );
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      3,
+      '/ai/teacher/quizzes/jobs/job-1/retry',
+      {},
+    );
+    expect(mockedApi.post).toHaveBeenNthCalledWith(
+      4,
+      '/ai/teacher/quizzes/jobs/job-1/cancel',
+      {},
+    );
+    expect(preview.data.canApply).toBe(false);
+    expect(apply.data.alreadyApplied).toBe(true);
+    expect(retry.data.jobId).toBe('retry-job-1');
+    expect(cancel.data.status).toBe('cancelled');
+  });
+
   it('coerces degraded quiz-result payloads into a safe result envelope', async () => {
     mockedApi.get.mockResolvedValue({
       data: {

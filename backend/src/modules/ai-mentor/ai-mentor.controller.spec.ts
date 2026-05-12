@@ -1145,6 +1145,9 @@ describe('AiMentorController', () => {
         assessmentType: 'quiz',
         passingScore: 60,
         feedbackLevel: 'standard',
+        sourcePolicy: 'published_default',
+        allowDraftSources: true,
+        retryOfJobId: JOB_ID,
       };
       mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
 
@@ -1337,6 +1340,134 @@ describe('AiMentorController', () => {
       expect(result).toEqual({
         success: true,
         data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+      });
+    });
+  });
+
+  describe('quiz draft apply/retry actions', () => {
+    it('should forward POST /teacher/quizzes/jobs/:jobId/apply/preview and audit the preview', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { canApply: true, assessment: { questionCount: 2 } },
+      });
+
+      const result = await controller.previewQuizDraftApply(
+        JOB_ID,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/apply/preview`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.apply_previewed',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { canApply: true, assessment: { questionCount: 2 } },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/apply and audit idempotent apply', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          alreadyApplied: true,
+          applyResult: { assessmentId: 'assessment-1' },
+        },
+      });
+
+      const result = await controller.applyQuizDraft(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/apply`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.applied',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({
+            alreadyApplied: true,
+            assessmentId: 'assessment-1',
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: {
+          alreadyApplied: true,
+          applyResult: { assessmentId: 'assessment-1' },
+        },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/retry and audit the retry', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: 'retry-job-1', retryOfJobId: JOB_ID },
+      });
+
+      const result = await controller.retryQuizDraftJob(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/retry`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.retried',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({ retryJobId: 'retry-job-1' }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: 'retry-job-1', retryOfJobId: JOB_ID },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/cancel and audit the cancellation', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      });
+
+      const result = await controller.cancelQuizDraftJob(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/cancel`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.cancelled',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
       });
     });
   });

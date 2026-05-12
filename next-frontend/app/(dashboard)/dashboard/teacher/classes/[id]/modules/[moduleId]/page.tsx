@@ -37,11 +37,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
+import { PPTX_MIME, getFileSubtype } from '@/lib/pptx-viewer';
 import { normalizeRichText } from '@/lib/rich-text';
 import { ActionTooltip } from '@/components/shared/ActionTooltip';
 import { cn } from '@/utils/cn';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
+import type { UploadedFile } from '@/types/file';
 import type { Lesson } from '@/types/lesson';
 import type { ClassModule, ModuleItem, ModuleItemType } from '@/types/module';
 import './module-workspace.css';
@@ -73,8 +75,8 @@ const ATTACH_BLOCK_OPTIONS: Array<{
   },
   {
     type: 'file',
-    label: 'PDF',
-    description: 'Upload a PDF resource block for this section.',
+    label: 'PDF / PPTX',
+    description: 'Upload a PDF or PowerPoint resource block for this section.',
     icon: FileText,
     tone: 'file',
   },
@@ -89,8 +91,8 @@ const FILE_ATTACH_SOURCE_OPTIONS: Array<{
 }> = [
   {
     value: 'upload',
-    label: 'Upload New PDF',
-    description: 'Upload a fresh PDF file for this module block.',
+    label: 'Upload New File',
+    description: 'Upload a fresh PDF or PowerPoint file for this module block.',
     icon: Upload,
     tone: 'upload',
   },
@@ -131,6 +133,7 @@ type AttachState = {
   itemId: string;
   lessonPoints: string;
   file: File | null;
+  selectedLibraryFile: UploadedFile | null;
 };
 
 type DraggingItem = {
@@ -217,13 +220,13 @@ const teacherModuleGuidePages: Array<{
   },
   {
     title: 'Attach and manage module blocks',
-    description: 'Use Add Block on a section to attach lesson, assessment, or PDF blocks.',
+    description: 'Use Add Block on a section to attach lesson, assessment, PDF, or PowerPoint blocks.',
     screen: 'blocks',
     reminder: 'Keep section blocks consistent: lessons, assessments, then references for a readable learner flow.',
     steps: [
       {
         action: 'Add',
-        body: 'Click Add Block and choose Lesson, Assessment, or PDF.',
+        body: 'Click Add Block and choose Lesson, Assessment, or PDF / PPTX.',
       },
       {
         action: 'Verify',
@@ -710,6 +713,7 @@ export default function TeacherModuleDetailPage() {
     itemId: '',
     lessonPoints: '0',
     file: null,
+    selectedLibraryFile: null,
   });
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
@@ -798,7 +802,7 @@ export default function TeacherModuleDetailPage() {
       : attachState.itemType === 'assessment'
         ? 'Add Assessment Block'
         : attachState.itemType === 'file'
-          ? 'Add PDF Block'
+          ? 'Add File Block'
           : 'Add Block';
 
   const attachDialogDescription =
@@ -807,7 +811,7 @@ export default function TeacherModuleDetailPage() {
       : attachState.itemType === 'assessment'
         ? 'Create a new empty assessment or attach an existing one.'
         : attachState.itemType === 'file'
-          ? 'Upload a new PDF or attach an existing library file as a downloadable module block.'
+          ? 'Upload a new PDF or PowerPoint file, or attach an existing library file as a module block.'
           : 'Choose the block type you want to add to this section.';
 
   const canSubmitAttach =
@@ -1239,14 +1243,15 @@ export default function TeacherModuleDetailPage() {
             setAttachingItem(false);
             return;
           }
+          const fileSubtype = getFileSubtype(attachState.selectedLibraryFile);
           payload = {
             itemType: 'file',
             fileId: attachState.itemId,
-            metadata: { fileSubtype: 'library' },
+            metadata: { fileSubtype },
           };
         } else {
           if (!attachState.file) {
-            toast.error('Upload a PDF file first');
+            toast.error('Upload a PDF or PowerPoint file first');
             setAttachingItem(false);
             return;
           }
@@ -1254,10 +1259,14 @@ export default function TeacherModuleDetailPage() {
             classId,
             scope: 'private',
           });
+          const uploadedSubtype = getFileSubtype(uploaded.data);
           payload = {
             itemType: 'file',
             fileId: uploaded.data.id,
-            metadata: { fileSubtype: 'pdf' },
+            metadata: {
+              fileSubtype:
+                uploadedSubtype === 'file' ? getFileSubtype(attachState.file) : uploadedSubtype,
+            },
           };
         }
       }
@@ -1270,6 +1279,7 @@ export default function TeacherModuleDetailPage() {
         itemId: '',
         lessonPoints: '0',
         file: null,
+        selectedLibraryFile: null,
       });
       setAttachSource('upload');
       setLibraryPickerOpen(false);
@@ -1293,7 +1303,7 @@ export default function TeacherModuleDetailPage() {
       toast.success(
         attachState.itemType === 'assessment'
           ? 'Assessment attached (not given yet)'
-          : 'PDF block attached',
+          : 'File block attached',
       );
     } catch {
       toast.error('Unable to attach item');
@@ -1750,6 +1760,7 @@ export default function TeacherModuleDetailPage() {
                             itemId: '',
                             lessonPoints: '0',
                             file: null,
+                            selectedLibraryFile: null,
                           })
                         }
                       >
@@ -1758,7 +1769,7 @@ export default function TeacherModuleDetailPage() {
                         </span>
                         <span className="teacher-module-detail__section-add-copy">
                           <span>Add Block</span>
-                          <small aria-hidden="true">Lesson, assessment, or PDF</small>
+                          <small aria-hidden="true">Lesson, assessment, or file</small>
                         </span>
                       </button>
                     )}
@@ -2051,6 +2062,7 @@ export default function TeacherModuleDetailPage() {
                   itemId: '',
                   lessonPoints: '0',
                   file: null,
+                  selectedLibraryFile: null,
                 },
           )
         }
@@ -2079,6 +2091,7 @@ export default function TeacherModuleDetailPage() {
                         itemId: '',
                         lessonPoints: '0',
                         file: null,
+                        selectedLibraryFile: null,
                       }))
                     }
                   >
@@ -2114,6 +2127,7 @@ export default function TeacherModuleDetailPage() {
                             ...current,
                             itemId: option.value === 'upload' ? '' : current.itemId,
                             file: null,
+                            selectedLibraryFile: option.value === 'upload' ? null : current.selectedLibraryFile,
                           }));
                           if (option.value === 'library') {
                             setLibraryPickerOpen(true);
@@ -2136,16 +2150,17 @@ export default function TeacherModuleDetailPage() {
 
                 {attachSource === 'upload' ? (
                   <>
-                    <label htmlFor="attach-file">PDF File</label>
+                    <label htmlFor="attach-file">PDF or PowerPoint file</label>
                     <Input
                       id="attach-file"
                       type="file"
-                      accept="application/pdf"
+                      accept={`application/pdf,${PPTX_MIME},.pdf,.pptx`}
                       onChange={(event) =>
                         setAttachState((current) => ({
                           ...current,
                           file: event.target.files?.[0] || null,
                           itemId: '',
+                          selectedLibraryFile: null,
                         }))
                       }
                     />
@@ -2154,7 +2169,7 @@ export default function TeacherModuleDetailPage() {
                         Selected file: <strong>{attachState.file.name}</strong>
                       </p>
                     ) : (
-                      <p className="teacher-module-detail__attach-note">Upload a PDF to continue.</p>
+                      <p className="teacher-module-detail__attach-note">Upload a PDF or PowerPoint file to continue.</p>
                     )}
                   </>
                 ) : (
@@ -2296,6 +2311,7 @@ export default function TeacherModuleDetailPage() {
                   itemId: '',
                   lessonPoints: '0',
                   file: null,
+                  selectedLibraryFile: null,
                 })
               }
             >
@@ -2415,12 +2431,15 @@ export default function TeacherModuleDetailPage() {
         onOpenChange={setLibraryPickerOpen}
         subjectKey={normalizeLibrarySubjectKey(classItem.subjectCode, classItem.subjectName)}
         gradeLevel={normalizeLibraryGradeLevel(classItem.subjectGradeLevel ?? classItem.section?.gradeLevel)}
+        allowedKinds={['pdf', 'pptx']}
+        description="Attach an existing General Module or My Library PDF or PowerPoint file."
         onSelect={(file) =>
           setAttachState((current) => ({
             ...current,
             itemType: 'file',
             itemId: file.id,
             file: null,
+            selectedLibraryFile: file,
           }))
         }
       />

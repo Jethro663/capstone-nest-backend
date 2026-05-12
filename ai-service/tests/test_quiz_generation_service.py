@@ -6,12 +6,112 @@ from app.quiz_generation_service import (
     _build_blueprint_evidence,
     _build_quiz_blueprint,
     _fallback_quiz_blueprint,
+    _prepare_quiz_questions_for_review,
     _parse_quiz_blueprint_output,
+    _score_quiz_golden_eval,
     _validate_generated_questions,
 )
 
 
 class QuizGenerationValidationTests(unittest.IsolatedAsyncioTestCase):
+    def test_prepare_quiz_questions_enforces_shape_and_provenance(self) -> None:
+        source_chunks = [
+            {
+                "id": "chunk-1",
+                "sourceType": "lesson_block",
+                "sourceId": "lesson-1",
+                "sourceReference": "lesson:1 | block:intro",
+                "chunkText": "Photosynthesis lets plants make glucose using sunlight, water, and carbon dioxide.",
+                "metadataJson": {"lessonTitle": "Photosynthesis"},
+                "selectionReason": "semantic match",
+                "scoreBreakdown": {"final": 0.92},
+            }
+        ]
+
+        prepared = _prepare_quiz_questions_for_review(
+            [
+                {
+                    "type": "multiple_choice",
+                    "content": "What materials do plants use during photosynthesis?",
+                    "points": 1,
+                    "explanation": "The source says plants use sunlight, water, and carbon dioxide.",
+                    "conceptTags": ["photosynthesis"],
+                    "options": [
+                        {"text": "Sunlight, water, and carbon dioxide", "isCorrect": True, "order": 1},
+                        {"text": "Sunlight, water, and carbon dioxide", "isCorrect": False, "order": 2},
+                    ],
+                }
+            ],
+            source_chunks=source_chunks,
+            question_type="multiple_choice",
+            requested_count=1,
+            existing_question_texts=set(),
+        )
+
+        self.assertEqual(prepared["qualityGate"], "fail")
+        self.assertTrue(prepared["reviewRequired"])
+        self.assertEqual(prepared["reviewIssues"][0]["code"], "invalid_multiple_choice_options")
+        self.assertEqual(prepared["questions"][0]["provenance"]["chunkId"], "chunk-1")
+        self.assertIn("Photosynthesis lets plants", prepared["questions"][0]["provenance"]["sourceSnippet"])
+
+    def test_prepare_quiz_questions_refills_underfilled_output(self) -> None:
+        source_chunks = [
+            {
+                "id": "chunk-1",
+                "sourceType": "lesson_block",
+                "sourceId": "lesson-1",
+                "sourceReference": "lesson:1 | block:intro",
+                "chunkText": "Fractions represent equal parts of a whole. A numerator counts selected parts.",
+                "metadataJson": {"lessonTitle": "Fractions", "conceptTags": ["fractions"]},
+                "selectionReason": "semantic match",
+                "scoreBreakdown": {"final": 0.88},
+            }
+        ]
+
+        prepared = _prepare_quiz_questions_for_review(
+            [
+                {
+                    "type": "true_false",
+                    "content": "Fractions can represent equal parts of a whole.",
+                    "points": 1,
+                    "explanation": "The source states this directly.",
+                    "conceptTags": ["fractions"],
+                    "options": [
+                        {"text": "True", "isCorrect": True, "order": 1},
+                        {"text": "False", "isCorrect": False, "order": 2},
+                    ],
+                }
+            ],
+            source_chunks=source_chunks,
+            question_type="true_false",
+            requested_count=2,
+            existing_question_texts=set(),
+        )
+
+        self.assertEqual(len(prepared["questions"]), 2)
+        self.assertEqual(prepared["qualityGate"], "warn")
+        self.assertIn("underfilled_repaired", {issue["code"] for issue in prepared["reviewIssues"]})
+        self.assertTrue(all(question.get("id") for question in prepared["questions"]))
+
+    def test_score_quiz_golden_eval_flags_missing_required_source_and_forbidden_text(self) -> None:
+        score = _score_quiz_golden_eval(
+            {
+                "questions": [
+                    {"content": "Who discovered gravity?", "reviewIssues": []},
+                ],
+                "reviewIssues": [{"code": "weak_grounding"}],
+            },
+            expected_question_count=2,
+            required_source_terms=["photosynthesis"],
+            forbidden_terms=["gravity"],
+            required_issue_codes=["weak_grounding"],
+        )
+
+        self.assertFalse(score["passed"])
+        self.assertIn("question_count", score["failedChecks"])
+        self.assertIn("required_source_terms", score["failedChecks"])
+        self.assertIn("forbidden_terms", score["failedChecks"])
+
     def test_validate_generated_questions_filters_ungrounded_content(self) -> None:
         source_chunks = [
             {
