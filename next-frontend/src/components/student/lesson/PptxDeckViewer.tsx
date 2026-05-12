@@ -1,9 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Loader2,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { parsePptxSlides, type PptxSlide } from '@/lib/pptx-viewer';
+import { cn } from '@/utils/cn';
 
 interface PptxDeckViewerProps {
   title: string;
@@ -18,10 +27,12 @@ export function PptxDeckViewer({
   loadFile,
   onDownload,
 }: PptxDeckViewerProps) {
+  const viewerRef = useRef<HTMLElement | null>(null);
   const [slides, setSlides] = useState<PptxSlide[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const activeSlide = slides[activeIndex] ?? null;
 
   useEffect(() => {
@@ -64,26 +75,84 @@ export function PptxDeckViewer({
     setActiveIndex((current) => Math.min(slides.length - 1, current + 1));
   }, [slides.length]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goPrevious();
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        goNext();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goNext, goPrevious]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === viewerRef.current);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+        return;
+      }
+      await viewerRef.current?.requestFullscreen();
+    } catch {
+      setIsFullscreen(false);
+    }
+  }, []);
+
   return (
     <article
-      className="student-pptx-viewer rounded-[1rem] border border-[#d7deea] bg-white shadow-sm"
+      ref={viewerRef}
+      className={cn(
+        'student-pptx-viewer overflow-hidden rounded-[1rem] border border-[#d7deea] bg-[#f7f9fc] shadow-sm',
+        isFullscreen && 'fixed inset-0 z-50 rounded-none border-0 bg-[#111827]',
+      )}
       aria-label={`${title} PowerPoint viewer`}
     >
-      <header className="student-pptx-viewer__header flex flex-wrap items-start justify-between gap-3 border-b border-[#e5eaf2] px-4 py-4">
-        <div>
+      <header className="student-pptx-viewer__header flex flex-wrap items-start justify-between gap-3 border-b border-[#dce3ee] bg-white px-4 py-4">
+        <div className="min-w-0">
           <p className="student-pptx-viewer__eyebrow text-xs font-black uppercase tracking-[0.12em] text-[#a32d2d]">Deck Preview</p>
-          <h2 className="mt-1 text-lg font-black text-[#172033]">{title}</h2>
+          <h2 className="mt-1 truncate text-lg font-black text-[#172033]">{title}</h2>
           {subtitle ? <p className="mt-1 text-sm font-semibold text-[#64748b]">{subtitle}</p> : null}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="student-pptx-viewer__download rounded-full"
-          onClick={() => void onDownload()}
-        >
-          <Download className="h-4 w-4" />
-          Download deck
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="student-pptx-viewer__download rounded-full"
+            onClick={() => void toggleFullscreen()}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            {isFullscreen ? 'Exit full screen' : 'Full screen'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="student-pptx-viewer__download rounded-full"
+            onClick={() => void onDownload()}
+          >
+            <Download className="h-4 w-4" />
+            Download deck
+          </Button>
+        </div>
       </header>
 
       {loading ? (
@@ -100,41 +169,73 @@ export function PptxDeckViewer({
           <span>{error}</span>
         </div>
       ) : activeSlide ? (
-        <>
-          <div className="student-pptx-viewer__toolbar flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm font-bold text-[#475569]">
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-[#dbe3ef] px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={goPrevious}
-              disabled={activeIndex === 0}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </button>
-            <span>
-              Slide {activeIndex + 1} of {slides.length}
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-full border border-[#dbe3ef] px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={goNext}
-              disabled={activeIndex >= slides.length - 1}
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
+        <div className={cn('grid gap-0 bg-[#eef3f8]', isFullscreen ? 'h-[calc(100vh-81px)] md:grid-cols-[13rem_minmax(0,1fr)]' : 'md:grid-cols-[12rem_minmax(0,1fr)]')}>
+          <aside className="student-pptx-viewer__rail flex gap-2 overflow-x-auto border-b border-[#dce3ee] bg-[#f8fafc] p-3 md:max-h-[38rem] md:flex-col md:overflow-y-auto md:border-b-0 md:border-r">
+            {slides.map((slide, index) => (
+              <button
+                key={slide.slideNumber}
+                type="button"
+                aria-label={`Open slide ${slide.slideNumber}`}
+                aria-current={index === activeIndex ? 'true' : undefined}
+                className={cn(
+                  'grid min-w-36 gap-2 rounded-lg border bg-white p-2 text-left shadow-sm transition md:min-w-0',
+                  index === activeIndex
+                    ? 'border-[#a32d2d] ring-2 ring-[#f2c7c7]'
+                    : 'border-[#dbe3ef] hover:border-[#b9c6d8]',
+                )}
+                onClick={() => setActiveIndex(index)}
+              >
+                <span className="text-[0.68rem] font-black uppercase text-[#64748b]">Slide {slide.slideNumber}</span>
+                <span className="aspect-video overflow-hidden rounded border border-[#e3e9f2] bg-[#f8fafc] px-2 py-2">
+                  <span className="line-clamp-2 block text-xs font-black leading-snug text-[#172033]">
+                    {slide.title}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </aside>
 
-          <section className="student-pptx-viewer__slide m-4 rounded-[0.9rem] border border-[#dbe3ef] bg-[#f8fafc] px-4 py-5" aria-live="polite">
-            <p className="student-pptx-viewer__slide-number text-xs font-black uppercase tracking-[0.12em] text-[#64748b]">Slide {activeSlide.slideNumber}</p>
-            <h3 className="mt-2 text-xl font-black text-[#111827]">{activeSlide.title}</h3>
-            <div className="student-pptx-viewer__slide-lines mt-4 grid gap-2 text-sm leading-6 text-[#334155]">
-              {activeSlide.lines.map((line, index) => (
-                <p key={`${activeSlide.slideNumber}-${index}`}>{line}</p>
-              ))}
+          <div className="grid min-w-0 grid-rows-[auto_minmax(0,1fr)]">
+            <div className="student-pptx-viewer__toolbar flex flex-wrap items-center justify-between gap-2 border-b border-[#dce3ee] bg-white px-4 py-3 text-sm font-bold text-[#475569]">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border border-[#dbe3ef] px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={goPrevious}
+                disabled={activeIndex === 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </button>
+              <span>
+                Slide {activeIndex + 1} of {slides.length}
+              </span>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-full border border-[#dbe3ef] px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={goNext}
+                disabled={activeIndex >= slides.length - 1}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-          </section>
-        </>
+
+            <div className="flex min-h-[22rem] items-center justify-center bg-[#dde5ef] p-4 md:p-8">
+              <section
+                className="student-pptx-viewer__slide aspect-video w-full max-w-5xl rounded-md border border-[#dbe3ef] bg-white px-[6%] py-[5%] shadow-xl"
+                aria-live="polite"
+              >
+                <p className="student-pptx-viewer__slide-number text-xs font-black uppercase tracking-[0.12em] text-[#64748b]">Slide {activeSlide.slideNumber}</p>
+                <h3 className="mt-3 text-2xl font-black leading-tight text-[#111827] md:text-4xl">{activeSlide.title}</h3>
+                <div className="student-pptx-viewer__slide-lines mt-6 grid gap-3 text-sm leading-6 text-[#334155] md:text-lg">
+                  {activeSlide.lines.map((line, index) => (
+                    <p key={`${activeSlide.slideNumber}-${index}`}>{line}</p>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       ) : null}
     </article>
   );
