@@ -1,7 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, CheckCheck, Filter, RefreshCcw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { ArrowUpRight, Bell, CheckCheck, Filter, RefreshCcw, TriangleAlert } from 'lucide-react';
+import {
+  getNotificationMessage,
+  isInterventionAlertNotification,
+  resolveNotificationDestination,
+} from '@/lib/notification-routing';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { notificationService } from '@/services/notification-service';
@@ -50,6 +56,7 @@ function formatNotificationRelativeTime(value: string) {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const { user, role } = useAuth();
   const { unreadCount, markAsRead, markAllAsRead, fetchNotifications } = useNotifications();
   const isStudent = user?.roles?.includes('student');
@@ -85,6 +92,16 @@ export default function NotificationsPage() {
     () => items.filter((notification) => !notification.isRead).length,
     [items],
   );
+  const displayItems = useMemo(
+    () =>
+      [...items].sort((left, right) => {
+        const leftPinned = !left.isRead && isInterventionAlertNotification(left);
+        const rightPinned = !right.isRead && isInterventionAlertNotification(right);
+        if (leftPinned !== rightPinned) return leftPinned ? -1 : 1;
+        return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+      }),
+    [items],
+  );
 
   useEffect(() => {
     void loadPage();
@@ -106,6 +123,23 @@ export default function NotificationsPage() {
     await markAllAsRead();
     await refreshAll();
   }, [markAllAsRead, refreshAll]);
+
+  const handleOpenNotification = useCallback(
+    async (notification: Notification) => {
+      if (!notification.isRead) {
+        await markAsRead(notification.id);
+        setItems((current) =>
+          current.map((item) =>
+            item.id === notification.id
+              ? { ...item, isRead: true, readAt: new Date().toISOString() }
+              : item,
+          ),
+        );
+      }
+      router.push(resolveNotificationDestination(notification, role));
+    },
+    [markAsRead, role, router],
+  );
 
   useEffect(() => {
     setPage(1);
@@ -220,10 +254,12 @@ export default function NotificationsPage() {
             </div>
           ) : (
             <div className="space-y-3 pt-3">
-              {items.map((notification) => (
+              {displayItems.map((notification) => {
+                const isIntervention = isInterventionAlertNotification(notification);
+                return (
                 <article
                   key={notification.id}
-                  className={`rounded-[1rem] border p-4 ${notification.isRead ? 'border-[#d8e2ef] bg-[#f8fbff]' : 'border-[#e70012] bg-[#fff8f9]'}`}
+                  className={`rounded-[1rem] border p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-30px_rgba(15,35,64,0.55)] ${isIntervention ? 'border-[#e70012] bg-[#fff4f6]' : notification.isRead ? 'border-[#d8e2ef] bg-[#f8fbff]' : 'border-[#e70012] bg-[#fff8f9]'}`}
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 space-y-2">
@@ -235,14 +271,30 @@ export default function NotificationsPage() {
                         <span className="rounded-full border border-[#c9d6e8] bg-[#edf4ff] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#183a63]">
                           {notification.type.replaceAll('_', ' ')}
                         </span>
+                        {isIntervention ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-[#fecdd3] bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-[#be123c]">
+                            <TriangleAlert className="h-3 w-3" />
+                            Pinned risk warning
+                          </span>
+                        ) : null}
                       </div>
-                      <p className="text-sm leading-6 text-[#314766]">{notification.message}</p>
+                      <p className="text-sm leading-6 text-[#314766]">{getNotificationMessage(notification)}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6c7f99]">
                         <span>{formatNotificationRelativeTime(notification.createdAt)}</span>
                         <span>{formatNotificationTimestamp(notification.createdAt)}</span>
                         {notification.readAt ? <span>Read {formatNotificationTimestamp(notification.readAt)}</span> : null}
                       </div>
                     </div>
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full bg-[#12284a] text-white hover:bg-[#183a63] sm:w-auto"
+                        onClick={() => void handleOpenNotification(notification)}
+                      >
+                        <ArrowUpRight className="mr-2 h-4 w-4" />
+                        Open
+                      </Button>
                     {!notification.isRead && (
                       <Button
                         type="button"
@@ -254,9 +306,11 @@ export default function NotificationsPage() {
                         Mark Read
                       </Button>
                     )}
+                    </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -361,13 +415,15 @@ export default function NotificationsPage() {
             />
           ) : (
             <div className="admin-notification-list">
-              {items.map((notification) => (
+              {displayItems.map((notification) => {
+                const isIntervention = isInterventionAlertNotification(notification);
+                return (
                 <article
                   key={notification.id}
-                  className={`admin-notification-row ${notification.isRead ? 'admin-notification-row--read' : 'admin-notification-row--unread'}`}
+                  className={`admin-notification-row ${notification.isRead ? 'admin-notification-row--read' : 'admin-notification-row--unread'} ${isIntervention ? 'ring-2 ring-rose-200' : ''}`}
                 >
                   <div className="admin-notification-row__icon">
-                    <Bell className="h-4 w-4" />
+                    {isIntervention ? <TriangleAlert className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                   </div>
 
                   <div className="admin-notification-row__body">
@@ -381,10 +437,23 @@ export default function NotificationsPage() {
                           <span className="admin-notification-row__type">
                             {notification.type.replaceAll('_', ' ')}
                           </span>
+                          {isIntervention ? (
+                            <span className="admin-notification-row__status is-unread">Risk warning</span>
+                          ) : null}
                         </div>
-                        <p className="admin-notification-row__message">{notification.message}</p>
+                        <p className="admin-notification-row__message">{getNotificationMessage(notification)}</p>
                       </div>
 
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="admin-button-solid rounded-xl font-black"
+                          onClick={() => void handleOpenNotification(notification)}
+                        >
+                          <ArrowUpRight className="mr-2 h-4 w-4" />
+                          Open
+                        </Button>
                       {!notification.isRead ? (
                         <Button
                           type="button"
@@ -396,6 +465,7 @@ export default function NotificationsPage() {
                           Mark Read
                         </Button>
                       ) : null}
+                      </div>
                     </div>
 
                     <div className="admin-notification-row__meta">
@@ -404,7 +474,8 @@ export default function NotificationsPage() {
                     </div>
                   </div>
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -538,10 +609,12 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-3 pt-3">
-            {items.map((notification) => (
+            {displayItems.map((notification) => {
+              const isIntervention = isInterventionAlertNotification(notification);
+              return (
               <article
                 key={notification.id}
-                className={`rounded-[1rem] border p-4 ${notification.isRead ? 'border-[#d8e2ef] bg-[#f8fbff]' : 'border-[#e70012] bg-[#fff8f9]'}`}
+                className={`rounded-[1rem] border p-4 transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_-30px_rgba(15,35,64,0.55)] ${isIntervention ? 'border-[#e70012] bg-[#fff4f6]' : notification.isRead ? 'border-[#d8e2ef] bg-[#f8fbff]' : 'border-[#e70012] bg-[#fff8f9]'}`}
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 space-y-2">
@@ -553,14 +626,30 @@ export default function NotificationsPage() {
                       <span className="rounded-full border border-[#c9d6e8] bg-[#edf4ff] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#183a63]">
                         {notification.type.replaceAll('_', ' ')}
                       </span>
+                      {isIntervention ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[#fecdd3] bg-white px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-[#be123c]">
+                          <TriangleAlert className="h-3 w-3" />
+                          Pinned risk warning
+                        </span>
+                      ) : null}
                     </div>
-                    <p className="text-sm leading-6 text-[#314766]">{notification.message}</p>
+                    <p className="text-sm leading-6 text-[#314766]">{getNotificationMessage(notification)}</p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#6c7f99]">
                       <span>{formatNotificationRelativeTime(notification.createdAt)}</span>
                       <span>{formatNotificationTimestamp(notification.createdAt)}</span>
                       {notification.readAt ? <span>Read {formatNotificationTimestamp(notification.readAt)}</span> : null}
                     </div>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="shrink-0 bg-[#12284a] text-white hover:bg-[#183a63]"
+                      onClick={() => void handleOpenNotification(notification)}
+                    >
+                      <ArrowUpRight className="mr-2 h-4 w-4" />
+                      Open
+                    </Button>
                   {!notification.isRead && (
                     <Button
                       type="button"
@@ -572,9 +661,11 @@ export default function NotificationsPage() {
                       Mark Read
                     </Button>
                   )}
+                  </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         )}
 

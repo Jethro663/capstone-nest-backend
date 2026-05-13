@@ -3,12 +3,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Animated, Easing, Image, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { notificationsApi } from "../api/services/notifications";
+import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { colors, hexToRgba, radii, shadow } from "../theme/tokens";
 import type { MobileNotification } from "../types/notification";
 import { useAuth } from "./AuthProvider";
 
 const INTERVENTION_TERMS = ["intervention", "at risk", "at-risk", "flagged"];
+const ASSESSMENT_TYPES = new Set(["assessment_assigned", "assessment_due", "assessment_graded"]);
 const NOTIFICATION_POLL_MS = 4000;
 const AUTO_DISMISS_MS = 7800;
 
@@ -39,7 +41,61 @@ function isInterventionAlertNotification(
   return INTERVENTION_TERMS.some((term) => joined.includes(term));
 }
 
+function shouldSurfaceNotificationOnHydration(notification: MobileNotification) {
+  return !notification.isRead;
+}
+
+function navigateToMainTab(tabName: string) {
+  if (!rootNavigationRef.isReady()) return false;
+  (rootNavigationRef.navigate as unknown as (name: string, params?: unknown) => void)("MainTabs", { screen: tabName });
+  return true;
+}
+
+function resolveNotificationNavigation(notification: MobileNotification, role: string | null) {
+  const normalizedRole = String(role || "").toLowerCase();
+  const referenceId = notification.referenceId || undefined;
+
+  if (isInterventionAlertNotification(notification)) {
+    if (normalizedRole === "teacher") {
+      return referenceId
+        ? () => rootNavigationRef.navigate("TeacherInterventionDetail", { caseId: referenceId })
+        : () => rootNavigationRef.navigate("TeacherInterventions", undefined);
+    }
+    return () => rootNavigationRef.navigate("LXP", { tab: "case" });
+  }
+
+  if (ASSESSMENT_TYPES.has(notification.type)) {
+    if (normalizedRole === "teacher") {
+      return referenceId
+        ? () => rootNavigationRef.navigate("TeacherAssessmentDetail", { assessmentId: referenceId })
+        : () => navigateToMainTab("Assessments");
+    }
+    return () => rootNavigationRef.navigate("AssessmentHistory", referenceId ? { assessmentId: referenceId } : undefined);
+  }
+
+  if (notification.type === "announcement_posted") {
+    if (normalizedRole === "teacher") {
+      return () => rootNavigationRef.navigate("TeacherAnnouncements");
+    }
+    return () => navigateToMainTab("Announcements");
+  }
+
+  if (notification.type === "discussion_thread_posted" || notification.type === "discussion_comment_posted") {
+    return () => navigateToMainTab("Classes");
+  }
+
+  if (notification.type === "grade_updated") {
+    if (normalizedRole === "teacher") {
+      return () => rootNavigationRef.navigate("TeacherClassRecord");
+    }
+    return () => rootNavigationRef.navigate("Performance");
+  }
+
+  return () => navigateToMainTab(normalizedRole === "teacher" ? "Home" : "Dashboard");
+}
+
 const interventionCharacterSource = () => require("../../assets/ja/ja_live_notify.png");
+const notificationCharacterSource = () => require("../../assets/ja/ja_wave.png");
 
 export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
@@ -59,6 +115,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const slide = useRef(new Animated.Value(-140)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  const role = resolveMobileRole(user?.roles);
 
   useEffect(() => {
     return () => {
@@ -107,6 +164,27 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       setActiveNotification(null);
     });
   }, [opacity, slide]);
+
+  const openNotification = useCallback(
+    (notification: MobileNotification) => {
+      const navigate = resolveNotificationNavigation(notification, role);
+      if (!rootNavigationRef.isReady()) {
+        dismissActive();
+        return;
+      }
+
+      setUnreadCount((current) => (notification.isRead ? current : Math.max(0, current - 1)));
+      void notificationsApi.markRead(notification.id).catch(() => {
+        // Navigation matters more than a transient read-state failure.
+      });
+
+      dismissActive();
+      setTimeout(() => {
+        navigate();
+      }, 230);
+    },
+    [dismissActive, role],
+  );
 
   useEffect(() => {
     if (!activeNotification) {
@@ -193,14 +271,25 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
       const rows = Array.isArray(listResponse.data) ? listResponse.data : [];
       if (!hydratedRef.current) {
+        const urgentUnread = rows
+          .filter(shouldSurfaceNotificationOnHydration)
+          .sort((left, right) => {
+            const leftTs = Date.parse(left.createdAt);
+            const rightTs = Date.parse(right.createdAt);
+            return leftTs - rightTs;
+          })
+          .slice(-3);
+
         rows.forEach((row) => {
           seenIdsRef.current.add(row.id);
         });
         hydratedRef.current = true;
+        queueRef.current.push(...urgentUnread);
+        tryShowNext();
         return;
       }
 
-      const fresh = rows.filter((row) => !seenIdsRef.current.has(row.id));
+      const fresh = rows.filter((row) => !row.isRead && !seenIdsRef.current.has(row.id));
       if (fresh.length === 0) return;
 
       const orderedFresh = [...fresh].sort((left, right) => {
@@ -249,7 +338,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     };
   }, [isAuthenticated, pollNotifications, user?.id]);
 
-  const role = resolveMobileRole(user?.roles);
   const interventionAlert = activeNotification ? isInterventionAlertNotification(activeNotification) : false;
   const message = activeNotification ? messageFromNotification(activeNotification) : "";
   const pulseTranslate = pulse.interpolate({
@@ -296,7 +384,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
               ]}
             >
               <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                <View style={{ flex: 1, paddingRight: interventionAlert ? 78 : 4 }}>
+                <View style={{ flex: 1, paddingRight: 78 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <View
                       style={{
@@ -315,7 +403,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                           color: interventionAlert ? "#9F1239" : colors.blueDeep,
                         }}
                       >
-                        {interventionAlert ? "Intervention alert" : "Live update"}
+                        {interventionAlert ? "Intervention alert" : "Nexora push"}
                       </Text>
                     </View>
                     {unreadCount > 0 ? (
@@ -345,7 +433,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                       <Text style={{ fontSize: 11, fontWeight: "800", color: colors.text }}>Dismiss</Text>
                     </Pressable>
                     <Pressable
-                      onPress={dismissActive}
+                      onPress={() => openNotification(activeNotification)}
                       style={{
                         borderRadius: 14,
                         backgroundColor: interventionAlert ? "#BE123C" : "#0F172A",
@@ -354,29 +442,27 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                       }}
                     >
                       <Text style={{ fontSize: 11, fontWeight: "800", color: colors.white }}>
-                        {role === "teacher" ? "View now" : "Got it"}
+                        View now
                       </Text>
                     </Pressable>
                   </View>
                 </View>
 
-                {interventionAlert ? (
-                  <Animated.View
-                    pointerEvents="none"
-                    style={{
-                      position: "absolute",
-                      right: 4,
-                      bottom: -3,
-                      transform: [{ translateY: pulseTranslate }],
-                    }}
-                  >
-                    <Image
-                      source={interventionCharacterSource()}
-                      resizeMode="contain"
-                      style={{ width: 84, height: 84, opacity: 0.95 }}
-                    />
-                  </Animated.View>
-                ) : null}
+                <Animated.View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    right: 4,
+                    bottom: -3,
+                    transform: [{ translateY: pulseTranslate }],
+                  }}
+                >
+                  <Image
+                    source={interventionAlert ? interventionCharacterSource() : notificationCharacterSource()}
+                    resizeMode="contain"
+                    style={{ width: 84, height: 84, opacity: interventionAlert ? 0.95 : 0.9 }}
+                  />
+                </Animated.View>
               </View>
             </Animated.View>
           </View>

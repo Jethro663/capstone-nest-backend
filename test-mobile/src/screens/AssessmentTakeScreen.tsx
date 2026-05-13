@@ -93,6 +93,8 @@ function buildUploadRules(assessment?: {
   };
 }
 
+const jaAssessmentSource = () => require("../../assets/ja/ja_cheer.png");
+
 function resolveMediaUrl(value?: string | null) {
   if (!value) return null;
   if (/^https?:\/\//i.test(value) || value.startsWith("file://")) {
@@ -666,8 +668,20 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
     const selectedDropdownOption = options.find((option) => option.id === answer);
 
     return (
-      <Card style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, padding: 0 }}>
-        <View style={{ padding: 16 }}>
+      <Card style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, padding: 0, overflow: "hidden", position: "relative" }}>
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            right: -10,
+            bottom: -18,
+            zIndex: 0,
+            opacity: 0.18,
+          }}
+        >
+          <Image source={jaAssessmentSource()} resizeMode="contain" style={{ width: 148, height: 148 }} />
+        </View>
+        <View style={{ padding: 16, position: "relative", zIndex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <View
               style={{
@@ -685,9 +699,11 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             <Text style={{ fontSize: 11, color: theme.muted }}>{currentQuestion.points} pts</Text>
           </View>
 
-          <Text style={{ marginTop: 12, fontSize: 20, lineHeight: 29, fontWeight: "900", color: theme.text }}>
-            {prompt}
-          </Text>
+          <View style={{ marginTop: 12, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)", paddingHorizontal: 12, paddingVertical: 12 }}>
+            <Text style={{ fontSize: 20, lineHeight: 29, fontWeight: "900", color: theme.text }}>
+              {prompt}
+            </Text>
+          </View>
 
           {questionImageUri ? (
             <Image

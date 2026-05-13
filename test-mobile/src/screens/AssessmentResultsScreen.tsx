@@ -553,11 +553,11 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                       {stripRichText(response.question?.content || "Question content unavailable")}
                     </Text>
                     <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
-                      Your answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
+                      Your previous answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
                     </Text>
-                    {!response.isCorrect && correctAnswer ? (
+                    {correctAnswer ? (
                       <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
-                        Correct answer: <Text style={{ color: theme.text }}>{correctAnswer}</Text>
+                        Correct answer: <Text style={{ color: theme.green, fontWeight: "900" }}>{correctAnswer}</Text>
                       </Text>
                     ) : null}
                     {response.question?.explanation ? (

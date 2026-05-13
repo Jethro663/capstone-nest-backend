@@ -63,7 +63,7 @@ import {
   TeacherModuleFileDetailScreen,
   TeacherSectionAddStudentsScreen,
   TeacherSectionStudentProfileScreen,
-} from "../screens/TeacherDeepParityScreens";
+} from "../screens/TeacherDeepParity";
 import { colors } from "../theme/tokens";
 import {
   studentStackRouteNames,
@@ -75,6 +75,7 @@ import {
 } from "./student-route-manifest";
 import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
 import { resolveMobileRole } from "./role-resolver";
+import { rootNavigationRef } from "./navigation-ref";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -501,6 +502,7 @@ export function AppNavigator() {
 
   return (
     <NavigationContainer
+      ref={rootNavigationRef}
       theme={navigationTheme}
       onReady={() => {
         if (!isAuthenticated) {

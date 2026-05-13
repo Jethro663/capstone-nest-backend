@@ -104,7 +104,9 @@ const MODE_META: Record<
 const JA_COACH_SPLIT_PATTERN = /\s*JA Coach:\s*/i;
 const JA_AVATAR_IMAGES = {
   default: "/images/JA/ja_wave.png",
+  celebrate: "/images/JA/ja_cheer.png",
   guarded: "/images/JA/ja_sad.png",
+  surprised: "/images/JA/ja_shock.png",
   thinking: "/images/JA/ja_thinking.png",
 } as const;
 const DEFAULT_JA_ASK_GUIDELINES = [
@@ -966,6 +968,78 @@ export default function StudentJaWorkspace({
     }
   };
 
+  const liveJaState = useMemo<{
+    mood: keyof typeof JA_AVATAR_IMAGES;
+    caption: string;
+    key: string;
+    talking: boolean;
+  }>(() => {
+    const latestAssistant =
+      [...askMessages].reverse().find((message) => message.role !== "student") ?? null;
+    const latestStudent =
+      [...askMessages].reverse().find((message) => message.role === "student") ?? null;
+
+    if (busy) {
+      return {
+        mood: "thinking",
+        caption: "Thinking through your lesson...",
+        key: `thinking-${latestStudent?.id ?? askMessages.length}`,
+        talking: true,
+      };
+    }
+
+    if (latestAssistant?.blocked) {
+      return {
+        mood: "guarded",
+        caption: "Let's keep it safe and class-grounded.",
+        key: `guarded-${latestAssistant.id}`,
+        talking: true,
+      };
+    }
+
+    if (latestAssistant) {
+      const tone = getAssistantTone(latestAssistant);
+      if (tone === "thin-evidence") {
+        return {
+          mood: "surprised",
+          caption: "I need a clearer lesson clue.",
+          key: `thin-${latestAssistant.id}`,
+          talking: true,
+        };
+      }
+      if (tone === "guarded") {
+        return {
+          mood: "guarded",
+          caption: "Let's stay with your class material.",
+          key: `guarded-${latestAssistant.id}`,
+          talking: true,
+        };
+      }
+      return {
+        mood: "celebrate",
+        caption: "Nice, I found a path through it.",
+        key: `celebrate-${latestAssistant.id}`,
+        talking: true,
+      };
+    }
+
+    if (latestStudent) {
+      return {
+        mood: "surprised",
+        caption: "I'm listening. Let's solve it.",
+        key: `listening-${latestStudent.id}`,
+        talking: true,
+      };
+    }
+
+    return {
+      mood: "default",
+      caption: "Choose a lesson, then ask me anything.",
+      key: "idle",
+      talking: false,
+    };
+  }, [askMessages, busy]);
+
   if (loading) {
     return (
       <div className="ja-hub-loading">
@@ -1226,13 +1300,34 @@ export default function StudentJaWorkspace({
               exit={reduceMotion ? {} : { opacity: 0, y: -8 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
-              <div className="ja-home-copy">
-                <p className="ja-eyebrow">Start with a mode</p>
-                <h2>How do you want JA to help?</h2>
-                <p>
-                  Choose the kind of support first. JA will keep the selected class context
-                  and load the matching workspace.
-                </p>
+              <div className="ja-home-hero">
+                <div className="ja-home-copy">
+                  <p className="ja-eyebrow">Pick your study boost</p>
+                  <h2>Tell JA what feels confusing, then watch the lesson click.</h2>
+                  <p>
+                    Choose a mode and JA will turn this class into simpler explanations,
+                    sharper review questions, and a study path that feels easier to start.
+                  </p>
+                  <div className="ja-home-sparkline" aria-label="JA study strengths">
+                    <span>Explain it simply</span>
+                    <span>Quiz me fast</span>
+                    <span>Find my weak spots</span>
+                  </div>
+                </div>
+                <div className="ja-home-figure" aria-hidden="true">
+                  <span className="ja-home-orb ja-home-orb--one" />
+                  <span className="ja-home-orb ja-home-orb--two" />
+                  <Image
+                    src={JA_AVATAR_IMAGES.default}
+                    alt=""
+                    width={420}
+                    height={420}
+                    className="ja-home-robot"
+                    priority
+                  />
+                  <span className="ja-home-bubble ja-home-bubble--ask">Ask me anything</span>
+                  <span className="ja-home-bubble ja-home-bubble--review">Replay mistakes</span>
+                </div>
               </div>
               <div className="ja-home-modes">
                 {MODE_ORDER.map((modeKey) => {
@@ -1461,6 +1556,28 @@ export default function StudentJaWorkspace({
                   </article>
                 ) : null}
                 <div ref={askTailRef} />
+              </div>
+
+              <div
+                key={liveJaState.key}
+                className={cn(
+                  "ja-live-companion",
+                  `is-${liveJaState.mood}`,
+                  liveJaState.talking && "is-talking",
+                  askMessages.length > 0 && "has-chat",
+                )}
+                aria-hidden="true"
+              >
+                <span className="ja-live-companion__halo" />
+                <Image
+                  src={JA_AVATAR_IMAGES[liveJaState.mood]}
+                  alt=""
+                  width={520}
+                  height={520}
+                  sizes="(max-width: 640px) 10rem, (max-width: 920px) 14rem, 24rem"
+                  className="ja-live-companion__image"
+                />
+                <span className="ja-live-companion__caption">{liveJaState.caption}</span>
               </div>
 
               {selectedLessonContext ? (

@@ -17,7 +17,11 @@ import {
   sql,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  type CreateNotificationInput,
+} from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import {
   academicSystemStates,
   assessments,
@@ -249,6 +253,7 @@ export class LxpService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
   ) {}
 
@@ -1654,30 +1659,88 @@ export class LxpService {
     }
   }
 
-  private async notifyInterventionPending(studentId: string, classId: string) {
-    const cls = await this.db.query.classes.findFirst({
-      where: eq(classes.id, classId),
-      columns: { teacherId: true, subjectName: true, subjectCode: true },
+  private async createAndEmitNotifications(
+    inputs: CreateNotificationInput[],
+    options: { dedupe?: boolean } = {},
+  ) {
+    const shouldDedupe = options.dedupe ?? true;
+    const createdInputs = shouldDedupe
+      ? await this.notificationsService.createBulkDeduped(inputs)
+      : inputs;
+
+    if (!shouldDedupe) {
+      await this.notificationsService.createBulk(inputs);
+    }
+    const createdAt = new Date();
+
+    createdInputs.forEach((input, index) => {
+      this.notificationsGateway.emitToUser(input.userId, {
+        id: input.referenceId
+          ? `${input.type}:${input.referenceId}:${input.userId}`
+          : `${input.type}:${input.userId}:${createdAt.getTime()}:${index}`,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        referenceId: input.referenceId,
+        createdAt,
+      });
     });
+  }
+
+  private async notifyInterventionPending(
+    studentId: string,
+    classId: string,
+    caseId: string,
+    event?: Pick<
+      PerformanceStatusChangedEvent,
+      'blendedScore' | 'thresholdApplied'
+    >,
+  ) {
+    const [cls, student] = await Promise.all([
+      this.db.query.classes.findFirst({
+        where: eq(classes.id, classId),
+        columns: { teacherId: true, subjectName: true, subjectCode: true },
+      }),
+      this.db.query.users.findFirst({
+        where: eq(users.id, studentId),
+        columns: { firstName: true, lastName: true },
+      }),
+    ]);
     if (!cls) return;
 
-    const notifications: Array<{
-      userId: string;
-      type: 'grade_updated';
-      title: string;
-      body: string;
-    }> = [];
+    const subjectLabel =
+      cls.subjectCode || cls.subjectName || 'the enrolled class';
+    const studentName =
+      [student?.firstName, student?.lastName].filter(Boolean).join(' ') ||
+      'A student';
+    const scoreText =
+      typeof event?.blendedScore === 'number'
+        ? ` Current score: ${event.blendedScore.toFixed(1)}%, threshold: ${
+            event.thresholdApplied
+          }%.`
+        : '';
+
+    const notifications: CreateNotificationInput[] = [
+      {
+        userId: studentId,
+        type: 'grade_updated',
+        referenceId: caseId,
+        title: 'Intervention warning: grades at risk',
+        body: `Your performance in ${subjectLabel} is at risk for intervention. Open Learners Path to view the support plan.${scoreText}`,
+      },
+    ];
     if (cls.teacherId) {
       notifications.push({
         userId: cls.teacherId,
-        type: 'grade_updated' as const,
+        type: 'grade_updated',
+        referenceId: caseId,
         title: 'Student flagged for intervention',
-        body: `A student is pending intervention approval in ${cls.subjectCode}.`,
+        body: `${studentName} is at risk and pending intervention review in ${subjectLabel}.${scoreText}`,
       });
     }
 
     if (notifications.length > 0) {
-      await this.notificationsService.createBulk(notifications);
+      await this.createAndEmitNotifications(notifications);
     }
   }
 
@@ -1695,7 +1758,12 @@ export class LxpService {
         'performance_status_changed',
       );
 
-      await this.notifyInterventionPending(event.studentId, event.classId);
+      await this.notifyInterventionPending(
+        event.studentId,
+        event.classId,
+        interventionCase.id,
+        event,
+      );
 
       if (auditActorId) {
         await this.auditService.log({
@@ -3924,14 +3992,18 @@ export class LxpService {
         .where(eq(interventionCases.id, interventionCase.id));
     });
 
-    await this.notificationsService.createBulk([
-      {
-        userId: interventionCase.studentId,
-        type: 'grade_updated',
-        title: 'New intervention checklist assigned',
-        body: 'Your teacher updated your Learners Path tasks. Open Learners Path to continue.',
-      },
-    ]);
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'New intervention checklist assigned',
+          body: 'Your teacher updated your intervention checklist in Learners Path. Open Learners Path to continue.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,
@@ -3988,14 +4060,18 @@ export class LxpService {
       })
       .where(eq(interventionCases.id, caseId));
 
-    await this.notificationsService.createBulk([
-      {
-        userId: interventionCase.studentId,
-        type: 'grade_updated',
-        title: 'Intervention case resolved',
-        body: 'Your teacher marked your current intervention cycle as resolved.',
-      },
-    ]);
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'Intervention case resolved',
+          body: 'Your teacher marked your current intervention cycle as resolved.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,
@@ -4092,6 +4168,19 @@ export class LxpService {
         updatedAt: new Date(),
       })
       .where(eq(interventionCases.id, caseId));
+
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'Intervention support plan approved',
+          body: 'Your intervention support plan is now active. Open Learners Path to start the recommended steps.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Lightbulb, Send } from 'lucide-react';
 import { toast } from 'sonner';
@@ -51,6 +52,22 @@ function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
     .map((option) => option.text)
     .filter(Boolean);
   return labels.length > 0 ? labels.join(', ') : 'Answer key unavailable';
+}
+
+function isGuidedAnswerCorrect(
+  question: GuidedAssessmentQuestion | undefined,
+  answer: string | string[] | undefined,
+) {
+  if (!question || answer === undefined || answer === null) return false;
+  const correctIds = question.options.filter((option) => option.isCorrect).map((option) => option.id).sort();
+  if (correctIds.length === 0) return false;
+
+  if (Array.isArray(answer)) {
+    const selectedIds = [...answer].sort();
+    return selectedIds.length === correctIds.length && selectedIds.every((id, index) => id === correctIds[index]);
+  }
+
+  return correctIds.includes(answer);
 }
 
 export default function StudentGuidedAssessmentPage() {
@@ -182,6 +199,7 @@ export default function StudentGuidedAssessmentPage() {
       ((Array.isArray(currentAnswer) && currentAnswer.length > 0) ||
         (!Array.isArray(currentAnswer) && currentAnswer)),
   );
+  const currentAnswerCorrect = isGuidedAnswerCorrect(activeQuestion, currentAnswer);
   const progressValue = questions.length > 0 ? ((currentIdx + 1) / questions.length) * 100 : 0;
   const resultByQuestionId = useMemo(
     () =>
@@ -231,13 +249,11 @@ export default function StudentGuidedAssessmentPage() {
           </div>
           <div className="mt-3 grid gap-2 text-sm text-[var(--student-text-soft)] sm:grid-cols-2">
             <p className="font-semibold text-[var(--student-text-strong)]">
-              Your answer: {formatAnswer(question, response?.answer)}
+              Your previous answer: {formatAnswer(question, response?.answer)}
             </p>
-            {!response?.isCorrect ? (
-              <p className="font-semibold text-[var(--student-text-strong)]">
-                Correct answer: {formatCorrectAnswer(question)}
-              </p>
-            ) : null}
+            <p className="font-semibold text-emerald-700">
+              Correct answer: {formatCorrectAnswer(question)}
+            </p>
           </div>
           <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">{question.explanation}</p>
           {question.weakConceptTag ? (
@@ -250,7 +266,7 @@ export default function StudentGuidedAssessmentPage() {
     };
 
     return (
-      <div className="student-assessment-take-theme space-y-5">
+      <div className="student-assessment-take-theme guided-intervention-assessment relative space-y-5 overflow-hidden">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => router.push(returnHref)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -258,6 +274,10 @@ export default function StudentGuidedAssessmentPage() {
           </Button>
           <StudentStatusChip tone="success">Submitted</StudentStatusChip>
         </header>
+
+        <div className="guided-ja-corner guided-ja-corner--result" aria-hidden="true">
+          <Image src="/images/JA/ja_cheer.png" alt="" width={168} height={168} priority />
+        </div>
 
         <Card className="student-card">
           <CardContent className="space-y-4 p-6">
@@ -331,7 +351,7 @@ export default function StudentGuidedAssessmentPage() {
   }
 
   return (
-    <div className="student-assessment-take-theme space-y-4">
+    <div className="student-assessment-take-theme guided-intervention-assessment relative space-y-4 overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => router.push(returnHref)}>
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -342,6 +362,10 @@ export default function StudentGuidedAssessmentPage() {
           <StudentStatusChip tone="info">{session.attempt.status.replace('_', ' ')}</StudentStatusChip>
         </div>
       </header>
+
+      <div className="guided-ja-corner" aria-hidden="true">
+        <Image src="/images/JA/ja_wave.png" alt="" width={180} height={180} priority />
+      </div>
 
       <StudentObjectiveAssessmentSurface
         title={session.guidedAssessment.title}
@@ -354,6 +378,7 @@ export default function StudentGuidedAssessmentPage() {
           options: (activeQuestion.options ?? []).map((option) => ({
             id: option.id,
             text: option.text,
+            isCorrect: option.isCorrect,
           })),
         }}
         currentIdx={currentIdx}
@@ -395,11 +420,34 @@ export default function StudentGuidedAssessmentPage() {
             </div>
           ) : null
         }
+        showCorrectness={explanationVisible}
         feedback={
           explanationVisible ? (
-            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]">
-              <strong className="block text-[#102744]">Explanation</strong>
-              <p className="mt-2">{activeQuestion.explanation}</p>
+            <div
+              className={`rounded-3xl border p-4 text-sm shadow-[0_18px_42px_-34px_rgba(15,23,42,0.45)] ${
+                currentAnswerCorrect
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
+                  : 'border-amber-200 bg-amber-50 text-amber-950'
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <strong className="block text-base text-[#102744]">
+                    {currentAnswerCorrect ? 'Nice hit. You got it.' : 'Good try. Here is the answer key.'}
+                  </strong>
+                  <p className="mt-1">Your previous answer: {formatAnswer(activeQuestion, currentAnswer)}</p>
+                  <p className="mt-1 font-black text-emerald-700">
+                    Correct answer: {activeQuestion ? formatCorrectAnswer(activeQuestion) : 'Answer key unavailable'}
+                  </p>
+                </div>
+                <StudentStatusChip tone={currentAnswerCorrect ? 'success' : 'warning'}>
+                  {currentAnswerCorrect ? 'Correct' : 'Review'}
+                </StudentStatusChip>
+              </div>
+              <div className="mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
+                <strong className="block text-[#102744]">Why this works</strong>
+                <p className="mt-2">{activeQuestion?.explanation}</p>
+              </div>
             </div>
           ) : null
         }

@@ -43,6 +43,7 @@ interface StudentObjectiveAssessmentSurfaceProps {
   metaBadges?: ReactNode;
   promptSupplement?: ReactNode;
   feedback?: ReactNode;
+  showCorrectness?: boolean;
   footerLeft: ReactNode;
   footerRight: ReactNode;
   optionTextMode?: 'text' | 'rich';
@@ -66,6 +67,7 @@ export function StudentObjectiveAssessmentSurface({
   metaBadges,
   promptSupplement,
   feedback,
+  showCorrectness = false,
   footerLeft,
   footerRight,
   optionTextMode = 'text',
@@ -163,6 +165,7 @@ export function StudentObjectiveAssessmentSurface({
                     value={value}
                     onChange={onChange}
                     optionTextMode={optionTextMode}
+                    showCorrectness={showCorrectness}
                   />
                 </div>
 

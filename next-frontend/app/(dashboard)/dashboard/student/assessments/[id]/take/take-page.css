@@ -44,3 +44,115 @@
 .student-assessment-take-theme .student-card {
   background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 }
+
+.guided-intervention-assessment {
+  --student-page-gradient:
+    radial-gradient(circle at 12% 6%, rgba(56, 189, 248, 0.22), transparent 28%),
+    radial-gradient(circle at 92% 10%, rgba(251, 191, 36, 0.24), transparent 26%),
+    linear-gradient(135deg, #eff6ff 0%, #fff7ed 44%, #ecfdf5 100%);
+  --student-surface: #f8fbff;
+  --student-surface-soft: #eef7ff;
+  --student-elevated: #ffffff;
+  --student-glass: rgba(255, 255, 255, 0.88);
+  --student-outline: rgba(59, 130, 246, 0.18);
+  --student-outline-strong: rgba(14, 165, 233, 0.34);
+  --student-accent: #2563eb;
+  --student-accent-soft: #dbeafe;
+  --student-accent-soft-strong: #93c5fd;
+}
+
+.guided-intervention-assessment::before,
+.guided-intervention-assessment::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  filter: blur(2px);
+}
+
+.guided-intervention-assessment::before {
+  width: 11rem;
+  height: 11rem;
+  right: -3.4rem;
+  top: 8rem;
+  background: rgba(14, 165, 233, 0.16);
+}
+
+.guided-intervention-assessment::after {
+  width: 8rem;
+  height: 8rem;
+  left: -2.8rem;
+  bottom: 9rem;
+  background: rgba(245, 158, 11, 0.16);
+}
+
+.guided-intervention-assessment > * {
+  position: relative;
+  z-index: 1;
+}
+
+.guided-intervention-assessment .student-page {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(239, 246, 255, 0.82)),
+    var(--student-page-gradient);
+  box-shadow: 0 28px 70px -52px rgba(37, 99, 235, 0.7);
+}
+
+.guided-intervention-assessment .student-card {
+  border-color: rgba(37, 99, 235, 0.16);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(251, 191, 36, 0.16), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.guided-intervention-assessment .student-button-solid {
+  background: linear-gradient(135deg, #2563eb, #0ea5e9 54%, #f59e0b);
+  box-shadow: 0 20px 34px -26px rgba(37, 99, 235, 0.75);
+}
+
+.guided-intervention-assessment .student-button-solid:hover {
+  background: linear-gradient(135deg, #1d4ed8, #0284c7 54%, #d97706);
+}
+
+.guided-ja-corner {
+  pointer-events: none;
+  position: fixed;
+  right: clamp(0.5rem, 3vw, 2.2rem);
+  bottom: clamp(0.5rem, 3vw, 1.6rem);
+  z-index: 20;
+  width: min(10rem, 28vw);
+  opacity: 0.92;
+  filter: drop-shadow(0 22px 22px rgba(37, 99, 235, 0.22));
+  animation: guidedJaFloat 2.8s ease-in-out infinite;
+}
+
+.guided-ja-corner--result {
+  width: min(9rem, 24vw);
+}
+
+.guided-ja-corner img {
+  width: 100%;
+  height: auto;
+}
+
+@keyframes guidedJaFloat {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1.5deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .guided-ja-corner {
+    position: absolute;
+    right: -0.25rem;
+    bottom: 3.2rem;
+    width: 6.5rem;
+    opacity: 0.8;
+  }
+}

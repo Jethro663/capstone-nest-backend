@@ -5,9 +5,12 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
+  MapPin,
   Pencil,
   Plus,
   RefreshCcw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -201,6 +204,22 @@ export default function AdminCalendarPage() {
     };
   }, [selectedSchoolYear]);
 
+  const eventStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingEvents = [...events]
+      .filter((event) => new Date(event.endsAt).getTime() >= today.getTime())
+      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+
+    return {
+      total: events.length,
+      schoolEvents: events.filter((event) => event.eventType === 'school_event').length,
+      breaks: events.filter((event) => event.eventType === 'holiday_break').length,
+      upcoming: upcomingEvents.length,
+      nextEvent: upcomingEvents[0] ?? null,
+    };
+  }, [events]);
+
   const currentYearIndex = schoolYearOptions.indexOf(selectedSchoolYear);
 
   const setField = <K extends keyof SchoolEventFormState>(key: K, value: SchoolEventFormState[K]) => {
@@ -301,7 +320,9 @@ export default function AdminCalendarPage() {
     <AdminPageShell
       badge="Academic Calendar"
       title="School Calendar"
-      description="Admin-managed school events and holiday breaks reflected in teacher calendars."
+      description="Plan school events and breaks with a clearer, color-coded view for every teacher calendar."
+      icon={CalendarDays}
+      className={styles.calendarPage}
       actions={
         <div className={styles.actions}>
           <div className={styles.yearSwitcher}>
@@ -344,10 +365,62 @@ export default function AdminCalendarPage() {
         </div>
       }
     >
+      <section className={styles.calendarHero} aria-label="Calendar overview">
+        <div className={styles.heroCopy}>
+          <span className={styles.heroKicker}>
+            <Sparkles className="h-4 w-4" />
+            Live academic planner
+          </span>
+          <h2>{selectedSchoolYear || 'School year'} rhythm board</h2>
+          <p>
+            Keep campus-wide dates easy to scan: school programs, celebrations, and holiday breaks now stand out before
+            they reach teacher calendars.
+          </p>
+          <div className={styles.nextEventCard}>
+            <div className={styles.nextEventIcon} aria-hidden="true">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <span>Next on deck</span>
+              <strong>{eventStats.nextEvent ? eventStats.nextEvent.title : 'No upcoming entry yet'}</strong>
+              <p>
+                {eventStats.nextEvent
+                  ? formatEventSpan(eventStats.nextEvent)
+                  : 'Create the first calendar entry for this school year.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.heroStats}>
+          <div className={`${styles.heroStat} ${styles.heroStatRed}`}>
+            <span>Total entries</span>
+            <strong>{eventStats.total}</strong>
+            <small>Visible in teacher calendars</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatBlue}`}>
+            <span>School events</span>
+            <strong>{eventStats.schoolEvents}</strong>
+            <small>Programs, meetings, and campus days</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatAmber}`}>
+            <span>Breaks</span>
+            <strong>{eventStats.breaks}</strong>
+            <small>Holidays and suspension windows</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatGreen}`}>
+            <span>Upcoming</span>
+            <strong>{eventStats.upcoming}</strong>
+            <small>Still active from today onward</small>
+          </div>
+        </div>
+      </section>
+
       <div className={styles.layout}>
         <AdminSectionCard
           title={editingEventId ? 'Edit School Event' : 'Create School Event'}
           description="Use all-day for date-only entries; disable all-day to input exact start and end times."
+          className={styles.composerCard}
           action={
             <Button type="button" variant="outline" className="rounded-xl" onClick={resetForm}>
               <Plus className="mr-2 h-4 w-4" />
@@ -434,6 +507,7 @@ export default function AdminCalendarPage() {
         <AdminSectionCard
           title="School Event Timeline"
           description="Items in this school year are visible in teacher calendar views."
+          className={styles.timelineCard}
         >
           {events.length === 0 ? (
             <div className={styles.emptyState}>
@@ -442,40 +516,57 @@ export default function AdminCalendarPage() {
             </div>
           ) : (
             <div className={styles.eventList}>
-              {events.map((event) => (
-                <article key={event.id} className={styles.eventCard}>
-                  <div className={styles.eventTop}>
-                    <span className={styles.eventType}>{getTypeLabel(event.eventType)}</span>
-                    <span className={styles.eventSpan}>{formatEventSpan(event)}</span>
-                  </div>
-                  <h3>{event.title}</h3>
-                  <p className={styles.eventMeta}>
-                    {event.location ? `${event.location} - ` : ''}
-                    {event.schoolYear}
-                  </p>
-                  {event.description ? <p className={styles.eventDescription}>{event.description}</p> : null}
-                  <div className={styles.eventActions}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => editEvent(event)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
-                      onClick={() => void deleteEvent(event)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Archive
-                    </Button>
-                  </div>
-                </article>
-              ))}
+              {events.map((event) => {
+                const isBreak = event.eventType === 'holiday_break';
+
+                return (
+                  <article
+                    key={event.id}
+                    className={`${styles.eventCard} ${isBreak ? styles.eventCardBreak : styles.eventCardSchool}`}
+                  >
+                    <span className={styles.eventAura} aria-hidden="true" />
+                    <div className={styles.eventTop}>
+                      <span className={styles.eventType}>{getTypeLabel(event.eventType)}</span>
+                      <span className={styles.eventSpan}>
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {formatEventSpan(event)}
+                      </span>
+                    </div>
+                    <h3>{event.title}</h3>
+                    <p className={styles.eventMeta}>
+                      {event.location ? (
+                        <>
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>{event.location}</span>
+                          <span className={styles.eventDot} aria-hidden="true" />
+                        </>
+                      ) : null}
+                      <span>{event.schoolYear}</span>
+                    </p>
+                    {event.description ? <p className={styles.eventDescription}>{event.description}</p> : null}
+                    <div className={styles.eventActions}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => editEvent(event)}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                        onClick={() => void deleteEvent(event)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Archive
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </AdminSectionCard>
