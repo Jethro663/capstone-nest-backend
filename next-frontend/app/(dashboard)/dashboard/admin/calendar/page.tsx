@@ -42,6 +42,19 @@ interface SchoolEventFormState {
   endsAt: string;
 }
 
+interface FormDateRange {
+  start: Date;
+  end: Date;
+  startMs: number;
+  endMs: number;
+}
+
+interface SchoolEventValidationState {
+  title?: string;
+  startsAt?: string;
+  endsAt?: string;
+}
+
 function emptyFormState(): SchoolEventFormState {
   return {
     eventType: 'school_event',
@@ -115,6 +128,119 @@ function formatEventSpan(event: SchoolEvent): string {
 
 function getTypeLabel(eventType: SchoolEvent['eventType']): string {
   return eventType === 'holiday_break' ? 'Holiday / Break' : 'School Event';
+}
+
+function normalizeEventTitle(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function buildDateRange(allDay: boolean, startsAt: string, endsAt: string): FormDateRange | null {
+  const start = allDay ? new Date(`${startsAt}T00:00:00.000`) : new Date(startsAt);
+  const end = allDay ? new Date(`${endsAt}T23:59:59.999`) : new Date(endsAt);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return null;
+  return { start, end, startMs, endMs };
+}
+
+function getFormDateRange(form: SchoolEventFormState): FormDateRange | null {
+  if (!form.startsAt || !form.endsAt) return null;
+  return buildDateRange(form.allDay, form.startsAt, form.endsAt);
+}
+
+function getValidationDateRange(form: SchoolEventFormState): FormDateRange | null {
+  const startsAt = form.startsAt || form.endsAt;
+  const endsAt = form.endsAt || form.startsAt;
+  if (!startsAt || !endsAt) return null;
+  return buildDateRange(form.allDay, startsAt, endsAt);
+}
+
+function getEventDateRange(event: SchoolEvent): FormDateRange | null {
+  const start = new Date(event.startsAt);
+  const end = new Date(event.endsAt);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return null;
+  return { start, end, startMs, endMs };
+}
+
+function dateRangesOverlap(left: FormDateRange, right: FormDateRange): boolean {
+  return left.startMs <= right.endMs && left.endMs >= right.startMs;
+}
+
+function timeRangesOverlap(left: FormDateRange, right: FormDateRange): boolean {
+  return left.startMs < right.endMs && left.endMs > right.startMs;
+}
+
+function getInlineValidationMessage(errors: SchoolEventValidationState): string | null {
+  return errors.title || errors.startsAt || errors.endsAt || null;
+}
+
+function validateSchoolEventForm(
+  form: SchoolEventFormState,
+  events: SchoolEvent[],
+  editingEventId: string | null,
+): SchoolEventValidationState {
+  const errors: SchoolEventValidationState = {};
+  const activeEvents = events.filter((event) => event.id !== editingEventId);
+  const normalizedTitle = normalizeEventTitle(form.title);
+
+  if (normalizedTitle) {
+    const titleMatch = activeEvents.find((event) => normalizeEventTitle(event.title) === normalizedTitle);
+    if (titleMatch) {
+      errors.title = `"${titleMatch.title}" already exists in ${titleMatch.schoolYear}. Use a unique event title.`;
+    }
+  }
+
+  const formRange = getValidationDateRange(form);
+  if (!formRange) return errors;
+
+  const hasCompleteDateWindow = Boolean(form.startsAt && form.endsAt);
+
+  if (hasCompleteDateWindow && formRange.endMs < formRange.startMs) {
+    errors.endsAt = 'End must be the same as or later than the start.';
+    return errors;
+  }
+
+  if (form.allDay) {
+    const dateConflict = activeEvents.find((event) => {
+      const eventRange = getEventDateRange(event);
+      return eventRange ? dateRangesOverlap(formRange, eventRange) : false;
+    });
+
+    if (dateConflict) {
+      errors.startsAt = `This date is already used by "${dateConflict.title}" (${formatEventSpan(dateConflict)}).`;
+    }
+
+    return errors;
+  }
+
+  const allDayBlocker = activeEvents.find((event) => {
+    if (!event.allDay) return false;
+    const eventRange = getEventDateRange(event);
+    return eventRange ? dateRangesOverlap(formRange, eventRange) : false;
+  });
+
+  if (allDayBlocker) {
+    errors.startsAt = `This date is blocked by all-day event "${allDayBlocker.title}" (${formatEventSpan(allDayBlocker)}).`;
+    return errors;
+  }
+
+  if (!hasCompleteDateWindow) return errors;
+
+  const timeConflict = activeEvents.find((event) => {
+    if (event.allDay) return false;
+    const eventRange = getEventDateRange(event);
+    return eventRange ? timeRangesOverlap(formRange, eventRange) : false;
+  });
+
+  if (timeConflict) {
+    errors.endsAt = `This time is already taken by "${timeConflict.title}" (${formatEventSpan(timeConflict)}).`;
+  }
+
+  return errors;
 }
 
 export default function AdminCalendarPage() {
@@ -221,6 +347,11 @@ export default function AdminCalendarPage() {
   }, [events]);
 
   const currentYearIndex = schoolYearOptions.indexOf(selectedSchoolYear);
+  const formValidation = useMemo(
+    () => validateSchoolEventForm(form, events, editingEventId),
+    [editingEventId, events, form],
+  );
+  const validationMessage = getInlineValidationMessage(formValidation);
 
   const setField = <K extends keyof SchoolEventFormState>(key: K, value: SchoolEventFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -243,10 +374,11 @@ export default function AdminCalendarPage() {
     if (!form.startsAt || !form.endsAt) return null;
     if (form.eventType === 'school_event' && !form.location.trim()) return null;
 
-    const startsAt = form.allDay ? toIsoDateRange(form.startsAt, false) : toIsoDateTime(form.startsAt);
-    const endsAt = form.allDay ? toIsoDateRange(form.endsAt, true) : toIsoDateTime(form.endsAt);
+    const range = getFormDateRange(form);
+    if (!range) return null;
 
-    if (new Date(endsAt).getTime() < new Date(startsAt).getTime()) return null;
+    if (range.endMs < range.startMs) return null;
+    if (validationMessage) return null;
 
     return {
       eventType: form.eventType,
@@ -254,8 +386,8 @@ export default function AdminCalendarPage() {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       location: form.location.trim() || undefined,
-      startsAt,
-      endsAt,
+      startsAt: form.allDay ? toIsoDateRange(form.startsAt, false) : toIsoDateTime(form.startsAt),
+      endsAt: form.allDay ? toIsoDateRange(form.endsAt, true) : toIsoDateTime(form.endsAt),
       allDay: form.allDay,
     };
   };
@@ -263,6 +395,10 @@ export default function AdminCalendarPage() {
   const submitForm = async () => {
     if (form.eventType === 'school_event' && !form.location.trim()) {
       toast.error('Location is required for school events.');
+      return;
+    }
+    if (validationMessage) {
+      toast.error(validationMessage);
       return;
     }
     const payload = getPayload();
@@ -447,7 +583,14 @@ export default function AdminCalendarPage() {
                 value={form.title}
                 onChange={(event) => setField('title', event.target.value)}
                 placeholder="Foundation Day Program"
+                aria-invalid={Boolean(formValidation.title)}
+                aria-describedby={formValidation.title ? 'calendar-title-validation' : undefined}
               />
+              {formValidation.title ? (
+                <p id="calendar-title-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.title}
+                </p>
+              ) : null}
             </div>
             <div className={styles.field}>
               <Label>Location</Label>
@@ -474,7 +617,14 @@ export default function AdminCalendarPage() {
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.startsAt}
                 onChange={(event) => setField('startsAt', event.target.value)}
+                aria-invalid={Boolean(formValidation.startsAt)}
+                aria-describedby={formValidation.startsAt ? 'calendar-start-validation' : undefined}
               />
+              {formValidation.startsAt ? (
+                <p id="calendar-start-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.startsAt}
+                </p>
+              ) : null}
             </div>
             <div className={styles.field}>
               <Label>{form.allDay ? 'End Date' : 'End Date & Time'}</Label>
@@ -482,7 +632,14 @@ export default function AdminCalendarPage() {
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.endsAt}
                 onChange={(event) => setField('endsAt', event.target.value)}
+                aria-invalid={Boolean(formValidation.endsAt)}
+                aria-describedby={formValidation.endsAt ? 'calendar-end-validation' : undefined}
               />
+              {formValidation.endsAt ? (
+                <p id="calendar-end-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.endsAt}
+                </p>
+              ) : null}
             </div>
             <div className={styles.fieldWide}>
               <Label>Description</Label>
@@ -498,7 +655,13 @@ export default function AdminCalendarPage() {
             <Button type="button" variant="outline" className="rounded-xl" onClick={resetForm}>
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={() => void submitForm()} disabled={saving}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={() => void submitForm()}
+              disabled={saving || Boolean(validationMessage)}
+              title={validationMessage || undefined}
+            >
               {editingEventId ? 'Save Changes' : 'Create Event'}
             </Button>
           </div>

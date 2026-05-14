@@ -650,6 +650,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
         </Text>
         {optionImageUri ? (
           <Image
+            testID="assessment-option-image"
             source={{ uri: optionImageUri }}
             style={{ marginTop: 10, width: "100%", height: 168, borderRadius: 12, backgroundColor: theme.header }}
             resizeMode="cover"
@@ -707,6 +708,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
 
           {questionImageUri ? (
             <Image
+              testID="assessment-question-image"
               source={{ uri: questionImageUri }}
               style={{ marginTop: 14, width: "100%", height: 220, borderRadius: 16, backgroundColor: theme.header }}
               resizeMode="cover"

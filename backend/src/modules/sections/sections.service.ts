@@ -22,6 +22,7 @@ import {
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { ClassRecordService } from '../class-record/class-record.service';
 import {
   sections,
   classes,
@@ -54,6 +55,22 @@ export interface RequestingUser {
   roles: string[];
 }
 
+type AccessStudentGradeStatus = 'pending' | 'passing' | 'failing';
+
+type AccessStudentPromotionReadiness = {
+  studentId: string;
+  finalGrade: number | null;
+  gradeStatus: AccessStudentGradeStatus;
+  isFinalized: boolean;
+  isPassing: boolean;
+  isFailing: boolean;
+  requiredClassRecordCount: number;
+  finalizedClassRecordCount: number;
+  finalGradeRecordCount: number;
+  missingFinalGradeCount: number;
+  finalizationLabel: string;
+};
+
 export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 @Injectable()
@@ -61,6 +78,7 @@ export class SectionsService {
   constructor(
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly classRecordService: ClassRecordService,
   ) {}
 
   private get db() {
@@ -1458,38 +1476,130 @@ export class SectionsService {
     return `${start}-${end}`;
   }
 
-  private async computeSectionStudentFinalGrades(
+  private roundFinalGrade(value: number | null | undefined) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+      return null;
+    }
+
+    return Math.round(Number(value) * 1000) / 1000;
+  }
+
+  private buildPromotionReadiness(input: {
+    studentId: string;
+    averageFinal: number | null;
+    requiredClassRecordCount: number;
+    finalizedClassRecordCount: number;
+    finalGradeRecordCount: number;
+  }): AccessStudentPromotionReadiness {
+    const finalGrade = this.roundFinalGrade(input.averageFinal);
+    const missingFinalGradeCount = Math.max(
+      input.requiredClassRecordCount - input.finalGradeRecordCount,
+      0,
+    );
+    const isFinalized =
+      input.requiredClassRecordCount > 0 &&
+      input.finalizedClassRecordCount >= input.requiredClassRecordCount &&
+      missingFinalGradeCount === 0 &&
+      finalGrade !== null;
+    const isPassing = isFinalized && finalGrade !== null && finalGrade >= 75;
+    const isFailing = isFinalized && finalGrade !== null && finalGrade < 75;
+    const gradeStatus: AccessStudentGradeStatus = !isFinalized
+      ? 'pending'
+      : isPassing
+        ? 'passing'
+        : 'failing';
+    const finalizationLabel = !isFinalized
+      ? input.requiredClassRecordCount === 0
+        ? 'No class records found to finalize'
+        : `${input.finalizedClassRecordCount}/${input.requiredClassRecordCount} class records finalized, ${input.finalGradeRecordCount}/${input.requiredClassRecordCount} final grades posted`
+      : isPassing
+        ? 'Finalized and passing'
+        : 'Finalized and failing';
+
+    return {
+      studentId: input.studentId,
+      finalGrade,
+      gradeStatus,
+      isFinalized,
+      isPassing,
+      isFailing,
+      requiredClassRecordCount: input.requiredClassRecordCount,
+      finalizedClassRecordCount: input.finalizedClassRecordCount,
+      finalGradeRecordCount: input.finalGradeRecordCount,
+      missingFinalGradeCount,
+      finalizationLabel,
+    };
+  }
+
+  private async getSectionStudentPromotionReadiness(
     sectionId: string,
     studentIds: string[],
   ) {
-    if (studentIds.length === 0) {
-      return new Map<string, number>();
+    const uniqueStudentIds = [...new Set(studentIds)];
+    if (uniqueStudentIds.length === 0) {
+      return new Map<string, AccessStudentPromotionReadiness>();
     }
 
-    const rows = await this.db
+    const recordRows = await this.db
       .select({
-        studentId: classRecordFinalGrades.studentId,
-        avgFinal:
-          sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
-            Number,
-          ),
+        id: classRecords.id,
+        status: classRecords.status,
       })
-      .from(classRecordFinalGrades)
-      .innerJoin(
-        classRecords,
-        eq(classRecords.id, classRecordFinalGrades.classRecordId),
-      )
+      .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(
-          eq(classes.sectionId, sectionId),
-          inArray(classRecordFinalGrades.studentId, studentIds),
-        ),
-      )
-      .groupBy(classRecordFinalGrades.studentId);
+      .where(eq(classes.sectionId, sectionId));
+
+    const requiredClassRecordCount = recordRows.length;
+    const finalizedClassRecordCount = recordRows.filter((record) =>
+      ['finalized', 'locked'].includes(record.status),
+    ).length;
+    const classRecordIds = recordRows.map((record) => record.id);
+
+    const gradeRows = classRecordIds.length
+      ? await this.db
+          .select({
+            studentId: classRecordFinalGrades.studentId,
+            avgFinal:
+              sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
+                Number,
+              ),
+            finalGradeRecordCount:
+              sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
+                Number,
+              ),
+          })
+          .from(classRecordFinalGrades)
+          .where(
+            and(
+              inArray(classRecordFinalGrades.classRecordId, classRecordIds),
+              inArray(classRecordFinalGrades.studentId, uniqueStudentIds),
+            ),
+          )
+          .groupBy(classRecordFinalGrades.studentId)
+      : [];
+
+    const gradeByStudentId = new Map(
+      gradeRows.map((row) => [
+        row.studentId,
+        {
+          averageFinal: Number(row.avgFinal ?? 0),
+          finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
+        },
+      ]),
+    );
 
     return new Map(
-      rows.map((row) => [row.studentId, Number(row.avgFinal ?? 0)]),
+      uniqueStudentIds.map((studentId) => {
+        const gradeInfo = gradeByStudentId.get(studentId);
+        const readiness = this.buildPromotionReadiness({
+          studentId,
+          averageFinal: gradeInfo?.averageFinal ?? null,
+          requiredClassRecordCount,
+          finalizedClassRecordCount,
+          finalGradeRecordCount: gradeInfo?.finalGradeRecordCount ?? 0,
+        });
+        return [studentId, readiness];
+      }),
     );
   }
 
@@ -1577,6 +1687,10 @@ export class SectionsService {
           sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
             Number,
           ),
+        finalGradeRecordCount:
+          sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
+            Number,
+          ),
       })
       .from(classRecordFinalGrades)
       .innerJoin(
@@ -1613,12 +1727,15 @@ export class SectionsService {
       });
     }
 
-    const finalGradeBySectionStudentKey = new Map<string, number>();
+    const finalGradeBySectionStudentKey = new Map<
+      string,
+      { averageFinal: number; finalGradeRecordCount: number }
+    >();
     for (const row of finalGradeRows) {
-      finalGradeBySectionStudentKey.set(
-        `${row.sectionId}:${row.studentId}`,
-        Number(row.avgFinal ?? 0),
-      );
+      finalGradeBySectionStudentKey.set(`${row.sectionId}:${row.studentId}`, {
+        averageFinal: Number(row.avgFinal ?? 0),
+        finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
+      });
     }
 
     const normalizedSearch = filters?.search?.trim().toLowerCase() ?? '';
@@ -1633,17 +1750,34 @@ export class SectionsService {
         lrn: string | null;
         gradeLevel: string | null;
         finalGrade: number | null;
+        finalGradePercentage: number | null;
+        gradeStatus: AccessStudentGradeStatus;
+        isFinalized: boolean;
+        isPassing: boolean;
         isFailing: boolean;
+        requiredClassRecordCount: number;
+        finalizedClassRecordCount: number;
+        finalGradeRecordCount: number;
+        missingFinalGradeCount: number;
+        finalizationLabel: string;
       }>
     >();
 
     for (const row of rosterRows) {
       const finalGradeKey = `${row.sectionId}:${row.studentId}`;
       const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
-      const finalGrade =
-        finalGradeValue === undefined
-          ? null
-          : Math.round(finalGradeValue * 100) / 100;
+      const classRecordCounts = classRecordCountBySectionId.get(row.sectionId) ?? {
+        totalRecords: 0,
+        finalizedRecords: 0,
+      };
+      const readiness = this.buildPromotionReadiness({
+        studentId: row.studentId,
+        averageFinal: finalGradeValue?.averageFinal ?? null,
+        requiredClassRecordCount: classRecordCounts.totalRecords,
+        finalizedClassRecordCount: classRecordCounts.finalizedRecords,
+        finalGradeRecordCount: finalGradeValue?.finalGradeRecordCount ?? 0,
+      });
+      const finalGrade = readiness.finalGrade;
       const searchable = [
         row.firstName ?? '',
         row.middleName ?? '',
@@ -1667,7 +1801,16 @@ export class SectionsService {
         lrn: row.lrn,
         gradeLevel: row.gradeLevel ?? null,
         finalGrade,
-        isFailing: finalGrade !== null && finalGrade < 75,
+        finalGradePercentage: readiness.finalGrade,
+        gradeStatus: readiness.gradeStatus,
+        isFinalized: readiness.isFinalized,
+        isPassing: readiness.isPassing,
+        isFailing: readiness.isFailing,
+        requiredClassRecordCount: readiness.requiredClassRecordCount,
+        finalizedClassRecordCount: readiness.finalizedClassRecordCount,
+        finalGradeRecordCount: readiness.finalGradeRecordCount,
+        missingFinalGradeCount: readiness.missingFinalGradeCount,
+        finalizationLabel: readiness.finalizationLabel,
       });
       studentsBySectionId.set(row.sectionId, bucket);
     }
@@ -1699,7 +1842,16 @@ export class SectionsService {
           lrn: string | null;
           gradeLevel: string | null;
           finalGrade: number | null;
+          finalGradePercentage: number | null;
+          gradeStatus: AccessStudentGradeStatus;
+          isFinalized: boolean;
+          isPassing: boolean;
           isFailing: boolean;
+          requiredClassRecordCount: number;
+          finalizedClassRecordCount: number;
+          finalGradeRecordCount: number;
+          missingFinalGradeCount: number;
+          finalizationLabel: string;
         }>;
       }>
     >();
@@ -1955,6 +2107,90 @@ export class SectionsService {
     return uniqueStudentIds.length;
   }
 
+  async finalizeAccessStudentGrades(
+    dto: { sectionId: string; studentIds?: string[] },
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.db.query.sections.findFirst({
+      where: eq(sections.id, dto.sectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Section not found');
+    }
+
+    const recordRows = await this.db
+      .select({
+        id: classRecords.id,
+        status: classRecords.status,
+        classId: classes.id,
+        subjectName: classes.subjectName,
+      })
+      .from(classRecords)
+      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .where(eq(classes.sectionId, section.id));
+
+    if (recordRows.length === 0) {
+      throw new BadRequestException(
+        'This section has no class records to finalize yet.',
+      );
+    }
+
+    const draftRecords = recordRows.filter((record) => record.status === 'draft');
+    const finalizedRecords: Array<{ classRecordId: string; subjectName: string }> = [];
+
+    for (const record of draftRecords) {
+      await this.classRecordService.finalizeClassRecord(
+        record.id,
+        actorId ?? 'system',
+        actorRoles,
+      );
+      finalizedRecords.push({
+        classRecordId: record.id,
+        subjectName: record.subjectName,
+      });
+    }
+
+    const selectedStudentIds = [...new Set(dto.studentIds ?? [])];
+    const studentReadiness = selectedStudentIds.length
+      ? Array.from(
+          (
+            await this.getSectionStudentPromotionReadiness(
+              section.id,
+              selectedStudentIds,
+            )
+          ).values(),
+        )
+      : [];
+
+    await this.auditService.log({
+      actorId: actorId ?? 'system',
+      action: 'section.students.grades_finalized',
+      targetType: 'section',
+      targetId: section.id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        finalizedClassRecordCount: finalizedRecords.length,
+        selectedStudentCount: selectedStudentIds.length,
+      },
+    });
+
+    return {
+      section,
+      finalizedClassRecordCount: finalizedRecords.length,
+      alreadyFinalizedClassRecordCount: recordRows.length - draftRecords.length,
+      finalizedRecords,
+      students: studentReadiness,
+    };
+  }
+
   async moveUpStudents(
     dto: {
       fromSectionId: string;
@@ -2022,25 +2258,31 @@ export class SectionsService {
       uniqueStudentIds,
     );
 
-    const finalGradeByStudentId = await this.computeSectionStudentFinalGrades(
+    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
       fromSection.id,
       uniqueStudentIds,
     );
+    const studentReadiness = Array.from(readinessByStudentId.values());
+    const unfinalizedStudents = studentReadiness.filter(
+      (student) => !student.isFinalized,
+    );
 
-    const failingStudents = uniqueStudentIds
-      .map((studentId) => ({
-        studentId,
-        finalGrade: finalGradeByStudentId.get(studentId) ?? null,
-      }))
-      .filter(
-        (student) =>
-          student.finalGrade !== null && Number(student.finalGrade) < 75,
-      );
-
-    if (failingStudents.length > 0 && !dto.allowFailingPromotion) {
+    if (unfinalizedStudents.length > 0) {
       throw new BadRequestException({
         message:
-          'Some selected students have final grades below 75. Confirm promotion to proceed.',
+          'Finalize selected student grades before moving students up.',
+        unfinalizedStudents,
+      });
+    }
+
+    const failingStudents = studentReadiness.filter(
+      (student) => !student.isPassing,
+    );
+
+    if (failingStudents.length > 0) {
+      throw new BadRequestException({
+        message:
+          'Only finalized passing students can be moved up. Retain failing students instead.',
         failingStudents,
       });
     }
@@ -2062,7 +2304,7 @@ export class SectionsService {
         fromSectionId: fromSection.id,
         targetSectionId: targetSection.id,
         movedCount,
-        failingStudentsConfirmed: failingStudents.length,
+        finalizedPassingStudents: studentReadiness.length,
       },
     });
 
@@ -2132,6 +2374,34 @@ export class SectionsService {
       uniqueStudentIds,
     );
 
+    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
+      fromSection.id,
+      uniqueStudentIds,
+    );
+    const studentReadiness = Array.from(readinessByStudentId.values());
+    const unfinalizedStudents = studentReadiness.filter(
+      (student) => !student.isFinalized,
+    );
+
+    if (unfinalizedStudents.length > 0) {
+      throw new BadRequestException({
+        message: 'Finalize selected student grades before retaining students.',
+        unfinalizedStudents,
+      });
+    }
+
+    const nonFailingStudents = studentReadiness.filter(
+      (student) => !student.isFailing,
+    );
+
+    if (nonFailingStudents.length > 0) {
+      throw new BadRequestException({
+        message:
+          'Only finalized failing students can be retained. Move passing students up instead.',
+        nonFailingStudents,
+      });
+    }
+
     const retainedCount = await this.transferStudentsBetweenSections({
       fromSectionId: fromSection.id,
       targetSectionId: targetSection.id,
@@ -2149,6 +2419,7 @@ export class SectionsService {
         fromSectionId: fromSection.id,
         targetSectionId: targetSection.id,
         retainedCount,
+        finalizedFailingStudents: studentReadiness.length,
       },
     });
 

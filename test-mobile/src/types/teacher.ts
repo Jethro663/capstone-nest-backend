@@ -10,6 +10,7 @@ export interface TeacherSection {
   isActive?: boolean;
   isHidden?: boolean;
   enrollmentCount?: number;
+  studentCount?: number;
   adviser?: {
     id: string;
     firstName?: string | null;

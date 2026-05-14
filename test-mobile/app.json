@@ -20,10 +20,15 @@
         "foregroundImage": "./assets/ja/apk_logo.png",
         "backgroundColor": "#000000"
       },
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "plugins": [
-      "expo-document-picker"
+      "expo-document-picker",
+      "expo-notifications"
     ]
   }
 }

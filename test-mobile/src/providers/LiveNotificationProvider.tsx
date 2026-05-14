@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Easing, Image, Pressable, Text, View } from "react-native";
+import * as Notifications from "expo-notifications";
+import { Animated, AppState, Easing, Image, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { notificationsApi } from "../api/services/notifications";
 import { rootNavigationRef } from "../navigation/navigation-ref";
@@ -9,10 +10,35 @@ import { colors, hexToRgba, radii, shadow } from "../theme/tokens";
 import type { MobileNotification } from "../types/notification";
 import { useAuth } from "./AuthProvider";
 
-const INTERVENTION_TERMS = ["intervention", "at risk", "at-risk", "flagged"];
+const INTERVENTION_TERMS = [
+  "intervention",
+  "at risk",
+  "at-risk",
+  "flagged",
+  "learners path",
+  "support plan",
+  "checklist",
+];
 const ASSESSMENT_TYPES = new Set(["assessment_assigned", "assessment_due", "assessment_graded"]);
 const NOTIFICATION_POLL_MS = 4000;
 const AUTO_DISMISS_MS = 7800;
+const NATIVE_NOTIFICATION_CHANNEL_ID = "nexora-live";
+const NATIVE_NOTIFICATION_PREFIX = "nexora-notification";
+const NOTIFICATION_TAP_RETRY_MS = 320;
+
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    }),
+  });
+} catch {
+  // Expo notifications can be unavailable in lightweight test/runtime shells.
+}
 
 type LiveNotificationContextValue = {
   unreadCount: number;
@@ -30,6 +56,47 @@ function messageFromNotification(notification: Pick<MobileNotification, "message
   const message = notification.message?.trim();
   if (message) return message;
   return notification.body?.trim() || "A new update is available.";
+}
+
+function readPayloadString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function notificationToNativeData(notification: MobileNotification, role: string | null) {
+  return {
+    source: NATIVE_NOTIFICATION_PREFIX,
+    notificationId: notification.id,
+    userId: notification.userId,
+    type: notification.type,
+    title: notification.title,
+    body: notification.body || "",
+    message: messageFromNotification(notification),
+    referenceId: notification.referenceId || "",
+    createdAt: notification.createdAt,
+    role: role || "",
+  };
+}
+
+function notificationFromNativeData(data: Record<string, unknown> | undefined): MobileNotification | null {
+  if (!data || data.source !== NATIVE_NOTIFICATION_PREFIX) return null;
+
+  const id = readPayloadString(data.notificationId) || readPayloadString(data.id);
+  const title = readPayloadString(data.title);
+  const type = readPayloadString(data.type);
+
+  if (!id || !title || !type) return null;
+
+  return {
+    id,
+    userId: readPayloadString(data.userId),
+    type,
+    title,
+    body: readPayloadString(data.body),
+    message: readPayloadString(data.message),
+    isRead: false,
+    referenceId: readPayloadString(data.referenceId) || null,
+    createdAt: readPayloadString(data.createdAt) || new Date().toISOString(),
+  };
 }
 
 function isInterventionAlertNotification(
@@ -94,6 +161,12 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
   return () => navigateToMainTab(normalizedRole === "teacher" ? "Home" : "Dashboard");
 }
 
+function navigateToNotification(notification: MobileNotification, role: string | null) {
+  if (!rootNavigationRef.isReady()) return false;
+  resolveNotificationNavigation(notification, role)();
+  return true;
+}
+
 const interventionCharacterSource = () => require("../../assets/ja/ja_live_notify.png");
 const notificationCharacterSource = () => require("../../assets/ja/ja_wave.png");
 
@@ -111,6 +184,11 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const pollInFlightRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nativeReadyRef = useRef(false);
+  const nativeDeniedRef = useRef(false);
+  const scheduledNativeIdsRef = useRef<Set<string>>(new Set());
+  const pendingNativeOpenRef = useRef<MobileNotification | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
   const slide = useRef(new Animated.Value(-140)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -130,6 +208,96 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
     };
   }, []);
+
+  const ensureNativeNotificationsReady = useCallback(async () => {
+    if (nativeReadyRef.current) return true;
+    if (nativeDeniedRef.current) return false;
+
+    try {
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync(NATIVE_NOTIFICATION_CHANNEL_ID, {
+          name: "Nexora live alerts",
+          importance: Notifications.AndroidImportance.HIGH,
+          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+          vibrationPattern: [0, 260, 120, 260],
+          lightColor: "#E3062C",
+          enableVibrate: true,
+          showBadge: true,
+        });
+      }
+
+      const current = await Notifications.getPermissionsAsync();
+      let status = current.status;
+
+      if (status !== "granted" && current.canAskAgain !== false) {
+        const requested = await Notifications.requestPermissionsAsync();
+        status = requested.status;
+      }
+
+      const granted = status === "granted";
+      nativeReadyRef.current = granted;
+      nativeDeniedRef.current = !granted;
+      return granted;
+    } catch {
+      nativeDeniedRef.current = true;
+      return false;
+    }
+  }, []);
+
+  const scheduleNativeNotification = useCallback(
+    async (notification: MobileNotification) => {
+      if (scheduledNativeIdsRef.current.has(notification.id)) return;
+
+      const ready = await ensureNativeNotificationsReady();
+      if (!ready) return;
+
+      scheduledNativeIdsRef.current.add(notification.id);
+      const interventionAlert = isInterventionAlertNotification(notification);
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          identifier: `${NATIVE_NOTIFICATION_PREFIX}:${notification.id}`,
+          content: {
+            title: interventionAlert ? `JA alert: ${notification.title}` : notification.title,
+            body: messageFromNotification(notification),
+            data: notificationToNativeData(notification, role),
+            sound: true,
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+            color: interventionAlert ? "#BE123C" : "#0F172A",
+            vibrate: interventionAlert ? [0, 280, 120, 280] : [0, 180],
+            autoDismiss: true,
+          },
+          trigger: Platform.OS === "android" ? { channelId: NATIVE_NOTIFICATION_CHANNEL_ID } : null,
+        });
+      } catch {
+        scheduledNativeIdsRef.current.delete(notification.id);
+      }
+    },
+    [ensureNativeNotificationsReady, role],
+  );
+
+  const openOrDeferNativeNotification = useCallback(
+    (notification: MobileNotification) => {
+      setUnreadCount((current) => Math.max(0, current - 1));
+      void notificationsApi.markRead(notification.id).catch(() => {
+        // Keep the tap path resilient even if the read-state request is interrupted.
+      });
+
+      if (navigateToNotification(notification, role)) {
+        pendingNativeOpenRef.current = null;
+        return;
+      }
+
+      pendingNativeOpenRef.current = notification;
+      setTimeout(() => {
+        const pending = pendingNativeOpenRef.current;
+        if (pending && navigateToNotification(pending, role)) {
+          pendingNativeOpenRef.current = null;
+        }
+      }, NOTIFICATION_TAP_RETRY_MS);
+    },
+    [role],
+  );
 
   const tryShowNext = useCallback(() => {
     if (activeRef.current || queueRef.current.length === 0) return;
@@ -167,8 +335,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
   const openNotification = useCallback(
     (notification: MobileNotification) => {
-      const navigate = resolveNotificationNavigation(notification, role);
       if (!rootNavigationRef.isReady()) {
+        pendingNativeOpenRef.current = notification;
         dismissActive();
         return;
       }
@@ -180,7 +348,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
       dismissActive();
       setTimeout(() => {
-        navigate();
+        navigateToNotification(notification, role);
       }, 230);
     },
     [dismissActive, role],
@@ -285,6 +453,9 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         });
         hydratedRef.current = true;
         queueRef.current.push(...urgentUnread);
+        urgentUnread.forEach((row) => {
+          void scheduleNativeNotification(row);
+        });
         tryShowNext();
         return;
       }
@@ -301,6 +472,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       orderedFresh.forEach((row) => {
         seenIdsRef.current.add(row.id);
         queueRef.current.push(row);
+        void scheduleNativeNotification(row);
       });
       tryShowNext();
     } catch {
@@ -308,7 +480,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [isAuthenticated, tryShowNext, user?.id]);
+  }, [isAuthenticated, scheduleNativeNotification, tryShowNext, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
@@ -316,6 +488,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       queueRef.current = [];
       hydratedRef.current = false;
       activeRef.current = null;
+      scheduledNativeIdsRef.current = new Set();
+      pendingNativeOpenRef.current = null;
       setActiveNotification(null);
       setUnreadCount(0);
       if (pollTimerRef.current) {
@@ -337,6 +511,71 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
     };
   }, [isAuthenticated, pollNotifications, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if ((previousState === "background" || previousState === "inactive") && nextState === "active") {
+        void pollNotifications();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isAuthenticated, pollNotifications, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+
+    void ensureNativeNotificationsReady();
+
+    const handleResponse = (response: Notifications.NotificationResponse) => {
+      const notification = notificationFromNativeData(response.notification.request.content.data);
+      if (!notification) return;
+      openOrDeferNativeNotification(notification);
+    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(handleResponse);
+
+    void Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (!response) return;
+        handleResponse(response);
+        if (typeof Notifications.clearLastNotificationResponseAsync === "function") {
+          return Notifications.clearLastNotificationResponseAsync();
+        }
+        return undefined;
+      })
+      .catch(() => {
+        // Missing or stale launch notifications should not block the app shell.
+      });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [ensureNativeNotificationsReady, isAuthenticated, openOrDeferNativeNotification, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || nativeDeniedRef.current) return;
+
+    void Notifications.setBadgeCountAsync(Math.max(0, unreadCount)).catch(() => {
+      // Some Android launchers do not support badges; the in-app count remains authoritative.
+    });
+  }, [isAuthenticated, unreadCount]);
+
+  useEffect(() => {
+    if (!activeNotification) {
+      const pending = pendingNativeOpenRef.current;
+      if (pending && navigateToNotification(pending, role)) {
+        pendingNativeOpenRef.current = null;
+      }
+    }
+  }, [activeNotification, role]);
 
   const interventionAlert = activeNotification ? isInterventionAlertNotification(activeNotification) : false;
   const message = activeNotification ? messageFromNotification(activeNotification) : "";
@@ -365,7 +604,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
               top: insets.top + 8,
               left: 10,
               right: 10,
-              zIndex: 200,
+              zIndex: 1000,
+              elevation: 1000,
             }}
           >
             <Animated.View
@@ -378,6 +618,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                   paddingHorizontal: 14,
                   paddingVertical: 12,
                   opacity,
+                  elevation: 22,
                   transform: [{ translateY: slide }],
                 },
                 shadow.card,

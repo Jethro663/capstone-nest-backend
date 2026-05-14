@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -43,7 +43,7 @@ function toEligibility(value: string | null): MasterlistEligibilityFilter {
   return 'all';
 }
 
-export default function TeacherAddStudentsPage() {
+export default function AdminAddStudentsPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -65,8 +65,6 @@ export default function TeacherAddStudentsPage() {
   const eligibility = toEligibility(searchParams.get('eligibility'));
   const sortBy = toSortField(searchParams.get('sortBy'));
   const sortDirection = toSortDirection(searchParams.get('sortDirection'));
-  const classGradeLevel = classItem?.subjectGradeLevel || classItem?.section?.gradeLevel || '';
-  const effectiveGradeLevel = classGradeLevel || gradeLevel;
 
   const selectedEligibleCount = useMemo(
     () => students.filter((student) => selectedIds.includes(student.id) && student.isEligible).length,
@@ -87,8 +85,8 @@ export default function TeacherAddStudentsPage() {
       const query = next.toString();
       router.replace(
         query
-          ? `/dashboard/teacher/classes/${classId}/students/add?${query}`
-          : `/dashboard/teacher/classes/${classId}/students/add`,
+          ? `/dashboard/admin/classes/${classId}/students/add?${query}`
+          : `/dashboard/admin/classes/${classId}/students/add`,
         { scroll: false },
       );
     },
@@ -100,28 +98,28 @@ export default function TeacherAddStudentsPage() {
     const resolvedClass = classRes.data;
     setClassItem(resolvedClass);
 
-    const defaultGrade = resolvedClass.subjectGradeLevel || resolvedClass.section?.gradeLevel || '';
-    if (defaultGrade && gradeLevel !== defaultGrade) {
-      updateQuery({ gradeLevel: defaultGrade, sectionId: null, page: 1 });
+    const defaultGrade = resolvedClass.section?.gradeLevel || resolvedClass.subjectGradeLevel || '';
+    if (!gradeLevel && defaultGrade) {
+      updateQuery({ gradeLevel: defaultGrade, page: 1 });
     }
   }, [classId, gradeLevel, updateQuery]);
 
   const fetchSections = useCallback(async () => {
-    if (!effectiveGradeLevel) {
+    if (!gradeLevel) {
       setSections([]);
       return;
     }
-    const res = await sectionService.getAll({ gradeLevel: effectiveGradeLevel, page: 1, limit: 100 });
+    const res = await sectionService.getAll({ gradeLevel, page: 1, limit: 100 });
     setSections(res.data || []);
-  }, [effectiveGradeLevel]);
+  }, [gradeLevel]);
 
   const fetchStudents = useCallback(async () => {
-    if (!effectiveGradeLevel) return;
+    if (!gradeLevel) return;
 
     try {
       setLoading(true);
       const res = await classService.getStudentsMasterlist(classId, {
-        gradeLevel: effectiveGradeLevel,
+        gradeLevel,
         sectionId: sectionId || undefined,
         search: search || undefined,
         eligibility,
@@ -141,7 +139,7 @@ export default function TeacherAddStudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [classId, effectiveGradeLevel, eligibility, page, search, sectionId, sortBy, sortDirection]);
+  }, [classId, eligibility, gradeLevel, page, search, sectionId, sortBy, sortDirection]);
 
   useEffect(() => {
     (async () => {
@@ -161,9 +159,9 @@ export default function TeacherAddStudentsPage() {
   }, [fetchSections]);
 
   useEffect(() => {
-    if (!effectiveGradeLevel) return;
+    if (!gradeLevel) return;
     void fetchStudents();
-  }, [effectiveGradeLevel, fetchStudents]);
+  }, [fetchStudents, gradeLevel]);
 
   const handleToggleStudent = (studentId: string) => {
     const student = students.find((row) => row.id === studentId);
@@ -189,7 +187,7 @@ export default function TeacherAddStudentsPage() {
         eligibleIds.map((studentId) => classService.enrollStudent(classId, { studentId })),
       );
       toast.success(`Added ${eligibleIds.length} student(s)`);
-      router.push(`/dashboard/teacher/classes/${classId}`);
+      router.push(`/dashboard/admin/classes/${classId}`);
     } catch {
       toast.error('Failed to add one or more students');
     } finally {
@@ -201,7 +199,7 @@ export default function TeacherAddStudentsPage() {
     <div className="space-y-6 pb-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)} className="mb-2">
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/dashboard/admin/classes/${classId}`)} className="mb-2">
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back to Class
           </Button>
@@ -216,7 +214,7 @@ export default function TeacherAddStudentsPage() {
         </Button>
       </div>
 
-      {!effectiveGradeLevel ? (
+      {!gradeLevel ? (
         <Card>
           <CardHeader>
             <CardTitle>Loading class grade context</CardTitle>
@@ -228,7 +226,7 @@ export default function TeacherAddStudentsPage() {
       ) : (
         <StudentMasterlistTable
           title="Modern Masterlist"
-          description={`Only Grade ${effectiveGradeLevel} students are shown for this class, with eligibility-first ordering and quick select.`}
+          description="Multi-filter student discovery with eligibility-first ordering, quick select, and paginated matching."
           rows={students.map((student) => ({
             id: student.id,
             firstName: student.firstName,
@@ -250,12 +248,15 @@ export default function TeacherAddStudentsPage() {
           onSearchChange={(value) => updateQuery({ search: value || null, page: 1 })}
           eligibility={eligibility}
           onEligibilityChange={(value) => updateQuery({ eligibility: value, page: 1 })}
-          gradeFilter={effectiveGradeLevel}
-          gradeOptions={
-            effectiveGradeLevel
-              ? [{ value: effectiveGradeLevel, label: `Grade ${effectiveGradeLevel} (class level)` }]
-              : GRADE_LEVELS.map((grade) => ({ value: grade, label: `Grade ${grade}` }))
-          }
+          gradeFilter={gradeLevel}
+          onGradeFilterChange={(value) => {
+            updateQuery({
+              gradeLevel: value || null,
+              sectionId: null,
+              page: 1,
+            });
+          }}
+          gradeOptions={GRADE_LEVELS.map((grade) => ({ value: grade, label: `Grade ${grade}` }))}
           sectionFilter={sectionId}
           onSectionFilterChange={(value) => updateQuery({ sectionId: value || null, page: 1 })}
           sectionOptions={sections.map((section) => ({ value: section.id, label: section.name }))}
@@ -270,7 +271,7 @@ export default function TeacherAddStudentsPage() {
           }}
           onClearSelection={() => setSelectedIds([])}
           onPageChange={(nextPage) => updateQuery({ page: nextPage })}
-          onOpenProfile={(studentId) => router.push(`/dashboard/teacher/classes/${classId}/students/${studentId}`)}
+          onOpenProfile={(studentId) => router.push(`/dashboard/admin/users/${studentId}`)}
         />
       )}
 
@@ -281,7 +282,7 @@ export default function TeacherAddStudentsPage() {
             Selected eligible: {selectedEligibleCount}
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => router.push(`/dashboard/teacher/classes/${classId}`)}>
+            <Button variant="outline" onClick={() => router.push(`/dashboard/admin/classes/${classId}`)}>
               Cancel
             </Button>
             <Button onClick={handleAddSelected} disabled={submitting || selectedEligibleCount === 0}>
@@ -293,4 +294,3 @@ export default function TeacherAddStudentsPage() {
     </div>
   );
 }
-

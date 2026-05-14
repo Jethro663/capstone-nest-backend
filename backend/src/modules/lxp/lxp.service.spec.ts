@@ -3,11 +3,16 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { LxpService } from './lxp.service';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 
 describe('LxpService', () => {
   let service: LxpService;
-  const mockNotificationsService = { createBulk: jest.fn() };
+  const mockNotificationsService = {
+    createBulk: jest.fn(),
+    createBulkDeduped: jest.fn(),
+  };
+  const mockNotificationsGateway = { emitToUser: jest.fn() };
   const mockAuditService = { log: jest.fn() };
 
   const mockDb: any = {
@@ -41,6 +46,10 @@ describe('LxpService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    mockNotificationsService.createBulk.mockResolvedValue(undefined);
+    mockNotificationsService.createBulkDeduped.mockImplementation(
+      async (inputs) => inputs,
+    );
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
     mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue(
       [],
@@ -63,6 +72,7 @@ describe('LxpService', () => {
         LxpService,
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: NotificationsGateway, useValue: mockNotificationsGateway },
         { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();

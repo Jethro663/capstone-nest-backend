@@ -72,6 +72,7 @@ export interface JaPracticeSessionItem {
   explanation?: string | null;
   citations?: Array<Record<string, unknown>> | null;
   validation?: Record<string, unknown> | null;
+  correctOptionIds?: string[] | null;
   response?: {
     id: string;
     studentAnswer: Record<string, unknown>;

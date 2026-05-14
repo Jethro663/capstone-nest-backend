@@ -13,6 +13,9 @@ module.exports = {
       },
     ],
   },
+  moduleNameMapper: {
+    "\\.(png|jpg|jpeg|gif|webp)$": "<rootDir>/src/__mocks__/assetMock.js",
+  },
   moduleFileExtensions: ["ts", "tsx", "js", "json"],
   clearMocks: true,
 };

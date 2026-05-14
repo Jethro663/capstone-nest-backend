@@ -16,7 +16,18 @@ export interface AcademicStateImpactPreview {
   target: AcademicStateSnapshot;
   impact: {
     classRecordsToFinalize: number;
+    enrollmentsToComplete: number;
+    classesToArchive: number;
+    sectionsToArchive: number;
     schoolEventsToArchive: number;
+    reusableSectionsToCreate: number;
+    reusableClassesToCreate: number;
+    promotionReadiness: {
+      activeStudentsInCurrentYear: number;
+      studentsMissingFinalizedGrades: number;
+      transitionBlocked: boolean;
+      message: string | null;
+    };
   };
   transitionConfirmationText: string;
 }

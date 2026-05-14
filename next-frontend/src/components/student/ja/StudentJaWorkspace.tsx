@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -158,9 +152,151 @@ function isJaMode(value: string | null | undefined): value is JaVisibleMode {
   return value === "ask" || value === "review";
 }
 
-function itemReady(item: JaPracticeSessionItem, selected: string[] | undefined) {
+function itemReady(
+  item: JaPracticeSessionItem,
+  selected: string[] | undefined,
+) {
   if (!selected || selected.length === 0) return false;
-  return item.itemType === "multiple_select" ? selected.length > 0 : Boolean(selected[0]);
+  return item.itemType === "multiple_select"
+    ? selected.length > 0
+    : Boolean(selected[0]);
+}
+
+function plainOptionText(value: string) {
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getItemAnswerIds(
+  item: JaPracticeSessionItem,
+  fallbackAnswers: string[] | undefined,
+) {
+  const answer = item.response?.studentAnswer;
+  if (!answer || typeof answer !== "object") return fallbackAnswers ?? [];
+
+  const selectedOptionIds = (answer as { selectedOptionIds?: unknown })
+    .selectedOptionIds;
+  if (Array.isArray(selectedOptionIds)) {
+    return selectedOptionIds.filter(
+      (id): id is string => typeof id === "string",
+    );
+  }
+
+  const selectedOptionId = (answer as { selectedOptionId?: unknown })
+    .selectedOptionId;
+  if (typeof selectedOptionId === "string") return [selectedOptionId];
+
+  const booleanValue = (answer as { value?: unknown }).value;
+  if (typeof booleanValue === "boolean") {
+    const matchingOption = (item.options ?? []).find(
+      (option) =>
+        plainOptionText(option.text).toLowerCase() === String(booleanValue),
+    );
+    return matchingOption ? [matchingOption.id] : [];
+  }
+
+  return fallbackAnswers ?? [];
+}
+
+function summarizeJaOptions(item: JaPracticeSessionItem, optionIds: string[]) {
+  const labels = optionIds
+    .map((id) => {
+      const option = (item.options ?? []).find((entry) => entry.id === id);
+      return option ? plainOptionText(option.text) : id;
+    })
+    .filter(Boolean);
+
+  return labels.length > 0 ? labels.join(", ") : "No answer selected";
+}
+
+function summarizeJaCorrectAnswer(item: JaPracticeSessionItem) {
+  return item.correctOptionIds?.length
+    ? summarizeJaOptions(item, item.correctOptionIds)
+    : "Answer key unavailable";
+}
+
+function JaAnswerFeedback({
+  item,
+  fallbackAnswers,
+}: {
+  item: JaPracticeSessionItem;
+  fallbackAnswers?: string[];
+}) {
+  if (!item.response) return null;
+
+  const studentAnswer = summarizeJaOptions(
+    item,
+    getItemAnswerIds(item, fallbackAnswers),
+  );
+  const correctAnswer = summarizeJaCorrectAnswer(item);
+  const isCorrect = item.response.isCorrect;
+  const baseComment =
+    item.response.feedback ||
+    (isCorrect
+      ? "Correct. Keep your momentum."
+      : "Not quite yet. Review the answer key and try the next one.");
+  const comment = isCorrect
+    ? baseComment
+    : `${baseComment} Correct answer: ${correctAnswer}.`;
+
+  return (
+    <div
+      className={cn(
+        "ja-feedback ja-answer-review",
+        isCorrect ? "is-correct" : "is-incorrect",
+      )}
+      aria-live="polite"
+    >
+      <div className="ja-answer-review__header">
+        <span className="ja-answer-review__icon" aria-hidden="true">
+          {isCorrect ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <X className="h-4 w-4" />
+          )}
+        </span>
+        <div>
+          <strong>
+            {isCorrect
+              ? "Nice. Your answer matched the key."
+              : "Good try. Here is the clear answer key."}
+          </strong>
+          <p>
+            {isCorrect
+              ? "Keep that reasoning pattern."
+              : "Use the green answer as your anchor before moving on."}
+          </p>
+        </div>
+        <StudentStatusChip tone={isCorrect ? "success" : "warning"}>
+          {isCorrect ? "Correct" : "Review"}
+        </StudentStatusChip>
+      </div>
+      <div className="ja-answer-review__grid">
+        <div
+          className={cn("ja-answer-review__answer", !isCorrect && "is-wrong")}
+        >
+          <span>Your answer</span>
+          <strong>{studentAnswer}</strong>
+        </div>
+        <div className="ja-answer-review__answer is-correct">
+          <span>Correct answer</span>
+          <strong>{correctAnswer}</strong>
+        </div>
+      </div>
+      <div className="ja-answer-review__comment">
+        <strong>JA comment</strong>
+        <p>{comment}</p>
+      </div>
+    </div>
+  );
 }
 
 function getAssistantTone(message: JaAskMessage): JaAssistantTone {
@@ -277,7 +413,8 @@ function normalizeJaAssistantContent(content: string) {
       return normalizeRichText(content);
     }
 
-    const heading = typeof parsed.heading === "string" ? parsed.heading.trim() : "";
+    const heading =
+      typeof parsed.heading === "string" ? parsed.heading.trim() : "";
     const html =
       typeof parsed.html === "string"
         ? parsed.html.trim()
@@ -316,7 +453,9 @@ function JaAssistantAvatar({
 }
 
 function buildLessonContextLabel(context: JaAskLessonContextSummary) {
-  return [context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ");
+  return [context.moduleTitle, context.sectionTitle]
+    .filter(Boolean)
+    .join(" / ");
 }
 
 function resolveThreadLessonContext(
@@ -364,9 +503,9 @@ export default function StudentJaWorkspace({
   const conditionalSurfaceMotionProps = reduceMotion
     ? {}
     : {
-      initial: { opacity: 0, y: 10 },
-      animate: { opacity: 1, y: 0 },
-      transition: { duration: 0.22, ease: "easeOut" as const },
+        initial: { opacity: 0, y: 10 },
+        animate: { opacity: 1, y: 0 },
+        transition: { duration: 0.22, ease: "easeOut" as const },
       };
 
   const [hub, setHub] = useState<JaHubResponse | null>(null);
@@ -386,9 +525,11 @@ export default function StudentJaWorkspace({
   const [activityFilter, setActivityFilter] = useState<JaActivityFilter>("all");
   const [activeActivityKey, setActiveActivityKey] = useState("");
 
-  const [reviewSession, setReviewSession] = useState<JaPracticeSessionResponse | null>(null);
+  const [reviewSession, setReviewSession] =
+    useState<JaPracticeSessionResponse | null>(null);
   const [reviewCursor, setReviewCursor] = useState(0);
-  const [reviewSessionTitle, setReviewSessionTitle] = useState("Assessment Replay");
+  const [reviewSessionTitle, setReviewSessionTitle] =
+    useState("Assessment Replay");
   const [answers, setAnswers] = useState<AnswerState>({});
   const [busy, setBusy] = useState(false);
 
@@ -451,7 +592,8 @@ export default function StudentJaWorkspace({
       timestamp: string,
     ) => {
       setHub((current) => {
-        if (!current || current.selectedClassId !== thread.classId) return current;
+        if (!current || current.selectedClassId !== thread.classId)
+          return current;
         const nextSummary: JaAskThreadSummary = {
           id: thread.id,
           title: thread.title,
@@ -614,7 +756,7 @@ export default function StudentJaWorkspace({
 
   const activeItem =
     currentSession && activeItemIndex !== null && activeItemIndex >= 0
-      ? currentSession.items[activeItemIndex] ?? null
+      ? (currentSession.items[activeItemIndex] ?? null)
       : null;
 
   const activeItemPrompt = useMemo(
@@ -622,9 +764,14 @@ export default function StudentJaWorkspace({
     [activeItem?.prompt],
   );
   const activeCoachText = activeItemPrompt.coach || activeItem?.hint || "";
+  const activeAnswerIds = activeItem
+    ? getItemAnswerIds(activeItem, answers[activeItem.id])
+    : [];
 
   const answeredCount = useMemo(
-    () => currentSession?.items.filter((item) => Boolean(item.response)).length ?? 0,
+    () =>
+      currentSession?.items.filter((item) => Boolean(item.response)).length ??
+      0,
     [currentSession],
   );
   const sessionAnsweredById = useMemo(
@@ -641,8 +788,9 @@ export default function StudentJaWorkspace({
   );
   const draftAnsweredCount = useMemo(
     () =>
-      currentSession?.items.filter((item) => Boolean(sessionAnsweredById[item.id]))
-        .length ?? 0,
+      currentSession?.items.filter((item) =>
+        Boolean(sessionAnsweredById[item.id]),
+      ).length ?? 0,
     [currentSession, sessionAnsweredById],
   );
   const allSessionItemsReady = useMemo(
@@ -654,8 +802,8 @@ export default function StudentJaWorkspace({
   );
   const canComplete = Boolean(
     currentSession &&
-      currentSession.session.status === "active" &&
-      answeredCount === currentSession.session.questionCount,
+    currentSession.session.status === "active" &&
+    answeredCount === currentSession.session.questionCount,
   );
 
   const sessionProgressPercent = currentSession
@@ -678,7 +826,9 @@ export default function StudentJaWorkspace({
     () => hub?.classes.find((item) => item.id === selectedClassId) ?? null,
     [hub?.classes, selectedClassId],
   );
-  const selectedClassLabel = selectedClass ? classLabel(selectedClass) : "Selected class";
+  const selectedClassLabel = selectedClass
+    ? classLabel(selectedClass)
+    : "Selected class";
 
   const activityItems = useMemo<JaActivityItem[]>(() => {
     if (!hub) return [];
@@ -704,7 +854,9 @@ export default function StudentJaWorkspace({
       updatedAt: session.completedAt || session.startedAt,
     }));
     return [...askItems, ...reviewItems].sort(
-      (left, right) => getActivityTimestamp(right.updatedAt) - getActivityTimestamp(left.updatedAt),
+      (left, right) =>
+        getActivityTimestamp(right.updatedAt) -
+        getActivityTimestamp(left.updatedAt),
     );
   }, [hub, selectedClassLabel]);
 
@@ -717,8 +869,9 @@ export default function StudentJaWorkspace({
   );
   const activeActivity = useMemo(
     () =>
-      activityItems.find((item) => `${item.mode}:${item.id}` === activeActivityKey) ??
-      null,
+      activityItems.find(
+        (item) => `${item.mode}:${item.id}` === activeActivityKey,
+      ) ?? null,
     [activityItems, activeActivityKey],
   );
   const askLessonContexts = hub?.ask.lessonContexts ?? [];
@@ -737,12 +890,23 @@ export default function StudentJaWorkspace({
       res.data.items.forEach((item) => {
         const answer = item.response?.studentAnswer;
         if (!answer || typeof answer !== "object") return;
-        if (Array.isArray((answer as { selectedOptionIds?: unknown }).selectedOptionIds)) {
-          draft[item.id] = (answer as { selectedOptionIds: string[] }).selectedOptionIds;
+        if (
+          Array.isArray(
+            (answer as { selectedOptionIds?: unknown }).selectedOptionIds,
+          )
+        ) {
+          draft[item.id] = (
+            answer as { selectedOptionIds: string[] }
+          ).selectedOptionIds;
           return;
         }
-        if (typeof (answer as { selectedOptionId?: unknown }).selectedOptionId === "string") {
-          draft[item.id] = [(answer as { selectedOptionId: string }).selectedOptionId];
+        if (
+          typeof (answer as { selectedOptionId?: unknown }).selectedOptionId ===
+          "string"
+        ) {
+          draft[item.id] = [
+            (answer as { selectedOptionId: string }).selectedOptionId,
+          ];
         }
       });
       setAnswers(draft);
@@ -811,7 +975,9 @@ export default function StudentJaWorkspace({
       const attemptSummary = hub?.review.eligibleAttempts.find(
         (attempt) => attempt.attemptId === attemptId,
       );
-      setReviewSessionTitle(attemptSummary?.assessmentTitle || "Assessment Replay");
+      setReviewSessionTitle(
+        attemptSummary?.assessmentTitle || "Assessment Replay",
+      );
       const res = await jaService.createReviewSession({
         classId: selectedClassId,
         attemptId,
@@ -825,7 +991,9 @@ export default function StudentJaWorkspace({
       await refreshHub(selectedClassId);
       toast.success("Review session started.");
     } catch (error: unknown) {
-      toast.error(getApiErrorMessage(error, "Unable to generate review session."));
+      toast.error(
+        getApiErrorMessage(error, "Unable to generate review session."),
+      );
     } finally {
       setBusy(false);
     }
@@ -836,7 +1004,9 @@ export default function StudentJaWorkspace({
     if (!currentSession || !activeItem) return;
     setBusy(true);
     try {
-      const unansweredItems = currentSession.items.filter((item) => !item.response);
+      const unansweredItems = currentSession.items.filter(
+        (item) => !item.response,
+      );
       const incompleteItem = unansweredItems.find(
         (item) => !itemReady(item, answers[item.id]),
       );
@@ -906,7 +1076,10 @@ export default function StudentJaWorkspace({
     setAskMessages((prev) => [...prev, studentMessage]);
     try {
       let threadId = askThreadId;
-      if (!threadId || (askThreadClassId && askThreadClassId !== selectedClassId)) {
+      if (
+        !threadId ||
+        (askThreadClassId && askThreadClassId !== selectedClassId)
+      ) {
         const created = await jaService.createAskThread({
           classId: selectedClassId,
           lessonId: selectedLessonContext?.lessonId,
@@ -915,7 +1088,10 @@ export default function StudentJaWorkspace({
         setAskThreadId(threadId);
         setAskThreadClassId(created.data.thread.classId);
         setSelectedLessonContext(
-          resolveThreadLessonContext(created.data.thread, selectedLessonContext),
+          resolveThreadLessonContext(
+            created.data.thread,
+            selectedLessonContext,
+          ),
         );
       }
       setActiveActivityKey(`ask:${threadId}`);
@@ -937,13 +1113,17 @@ export default function StudentJaWorkspace({
       if (response.data.blocked) setShowGuardrailModal(true);
       setAskThreadId(response.data.thread.id);
       setAskThreadClassId(response.data.thread.classId);
-      setSelectedLessonContext(resolveThreadLessonContext(response.data.thread));
+      setSelectedLessonContext(
+        resolveThreadLessonContext(response.data.thread),
+      );
       syncAskThreadSummary(
         response.data.thread,
         assistantMessage.createdAt ?? new Date().toISOString(),
       );
     } catch (error: unknown) {
-      setAskMessages((prev) => prev.filter((message) => message.id !== localMessageId));
+      setAskMessages((prev) =>
+        prev.filter((message) => message.id !== localMessageId),
+      );
       const message = getApiErrorMessage(error, "JA Ask failed to respond.");
       setAskError(message);
       toast.error(message);
@@ -975,9 +1155,13 @@ export default function StudentJaWorkspace({
     talking: boolean;
   }>(() => {
     const latestAssistant =
-      [...askMessages].reverse().find((message) => message.role !== "student") ?? null;
+      [...askMessages]
+        .reverse()
+        .find((message) => message.role !== "student") ?? null;
     const latestStudent =
-      [...askMessages].reverse().find((message) => message.role === "student") ?? null;
+      [...askMessages]
+        .reverse()
+        .find((message) => message.role === "student") ?? null;
 
     if (busy) {
       return {
@@ -1057,7 +1241,9 @@ export default function StudentJaWorkspace({
     );
   }
 
-  const isContextualEntry = Boolean(initialClassId && initialEntry && initialEntry !== "sidebar");
+  const isContextualEntry = Boolean(
+    initialClassId && initialEntry && initialEntry !== "sidebar",
+  );
 
   return (
     <motion.div
@@ -1090,7 +1276,11 @@ export default function StudentJaWorkspace({
             </div>
           </div>
 
-          <div className="ja-mode-grid" role="tablist" aria-label="JA study modes">
+          <div
+            className="ja-mode-grid"
+            role="tablist"
+            aria-label="JA study modes"
+          >
             {MODE_ORDER.map((modeKey) => {
               const details = MODE_META[modeKey];
               const Icon = details.icon;
@@ -1101,7 +1291,11 @@ export default function StudentJaWorkspace({
                   type="button"
                   role="tab"
                   aria-selected={isActive}
-                  className={cn("ja-mode-card", `mode-${modeKey}`, isActive && "active")}
+                  className={cn(
+                    "ja-mode-card",
+                    `mode-${modeKey}`,
+                    isActive && "active",
+                  )}
                   onClick={() => selectMode(modeKey)}
                 >
                   <span className="ja-mode-card__icon">
@@ -1134,7 +1328,9 @@ export default function StudentJaWorkspace({
 
           <div className="ja-saved-list ja-activity-list" aria-live="polite">
             {filteredActivityItems.length === 0 ? (
-              <span className="ja-inline-empty">No saved JA activity for this filter yet.</span>
+              <span className="ja-inline-empty">
+                No saved JA activity for this filter yet.
+              </span>
             ) : (
               filteredActivityItems.map((item) => (
                 <button
@@ -1149,7 +1345,9 @@ export default function StudentJaWorkspace({
                   )}
                 >
                   <span className="ja-session-chip__top">
-                    <span className={cn("ja-activity-tag", `mode-${item.mode}`)}>
+                    <span
+                      className={cn("ja-activity-tag", `mode-${item.mode}`)}
+                    >
                       {MODE_META[item.mode].title}
                     </span>
                     <span className="ja-session-chip__stamp">
@@ -1157,7 +1355,9 @@ export default function StudentJaWorkspace({
                     </span>
                   </span>
                   <strong>{item.title}</strong>
-                  <span className="ja-session-chip__subtitle">{item.subtitle}</span>
+                  <span className="ja-session-chip__subtitle">
+                    {item.subtitle}
+                  </span>
                   <span className="ja-session-chip__meta">
                     <span>{item.classLabel}</span>
                     <span>{item.status}</span>
@@ -1166,7 +1366,6 @@ export default function StudentJaWorkspace({
               ))
             )}
           </div>
-
         </motion.aside>
       ) : null}
 
@@ -1203,7 +1402,11 @@ export default function StudentJaWorkspace({
                   <ChevronDown className="h-4 w-4" />
                 </button>
                 {classMenuOpen ? (
-                  <div className="ja-class-menu__popover" role="listbox" aria-label="Class options">
+                  <div
+                    className="ja-class-menu__popover"
+                    role="listbox"
+                    aria-label="Class options"
+                  >
                     {hub.classes.map((item) => {
                       const isSelected = item.id === selectedClassId;
                       return (
@@ -1227,7 +1430,9 @@ export default function StudentJaWorkspace({
                 ) : null}
               </div>
             ) : (
-              <span className="ja-class-label-static">{selectedClassLabel}</span>
+              <span className="ja-class-label-static">
+                {selectedClassLabel}
+              </span>
             )}
             {aiUnavailable ? (
               <span className="ja-ai-offline-pill">AI offline</span>
@@ -1303,12 +1508,18 @@ export default function StudentJaWorkspace({
               <div className="ja-home-hero">
                 <div className="ja-home-copy">
                   <p className="ja-eyebrow">Pick your study boost</p>
-                  <h2>Tell JA what feels confusing, then watch the lesson click.</h2>
+                  <h2>
+                    Tell JA what feels confusing, then watch the lesson click.
+                  </h2>
                   <p>
-                    Choose a mode and JA will turn this class into simpler explanations,
-                    sharper review questions, and a study path that feels easier to start.
+                    Choose a mode and JA will turn this class into simpler
+                    explanations, sharper review questions, and a study path
+                    that feels easier to start.
                   </p>
-                  <div className="ja-home-sparkline" aria-label="JA study strengths">
+                  <div
+                    className="ja-home-sparkline"
+                    aria-label="JA study strengths"
+                  >
                     <span>Explain it simply</span>
                     <span>Quiz me fast</span>
                     <span>Find my weak spots</span>
@@ -1325,8 +1536,12 @@ export default function StudentJaWorkspace({
                     className="ja-home-robot"
                     priority
                   />
-                  <span className="ja-home-bubble ja-home-bubble--ask">Ask me anything</span>
-                  <span className="ja-home-bubble ja-home-bubble--review">Replay mistakes</span>
+                  <span className="ja-home-bubble ja-home-bubble--ask">
+                    Ask me anything
+                  </span>
+                  <span className="ja-home-bubble ja-home-bubble--review">
+                    Replay mistakes
+                  </span>
                 </div>
               </div>
               <div className="ja-home-modes">
@@ -1374,16 +1589,20 @@ export default function StudentJaWorkspace({
                         <h3>Pick a visible lesson, then ask JA for help.</h3>
                         <p>
                           JA stays inside the lesson you select so explanations,
-                          summaries, study plans, and review suggestions stay grounded
-                          to what your class can currently access.
+                          summaries, study plans, and review suggestions stay
+                          grounded to what your class can currently access.
                         </p>
                       </div>
 
-                      <div className="ja-context-picker" aria-label="Available lessons">
+                      <div
+                        className="ja-context-picker"
+                        aria-label="Available lessons"
+                      >
                         {askLessonContexts.length > 0 ? (
                           askLessonContexts.map((context) => {
                             const isSelected =
-                              selectedLessonContext?.lessonId === context.lessonId;
+                              selectedLessonContext?.lessonId ===
+                              context.lessonId;
                             return (
                               <button
                                 key={context.lessonId}
@@ -1399,7 +1618,9 @@ export default function StudentJaWorkspace({
                                 <span className="ja-context-chip__copy">
                                   <strong>{context.title}</strong>
                                   {buildLessonContextLabel(context) ? (
-                                    <span>{buildLessonContextLabel(context)}</span>
+                                    <span>
+                                      {buildLessonContextLabel(context)}
+                                    </span>
                                   ) : null}
                                 </span>
                               </button>
@@ -1407,18 +1628,21 @@ export default function StudentJaWorkspace({
                           })
                         ) : (
                           <div className="ja-context-empty__notice">
-                            No visible lessons are available for JA Ask yet in this class.
+                            No visible lessons are available for JA Ask yet in
+                            this class.
                           </div>
                         )}
                       </div>
 
                       <div className="ja-guidelines">
-                        <p className="ja-guidelines__title">Good prompts for JA</p>
+                        <p className="ja-guidelines__title">
+                          Good prompts for JA
+                        </p>
                         <ul>
                           <li>Select one visible lesson card first.</li>
                           <li>
-                            Use the bottom Ask button to choose one of JA&apos;s fixed
-                            lesson actions.
+                            Use the bottom Ask button to choose one of JA&apos;s
+                            fixed lesson actions.
                           </li>
                           {askGuidelines.map((guideline) => (
                             <li key={guideline}>{guideline}</li>
@@ -1433,21 +1657,31 @@ export default function StudentJaWorkspace({
                   const isStudentMessage = msg.role === "student";
                   const tone = isStudentMessage ? null : getAssistantTone(msg);
                   const toneMeta = tone ? getAssistantToneLabel(tone) : null;
-                  const citations = Array.isArray(msg.citations) ? msg.citations : [];
+                  const citations = Array.isArray(msg.citations)
+                    ? msg.citations
+                    : [];
                   const inlineActions =
                     !isStudentMessage && !msg.blocked ? JA_INLINE_ACTIONS : [];
 
                   return (
                     <article
                       key={msg.id}
-                      className={cn("ja-msg-row", isStudentMessage ? "user" : "ja")}
+                      className={cn(
+                        "ja-msg-row",
+                        isStudentMessage ? "user" : "ja",
+                      )}
                     >
                       {isStudentMessage ? (
-                        <span className="ja-msg-avatar user-av" aria-hidden="true">
+                        <span
+                          className="ja-msg-avatar user-av"
+                          aria-hidden="true"
+                        >
                           ME
                         </span>
                       ) : (
-                        <JaAssistantAvatar mood={msg.blocked ? "guarded" : "default"} />
+                        <JaAssistantAvatar
+                          mood={msg.blocked ? "guarded" : "default"}
+                        />
                       )}
                       <div
                         className={cn(
@@ -1455,7 +1689,8 @@ export default function StudentJaWorkspace({
                           isStudentMessage ? "user" : "ja",
                           isStudentMessage && "ja-bubble--student",
                           tone === "grounded" && "ja-bubble--grounded",
-                          tone === "thin-evidence" && "ja-bubble--thin-evidence",
+                          tone === "thin-evidence" &&
+                            "ja-bubble--thin-evidence",
                           tone === "guarded" && "ja-bubble--guarded",
                           msg.blocked && "notice",
                         )}
@@ -1499,23 +1734,28 @@ export default function StudentJaWorkspace({
                                       "assessmentTitle",
                                       "title",
                                     ]);
-                                    const snippet = readCitationValue(citation, [
-                                      "snippet",
-                                      "chunkText",
-                                    ]);
-                                    const sourceType = readCitationValue(citation, [
-                                      "sourceType",
-                                    ]);
+                                    const snippet = readCitationValue(
+                                      citation,
+                                      ["snippet", "chunkText"],
+                                    );
+                                    const sourceType = readCitationValue(
+                                      citation,
+                                      ["sourceType"],
+                                    );
 
                                     return (
                                       <article
                                         key={`${msg.id}-citation-${index}`}
                                         className="ja-evidence-card"
                                       >
-                                        <strong>{label || "Class material"}</strong>
+                                        <strong>
+                                          {label || "Class material"}
+                                        </strong>
                                         {snippet ? <p>{snippet}</p> : null}
                                         {sourceType ? (
-                                          <span>{formatCitationSource(sourceType)}</span>
+                                          <span>
+                                            {formatCitationSource(sourceType)}
+                                          </span>
                                         ) : null}
                                       </article>
                                     );
@@ -1525,7 +1765,10 @@ export default function StudentJaWorkspace({
                             ) : null}
 
                             {inlineActions.length > 0 ? (
-                              <div className="ja-bubble__actions" aria-label="Suggested follow-ups">
+                              <div
+                                className="ja-bubble__actions"
+                                aria-label="Suggested follow-ups"
+                              >
                                 {inlineActions.map((action) => (
                                   <button
                                     key={`${msg.id}-${action.id}`}
@@ -1550,8 +1793,9 @@ export default function StudentJaWorkspace({
                   <article className="ja-msg-row ja is-pending">
                     <JaAssistantAvatar mood="thinking" />
                     <div className="ja-bubble ja notice ja-bubble--pending">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Thinking through your
-                      question and grounding it to your class material...
+                      <Loader2 className="h-4 w-4 animate-spin" /> Thinking
+                      through your question and grounding it to your class
+                      material...
                     </div>
                   </article>
                 ) : null}
@@ -1577,16 +1821,22 @@ export default function StudentJaWorkspace({
                   sizes="(max-width: 640px) 10rem, (max-width: 920px) 14rem, 24rem"
                   className="ja-live-companion__image"
                 />
-                <span className="ja-live-companion__caption">{liveJaState.caption}</span>
+                <span className="ja-live-companion__caption">
+                  {liveJaState.caption}
+                </span>
               </div>
 
               {selectedLessonContext ? (
                 <div className="ja-active-context" aria-live="polite">
                   <div className="ja-active-context__copy">
-                    <span className="ja-active-context__label">Current lesson</span>
+                    <span className="ja-active-context__label">
+                      Current lesson
+                    </span>
                     <strong>{selectedLessonContext.title}</strong>
                     {buildLessonContextLabel(selectedLessonContext) ? (
-                      <span>{buildLessonContextLabel(selectedLessonContext)}</span>
+                      <span>
+                        {buildLessonContextLabel(selectedLessonContext)}
+                      </span>
                     ) : null}
                   </div>
                   <button
@@ -1608,10 +1858,7 @@ export default function StudentJaWorkspace({
 
               <div className="ja-composer ja-ask-launcher" ref={askMenuRef}>
                 <div
-                  className={cn(
-                    "ja-ask-menu",
-                    askMenuOpen && "is-open",
-                  )}
+                  className={cn("ja-ask-menu", askMenuOpen && "is-open")}
                   role="dialog"
                   aria-label="Ask JA actions"
                   aria-hidden={!askMenuOpen}
@@ -1665,16 +1912,16 @@ export default function StudentJaWorkspace({
                   <div className="ja-empty-copy">
                     <h3>Pick an assessment to replay</h3>
                     <p>
-                      Replay mode builds a focused retry session from one submitted
-                      assessment attempt.
+                      Replay mode builds a focused retry session from one
+                      submitted assessment attempt.
                     </p>
                   </div>
 
                   <div className="ja-review-attempts">
                     {hub.review.eligibleAttempts.length === 0 ? (
                       <p className="ja-inline-empty">
-                        No eligible attempts yet. Complete an assessment and return to
-                        replay weak areas.
+                        No eligible attempts yet. Complete an assessment and
+                        return to replay weak areas.
                       </p>
                     ) : (
                       hub.review.eligibleAttempts.map((attempt) => (
@@ -1686,8 +1933,12 @@ export default function StudentJaWorkspace({
                         >
                           <strong>{attempt.assessmentTitle}</strong>
                           <span>
-                            Submitted {new Date(attempt.submittedAt).toLocaleDateString()} |{" "}
-                            {attempt.score !== null ? `${attempt.score}%` : "Ungraded"}
+                            Submitted{" "}
+                            {new Date(attempt.submittedAt).toLocaleDateString()}{" "}
+                            |{" "}
+                            {attempt.score !== null
+                              ? `${attempt.score}%`
+                              : "Ungraded"}
                           </span>
                         </button>
                       ))
@@ -1701,7 +1952,11 @@ export default function StudentJaWorkspace({
                       <div className="ja-session-head">
                         <div>
                           <p className="ja-eyebrow">Replay</p>
-                          <h3>{reviewSessionTitle || activeActivity?.title || "Assessment Replay"}</h3>
+                          <h3>
+                            {reviewSessionTitle ||
+                              activeActivity?.title ||
+                              "Assessment Replay"}
+                          </h3>
                         </div>
                         <div className="ja-session-head__actions">
                           <Button
@@ -1716,13 +1971,18 @@ export default function StudentJaWorkspace({
                       </div>
 
                       <StudentObjectiveAssessmentSurface
-                        title={reviewSessionTitle || activeActivity?.title || "Assessment Replay"}
+                        title={
+                          reviewSessionTitle ||
+                          activeActivity?.title ||
+                          "Assessment Replay"
+                        }
                         questionLabel={`Question ${(activeItemIndex ?? 0) + 1} of ${currentSession.items.length}`}
                         progressValue={sessionProgressPercent}
                         statusChips={
                           <>
                             <StudentStatusChip tone="info">
-                              {draftAnsweredCount}/{currentSession.items.length} answered
+                              {draftAnsweredCount}/{currentSession.items.length}{" "}
+                              answered
                             </StudentStatusChip>
                             <StudentStatusChip
                               tone={canComplete ? "success" : "info"}
@@ -1746,16 +2006,22 @@ export default function StudentJaWorkspace({
                           options: (activeItem.options ?? []).map((option) => ({
                             id: option.id,
                             text: option.text,
+                            isCorrect:
+                              activeItem.correctOptionIds?.includes(
+                                option.id,
+                              ) ?? false,
                           })),
                         }}
                         currentIdx={activeItemIndex ?? 0}
-                        questionIds={currentSession.items.map((item) => item.id)}
+                        questionIds={currentSession.items.map(
+                          (item) => item.id,
+                        )}
                         answeredById={sessionAnsweredById}
                         navigationLocked={false}
                         value={
                           activeItem.itemType === "multiple_select"
-                            ? answers[activeItem.id] ?? []
-                            : answers[activeItem.id]?.[0] ?? ""
+                            ? activeAnswerIds
+                            : (activeAnswerIds[0] ?? "")
                         }
                         onChange={(val) => {
                           setAnswers((prev) => ({
@@ -1789,24 +2055,21 @@ export default function StudentJaWorkspace({
                         }
                         feedback={
                           activeItem.response ? (
-                            <div
-                              className={cn(
-                                "ja-feedback",
-                                activeItem.response.isCorrect
-                                  ? "is-correct"
-                                  : "is-incorrect",
-                              )}
-                            >
-                              {activeItem.response.feedback}
-                            </div>
+                            <JaAnswerFeedback
+                              item={activeItem}
+                              fallbackAnswers={answers[activeItem.id]}
+                            />
                           ) : null
                         }
+                        showCorrectness={Boolean(activeItem.response)}
                         footerLeft={
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() =>
-                              setReviewCursor((current) => Math.max(0, current - 1))
+                              setReviewCursor((current) =>
+                                Math.max(0, current - 1),
+                              )
                             }
                             disabled={busy || (activeItemIndex ?? 0) <= 0}
                           >
@@ -1815,18 +2078,23 @@ export default function StudentJaWorkspace({
                           </Button>
                         }
                         footerRight={
-                          (activeItemIndex ?? 0) < currentSession.items.length - 1 ? (
+                          (activeItemIndex ?? 0) <
+                          currentSession.items.length - 1 ? (
                             <Button
                               type="button"
                               className="student-button-solid"
                               onClick={() =>
                                 setReviewCursor((current) =>
-                                  Math.min(currentSession.items.length - 1, current + 1),
+                                  Math.min(
+                                    currentSession.items.length - 1,
+                                    current + 1,
+                                  ),
                                 )
                               }
                               disabled={
                                 busy ||
-                                (activeItemIndex ?? 0) >= currentSession.items.length - 1
+                                (activeItemIndex ?? 0) >=
+                                  currentSession.items.length - 1
                               }
                             >
                               Next
@@ -1845,7 +2113,9 @@ export default function StudentJaWorkspace({
                               type="button"
                               className="student-button-solid"
                               onClick={() => void submitCurrentAnswer()}
-                              disabled={busy || aiUnavailable || !allSessionItemsReady}
+                              disabled={
+                                busy || aiUnavailable || !allSessionItemsReady
+                              }
                             >
                               Submit Answers
                             </Button>
@@ -1865,7 +2135,8 @@ export default function StudentJaWorkspace({
                       >
                         <header>
                           <p className="ja-question-index">
-                            Item {(activeItemIndex ?? 0) + 1} of {currentSession.items.length} |{" "}
+                            Item {(activeItemIndex ?? 0) + 1} of{" "}
+                            {currentSession.items.length} |{" "}
                             {activeItem.itemType === "multiple_select"
                               ? "Multiple Select"
                               : "Single Select"}
@@ -1892,31 +2163,65 @@ export default function StudentJaWorkspace({
                           aria-label="Question options"
                         >
                           {(activeItem.options ?? []).map((option) => {
-                            const selected = (answers[activeItem.id] ?? []).includes(option.id);
+                            const selected = activeAnswerIds.includes(
+                              option.id,
+                            );
+                            const isAnswered = Boolean(activeItem.response);
+                            const isCorrectOption =
+                              isAnswered &&
+                              Boolean(
+                                activeItem.correctOptionIds?.includes(
+                                  option.id,
+                                ),
+                              );
+                            const isWrongSelected =
+                              isAnswered && selected && !isCorrectOption;
                             return (
                               <button
                                 key={option.id}
                                 type="button"
-                                className={cn(selected && "selected")}
+                                className={cn(
+                                  selected && "selected",
+                                  isCorrectOption && "correct-answer",
+                                  isWrongSelected && "wrong-answer",
+                                )}
                                 onClick={() => {
                                   if (aiUnavailable) return;
                                   setAnswers((prev) => ({
                                     ...prev,
                                     [activeItem.id]:
                                       activeItem.itemType === "multiple_select"
-                                        ? (prev[activeItem.id] ?? []).includes(option.id)
+                                        ? (prev[activeItem.id] ?? []).includes(
+                                            option.id,
+                                          )
                                           ? (prev[activeItem.id] ?? []).filter(
                                               (value) => value !== option.id,
                                             )
-                                          : [...(prev[activeItem.id] ?? []), option.id]
+                                          : [
+                                              ...(prev[activeItem.id] ?? []),
+                                              option.id,
+                                            ]
                                         : [option.id],
                                   }));
                                 }}
                                 aria-pressed={selected}
-                                disabled={aiUnavailable || Boolean(activeItem.response)}
+                                disabled={
+                                  aiUnavailable || Boolean(activeItem.response)
+                                }
                               >
-                                <span className="ja-option-mark" aria-hidden="true">
-                                  {selected ? "[x]" : "[ ]"}
+                                <span
+                                  className="ja-option-mark"
+                                  aria-hidden="true"
+                                >
+                                  {isCorrectOption ? (
+                                    <Check className="h-4 w-4" />
+                                  ) : isWrongSelected ? (
+                                    <X className="h-4 w-4" />
+                                  ) : selected ? (
+                                    "[x]"
+                                  ) : (
+                                    "[ ]"
+                                  )}
                                 </span>
                                 <RichTextRenderer
                                   html={option.text}
@@ -1928,24 +2233,26 @@ export default function StudentJaWorkspace({
                         </div>
 
                         {activeItem.response ? (
-                          <div
-                            className={cn(
-                              "ja-feedback",
-                              activeItem.response.isCorrect ? "is-correct" : "is-incorrect",
-                            )}
-                          >
-                            {activeItem.response.feedback}
-                          </div>
+                          <JaAnswerFeedback
+                            item={activeItem}
+                            fallbackAnswers={answers[activeItem.id]}
+                          />
                         ) : null}
 
                         <div className="ja-question-actions">
-                          {mode === "review" && currentSession.items.length > 1 ? (
-                            <div className="ja-question-nav" aria-label="Replay question navigation">
+                          {mode === "review" &&
+                          currentSession.items.length > 1 ? (
+                            <div
+                              className="ja-question-nav"
+                              aria-label="Replay question navigation"
+                            >
                               <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() =>
-                                  setReviewCursor((current) => Math.max(0, current - 1))
+                                  setReviewCursor((current) =>
+                                    Math.max(0, current - 1),
+                                  )
                                 }
                                 disabled={busy || (activeItemIndex ?? 0) <= 0}
                                 className="student-button-outline ja-secondary-action"
@@ -1958,12 +2265,16 @@ export default function StudentJaWorkspace({
                                 variant="outline"
                                 onClick={() =>
                                   setReviewCursor((current) =>
-                                    Math.min(currentSession.items.length - 1, current + 1),
+                                    Math.min(
+                                      currentSession.items.length - 1,
+                                      current + 1,
+                                    ),
                                   )
                                 }
                                 disabled={
                                   busy ||
-                                  (activeItemIndex ?? 0) >= currentSession.items.length - 1
+                                  (activeItemIndex ?? 0) >=
+                                    currentSession.items.length - 1
                                 }
                                 className="student-button-outline ja-secondary-action"
                               >
@@ -1981,7 +2292,9 @@ export default function StudentJaWorkspace({
                             !canComplete ? (
                               <Button
                                 onClick={() => void submitCurrentAnswer()}
-                                disabled={busy || aiUnavailable || !allSessionItemsReady}
+                                disabled={
+                                  busy || aiUnavailable || !allSessionItemsReady
+                                }
                                 className="student-button-solid ja-primary-action"
                               >
                                 Submit Answers
@@ -2015,7 +2328,10 @@ export default function StudentJaWorkspace({
           <div>
             <ShieldAlert />
             <h3>JA blocked that request</h3>
-            <p>This attempt was logged for safety review. Ask a class-grounded study question instead.</p>
+            <p>
+              This attempt was logged for safety review. Ask a class-grounded
+              study question instead.
+            </p>
             <Button
               onClick={() => setShowGuardrailModal(false)}
               className="student-button-solid ja-primary-action"
@@ -2028,4 +2344,3 @@ export default function StudentJaWorkspace({
     </motion.div>
   );
 }
-

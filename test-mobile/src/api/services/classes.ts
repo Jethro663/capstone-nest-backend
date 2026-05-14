@@ -14,6 +14,20 @@ import type {
 } from "../../types/class";
 
 export const classesApi = {
+  async getAll(query?: {
+    isActive?: boolean;
+    schoolYear?: string;
+    subjectGradeLevel?: string;
+    search?: string;
+    limit?: number;
+  }) {
+    const response = await apiClient.get<ApiEnvelope<{ data: ClassItem[] }>>("/classes/all", {
+      params: query,
+    });
+    const payload = unwrapEnvelope(response.data);
+    return normalizeArray<ClassItem>(payload?.data);
+  },
+
   async getStudentClasses(studentId: string) {
     const response = await apiClient.get<ApiEnvelope<ClassItem[]>>(`/classes/student/${studentId}`);
     return normalizeArray<ClassItem>(unwrapEnvelope(response.data));

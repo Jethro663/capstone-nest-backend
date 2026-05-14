@@ -339,6 +339,32 @@
     0 16px 28px -26px rgba(19, 34, 58, 0.42);
 }
 
+.formGrid input[aria-invalid="true"],
+.formGrid textarea[aria-invalid="true"] {
+  border-color: rgba(225, 29, 72, 0.56);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 241, 242, 0.86)),
+    #ffffff;
+  box-shadow:
+    0 0 0 3px rgba(225, 29, 72, 0.09),
+    0 16px 28px -26px rgba(159, 18, 57, 0.42);
+}
+
+.fieldFeedback {
+  margin: -0.08rem 0 0;
+  border: 1px solid rgba(225, 29, 72, 0.18);
+  border-radius: 0.82rem;
+  padding: 0.52rem 0.62rem;
+  background:
+    linear-gradient(135deg, rgba(255, 241, 242, 0.96), rgba(255, 247, 237, 0.82)),
+    #fff1f2;
+  color: #9f1239;
+  font-size: 0.74rem;
+  font-weight: 850;
+  line-height: 1.35;
+  box-shadow: 0 14px 24px -24px rgba(159, 18, 57, 0.42);
+}
+
 .fieldCheckbox {
   display: flex;
   align-items: flex-end;
