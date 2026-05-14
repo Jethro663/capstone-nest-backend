@@ -156,6 +156,8 @@ export interface AccessStudentsOverviewQuery {
   search?: string;
 }
 
+export type AccessStudentGradeStatus = 'pending' | 'passing' | 'failing';
+
 export interface AccessStudentsOverviewStudent {
   id: string;
   firstName: string | null;
@@ -165,7 +167,16 @@ export interface AccessStudentsOverviewStudent {
   lrn: string | null;
   gradeLevel: string | null;
   finalGrade: number | null;
+  finalGradePercentage: number | null;
+  gradeStatus: AccessStudentGradeStatus;
+  isFinalized: boolean;
+  isPassing: boolean;
   isFailing: boolean;
+  requiredClassRecordCount: number;
+  finalizedClassRecordCount: number;
+  finalGradeRecordCount: number;
+  missingFinalGradeCount: number;
+  finalizationLabel: string;
 }
 
 export interface AccessStudentsOverviewSection {
@@ -226,6 +237,11 @@ export interface AccessStudentsTargetSectionsResponse {
       capacity: number;
     }>;
   };
+}
+
+export interface FinalizeAccessStudentGradesDto {
+  sectionId: string;
+  studentIds?: string[];
 }
 
 export interface MoveUpStudentsDto {
@@ -427,6 +443,11 @@ export const sectionService = {
     const { data } = await api.get('/sections/access-students/target-sections', {
       params: query,
     });
+    return data;
+  },
+
+  async finalizeAccessStudentGrades(dto: FinalizeAccessStudentGradesDto): Promise<BulkStudentTransferResponse> {
+    const { data } = await api.post('/sections/access-students/finalize-grades', dto);
     return data;
   },
 

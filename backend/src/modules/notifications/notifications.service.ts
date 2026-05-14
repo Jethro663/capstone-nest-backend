@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import { and, eq, count, desc, SQL, inArray } from 'drizzle-orm';
+import { and, eq, count, desc, SQL, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { notifications } from '../../drizzle/schema';
 import { QueryNotificationsDto } from './DTO/query-notifications.dto';
@@ -37,16 +37,33 @@ export class NotificationsService {
     if (inputs.length === 0) return;
 
     // Drizzle handles large inserts efficiently in a single statement
-    await this.db.insert(notifications).values(
-      inputs.map((n) => ({
-        userId: n.userId,
-        type: n.type,
-        referenceId: n.referenceId ?? null,
-        title: n.title,
-        body: n.body,
-        isRead: false,
-      })),
-    );
+    await this.db
+      .insert(notifications)
+      .values(
+        inputs.map((n) => ({
+          userId: n.userId,
+          type: n.type,
+          referenceId: n.referenceId ?? null,
+          title: n.title,
+          body: n.body,
+          isRead: false,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          notifications.userId,
+          notifications.type,
+          notifications.referenceId,
+        ],
+        targetWhere: sql`${notifications.referenceId} IS NOT NULL`,
+        set: {
+          title: sql`excluded.title`,
+          body: sql`excluded.body`,
+          isRead: false,
+          readAt: null,
+          createdAt: new Date(),
+        },
+      });
   }
 
   // ─── REST: paginated inbox ────────────────────────────────────────────────

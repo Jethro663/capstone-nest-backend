@@ -2,7 +2,7 @@
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Text, View } from "react-native";
-import { queryKeys, useClassRecordPreviewGrades, useTeacherClasses } from "../api/hooks";
+import { queryKeys, useClassRecordPreviewGrades, useClassRecordSpreadsheet, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { classRecordApi } from "../api/services/class-record";
 import type { RootStackParamList } from "../navigation/types";
@@ -17,6 +17,7 @@ import {
   TeacherStats,
   teacherTheme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import { MobileClassRecordWorkbook } from "../components/teacher/MobileClassRecordWorkbook";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherClassRecord">;
 type StatusFilter = "all" | "draft" | "finalized" | "locked";
@@ -73,6 +74,7 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
 
   const selectedRecord = filteredRecords.find((entry) => entry.id === selectedRecordId) || filteredRecords[0];
   const previewQuery = useClassRecordPreviewGrades(selectedRecord?.id);
+  const spreadsheetQuery = useClassRecordSpreadsheet(selectedRecord?.id);
 
   const generateMutation = useMutation({
     mutationFn: () => {
@@ -111,6 +113,7 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
   const isRefreshing =
     classesQuery.isRefetching ||
     recordQueries.some((query) => query.isRefetching) ||
+    spreadsheetQuery.isRefetching ||
     previewQuery.isRefetching;
 
   const recordActionBusy =
@@ -128,6 +131,7 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
         void Promise.all([
           classesQuery.refetch(),
           ...recordQueries.map((query) => query.refetch()),
+          spreadsheetQuery.refetch(),
           previewQuery.refetch(),
         ]);
       }}
@@ -278,6 +282,10 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
           />
         )}
       </TeacherPanel>
+
+      {selectedRecord ? (
+        <MobileClassRecordWorkbook workbook={spreadsheetQuery.data} />
+      ) : null}
 
       <TeacherPanel
         title="Grade preview"

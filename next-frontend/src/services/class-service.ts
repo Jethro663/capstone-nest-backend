@@ -22,6 +22,7 @@ export interface ClassesQuery {
   teacherId?: string;
   room?: string;
   schoolYear?: string;
+  subjectGradeLevel?: string;
   isActive?: string;
   search?: string;
   page?: number;

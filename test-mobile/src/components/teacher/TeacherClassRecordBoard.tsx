@@ -23,6 +23,7 @@ import {
   TeacherStats,
   teacherTheme as theme,
 } from "./TeacherMobilePrimitives";
+import { MobileClassRecordWorkbook } from "./MobileClassRecordWorkbook";
 
 type StudentFilter = "all" | "passed" | "intervention";
 
@@ -297,6 +298,8 @@ export function TeacherClassRecordBoard({ classId, registerRefetch }: Props) {
               />
             ))}
           </View>
+
+          <MobileClassRecordWorkbook workbook={workbook} students={filteredStudents} />
 
           <TeacherPanel title={`Student Grades (${filteredStudents.length})`} subtitle="Filter and inspect each learner's computed quarterly grade.">
             {filteredStudents.length ? (

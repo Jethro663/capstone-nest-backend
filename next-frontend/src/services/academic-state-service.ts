@@ -38,7 +38,24 @@ export const academicStateService = {
         state: AcademicStateCurrent;
         impact: {
           classRecordsFinalized: number;
+          enrollmentsCompleted: number;
+          classesArchived: number;
+          sectionsArchived: number;
           schoolEventsArchived: number;
+          reusableSectionsCreated: number;
+          reusableClassesCreated: number;
+          classSchedulesCloned: number;
+          classSchedulesCleared: boolean;
+          reusableContentCloned: {
+            assessmentsCreated: number;
+            assessmentQuestionsCreated: number;
+            lessonsCreated: number;
+            lessonBlocksCreated: number;
+            modulesCreated: number;
+            moduleSectionsCreated: number;
+            moduleItemsCreated: number;
+            moduleGradingScaleEntriesCreated: number;
+          };
         };
       };
     };

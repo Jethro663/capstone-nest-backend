@@ -3,6 +3,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ClassForm, { createEmptyClassForm } from './ClassForm';
 import { toast } from 'sonner';
+import { classService } from '@/services/class-service';
 
 jest.mock('sonner', () => ({
   toast: {
@@ -54,7 +55,21 @@ describe('ClassForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (classService.getAll as jest.Mock).mockResolvedValue({ data: { data: [] } });
   });
+
+  const waitForClassLookups = async (expectedCalls = 2) => {
+    await waitFor(() => expect(classService.getAll).toHaveBeenCalledTimes(expectedCalls));
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/Checking subjects already assigned to this section/i),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Checking teachers already assigned to this section/i),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/Checking room/i)).not.toBeInTheDocument();
+    });
+  };
 
   it('blocks saving when room or schedule is missing', async () => {
     render(
@@ -72,6 +87,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Class' }));
 
@@ -99,10 +115,12 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups(1);
 
     fireEvent.change(screen.getByPlaceholderText('e.g. MATH-7'), {
       target: { value: ' math-7 / rm@ ' },
     });
+    await waitForClassLookups();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Class' }));
 
@@ -116,7 +134,7 @@ describe('ClassForm', () => {
     );
   });
 
-  it('disables grading inputs by default and enables them after Edit Grade', () => {
+  it('disables grading inputs by default and enables them after Edit Grade', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -138,6 +156,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     const writtenWorkInput = screen.getByRole('textbox', {
       name: 'Written Works',
@@ -160,7 +179,7 @@ describe('ClassForm', () => {
     expect(quarterlyAssessmentInput).toBeEnabled();
   });
 
-  it('rejects leading zeros, non-digit input, and three-digit inputs', () => {
+  it('rejects leading zeros, non-digit input, and three-digit inputs', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -182,6 +201,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     const writtenWorkInput = screen.getByRole('textbox', {
       name: 'Written Works',
@@ -201,7 +221,7 @@ describe('ClassForm', () => {
     expect(writtenWorkInput).toHaveValue('1');
   });
 
-  it('allows clearing the first digit and replacing the grading number', () => {
+  it('allows clearing the first digit and replacing the grading number', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -223,6 +243,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     const writtenWorkInput = screen.getByRole('textbox', {
       name: 'Written Works',
@@ -235,7 +256,7 @@ describe('ClassForm', () => {
     expect(writtenWorkInput).toHaveValue('40');
   });
 
-  it('rejects totals above 100 and only enables saving at exact total', () => {
+  it('rejects totals above 100 and only enables saving at exact total', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -257,6 +278,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     const writtenWorkInput = screen.getByRole('textbox', {
       name: 'Written Works',
@@ -295,7 +317,7 @@ describe('ClassForm', () => {
     expect(createButton).toBeEnabled();
   });
 
-  it('does not allow class submission while grading editor is unlocked or invalid', () => {
+  it('does not allow class submission while grading editor is unlocked or invalid', async () => {
     render(
       <ClassForm
         {...baseProps}
@@ -317,6 +339,7 @@ describe('ClassForm', () => {
         }}
       />,
     );
+    await waitForClassLookups();
 
     const performanceTaskInput = screen.getByRole('textbox', {
       name: 'Performance Tasks',
@@ -330,5 +353,73 @@ describe('ClassForm', () => {
 
     fireEvent.change(performanceTaskInput, { target: { value: '35' } });
     expect(createButton).toBeDisabled();
+  });
+
+  it('disables subjects and teachers already assigned to the selected section', async () => {
+    (classService.getAll as jest.Mock).mockImplementation(async (query?: { sectionId?: string }) => {
+      if (query?.sectionId === 'section-1') {
+        return {
+          data: {
+            data: [
+              {
+                id: 'class-existing',
+                subjectName: 'Science',
+                subjectCode: 'SCI-7',
+                subjectGradeLevel: '7',
+                sectionId: 'section-1',
+                teacherId: 'teacher-1',
+                schoolYear: '2026-2027',
+                room: '201',
+                isActive: true,
+              },
+            ],
+          },
+        };
+      }
+
+      return { data: { data: [] } };
+    });
+
+    render(
+      <ClassForm
+        {...baseProps}
+        teachers={[
+          ...baseProps.teachers,
+          {
+            id: 'teacher-2',
+            firstName: 'Rico',
+            lastName: 'Ramos',
+            email: 'rico@nexora.edu',
+            roles: ['teacher'],
+            status: 'ACTIVE',
+            isEmailVerified: true,
+          },
+        ]}
+        initialValues={{
+          ...createEmptyClassForm('2026-2027'),
+          subjectGradeLevel: '7',
+          sectionId: 'section-1',
+          room: '201',
+        }}
+      />,
+    );
+
+    await waitForClassLookups(1);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('option', { name: 'Science (already in this section)' }),
+      ).toBeDisabled(),
+    );
+
+    expect(screen.getByRole('option', { name: 'Mathematics' })).toBeEnabled();
+    expect(
+      screen.getByRole('option', {
+        name: 'Tina Teacher (already assigned in this section)',
+      }),
+    ).toBeDisabled();
+    expect(screen.getByRole('option', { name: 'Rico Ramos' })).toBeEnabled();
+    expect(screen.getByText('1 subject is already assigned here and disabled.')).toBeInTheDocument();
+    expect(screen.getByText('1 teacher is already assigned here and disabled.')).toBeInTheDocument();
   });
 });

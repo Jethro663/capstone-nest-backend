@@ -12,6 +12,26 @@ import type {
 } from "../../types/teacher";
 
 export const sectionsApi = {
+  async getAll(query?: {
+    gradeLevel?: string;
+    schoolYear?: string;
+    isActive?: boolean;
+    search?: string;
+    limit?: number;
+  }): Promise<TeacherSectionsListResponse> {
+    const response = await apiClient.get<TeacherSectionsListResponse | ApiEnvelope<TeacherSection[]>>(
+      "/sections/all",
+      { params: query },
+    );
+    const payload = response.data as TeacherSectionsListResponse;
+
+    return {
+      success: payload?.success,
+      data: normalizeArray<TeacherSection>(unwrapEnvelope(response.data as ApiEnvelope<TeacherSection[]>)),
+      pagination: payload?.pagination,
+    };
+  },
+
   async getMy(status: TeacherSectionVisibilityStatus = "all"): Promise<TeacherSectionsListResponse> {
     const response = await apiClient.get<
       TeacherSectionsListResponse | ApiEnvelope<TeacherSection[]>

@@ -5,9 +5,12 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock3,
+  MapPin,
   Pencil,
   Plus,
   RefreshCcw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +40,19 @@ interface SchoolEventFormState {
   allDay: boolean;
   startsAt: string;
   endsAt: string;
+}
+
+interface FormDateRange {
+  start: Date;
+  end: Date;
+  startMs: number;
+  endMs: number;
+}
+
+interface SchoolEventValidationState {
+  title?: string;
+  startsAt?: string;
+  endsAt?: string;
 }
 
 function emptyFormState(): SchoolEventFormState {
@@ -112,6 +128,119 @@ function formatEventSpan(event: SchoolEvent): string {
 
 function getTypeLabel(eventType: SchoolEvent['eventType']): string {
   return eventType === 'holiday_break' ? 'Holiday / Break' : 'School Event';
+}
+
+function normalizeEventTitle(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function buildDateRange(allDay: boolean, startsAt: string, endsAt: string): FormDateRange | null {
+  const start = allDay ? new Date(`${startsAt}T00:00:00.000`) : new Date(startsAt);
+  const end = allDay ? new Date(`${endsAt}T23:59:59.999`) : new Date(endsAt);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return null;
+  return { start, end, startMs, endMs };
+}
+
+function getFormDateRange(form: SchoolEventFormState): FormDateRange | null {
+  if (!form.startsAt || !form.endsAt) return null;
+  return buildDateRange(form.allDay, form.startsAt, form.endsAt);
+}
+
+function getValidationDateRange(form: SchoolEventFormState): FormDateRange | null {
+  const startsAt = form.startsAt || form.endsAt;
+  const endsAt = form.endsAt || form.startsAt;
+  if (!startsAt || !endsAt) return null;
+  return buildDateRange(form.allDay, startsAt, endsAt);
+}
+
+function getEventDateRange(event: SchoolEvent): FormDateRange | null {
+  const start = new Date(event.startsAt);
+  const end = new Date(event.endsAt);
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return null;
+  return { start, end, startMs, endMs };
+}
+
+function dateRangesOverlap(left: FormDateRange, right: FormDateRange): boolean {
+  return left.startMs <= right.endMs && left.endMs >= right.startMs;
+}
+
+function timeRangesOverlap(left: FormDateRange, right: FormDateRange): boolean {
+  return left.startMs < right.endMs && left.endMs > right.startMs;
+}
+
+function getInlineValidationMessage(errors: SchoolEventValidationState): string | null {
+  return errors.title || errors.startsAt || errors.endsAt || null;
+}
+
+function validateSchoolEventForm(
+  form: SchoolEventFormState,
+  events: SchoolEvent[],
+  editingEventId: string | null,
+): SchoolEventValidationState {
+  const errors: SchoolEventValidationState = {};
+  const activeEvents = events.filter((event) => event.id !== editingEventId);
+  const normalizedTitle = normalizeEventTitle(form.title);
+
+  if (normalizedTitle) {
+    const titleMatch = activeEvents.find((event) => normalizeEventTitle(event.title) === normalizedTitle);
+    if (titleMatch) {
+      errors.title = `"${titleMatch.title}" already exists in ${titleMatch.schoolYear}. Use a unique event title.`;
+    }
+  }
+
+  const formRange = getValidationDateRange(form);
+  if (!formRange) return errors;
+
+  const hasCompleteDateWindow = Boolean(form.startsAt && form.endsAt);
+
+  if (hasCompleteDateWindow && formRange.endMs < formRange.startMs) {
+    errors.endsAt = 'End must be the same as or later than the start.';
+    return errors;
+  }
+
+  if (form.allDay) {
+    const dateConflict = activeEvents.find((event) => {
+      const eventRange = getEventDateRange(event);
+      return eventRange ? dateRangesOverlap(formRange, eventRange) : false;
+    });
+
+    if (dateConflict) {
+      errors.startsAt = `This date is already used by "${dateConflict.title}" (${formatEventSpan(dateConflict)}).`;
+    }
+
+    return errors;
+  }
+
+  const allDayBlocker = activeEvents.find((event) => {
+    if (!event.allDay) return false;
+    const eventRange = getEventDateRange(event);
+    return eventRange ? dateRangesOverlap(formRange, eventRange) : false;
+  });
+
+  if (allDayBlocker) {
+    errors.startsAt = `This date is blocked by all-day event "${allDayBlocker.title}" (${formatEventSpan(allDayBlocker)}).`;
+    return errors;
+  }
+
+  if (!hasCompleteDateWindow) return errors;
+
+  const timeConflict = activeEvents.find((event) => {
+    if (event.allDay) return false;
+    const eventRange = getEventDateRange(event);
+    return eventRange ? timeRangesOverlap(formRange, eventRange) : false;
+  });
+
+  if (timeConflict) {
+    errors.endsAt = `This time is already taken by "${timeConflict.title}" (${formatEventSpan(timeConflict)}).`;
+  }
+
+  return errors;
 }
 
 export default function AdminCalendarPage() {
@@ -201,7 +330,28 @@ export default function AdminCalendarPage() {
     };
   }, [selectedSchoolYear]);
 
+  const eventStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcomingEvents = [...events]
+      .filter((event) => new Date(event.endsAt).getTime() >= today.getTime())
+      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+
+    return {
+      total: events.length,
+      schoolEvents: events.filter((event) => event.eventType === 'school_event').length,
+      breaks: events.filter((event) => event.eventType === 'holiday_break').length,
+      upcoming: upcomingEvents.length,
+      nextEvent: upcomingEvents[0] ?? null,
+    };
+  }, [events]);
+
   const currentYearIndex = schoolYearOptions.indexOf(selectedSchoolYear);
+  const formValidation = useMemo(
+    () => validateSchoolEventForm(form, events, editingEventId),
+    [editingEventId, events, form],
+  );
+  const validationMessage = getInlineValidationMessage(formValidation);
 
   const setField = <K extends keyof SchoolEventFormState>(key: K, value: SchoolEventFormState[K]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -224,10 +374,11 @@ export default function AdminCalendarPage() {
     if (!form.startsAt || !form.endsAt) return null;
     if (form.eventType === 'school_event' && !form.location.trim()) return null;
 
-    const startsAt = form.allDay ? toIsoDateRange(form.startsAt, false) : toIsoDateTime(form.startsAt);
-    const endsAt = form.allDay ? toIsoDateRange(form.endsAt, true) : toIsoDateTime(form.endsAt);
+    const range = getFormDateRange(form);
+    if (!range) return null;
 
-    if (new Date(endsAt).getTime() < new Date(startsAt).getTime()) return null;
+    if (range.endMs < range.startMs) return null;
+    if (validationMessage) return null;
 
     return {
       eventType: form.eventType,
@@ -235,8 +386,8 @@ export default function AdminCalendarPage() {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       location: form.location.trim() || undefined,
-      startsAt,
-      endsAt,
+      startsAt: form.allDay ? toIsoDateRange(form.startsAt, false) : toIsoDateTime(form.startsAt),
+      endsAt: form.allDay ? toIsoDateRange(form.endsAt, true) : toIsoDateTime(form.endsAt),
       allDay: form.allDay,
     };
   };
@@ -244,6 +395,10 @@ export default function AdminCalendarPage() {
   const submitForm = async () => {
     if (form.eventType === 'school_event' && !form.location.trim()) {
       toast.error('Location is required for school events.');
+      return;
+    }
+    if (validationMessage) {
+      toast.error(validationMessage);
       return;
     }
     const payload = getPayload();
@@ -301,7 +456,9 @@ export default function AdminCalendarPage() {
     <AdminPageShell
       badge="Academic Calendar"
       title="School Calendar"
-      description="Admin-managed school events and holiday breaks reflected in teacher calendars."
+      description="Plan school events and breaks with a clearer, color-coded view for every teacher calendar."
+      icon={CalendarDays}
+      className={styles.calendarPage}
       actions={
         <div className={styles.actions}>
           <div className={styles.yearSwitcher}>
@@ -344,10 +501,62 @@ export default function AdminCalendarPage() {
         </div>
       }
     >
+      <section className={styles.calendarHero} aria-label="Calendar overview">
+        <div className={styles.heroCopy}>
+          <span className={styles.heroKicker}>
+            <Sparkles className="h-4 w-4" />
+            Live academic planner
+          </span>
+          <h2>{selectedSchoolYear || 'School year'} rhythm board</h2>
+          <p>
+            Keep campus-wide dates easy to scan: school programs, celebrations, and holiday breaks now stand out before
+            they reach teacher calendars.
+          </p>
+          <div className={styles.nextEventCard}>
+            <div className={styles.nextEventIcon} aria-hidden="true">
+              <CalendarDays className="h-5 w-5" />
+            </div>
+            <div>
+              <span>Next on deck</span>
+              <strong>{eventStats.nextEvent ? eventStats.nextEvent.title : 'No upcoming entry yet'}</strong>
+              <p>
+                {eventStats.nextEvent
+                  ? formatEventSpan(eventStats.nextEvent)
+                  : 'Create the first calendar entry for this school year.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.heroStats}>
+          <div className={`${styles.heroStat} ${styles.heroStatRed}`}>
+            <span>Total entries</span>
+            <strong>{eventStats.total}</strong>
+            <small>Visible in teacher calendars</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatBlue}`}>
+            <span>School events</span>
+            <strong>{eventStats.schoolEvents}</strong>
+            <small>Programs, meetings, and campus days</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatAmber}`}>
+            <span>Breaks</span>
+            <strong>{eventStats.breaks}</strong>
+            <small>Holidays and suspension windows</small>
+          </div>
+          <div className={`${styles.heroStat} ${styles.heroStatGreen}`}>
+            <span>Upcoming</span>
+            <strong>{eventStats.upcoming}</strong>
+            <small>Still active from today onward</small>
+          </div>
+        </div>
+      </section>
+
       <div className={styles.layout}>
         <AdminSectionCard
           title={editingEventId ? 'Edit School Event' : 'Create School Event'}
           description="Use all-day for date-only entries; disable all-day to input exact start and end times."
+          className={styles.composerCard}
           action={
             <Button type="button" variant="outline" className="rounded-xl" onClick={resetForm}>
               <Plus className="mr-2 h-4 w-4" />
@@ -374,7 +583,14 @@ export default function AdminCalendarPage() {
                 value={form.title}
                 onChange={(event) => setField('title', event.target.value)}
                 placeholder="Foundation Day Program"
+                aria-invalid={Boolean(formValidation.title)}
+                aria-describedby={formValidation.title ? 'calendar-title-validation' : undefined}
               />
+              {formValidation.title ? (
+                <p id="calendar-title-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.title}
+                </p>
+              ) : null}
             </div>
             <div className={styles.field}>
               <Label>Location</Label>
@@ -401,7 +617,14 @@ export default function AdminCalendarPage() {
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.startsAt}
                 onChange={(event) => setField('startsAt', event.target.value)}
+                aria-invalid={Boolean(formValidation.startsAt)}
+                aria-describedby={formValidation.startsAt ? 'calendar-start-validation' : undefined}
               />
+              {formValidation.startsAt ? (
+                <p id="calendar-start-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.startsAt}
+                </p>
+              ) : null}
             </div>
             <div className={styles.field}>
               <Label>{form.allDay ? 'End Date' : 'End Date & Time'}</Label>
@@ -409,7 +632,14 @@ export default function AdminCalendarPage() {
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.endsAt}
                 onChange={(event) => setField('endsAt', event.target.value)}
+                aria-invalid={Boolean(formValidation.endsAt)}
+                aria-describedby={formValidation.endsAt ? 'calendar-end-validation' : undefined}
               />
+              {formValidation.endsAt ? (
+                <p id="calendar-end-validation" className={styles.fieldFeedback} role="alert">
+                  {formValidation.endsAt}
+                </p>
+              ) : null}
             </div>
             <div className={styles.fieldWide}>
               <Label>Description</Label>
@@ -425,7 +655,13 @@ export default function AdminCalendarPage() {
             <Button type="button" variant="outline" className="rounded-xl" onClick={resetForm}>
               Cancel
             </Button>
-            <Button type="button" className="rounded-xl" onClick={() => void submitForm()} disabled={saving}>
+            <Button
+              type="button"
+              className="rounded-xl"
+              onClick={() => void submitForm()}
+              disabled={saving || Boolean(validationMessage)}
+              title={validationMessage || undefined}
+            >
               {editingEventId ? 'Save Changes' : 'Create Event'}
             </Button>
           </div>
@@ -434,6 +670,7 @@ export default function AdminCalendarPage() {
         <AdminSectionCard
           title="School Event Timeline"
           description="Items in this school year are visible in teacher calendar views."
+          className={styles.timelineCard}
         >
           {events.length === 0 ? (
             <div className={styles.emptyState}>
@@ -442,40 +679,57 @@ export default function AdminCalendarPage() {
             </div>
           ) : (
             <div className={styles.eventList}>
-              {events.map((event) => (
-                <article key={event.id} className={styles.eventCard}>
-                  <div className={styles.eventTop}>
-                    <span className={styles.eventType}>{getTypeLabel(event.eventType)}</span>
-                    <span className={styles.eventSpan}>{formatEventSpan(event)}</span>
-                  </div>
-                  <h3>{event.title}</h3>
-                  <p className={styles.eventMeta}>
-                    {event.location ? `${event.location} - ` : ''}
-                    {event.schoolYear}
-                  </p>
-                  {event.description ? <p className={styles.eventDescription}>{event.description}</p> : null}
-                  <div className={styles.eventActions}>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() => editEvent(event)}
-                    >
-                      <Pencil className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
-                      onClick={() => void deleteEvent(event)}
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Archive
-                    </Button>
-                  </div>
-                </article>
-              ))}
+              {events.map((event) => {
+                const isBreak = event.eventType === 'holiday_break';
+
+                return (
+                  <article
+                    key={event.id}
+                    className={`${styles.eventCard} ${isBreak ? styles.eventCardBreak : styles.eventCardSchool}`}
+                  >
+                    <span className={styles.eventAura} aria-hidden="true" />
+                    <div className={styles.eventTop}>
+                      <span className={styles.eventType}>{getTypeLabel(event.eventType)}</span>
+                      <span className={styles.eventSpan}>
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {formatEventSpan(event)}
+                      </span>
+                    </div>
+                    <h3>{event.title}</h3>
+                    <p className={styles.eventMeta}>
+                      {event.location ? (
+                        <>
+                          <MapPin className="h-3.5 w-3.5" />
+                          <span>{event.location}</span>
+                          <span className={styles.eventDot} aria-hidden="true" />
+                        </>
+                      ) : null}
+                      <span>{event.schoolYear}</span>
+                    </p>
+                    {event.description ? <p className={styles.eventDescription}>{event.description}</p> : null}
+                    <div className={styles.eventActions}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => editEvent(event)}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl border-rose-200 text-rose-600 hover:bg-rose-50"
+                        onClick={() => void deleteEvent(event)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Archive
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </AdminSectionCard>

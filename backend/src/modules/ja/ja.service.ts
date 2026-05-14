@@ -336,6 +336,60 @@ export class JaService {
     return { isCorrect: false, scoreDelta: 0 };
   }
 
+  private getCorrectOptionIdsForItem(
+    itemType: string,
+    answerKey: Record<string, unknown>,
+    options?: unknown[] | null,
+  ) {
+    const uniqueStrings = (values: unknown[]) =>
+      Array.from(
+        new Set(
+          values.filter(
+            (value): value is string =>
+              typeof value === 'string' && value.trim().length > 0,
+          ),
+        ),
+      );
+
+    if (itemType === 'multiple_choice' || itemType === 'dropdown') {
+      return uniqueStrings([answerKey.correctOptionId]);
+    }
+
+    if (itemType === 'multiple_select') {
+      return uniqueStrings(
+        Array.isArray(answerKey.correctOptionIds)
+          ? answerKey.correctOptionIds
+          : [],
+      );
+    }
+
+    if (itemType === 'true_false') {
+      const directOptionIds = uniqueStrings([answerKey.correctOptionId]);
+      if (directOptionIds.length > 0) return directOptionIds;
+      if (
+        typeof answerKey.correctValue !== 'boolean' ||
+        !Array.isArray(options)
+      ) {
+        return [];
+      }
+
+      const expectedText = String(answerKey.correctValue).toLowerCase();
+      const matchingOption = options.find((option) => {
+        if (!option || typeof option !== 'object') return false;
+        const optionRecord = option as { id?: unknown; text?: unknown };
+        return (
+          typeof optionRecord.id === 'string' &&
+          typeof optionRecord.text === 'string' &&
+          optionRecord.text.trim().toLowerCase() === expectedText
+        );
+      }) as { id?: unknown } | undefined;
+
+      return typeof matchingOption?.id === 'string' ? [matchingOption.id] : [];
+    }
+
+    return [];
+  }
+
   private async getAccessibleAskSources(
     studentId: string,
     classId: string,
@@ -1555,17 +1609,8 @@ export class JaService {
         startedAt: session.startedAt,
         completedAt: session.completedAt,
       },
-      items: session.items.map((item) => ({
-        id: item.id,
-        orderIndex: item.orderIndex,
-        itemType: item.itemType,
-        prompt: item.prompt,
-        options: item.optionsJson,
-        hint: item.hint,
-        explanation: item.explanation,
-        citations: item.citationsJson,
-        validation: item.validationJson,
-        response: item.responses[0]
+      items: session.items.map((item) => {
+        const response = item.responses[0]
           ? {
               id: item.responses[0].id,
               studentAnswer: item.responses[0].studentAnswerJson,
@@ -1574,8 +1619,32 @@ export class JaService {
               feedback: item.responses[0].feedback,
               answeredAt: item.responses[0].answeredAt,
             }
-          : null,
-      })),
+          : null;
+        const answerKey =
+          item.answerKeyJson && typeof item.answerKeyJson === 'object'
+            ? (item.answerKeyJson as Record<string, unknown>)
+            : {};
+
+        return {
+          id: item.id,
+          orderIndex: item.orderIndex,
+          itemType: item.itemType,
+          prompt: item.prompt,
+          options: item.optionsJson,
+          correctOptionIds: response
+            ? this.getCorrectOptionIdsForItem(
+                item.itemType,
+                answerKey,
+                Array.isArray(item.optionsJson) ? item.optionsJson : [],
+              )
+            : null,
+          hint: item.hint,
+          explanation: item.explanation,
+          citations: item.citationsJson,
+          validation: item.validationJson,
+          response,
+        };
+      }),
     };
   }
 

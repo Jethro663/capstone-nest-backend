@@ -5456,7 +5456,12 @@ describe("mobile rendered screen flows", () => {
 
     expect(renderedText).toContain("Pick the correct color");
     expect(renderedText).not.toContain("<p>");
-    expect(testRenderer!.root.findAll((node) => node.type === "Image")).toHaveLength(1);
+    const questionImages = testRenderer!.root.findAll((node) => node.props.testID === "assessment-question-image");
+    expect(
+      questionImages.some((node) =>
+        String(node.props.source?.uri || "").includes("/api/assessments/questions/images/question.png"),
+      ),
+    ).toBe(true);
 
     const dropdownPressable = findPressableByText(testRenderer!.root, "Select an answer");
     act(() => {

@@ -3,42 +3,14 @@
 import { BellRing, Sparkles, TriangleAlert } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
+import {
+  getNotificationMessage,
+  isInterventionAlertNotification,
+  resolveNotificationDestination,
+  type NotificationRole,
+} from '@/lib/notification-routing';
 import type { Notification } from '@/types/notification';
 import styles from './LiveNotificationToast.module.css';
-
-const INTERVENTION_TERMS = ['intervention', 'at risk', 'at-risk', 'flagged'];
-
-function normalizeText(value: unknown) {
-  if (value === null || value === undefined) return '';
-  return String(value).trim().toLowerCase();
-}
-
-function getNotificationMessage(notification: Pick<Notification, 'message' | 'body'>) {
-  const message = notification.message?.trim();
-  if (message) return message;
-  return notification.body?.trim() || 'A new update is available.';
-}
-
-export function isInterventionAlertNotification(
-  notification: Pick<Notification, 'type' | 'title' | 'message' | 'body'>,
-) {
-  const joined = normalizeText(
-    `${notification.type} ${notification.title} ${notification.message ?? ''} ${notification.body ?? ''}`,
-  );
-  return INTERVENTION_TERMS.some((term) => joined.includes(term));
-}
-
-function resolveNotificationDestination(
-  notification: Pick<Notification, 'type' | 'referenceId' | 'title' | 'message' | 'body'>,
-) {
-  if (isInterventionAlertNotification(notification)) {
-    return '/dashboard/teacher/interventions';
-  }
-  if (notification.type === 'discussion_comment_posted' || notification.type === 'discussion_thread_posted') {
-    return '/dashboard/notifications';
-  }
-  return '/dashboard/notifications';
-}
 
 function LiveNotificationToastCard({
   title,
@@ -82,25 +54,23 @@ function LiveNotificationToastCard({
         </div>
       </div>
 
-      {interventionAlert ? (
-        <Image
-          src="/images/JA/ja_live_notify.png"
-          alt=""
-          className={styles.interventionCharacter}
-          aria-hidden="true"
-          width={92}
-          height={92}
-        />
-      ) : null}
+      <Image
+        src={interventionAlert ? '/images/JA/ja_live_notify.png' : '/images/JA/ja_wave.png'}
+        alt=""
+        className={`${styles.notificationCharacter} ${interventionAlert ? styles.interventionCharacter : styles.standardCharacter}`}
+        aria-hidden="true"
+        width={98}
+        height={98}
+      />
       <span className={styles.progressLine} />
     </article>
   );
 }
 
-export function showLiveNotificationToast(notification: Notification) {
+export function showLiveNotificationToast(notification: Notification, role?: NotificationRole) {
   const interventionAlert = isInterventionAlertNotification(notification);
   const toastId = `live-notification-${notification.id}`;
-  const destination = resolveNotificationDestination(notification);
+  const destination = resolveNotificationDestination(notification, role);
   const message = getNotificationMessage(notification);
 
   toast.custom(

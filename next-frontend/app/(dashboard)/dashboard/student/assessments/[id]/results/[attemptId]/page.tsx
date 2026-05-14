@@ -718,11 +718,11 @@ export default function StudentAssessmentResultsPage() {
 
                           <div className="mt-3 space-y-2 text-sm">
                             <p>
-                              <span className="text-slate-500">Your answer: </span>
+                              <span className="text-slate-500">Your previous answer: </span>
                               <span className="font-semibold text-slate-900">{answerText ?? 'No answer provided'}</span>
                             </p>
 
-                            {response.isCorrect === false && correctAnswerText ? (
+                            {correctAnswerText ? (
                               <p>
                                 <span className="text-slate-500">Correct answer: </span>
                                 <span className="font-semibold text-emerald-700">{correctAnswerText}</span>

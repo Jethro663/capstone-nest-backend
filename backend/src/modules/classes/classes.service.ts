@@ -345,6 +345,12 @@ export class ClassesService {
       );
     }
 
+    if (filters?.subjectGradeLevel) {
+      whereConditions.push(
+        eq(classes.subjectGradeLevel, filters.subjectGradeLevel),
+      );
+    }
+
     if (filters?.sectionId) {
       whereConditions.push(eq(classes.sectionId, filters.sectionId));
     }
@@ -2689,10 +2695,15 @@ export class ClassesService {
     const classRecord = await this.findById(classId);
     this.ensureTeacherCanAccessClass(classRecord, requesterId, requesterRoles);
 
-    const classGradeLevel = classRecord.section?.gradeLevel;
-    const effectiveGradeLevel =
-      (filters?.gradeLevel as '7' | '8' | '9' | '10' | undefined) ??
-      classGradeLevel;
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
+    const requestedGradeLevel = filters?.gradeLevel as
+      | '7'
+      | '8'
+      | '9'
+      | '10'
+      | undefined;
+    const effectiveGradeLevel = classGradeLevel ?? requestedGradeLevel;
     const page = Math.max(1, Number(filters?.page ?? 1) || 1);
     const limit = Math.max(
       1,
@@ -2921,8 +2932,10 @@ export class ClassesService {
    * Returns students from the same section who are not yet enrolled in this class
    */
   async getCandidates(classId: string) {
-    // Get the class to find its section
+    // Get the class to find its section and designated grade level
     const classRecord = await this.findById(classId);
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
 
     // IDs of students already enrolled in this specific class
     const classEnrollments = await this.db.query.enrollments.findMany({
@@ -2963,7 +2976,11 @@ export class ClassesService {
       },
     });
 
-    return candidates;
+    if (!classGradeLevel) return candidates;
+
+    return candidates.filter(
+      (candidate) => candidate.student?.profile?.gradeLevel === classGradeLevel,
+    );
   }
 
   /**
@@ -2974,12 +2991,26 @@ export class ClassesService {
   async enrollStudent(classId: string, studentId: string, actorId: string) {
     // Pre-flight checks outside the transaction (cheap, read-only)
     const classRecord = await this.findById(classId);
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
 
     const student = await this.db.query.users.findFirst({
       where: eq(users.id, studentId),
+      columns: { id: true },
+      with: {
+        profile: {
+          columns: { gradeLevel: true },
+        },
+      },
     });
     if (!student) {
       throw new BadRequestException(`Student with ID "${studentId}" not found`);
+    }
+
+    if (classGradeLevel && student.profile?.gradeLevel !== classGradeLevel) {
+      throw new BadRequestException(
+        `Only Grade ${classGradeLevel} students can be added to this class`,
+      );
     }
 
     // Run the duplicate-check + write atomically
@@ -3153,6 +3184,7 @@ export class ClassesService {
       )}]::text[]`;
 
       const conditions: SQL[] = [
+        eq(classes.isActive, true),
         // Day overlap: stored days array has at least one day in common with incoming days
         sql`${classSchedules.days} && ${daysArray}`,
         // Time overlap: existing.start < new.end AND existing.end > new.start

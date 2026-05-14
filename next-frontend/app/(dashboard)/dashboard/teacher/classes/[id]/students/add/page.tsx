@@ -65,6 +65,8 @@ export default function TeacherAddStudentsPage() {
   const eligibility = toEligibility(searchParams.get('eligibility'));
   const sortBy = toSortField(searchParams.get('sortBy'));
   const sortDirection = toSortDirection(searchParams.get('sortDirection'));
+  const classGradeLevel = classItem?.subjectGradeLevel || classItem?.section?.gradeLevel || '';
+  const effectiveGradeLevel = classGradeLevel || gradeLevel;
 
   const selectedEligibleCount = useMemo(
     () => students.filter((student) => selectedIds.includes(student.id) && student.isEligible).length,
@@ -98,28 +100,28 @@ export default function TeacherAddStudentsPage() {
     const resolvedClass = classRes.data;
     setClassItem(resolvedClass);
 
-    const defaultGrade = resolvedClass.section?.gradeLevel || resolvedClass.subjectGradeLevel || '';
-    if (!gradeLevel && defaultGrade) {
-      updateQuery({ gradeLevel: defaultGrade, page: 1 });
+    const defaultGrade = resolvedClass.subjectGradeLevel || resolvedClass.section?.gradeLevel || '';
+    if (defaultGrade && gradeLevel !== defaultGrade) {
+      updateQuery({ gradeLevel: defaultGrade, sectionId: null, page: 1 });
     }
   }, [classId, gradeLevel, updateQuery]);
 
   const fetchSections = useCallback(async () => {
-    if (!gradeLevel) {
+    if (!effectiveGradeLevel) {
       setSections([]);
       return;
     }
-    const res = await sectionService.getAll({ gradeLevel, page: 1, limit: 100 });
+    const res = await sectionService.getAll({ gradeLevel: effectiveGradeLevel, page: 1, limit: 100 });
     setSections(res.data || []);
-  }, [gradeLevel]);
+  }, [effectiveGradeLevel]);
 
   const fetchStudents = useCallback(async () => {
-    if (!gradeLevel) return;
+    if (!effectiveGradeLevel) return;
 
     try {
       setLoading(true);
       const res = await classService.getStudentsMasterlist(classId, {
-        gradeLevel,
+        gradeLevel: effectiveGradeLevel,
         sectionId: sectionId || undefined,
         search: search || undefined,
         eligibility,
@@ -139,7 +141,7 @@ export default function TeacherAddStudentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [classId, eligibility, gradeLevel, page, search, sectionId, sortBy, sortDirection]);
+  }, [classId, effectiveGradeLevel, eligibility, page, search, sectionId, sortBy, sortDirection]);
 
   useEffect(() => {
     (async () => {
@@ -159,9 +161,9 @@ export default function TeacherAddStudentsPage() {
   }, [fetchSections]);
 
   useEffect(() => {
-    if (!gradeLevel) return;
+    if (!effectiveGradeLevel) return;
     void fetchStudents();
-  }, [fetchStudents, gradeLevel]);
+  }, [effectiveGradeLevel, fetchStudents]);
 
   const handleToggleStudent = (studentId: string) => {
     const student = students.find((row) => row.id === studentId);
@@ -214,7 +216,7 @@ export default function TeacherAddStudentsPage() {
         </Button>
       </div>
 
-      {!gradeLevel ? (
+      {!effectiveGradeLevel ? (
         <Card>
           <CardHeader>
             <CardTitle>Loading class grade context</CardTitle>
@@ -226,7 +228,7 @@ export default function TeacherAddStudentsPage() {
       ) : (
         <StudentMasterlistTable
           title="Modern Masterlist"
-          description="Multi-filter student discovery with eligibility-first ordering, quick select, and paginated matching."
+          description={`Only Grade ${effectiveGradeLevel} students are shown for this class, with eligibility-first ordering and quick select.`}
           rows={students.map((student) => ({
             id: student.id,
             firstName: student.firstName,
@@ -248,15 +250,12 @@ export default function TeacherAddStudentsPage() {
           onSearchChange={(value) => updateQuery({ search: value || null, page: 1 })}
           eligibility={eligibility}
           onEligibilityChange={(value) => updateQuery({ eligibility: value, page: 1 })}
-          gradeFilter={gradeLevel}
-          onGradeFilterChange={(value) => {
-            updateQuery({
-              gradeLevel: value || null,
-              sectionId: null,
-              page: 1,
-            });
-          }}
-          gradeOptions={GRADE_LEVELS.map((grade) => ({ value: grade, label: `Grade ${grade}` }))}
+          gradeFilter={effectiveGradeLevel}
+          gradeOptions={
+            effectiveGradeLevel
+              ? [{ value: effectiveGradeLevel, label: `Grade ${effectiveGradeLevel} (class level)` }]
+              : GRADE_LEVELS.map((grade) => ({ value: grade, label: `Grade ${grade}` }))
+          }
           sectionFilter={sectionId}
           onSectionFilterChange={(value) => updateQuery({ sectionId: value || null, page: 1 })}
           sectionOptions={sections.map((section) => ({ value: section.id, label: section.name }))}

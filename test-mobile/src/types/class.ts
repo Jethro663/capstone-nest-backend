@@ -12,7 +12,7 @@ export interface ClassItem {
   subjectGradeLevel?: string;
   sectionId: string;
   section?: { id: string; name: string; gradeLevel: string } | null;
-  teacherId: string;
+  teacherId?: string | null;
   teacher?: { id: string; firstName?: string; lastName?: string; email?: string } | null;
   schoolYear: string;
   room?: string;

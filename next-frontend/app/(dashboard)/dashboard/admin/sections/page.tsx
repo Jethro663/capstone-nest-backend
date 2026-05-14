@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Layers3, Pencil, RotateCcw, Search, Trash2, UserPlus, Users } from 'lucide-react';
+import { Archive, ChevronDown, Layers3, Pencil, RotateCcw, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import {
   type BulkSectionLifecycleAction,
   sectionService,
@@ -69,6 +69,8 @@ export default function SectionManagementPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [tab, setTab] = useState<StatusTab>('active');
+  const [gradeFilter, setGradeFilter] = useState('all');
+  const [schoolYearFilter, setSchoolYearFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
   const [purgeTarget, setPurgeTarget] = useState<Section | null>(null);
@@ -84,7 +86,7 @@ export default function SectionManagementPage() {
         setTableLoading(true);
       }
 
-      const sectionsRes = await sectionService.getAll();
+      const sectionsRes = await sectionService.getAll({ limit: 100 });
       setSections(sectionsRes.data || []);
     } catch {
       toast.error('Failed to load sections');
@@ -109,12 +111,29 @@ export default function SectionManagementPage() {
     () => sections.filter((section) => !section.isActive).length,
     [sections],
   );
+  const schoolYearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          sections
+            .map((section) => section.schoolYear)
+            .filter((schoolYear): schoolYear is string => Boolean(schoolYear)),
+        ),
+      ).sort((left, right) => right.localeCompare(left)),
+    [sections],
+  );
 
   const filtered = useMemo(
     () =>
       sections.filter((section) => {
         if (tab === 'active' && !section.isActive) return false;
         if (tab === 'archived' && section.isActive) return false;
+        if (gradeFilter !== 'all' && String(section.gradeLevel) !== gradeFilter) {
+          return false;
+        }
+        if (schoolYearFilter !== 'all' && section.schoolYear !== schoolYearFilter) {
+          return false;
+        }
         if (!search) return true;
 
         const query = search.toLowerCase();
@@ -126,7 +145,7 @@ export default function SectionManagementPage() {
           section.adviser?.lastName?.toLowerCase().includes(query)
         );
       }),
-    [search, sections, tab],
+    [gradeFilter, schoolYearFilter, search, sections, tab],
   );
 
   const selectableVisibleIds = useMemo(
@@ -285,6 +304,8 @@ export default function SectionManagementPage() {
           onValueChange={(value) => {
             setTab(value as StatusTab);
             setSearch('');
+            setGradeFilter('all');
+            setSchoolYearFilter('all');
             setSelectedSectionIds([]);
           }}
           className="space-y-5"
@@ -308,6 +329,44 @@ export default function SectionManagementPage() {
                 onChange={(event) => setSearch(event.target.value)}
                 className="admin-input"
               />
+            </div>
+
+            <div className="admin-controls">
+              <div className="relative">
+                <select
+                  value={gradeFilter}
+                  onChange={(event) => setGradeFilter(event.target.value)}
+                  className="admin-select min-w-[9rem] appearance-none pr-10 text-sm font-semibold text-[#6f83a3]"
+                >
+                  <option value="all">All Grades</option>
+                  <option value="7">Grade 7</option>
+                  <option value="8">Grade 8</option>
+                  <option value="9">Grade 9</option>
+                  <option value="10">Grade 10</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
+              <div className="relative">
+                <select
+                  value={schoolYearFilter}
+                  onChange={(event) => setSchoolYearFilter(event.target.value)}
+                  className="admin-select min-w-[10rem] appearance-none pr-10 text-sm font-semibold text-[#6f83a3]"
+                >
+                  <option value="all">All School Years</option>
+                  {schoolYearOptions.map((schoolYear) => (
+                    <option key={schoolYear} value={schoolYear}>
+                      {schoolYear}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
+              {gradeFilter !== 'all' ? (
+                <span className="admin-filter-badge">Grade {gradeFilter}</span>
+              ) : null}
+              {schoolYearFilter !== 'all' ? (
+                <span className="admin-filter-badge">SY {schoolYearFilter}</span>
+              ) : null}
             </div>
           </div>
         </Tabs>

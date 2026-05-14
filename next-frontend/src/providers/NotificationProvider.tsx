@@ -9,7 +9,6 @@ import React, {
   useRef,
 } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
@@ -19,6 +18,7 @@ import {
   readAllTrackedExtractionNotifications,
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
+import { shouldSurfaceNotificationOnHydration } from '@/lib/notification-routing';
 import { extractionService } from '@/services/extraction-service';
 import {
   normalizeNotification,
@@ -90,12 +90,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       });
 
       if (options?.showToast) {
-        showLiveNotificationToast(notification);
+        showLiveNotificationToast(notification, role);
       }
 
       return true;
     },
-    [],
+    [role],
   );
 
   const syncNotifications = useCallback(
@@ -110,6 +110,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const rows = Array.isArray(listRes.data) ? listRes.data : [];
 
         if (!hasHydratedSeenIdsRef.current) {
+          const initialUrgentRows = rows
+            .filter(shouldSurfaceNotificationOnHydration)
+            .sort((left, right) => {
+              const leftTs = Date.parse(left.createdAt);
+              const rightTs = Date.parse(right.createdAt);
+              return leftTs - rightTs;
+            })
+            .slice(-3);
+
+          initialUrgentRows.forEach((row) => {
+            publishIncomingNotification(row, { showToast: true });
+          });
+
           rows.forEach((row) => {
             if (row?.id) {
               seenNotificationIdsRef.current.add(row.id);
@@ -197,29 +210,41 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           if (shouldNotify) {
             nextEntry.notifiedAt = new Date().toISOString();
             if (nextStatus === 'completed' || nextStatus === 'applied') {
-              toast.success('Extraction ready', {
-                description: `${entry.originalName} finished processing and is ready for teacher review.`,
-                action: {
-                  label: 'View',
-                  onClick: () => {
-                    window.location.assign(`/dashboard/teacher/extractions/${entry.extractionId}`);
-                  },
+              const message = `${entry.originalName} finished processing and is ready for teacher review.`;
+              showLiveNotificationToast(
+                {
+                  id: `extraction:${entry.extractionId}:completed`,
+                  userId: sessionUserId,
+                  type: 'extraction_completed',
+                  title: 'Extraction ready',
+                  body: message,
+                  message,
+                  isRead: false,
+                  referenceId: entry.extractionId,
+                  metadata: { classId: entry.classId },
+                  createdAt: nextEntry.notifiedAt,
                 },
-              });
+                role,
+              );
             } else if (nextStatus === 'failed') {
-              toast.error('Extraction failed', {
-                description:
-                  statusRes.data.errorMessage ||
-                  `${entry.originalName} could not be completed. Open the extraction history to review the error.`,
-                action: {
-                  label: 'History',
-                  onClick: () => {
-                    window.location.assign(
-                      `/dashboard/teacher/classes/${entry.classId}?view=extraction`,
-                    );
-                  },
+              const message =
+                statusRes.data.errorMessage ||
+                `${entry.originalName} could not be completed. Open the extraction history to review the error.`;
+              showLiveNotificationToast(
+                {
+                  id: `extraction:${entry.extractionId}:failed`,
+                  userId: sessionUserId,
+                  type: 'extraction_failed',
+                  title: 'Extraction failed',
+                  body: message,
+                  message,
+                  isRead: false,
+                  referenceId: entry.extractionId,
+                  metadata: { classId: entry.classId },
+                  createdAt: nextEntry.notifiedAt,
                 },
-              });
+                role,
+              );
             }
           }
 

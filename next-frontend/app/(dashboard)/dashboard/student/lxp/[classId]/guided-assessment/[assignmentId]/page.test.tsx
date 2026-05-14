@@ -175,7 +175,7 @@ describe('StudentGuidedAssessmentPage', () => {
 
     expect(within(correctSection).getByText(/Elements are represented by symbols/i)).toBeInTheDocument();
     expect(within(reviewSection).getByText(/Pure substances are made of one kind of atom/i)).toBeInTheDocument();
-    expect(within(reviewSection).getByText(/Your answer: Compounds/i)).toBeInTheDocument();
+    expect(within(reviewSection).getByText(/Your previous answer: Compounds/i)).toBeInTheDocument();
     expect(within(reviewSection).getByText(/Correct answer: Elements/i)).toBeInTheDocument();
   });
 });

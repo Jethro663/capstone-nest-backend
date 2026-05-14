@@ -14,7 +14,6 @@ import {
   Eye,
   EyeOff,
   FileSpreadsheet,
-  ListChecks,
   Megaphone,
   MessageSquare,
   Plus,
@@ -1167,8 +1166,8 @@ export default function AdminClassDetailPage() {
                   <Link href={`/dashboard/admin/sections/${classItem.sectionId}/roster`}>Section Roster</Link>
                 </Button>
                 <Button asChild variant="outline" className="admin-button-outline rounded-xl font-black">
-                  <Link href={`/dashboard/admin/sections/${classItem.sectionId}/students/add`}>
-                    Add Section Students
+                  <Link href={`/dashboard/admin/classes/${classItem.id}/students/add`}>
+                    Add Class Students
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="admin-button-outline rounded-xl font-black">
@@ -1914,7 +1913,7 @@ export default function AdminClassDetailPage() {
                   <Link href={`/dashboard/admin/sections/${classItem.sectionId}/roster`}>Open Section Roster</Link>
                 </Button>
                 <Button asChild className="teacher-class-workspace__solid">
-                  <Link href={`/dashboard/admin/sections/${classItem.sectionId}/students/add`}>
+                  <Link href={`/dashboard/admin/classes/${classItem.id}/students/add`}>
                     Add Students
                   </Link>
                 </Button>
