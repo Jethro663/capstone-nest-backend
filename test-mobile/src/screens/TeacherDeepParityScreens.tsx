@@ -278,20 +278,36 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
 export function TeacherSectionAddStudentsScreen({ navigation, route }: SectionAddStudentsProps) {
   const { sectionId } = route.params;
   const [search, setSearch] = useState("");
-  const [students, setStudents] = useState<Array<{ id: string; firstName?: string; lastName?: string; email?: string; isEligible?: boolean; eligibilityReason?: string | null }>>([]);
+  const [students, setStudents] = useState<
+    Array<{
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      gradeLevel?: string;
+      isEligible?: boolean;
+      eligibilityReason?: string | null;
+    }>
+  >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sectionName, setSectionName] = useState("Section");
+  const [sectionGradeLevel, setSectionGradeLevel] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [section, candidates] = await Promise.all([
-        sectionsApi.getById(sectionId),
-        sectionsApi.getCandidates(sectionId, search),
-      ]);
+      const section = await sectionsApi.getById(sectionId);
+      const candidates = await sectionsApi.getCandidates(sectionId, {
+        search,
+        gradeLevel: section.gradeLevel,
+        eligibility: "eligible",
+        prioritizeEligible: true,
+        limit: 50,
+      });
       setSectionName(section.name);
-      setStudents(candidates);
+      setSectionGradeLevel(section.gradeLevel);
+      setStudents(candidates.filter((student) => !section.gradeLevel || student.gradeLevel === section.gradeLevel));
     } catch (error) {
       Alert.alert("Unable to load section candidates", getErrorMessage(error));
     } finally {
@@ -305,8 +321,18 @@ export function TeacherSectionAddStudentsScreen({ navigation, route }: SectionAd
 
   const addSelected = async () => {
     try {
-      await sectionsApi.addStudents(sectionId, selectedIds);
-      Alert.alert("Students added", `${selectedIds.length} student(s) were added to the section.`);
+      const visibleEligibleIds = new Set(
+        students
+          .filter((student) => student.isEligible !== false && (!sectionGradeLevel || student.gradeLevel === sectionGradeLevel))
+          .map((student) => student.id),
+      );
+      const safeSelectedIds = selectedIds.filter((id) => visibleEligibleIds.has(id));
+      if (!safeSelectedIds.length) {
+        Alert.alert("Select students", "Select at least one Grade-matched eligible student.");
+        return;
+      }
+      await sectionsApi.addStudents(sectionId, safeSelectedIds);
+      Alert.alert("Students added", `${safeSelectedIds.length} student(s) were added to the section.`);
       navigation.navigate("TeacherSectionDetail", { sectionId });
     } catch (error) {
       Alert.alert("Unable to add students", getErrorMessage(error));
@@ -326,7 +352,7 @@ export function TeacherSectionAddStudentsScreen({ navigation, route }: SectionAd
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search section candidates" />
       <TeacherPanel
         title="Candidates"
-        subtitle={`Selected ${selectedIds.length}. Section add uses the same roster endpoint as web.`}
+        subtitle={`Grade ${sectionGradeLevel || "N/A"} only. Selected ${selectedIds.length}. Section add uses the same roster endpoint as web.`}
         action={<TeacherActionButton label="Add selected" icon="account-multiple-plus-outline" tone="green" disabled={!selectedIds.length} onPress={() => void addSelected()} />}
       >
         {students.length ? (

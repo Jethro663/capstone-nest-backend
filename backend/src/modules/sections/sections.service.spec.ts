@@ -445,6 +445,13 @@ describe('SectionsService', () => {
       tx.select.mockReturnValueOnce(
         makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
       );
+      // Verify student grade level
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '7' },
+        ]),
+      );
       // Already enrolled check (none)
       tx.select.mockReturnValueOnce(makeSelectChain([]));
       // Bulk insert
@@ -511,6 +518,13 @@ describe('SectionsService', () => {
       tx.select.mockReturnValueOnce(
         makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
       );
+      // Verify student grade level
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '7' },
+        ]),
+      );
       // Both already enrolled
       tx.select.mockReturnValueOnce(
         makeSelectChain([
@@ -525,6 +539,34 @@ describe('SectionsService', () => {
 
       expect(result.createdCount).toBe(0);
       expect(result.skipped).toBe(2);
+      expect(tx.insert).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submitted students do not match the section grade level', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 40, gradeLevel: '7' }),
+      );
+
+      const tx = makeTx();
+      tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]),
+      );
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
+      );
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '8' },
+        ]),
+      );
+
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
+
+      await expect(
+        service.addStudentsToSection(SECTION_ID, dto as any),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.insert).not.toHaveBeenCalled();
     });
 

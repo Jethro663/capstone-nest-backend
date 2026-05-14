@@ -2019,6 +2019,103 @@ export class LxpService {
     };
   }
 
+  async getStudentInterventionAlerts(userId: string) {
+    const studentEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.studentId, userId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { classId: true },
+      with: {
+        class: {
+          columns: {
+            id: true,
+            subjectName: true,
+            subjectCode: true,
+          },
+          with: {
+            section: {
+              columns: {
+                id: true,
+                name: true,
+                gradeLevel: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const enrolledClasses = studentEnrollments
+      .filter((entry) => entry.classId && entry.class)
+      .map((entry) => ({
+        classId: entry.classId as string,
+        class: entry.class!,
+      }));
+
+    const classIds = enrolledClasses.map((entry) => entry.classId);
+    if (classIds.length === 0) {
+      return { alerts: [], count: 0 };
+    }
+
+    const cases = await this.db.query.interventionCases.findMany({
+      where: and(
+        eq(interventionCases.studentId, userId),
+        inArray(interventionCases.classId, classIds),
+        inArray(interventionCases.status, ['pending', 'active']),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+        status: true,
+        triggerScore: true,
+        thresholdApplied: true,
+        openedAt: true,
+      },
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    if (cases.length === 0) {
+      return { alerts: [], count: 0 };
+    }
+
+    const caseIds = cases.map((entry) => entry.id);
+    const assignments = await this.db.query.interventionAssignments.findMany({
+      where: inArray(interventionAssignments.caseId, caseIds),
+      columns: { caseId: true },
+    });
+    const assignedCaseIds = new Set(assignments.map((entry) => entry.caseId));
+    const classById = new Map(
+      enrolledClasses.map((entry) => [entry.classId, entry.class]),
+    );
+
+    const alerts = cases
+      .map((entry) => {
+        const classRecord = classById.get(entry.classId);
+        if (!classRecord) return null;
+
+        return {
+          caseId: entry.id,
+          classId: entry.classId,
+          status: entry.status,
+          subjectName: classRecord.subjectName,
+          subjectCode: classRecord.subjectCode,
+          section: classRecord.section ?? null,
+          triggerScore: this.toNumber(entry.triggerScore),
+          thresholdApplied:
+            this.toNumber(entry.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+          openedAt: entry.openedAt,
+          hasAssignedPath: assignedCaseIds.has(entry.id),
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    return {
+      alerts,
+      count: alerts.length,
+    };
+  }
+
   async getStudentPlaylist(studentId: string, classId: string) {
     await this.assertStudentEnrollment(studentId, classId);
 

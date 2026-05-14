@@ -1,7 +1,16 @@
 import { apiClient } from "../client";
 import { normalizeArray, normalizeObject, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { EligibilityResponse, EligibleClass, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary, PlaylistResponse } from "../../types/lxp";
+import type {
+  EligibilityResponse,
+  EligibleClass,
+  LxpCheckpoint,
+  LxpOverviewResponse,
+  LxpPathSummary,
+  PlaylistResponse,
+  StudentInterventionAlert,
+  StudentInterventionAlertsResponse,
+} from "../../types/lxp";
 import type {
   TeacherEvaluationSummaryResponse,
   TeacherInterventionCase,
@@ -35,6 +44,11 @@ const emptyPlaylist = (): PlaylistResponse => ({
   checkpoints: [],
 });
 
+const emptyInterventionAlerts = (): StudentInterventionAlertsResponse => ({
+  alerts: [],
+  count: 0,
+});
+
 function normalizeTeacherInterventionQueue(
   payload: TeacherInterventionQueueResponse,
 ): TeacherInterventionQueueResponse {
@@ -66,6 +80,18 @@ export const lxpApi = {
       ...payload,
       eligibleClasses: normalizeArray<EligibleClass>(payload.eligibleClasses),
       paths: normalizeArray<LxpPathSummary>(payload.paths),
+    };
+  },
+
+  async getInterventionAlerts() {
+    const response = await apiClient.get<ApiEnvelope<StudentInterventionAlertsResponse>>(
+      "/lxp/me/intervention-alerts",
+    );
+    const payload = normalizeObject(unwrapEnvelope(response.data), emptyInterventionAlerts());
+    const alerts = normalizeArray<StudentInterventionAlert>(payload.alerts);
+    return {
+      alerts,
+      count: typeof payload.count === "number" ? payload.count : alerts.length,
     };
   },
 

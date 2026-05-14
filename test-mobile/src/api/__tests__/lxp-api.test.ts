@@ -95,6 +95,38 @@ describe("lxpApi", () => {
     expect(result.checkpoints).toEqual([]);
   });
 
+  it("loads student intervention alerts", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          count: 1,
+          alerts: [
+            {
+              caseId: "case-1",
+              classId: "class-1",
+              status: "pending",
+              subjectName: "Mathematics",
+              subjectCode: "MATH-7",
+              section: { id: "section-1", name: "Ruby", gradeLevel: "7" },
+              triggerScore: 71.5,
+              thresholdApplied: 74,
+              openedAt: "2026-05-01T00:00:00.000Z",
+              hasAssignedPath: false,
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await lxpApi.getInterventionAlerts();
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/lxp/me/intervention-alerts");
+    expect(result.count).toBe(1);
+    expect(result.alerts[0].status).toBe("pending");
+    expect(result.alerts[0].section?.gradeLevel).toBe("7");
+  });
+
   it("posts checkpoint completion and normalizes response", async () => {
     mockedApiClient.post.mockResolvedValue({
       data: {

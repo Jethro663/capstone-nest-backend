@@ -15,6 +15,7 @@ import { profileApi } from "./services/profile";
 import { reportsApi } from "./services/reports";
 import { schoolEventsApi } from "./services/school-events";
 import { sectionsApi } from "./services/sections";
+import type { TeacherSectionCandidateQuery } from "./services/sections";
 import { teacherProfileApi } from "./services/teacher-profile";
 import type { AssessmentHistoryQuery, TeacherReportQuery, TranscriptQuery } from "../types/report";
 import type { CreateDiscussionCommentDto, CreateDiscussionThreadDto, DiscussionReactionType, ReportDiscussionCommentDto, UpdateDiscussionThreadDto } from "../types/discussion";
@@ -64,6 +65,7 @@ export const queryKeys = {
   transcript: (query?: TranscriptQuery) => ["transcript", query ?? "all"] as const,
   performance: ["performance"] as const,
   lxpEligibility: ["lxp-eligibility"] as const,
+  studentInterventionAlerts: ["student-intervention-alerts"] as const,
   lxpPlaylist: (classId: string) => ["lxp-playlist", classId] as const,
   lxpOverview: (classId?: string) => ["lxp-overview", classId ?? "missing"] as const,
   profile: ["profile"] as const,
@@ -78,8 +80,8 @@ export const queryKeys = {
     ["teacher-sections", status] as const,
   teacherSectionDetail: (sectionId?: string) => ["teacher-section-detail", sectionId ?? "missing"] as const,
   teacherSectionRoster: (sectionId?: string) => ["teacher-section-roster", sectionId ?? "missing"] as const,
-  teacherSectionCandidates: (sectionId?: string, search?: string) =>
-    ["teacher-section-candidates", sectionId ?? "missing", (search ?? "").trim().toLowerCase() || "all"] as const,
+  teacherSectionCandidates: (sectionId?: string, query?: TeacherSectionCandidateQuery) =>
+    ["teacher-section-candidates", sectionId ?? "missing", query ?? "all"] as const,
   teacherSectionSchedule: (sectionId?: string) => ["teacher-section-schedule", sectionId ?? "missing"] as const,
   teacherClassPerformanceSummary: (classId?: string) =>
     ["teacher-class-performance-summary", classId ?? "missing"] as const,
@@ -313,6 +315,13 @@ export const useLxpEligibility = () =>
     queryFn: () => lxpApi.getEligibility(),
   });
 
+export const useStudentInterventionAlerts = (enabled = true) =>
+  useQuery({
+    queryKey: queryKeys.studentInterventionAlerts,
+    queryFn: () => lxpApi.getInterventionAlerts(),
+    enabled,
+  });
+
 export const useLxpPlaylist = (classId?: string) =>
   useQuery({
     queryKey: classId ? queryKeys.lxpPlaylist(classId) : ["lxp-playlist", "missing"],
@@ -386,10 +395,10 @@ export const useTeacherSectionRoster = (sectionId?: string) =>
     enabled: !!sectionId,
   });
 
-export const useTeacherSectionCandidates = (sectionId?: string, search?: string) =>
+export const useTeacherSectionCandidates = (sectionId?: string, query?: TeacherSectionCandidateQuery) =>
   useQuery({
-    queryKey: queryKeys.teacherSectionCandidates(sectionId, search?.trim() || undefined),
-    queryFn: () => sectionsApi.getCandidates(sectionId!, search),
+    queryKey: queryKeys.teacherSectionCandidates(sectionId, query),
+    queryFn: () => sectionsApi.getCandidates(sectionId!, query),
     enabled: !!sectionId,
   });
 

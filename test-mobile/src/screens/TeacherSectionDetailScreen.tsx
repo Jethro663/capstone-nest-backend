@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
@@ -35,7 +35,17 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const detailQuery = useTeacherSectionDetail(sectionId);
   const rosterQuery = useTeacherSectionRoster(sectionId);
-  const candidatesQuery = useTeacherSectionCandidates(sectionId, search);
+  const candidateQuery = useMemo(
+    () => ({
+      search,
+      gradeLevel: detailQuery.data?.gradeLevel,
+      eligibility: "eligible" as const,
+      prioritizeEligible: true,
+      limit: 50,
+    }),
+    [detailQuery.data?.gradeLevel, search],
+  );
+  const candidatesQuery = useTeacherSectionCandidates(sectionId, candidateQuery);
   const addStudentsMutation = useTeacherAddSectionStudentsMutation(sectionId);
   const scheduleQuery = useTeacherSectionSchedule(sectionId);
 
@@ -146,7 +156,10 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
                   marginBottom: 10,
                 }}
               />
-              {(candidatesQuery.data ?? []).slice(0, 15).map((candidate) => {
+              {(candidatesQuery.data ?? [])
+                .filter((candidate) => !detailQuery.data?.gradeLevel || candidate.gradeLevel === detailQuery.data.gradeLevel)
+                .slice(0, 15)
+                .map((candidate) => {
                 const fullName =
                   [candidate.firstName, candidate.lastName].filter(Boolean).join(" ").trim() ||
                   candidate.email ||
@@ -209,7 +222,18 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
                     onPress={() => {
                       void (async () => {
                         try {
-                          await addStudentsMutation.mutateAsync(selectedCandidateIds);
+                          const visibleEligibleIds = new Set(
+                            (candidatesQuery.data ?? [])
+                              .filter(
+                                (candidate) =>
+                                  candidate.isEligible !== false &&
+                                  (!detailQuery.data?.gradeLevel || candidate.gradeLevel === detailQuery.data.gradeLevel),
+                              )
+                              .map((candidate) => candidate.id),
+                          );
+                          await addStudentsMutation.mutateAsync(
+                            selectedCandidateIds.filter((id) => visibleEligibleIds.has(id)),
+                          );
                           setSelectedCandidateIds([]);
                           Alert.alert("Students added", "Selected students were added to this section.");
                         } catch (error) {

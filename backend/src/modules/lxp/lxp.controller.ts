@@ -43,6 +43,17 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('me/intervention-alerts')
+  @Roles(RoleName.Student)
+  async getInterventionAlerts(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getStudentInterventionAlerts(
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
   @Get('me/playlist/:classId')
   @Roles(RoleName.Student)
   async getPlaylist(

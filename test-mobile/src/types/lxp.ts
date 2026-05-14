@@ -49,6 +49,28 @@ export interface EligibilityResponse {
   paths?: LxpPathSummary[];
 }
 
+export interface StudentInterventionAlert {
+  caseId: string;
+  classId: string;
+  status: "pending" | "active";
+  subjectName?: string | null;
+  subjectCode?: string | null;
+  section?: {
+    id: string;
+    name: string;
+    gradeLevel: string;
+  } | null;
+  triggerScore: number | null;
+  thresholdApplied: number;
+  openedAt: string | null;
+  hasAssignedPath: boolean;
+}
+
+export interface StudentInterventionAlertsResponse {
+  alerts: StudentInterventionAlert[];
+  count: number;
+}
+
 export interface LxpCheckpoint {
   id: string;
   type: "lesson_review" | "assessment_retry";

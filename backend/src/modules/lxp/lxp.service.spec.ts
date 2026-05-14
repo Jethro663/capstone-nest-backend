@@ -223,6 +223,74 @@ describe('LxpService', () => {
     );
   });
 
+  it('returns open student intervention alerts for enrolled classes', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-pending',
+        class: {
+          id: 'class-pending',
+          subjectName: 'English 7',
+          subjectCode: 'ENG-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+    ]);
+    mockDb.query.interventionCases.findMany.mockResolvedValueOnce([
+      {
+        id: 'case-pending',
+        classId: 'class-pending',
+        status: 'pending',
+        triggerScore: '71.25',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-05-01T00:00:00.000Z'),
+      },
+      {
+        id: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        triggerScore: '68.5',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-05-02T00:00:00.000Z'),
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValueOnce([
+      { caseId: 'case-active' },
+    ]);
+
+    const result = await service.getStudentInterventionAlerts('student-1');
+
+    expect(result.count).toBe(2);
+    expect(result.alerts).toEqual([
+      expect.objectContaining({
+        caseId: 'case-pending',
+        classId: 'class-pending',
+        status: 'pending',
+        subjectCode: 'ENG-7',
+        triggerScore: 71.25,
+        thresholdApplied: 74,
+        hasAssignedPath: false,
+      }),
+      expect.objectContaining({
+        caseId: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        subjectCode: 'MATH-7',
+        triggerScore: 68.5,
+        thresholdApplied: 74,
+        hasAssignedPath: true,
+      }),
+    ]);
+  });
+
   it('hides active intervention cases from student eligibility until assignments exist', async () => {
     mockDb.query.enrollments.findMany.mockResolvedValueOnce([
       {
