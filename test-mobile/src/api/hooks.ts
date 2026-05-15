@@ -90,6 +90,8 @@ export const queryKeys = {
     ["teacher-intervention-quiz-comparison", classId ?? "missing"] as const,
   teacherInterventionsQueue: (classId?: string) => ["teacher-interventions-queue", classId ?? "missing"] as const,
   teacherInterventionsHistory: (classId?: string) => ["teacher-interventions-history", classId ?? "missing"] as const,
+  teacherInterventionClassReport: (classId?: string) =>
+    ["teacher-intervention-class-report", classId ?? "missing"] as const,
   teacherPendingInterventions: ["teacher-pending-interventions"] as const,
   teacherEvaluationSummary: (
     evaluationType: TeacherEvaluationType,
@@ -441,6 +443,13 @@ export const useTeacherInterventionsHistory = (classId?: string) =>
   useQuery({
     queryKey: queryKeys.teacherInterventionsHistory(classId),
     queryFn: () => lxpApi.getTeacherInterventionHistory(classId!),
+    enabled: !!classId,
+  });
+
+export const useTeacherInterventionClassReport = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherInterventionClassReport(classId),
+    queryFn: () => lxpApi.getClassReport(classId!),
     enabled: !!classId,
   });
 

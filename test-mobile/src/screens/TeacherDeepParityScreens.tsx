@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
@@ -56,6 +56,14 @@ type ModuleFileDetailProps = NativeStackScreenProps<RootStackParamList, "Teacher
 type LessonEditorProps = NativeStackScreenProps<RootStackParamList, "TeacherLessonEditor">;
 type AiDraftProps = NativeStackScreenProps<RootStackParamList, "TeacherAiDraft">;
 type InterventionDetailProps = NativeStackScreenProps<RootStackParamList, "TeacherInterventionDetail">;
+type InterventionWorkspaceContentProps = {
+  navigation: NativeStackNavigationProp<RootStackParamList>;
+  caseId: string;
+  classId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+  onAssigned?: (classId?: string) => void;
+};
 
 function formatName(value?: { firstName?: string | null; lastName?: string | null; email?: string | null }) {
   return [value?.firstName, value?.lastName].filter(Boolean).join(" ").trim() || value?.email || "Student";
@@ -1191,9 +1199,16 @@ function makeResultWithOutput(
   };
 }
 
-export function TeacherInterventionDetailScreen({ navigation, route }: InterventionDetailProps) {
-  const { caseId, classId } = route.params;
+export function TeacherInterventionWorkspaceContent({
+  navigation,
+  caseId,
+  classId,
+  embedded = false,
+  onClose,
+  onAssigned,
+}: InterventionWorkspaceContentProps) {
   const [detail, setDetail] = useState<TeacherInterventionCaseDetail | null>(null);
+  const [queueEntry, setQueueEntry] = useState<TeacherInterventionCase | null>(null);
   const [loading, setLoading] = useState(false);
   const [creatingJob, setCreatingJob] = useState(false);
   const [assigning, setAssigning] = useState(false);
@@ -1218,21 +1233,32 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const nextDetail = await lxpApi.getTeacherCaseDetail(caseId);
+      const [nextDetail, nextQueueEntry] = await Promise.all([
+        lxpApi.getTeacherCaseDetail(caseId),
+        (async () => {
+          if (classId) {
+            const queue = await lxpApi.getTeacherQueue(classId);
+            const fromQueue = queue.queue.find((entry) => (entry.id || entry.caseId) === caseId);
+            if (fromQueue) return fromQueue;
+          }
+          return lxpApi.getTeacherCase(caseId);
+        })(),
+      ]);
       setDetail(nextDetail);
+      setQueueEntry(nextQueueEntry);
       setNote((current) => current || nextDetail.note || "");
     } catch (error) {
       Alert.alert("Unable to load intervention", getErrorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, [caseId]);
+  }, [caseId, classId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const caseRecord = useMemo(() => getCaseRecord(detail), [detail]);
+  const caseRecord = useMemo(() => queueEntry ?? getCaseRecord(detail), [detail, queueEntry]);
   const completion = useMemo(() => getCompletion(detail, caseRecord), [caseRecord, detail]);
   const activeClassId = classId || caseRecord?.classId || detail?.classId || detail?.class?.id || "";
   const status = String(caseRecord?.status || detail?.status || "pending").toLowerCase();
@@ -1254,16 +1280,24 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
   const generatedLessonDraft = output.generatedLessonDraft;
   const generatedGuidedAssessmentDraft = output.generatedGuidedAssessmentDraft;
   const hasGeneratedDrafts = Boolean(generatedLessonDraft || generatedGuidedAssessmentDraft);
-  const hasApprovedGeneratedArtifacts = Boolean(
-    approvedGeneratedContent?.generatedLesson ||
-      approvedGeneratedContent?.guidedAssessment ||
-      generatedArtifactObject.generatedLesson?.status === "approved" ||
-      generatedArtifactObject.guidedAssessment?.status === "approved",
-  );
-  const hasAssignableItems =
-    visibleLessons.length > 0 || visibleAssessments.length > 0 || hasGeneratedDrafts || hasApprovedGeneratedArtifacts;
-  const needsGeneratedApproval = hasGeneratedDrafts && !hasApprovedGeneratedArtifacts;
+  const generatedLessonApproved =
+    !generatedLessonDraft ||
+    Boolean(approvedGeneratedContent?.generatedLesson || generatedArtifactObject.generatedLesson?.status === "approved");
+  const guidedAssessmentApproved =
+    !generatedGuidedAssessmentDraft ||
+    Boolean(approvedGeneratedContent?.guidedAssessment || generatedArtifactObject.guidedAssessment?.status === "approved");
+  const hasAssignableItems = visibleLessons.length > 0 || visibleAssessments.length > 0;
+  const needsGeneratedApproval = hasGeneratedDrafts && !(generatedLessonApproved && guidedAssessmentApproved);
   const assignDisabled = assigning || !hasCaseContext || !isCaseActive || hasStartedPath || !hasAssignableItems || needsGeneratedApproval;
+  const assignButtonLabel = assigning
+    ? "Assigning..."
+    : hasStartedPath
+      ? "Progress already started"
+      : needsGeneratedApproval
+        ? "Approve generated content first"
+        : hasUnstartedExistingPath
+          ? "Replace current path"
+          : "Assign suggested path";
 
   const seedXpFromOutput = useCallback((nextOutput: InterventionStructuredOutput) => {
     const lessonAssignments = asArray(nextOutput.suggestedAssignmentPayload.lessonAssignments);
@@ -1621,26 +1655,33 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
       return;
     }
 
+    const teacherNote = note.trim();
+    const aiSuggestedNote = output.suggestedAssignmentPayload.note?.trim();
+    const assignmentNote =
+      aiSuggestedNote && teacherNote && !aiSuggestedNote.includes(teacherNote)
+        ? `${teacherNote}\n${aiSuggestedNote}`
+        : aiSuggestedNote || teacherNote || undefined;
+
     try {
       setAssigning(true);
       await lxpApi.assignIntervention(caseId, {
-        note: note.trim() || undefined,
-        lessonIds: visibleLessons.map((lesson) => lesson.lessonId),
-        assessmentIds: visibleAssessments.map((assessment) => assessment.assessmentId),
+        note: assignmentNote,
         lessonAssignments: visibleLessons.map((lesson) => ({
           lessonId: lesson.lessonId,
-          label: lesson.title,
+          label: `AI plan: ${lesson.title}`,
           xpAwarded: parseXp(lessonXp[lesson.lessonId], DEFAULT_LESSON_XP),
         })),
         assessmentAssignments: visibleAssessments.map((assessment) => ({
           assessmentId: assessment.assessmentId,
-          label: assessment.title,
+          label: `AI plan: ${assessment.title}`,
           xpAwarded: parseXp(assessmentXp[assessment.assessmentId], DEFAULT_ASSESSMENT_XP),
         })),
       });
       await load();
       Alert.alert("Intervention assigned", "The student can now see the intervention path in Learner's Path.");
-      if (activeClassId) {
+      if (onAssigned) {
+        onAssigned(activeClassId);
+      } else if (activeClassId) {
         navigation.navigate("TeacherInterventions", { classId: activeClassId });
       } else {
         navigation.goBack();
@@ -1660,16 +1701,8 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
     (assessment) => !visibleAssessments.some((entry) => entry.assessmentId === assessment.id),
   );
 
-  return (
-    <TeacherScreen
-      title={studentName || "Intervention detail"}
-      subtitle={`${stringifyStatus(status)} | ${sourceSubtitle}`}
-      icon="account-alert-outline"
-      showBackButton
-      onBackPress={() => navigation.goBack()}
-      refreshing={loading || creatingJob || assigning || loadingResult}
-      onRefresh={() => void load()}
-    >
+  const workspaceContent = (
+    <>
       <TeacherStats
         items={[
           { label: "Trigger", value: formatScoreValue(caseRecord?.triggerScore ?? detail?.triggerScore), tone: "red" },
@@ -1859,8 +1892,7 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
 
           <TeacherPanel title="Assign intervention" subtitle={needsGeneratedApproval ? "Approve or reject generated drafts first." : hasStartedPath ? "This path has student progress and cannot be replaced." : "Assign the selected plan to the learner path."}>
             <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              <TeacherActionButton label={assigning ? "Assigning..." : "Assign path"} icon="send-check-outline" tone="green" disabled={assignDisabled} onPress={() => void handleAssign()} />
-              <TeacherActionButton label="Regenerate backend path" icon="refresh" tone="amber" disabled={hasStartedPath} onPress={() => void runAction("regenerate")} />
+              <TeacherActionButton label={assignButtonLabel} icon="send-check-outline" tone="green" disabled={assignDisabled} onPress={() => void handleAssign()} />
               <TeacherActionButton label="Back to planning" icon="arrow-left" tone="neutral" onPress={() => setActiveTab("plan")} />
             </View>
           </TeacherPanel>
@@ -1883,6 +1915,34 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
           </TeacherPanel>
         </>
       ) : null}
+    </>
+  );
+
+  if (embedded) {
+    return <View style={{ paddingBottom: 14 }}>{workspaceContent}</View>;
+  }
+
+  return (
+    <TeacherScreen
+      title={studentName || "Intervention detail"}
+      subtitle={`${stringifyStatus(status)} | ${sourceSubtitle}`}
+      icon="account-alert-outline"
+      showBackButton
+      onBackPress={onClose ?? (() => navigation.goBack())}
+      refreshing={loading || creatingJob || assigning || loadingResult}
+      onRefresh={() => void load()}
+    >
+      {workspaceContent}
     </TeacherScreen>
+  );
+}
+
+export function TeacherInterventionDetailScreen({ navigation, route }: InterventionDetailProps) {
+  return (
+    <TeacherInterventionWorkspaceContent
+      navigation={navigation}
+      caseId={route.params.caseId}
+      classId={route.params.classId}
+    />
   );
 }

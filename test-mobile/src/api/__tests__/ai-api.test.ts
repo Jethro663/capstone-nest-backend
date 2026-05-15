@@ -102,4 +102,52 @@ describe("aiApi", () => {
       },
     );
   });
+
+  it("normalizes intervention job creation like the web service", async () => {
+    mockedApiClient.post.mockResolvedValue({
+      data: {
+        data: {
+          jobId: "job-1",
+          jobType: "intervention_recommendation",
+          status: "completed",
+          progressPercent: "100",
+          statusMessage: "Done",
+          outputId: "output-1",
+        },
+      },
+    });
+
+    const result = await aiApi.createInterventionJob("case-1", { note: "Focus on fractions" });
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      "/ai/teacher/interventions/case-1/jobs",
+      { note: "Focus on fractions" },
+    );
+    expect(result.id).toBe("job-1");
+    expect(result.status).toBe("completed");
+    expect(result.progressPercent).toBe(100);
+    expect(result.message).toBe("Done");
+  });
+
+  it("returns a safe fallback for malformed intervention job results", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          job: { jobId: "job-1", status: "completed", outputId: "output-1" },
+          result: {
+            outputId: "output-1",
+            outputType: "intervention_recommendation",
+            structuredOutput: null,
+          },
+        },
+      },
+    });
+
+    const result = await aiApi.getInterventionJobResult("job-1");
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/ai/teacher/jobs/job-1/result");
+    expect(result.job.id).toBe("job-1");
+    expect(result.result?.structuredOutput?.recommendedLessons).toEqual([]);
+    expect(result.result?.structuredOutput?.aiSummary.summary).toContain("temporarily unavailable");
+  });
 });

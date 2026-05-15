@@ -207,4 +207,112 @@ describe("lxpApi", () => {
     expect(result.selectedClass.subjectCode).toBe("MATH-7");
     expect(result.progress.totalCheckpoints).toBe(3);
   });
+
+  it("loads web-shaped teacher intervention history", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          classId: "class-1",
+          scoreThreshold: 60,
+          history: [
+            {
+              id: "case-1",
+              classId: "class-1",
+              studentId: "student-1",
+              status: "completed",
+              openedAt: "2026-05-01T00:00:00.000Z",
+              closedAt: "2026-05-02T00:00:00.000Z",
+              triggerScore: 52,
+              thresholdApplied: 74,
+              completion: {
+                totalCheckpoints: 2,
+                completedCheckpoints: 2,
+                completionPercent: 100,
+              },
+              pathScore: {
+                source: "guided_assessment",
+                assignmentId: "assignment-1",
+                attemptId: "attempt-1",
+                scorePercent: 58,
+                submittedAt: "2026-05-02T00:00:00.000Z",
+              },
+              canRegenerate: true,
+              assignments: [{ id: "assignment-1", label: "Guided retry" }],
+            },
+          ],
+        },
+      },
+    });
+
+    const result = await lxpApi.getTeacherInterventionHistory("class-1");
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/lxp/teacher/classes/class-1/interventions/history");
+    expect(result.history).toHaveLength(1);
+    expect(result.history[0].pathScore?.scorePercent).toBe(58);
+    expect(result.history[0].assignments[0].label).toBe("Guided retry");
+  });
+
+  it("loads teacher intervention class report for outcomes and leaderboard", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        data: {
+          classId: "class-1",
+          threshold: 74,
+          summary: {
+            totalCases: 2,
+            pendingCases: 1,
+            activeCases: 1,
+            completedCases: 0,
+            interventionParticipation: 2,
+            averageDelta: 4.25,
+          },
+          rows: [{ id: "case-1", studentId: "student-1", status: "active" }],
+          leaderboard: [{ rank: 1, studentId: "student-1", xpTotal: 220, starsTotal: 2, streakDays: 3, checkpointsCompleted: 4 }],
+        },
+      },
+    });
+
+    const result = await lxpApi.getClassReport("class-1");
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/lxp/teacher/classes/class-1/reports/summary");
+    expect(result.summary.averageDelta).toBe(4.25);
+    expect(result.leaderboard[0].xpTotal).toBe(220);
+  });
+
+  it("posts teacher intervention resolve and regenerate requests", async () => {
+    mockedApiClient.post
+      .mockResolvedValueOnce({ data: { data: { queue: [] } } })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            sourceCaseId: "case-1",
+            reusedExisting: false,
+            scoreThreshold: 60,
+            pathScore: {
+              source: "assessment_retry",
+              assignmentId: "assignment-1",
+              attemptId: "attempt-1",
+              scorePercent: 55,
+              submittedAt: null,
+            },
+            case: { id: "case-2", status: "active" },
+          },
+        },
+      });
+
+    await lxpApi.resolveIntervention("case-1", "Resolved by teacher queue");
+    const regenerated = await lxpApi.regenerateInterventionPath("case-1");
+
+    expect(mockedApiClient.post).toHaveBeenNthCalledWith(
+      1,
+      "/lxp/teacher/interventions/case-1/resolve",
+      { note: "Resolved by teacher queue" },
+    );
+    expect(mockedApiClient.post).toHaveBeenNthCalledWith(
+      2,
+      "/lxp/teacher/interventions/case-1/regenerate",
+    );
+    expect(regenerated.case.id).toBe("case-2");
+  });
 });

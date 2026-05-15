@@ -1,3 +1,14 @@
+export type AiGenerationStatus =
+  | "queued"
+  | "pending"
+  | "running"
+  | "processing"
+  | "completed"
+  | "approved"
+  | "cancelled"
+  | "rejected"
+  | "failed";
+
 export interface TutorRecommendationPayload {
   id: string;
   title: string;
@@ -108,9 +119,11 @@ export interface AiGenerationJob {
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | string;
   progressPercent?: number | null;
   message?: string | null;
+  statusMessage?: string | null;
   errorMessage?: string | null;
   outputId?: string | null;
   outputType?: string | null;
+  assessmentId?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

@@ -205,6 +205,43 @@ export interface GuidedAssessmentContent {
   rejectedAt?: string | null;
 }
 
+export type TeacherPathScoreSource = "guided_assessment" | "assessment_retry";
+
+export interface TeacherPathScore {
+  source: TeacherPathScoreSource;
+  assignmentId: string | null;
+  attemptId: string;
+  scorePercent: number;
+  correctCount?: number | null;
+  totalQuestions?: number | null;
+  passed?: boolean | null;
+  submittedAt: string | null;
+}
+
+export interface TeacherInterventionAssignment {
+  id?: string;
+  assignmentId?: string;
+  type?: "lesson_review" | "assessment_retry" | "generated_lesson_review" | "guided_assessment" | string;
+  label?: string;
+  order?: number;
+  status?: string;
+  isCompleted?: boolean;
+  completedAt?: string | null;
+  xpAwarded?: number;
+  lesson?: { id: string; title?: string | null; description?: string | null; order?: number } | null;
+  assessment?: {
+    id: string;
+    title?: string | null;
+    type?: string | null;
+    description?: string | null;
+    passingScore?: number | null;
+    dueDate?: string | null;
+  } | null;
+  generatedLesson?: GeneratedLessonContent | null;
+  guidedAssessment?: GuidedAssessmentContent | null;
+  score?: TeacherPathScore | null;
+}
+
 export interface TeacherInterventionCase {
   id?: string;
   caseId?: string;
@@ -232,9 +269,14 @@ export interface TeacherInterventionCase {
   completedCheckpoints?: number;
   completionPercent?: number;
   progress?: {
+    xpTotal?: number;
+    starsTotal?: number;
+    streakDays?: number;
     completionPercent?: number;
     completedCheckpoints?: number;
     totalCheckpoints?: number;
+    checkpointsCompleted?: number;
+    lastActivityAt?: string | null;
   } | null;
 }
 
@@ -260,20 +302,7 @@ export interface TeacherInterventionCaseDetail {
     subjectName?: string | null;
     subjectCode?: string | null;
   } | null;
-  assignments?: Array<{
-    assignmentId?: string;
-    id?: string;
-    type?: string;
-    label?: string;
-    status?: string;
-    xpAwarded?: number;
-    isCompleted?: boolean;
-    completedAt?: string | null;
-    lesson?: { id: string; title?: string | null; description?: string | null; order?: number } | null;
-    assessment?: { id: string; title?: string | null; type?: string; description?: string | null; passingScore?: number | null; dueDate?: string | null } | null;
-    generatedLesson?: GeneratedLessonContent | null;
-    guidedAssessment?: GuidedAssessmentContent | null;
-  }>;
+  assignments?: TeacherInterventionAssignment[];
   generatedArtifacts?:
     | Array<{
         id?: string;
@@ -301,6 +330,7 @@ export interface TeacherInterventionCaseDetail {
     checkpointsCompleted?: number;
     lastActivityAt?: string | null;
   };
+  pathScore?: TeacherPathScore | null;
   latestSnapshot?: {
     assessmentAverage?: number | null;
     classRecordAverage?: number | null;
@@ -355,6 +385,9 @@ export interface GeneratedArtifactApprovalResponse {
 }
 
 export interface TeacherInterventionQueueResponse {
+  classId?: string;
+  threshold?: number;
+  count?: number;
   queue: TeacherInterventionCase[];
   summary?: {
     active?: number;
@@ -365,6 +398,82 @@ export interface TeacherInterventionQueueResponse {
 
 export interface TeacherPendingInterventionCountResponse {
   pendingCount: number;
+  classBreakdown?: Array<{
+    classId: string;
+    subjectName?: string | null;
+    subjectCode?: string | null;
+    pendingCount: number;
+  }>;
+}
+
+export interface TeacherInterventionHistoryRow {
+  id: string;
+  classId: string;
+  studentId: string;
+  student?: TeacherInterventionCase["student"];
+  status: string;
+  openedAt: string | null;
+  closedAt: string | null;
+  triggerSource?: string | null;
+  triggerScore: number | null;
+  thresholdApplied: number;
+  note?: string | null;
+  completion: {
+    totalCheckpoints: number;
+    completedCheckpoints: number;
+    completionPercent: number;
+  };
+  pathScore: TeacherPathScore | null;
+  canRegenerate: boolean;
+  assignments: TeacherInterventionAssignment[];
+}
+
+export interface TeacherInterventionHistoryResponse {
+  classId: string;
+  scoreThreshold: number;
+  history: TeacherInterventionHistoryRow[];
+}
+
+export interface RegenerateInterventionPathResponse {
+  sourceCaseId: string;
+  reusedExisting: boolean;
+  scoreThreshold: number;
+  pathScore: TeacherPathScore;
+  case: TeacherInterventionCase;
+}
+
+export interface LxpClassReport {
+  classId: string;
+  threshold: number;
+  summary: {
+    totalCases: number;
+    pendingCases: number;
+    activeCases: number;
+    completedCases: number;
+    interventionParticipation: number;
+    averageDelta: number | null;
+  };
+  rows: Array<{
+    id: string;
+    studentId: string;
+    status: string;
+    triggerScore: number | null;
+    currentBlendedScore: number | null;
+    improvementDelta: number | null;
+    openedAt: string | null;
+    closedAt: string | null;
+    student?: TeacherInterventionCase["student"];
+  }>;
+  leaderboard: Array<{
+    rank: number;
+    studentId: string;
+    xpTotal: number;
+    starsTotal: number;
+    streakDays: number;
+    checkpointsCompleted: number;
+    lastActivityAt: string | null;
+    student?: TeacherInterventionCase["student"];
+  }>;
 }
 
 export type TeacherEvaluationType = "teacher_class" | "ja_hub" | "learners_path";

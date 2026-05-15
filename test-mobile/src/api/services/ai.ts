@@ -2,6 +2,7 @@ import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
+  AiGenerationStatus,
   AiClassIndexStatus,
   AiGenerationJob,
   AiGenerationJobResult,
@@ -17,19 +18,87 @@ import type {
   UpdateClassAiPolicyDto,
 } from "../../types/ai";
 
-function normalizeJob(job: AiGenerationJob): AiGenerationJob {
-  const jobId = job.id || job.jobId || "";
+const AI_JOB_STATUSES = [
+  "queued",
+  "pending",
+  "running",
+  "processing",
+  "completed",
+  "approved",
+  "cancelled",
+  "rejected",
+  "failed",
+] as const;
+
+function normalizeAiJobStatus(value: unknown): AiGenerationStatus | string {
+  if (typeof value === "string" && AI_JOB_STATUSES.includes(value as (typeof AI_JOB_STATUSES)[number])) {
+    return value;
+  }
+  return "processing";
+}
+
+function normalizeProgressPercent(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(0, Math.min(100, value));
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) {
+      return Math.max(0, Math.min(100, parsed));
+    }
+  }
+  return 0;
+}
+
+function normalizeJob(job: unknown): AiGenerationJob {
+  const raw = job && typeof job === "object" ? (job as Partial<AiGenerationJob>) : {};
+  const jobId = raw.id || raw.jobId || "";
+  const statusMessage =
+    typeof raw.statusMessage === "string"
+      ? raw.statusMessage
+      : typeof raw.message === "string"
+        ? raw.message
+        : null;
   return {
-    ...job,
+    ...raw,
     id: jobId,
-    jobId: job.jobId || jobId,
+    jobId: raw.jobId || jobId,
+    status: normalizeAiJobStatus(raw.status),
+    progressPercent: normalizeProgressPercent(raw.progressPercent),
+    message: statusMessage,
+    statusMessage,
+    errorMessage: typeof raw.errorMessage === "string" ? raw.errorMessage : null,
+    outputId: typeof raw.outputId === "string" ? raw.outputId : null,
+    assessmentId: typeof raw.assessmentId === "string" ? raw.assessmentId : null,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
   };
 }
 
-function normalizeJobResult<TOutput>(payload: AiGenerationJobResult<TOutput>): AiGenerationJobResult<TOutput> {
+function normalizeJobResult<TOutput>(
+  payload: unknown,
+  fallbackStructuredOutput: TOutput,
+): AiGenerationJobResult<TOutput> {
+  const rawData = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+  const rawJob = rawData.job && typeof rawData.job === "object" ? rawData.job : rawData;
+  const rawResult = rawData.result && typeof rawData.result === "object" ? (rawData.result as Record<string, unknown>) : {};
+  const normalizedJob = normalizeJob(rawJob);
+  const outputIdFromResult = typeof rawResult.outputId === "string" ? rawResult.outputId : null;
+  const outputId = outputIdFromResult ?? normalizedJob.outputId ?? "";
+
   return {
-    ...payload,
-    job: normalizeJob(payload.job),
+    ...(rawData as Partial<AiGenerationJobResult<TOutput>>),
+    job: {
+      ...normalizedJob,
+      outputId,
+    },
+    result: {
+      outputId,
+      outputType: typeof rawResult.outputType === "string" ? rawResult.outputType : "degraded_unavailable",
+      structuredOutput:
+        rawResult.structuredOutput && typeof rawResult.structuredOutput === "object"
+          ? (rawResult.structuredOutput as TOutput)
+          : fallbackStructuredOutput,
+    },
   };
 }
 
@@ -80,14 +149,34 @@ export const aiApi = {
     const response = await apiClient.get<ApiEnvelope<AiGenerationJobResult<QuizDraftStructuredOutput>>>(
       `/ai/teacher/jobs/${jobId}/result`,
     );
-    return normalizeJobResult(unwrapEnvelope(response.data));
+    return normalizeJobResult<QuizDraftStructuredOutput>(unwrapEnvelope(response.data), {
+      title: "AI draft temporarily unavailable",
+      description:
+        "The AI result endpoint is temporarily unavailable. Keep polling job status and retry result fetch shortly.",
+      questions: [],
+    });
   },
 
   async getInterventionJobResult(jobId: string) {
     const response = await apiClient.get<ApiEnvelope<AiGenerationJobResult<InterventionStructuredOutput>>>(
       `/ai/teacher/jobs/${jobId}/result`,
     );
-    return normalizeJobResult(unwrapEnvelope(response.data));
+    return normalizeJobResult<InterventionStructuredOutput>(unwrapEnvelope(response.data), {
+      caseId: "",
+      weakConcepts: [],
+      recommendedLessons: [],
+      recommendedAssessments: [],
+      aiSummary: {
+        summary:
+          "AI intervention result is temporarily unavailable. Keep polling job status and retry shortly.",
+        teacherActions: [],
+        studentFocus: [],
+      },
+      suggestedAssignmentPayload: {
+        lessonIds: [],
+        assessmentIds: [],
+      },
+    });
   },
 
   async getTeacherClassPolicy(classId: string) {
