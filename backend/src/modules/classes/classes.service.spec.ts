@@ -1558,7 +1558,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
 
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
@@ -1584,7 +1587,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
 
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
@@ -1621,7 +1627,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
       txMock.query.enrollments.findFirst.mockResolvedValueOnce(
         makeEnrollment(),
       );
@@ -1641,7 +1650,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);

@@ -702,6 +702,46 @@ describe('TeacherModuleDetailPage', () => {
     expect(mockedFileService.upload).not.toHaveBeenCalled();
   });
 
+  it('clears file attach state so the same library file can be attached again', async () => {
+    render(<TeacherModuleDetailPage />);
+
+    await screen.findByRole('heading', { name: 'Sections' });
+
+    const attachLibraryFile = async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Add Block' })[0]);
+      const dialog = await screen.findByRole('dialog');
+      const fileTypeButton = within(dialog).getByText('PDF / PPTX').closest('button');
+      if (!fileTypeButton) {
+        throw new Error('PDF block type button was not rendered');
+      }
+      fireEvent.click(fileTypeButton);
+      fireEvent.click(within(dialog).getByRole('button', { name: /Choose from Library/i }));
+      const picker = await screen.findByRole('dialog', { name: 'Choose from Library' });
+      fireEvent.click(await within(picker).findByRole('button', { name: /General Science File/i }));
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+    };
+
+    await attachLibraryFile();
+    await waitFor(() => expect(mockedModuleService.attachItem).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await attachLibraryFile();
+
+    await waitFor(() => {
+      expect(mockedModuleService.attachItem).toHaveBeenCalledTimes(2);
+      expect(mockedModuleService.attachItem).toHaveBeenNthCalledWith(
+        1,
+        'section-1',
+        expect.objectContaining({ itemType: 'file', fileId: 'general-file-1' }),
+      );
+      expect(mockedModuleService.attachItem).toHaveBeenNthCalledWith(
+        2,
+        'section-1',
+        expect.objectContaining({ itemType: 'file', fileId: 'general-file-1' }),
+      );
+    });
+  });
+
   it('uploads a PPTX module file block with deck metadata', async () => {
     const pptxMime =
       'application/vnd.openxmlformats-officedocument.presentationml.presentation';

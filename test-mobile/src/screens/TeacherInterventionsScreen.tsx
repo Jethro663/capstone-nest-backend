@@ -43,10 +43,10 @@ export function TeacherInterventionsScreen({ navigation, route }: Props) {
   }, [classesQuery.data, selectedClassId]);
 
   useEffect(() => {
-    if (route.params?.classId && route.params.classId !== selectedClassId) {
-      setSelectedClassId(route.params.classId);
-    }
-  }, [route.params?.classId, selectedClassId]);
+    const routeClassId = route.params?.classId;
+    if (!routeClassId) return;
+    setSelectedClassId((current) => (current === routeClassId ? current : routeClassId));
+  }, [route.params?.classId]);
 
   const queueQuery = useTeacherInterventionsQueue(selectedClassId || undefined);
   const historyQuery = useTeacherInterventionsHistory(selectedClassId || undefined);

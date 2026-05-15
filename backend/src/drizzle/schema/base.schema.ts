@@ -844,7 +844,6 @@ export const moduleItems = pgTable(
     uniqueAssessmentItem: unique('module_items_assessment_id_unique').on(
       table.assessmentId,
     ),
-    uniqueFileItem: unique('module_items_file_id_unique').on(table.fileId),
   }),
 );
 

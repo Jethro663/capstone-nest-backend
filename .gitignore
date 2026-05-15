@@ -1,4 +1,9 @@
 /.npm-cache
+/backend/.npm-cache
+/next-frontend/.npm-cache
+/.expo
+.env
+/package-lock.json
 /next-FrontendToRecover
 .env.compose
 /ai-service/tests/__pycache__/

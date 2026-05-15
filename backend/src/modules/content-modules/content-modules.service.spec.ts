@@ -366,6 +366,168 @@ describe('ContentModulesService', () => {
     );
   });
 
+  it('allows the same General Module file to be attached multiple times', async () => {
+    db.query.moduleSections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      module: { id: MODULE_ID, classId: CLASS_ID },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-general-1',
+      classId: null,
+      teacherId: 'admin-1',
+      scope: 'general',
+      teacherVisible: true,
+    });
+    const where = jest.fn().mockResolvedValue([{ maxOrder: 0 }]);
+    const from = jest.fn().mockReturnValue({ where });
+    db.select.mockReturnValue({ from });
+
+    const values = jest.fn().mockImplementation((payload) => ({
+      returning: jest.fn().mockResolvedValue([{ id: `item-${values.mock.calls.length}`, ...payload }]),
+    }));
+    db.insert.mockReturnValue({ values });
+
+    await service.attachItem(
+      SECTION_ID,
+      {
+        itemType: ModuleItemType.File,
+        fileId: 'file-general-1',
+        metadata: { fileSubtype: 'pptx' },
+      },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+    await service.attachItem(
+      SECTION_ID,
+      {
+        itemType: ModuleItemType.File,
+        fileId: 'file-general-1',
+        metadata: { fileSubtype: 'pptx' },
+      },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(values).toHaveBeenCalledTimes(2);
+    expect(values).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ fileId: 'file-general-1' }),
+    );
+    expect(values).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ fileId: 'file-general-1' }),
+    );
+  });
+
+  it('allows the same teacher-owned My Library file to be attached multiple times', async () => {
+    db.query.moduleSections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      module: { id: MODULE_ID, classId: CLASS_ID },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-private-1',
+      classId: null,
+      teacherId: TEACHER_ID,
+      scope: 'private',
+      teacherVisible: true,
+    });
+    const where = jest.fn().mockResolvedValue([{ maxOrder: 0 }]);
+    const from = jest.fn().mockReturnValue({ where });
+    db.select.mockReturnValue({ from });
+
+    const values = jest.fn().mockImplementation((payload) => ({
+      returning: jest.fn().mockResolvedValue([{ id: `item-${values.mock.calls.length}`, ...payload }]),
+    }));
+    db.insert.mockReturnValue({ values });
+
+    await service.attachItem(
+      SECTION_ID,
+      { itemType: ModuleItemType.File, fileId: 'file-private-1' },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+    await service.attachItem(
+      SECTION_ID,
+      { itemType: ModuleItemType.File, fileId: 'file-private-1' },
+      TEACHER_ID,
+      [RoleName.Teacher],
+    );
+
+    expect(values).toHaveBeenCalledTimes(2);
+    expect(values).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ fileId: 'file-private-1' }),
+    );
+    expect(values).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ fileId: 'file-private-1' }),
+    );
+  });
+
+  it('rejects attaching another teacher private library file', async () => {
+    db.query.moduleSections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      module: { id: MODULE_ID, classId: CLASS_ID },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-private-other',
+      classId: null,
+      teacherId: 'other-teacher',
+      scope: 'private',
+      teacherVisible: true,
+    });
+
+    await expect(
+      service.attachItem(
+        SECTION_ID,
+        { itemType: ModuleItemType.File, fileId: 'file-private-other' },
+        TEACHER_ID,
+        [RoleName.Teacher],
+      ),
+    ).rejects.toThrow('You do not have access to this file');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects attaching a class-scoped file from another class', async () => {
+    db.query.moduleSections.findFirst.mockResolvedValue({
+      id: SECTION_ID,
+      module: { id: MODULE_ID, classId: CLASS_ID },
+    });
+    db.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      teacherId: TEACHER_ID,
+    });
+    db.query.uploadedFiles.findFirst.mockResolvedValue({
+      id: 'file-other-class',
+      classId: '00000000-0000-0000-0000-000000000999',
+      teacherId: TEACHER_ID,
+      scope: 'private',
+      teacherVisible: true,
+    });
+
+    await expect(
+      service.attachItem(
+        SECTION_ID,
+        { itemType: ModuleItemType.File, fileId: 'file-other-class' },
+        TEACHER_ID,
+        [RoleName.Teacher],
+      ),
+    ).rejects.toThrow('Class-scoped file must belong to the same class');
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
   it('persists lesson points on update by merging metadata', async () => {
     db.query.moduleItems.findFirst
       .mockResolvedValueOnce({

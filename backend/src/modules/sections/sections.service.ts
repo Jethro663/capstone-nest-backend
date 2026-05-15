@@ -485,12 +485,9 @@ export class SectionsService {
       );
 
     // Collect only defined extra conditions — avoids unsafe and(...undefined[]) spread.
-    const extraConditions: SQL<unknown>[] = [];
-    if (filters?.gradeLevel) {
-      extraConditions.push(
-        eq(studentProfiles.gradeLevel, filters.gradeLevel as any),
-      );
-    }
+    const extraConditions: SQL<unknown>[] = [
+      eq(studentProfiles.gradeLevel, section.gradeLevel as any),
+    ];
     if (filters?.search) {
       const searchCond = or(
         ilike(users.firstName, `%${filters.search}%`),
@@ -718,6 +715,28 @@ export class SectionsService {
       if (nonStudentIds.length > 0) {
         throw new BadRequestException(
           `The following user(s) do not have the student role: ${nonStudentIds.join(', ')}`,
+        );
+      }
+
+      // 2c. Validate grade level server-side so clients cannot bypass the
+      // section candidate filter and assign students to the wrong grade.
+      const profileRows = await tx
+        .select({
+          userId: studentProfiles.userId,
+          gradeLevel: studentProfiles.gradeLevel,
+        })
+        .from(studentProfiles)
+        .where(inArray(studentProfiles.userId, dto.studentIds));
+
+      const profileByStudentId = new Map(
+        profileRows.map((row) => [row.userId, row.gradeLevel]),
+      );
+      const mismatchedIds = dto.studentIds.filter(
+        (id) => profileByStudentId.get(id) !== section.gradeLevel,
+      );
+      if (mismatchedIds.length > 0) {
+        throw new BadRequestException(
+          `Student grade level must match Grade ${section.gradeLevel}. Mismatched student IDs: ${mismatchedIds.join(', ')}`,
         );
       }
 

@@ -136,6 +136,17 @@ type AttachState = {
   selectedLibraryFile: UploadedFile | null;
 };
 
+const INITIAL_ATTACH_STATE: AttachState = {
+  open: false,
+  sectionId: '',
+  itemType: null,
+  assessmentMode: 'create-new',
+  itemId: '',
+  lessonPoints: '0',
+  file: null,
+  selectedLibraryFile: null,
+};
+
 type DraggingItem = {
   sectionId: string;
   itemId: string;
@@ -705,16 +716,7 @@ export default function TeacherModuleDetailPage() {
   const [attachingItem, setAttachingItem] = useState(false);
   const [attachSource, setAttachSource] = useState<FileAttachSource>('upload');
   const [libraryPickerOpen, setLibraryPickerOpen] = useState(false);
-  const [attachState, setAttachState] = useState<AttachState>({
-    open: false,
-    sectionId: '',
-    itemType: null,
-    assessmentMode: 'create-new',
-    itemId: '',
-    lessonPoints: '0',
-    file: null,
-    selectedLibraryFile: null,
-  });
+  const [attachState, setAttachState] = useState<AttachState>(INITIAL_ATTACH_STATE);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
@@ -828,6 +830,12 @@ export default function TeacherModuleDetailPage() {
         : false;
 
   const activeGuidePage = teacherModuleGuidePages[helpPage] ?? teacherModuleGuidePages[0];
+
+  const resetAttachWorkflow = useCallback(() => {
+    setAttachState(INITIAL_ATTACH_STATE);
+    setAttachSource('upload');
+    setLibraryPickerOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!attachState.open) return;
@@ -1271,18 +1279,7 @@ export default function TeacherModuleDetailPage() {
         }
       }
       await moduleService.attachItem(attachState.sectionId, payload);
-      setAttachState({
-        open: false,
-        sectionId: '',
-        itemType: null,
-        assessmentMode: 'create-new',
-        itemId: '',
-        lessonPoints: '0',
-        file: null,
-        selectedLibraryFile: null,
-      });
-      setAttachSource('upload');
-      setLibraryPickerOpen(false);
+      resetAttachWorkflow();
       await fetchData();
       if (attachState.itemType === 'lesson' && payload.itemType === 'lesson') {
         toast.success('Lesson block created');
@@ -1307,6 +1304,9 @@ export default function TeacherModuleDetailPage() {
       );
     } catch {
       toast.error('Unable to attach item');
+      if (attachState.itemType === 'file') {
+        resetAttachWorkflow();
+      }
     } finally {
       setAttachingItem(false);
     }
@@ -2302,18 +2302,7 @@ export default function TeacherModuleDetailPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                setAttachState({
-                  open: false,
-                  sectionId: '',
-                  itemType: null,
-                  assessmentMode: 'create-new',
-                  itemId: '',
-                  lessonPoints: '0',
-                  file: null,
-                  selectedLibraryFile: null,
-                })
-              }
+              onClick={resetAttachWorkflow}
             >
               Cancel
             </Button>

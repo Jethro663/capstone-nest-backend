@@ -11,6 +11,15 @@ import type {
   TeacherSectionVisibilityStatus,
 } from "../../types/teacher";
 
+export type TeacherSectionCandidateQuery = {
+  search?: string;
+  gradeLevel?: string;
+  eligibility?: "all" | "eligible" | "mismatch";
+  prioritizeEligible?: boolean;
+  page?: number;
+  limit?: number;
+};
+
 export const sectionsApi = {
   async getAll(query?: {
     gradeLevel?: string;
@@ -59,10 +68,17 @@ export const sectionsApi = {
     return normalizeArray<TeacherSectionRosterStudent>(unwrapEnvelope(response.data));
   },
 
-  async getCandidates(sectionId: string, search?: string) {
+  async getCandidates(sectionId: string, query?: string | TeacherSectionCandidateQuery) {
+    const params =
+      typeof query === "string"
+        ? { search: query.trim() || undefined }
+        : {
+            ...query,
+            search: query?.search?.trim() || undefined,
+          };
     const response = await apiClient.get<ApiEnvelope<TeacherSectionCandidate[]>>(
       `/sections/${sectionId}/candidates`,
-      { params: { search: search?.trim() || undefined } },
+      { params },
     );
     return normalizeArray<TeacherSectionCandidate>(unwrapEnvelope(response.data));
   },

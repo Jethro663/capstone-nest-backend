@@ -52,6 +52,7 @@ describe('ClassesController', () => {
         'section-1',
         'teacher-1',
         '2026-2027',
+        undefined,
         'true',
         'math',
         '201',
@@ -82,12 +83,14 @@ describe('ClassesController', () => {
           undefined,
           undefined,
           undefined,
+          undefined,
           '0',
         ),
       ).rejects.toThrow(BadRequestException);
 
       await expect(
         controller.getAllClasses(
+          undefined,
           undefined,
           undefined,
           undefined,
