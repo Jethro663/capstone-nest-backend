@@ -19,10 +19,29 @@ const localFallbackApiUrl = Platform.OS === "android" ? "http://10.0.2.2:3000/ap
 const devRuntimeApiUrl = inferredApiUrl || localFallbackApiUrl;
 const isDevRuntime = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
 
+function readExpoExtraString(key: string) {
+  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
+  const value = extra?.[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeApiUrl(value: string) {
+  const trimmed = value.trim().replace(/\/+$/, "");
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`;
+}
+
+export function getApiOrigin(apiUrl = API_BASE_URL) {
+  return apiUrl.replace(/\/api\/?$/, "");
+}
+
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim() || readExpoExtraString("apiUrl");
+const configuredSocketOrigin = process.env.EXPO_PUBLIC_WS_URL?.trim() || readExpoExtraString("wsUrl");
+
 // Use EXPO_PUBLIC_API_URL for physical-device testing, e.g. http://192.168.1.10:3000/api.
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL?.trim() ||
-  (isDevRuntime ? devRuntimeApiUrl : hostedProductionApiUrl);
+export const API_BASE_URL = normalizeApiUrl(configuredApiUrl || (isDevRuntime ? devRuntimeApiUrl : hostedProductionApiUrl));
+
+// Socket.IO uses the backend origin without the /api suffix.
+export const SOCKET_ORIGIN = (configuredSocketOrigin || getApiOrigin(API_BASE_URL)).replace(/\/+$/, "");
 
 export const AUTH_STORAGE_KEYS = {
   accessToken: "nexora.test-mobile.access-token",

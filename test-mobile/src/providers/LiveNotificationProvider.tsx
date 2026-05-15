@@ -1,8 +1,11 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
+import { io, type Socket } from "socket.io-client";
 import { Animated, AppState, Easing, Image, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getAccessToken } from "../api/client";
+import { SOCKET_ORIGIN } from "../api/config";
 import { assessmentsApi } from "../api/services/assessments";
 import { classesApi } from "../api/services/classes";
 import { lxpApi } from "../api/services/lxp";
@@ -105,6 +108,57 @@ function notificationFromNativeData(data: Record<string, unknown> | undefined): 
     isRead: false,
     referenceId: readPayloadString(data.referenceId) || null,
     createdAt: readPayloadString(data.createdAt) || new Date().toISOString(),
+  };
+}
+
+type RealtimeNotificationPayload = {
+  id?: unknown;
+  type?: unknown;
+  title?: unknown;
+  body?: unknown;
+  message?: unknown;
+  referenceId?: unknown;
+  createdAt?: unknown;
+};
+
+function getNotificationSeenKeys(notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  const keys = [notification.id];
+  if (notification.type && notification.referenceId) {
+    keys.push(`${notification.type}:${notification.referenceId}`);
+  }
+  return keys.filter(Boolean);
+}
+
+function hasSeenNotification(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  return getNotificationSeenKeys(notification).some((key) => seen.has(key));
+}
+
+function markNotificationSeen(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  getNotificationSeenKeys(notification).forEach((key) => seen.add(key));
+}
+
+function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, userId: string): MobileNotification | null {
+  const type = readPayloadString(payload.type);
+  const title = readPayloadString(payload.title);
+  const referenceId = readPayloadString(payload.referenceId) || null;
+  const id = readPayloadString(payload.id) || (referenceId ? `${type}:${referenceId}` : "");
+
+  if (!id || !type || !title) return null;
+
+  const body = readPayloadString(payload.body);
+  const message = readPayloadString(payload.message) || body;
+  const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
+
+  return {
+    id,
+    userId,
+    type,
+    title,
+    body,
+    message,
+    isRead: false,
+    referenceId,
+    createdAt,
   };
 }
 
@@ -350,6 +404,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const scheduledNativeIdsRef = useRef<Set<string>>(new Set());
   const studentReminderInFlightRef = useRef(false);
   const pendingNativeOpenRef = useRef<MobileNotification | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
   const slide = useRef(new Animated.Value(-140)).current;
@@ -368,6 +423,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         clearTimeout(autoDismissTimerRef.current);
         autoDismissTimerRef.current = null;
       }
+      socketRef.current?.disconnect();
+      socketRef.current = null;
     };
   }, []);
 
@@ -473,8 +530,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
   const enqueueLiveNotification = useCallback(
     (notification: MobileNotification) => {
-      if (!notification.id || seenIdsRef.current.has(notification.id)) return false;
-      seenIdsRef.current.add(notification.id);
+      if (!notification.id || hasSeenNotification(seenIdsRef.current, notification)) return false;
+      markNotificationSeen(seenIdsRef.current, notification);
       queueRef.current.push(notification);
       void scheduleNativeNotification(notification);
       tryShowNext();
@@ -649,7 +706,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
           .slice(-3);
 
         rows.forEach((row) => {
-          seenIdsRef.current.add(row.id);
+          markNotificationSeen(seenIdsRef.current, row);
         });
         hydratedRef.current = true;
         queueRef.current.push(...urgentUnread);
@@ -660,7 +717,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      const fresh = rows.filter((row) => !row.isRead && !seenIdsRef.current.has(row.id));
+      const fresh = rows.filter((row) => !row.isRead && !hasSeenNotification(seenIdsRef.current, row));
       if (fresh.length === 0) return;
 
       const orderedFresh = [...fresh].sort((left, right) => {
@@ -670,7 +727,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       });
 
       orderedFresh.forEach((row) => {
-        seenIdsRef.current.add(row.id);
+        markNotificationSeen(seenIdsRef.current, row);
         queueRef.current.push(row);
         void scheduleNativeNotification(row);
       });
@@ -711,6 +768,51 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
     };
   }, [isAuthenticated, pollNotifications, user?.id]);
+
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      return;
+    }
+
+    const token = getAccessToken();
+    if (!token) return;
+
+    const activeUserId = user.id;
+    const socket = io(`${SOCKET_ORIGIN}/notifications`, {
+      auth: { token: `Bearer ${token}` },
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 2500,
+      reconnectionAttempts: Infinity,
+      timeout: 12000,
+    });
+
+    socket.on("connect", () => {
+      void pollNotifications();
+    });
+
+    socket.on("notification.new", (payload: RealtimeNotificationPayload) => {
+      const notification = notificationFromRealtimePayload(payload, activeUserId);
+      if (!notification) return;
+
+      const inserted = enqueueLiveNotification(notification);
+      if (inserted) {
+        setUnreadCount((current) => current + 1);
+      }
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socket.disconnect();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    };
+  }, [enqueueLiveNotification, isAuthenticated, pollNotifications, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated || role !== "student") return;
