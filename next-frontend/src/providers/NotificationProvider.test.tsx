@@ -192,10 +192,21 @@ describe('NotificationProvider', () => {
 
     await waitFor(() => {
       expect(getExtractionStatusMock).toHaveBeenCalledWith('extraction-1');
-      expect(toast.success).toHaveBeenCalledWith('Extraction ready', expect.objectContaining({
-        description: expect.stringContaining('Quarter 1 Module.pdf'),
-      }));
+      expect(toast.custom).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          id: 'live-notification-extraction:extraction-1:completed',
+          position: 'top-right',
+        }),
+      );
     });
+
+    const [renderToast] = (toast.custom as jest.Mock).mock.calls[0] as [
+      () => { props: { title: string; body: string } },
+    ];
+    const toastElement = renderToast();
+    expect(toastElement.props.title).toBe('Extraction ready');
+    expect(toastElement.props.body).toContain('Quarter 1 Module.pdf');
   });
 
   it('allows feature pages to subscribe to incoming notifications and unsubscribe cleanly', async () => {

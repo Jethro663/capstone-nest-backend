@@ -2,8 +2,16 @@ import type { Notification } from '@/types/notification';
 
 export type NotificationRole = 'student' | 'teacher' | 'admin' | string | null | undefined;
 
-const INTERVENTION_TERMS = ['intervention', 'at risk', 'at-risk', 'flagged', 'learners path'];
-const ASSESSMENT_TYPES = new Set(['assessment_assigned', 'assessment_due', 'assessment_graded']);
+const AT_RISK_TERMS = ['at risk', 'at-risk', 'flagged'];
+const INTERVENTION_ALERT_TERMS = ['intervention', 'support plan'];
+const BLUE_REMINDER_TYPES = new Set(['student_pending_task_reminder', 'student_pending_intervention_reminder']);
+const BLUE_INTERVENTION_TERMS = ['checklist', 'learner path', 'learners path', 'assigned path', 'pending intervention'];
+const ASSESSMENT_TYPES = new Set([
+  'assessment_assigned',
+  'assessment_due',
+  'assessment_graded',
+  'student_pending_task_reminder',
+]);
 const ANNOUNCEMENT_TYPES = new Set(['announcement_posted']);
 const DISCUSSION_TYPES = new Set(['discussion_thread_posted', 'discussion_comment_posted']);
 
@@ -21,10 +29,15 @@ export function getNotificationMessage(notification: Pick<Notification, 'message
 export function isInterventionAlertNotification(
   notification: Pick<Notification, 'type' | 'title' | 'message' | 'body'>,
 ) {
+  if (BLUE_REMINDER_TYPES.has(notification.type)) return false;
+
   const joined = normalizeText(
     `${notification.type} ${notification.title} ${notification.message ?? ''} ${notification.body ?? ''}`,
   );
-  return INTERVENTION_TERMS.some((term) => joined.includes(term));
+
+  if (AT_RISK_TERMS.some((term) => joined.includes(term))) return true;
+  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term))) return false;
+  return INTERVENTION_ALERT_TERMS.some((term) => joined.includes(term));
 }
 
 export function shouldSurfaceNotificationOnHydration(notification: Notification) {
@@ -46,6 +59,11 @@ export function resolveNotificationDestination(notification: Notification, role?
     typeof rawReferenceId === 'string' && rawReferenceId.trim().length > 0
       ? rawReferenceId
       : undefined;
+
+  if (notification.type === 'student_pending_intervention_reminder') {
+    if (resolvedRole === 'student') return '/dashboard/student/ja?entry=lxp';
+    return '/dashboard/notifications';
+  }
 
   if (isInterventionAlertNotification(notification)) {
     if (resolvedRole === 'student') return '/dashboard/student/ja?entry=lxp';

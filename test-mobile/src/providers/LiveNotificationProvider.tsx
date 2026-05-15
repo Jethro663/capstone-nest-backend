@@ -3,24 +3,33 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import * as Notifications from "expo-notifications";
 import { Animated, AppState, Easing, Image, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { assessmentsApi } from "../api/services/assessments";
+import { classesApi } from "../api/services/classes";
+import { lxpApi } from "../api/services/lxp";
 import { notificationsApi } from "../api/services/notifications";
 import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { colors, hexToRgba, radii, shadow } from "../theme/tokens";
+import type { Assessment, AssessmentAttempt } from "../types/assessment";
+import type { ClassItem } from "../types/class";
+import type { LxpPathSummary } from "../types/lxp";
 import type { MobileNotification } from "../types/notification";
 import { useAuth } from "./AuthProvider";
 
-const INTERVENTION_TERMS = [
-  "intervention",
-  "at risk",
-  "at-risk",
-  "flagged",
-  "learners path",
-  "support plan",
-  "checklist",
-];
-const ASSESSMENT_TYPES = new Set(["assessment_assigned", "assessment_due", "assessment_graded"]);
+const AT_RISK_TERMS = ["at risk", "at-risk", "flagged"];
+const INTERVENTION_ALERT_TERMS = ["intervention", "support plan"];
+const BLUE_REMINDER_TYPES = new Set(["student_pending_task_reminder", "student_pending_intervention_reminder"]);
+const BLUE_INTERVENTION_TERMS = ["checklist", "learner path", "learners path", "assigned path", "pending intervention"];
+const ASSESSMENT_TYPES = new Set([
+  "assessment_assigned",
+  "assessment_due",
+  "assessment_graded",
+  "student_pending_task_reminder",
+]);
 const NOTIFICATION_POLL_MS = 4000;
+const STUDENT_REMINDER_POLL_MS = 60_000;
+const STUDENT_REMINDER_CLASS_LIMIT = 6;
+const STUDENT_REMINDER_ASSESSMENT_LIMIT = 16;
 const AUTO_DISMISS_MS = 7800;
 const NATIVE_NOTIFICATION_CHANNEL_ID = "nexora-live";
 const NATIVE_NOTIFICATION_PREFIX = "nexora-notification";
@@ -102,14 +111,162 @@ function notificationFromNativeData(data: Record<string, unknown> | undefined): 
 function isInterventionAlertNotification(
   notification: Pick<MobileNotification, "type" | "title" | "message" | "body">,
 ) {
+  if (BLUE_REMINDER_TYPES.has(notification.type)) return false;
+
   const joined = normalizeText(
-    `${notification.type} ${notification.title} ${notification.message ?? ""} ${notification.body ?? ""}`,
+    notification.type +
+      " " +
+      notification.title +
+      " " +
+      (notification.message ?? "") +
+      " " +
+      (notification.body ?? ""),
   );
-  return INTERVENTION_TERMS.some((term) => joined.includes(term));
+
+  if (AT_RISK_TERMS.some((term) => joined.includes(term))) return true;
+  if (BLUE_INTERVENTION_TERMS.some((term) => joined.includes(term))) return false;
+  return INTERVENTION_ALERT_TERMS.some((term) => joined.includes(term));
 }
 
 function shouldSurfaceNotificationOnHydration(notification: MobileNotification) {
   return !notification.isRead;
+}
+
+function isLocalReminderNotification(notification: Pick<MobileNotification, "id" | "type">) {
+  return notification.id.startsWith("student-reminder:") || BLUE_REMINDER_TYPES.has(notification.type);
+}
+
+function resolveUserId(user: unknown) {
+  const record = user as { id?: unknown; userId?: unknown };
+  const id = typeof record.id === "string" ? record.id : "";
+  const userId = typeof record.userId === "string" ? record.userId : "";
+  return id || userId;
+}
+
+function reminderDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getClassLabel(classItem: ClassItem) {
+  return classItem.subjectName || classItem.subjectCode || classItem.name || classItem.className || "your class";
+}
+
+function getAssessmentDueMs(assessment: Assessment) {
+  if (!assessment.dueDate) return Number.MAX_SAFE_INTEGER;
+  const dueMs = Date.parse(assessment.dueDate);
+  return Number.isFinite(dueMs) ? dueMs : Number.MAX_SAFE_INTEGER;
+}
+
+function getLatestAttempt(attempts: AssessmentAttempt[]) {
+  return [...attempts].sort((left, right) => {
+    const leftTime = Date.parse(left.submittedAt || left.startedAt || left.createdAt || "");
+    const rightTime = Date.parse(right.submittedAt || right.startedAt || right.createdAt || "");
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  })[0];
+}
+
+async function buildStudentPendingTaskReminder(studentId: string): Promise<MobileNotification | null> {
+  const classRows = await classesApi.getStudentClasses(studentId).catch(() => [] as ClassItem[]);
+  if (classRows.length === 0) return null;
+
+  const batches = await Promise.all(
+    classRows.slice(0, STUDENT_REMINDER_CLASS_LIMIT).map(async (classItem) => {
+      const assessments = await assessmentsApi.getByClass(classItem.id).catch(() => [] as Assessment[]);
+      const published = assessments
+        .filter((assessment) => assessment.id && assessment.isPublished !== false)
+        .slice(0, STUDENT_REMINDER_ASSESSMENT_LIMIT);
+
+      const statuses = await Promise.all(
+        published.map(async (assessment) => {
+          const attempts = await assessmentsApi.getStudentAttempts(assessment.id).catch(() => [] as AssessmentAttempt[]);
+          return { assessment, classItem, latestAttempt: getLatestAttempt(attempts), dueMs: getAssessmentDueMs(assessment) };
+        }),
+      );
+
+      return statuses.filter((entry) => !entry.latestAttempt?.isSubmitted);
+    }),
+  );
+
+  const pending = batches
+    .flat()
+    .sort((left, right) => left.dueMs - right.dueMs || left.assessment.title.localeCompare(right.assessment.title));
+
+  if (pending.length === 0) return null;
+
+  const first = pending[0];
+  const classLabel = getClassLabel(first.classItem);
+  const title = pending.length === 1 ? "1 pending task waiting" : String(pending.length) + " pending tasks waiting";
+  const message =
+    pending.length === 1
+      ? first.assessment.title + " in " + classLabel + " is ready. Tap to open your assessments."
+      : first.assessment.title + " is next, plus " + String(pending.length - 1) + " more task(s). Tap to open your assessments.";
+
+  return {
+    id:
+      "student-reminder:pending-task:" +
+      studentId +
+      ":" +
+      reminderDateKey() +
+      ":" +
+      first.assessment.id +
+      ":" +
+      String(pending.length),
+    userId: studentId,
+    type: "student_pending_task_reminder",
+    title,
+    body: message,
+    message,
+    isRead: true,
+    referenceId: first.assessment.id,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function getPendingPathCount(path: LxpPathSummary) {
+  const explicitPending = Number(path.counts?.pending ?? 0);
+  if (explicitPending > 0) return explicitPending;
+
+  const total = Number(path.progress?.totalCheckpoints ?? path.counts?.total ?? 0);
+  const completed = Number(path.progress?.completedCheckpoints ?? path.counts?.completed ?? 0);
+  return Math.max(0, total - completed);
+}
+
+async function buildStudentPendingInterventionReminder(studentId: string): Promise<MobileNotification | null> {
+  const eligibility = await lxpApi.getEligibility().catch(() => null);
+  const paths = eligibility?.paths || [];
+  const pendingPaths = paths
+    .map((path) => ({ path, pendingCount: getPendingPathCount(path) }))
+    .filter(({ path, pendingCount }) => path.status !== "completed" && pendingCount > 0);
+
+  if (pendingPaths.length === 0) return null;
+
+  const first = pendingPaths[0];
+  const totalPending = pendingPaths.reduce((sum, item) => sum + item.pendingCount, 0);
+  const subjectLabel = first.path.class?.subjectName || first.path.class?.subjectCode || "Learners Path";
+  const message =
+    totalPending === 1
+      ? subjectLabel + " has 1 pending intervention step. JA can guide you through it now."
+      : subjectLabel + " has " + String(first.pendingCount) + " pending step(s), with " + String(totalPending) + " total across your intervention paths.";
+
+  return {
+    id:
+      "student-reminder:pending-intervention:" +
+      studentId +
+      ":" +
+      reminderDateKey() +
+      ":" +
+      first.path.classId +
+      ":" +
+      String(totalPending),
+    userId: studentId,
+    type: "student_pending_intervention_reminder",
+    title: "Learners Path needs you",
+    body: message,
+    message,
+    isRead: true,
+    referenceId: first.path.classId,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 function navigateToMainTab(tabName: string) {
@@ -121,6 +278,10 @@ function navigateToMainTab(tabName: string) {
 function resolveNotificationNavigation(notification: MobileNotification, role: string | null) {
   const normalizedRole = String(role || "").toLowerCase();
   const referenceId = notification.referenceId || undefined;
+
+  if (notification.type === "student_pending_intervention_reminder") {
+    return () => rootNavigationRef.navigate("LXP", referenceId ? { classId: referenceId, tab: "paths" } : { tab: "paths" });
+  }
 
   if (isInterventionAlertNotification(notification)) {
     if (normalizedRole === "teacher") {
@@ -187,6 +348,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const nativeReadyRef = useRef(false);
   const nativeDeniedRef = useRef(false);
   const scheduledNativeIdsRef = useRef<Set<string>>(new Set());
+  const studentReminderInFlightRef = useRef(false);
   const pendingNativeOpenRef = useRef<MobileNotification | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
@@ -263,7 +425,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
             data: notificationToNativeData(notification, role),
             sound: true,
             priority: Notifications.AndroidNotificationPriority.HIGH,
-            color: interventionAlert ? "#BE123C" : "#0F172A",
+            color: interventionAlert ? "#BE123C" : "#2563EB",
             vibrate: interventionAlert ? [0, 280, 120, 280] : [0, 180],
             autoDismiss: true,
           },
@@ -278,10 +440,12 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
   const openOrDeferNativeNotification = useCallback(
     (notification: MobileNotification) => {
-      setUnreadCount((current) => Math.max(0, current - 1));
-      void notificationsApi.markRead(notification.id).catch(() => {
-        // Keep the tap path resilient even if the read-state request is interrupted.
-      });
+      if (!isLocalReminderNotification(notification)) {
+        setUnreadCount((current) => Math.max(0, current - 1));
+        void notificationsApi.markRead(notification.id).catch(() => {
+          // Keep the tap path resilient even if the read-state request is interrupted.
+        });
+      }
 
       if (navigateToNotification(notification, role)) {
         pendingNativeOpenRef.current = null;
@@ -306,6 +470,18 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     activeRef.current = next;
     setActiveNotification(next);
   }, []);
+
+  const enqueueLiveNotification = useCallback(
+    (notification: MobileNotification) => {
+      if (!notification.id || seenIdsRef.current.has(notification.id)) return false;
+      seenIdsRef.current.add(notification.id);
+      queueRef.current.push(notification);
+      void scheduleNativeNotification(notification);
+      tryShowNext();
+      return true;
+    },
+    [scheduleNativeNotification, tryShowNext],
+  );
 
   const dismissActive = useCallback(() => {
     if (autoDismissTimerRef.current) {
@@ -341,10 +517,12 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         return;
       }
 
-      setUnreadCount((current) => (notification.isRead ? current : Math.max(0, current - 1)));
-      void notificationsApi.markRead(notification.id).catch(() => {
-        // Navigation matters more than a transient read-state failure.
-      });
+      if (!isLocalReminderNotification(notification)) {
+        setUnreadCount((current) => (notification.isRead ? current : Math.max(0, current - 1)));
+        void notificationsApi.markRead(notification.id).catch(() => {
+          // Navigation matters more than a transient read-state failure.
+        });
+      }
 
       dismissActive();
       setTimeout(() => {
@@ -423,6 +601,28 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
     };
   }, [activeNotification, dismissActive, opacity, pulse, slide, tryShowNext]);
+
+  const syncStudentReminderNotifications = useCallback(async () => {
+    if (!isAuthenticated || role !== "student" || studentReminderInFlightRef.current) return;
+
+    const studentId = resolveUserId(user);
+    if (!studentId) return;
+
+    studentReminderInFlightRef.current = true;
+    try {
+      const [taskReminder, interventionReminder] = await Promise.all([
+        buildStudentPendingTaskReminder(studentId).catch(() => null),
+        buildStudentPendingInterventionReminder(studentId).catch(() => null),
+      ]);
+
+      if (taskReminder) enqueueLiveNotification(taskReminder);
+      if (interventionReminder) enqueueLiveNotification(interventionReminder);
+    } catch {
+      // Local reminders should never interrupt the core notification stream.
+    } finally {
+      studentReminderInFlightRef.current = false;
+    }
+  }, [enqueueLiveNotification, isAuthenticated, role, user]);
 
   const pollNotifications = useCallback(async () => {
     if (!isAuthenticated || !user?.id || pollInFlightRef.current) return;
@@ -513,6 +713,19 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   }, [isAuthenticated, pollNotifications, user?.id]);
 
   useEffect(() => {
+    if (!isAuthenticated || role !== "student") return;
+
+    void syncStudentReminderNotifications();
+    const interval = setInterval(() => {
+      void syncStudentReminderNotifications();
+    }, STUDENT_REMINDER_POLL_MS);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, role, syncStudentReminderNotifications]);
+
+  useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
 
     const subscription = AppState.addEventListener("change", (nextState) => {
@@ -521,13 +734,14 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
       if ((previousState === "background" || previousState === "inactive") && nextState === "active") {
         void pollNotifications();
+        void syncStudentReminderNotifications();
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [isAuthenticated, pollNotifications, user?.id]);
+  }, [isAuthenticated, pollNotifications, syncStudentReminderNotifications, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
@@ -613,8 +827,8 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                 {
                   borderRadius: radii.xxl,
                   borderWidth: 1,
-                  borderColor: interventionAlert ? hexToRgba("#BE123C", 0.44) : hexToRgba("#1E293B", 0.18),
-                  backgroundColor: interventionAlert ? "#FFF4F4" : colors.white,
+                  borderColor: interventionAlert ? hexToRgba("#BE123C", 0.44) : hexToRgba("#2563EB", 0.34),
+                  backgroundColor: interventionAlert ? "#FFF4F4" : "#EFF6FF",
                   paddingHorizontal: 14,
                   paddingVertical: 12,
                   opacity,
@@ -677,7 +891,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
                       onPress={() => openNotification(activeNotification)}
                       style={{
                         borderRadius: 14,
-                        backgroundColor: interventionAlert ? "#BE123C" : "#0F172A",
+                        backgroundColor: interventionAlert ? "#BE123C" : "#2563EB",
                         paddingHorizontal: 10,
                         paddingVertical: 8,
                       }}

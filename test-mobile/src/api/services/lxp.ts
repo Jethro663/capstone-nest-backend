@@ -9,6 +9,8 @@ import type {
   TeacherEvaluationType,
   TeacherInterventionQueueResponse,
   TeacherPendingInterventionCountResponse,
+  ApproveGeneratedRemedialPayload,
+  GeneratedArtifactApprovalResponse,
 } from "../../types/teacher";
 
 const emptyEligibility = (): EligibilityResponse => ({
@@ -155,6 +157,8 @@ export const lxpApi = {
     payload: {
       lessonIds?: string[];
       assessmentIds?: string[];
+      lessonAssignments?: Array<{ lessonId: string; xpAwarded: number; label?: string }>;
+      assessmentAssignments?: Array<{ assessmentId: string; xpAwarded: number; label?: string }>;
       note?: string;
     },
   ) {
@@ -165,6 +169,21 @@ export const lxpApi = {
     return unwrapEnvelope(response.data);
   },
 
+  async approveGeneratedArtifacts(caseId: string, payload: ApproveGeneratedRemedialPayload) {
+    const response = await apiClient.post<ApiEnvelope<GeneratedArtifactApprovalResponse>>(
+      `/lxp/teacher/interventions/${caseId}/generated-content/approve`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async rejectGeneratedArtifacts(caseId: string, payload: ApproveGeneratedRemedialPayload) {
+    const response = await apiClient.post<ApiEnvelope<GeneratedArtifactApprovalResponse>>(
+      `/lxp/teacher/interventions/${caseId}/generated-content/reject`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
   async getTeacherEvaluationSummary(
     filters: {
       evaluationType: TeacherEvaluationType;

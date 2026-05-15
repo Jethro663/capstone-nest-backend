@@ -9,9 +9,29 @@ import type {
   AiTutorBootstrap,
   AiTutorSession,
   AiTutorSessionStart,
+  ClassAiPolicy,
+  InterventionRecommendationDto,
+  InterventionStructuredOutput,
   QuizDraftStructuredOutput,
   TutorRecommendationPayload,
+  UpdateClassAiPolicyDto,
 } from "../../types/ai";
+
+function normalizeJob(job: AiGenerationJob): AiGenerationJob {
+  const jobId = job.id || job.jobId || "";
+  return {
+    ...job,
+    id: jobId,
+    jobId: job.jobId || jobId,
+  };
+}
+
+function normalizeJobResult<TOutput>(payload: AiGenerationJobResult<TOutput>): AiGenerationJobResult<TOutput> {
+  return {
+    ...payload,
+    job: normalizeJob(payload.job),
+  };
+}
 
 export const aiApi = {
   async getClassIndexStatus(classId: string) {
@@ -35,22 +55,50 @@ export const aiApi = {
     useAllReadySources?: boolean;
   }) {
     const response = await apiClient.post<ApiEnvelope<AiGenerationJob>>("/ai/teacher/quizzes/jobs", payload);
-    return unwrapEnvelope(response.data);
+    return normalizeJob(unwrapEnvelope(response.data));
+  },
+
+  async createInterventionJob(caseId: string, payload?: InterventionRecommendationDto) {
+    const response = await apiClient.post<ApiEnvelope<AiGenerationJob>>(
+      `/ai/teacher/interventions/${caseId}/jobs`,
+      payload ?? {},
+    );
+    return normalizeJob(unwrapEnvelope(response.data));
   },
 
   async getTeacherJobStatus(jobId: string) {
     const response = await apiClient.get<ApiEnvelope<AiGenerationJob>>(`/ai/teacher/jobs/${jobId}`);
-    return unwrapEnvelope(response.data);
+    return normalizeJob(unwrapEnvelope(response.data));
   },
 
   async deleteTeacherJob(jobId: string) {
     const response = await apiClient.delete<ApiEnvelope<AiGenerationJob>>(`/ai/teacher/jobs/${jobId}`);
-    return unwrapEnvelope(response.data);
+    return normalizeJob(unwrapEnvelope(response.data));
   },
 
   async getQuizDraftJobResult(jobId: string) {
     const response = await apiClient.get<ApiEnvelope<AiGenerationJobResult<QuizDraftStructuredOutput>>>(
       `/ai/teacher/jobs/${jobId}/result`,
+    );
+    return normalizeJobResult(unwrapEnvelope(response.data));
+  },
+
+  async getInterventionJobResult(jobId: string) {
+    const response = await apiClient.get<ApiEnvelope<AiGenerationJobResult<InterventionStructuredOutput>>>(
+      `/ai/teacher/jobs/${jobId}/result`,
+    );
+    return normalizeJobResult(unwrapEnvelope(response.data));
+  },
+
+  async getTeacherClassPolicy(classId: string) {
+    const response = await apiClient.get<ApiEnvelope<ClassAiPolicy>>(`/ai/teacher/classes/${classId}/policy`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateTeacherClassPolicy(classId: string, payload: UpdateClassAiPolicyDto) {
+    const response = await apiClient.patch<ApiEnvelope<ClassAiPolicy>>(
+      `/ai/teacher/classes/${classId}/policy`,
+      payload,
     );
     return unwrapEnvelope(response.data);
   },

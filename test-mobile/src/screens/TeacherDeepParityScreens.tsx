@@ -9,11 +9,27 @@ import { modulesApi } from "../api/services/modules";
 import { lessonsApi } from "../api/services/lessons";
 import { aiApi } from "../api/services/ai";
 import { lxpApi } from "../api/services/lxp";
+import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import type { StudentMasterlistItem, TeacherClassStudentOverview } from "../types/class";
 import type { Extraction, ExtractionSection } from "../types/extraction";
+import type { Assessment } from "../types/assessment";
+import type {
+  AiGenerationJob,
+  AiGenerationJobResult,
+  ClassAiPolicy,
+  InterventionStructuredOutput,
+  UpdateClassAiPolicyDto,
+} from "../types/ai";
+import type { Lesson } from "../types/lesson";
 import type { ModuleItem } from "../types/module";
+import type {
+  GeneratedArtifactApprovalResponse,
+  GuidedAssessmentContent,
+  TeacherInterventionCase,
+  TeacherInterventionCaseDetail,
+} from "../types/teacher";
 import { extractLessonBlockText } from "../utils/lessonBlocks";
 import { TeacherAssessmentReviewScreen } from "./TeacherAssessmentReviewScreen";
 import {
@@ -43,6 +59,12 @@ type InterventionDetailProps = NativeStackScreenProps<RootStackParamList, "Teach
 
 function formatName(value?: { firstName?: string | null; lastName?: string | null; email?: string | null }) {
   return [value?.firstName, value?.lastName].filter(Boolean).join(" ").trim() || value?.email || "Student";
+}
+
+function normalizeGradeKey(value?: string | null) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const gradeNumber = normalized.match(/\d+/)?.[0];
+  return gradeNumber || normalized;
 }
 
 function toPercent(value: number | null | undefined) {
@@ -162,13 +184,17 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [classLabel, setClassLabel] = useState("Class");
+  const [sectionLabel, setSectionLabel] = useState("");
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const classItem = await classesApi.getById(classId);
       const resolvedGrade = gradeLevel || classItem.section?.gradeLevel || classItem.subjectGradeLevel || "";
-      setClassLabel(`${classItem.subjectCode} | ${classItem.subjectName}`);
+      const resolvedSectionId = classItem.sectionId || classItem.section?.id || "";
+      const resolvedSectionLabel = classItem.section?.name || "assigned section";
+      setClassLabel(classItem.subjectCode + " | " + classItem.subjectName);
+      setSectionLabel(resolvedSectionLabel);
       if (!gradeLevel && resolvedGrade) setGradeLevel(resolvedGrade);
       if (!resolvedGrade) {
         setStudents([]);
@@ -176,13 +202,21 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
       }
       const response = await classesApi.getStudentsMasterlist(classId, {
         gradeLevel: resolvedGrade,
+        sectionId: resolvedSectionId || undefined,
         search: search.trim() || undefined,
         eligibility,
         prioritizeEligible: true,
         page: 1,
         limit: 50,
       });
-      setStudents(response.data);
+      const targetGradeKey = normalizeGradeKey(resolvedGrade);
+      const filteredRows = response.data.filter((student) => {
+        const studentGradeKey = normalizeGradeKey(student.gradeLevel || student.section?.gradeLevel);
+        const matchesGrade = targetGradeKey ? studentGradeKey === targetGradeKey : true;
+        const matchesSection = resolvedSectionId ? student.section?.id === resolvedSectionId : true;
+        return matchesGrade && matchesSection;
+      });
+      setStudents(filteredRows);
       setSelectedIds([]);
     } catch (error) {
       Alert.alert("Unable to load students", getErrorMessage(error));
@@ -229,9 +263,26 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
           <TeacherChip key={value} label={value} active={eligibility === value} onPress={() => setEligibility(value)} />
         ))}
       </View>
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 10,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.blueSoft,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+        }}
+      >
+        <Text style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>Grade and section locked</Text>
+        <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 16, color: theme.muted }}>
+          Showing only Grade {gradeLevel || "matched"} students from {sectionLabel || "this class section"}.
+        </Text>
+      </View>
       <TeacherPanel
         title="Eligible students"
-        subtitle={`Selected ${selectedIds.length}. This uses the same class masterlist and enrollment endpoint as web.`}
+        subtitle={`Selected ${selectedIds.length}. Only matching grade and section students are shown.`}
         action={<TeacherActionButton label={adding ? "Adding..." : "Add selected"} icon="account-plus-outline" tone="green" disabled={adding} onPress={() => void addSelected()} />}
       >
         {students.length ? (
@@ -911,15 +962,239 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
   );
 }
 
+type InterventionWorkspaceTab = "plan" | "generating" | "assign";
+
+const DEFAULT_LESSON_XP = 20;
+const DEFAULT_ASSESSMENT_XP = 30;
+const INTERVENTION_POLL_MS = 2500;
+
+function readJobId(job?: AiGenerationJob | null) {
+  return job?.id || job?.jobId || "";
+}
+
+function isInterventionJobPending(status?: string | null) {
+  const normalized = String(status ?? "").toLowerCase();
+  return ["queued", "pending", "running", "processing"].includes(normalized);
+}
+
+function isInterventionJobComplete(status?: string | null) {
+  const normalized = String(status ?? "").toLowerCase();
+  return ["completed", "approved"].includes(normalized);
+}
+
+function isInterventionJobFailed(status?: string | null) {
+  const normalized = String(status ?? "").toLowerCase();
+  return ["failed", "cancelled", "rejected"].includes(normalized);
+}
+
+function asArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function parseXp(value: string | number | undefined, fallback: number) {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.min(500, parsed));
+}
+
+function formatScoreValue(value?: number | null) {
+  return typeof value === "number" ? value.toFixed(1) : "N/A";
+}
+
+function createManualInterventionJob(caseId: string): AiGenerationJob {
+  return {
+    id: `manual-${caseId}`,
+    jobId: `manual-${caseId}`,
+    status: "completed",
+    message: "Teacher-curated intervention plan",
+  };
+}
+
+function createEmptyInterventionOutput(caseId: string, note?: string): InterventionStructuredOutput {
+  return {
+    caseId,
+    weakConcepts: [],
+    recommendedLessons: [],
+    recommendedAssessments: [],
+    aiSummary: {
+      summary: "Teacher-curated intervention path.",
+      teacherActions: [],
+      studentFocus: [],
+    },
+    suggestedAssignmentPayload: {
+      lessonIds: [],
+      assessmentIds: [],
+      lessonAssignments: [],
+      assessmentAssignments: [],
+      note,
+    },
+    generatedLessonDraft: null,
+    generatedGuidedAssessmentDraft: null,
+    note,
+  };
+}
+
+function normalizeInterventionOutput(
+  output: InterventionStructuredOutput | null | undefined,
+  caseId: string,
+): InterventionStructuredOutput {
+  const base = output ?? createEmptyInterventionOutput(caseId);
+  const recommendedLessons = asArray(base.recommendedLessons)
+    .filter((lesson) => Boolean(lesson?.lessonId))
+    .map((lesson) => ({
+      ...lesson,
+      title: lesson.title || "Recommended lesson",
+      reason: lesson.reason || "Recommended by intervention evidence.",
+    }));
+  const recommendedAssessments = asArray(base.recommendedAssessments)
+    .filter((assessment) => Boolean(assessment?.assessmentId))
+    .map((assessment) => ({
+      ...assessment,
+      title: assessment.title || "Recommended assessment",
+      reason: assessment.reason || "Recommended by intervention evidence.",
+    }));
+
+  return {
+    ...base,
+    caseId: base.caseId || caseId,
+    weakConcepts: asArray(base.weakConcepts),
+    recommendedLessons,
+    recommendedAssessments,
+    aiSummary: {
+      summary: base.aiSummary?.summary || "AI intervention plan is ready for teacher review.",
+      teacherActions: asArray(base.aiSummary?.teacherActions),
+      studentFocus: asArray(base.aiSummary?.studentFocus),
+    },
+    suggestedAssignmentPayload: {
+      lessonIds: asArray(base.suggestedAssignmentPayload?.lessonIds),
+      assessmentIds: asArray(base.suggestedAssignmentPayload?.assessmentIds),
+      lessonAssignments: asArray(base.suggestedAssignmentPayload?.lessonAssignments),
+      assessmentAssignments: asArray(base.suggestedAssignmentPayload?.assessmentAssignments),
+      note: base.suggestedAssignmentPayload?.note,
+    },
+    generatedLessonDraft: base.generatedLessonDraft ?? null,
+    generatedGuidedAssessmentDraft: base.generatedGuidedAssessmentDraft ?? null,
+  };
+}
+
+function getCaseRecord(detail: TeacherInterventionCaseDetail | null): TeacherInterventionCase | null {
+  if (!detail) return null;
+  if (detail.case) return detail.case;
+
+  return {
+    id: detail.id,
+    caseId: detail.id,
+    classId: detail.classId || detail.class?.id,
+    studentId: detail.studentId || detail.student?.id,
+    student: detail.student,
+    status: detail.status,
+    triggerScore: detail.triggerScore,
+    thresholdApplied: detail.thresholdApplied,
+    openedAt: detail.openedAt,
+    closedAt: detail.closedAt,
+    totalCheckpoints: detail.completion?.totalCheckpoints ?? detail.progress?.totalCheckpoints,
+    completedCheckpoints:
+      detail.completion?.completedCheckpoints ??
+      detail.progress?.completedCheckpoints ??
+      detail.progress?.checkpointsCompleted,
+    completionPercent: detail.completion?.completionPercent ?? detail.progress?.completionPercent,
+  };
+}
+
+function getCompletion(detail: TeacherInterventionCaseDetail | null, caseRecord: TeacherInterventionCase | null) {
+  return {
+    total:
+      detail?.completion?.totalCheckpoints ??
+      detail?.progress?.totalCheckpoints ??
+      caseRecord?.totalCheckpoints ??
+      caseRecord?.progress?.totalCheckpoints ??
+      0,
+    completed:
+      detail?.completion?.completedCheckpoints ??
+      detail?.progress?.completedCheckpoints ??
+      detail?.progress?.checkpointsCompleted ??
+      caseRecord?.completedCheckpoints ??
+      caseRecord?.progress?.completedCheckpoints ??
+      0,
+    percent:
+      detail?.completion?.completionPercent ??
+      detail?.progress?.completionPercent ??
+      caseRecord?.completionPercent ??
+      caseRecord?.progress?.completionPercent ??
+      0,
+  };
+}
+
+function getGeneratedArtifactObject(detail: TeacherInterventionCaseDetail | null) {
+  const artifacts = detail?.generatedArtifacts;
+  if (!artifacts || Array.isArray(artifacts)) {
+    return { generatedLesson: null, guidedAssessment: null };
+  }
+  return {
+    generatedLesson: artifacts.generatedLesson ?? null,
+    guidedAssessment: artifacts.guidedAssessment ?? null,
+  };
+}
+
+function getFlatGeneratedArtifacts(detail: TeacherInterventionCaseDetail | null) {
+  const artifacts = detail?.generatedArtifacts;
+  if (Array.isArray(artifacts)) return artifacts;
+  const generated = getGeneratedArtifactObject(detail);
+  return [
+    generated.generatedLesson
+      ? { id: generated.generatedLesson.id, title: generated.generatedLesson.title, type: "Generated lesson", status: generated.generatedLesson.status }
+      : null,
+    generated.guidedAssessment
+      ? { id: generated.guidedAssessment.id, title: generated.guidedAssessment.title, type: "Guided assessment", status: generated.guidedAssessment.status }
+      : null,
+  ].filter(Boolean) as Array<{ id?: string; title?: string | null; type?: string; status?: string | null }>;
+}
+
+function makeResultWithOutput(
+  previous: AiGenerationJobResult<InterventionStructuredOutput> | null,
+  job: AiGenerationJob | null,
+  output: InterventionStructuredOutput,
+): AiGenerationJobResult<InterventionStructuredOutput> {
+  return {
+    job: previous?.job ?? job ?? createManualInterventionJob(output.caseId),
+    result: {
+      outputId: previous?.result?.outputId,
+      outputType: previous?.result?.outputType,
+      structuredOutput: output,
+    },
+  };
+}
+
 export function TeacherInterventionDetailScreen({ navigation, route }: InterventionDetailProps) {
   const { caseId, classId } = route.params;
-  const [detail, setDetail] = useState<Awaited<ReturnType<typeof lxpApi.getTeacherCaseDetail>> | null>(null);
+  const [detail, setDetail] = useState<TeacherInterventionCaseDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [artifactActionLoading, setArtifactActionLoading] = useState(false);
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [job, setJob] = useState<AiGenerationJob | null>(null);
+  const [result, setResult] = useState<AiGenerationJobResult<InterventionStructuredOutput> | null>(null);
+  const [note, setNote] = useState("");
+  const [activeTab, setActiveTab] = useState<InterventionWorkspaceTab>("plan");
+  const [statusWarning, setStatusWarning] = useState<string | null>(null);
+  const [manualLessons, setManualLessons] = useState<Lesson[]>([]);
+  const [manualAssessments, setManualAssessments] = useState<Assessment[]>([]);
+  const [loadingManualSources, setLoadingManualSources] = useState(false);
+  const [policy, setPolicy] = useState<ClassAiPolicy | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyCap, setPolicyCap] = useState("3");
+  const [lessonXp, setLessonXp] = useState<Record<string, string>>({});
+  const [assessmentXp, setAssessmentXp] = useState<Record<string, string>>({});
+  const [approvedGeneratedContent, setApprovedGeneratedContent] = useState<GeneratedArtifactApprovalResponse | null>(null);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      setDetail(await lxpApi.getTeacherCaseDetail(caseId));
+      const nextDetail = await lxpApi.getTeacherCaseDetail(caseId);
+      setDetail(nextDetail);
+      setNote((current) => current || nextDetail.note || "");
     } catch (error) {
       Alert.alert("Unable to load intervention", getErrorMessage(error));
     } finally {
@@ -931,7 +1206,204 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
     void load();
   }, [load]);
 
-  const caseRecord = detail?.case;
+  const caseRecord = useMemo(() => getCaseRecord(detail), [detail]);
+  const completion = useMemo(() => getCompletion(detail, caseRecord), [caseRecord, detail]);
+  const activeClassId = classId || caseRecord?.classId || detail?.classId || detail?.class?.id || "";
+  const status = String(caseRecord?.status || detail?.status || "pending").toLowerCase();
+  const isCaseActive = status === "active";
+  const hasCaseContext = Boolean(caseRecord) && caseRecord?.aiPlanEligible !== false;
+  const hasExistingPath = completion.total > 0;
+  const hasStartedPath = completion.completed > 0;
+  const hasUnstartedExistingPath = hasExistingPath && !hasStartedPath;
+  const generatedArtifactObject = useMemo(() => getGeneratedArtifactObject(detail), [detail]);
+  const flatGeneratedArtifacts = useMemo(() => getFlatGeneratedArtifacts(detail), [detail]);
+
+  const output = useMemo(
+    () => normalizeInterventionOutput(result?.result?.structuredOutput, caseId),
+    [caseId, result?.result?.structuredOutput],
+  );
+
+  const visibleLessons = output.recommendedLessons;
+  const visibleAssessments = output.recommendedAssessments;
+  const generatedLessonDraft = output.generatedLessonDraft;
+  const generatedGuidedAssessmentDraft = output.generatedGuidedAssessmentDraft;
+  const hasGeneratedDrafts = Boolean(generatedLessonDraft || generatedGuidedAssessmentDraft);
+  const hasApprovedGeneratedArtifacts = Boolean(
+    approvedGeneratedContent?.generatedLesson ||
+      approvedGeneratedContent?.guidedAssessment ||
+      generatedArtifactObject.generatedLesson?.status === "approved" ||
+      generatedArtifactObject.guidedAssessment?.status === "approved",
+  );
+  const hasAssignableItems =
+    visibleLessons.length > 0 || visibleAssessments.length > 0 || hasGeneratedDrafts || hasApprovedGeneratedArtifacts;
+  const needsGeneratedApproval = hasGeneratedDrafts && !hasApprovedGeneratedArtifacts;
+  const assignDisabled = assigning || !hasCaseContext || !isCaseActive || hasStartedPath || !hasAssignableItems || needsGeneratedApproval;
+
+  const seedXpFromOutput = useCallback((nextOutput: InterventionStructuredOutput) => {
+    const lessonAssignments = asArray(nextOutput.suggestedAssignmentPayload.lessonAssignments);
+    const assessmentAssignments = asArray(nextOutput.suggestedAssignmentPayload.assessmentAssignments);
+
+    setLessonXp((current) => {
+      const seeded = { ...current };
+      nextOutput.recommendedLessons.forEach((lesson) => {
+        const suggested = lessonAssignments.find((assignment) => assignment.lessonId === lesson.lessonId);
+        seeded[lesson.lessonId] = String(suggested?.xpAwarded ?? parseXp(seeded[lesson.lessonId], DEFAULT_LESSON_XP));
+      });
+      return seeded;
+    });
+
+    setAssessmentXp((current) => {
+      const seeded = { ...current };
+      nextOutput.recommendedAssessments.forEach((assessment) => {
+        const suggested = assessmentAssignments.find((assignment) => assignment.assessmentId === assessment.assessmentId);
+        seeded[assessment.assessmentId] = String(suggested?.xpAwarded ?? parseXp(seeded[assessment.assessmentId], DEFAULT_ASSESSMENT_XP));
+      });
+      return seeded;
+    });
+  }, []);
+
+  const loadInterventionJobResult = useCallback(
+    async (jobId: string) => {
+      if (!jobId) return;
+      try {
+        setLoadingResult(true);
+        const nextResult = await aiApi.getInterventionJobResult(jobId);
+        const normalizedOutput = normalizeInterventionOutput(nextResult.result?.structuredOutput, caseId);
+        setResult({
+          ...nextResult,
+          result: {
+            ...nextResult.result,
+            structuredOutput: normalizedOutput,
+          },
+        });
+        seedXpFromOutput(normalizedOutput);
+        setActiveTab("assign");
+        setStatusWarning(null);
+      } catch (error) {
+        setStatusWarning(getErrorMessage(error));
+      } finally {
+        setLoadingResult(false);
+      }
+    },
+    [caseId, seedXpFromOutput],
+  );
+
+  useEffect(() => {
+    const jobId = readJobId(job);
+    if (!jobId || !isInterventionJobPending(job?.status)) return undefined;
+
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const nextJob = await aiApi.getTeacherJobStatus(jobId);
+          setJob(nextJob);
+          if (isInterventionJobComplete(nextJob.status)) {
+            await loadInterventionJobResult(readJobId(nextJob));
+          }
+          if (isInterventionJobFailed(nextJob.status)) {
+            setStatusWarning(nextJob.errorMessage || nextJob.message || "AI intervention job did not finish.");
+          }
+        } catch (error) {
+          setStatusWarning(getErrorMessage(error));
+        }
+      })();
+    }, INTERVENTION_POLL_MS);
+
+    return () => clearInterval(timer);
+  }, [job, loadInterventionJobResult]);
+
+  const loadManualSources = useCallback(async () => {
+    if (!activeClassId) return;
+    try {
+      setLoadingManualSources(true);
+      const [lessons, assessments] = await Promise.all([
+        lessonsApi.getByClass(activeClassId),
+        assessmentsApi.getByClass(activeClassId),
+      ]);
+      setManualLessons(lessons.filter((lesson) => !lesson.isDraft));
+      setManualAssessments(assessments.filter((assessment) => assessment.isPublished !== false));
+    } catch (error) {
+      Alert.alert("Unable to load class sources", getErrorMessage(error));
+    } finally {
+      setLoadingManualSources(false);
+    }
+  }, [activeClassId]);
+
+  const loadPolicy = useCallback(async () => {
+    if (!activeClassId) return;
+    try {
+      setPolicyLoading(true);
+      const nextPolicy = await aiApi.getTeacherClassPolicy(activeClassId);
+      setPolicy(nextPolicy);
+      setPolicyCap(String(nextPolicy.maxFollowUpTurns ?? 3));
+    } catch (error) {
+      setPolicy(null);
+      setStatusWarning(getErrorMessage(error));
+    } finally {
+      setPolicyLoading(false);
+    }
+  }, [activeClassId]);
+
+  useEffect(() => {
+    void loadManualSources();
+    void loadPolicy();
+  }, [loadManualSources, loadPolicy]);
+
+  const updatePolicy = async (patch: UpdateClassAiPolicyDto) => {
+    if (!activeClassId) return;
+    try {
+      setPolicySaving(true);
+      const nextPolicy = await aiApi.updateTeacherClassPolicy(activeClassId, patch);
+      setPolicy(nextPolicy);
+      setPolicyCap(String(nextPolicy.maxFollowUpTurns ?? 3));
+    } catch (error) {
+      Alert.alert("Unable to update AI policy", getErrorMessage(error));
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  const runGenerate = async () => {
+    if (!hasCaseContext) {
+      Alert.alert("AI plan unavailable", "This intervention case is not eligible for AI planning yet.");
+      return;
+    }
+
+    try {
+      setCreatingJob(true);
+      setStatusWarning(null);
+      setApprovedGeneratedContent(null);
+      const createdJob = await aiApi.createInterventionJob(caseId, { note: note.trim() || undefined });
+      setJob(createdJob);
+      setResult(null);
+      setActiveTab("generating");
+      if (isInterventionJobComplete(createdJob.status)) {
+        await loadInterventionJobResult(readJobId(createdJob));
+      }
+      if (isInterventionJobFailed(createdJob.status)) {
+        setStatusWarning(createdJob.errorMessage || createdJob.message || "AI intervention job failed.");
+      }
+    } catch (error) {
+      Alert.alert("Unable to generate AI plan", getErrorMessage(error));
+    } finally {
+      setCreatingJob(false);
+    }
+  };
+
+  const handleGenerate = () => {
+    if (hasUnstartedExistingPath) {
+      Alert.alert(
+        "Replace current path?",
+        "This case already has an unstarted intervention path. Generating a new AI plan may replace the teacher review flow before assignment.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Generate", style: "destructive", onPress: () => void runGenerate() },
+        ],
+      );
+      return;
+    }
+    void runGenerate();
+  };
 
   const runAction = async (action: "activate" | "regenerate") => {
     try {
@@ -943,58 +1415,448 @@ export function TeacherInterventionDetailScreen({ navigation, route }: Intervent
     }
   };
 
+  const setOutput = (nextOutput: InterventionStructuredOutput) => {
+    const normalized = normalizeInterventionOutput(nextOutput, caseId);
+    setResult((current) => makeResultWithOutput(current, job, normalized));
+    seedXpFromOutput(normalized);
+    setActiveTab("assign");
+  };
+
+  const handleAddManualLesson = (lesson: Lesson) => {
+    if (visibleLessons.some((entry) => entry.lessonId === lesson.id)) {
+      Alert.alert("Already added", "This lesson is already in the intervention plan.");
+      return;
+    }
+    const nextOutput = normalizeInterventionOutput(output, caseId);
+    nextOutput.recommendedLessons = [
+      ...nextOutput.recommendedLessons,
+      {
+        lessonId: lesson.id,
+        title: lesson.title,
+        reason: "Teacher added manually from the class lesson library.",
+        chunkId: null,
+      },
+    ];
+    nextOutput.suggestedAssignmentPayload.lessonIds = nextOutput.recommendedLessons.map((entry) => entry.lessonId);
+    nextOutput.suggestedAssignmentPayload.lessonAssignments = nextOutput.recommendedLessons.map((entry) => ({
+      lessonId: entry.lessonId,
+      label: entry.title,
+      xpAwarded: parseXp(lessonXp[entry.lessonId], DEFAULT_LESSON_XP),
+    }));
+    setLessonXp((current) => ({ ...current, [lesson.id]: String(DEFAULT_LESSON_XP) }));
+    setOutput(nextOutput);
+  };
+
+  const handleAddManualAssessment = (assessment: Assessment) => {
+    if (visibleAssessments.some((entry) => entry.assessmentId === assessment.id)) {
+      Alert.alert("Already added", "This assessment is already in the intervention plan.");
+      return;
+    }
+    const nextOutput = normalizeInterventionOutput(output, caseId);
+    nextOutput.recommendedAssessments = [
+      ...nextOutput.recommendedAssessments,
+      {
+        assessmentId: assessment.id,
+        title: assessment.title,
+        reason: "Teacher added manually from published class assessments.",
+      },
+    ];
+    nextOutput.suggestedAssignmentPayload.assessmentIds = nextOutput.recommendedAssessments.map((entry) => entry.assessmentId);
+    nextOutput.suggestedAssignmentPayload.assessmentAssignments = nextOutput.recommendedAssessments.map((entry) => ({
+      assessmentId: entry.assessmentId,
+      label: entry.title,
+      xpAwarded: parseXp(assessmentXp[entry.assessmentId], DEFAULT_ASSESSMENT_XP),
+    }));
+    setAssessmentXp((current) => ({ ...current, [assessment.id]: String(DEFAULT_ASSESSMENT_XP) }));
+    setOutput(nextOutput);
+  };
+
+  const handleRemoveLesson = (lessonId: string) => {
+    const nextOutput = normalizeInterventionOutput(output, caseId);
+    nextOutput.recommendedLessons = nextOutput.recommendedLessons.filter((lesson) => lesson.lessonId !== lessonId);
+    nextOutput.suggestedAssignmentPayload.lessonIds = nextOutput.recommendedLessons.map((lesson) => lesson.lessonId);
+    nextOutput.suggestedAssignmentPayload.lessonAssignments = nextOutput.recommendedLessons.map((lesson) => ({
+      lessonId: lesson.lessonId,
+      label: lesson.title,
+      xpAwarded: parseXp(lessonXp[lesson.lessonId], DEFAULT_LESSON_XP),
+    }));
+    setOutput(nextOutput);
+  };
+
+  const handleRemoveAssessment = (assessmentId: string) => {
+    const nextOutput = normalizeInterventionOutput(output, caseId);
+    nextOutput.recommendedAssessments = nextOutput.recommendedAssessments.filter(
+      (assessment) => assessment.assessmentId !== assessmentId,
+    );
+    nextOutput.suggestedAssignmentPayload.assessmentIds = nextOutput.recommendedAssessments.map(
+      (assessment) => assessment.assessmentId,
+    );
+    nextOutput.suggestedAssignmentPayload.assessmentAssignments = nextOutput.recommendedAssessments.map((assessment) => ({
+      assessmentId: assessment.assessmentId,
+      label: assessment.title,
+      xpAwarded: parseXp(assessmentXp[assessment.assessmentId], DEFAULT_ASSESSMENT_XP),
+    }));
+    setOutput(nextOutput);
+  };
+
+  const handleApproveGeneratedContent = async () => {
+    if (!generatedLessonDraft && !generatedGuidedAssessmentDraft) {
+      Alert.alert("No generated content", "There is no generated lesson or guided assessment draft to approve.");
+      return;
+    }
+    try {
+      setArtifactActionLoading(true);
+      const response = await lxpApi.approveGeneratedArtifacts(caseId, {
+        generatedLessonDraft: generatedLessonDraft
+          ? {
+              title: generatedLessonDraft.title,
+              summary: generatedLessonDraft.summary,
+              lessonBody: generatedLessonDraft.lessonBody,
+              weakConcepts: generatedLessonDraft.weakConcepts,
+              sourceLessonIds: generatedLessonDraft.sourceLessonIds,
+              sourceReferences: generatedLessonDraft.sourceReferences,
+            }
+          : null,
+        generatedGuidedAssessmentDraft: generatedGuidedAssessmentDraft
+          ? {
+              sourceAssessmentId: generatedGuidedAssessmentDraft.sourceAssessmentId,
+              title: generatedGuidedAssessmentDraft.title,
+              description: generatedGuidedAssessmentDraft.description,
+              weakConcepts: generatedGuidedAssessmentDraft.weakConcepts,
+              formativeSummary: generatedGuidedAssessmentDraft.formativeSummary,
+              sourceReferences: generatedGuidedAssessmentDraft.sourceReferences,
+              questions: generatedGuidedAssessmentDraft.questions.map((question) => ({
+                id: question.id,
+                type: question.type,
+                stem: question.stem,
+                explanation: question.explanation,
+                hint: question.hint,
+                weakConceptTag: question.weakConceptTag,
+                sourceQuestionId: question.sourceQuestionId,
+                options: question.options,
+              })),
+            }
+          : null,
+      });
+      setApprovedGeneratedContent(response);
+      await load();
+      Alert.alert("Generated content approved", "The generated remedial content is ready for assignment.");
+    } catch (error) {
+      Alert.alert("Unable to approve generated content", getErrorMessage(error));
+    } finally {
+      setArtifactActionLoading(false);
+    }
+  };
+
+  const handleRejectGeneratedContent = async () => {
+    try {
+      setArtifactActionLoading(true);
+      await lxpApi.rejectGeneratedArtifacts(caseId, {
+        generatedLessonDraft: generatedLessonDraft ?? null,
+        generatedGuidedAssessmentDraft: generatedGuidedAssessmentDraft
+          ? {
+              ...generatedGuidedAssessmentDraft,
+              questions: generatedGuidedAssessmentDraft.questions.map((question) => ({
+                ...question,
+                options: question.options,
+              })),
+            }
+          : null,
+      });
+      setApprovedGeneratedContent(null);
+      const nextOutput = normalizeInterventionOutput(output, caseId);
+      nextOutput.generatedLessonDraft = null;
+      nextOutput.generatedGuidedAssessmentDraft = null;
+      setOutput(nextOutput);
+      await load();
+      Alert.alert("Generated content rejected", "The generated draft was removed from the assignment workflow.");
+    } catch (error) {
+      Alert.alert("Unable to reject generated content", getErrorMessage(error));
+    } finally {
+      setArtifactActionLoading(false);
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!isCaseActive) {
+      Alert.alert("Activate first", "This intervention must be active before assigning a path.");
+      return;
+    }
+    if (hasStartedPath) {
+      Alert.alert("Path already started", "A student has already started this path, so it cannot be replaced from mobile.");
+      return;
+    }
+    if (!hasAssignableItems) {
+      Alert.alert("Nothing to assign", "Add at least one lesson, assessment, or approved generated artifact first.");
+      return;
+    }
+    if (needsGeneratedApproval) {
+      Alert.alert("Review generated content", "Approve or reject generated remedial drafts before assigning this intervention.");
+      return;
+    }
+
+    try {
+      setAssigning(true);
+      await lxpApi.assignIntervention(caseId, {
+        note: note.trim() || undefined,
+        lessonIds: visibleLessons.map((lesson) => lesson.lessonId),
+        assessmentIds: visibleAssessments.map((assessment) => assessment.assessmentId),
+        lessonAssignments: visibleLessons.map((lesson) => ({
+          lessonId: lesson.lessonId,
+          label: lesson.title,
+          xpAwarded: parseXp(lessonXp[lesson.lessonId], DEFAULT_LESSON_XP),
+        })),
+        assessmentAssignments: visibleAssessments.map((assessment) => ({
+          assessmentId: assessment.assessmentId,
+          label: assessment.title,
+          xpAwarded: parseXp(assessmentXp[assessment.assessmentId], DEFAULT_ASSESSMENT_XP),
+        })),
+      });
+      await load();
+      Alert.alert("Intervention assigned", "The student can now see the intervention path in Learner's Path.");
+      if (activeClassId) {
+        navigation.navigate("TeacherInterventions", { classId: activeClassId });
+      } else {
+        navigation.goBack();
+      }
+    } catch (error) {
+      Alert.alert("Unable to assign intervention", getErrorMessage(error));
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const studentName = detail?.student ? formatName(detail.student) : formatName(caseRecord?.student ?? undefined);
+  const sourceSubtitle = detail?.class?.subjectName || caseRecord?.className || "AI-assisted intervention workspace.";
+  const jobStatus = job?.status || (result?.job ? result.job.status : "None");
+  const manualLessonPool = manualLessons.filter((lesson) => !visibleLessons.some((entry) => entry.lessonId === lesson.id));
+  const manualAssessmentPool = manualAssessments.filter(
+    (assessment) => !visibleAssessments.some((entry) => entry.assessmentId === assessment.id),
+  );
+
   return (
     <TeacherScreen
-      title={detail?.student ? formatName(detail.student) : "Intervention detail"}
-      subtitle={caseRecord?.status || "Teacher intervention case workspace."}
+      title={studentName || "Intervention detail"}
+      subtitle={`${stringifyStatus(status)} | ${sourceSubtitle}`}
       icon="account-alert-outline"
       showBackButton
       onBackPress={() => navigation.goBack()}
-      refreshing={loading}
+      refreshing={loading || creatingJob || assigning || loadingResult}
       onRefresh={() => void load()}
     >
       <TeacherStats
         items={[
-          { label: "Trigger", value: caseRecord?.triggerScore ?? "N/A", tone: "red" },
-          { label: "Threshold", value: caseRecord?.thresholdApplied ?? "N/A", tone: "amber" },
-          { label: "Progress", value: `${detail?.progress?.completionPercent ?? 0}%`, tone: "green" },
+          { label: "Trigger", value: formatScoreValue(caseRecord?.triggerScore ?? detail?.triggerScore), tone: "red" },
+          { label: "Threshold", value: formatScoreValue(caseRecord?.thresholdApplied ?? detail?.thresholdApplied), tone: "amber" },
+          { label: "Progress", value: `${Math.round(completion.percent)}%`, tone: "green" },
+          { label: "AI Job", value: jobStatus, tone: isInterventionJobFailed(jobStatus) ? "red" : "purple" },
         ]}
       />
-      <TeacherPanel title="Case actions" subtitle="Mobile exposes the same detail action lane for activate/regenerate and class navigation.">
+
+      <TeacherPanel title="Workspace" subtitle="Plan with AI, review the generated path, then assign it when ready.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Activate" icon="play-circle-outline" tone="green" onPress={() => void runAction("activate")} />
-          <TeacherActionButton label="Regenerate path" icon="refresh" tone="amber" onPress={() => void runAction("regenerate")} />
-          <TeacherActionButton
-            label="Open class"
-            icon="google-classroom"
-            tone="blue"
-            disabled={!classId && !caseRecord?.classId}
-            onPress={() => navigation.navigate("TeacherClassDetail", { classId: classId || caseRecord?.classId || "", initialTab: "students" })}
-          />
+          {(["plan", "generating", "assign"] as InterventionWorkspaceTab[]).map((tab) => (
+            <TeacherChip key={tab} label={tab === "plan" ? "Plan creator" : tab === "generating" ? "Generating" : "Clean out & assign"} active={activeTab === tab} onPress={() => setActiveTab(tab)} />
+          ))}
         </View>
       </TeacherPanel>
-      <TeacherPanel title="Assigned path" subtitle="Teacher-visible lessons, assessments, and generated artifacts for this case.">
-        {detail?.assignments?.length ? (
-          detail.assignments.map((assignment, index) => (
-            <TeacherRow
-              key={assignment.assignmentId || assignment.id || `${index}`}
-              title={assignment.label || assignment.lesson?.title || assignment.assessment?.title || "Intervention checkpoint"}
-              subtitle={`${assignment.type || "checkpoint"} | ${assignment.status || "pending"} | XP ${assignment.xpAwarded ?? 0}`}
-            />
-          ))
-        ) : (
-          <TeacherEmpty title="No assigned path yet" subtitle="Use regenerate or web AI Plan when a full generated plan is needed." icon="playlist-plus" />
-        )}
-      </TeacherPanel>
-      <TeacherPanel title="Generated artifacts" subtitle="Review generated lesson or guided assessment artifact status.">
-        {detail?.generatedArtifacts?.length ? (
-          detail.generatedArtifacts.map((artifact, index) => (
-            <TeacherRow key={artifact.id || `${index}`} title={artifact.title || artifact.type || "Generated artifact"} subtitle={artifact.status || "pending"} />
-          ))
-        ) : (
-          <TeacherEmpty title="No generated artifacts" subtitle="Generated remedial content will appear here when present." icon="file-star-outline" />
-        )}
-      </TeacherPanel>
+
+      {statusWarning ? (
+        <TeacherPanel title="Needs attention" subtitle={statusWarning}>
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+            <TeacherActionButton label="Retry result load" icon="refresh" tone="amber" disabled={!readJobId(job)} onPress={() => void loadInterventionJobResult(readJobId(job))} />
+          </View>
+        </TeacherPanel>
+      ) : null}
+
+      {activeTab === "plan" ? (
+        <>
+          <TeacherPanel title="Plan creator" subtitle="Generate a web-parity AI intervention plan, activate the case, or jump back into the class.">
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <TeacherInlineField
+                label="Teacher note for AI"
+                value={note}
+                onChangeText={setNote}
+                multiline
+                placeholder="Example: Focus on factoring errors and short guided practice."
+              />
+              <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <TeacherActionButton label={creatingJob ? "Generating..." : hasExistingPath ? "Regenerate AI plan" : "Generate AI plan"} icon="robot-outline" tone="green" disabled={creatingJob || !hasCaseContext} onPress={handleGenerate} />
+                <TeacherActionButton label="Activate" icon="play-circle-outline" tone="blue" disabled={isCaseActive} onPress={() => void runAction("activate")} />
+                <TeacherActionButton label="Refresh" icon="refresh" tone="neutral" onPress={() => void load()} />
+                <TeacherActionButton
+                  label="Open class"
+                  icon="google-classroom"
+                  tone="purple"
+                  disabled={!activeClassId}
+                  onPress={() => navigation.navigate("TeacherClassDetail", { classId: activeClassId, initialTab: "students" })}
+                />
+              </View>
+            </View>
+          </TeacherPanel>
+
+          <TeacherPanel title="Class AI policy" subtitle={policyLoading ? "Loading class guardrails." : "Matches the web controls for AI mentor and source behavior."}>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <TeacherChip label={policy?.mentorExplainEnabled ? "Mentor replies on" : "Mentor replies off"} active={Boolean(policy?.mentorExplainEnabled)} onPress={() => void updatePolicy({ mentorExplainEnabled: !policy?.mentorExplainEnabled })} />
+                <TeacherChip label={policy?.strictGrounding ? "Strict grounding" : "Flexible grounding"} active={Boolean(policy?.strictGrounding)} onPress={() => void updatePolicy({ strictGrounding: !policy?.strictGrounding })} />
+                <TeacherChip label="Recommended only" active={policy?.sourceScope === "recommended_only"} onPress={() => void updatePolicy({ sourceScope: "recommended_only" })} />
+                <TeacherChip label="Class materials" active={policy?.sourceScope === "class_materials"} onPress={() => void updatePolicy({ sourceScope: "class_materials" })} />
+              </View>
+              <TeacherInlineField label="Max follow-up turns" value={policyCap} onChangeText={setPolicyCap} />
+              <View style={{ marginTop: 12 }}>
+                <TeacherActionButton
+                  label={policySaving ? "Saving policy..." : "Save policy"}
+                  icon="content-save-outline"
+                  tone="blue"
+                  disabled={policySaving || !activeClassId}
+                  onPress={() => void updatePolicy({ maxFollowUpTurns: parseXp(policyCap, policy?.maxFollowUpTurns ?? 3) })}
+                />
+              </View>
+            </View>
+          </TeacherPanel>
+
+          <TeacherPanel title="Intervention basis" subtitle="Signals copied from the web review area so the teacher knows why this plan exists.">
+            <TeacherRow title="Latest blended score" subtitle={`${formatScoreValue(detail?.latestSnapshot?.blendedScore)} vs threshold ${formatScoreValue(detail?.latestSnapshot?.thresholdApplied ?? caseRecord?.thresholdApplied)}`} />
+            <TeacherRow title="Completion" subtitle={`${completion.completed}/${completion.total} checkpoints completed`} />
+            {detail?.weakConcepts?.length ? (
+              detail.weakConcepts.slice(0, 5).map((concept, index) => (
+                <TeacherRow key={`${concept.concept}-${index}`} title={concept.concept || "Weak concept"} subtitle={`Mastery ${formatScoreValue(concept.masteryScore)} | Errors ${concept.errorCount ?? 0}`} />
+              ))
+            ) : (
+              <TeacherEmpty title="No weak concepts yet" subtitle="AI output will list weak concepts after generation." icon="lightbulb-alert-outline" />
+            )}
+          </TeacherPanel>
+
+          <TeacherPanel title="Add manual sources" subtitle={loadingManualSources ? "Loading class lessons and assessments." : "Add existing published class work to the intervention path."}>
+            {manualLessonPool.slice(0, 5).map((lesson) => (
+              <TeacherRow key={lesson.id} title={lesson.title} subtitle={stripRichText(lesson.description || "Published lesson")} onPress={() => handleAddManualLesson(lesson)} />
+            ))}
+            {manualAssessmentPool.slice(0, 5).map((assessment) => (
+              <TeacherRow key={assessment.id} title={assessment.title} subtitle={`${assessment.type} | ${assessment.totalPoints ?? 0} pts`} onPress={() => handleAddManualAssessment(assessment)} />
+            ))}
+            {!manualLessonPool.length && !manualAssessmentPool.length ? (
+              <TeacherEmpty title="No manual sources available" subtitle="Published class lessons and assessments that are not already selected will appear here." icon="playlist-plus" />
+            ) : null}
+          </TeacherPanel>
+        </>
+      ) : null}
+
+      {activeTab === "generating" ? (
+        <TeacherPanel title="AI generation" subtitle={job?.message || job?.errorMessage || "Generate a plan, then this panel will update live while the job runs."}>
+          <TeacherRow title="Status" subtitle={job?.status || "No active AI job"} />
+          <TeacherRow title="Progress" subtitle={`${job?.progressPercent ?? (isInterventionJobComplete(job?.status) ? 100 : 0)}%`} />
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <TeacherActionButton label="Generate plan" icon="robot-outline" tone="green" disabled={creatingJob} onPress={handleGenerate} />
+            <TeacherActionButton label={loadingResult ? "Loading result..." : "Load result"} icon="file-search-outline" tone="blue" disabled={!readJobId(job)} onPress={() => void loadInterventionJobResult(readJobId(job))} />
+            <TeacherActionButton label="Review plan" icon="clipboard-check-outline" tone="purple" disabled={!result?.result?.structuredOutput} onPress={() => setActiveTab("assign")} />
+          </View>
+        </TeacherPanel>
+      ) : null}
+
+      {activeTab === "assign" ? (
+        <>
+          <TeacherPanel title="AI summary" subtitle={output.aiSummary.summary}>
+            {output.weakConcepts.length ? (
+              output.weakConcepts.map((concept, index) => <TeacherRow key={`${concept}-${index}`} title={concept} subtitle="AI detected weak concept" />)
+            ) : (
+              <TeacherEmpty title="No AI weak concepts" subtitle="Generate a plan or add class sources manually." icon="brain" />
+            )}
+            {output.aiSummary.teacherActions.map((action, index) => (
+              <TeacherRow key={`teacher-action-${index}`} title={`Teacher action ${index + 1}`} subtitle={action} />
+            ))}
+          </TeacherPanel>
+
+          <TeacherPanel title="Generated remedial content" subtitle="Approve generated lesson or guided assessment drafts before assignment, just like the web page.">
+            {generatedLessonDraft ? (
+              <TeacherRow title={generatedLessonDraft.title} subtitle={stripRichText(generatedLessonDraft.summary || generatedLessonDraft.lessonBody).slice(0, 180)} />
+            ) : null}
+            {generatedGuidedAssessmentDraft ? (
+              <>
+                <TeacherRow title={generatedGuidedAssessmentDraft.title} subtitle={`${generatedGuidedAssessmentDraft.questions.length} guided questions`} />
+                {generatedGuidedAssessmentDraft.questions.slice(0, 3).map((question, index) => (
+                  <TeacherRow key={question.id || `${index}`} title={`Question ${index + 1}`} subtitle={stripRichText(question.stem)} />
+                ))}
+              </>
+            ) : null}
+            {!hasGeneratedDrafts && flatGeneratedArtifacts.length ? (
+              flatGeneratedArtifacts.map((artifact, index) => (
+                <TeacherRow key={artifact.id || `${index}`} title={artifact.title || artifact.type || "Generated artifact"} subtitle={artifact.status || "pending"} />
+              ))
+            ) : null}
+            {!hasGeneratedDrafts && !flatGeneratedArtifacts.length ? (
+              <TeacherEmpty title="No generated artifacts" subtitle="AI-generated remedial content will appear after a successful plan generation." icon="file-star-outline" />
+            ) : null}
+            {hasGeneratedDrafts ? (
+              <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <TeacherActionButton label="Approve generated" icon="check-decagram-outline" tone="green" disabled={artifactActionLoading} onPress={() => void handleApproveGeneratedContent()} />
+                <TeacherActionButton label="Reject generated" icon="close-octagon-outline" tone="red" disabled={artifactActionLoading} onPress={() => void handleRejectGeneratedContent()} />
+              </View>
+            ) : null}
+          </TeacherPanel>
+
+          <TeacherPanel title="Recommended lessons" subtitle="Adjust XP, open the lesson, or remove it before assigning.">
+            {visibleLessons.length ? (
+              visibleLessons.map((lesson) => (
+                <View key={lesson.lessonId} style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 14, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{lesson.title}</Text>
+                  <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.subtext }}>{lesson.reason}</Text>
+                  <TeacherInlineField label="XP awarded" value={lessonXp[lesson.lessonId] ?? String(DEFAULT_LESSON_XP)} onChangeText={(value) => setLessonXp((current) => ({ ...current, [lesson.lessonId]: value }))} />
+                  <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    <TeacherActionButton label="Open lesson" icon="book-open-page-variant-outline" tone="blue" onPress={() => navigation.navigate("TeacherLessonEditor", { lessonId: lesson.lessonId, classId: activeClassId })} />
+                    <TeacherActionButton label="Remove" icon="trash-can-outline" tone="red" onPress={() => handleRemoveLesson(lesson.lessonId)} />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <TeacherEmpty title="No lessons selected" subtitle="Generate an AI plan or add manual class lessons." icon="book-plus-outline" />
+            )}
+          </TeacherPanel>
+
+          <TeacherPanel title="Recommended assessments" subtitle="Adjust XP, open the assessment, or remove it before assigning.">
+            {visibleAssessments.length ? (
+              visibleAssessments.map((assessment) => (
+                <View key={assessment.assessmentId} style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingHorizontal: 14, paddingVertical: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{assessment.title}</Text>
+                  <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.subtext }}>{assessment.reason}</Text>
+                  <TeacherInlineField label="XP awarded" value={assessmentXp[assessment.assessmentId] ?? String(DEFAULT_ASSESSMENT_XP)} onChangeText={(value) => setAssessmentXp((current) => ({ ...current, [assessment.assessmentId]: value }))} />
+                  <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    <TeacherActionButton label="Open assessment" icon="clipboard-edit-outline" tone="blue" onPress={() => navigation.navigate("TeacherAssessmentEditor", { assessmentId: assessment.assessmentId, classId: activeClassId })} />
+                    <TeacherActionButton label="Remove" icon="trash-can-outline" tone="red" onPress={() => handleRemoveAssessment(assessment.assessmentId)} />
+                  </View>
+                </View>
+              ))
+            ) : (
+              <TeacherEmpty title="No assessments selected" subtitle="Generate an AI plan or add manual published assessments." icon="clipboard-plus-outline" />
+            )}
+          </TeacherPanel>
+
+          <TeacherPanel title="Assign intervention" subtitle={needsGeneratedApproval ? "Approve or reject generated drafts first." : hasStartedPath ? "This path has student progress and cannot be replaced." : "Assign the selected plan to the learner path."}>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              <TeacherActionButton label={assigning ? "Assigning..." : "Assign path"} icon="send-check-outline" tone="green" disabled={assignDisabled} onPress={() => void handleAssign()} />
+              <TeacherActionButton label="Regenerate backend path" icon="refresh" tone="amber" disabled={hasStartedPath} onPress={() => void runAction("regenerate")} />
+              <TeacherActionButton label="Back to planning" icon="arrow-left" tone="neutral" onPress={() => setActiveTab("plan")} />
+            </View>
+          </TeacherPanel>
+
+          <TeacherPanel title="Currently assigned path" subtitle="Existing student-facing checkpoints for this intervention case.">
+            {detail?.assignments?.length ? (
+              detail.assignments.map((assignment, index) => {
+                const generated = assignment.generatedLesson || (assignment.guidedAssessment as GuidedAssessmentContent | null | undefined);
+                return (
+                  <TeacherRow
+                    key={assignment.assignmentId || assignment.id || `${index}`}
+                    title={assignment.label || assignment.lesson?.title || assignment.assessment?.title || generated?.title || "Intervention checkpoint"}
+                    subtitle={`${assignment.type || "checkpoint"} | ${assignment.status || "pending"} | XP ${assignment.xpAwarded ?? 0}`}
+                  />
+                );
+              })
+            ) : (
+              <TeacherEmpty title="No assigned path yet" subtitle="Assign a reviewed AI or manual intervention path to publish it to the student." icon="playlist-plus" />
+            )}
+          </TeacherPanel>
+        </>
+      ) : null}
     </TeacherScreen>
   );
 }

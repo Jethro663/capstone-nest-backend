@@ -161,6 +161,50 @@ export interface TeacherPaginatedReportResponse<T> {
   csv?: string;
 }
 
+export interface GeneratedLessonContent {
+  id?: string;
+  title: string;
+  summary?: string | null;
+  lessonBody?: string | null;
+  weakConcepts?: string[];
+  sourceLessonIds?: string[];
+  sourceReferences?: Array<Record<string, unknown>>;
+  status?: "draft" | "approved" | "rejected" | string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+}
+
+export interface GuidedAssessmentQuestionOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
+
+export interface GuidedAssessmentQuestion {
+  id: string;
+  type: "multiple_choice" | "multiple_select" | "true_false" | "dropdown" | string;
+  stem: string;
+  explanation?: string | null;
+  hint?: string | null;
+  weakConceptTag?: string | null;
+  sourceQuestionId?: string | null;
+  options?: GuidedAssessmentQuestionOption[];
+}
+
+export interface GuidedAssessmentContent {
+  id?: string;
+  title: string;
+  description?: string | null;
+  weakConcepts?: string[];
+  sourceAssessmentId?: string | null;
+  sourceReferences?: Array<Record<string, unknown>>;
+  formativeSummary?: string | null;
+  questions?: GuidedAssessmentQuestion[];
+  status?: "draft" | "approved" | "rejected" | string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+}
+
 export interface TeacherInterventionCase {
   id?: string;
   caseId?: string;
@@ -181,9 +225,29 @@ export interface TeacherInterventionCase {
   openedAt?: string | null;
   closedAt?: string | null;
   aiPlanEligible?: boolean;
+  isCurrentlyAtRisk?: boolean;
+  latestBlendedScore?: number | null;
+  latestThreshold?: number | null;
+  totalCheckpoints?: number;
+  completedCheckpoints?: number;
+  completionPercent?: number;
+  progress?: {
+    completionPercent?: number;
+    completedCheckpoints?: number;
+    totalCheckpoints?: number;
+  } | null;
 }
 
 export interface TeacherInterventionCaseDetail {
+  id?: string;
+  classId?: string;
+  studentId?: string;
+  status?: string;
+  openedAt?: string | null;
+  closedAt?: string | null;
+  triggerScore?: number | null;
+  thresholdApplied?: number | null;
+  note?: string | null;
   case?: TeacherInterventionCase;
   student?: {
     id: string;
@@ -203,20 +267,91 @@ export interface TeacherInterventionCaseDetail {
     label?: string;
     status?: string;
     xpAwarded?: number;
-    lesson?: { id: string; title?: string | null } | null;
-    assessment?: { id: string; title?: string | null } | null;
+    isCompleted?: boolean;
+    completedAt?: string | null;
+    lesson?: { id: string; title?: string | null; description?: string | null; order?: number } | null;
+    assessment?: { id: string; title?: string | null; type?: string; description?: string | null; passingScore?: number | null; dueDate?: string | null } | null;
+    generatedLesson?: GeneratedLessonContent | null;
+    guidedAssessment?: GuidedAssessmentContent | null;
   }>;
-  generatedArtifacts?: Array<{
-    id?: string;
-    type?: string;
-    status?: string;
-    title?: string | null;
-  }>;
-  progress?: {
+  generatedArtifacts?:
+    | Array<{
+        id?: string;
+        type?: string;
+        status?: string;
+        title?: string | null;
+      }>
+    | {
+        generatedLesson?: GeneratedLessonContent | null;
+        guidedAssessment?: GuidedAssessmentContent | null;
+      }
+    | null;
+  completion?: {
     completionPercent?: number;
     completedCheckpoints?: number;
     totalCheckpoints?: number;
   };
+  progress?: {
+    completionPercent?: number;
+    completedCheckpoints?: number;
+    totalCheckpoints?: number;
+    xpTotal?: number;
+    starsTotal?: number;
+    streakDays?: number;
+    checkpointsCompleted?: number;
+    lastActivityAt?: string | null;
+  };
+  latestSnapshot?: {
+    assessmentAverage?: number | null;
+    classRecordAverage?: number | null;
+    blendedScore?: number | null;
+    thresholdApplied?: number | null;
+    isAtRisk?: boolean;
+    lastComputedAt?: string | null;
+  } | null;
+  weakConcepts?: Array<{
+    concept?: string;
+    masteryScore?: number;
+    evidenceCount?: number;
+    errorCount?: number;
+    updatedAt?: string | null;
+  }>;
+  recentRiskTransitions?: Array<{
+    id?: string;
+    previousIsAtRisk?: boolean | null;
+    currentIsAtRisk?: boolean;
+    blendedScore?: number | null;
+    thresholdApplied?: number | null;
+    triggerSource?: string;
+    createdAt?: string | null;
+  }>;
+  canRegenerate?: boolean;
+}
+
+export interface ApproveGeneratedRemedialPayload {
+  generatedLessonDraft?: {
+    title: string;
+    summary?: string | null;
+    lessonBody: string;
+    weakConcepts: string[];
+    sourceLessonIds: string[];
+    sourceReferences: Array<Record<string, unknown>>;
+  } | null;
+  generatedGuidedAssessmentDraft?: {
+    sourceAssessmentId?: string | null;
+    title: string;
+    description?: string | null;
+    weakConcepts: string[];
+    formativeSummary?: string | null;
+    sourceReferences: Array<Record<string, unknown>>;
+    questions: GuidedAssessmentQuestion[];
+  } | null;
+}
+
+export interface GeneratedArtifactApprovalResponse {
+  caseId?: string;
+  generatedLesson: GeneratedLessonContent | null;
+  guidedAssessment: GuidedAssessmentContent | null;
 }
 
 export interface TeacherInterventionQueueResponse {

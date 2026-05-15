@@ -103,6 +103,8 @@ export interface AiTutorAnswersResult {
 
 export interface AiGenerationJob {
   id: string;
+  jobId?: string;
+  jobType?: string;
   status: "queued" | "running" | "completed" | "failed" | "cancelled" | string;
   progressPercent?: number | null;
   message?: string | null;
@@ -153,4 +155,99 @@ export interface AiGenerationJobResult<TOutput> {
     outputType?: string;
     structuredOutput?: TOutput;
   } | null;
+}
+
+export type AiPolicySourceScope = "recommended_only" | "class_materials";
+
+export interface ClassAiPolicy {
+  classId: string;
+  mentorExplainEnabled: boolean;
+  maxFollowUpTurns: number;
+  sourceScope: AiPolicySourceScope;
+  strictGrounding: boolean;
+  updatedBy?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface UpdateClassAiPolicyDto {
+  mentorExplainEnabled?: boolean;
+  maxFollowUpTurns?: number;
+  sourceScope?: AiPolicySourceScope;
+  strictGrounding?: boolean;
+}
+
+export interface InterventionRecommendationDto {
+  note?: string;
+}
+
+export interface InterventionRecommendedLesson {
+  lessonId: string;
+  title: string;
+  reason: string;
+  chunkId?: string | null;
+  scoreBreakdown?: Record<string, number>;
+  sourceReference?: string | null;
+}
+
+export interface InterventionRecommendedAssessment {
+  assessmentId: string;
+  title: string;
+  reason: string;
+}
+
+export interface InterventionStructuredOutput {
+  caseId: string;
+  weakConcepts: string[];
+  recommendedLessons: InterventionRecommendedLesson[];
+  recommendedAssessments: InterventionRecommendedAssessment[];
+  aiSummary: {
+    summary: string;
+    teacherActions: string[];
+    studentFocus: string[];
+  };
+  evidencePacket?: {
+    weakConcepts?: string[];
+    recommendedLessons?: Array<Record<string, unknown>>;
+    recommendedAssessments?: Array<Record<string, unknown>>;
+    mistakeSample?: Array<Record<string, unknown>>;
+  };
+  suggestedAssignmentPayload: {
+    lessonIds: string[];
+    assessmentIds: string[];
+    lessonAssignments?: Array<{ lessonId: string; xpAwarded: number; label?: string }>;
+    assessmentAssignments?: Array<{ assessmentId: string; xpAwarded: number; label?: string }>;
+    note?: string;
+  };
+  generatedLessonDraft?: {
+    title: string;
+    summary?: string | null;
+    lessonBody: string;
+    weakConcepts: string[];
+    sourceLessonIds: string[];
+    sourceReferences: Array<Record<string, unknown>>;
+  } | null;
+  generatedGuidedAssessmentDraft?: {
+    sourceAssessmentId?: string | null;
+    title: string;
+    description?: string | null;
+    weakConcepts: string[];
+    formativeSummary?: string | null;
+    sourceReferences: Array<Record<string, unknown>>;
+    questions: Array<{
+      id: string;
+      type: "multiple_choice" | "multiple_select" | "true_false" | "dropdown" | string;
+      stem: string;
+      explanation: string;
+      hint?: string | null;
+      weakConceptTag?: string | null;
+      sourceQuestionId?: string | null;
+      options: Array<{ id: string; text: string; isCorrect: boolean }>;
+    }>;
+  } | null;
+  note?: string | null;
+  runtime?: {
+    outputId?: string;
+    caseId?: string;
+  };
 }

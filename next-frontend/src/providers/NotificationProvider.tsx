@@ -19,15 +19,183 @@ import {
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
 import { shouldSurfaceNotificationOnHydration } from '@/lib/notification-routing';
+import { assessmentService } from '@/services/assessment-service';
+import { classService } from '@/services/class-service';
 import { extractionService } from '@/services/extraction-service';
+import { lxpService } from '@/services/lxp-service';
+import { profileService } from '@/services/profile-service';
 import {
   normalizeNotification,
   notificationService,
 } from '@/services/notification-service';
+import type { Assessment } from '@/types/assessment';
+import type { ClassItem } from '@/types/class';
 import type { ExtractionStatus } from '@/types/extraction';
+import type { LxpPathSummary } from '@/types/lxp';
 import type { Notification } from '@/types/notification';
 
 const NOTIFICATION_POLL_MS = 5000;
+const STUDENT_REMINDER_POLL_MS = 60_000;
+const STUDENT_REMINDER_CLASS_LIMIT = 6;
+
+type PendingAssessmentReminder = {
+  assessment: Assessment;
+  classItem: ClassItem;
+  dueMs: number;
+};
+
+function normalizeText(value: unknown) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim().toLowerCase();
+}
+
+function isStudentRole(role: string | null | undefined) {
+  return normalizeText(role).includes('student');
+}
+
+function reminderDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getClassLabel(classItem: ClassItem) {
+  return classItem.subjectName || classItem.subjectCode || classItem.name || classItem.className || 'your class';
+}
+
+function getAssessmentDueMs(assessment: Assessment) {
+  if (!assessment.dueDate) return Number.MAX_SAFE_INTEGER;
+  const dueMs = Date.parse(assessment.dueDate);
+  return Number.isFinite(dueMs) ? dueMs : Number.MAX_SAFE_INTEGER;
+}
+
+function isPublishedPendingAssessment(assessment: Assessment, submittedAssessmentIds: Set<string>) {
+  return Boolean(assessment.id) && assessment.isPublished !== false && !submittedAssessmentIds.has(assessment.id);
+}
+
+function getSubmittedAssessmentIds(history: unknown) {
+  const rows = Array.isArray(history) ? history : [];
+  return new Set(
+    rows
+      .filter((entry) => {
+        const item = entry as { assessmentId?: unknown; isSubmitted?: unknown; submittedAt?: unknown };
+        return Boolean(item.assessmentId) && (item.isSubmitted === true || Boolean(item.submittedAt));
+      })
+      .map((entry) => String((entry as { assessmentId: unknown }).assessmentId)),
+  );
+}
+
+async function buildStudentPendingTaskReminder(studentId: string): Promise<Notification | null> {
+  const [classesRes, historyRes] = await Promise.all([
+    classService.getByStudent(studentId, 'active').catch(() => classService.getByStudent(studentId, 'all')),
+    profileService
+      .getAssessmentHistory({ page: 1, limit: 300, submission: 'submitted' })
+      .catch(() => null),
+  ]);
+
+  const classRows = Array.isArray(classesRes.data) ? classesRes.data : [];
+  if (classRows.length === 0) return null;
+
+  const submittedAssessmentIds = getSubmittedAssessmentIds(historyRes?.data);
+  const batches = await Promise.all(
+    classRows.slice(0, STUDENT_REMINDER_CLASS_LIMIT).map(async (classItem) => {
+      try {
+        const assessmentsRes = await assessmentService.getByClass(classItem.id, { status: 'all', limit: 50 });
+        return assessmentsRes.data
+          .filter((assessment) => isPublishedPendingAssessment(assessment, submittedAssessmentIds))
+          .map<PendingAssessmentReminder>((assessment) => ({
+            assessment,
+            classItem,
+            dueMs: getAssessmentDueMs(assessment),
+          }));
+      } catch {
+        return [] as PendingAssessmentReminder[];
+      }
+    }),
+  );
+
+  const pending = batches
+    .flat()
+    .sort((left, right) => left.dueMs - right.dueMs || left.assessment.title.localeCompare(right.assessment.title));
+
+  if (pending.length === 0) return null;
+
+  const first = pending[0];
+  const classLabel = getClassLabel(first.classItem);
+  const countLabel = pending.length === 1 ? '1 pending task' : String(pending.length) + ' pending tasks';
+  const message =
+    pending.length === 1
+      ? first.assessment.title + ' in ' + classLabel + ' is ready. Tap to open your assessments.'
+      : first.assessment.title + ' is next, plus ' + String(pending.length - 1) + ' more task(s). Tap to open your assessments.';
+
+  return {
+    id:
+      'student-reminder:pending-task:' +
+      studentId +
+      ':' +
+      reminderDateKey() +
+      ':' +
+      first.assessment.id +
+      ':' +
+      String(pending.length),
+    userId: studentId,
+    type: 'student_pending_task_reminder',
+    title: countLabel + ' waiting',
+    body: message,
+    message,
+    isRead: false,
+    referenceId: first.assessment.id,
+    metadata: { classId: first.classItem.id, reminderKind: 'pending-task' },
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function getPendingPathCount(path: LxpPathSummary) {
+  const explicitPending = Number(path.counts?.pending ?? 0);
+  if (explicitPending > 0) return explicitPending;
+
+  const total = Number(path.progress?.totalCheckpoints ?? path.counts?.total ?? 0);
+  const completed = Number(path.progress?.completedCheckpoints ?? path.counts?.completed ?? 0);
+  return Math.max(0, total - completed);
+}
+
+async function buildStudentPendingInterventionReminder(studentId: string): Promise<Notification | null> {
+  const eligibilityRes = await lxpService.getEligibility();
+  const data = eligibilityRes.data;
+  const paths = Array.isArray(data.paths) ? data.paths : [];
+  const pendingPaths = paths
+    .map((path) => ({ path, pendingCount: getPendingPathCount(path) }))
+    .filter(({ path, pendingCount }) => path.status !== 'completed' && pendingCount > 0);
+
+  if (pendingPaths.length === 0) return null;
+
+  const first = pendingPaths[0];
+  const totalPending = pendingPaths.reduce((sum, item) => sum + item.pendingCount, 0);
+  const subjectLabel = first.path.class?.subjectName || first.path.class?.subjectCode || 'Learners Path';
+  const message =
+    totalPending === 1
+      ? subjectLabel + ' has 1 pending intervention step. JA can guide you through it now.'
+      : subjectLabel + ' has ' + String(first.pendingCount) + ' pending step(s), with ' + String(totalPending) + ' total across your intervention paths.';
+
+  return {
+    id:
+      'student-reminder:pending-intervention:' +
+      studentId +
+      ':' +
+      reminderDateKey() +
+      ':' +
+      first.path.classId +
+      ':' +
+      String(totalPending),
+    userId: studentId,
+    type: 'student_pending_intervention_reminder',
+    title: 'Learners Path needs you',
+    body: message,
+    message,
+    isRead: false,
+    referenceId: first.path.interventionCaseId || first.path.classId,
+    metadata: { classId: first.path.classId, reminderKind: 'pending-intervention' },
+    createdAt: new Date().toISOString(),
+  };
+}
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -63,6 +231,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const subscribersRef = useRef(new Set<(notification: Notification) => void>());
   const seenNotificationIdsRef = useRef(new Set<string>());
   const hasHydratedSeenIdsRef = useRef(false);
+  const studentReminderInFlightRef = useRef(false);
 
   const subscribe = useCallback((listener: (notification: Notification) => void) => {
     subscribersRef.current.add(listener);
@@ -256,6 +425,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     );
   }, [role, sessionUserId]);
 
+  const syncStudentReminderNotifications = useCallback(async () => {
+    if (!sessionUserId || !isStudentRole(role) || studentReminderInFlightRef.current) return;
+
+    studentReminderInFlightRef.current = true;
+    try {
+      const [taskReminder, interventionReminder] = await Promise.all([
+        buildStudentPendingTaskReminder(sessionUserId).catch(() => null),
+        buildStudentPendingInterventionReminder(sessionUserId).catch(() => null),
+      ]);
+
+      if (taskReminder) {
+        publishIncomingNotification(taskReminder, { showToast: true });
+      }
+      if (interventionReminder) {
+        publishIncomingNotification(interventionReminder, { showToast: true });
+      }
+    } catch {
+      // Student reminders are helpful but should never block live backend notifications.
+    } finally {
+      studentReminderInFlightRef.current = false;
+    }
+  }, [publishIncomingNotification, role, sessionUserId]);
+
   useEffect(() => {
     if (sessionUserId) {
       void syncNotifications(false);
@@ -287,6 +479,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, 5000);
     return () => window.clearInterval(interval);
   }, [role, sessionUserId, syncTrackedExtractionNotifications]);
+
+  useEffect(() => {
+    if (!sessionUserId || !isStudentRole(role)) return;
+
+    void syncStudentReminderNotifications();
+    const interval = window.setInterval(() => {
+      void syncStudentReminderNotifications();
+    }, STUDENT_REMINDER_POLL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [role, sessionUserId, syncStudentReminderNotifications]);
 
   // WebSocket connection
   useEffect(() => {
