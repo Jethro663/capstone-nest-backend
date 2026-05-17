@@ -377,7 +377,7 @@ export const useJaAskThread = (threadId?: string) =>
   });
 
 
-export const useTeacherSections = (status: "all" | "active" | "archived" | "hidden" = "all") =>
+export const useTeacherSections = (status: "all" | "active" | "archived" | "hidden" = "active") =>
   useQuery({
     queryKey: queryKeys.teacherSections(status),
     queryFn: () => sectionsApi.getMy(status),

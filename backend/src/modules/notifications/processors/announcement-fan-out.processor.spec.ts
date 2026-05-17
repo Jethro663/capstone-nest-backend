@@ -35,10 +35,16 @@ describe('AnnouncementFanOutProcessor', () => {
 
     mockDb = {
       query: {
+        classes: { findFirst: jest.fn() },
         enrollments: { findMany: jest.fn() },
       },
     };
 
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
+    });
     mockNotificationsService = {
       createBulk: jest.fn().mockResolvedValue(undefined),
     };
@@ -150,6 +156,20 @@ describe('AnnouncementFanOutProcessor', () => {
   // ──────────────────────────────────────────────────────────────────────────
   // Edge cases
   // ──────────────────────────────────────────────────────────────────────────
+
+  it('skips fan-out when the class is archived', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      isActive: false,
+      section: { id: 'section-1', isActive: true },
+    });
+
+    await processor.process(makeJob());
+
+    expect(mockDb.query.enrollments.findMany).not.toHaveBeenCalled();
+    expect(mockNotificationsService.createBulk).not.toHaveBeenCalled();
+    expect(mockGateway.emitToUser).not.toHaveBeenCalled();
+  });
 
   it('skips bulk insert and WS emit when no students are enrolled', async () => {
     mockDb.query.enrollments.findMany.mockResolvedValue([]);

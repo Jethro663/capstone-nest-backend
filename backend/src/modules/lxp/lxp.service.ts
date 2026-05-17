@@ -1403,9 +1403,16 @@ export class LxpService {
   private async assertTeacherClassAccess(classId: string, user: UserContext) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
-      columns: { id: true, teacherId: true },
+      columns: { id: true, teacherId: true, isActive: true },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
     });
-    if (!cls) throw new NotFoundException(`Class "${classId}" not found`);
+    if (!cls || !cls.isActive || cls.section?.isActive === false) {
+      throw new NotFoundException(`Class "${classId}" not found`);
+    }
     if (!this.isAdmin(user.roles) && cls.teacherId !== user.userId) {
       throw new ForbiddenException('Access denied');
     }
@@ -1419,9 +1426,19 @@ export class LxpService {
         eq(enrollments.status, 'enrolled'),
       ),
       columns: { id: true },
+      with: {
+        class: {
+          columns: { id: true, isActive: true },
+          with: {
+            section: {
+              columns: { id: true, isActive: true },
+            },
+          },
+        },
+      },
     });
-    if (!enrollment) {
-      throw new ForbiddenException('Student is not enrolled in this class');
+    if (!enrollment || !enrollment.class?.isActive || enrollment.class.section?.isActive === false) {
+      throw new ForbiddenException('Student is not enrolled in an active class');
     }
   }
 
@@ -1850,6 +1867,7 @@ export class LxpService {
             id: true,
             subjectName: true,
             subjectCode: true,
+            isActive: true,
           },
           with: {
             section: {
@@ -1857,6 +1875,7 @@ export class LxpService {
                 id: true,
                 name: true,
                 gradeLevel: true,
+                isActive: true,
               },
             },
           },
@@ -1864,7 +1883,11 @@ export class LxpService {
       },
     });
 
-    const classIds = studentEnrollments
+    const activeStudentEnrollments = studentEnrollments.filter(
+      (entry) => entry.classId && entry.class?.isActive && entry.class.section?.isActive !== false,
+    );
+
+    const classIds = activeStudentEnrollments
       .map((entry) => entry.classId)
       .filter((id): id is string => !!id);
 
@@ -1945,7 +1968,7 @@ export class LxpService {
 
     const paths = selectedCases
       .map((entry) => {
-        const enrollment = studentEnrollments.find(
+        const enrollment = activeStudentEnrollments.find(
           (row) => row.classId === entry.classId,
         );
         if (!enrollment?.class) return null;
@@ -2032,6 +2055,7 @@ export class LxpService {
             id: true,
             subjectName: true,
             subjectCode: true,
+            isActive: true,
           },
           with: {
             section: {
@@ -2039,6 +2063,7 @@ export class LxpService {
                 id: true,
                 name: true,
                 gradeLevel: true,
+                isActive: true,
               },
             },
           },
@@ -2047,7 +2072,7 @@ export class LxpService {
     });
 
     const enrolledClasses = studentEnrollments
-      .filter((entry) => entry.classId && entry.class)
+      .filter((entry) => entry.classId && entry.class?.isActive && entry.class.section?.isActive !== false)
       .map((entry) => ({
         classId: entry.classId as string,
         class: entry.class!,
@@ -2723,6 +2748,8 @@ export class LxpService {
             classId: true,
             status: true,
             note: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
       },
@@ -3288,6 +3315,76 @@ export class LxpService {
     };
   }
 
+  private async buildGuidedAssessmentScoreComparison(params: {
+    studentId: string;
+    sourceAssessmentId: string | null | undefined;
+    interventionOpenedAt?: Date | string | null;
+    triggerScore?: string | number | null;
+    currentAttemptId: string;
+    currentScorePercent: number;
+    currentSubmittedAt?: Date | string | null;
+  }) {
+    const sourceAssessmentId = params.sourceAssessmentId ?? null;
+    let baselineAttempt:
+      | { id: string; score: number | null; submittedAt: Date | null }
+      | undefined;
+
+    if (sourceAssessmentId) {
+      const conditions: SQL<unknown>[] = [
+        eq(assessmentAttempts.studentId, params.studentId),
+        eq(assessmentAttempts.assessmentId, sourceAssessmentId),
+        eq(assessmentAttempts.isSubmitted, true),
+      ];
+      const openedAt = params.interventionOpenedAt
+        ? new Date(params.interventionOpenedAt)
+        : null;
+      if (openedAt && !Number.isNaN(openedAt.getTime())) {
+        conditions.push(lte(assessmentAttempts.submittedAt, openedAt));
+      }
+
+      baselineAttempt = await this.db.query.assessmentAttempts.findFirst({
+        where: and(...conditions),
+        columns: {
+          id: true,
+          score: true,
+          submittedAt: true,
+        },
+        orderBy: [
+          desc(assessmentAttempts.submittedAt),
+          desc(assessmentAttempts.attemptNumber),
+        ],
+      });
+    }
+
+    const baselineScorePercent =
+      this.toNumber(baselineAttempt?.score) ?? this.toNumber(params.triggerScore);
+    const currentScorePercent = this.toNumber(params.currentScorePercent) ?? 0;
+    const deltaScorePercent =
+      baselineScorePercent === null
+        ? null
+        : Math.round((currentScorePercent - baselineScorePercent) * 1000) / 1000;
+    const trend =
+      deltaScorePercent === null
+        ? 'no_baseline'
+        : deltaScorePercent > 0
+          ? 'improved'
+          : deltaScorePercent < 0
+            ? 'declined'
+            : 'unchanged';
+
+    return {
+      sourceAssessmentId,
+      baselineAttemptId: baselineAttempt?.id ?? null,
+      baselineScorePercent,
+      baselineSubmittedAt: baselineAttempt?.submittedAt ?? null,
+      currentAttemptId: params.currentAttemptId,
+      currentScorePercent,
+      currentSubmittedAt: params.currentSubmittedAt ?? null,
+      deltaScorePercent,
+      trend,
+    };
+  }
+
   async submitGuidedAssessment(
     studentId: string,
     classId: string,
@@ -3314,6 +3411,8 @@ export class LxpService {
             classId: true,
             status: true,
             note: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
         generatedGuidedAssessment: true,
@@ -3407,6 +3506,16 @@ export class LxpService {
       },
     });
 
+    const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
+      studentId,
+      sourceAssessmentId: assignment.generatedGuidedAssessment.sourceAssessmentId,
+      interventionOpenedAt: assignment.interventionCase.openedAt,
+      triggerScore: assignment.interventionCase.triggerScore,
+      currentAttemptId: updatedAttempt.id,
+      currentScorePercent: scorePercent,
+      currentSubmittedAt: updatedAttempt.submittedAt,
+    });
+
     return {
       assignmentId,
       attemptId: updatedAttempt.id,
@@ -3414,6 +3523,7 @@ export class LxpService {
       correctCount,
       totalQuestions,
       formativeSummary,
+      scoreComparison,
       interventionCompletedByStudent:
         completionResult.interventionCompletedByStudent,
     };
@@ -3434,6 +3544,8 @@ export class LxpService {
             id: true,
             studentId: true,
             classId: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
         generatedGuidedAssessment: true,
@@ -3465,17 +3577,29 @@ export class LxpService {
       );
     }
 
+    const scorePercent = attempt.score ?? 0;
+    const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
+      studentId,
+      sourceAssessmentId: assignment.generatedGuidedAssessment?.sourceAssessmentId,
+      interventionOpenedAt: assignment.interventionCase.openedAt,
+      triggerScore: assignment.interventionCase.triggerScore,
+      currentAttemptId: attempt.id,
+      currentScorePercent: scorePercent,
+      currentSubmittedAt: attempt.submittedAt,
+    });
+
     return {
       assignmentId,
       attemptId: attempt.id,
       guidedAssessment: this.serializeGeneratedGuidedAssessment(
         assignment.generatedGuidedAssessment,
       ),
-      scorePercent: attempt.score ?? 0,
+      scorePercent,
       correctCount: attempt.correctCount ?? 0,
       responses: attempt.responses ?? [],
       hintedQuestionIds: attempt.hintUsage ?? [],
       formativeSummary: attempt.formativeSummary ?? null,
+      scoreComparison,
       submittedAt: attempt.submittedAt,
     };
   }
@@ -4188,23 +4312,29 @@ export class LxpService {
   async getTeacherPendingInterventionCount(user: UserContext) {
     const classRows = await this.db.query.classes.findMany({
       where: this.isAdmin(user.roles)
-        ? undefined
-        : eq(classes.teacherId, user.userId),
+        ? eq(classes.isActive, true)
+        : and(eq(classes.teacherId, user.userId), eq(classes.isActive, true)),
       columns: {
         id: true,
         subjectName: true,
         subjectCode: true,
       },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
     });
+    const activeClassRows = classRows.filter((row) => row.section?.isActive !== false);
 
-    if (classRows.length === 0) {
+    if (activeClassRows.length === 0) {
       return {
         pendingCount: 0,
         classBreakdown: [],
       };
     }
 
-    const classIds = classRows.map((row) => row.id);
+    const classIds = activeClassRows.map((row) => row.id);
     const pendingRows = await this.db.query.interventionCases.findMany({
       where: and(
         inArray(interventionCases.classId, classIds),
@@ -4226,7 +4356,7 @@ export class LxpService {
 
     return {
       pendingCount: pendingRows.length,
-      classBreakdown: classRows
+      classBreakdown: activeClassRows
         .map((cls) => ({
           classId: cls.id,
           subjectName: cls.subjectName,

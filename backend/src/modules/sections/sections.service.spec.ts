@@ -1068,7 +1068,7 @@ describe('SectionsService', () => {
         ADMIN_USER.roles,
       );
 
-      // archiveSection calls tx.update twice: enrollments drop + section archive
+      // archiveSection calls tx.update twice: linked classes inactive + section archive.
       expect(tx.update).toHaveBeenCalledTimes(2);
 
       // Second update (sections table) sets isActive to false
@@ -1113,7 +1113,9 @@ describe('SectionsService', () => {
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({ isActive: false }),
       );
-      mockDb.update.mockReturnValue(makeUpdateChain());
+      const txUpdateChain = makeUpdateChain();
+      const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
       await service.restoreSection(
         SECTION_ID,
@@ -1121,7 +1123,7 @@ describe('SectionsService', () => {
         ADMIN_USER.roles,
       );
 
-      expect(mockDb.update).toHaveBeenCalledTimes(1);
+      expect(tx.update).toHaveBeenCalledTimes(2);
       expect(mockAuditService.log).toHaveBeenCalledWith({
         actorId: ADMIN_USER.userId,
         action: 'section.restored',

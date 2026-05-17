@@ -676,6 +676,18 @@ export interface GuidedAssessmentSessionResponse {
   attempt: GuidedAssessmentAttemptState;
 }
 
+export interface GuidedAssessmentScoreComparison {
+  sourceAssessmentId: string | null;
+  baselineAttemptId: string | null;
+  baselineScorePercent: number | null;
+  baselineSubmittedAt?: string | null;
+  currentAttemptId: string;
+  currentScorePercent: number;
+  currentSubmittedAt?: string | null;
+  deltaScorePercent: number | null;
+  trend: 'improved' | 'declined' | 'unchanged' | 'no_baseline';
+}
+
 export interface GuidedAssessmentResultResponse {
   assignmentId: string;
   attemptId: string;
@@ -691,6 +703,7 @@ export interface GuidedAssessmentResultResponse {
   }>;
   hintedQuestionIds: string[];
   formativeSummary: Record<string, unknown> | null;
+  scoreComparison?: GuidedAssessmentScoreComparison | null;
   submittedAt?: string | null;
 }
 

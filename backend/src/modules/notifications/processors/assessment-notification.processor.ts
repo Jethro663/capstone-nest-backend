@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
-import { assessmentAttempts, enrollments } from '../../../drizzle/schema';
+import { assessmentAttempts, classes, enrollments } from '../../../drizzle/schema';
 import {
   ASSESSMENT_ASSIGNED_JOB,
   ASSESSMENT_DUE_REMINDER_JOB,
@@ -114,6 +114,23 @@ export class AssessmentNotificationProcessor extends WorkerHost {
   }
 
   private async getEnrolledStudentIds(classId: string): Promise<string[]> {
+    const classRecord = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, isActive: true },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
+    });
+
+    if (!classRecord?.isActive || classRecord.section?.isActive === false) {
+      this.logger.warn(
+        "[assessment-notifications] Class " + classId + " is archived or inactive. Skipping.",
+      );
+      return [];
+    }
+
     const enrolledRows = await this.db.query.enrollments.findMany({
       where: and(
         eq(enrollments.classId, classId),

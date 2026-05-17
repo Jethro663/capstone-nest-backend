@@ -73,7 +73,7 @@ export interface StudentInterventionAlertsResponse {
 
 export interface LxpCheckpoint {
   id: string;
-  type: "lesson_review" | "assessment_retry";
+  type: "lesson_review" | "assessment_retry" | "guided_assessment" | "generated_lesson_review";
   label: string;
   order: number;
   isCompleted: boolean;
@@ -155,7 +155,7 @@ export interface LxpOverviewResponse {
   }>;
   recommendedAction: {
     assignmentId: string;
-    type: "lesson_review" | "assessment_retry";
+    type: "lesson_review" | "assessment_retry" | "guided_assessment" | "generated_lesson_review";
     title: string;
     subtitle: string;
     xpAwarded: number;

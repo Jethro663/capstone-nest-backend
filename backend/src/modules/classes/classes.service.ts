@@ -489,6 +489,10 @@ export class ClassesService {
         throw new ForbiddenException('You do not have access to this class');
       }
 
+      if (!isAdmin && (!classRecord.isActive || classRecord.section?.isActive === false)) {
+        throw new ForbiddenException('This class is archived and temporarily inactive.');
+      }
+
       if (isTeacher && !isAdmin && classRecord.teacherId !== requesterId) {
         throw new ForbiddenException('You can only access your own classes');
       }
@@ -1515,7 +1519,7 @@ export class ClassesService {
   private applyClassVisibilityFilter(
     classList: any[],
     hiddenClassIds: Set<string>,
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     return classList
       .map((classRecord) => ({
@@ -1523,10 +1527,11 @@ export class ClassesService {
         isHidden: hiddenClassIds.has(classRecord.id),
       }))
       .filter((classRecord) => {
+        const isArchived = !classRecord.isActive || classRecord.section?.isActive === false;
         if (status === 'hidden') return classRecord.isHidden;
         if (classRecord.isHidden) return false;
-        if (status === 'active') return classRecord.isActive;
-        if (status === 'archived') return !classRecord.isActive;
+        if (status === 'active') return !isArchived;
+        if (status === 'archived') return isArchived;
         return true;
       });
   }
@@ -1736,7 +1741,7 @@ export class ClassesService {
     teacherId: string,
     requesterId?: string,
     requesterRoles?: string[],
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     if (
       requesterId &&
@@ -1835,7 +1840,7 @@ export class ClassesService {
     studentId: string,
     requesterId?: string,
     requesterRoles?: string[],
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     if (
       requesterId &&
@@ -1850,7 +1855,10 @@ export class ClassesService {
 
     // First, get all enrollments for this student
     const studentEnrollments = await this.db.query.enrollments.findMany({
-      where: eq(enrollments.studentId, studentId),
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
       columns: { classId: true },
     });
 

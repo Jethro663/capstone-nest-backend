@@ -31,10 +31,16 @@ describe('AssessmentNotificationProcessor', () => {
 
     mockDb = {
       query: {
+        classes: { findFirst: jest.fn() },
         enrollments: { findMany: jest.fn() },
         assessmentAttempts: { findMany: jest.fn() },
       },
     };
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
+    });
     notificationsService = {
       createBulkDeduped: jest.fn((inputs) => Promise.resolve(inputs)),
     };
@@ -73,6 +79,20 @@ describe('AssessmentNotificationProcessor', () => {
       }),
     ]);
     expect(gateway.emitToUser).toHaveBeenCalledTimes(2);
+  });
+
+  it('skips assessment notifications when the class is archived', async () => {
+    mockDb.query.classes.findFirst.mockResolvedValue({
+      id: CLASS_ID,
+      isActive: false,
+      section: { id: 'section-1', isActive: true },
+    });
+
+    await processor.process(makeJob('assessment-assigned'));
+
+    expect(mockDb.query.enrollments.findMany).not.toHaveBeenCalled();
+    expect(notificationsService.createBulkDeduped).not.toHaveBeenCalled();
+    expect(gateway.emitToUser).not.toHaveBeenCalled();
   });
 
   it('sends due reminders only to enrolled students without submitted attempts', async () => {

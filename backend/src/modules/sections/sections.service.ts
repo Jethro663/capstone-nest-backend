@@ -1192,14 +1192,9 @@ export class SectionsService {
 
     await this.db.transaction(async (tx) => {
       await tx
-        .update(enrollments)
-        .set({ status: 'dropped' })
-        .where(
-          and(
-            eq(enrollments.sectionId, id),
-            eq(enrollments.status, 'enrolled'),
-          ),
-        );
+        .update(classes)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(classes.sectionId, id));
 
       await tx
         .update(sections)
@@ -1226,10 +1221,17 @@ export class SectionsService {
   ) {
     const section = await this.findById(id);
 
-    await this.db
-      .update(sections)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(sections.id, id));
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(sections)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(sections.id, id));
+
+      await tx
+        .update(classes)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(classes.sectionId, id));
+    });
 
     await this.auditService.log({
       actorId: actorId ?? section.adviserId ?? 'system',
@@ -1566,7 +1568,7 @@ export class SectionsService {
       })
       .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(eq(classes.sectionId, sectionId));
+      .where(and(eq(classes.sectionId, sectionId), eq(classes.isActive, true)));
 
     const requiredClassRecordCount = recordRows.length;
     const finalizedClassRecordCount = recordRows.filter((record) =>
@@ -1694,7 +1696,6 @@ export class SectionsService {
         and(
           inArray(enrollments.sectionId, sectionIds),
           eq(enrollments.status, 'enrolled'),
-          isNull(enrollments.classId),
         ),
       );
 
@@ -1717,7 +1718,7 @@ export class SectionsService {
         eq(classRecords.id, classRecordFinalGrades.classRecordId),
       )
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(inArray(classes.sectionId, sectionIds))
+      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)))
       .groupBy(classes.sectionId, classRecordFinalGrades.studentId);
 
     const classRecordCountRows = await this.db
@@ -1732,7 +1733,7 @@ export class SectionsService {
       })
       .from(classes)
       .leftJoin(classRecords, eq(classRecords.classId, classes.id))
-      .where(inArray(classes.sectionId, sectionIds))
+      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)))
       .groupBy(classes.sectionId);
 
     const classRecordCountBySectionId = new Map<
@@ -1758,6 +1759,7 @@ export class SectionsService {
     }
 
     const normalizedSearch = filters?.search?.trim().toLowerCase() ?? '';
+    const seenRosterKeys = new Set<string>();
     const studentsBySectionId = new Map<
       string,
       Array<{
@@ -1783,6 +1785,10 @@ export class SectionsService {
     >();
 
     for (const row of rosterRows) {
+      const rosterKey = `${row.sectionId}:${row.studentId}`;
+      if (seenRosterKeys.has(rosterKey)) continue;
+      seenRosterKeys.add(rosterKey);
+
       const finalGradeKey = `${row.sectionId}:${row.studentId}`;
       const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
       const classRecordCounts = classRecordCountBySectionId.get(row.sectionId) ?? {
@@ -2154,7 +2160,7 @@ export class SectionsService {
       })
       .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(eq(classes.sectionId, section.id));
+      .where(and(eq(classes.sectionId, section.id), eq(classes.isActive, true)));
 
     if (recordRows.length === 0) {
       throw new BadRequestException(

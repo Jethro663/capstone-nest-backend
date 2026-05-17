@@ -172,7 +172,7 @@ export class ClassesController {
         statusQuery === 'archived' ||
         statusQuery === 'hidden'
         ? statusQuery
-        : 'all',
+        : 'active',
     );
 
     return {
@@ -235,7 +235,7 @@ export class ClassesController {
         statusQuery === 'archived' ||
         statusQuery === 'hidden'
         ? statusQuery
-        : 'all',
+        : 'active',
     );
 
     return {

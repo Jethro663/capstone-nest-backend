@@ -79,6 +79,23 @@ function isGuidedAnswerCorrect(
   return correctIds.includes(answer);
 }
 
+function formatComparisonScore(value: number | null | undefined) {
+  return typeof value === "number" ? value.toFixed(1) + "%" : "No baseline";
+}
+
+function formatComparisonDelta(value: number | null | undefined) {
+  if (typeof value !== "number") return "Baseline unavailable";
+  const sign = value > 0 ? "+" : "";
+  return sign + value.toFixed(1) + " pts";
+}
+
+function getComparisonCopy(trend: string | undefined) {
+  if (trend === "improved") return "Improved after intervention";
+  if (trend === "declined") return "Needs another guided review";
+  if (trend === "unchanged") return "Steady score";
+  return "Baseline quiz not found";
+}
+
 export default function StudentGuidedAssessmentPage() {
   const params = useParams();
   const router = useRouter();
@@ -364,6 +381,43 @@ export default function StudentGuidedAssessmentPage() {
               Score: <strong>{result.scorePercent}%</strong> (
               {result.correctCount} correct)
             </p>
+            {result.scoreComparison ? (
+              <section className="rounded-3xl border border-[#b9d9ff] bg-gradient-to-br from-[#f2f8ff] via-white to-[#eaf7ff] p-4 shadow-[0_18px_38px_rgba(56,116,203,0.13)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#2870c8]">
+                      Before vs after
+                    </p>
+                    <h2 className="mt-1 text-lg font-black text-[#102744]">
+                      {getComparisonCopy(result.scoreComparison.trend)}
+                    </h2>
+                  </div>
+                  <StudentStatusChip
+                    tone={result.scoreComparison.trend === "improved" ? "success" : "warning"}
+                  >
+                    {formatComparisonDelta(result.scoreComparison.deltaScorePercent)}
+                  </StudentStatusChip>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#d8e7f8] bg-white/80 p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6b7d96]">
+                      Previous quiz score
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-[#30415d]">
+                      {formatComparisonScore(result.scoreComparison.baselineScorePercent)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[#bfefd7] bg-[#f1fff7] p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#198554]">
+                      Current AI quiz score
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-[#0f7a45]">
+                      {formatComparisonScore(result.scoreComparison.currentScorePercent)}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
             {result.formativeSummary &&
             typeof result.formativeSummary === "object" ? (
               <div className="rounded-2xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm text-[#30415d]">

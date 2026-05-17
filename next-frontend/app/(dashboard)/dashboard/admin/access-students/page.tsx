@@ -63,6 +63,25 @@ function getGradeStatusClass(student: { gradeStatus?: string; isFinalized?: bool
   return 'admin-status-pill admin-status-pill--suspended';
 }
 
+function getFinalGradeIndicator(student: { gradeStatus?: string; isFinalized?: boolean; isPassing?: boolean; isFailing?: boolean }) {
+  if (!student.isFinalized || student.gradeStatus === 'pending') {
+    return {
+      label: 'Syncing class records',
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
+    };
+  }
+  if (student.isPassing || student.gradeStatus === 'passing') {
+    return {
+      label: 'Passing grade',
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    };
+  }
+  return {
+    label: 'Failing grade',
+    className: 'border-rose-200 bg-rose-50 text-rose-700',
+  };
+}
+
 export default function AdminAccessStudentsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -182,7 +201,7 @@ export default function AdminAccessStudentsPage() {
     return 'Finalize grades first, then process students based on passing or failing status.';
   }, [failingSelectedCount, passingSelectedCount, selectedStudents.length, unfinalizedSelectedCount]);
 
-  const fetchOverview = useCallback(async (mode: 'initial' | 'refresh') => {
+  const fetchOverview = useCallback(async (mode: 'initial' | 'refresh' | 'sync') => {
     try {
       if (mode === 'initial') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
@@ -199,10 +218,12 @@ export default function AdminAccessStudentsPage() {
       setTotalSections(response.totalSections ?? 0);
       setTotalStudents(response.totalStudents ?? 0);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load Access Students data'));
-      setData([]);
-      setTotalSections(0);
-      setTotalStudents(0);
+      if (mode !== 'sync') {
+        toast.error(getApiErrorMessage(error, 'Failed to load Access Students data'));
+        setData([]);
+        setTotalSections(0);
+        setTotalStudents(0);
+      }
     } finally {
       if (mode === 'initial') setLoading(false);
       if (mode === 'refresh') setRefreshing(false);
@@ -211,6 +232,14 @@ export default function AdminAccessStudentsPage() {
 
   useEffect(() => {
     void fetchOverview('initial');
+  }, [fetchOverview]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void fetchOverview('sync');
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
   }, [fetchOverview]);
 
   useEffect(() => {
@@ -651,6 +680,7 @@ export default function AdminAccessStudentsPage() {
                         <TableBody>
                           {visibleStudents.map((student) => {
                             const checked = selectedStudentIds.has(student.id);
+                            const finalGradeIndicator = getFinalGradeIndicator(student);
                             return (
                               <TableRow key={student.id} className="border-t border-[var(--admin-outline)]">
                                 <TableCell>
@@ -667,7 +697,14 @@ export default function AdminAccessStudentsPage() {
                                 <TableCell className="text-[#6f83a3]">{student.email}</TableCell>
                                 <TableCell className="text-[#6f83a3]">{student.lrn ?? 'N/A'}</TableCell>
                                 <TableCell className="font-black text-[#334b6d]">
-                                  {formatFinalGrade(student.finalGradePercentage ?? student.finalGrade)}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>{formatFinalGrade(student.finalGradePercentage ?? student.finalGrade)}</span>
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.08em] ${finalGradeIndicator.className}`}
+                                    >
+                                      {finalGradeIndicator.label}
+                                    </span>
+                                  </div>
                                   <p className="mt-1 text-[0.68rem] font-semibold text-[#8ea0bc]">
                                     {student.finalizationLabel}
                                   </p>

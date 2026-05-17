@@ -151,7 +151,7 @@ export default function TeacherSectionsPage() {
         return;
       }
 
-      const classesRes = await classService.getByTeacher(user.id, 'all').catch(() => ({ data: [] }));
+      const classesRes = await classService.getByTeacher(user.id, 'active').catch(() => ({ data: [] }));
       const teacherClasses = classesRes.data ?? [];
 
       setClassLabelById(

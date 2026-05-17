@@ -3,7 +3,7 @@ import { Job } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
-import { enrollments } from '../../../drizzle/schema';
+import { classes, enrollments } from '../../../drizzle/schema';
 import {
   NotificationsService,
   CreateNotificationInput,
@@ -39,6 +39,23 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
     this.logger.log(
       `[fan-out] Processing announcement ${announcementId} for class ${classId}`,
     );
+
+    const classRecord = await this.db.query.classes.findFirst({
+      where: eq(classes.id, classId),
+      columns: { id: true, isActive: true },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
+    });
+
+    if (!classRecord?.isActive || classRecord.section?.isActive === false) {
+      this.logger.warn(
+        "[fan-out] Class " + classId + " is archived or inactive. Skipping.",
+      );
+      return;
+    }
 
     // 1. Fetch all actively enrolled students for this class
     const enrolledRows = await this.db.query.enrollments.findMany({

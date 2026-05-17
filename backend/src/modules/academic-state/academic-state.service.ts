@@ -158,12 +158,22 @@ export class AcademicStateService {
         and(
           inArray(enrollments.sectionId, sectionIds),
           eq(enrollments.status, 'enrolled'),
-          isNull(enrollments.classId),
         ),
       );
 
+    const uniqueActiveSectionEnrollments = Array.from(
+      new Map(
+        activeSectionEnrollments
+          .filter((enrollment) => enrollment.sectionId)
+          .map((enrollment) => [
+            enrollment.sectionId + ':' + enrollment.studentId,
+            enrollment,
+          ]),
+      ).values(),
+    );
+
     const activeStudentIds = new Set(
-      activeSectionEnrollments.map((enrollment) => enrollment.studentId),
+      uniqueActiveSectionEnrollments.map((enrollment) => enrollment.studentId),
     );
 
     if (activeStudentIds.size === 0) {
@@ -178,7 +188,7 @@ export class AcademicStateService {
       })
       .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(inArray(classes.sectionId, sectionIds));
+      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)));
 
     const recordCountsBySectionId = new Map<
       string,
@@ -208,7 +218,7 @@ export class AcademicStateService {
         eq(classRecords.id, classRecordFinalGrades.classRecordId),
       )
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(inArray(classes.sectionId, sectionIds));
+      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)));
 
     const finalGradeRecordIdsBySectionStudent = new Map<string, Set<string>>();
     for (const row of finalGradeRows) {
@@ -219,7 +229,7 @@ export class AcademicStateService {
     }
 
     const missingFinalizedGradeStudentIds = new Set<string>();
-    for (const enrollment of activeSectionEnrollments) {
+    for (const enrollment of uniqueActiveSectionEnrollments) {
       const sectionId = enrollment.sectionId;
       if (!sectionId) continue;
 

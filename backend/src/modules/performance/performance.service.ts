@@ -157,10 +157,15 @@ export class PerformanceService {
   ): Promise<void> {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
-      columns: { id: true, teacherId: true },
+      columns: { id: true, teacherId: true, isActive: true },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
     });
 
-    if (!cls) {
+    if (!cls || !cls.isActive || cls.section?.isActive === false) {
       throw new NotFoundException(`Class "${classId}" not found`);
     }
 
