@@ -1986,6 +1986,24 @@ export class SectionsService {
     const targetSchoolYear =
       query.schoolYear ?? this.getNextSchoolYear(fromSection.schoolYear);
 
+    const targetSchoolYearRows = await this.db.query.sections.findMany({
+      where: and(
+        eq(sections.isActive, true),
+        eq(sections.gradeLevel, targetGradeLevel),
+      ),
+      columns: {
+        schoolYear: true,
+      },
+      orderBy: (table, { asc }) => [asc(table.schoolYear)],
+    });
+
+    const availableSchoolYears = Array.from(
+      new Set([
+        targetSchoolYear,
+        ...targetSchoolYearRows.map((section) => section.schoolYear),
+      ]),
+    ).sort((a, b) => a.localeCompare(b));
+
     const targetSections = await this.db.query.sections.findMany({
       where: and(
         eq(sections.isActive, true),
@@ -2008,6 +2026,7 @@ export class SectionsService {
       fromSection,
       targetGradeLevel,
       targetSchoolYear,
+      availableSchoolYears,
       sections: targetSections,
     };
   }

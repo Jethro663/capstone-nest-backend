@@ -20,7 +20,7 @@ function buildMockDb() {
   return {
     query: {
       classes: { findFirst: jest.fn() },
-      assessments: { findFirst: jest.fn() },
+      assessments: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentResponses: { findMany: jest.fn() },
       assessmentAttempts: { findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
@@ -28,6 +28,7 @@ function buildMockDb() {
       aiGenerationOutputs: { findMany: jest.fn() },
       interventionCases: { findFirst: jest.fn(), findMany: jest.fn() },
       interventionAssignments: { findMany: jest.fn() },
+      generatedGuidedAssessmentAttempts: { findMany: jest.fn() },
       performanceSnapshots: { findFirst: jest.fn(), findMany: jest.fn() },
       performanceLogs: { findMany: jest.fn() },
       enrollments: { findMany: jest.fn() },
@@ -322,6 +323,8 @@ describe('PerformanceService', () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
     });
     db.query.enrollments.findMany.mockResolvedValue([
       {
@@ -378,6 +381,8 @@ describe('PerformanceService', () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
     });
     db.query.enrollments.findMany.mockResolvedValue([
       {
@@ -473,6 +478,8 @@ describe('PerformanceService', () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-99',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
     });
 
     await expect(
@@ -480,11 +487,29 @@ describe('PerformanceService', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('getInterventionQuizComparison should return before-vs-after quiz scores for intervention retries', async () => {
+  it('getInterventionQuizComparison should compare pre-intervention assessment averages with AI quiz averages', async () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
     });
+    db.query.assessments.findMany.mockResolvedValue([
+      {
+        id: 'assessment-1',
+        title: 'Fractions Quiz',
+        type: 'quiz',
+        classRecordCategory: 'written_work',
+        createdAt: new Date('2026-04-01T08:00:00Z'),
+      },
+      {
+        id: 'assessment-2',
+        title: 'Performance Task 1',
+        type: 'assignment',
+        classRecordCategory: 'performance_task',
+        createdAt: new Date('2026-04-05T08:00:00Z'),
+      },
+    ]);
     db.query.interventionCases.findMany.mockResolvedValue([
       {
         id: 'case-1',
@@ -499,35 +524,56 @@ describe('PerformanceService', () => {
         },
       },
     ]);
-    db.query.interventionAssignments.findMany.mockResolvedValue([
-      {
-        id: 'assignment-1',
-        caseId: 'case-1',
-        assessmentId: 'assessment-1',
-        createdAt: new Date('2026-05-01T08:05:00Z'),
-        assessment: {
-          id: 'assessment-1',
-          title: 'Fractions Quiz',
-          type: 'quiz',
-        },
-      },
-    ]);
     db.query.assessmentAttempts.findMany.mockResolvedValue([
       {
-        id: 'attempt-after',
+        id: 'attempt-before-2',
         studentId: 'student-1',
-        assessmentId: 'assessment-1',
-        score: 78,
-        submittedAt: new Date('2026-05-03T09:00:00Z'),
-        attemptNumber: 2,
+        assessmentId: 'assessment-2',
+        score: 64,
+        submittedAt: new Date('2026-04-29T09:00:00Z'),
+        attemptNumber: 1,
       },
       {
-        id: 'attempt-before',
+        id: 'attempt-before-1',
         studentId: 'student-1',
         assessmentId: 'assessment-1',
         score: 54,
         submittedAt: new Date('2026-04-28T09:00:00Z'),
         attemptNumber: 1,
+      },
+    ]);
+    db.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'guided-attempt-1',
+        caseId: 'case-1',
+        studentId: 'student-1',
+        assignmentId: 'assignment-guided-1',
+        guidedAssessmentId: 'guided-1',
+        score: 78,
+        submittedAt: new Date('2026-05-03T09:00:00Z'),
+        totalQuestions: 5,
+        correctCount: 4,
+        guidedAssessment: {
+          id: 'guided-1',
+          title: 'Fractions Recovery Quiz',
+          sourceAssessmentId: 'assessment-1',
+        },
+      },
+      {
+        id: 'guided-attempt-2',
+        caseId: 'case-1',
+        studentId: 'student-1',
+        assignmentId: 'assignment-guided-2',
+        guidedAssessmentId: 'guided-2',
+        score: 82,
+        submittedAt: new Date('2026-05-04T09:00:00Z'),
+        totalQuestions: 5,
+        correctCount: 4,
+        guidedAssessment: {
+          id: 'guided-2',
+          title: 'Mixed Recovery Quiz',
+          sourceAssessmentId: null,
+        },
       },
     ]);
 
@@ -541,15 +587,46 @@ describe('PerformanceService', () => {
     expect(result.count).toBe(1);
     expect(result.improvedCount).toBe(1);
     expect(result.awaitingRetryCount).toBe(0);
+    expect(result.filterOptions).toEqual([
+      expect.objectContaining({ id: 'all', label: 'All assessments' }),
+      expect.objectContaining({
+        id: 'assessment-1',
+        label: 'Fractions Quiz',
+        classRecordCategory: 'written_work',
+      }),
+      expect.objectContaining({
+        id: 'assessment-2',
+        label: 'Performance Task 1',
+        classRecordCategory: 'performance_task',
+      }),
+    ]);
     expect(result.comparisons[0]).toMatchObject({
       caseId: 'case-1',
       studentId: 'student-1',
+      assessmentId: 'all',
+      assessmentTitle: 'All assessments',
+      comparisonScope: 'class_average',
+      beforeAttemptId: null,
+      beforeScorePercent: 59,
+      beforeSampleSize: 2,
+      afterAttemptId: null,
+      afterScorePercent: 80,
+      afterSampleSize: 2,
+      deltaScorePercent: 21,
+      trend: 'improved',
+    });
+    expect(
+      result.comparisons.find((entry) => entry.filterId === 'assessment-1'),
+    ).toMatchObject({
       assessmentId: 'assessment-1',
       assessmentTitle: 'Fractions Quiz',
-      beforeAttemptId: 'attempt-before',
+      comparisonScope: 'assessment',
+      beforeAttemptId: 'attempt-before-1',
       beforeScorePercent: 54,
-      afterAttemptId: 'attempt-after',
+      beforeSampleSize: 1,
+      afterAttemptId: 'guided-attempt-1',
       afterScorePercent: 78,
+      afterSampleSize: 1,
       deltaScorePercent: 24,
       trend: 'improved',
     });
@@ -611,6 +688,8 @@ describe('PerformanceService', () => {
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
       teacherId: 'teacher-1',
+      isActive: true,
+      section: { id: 'section-1', isActive: true },
     });
     db.query.performanceLogs.findMany.mockResolvedValue([
       {

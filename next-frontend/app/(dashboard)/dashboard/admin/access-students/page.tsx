@@ -31,6 +31,12 @@ import {
 
 type TransferMode = 'promote' | 'retain';
 
+function sortSchoolYears(years: string[]) {
+  return Array.from(new Set(years.filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 function formatStudentName(student: {
   firstName: string | null;
   middleName: string | null;
@@ -103,6 +109,7 @@ export default function AdminAccessStudentsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [targetSchoolYear, setTargetSchoolYear] = useState('');
+  const [targetSchoolYearOptions, setTargetSchoolYearOptions] = useState<string[]>([]);
   const [targetSections, setTargetSections] = useState<
     Array<{
       id: string;
@@ -315,6 +322,39 @@ export default function AdminAccessStudentsPage() {
     });
   };
 
+  const loadTargetSections = async (mode: TransferMode, schoolYear?: string) => {
+    if (!selectedSection) return false;
+
+    setTargetLoading(true);
+    setTargetSectionId('');
+    setTargetSections([]);
+
+    try {
+      const response = await sectionService.getAccessStudentsTargetSections({
+        fromSectionId: selectedSection.id,
+        mode,
+        schoolYear,
+      });
+      const options = response.data.sections ?? [];
+      const selectedYear = response.data.targetSchoolYear ?? schoolYear ?? '';
+      const yearOptions = sortSchoolYears([
+        selectedYear,
+        ...(response.data.availableSchoolYears ?? []),
+      ]);
+
+      setTargetSections(options);
+      setTargetSchoolYear(selectedYear);
+      setTargetSchoolYearOptions(yearOptions);
+      setTargetSectionId(options[0]?.id ?? '');
+      return true;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load target sections'));
+      return false;
+    } finally {
+      setTargetLoading(false);
+    }
+  };
+
   const openTransferDialog = async (mode: TransferMode) => {
     if (!selectedSection) {
       toast.error('Select a section first.');
@@ -335,26 +375,11 @@ export default function AdminAccessStudentsPage() {
 
     setDialogMode(mode);
     setDialogOpen(true);
-    setTargetLoading(true);
-    setTargetSectionId('');
-    setTargetSections([]);
     setTargetSchoolYear('');
+    setTargetSchoolYearOptions([]);
 
-    try {
-      const response = await sectionService.getAccessStudentsTargetSections({
-        fromSectionId: selectedSection.id,
-        mode,
-      });
-      const options = response.data.sections ?? [];
-      setTargetSections(options);
-      setTargetSchoolYear(response.data.targetSchoolYear ?? '');
-      setTargetSectionId(options[0]?.id ?? '');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load target sections'));
-      setDialogOpen(false);
-    } finally {
-      setTargetLoading(false);
-    }
+    const loaded = await loadTargetSections(mode);
+    if (!loaded) setDialogOpen(false);
   };
 
   const submitTransfer = async () => {
@@ -752,7 +777,24 @@ export default function AdminAccessStudentsPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-black">Target School Year</Label>
-                <Input value={targetSchoolYear} readOnly className="admin-input" />
+                <select
+                  value={targetSchoolYear}
+                  onChange={(event) => {
+                    const nextSchoolYear = event.target.value;
+                    setTargetSchoolYear(nextSchoolYear);
+                    void loadTargetSections(dialogMode, nextSchoolYear);
+                  }}
+                  className="admin-select h-11 w-full rounded-xl px-3 text-sm font-semibold text-[#24364f]"
+                >
+                  {targetSchoolYearOptions.map((schoolYear) => (
+                    <option key={schoolYear} value={schoolYear}>
+                      {schoolYear}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs font-semibold text-[var(--admin-text-muted)]">
+                  Sections below update based on the selected school year.
+                </p>
               </div>
 
               <div className="space-y-2">

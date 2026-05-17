@@ -1393,6 +1393,43 @@ describe('SectionsService', () => {
   });
 
   // =========================================================================
+  // getAccessStudentsTargetSections
+  // =========================================================================
+
+  describe('getAccessStudentsTargetSections', () => {
+    it('returns selectable school years and filters target sections by the selected year', async () => {
+      const targetSection = makeSection({
+        id: 'target-section-uuid',
+        name: 'Bonifacio',
+        gradeLevel: '8',
+        schoolYear: '2027-2028',
+      });
+
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ gradeLevel: '7', schoolYear: '2025-2026' }),
+      );
+      mockDb.query.sections.findMany
+        .mockResolvedValueOnce([
+          { schoolYear: '2026-2027' },
+          { schoolYear: '2027-2028' },
+        ])
+        .mockResolvedValueOnce([targetSection]);
+
+      const result = await service.getAccessStudentsTargetSections({
+        fromSectionId: SECTION_ID,
+        mode: 'promote',
+        schoolYear: '2027-2028',
+      });
+
+      expect(result.targetGradeLevel).toBe('8');
+      expect(result.targetSchoolYear).toBe('2027-2028');
+      expect(result.availableSchoolYears).toEqual(['2026-2027', '2027-2028']);
+      expect(result.sections).toEqual([targetSection]);
+      expect(mockDb.query.sections.findMany).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // =========================================================================
   // verifyAdviserHasTeacherRole (via createSection / updateSection)
   // =========================================================================
 

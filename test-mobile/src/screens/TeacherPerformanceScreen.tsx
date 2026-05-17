@@ -57,11 +57,31 @@ function trendColor(trend: string | undefined) {
   }
 }
 
+function formatSourceLabel(value: string | null | undefined) {
+  if (!value) return "";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatFilterLabel(filter: {
+  id: string;
+  label: string;
+  assessmentType?: string | null;
+  classRecordCategory?: string | null;
+}) {
+  if (filter.id === "all") return filter.label;
+  const category = formatSourceLabel(filter.classRecordCategory ?? filter.assessmentType);
+  return category ? `${filter.label} - ${category}` : filter.label;
+}
+
 export function TeacherPerformanceScreen({ navigation }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [selectedComparisonFilterId, setSelectedComparisonFilterId] = useState<string>("all");
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.length) {
@@ -80,30 +100,64 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
 
   const atRiskStudents = atRiskQuery.data?.students ?? [];
   const comparisonRows = comparisonQuery.data?.comparisons ?? [];
+  const comparisonFilters = comparisonQuery.data?.filterOptions?.length
+    ? comparisonQuery.data.filterOptions
+    : [
+        {
+          id: "all",
+          label: "All assessments",
+          assessmentId: null,
+          assessmentTitle: null,
+          assessmentType: null,
+          classRecordCategory: null,
+        },
+      ];
+  const filteredComparisonRows = useMemo(
+    () =>
+      comparisonRows.filter(
+        (row) => (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
+      ),
+    [comparisonRows, selectedComparisonFilterId],
+  );
+  const filteredComparisonCounts = useMemo(
+    () => ({
+      improved: filteredComparisonRows.filter((row) => row.trend === "improved").length,
+      declined: filteredComparisonRows.filter((row) => row.trend === "declined").length,
+      unchanged: filteredComparisonRows.filter((row) => row.trend === "unchanged").length,
+      awaiting: filteredComparisonRows.filter((row) => row.trend === "awaiting_retry").length,
+    }),
+    [filteredComparisonRows],
+  );
   const latestComparisonByStudent = useMemo(() => {
     const map = new Map<string, (typeof comparisonRows)[number]>();
 
-    comparisonRows.forEach((row) => {
-      const current = map.get(row.studentId);
-      if (!current) {
-        map.set(row.studentId, row);
-        return;
-      }
+    comparisonRows
+      .filter((row) => (row.comparisonScope ?? "class_average") === "class_average" || row.filterId === "all")
+      .forEach((row) => {
+        const current = map.get(row.studentId);
+        if (!current) {
+          map.set(row.studentId, row);
+          return;
+        }
 
-      const currentAfter = current.afterSubmittedAt
-        ? new Date(current.afterSubmittedAt).getTime()
-        : 0;
-      const nextAfter = row.afterSubmittedAt
-        ? new Date(row.afterSubmittedAt).getTime()
-        : 0;
+        const currentAfter = current.afterSubmittedAt
+          ? new Date(current.afterSubmittedAt).getTime()
+          : 0;
+        const nextAfter = row.afterSubmittedAt
+          ? new Date(row.afterSubmittedAt).getTime()
+          : 0;
 
-      if (nextAfter > currentAfter) {
-        map.set(row.studentId, row);
-      }
-    });
+        if (nextAfter > currentAfter) {
+          map.set(row.studentId, row);
+        }
+      });
 
     return map;
   }, [comparisonRows]);
+
+  useEffect(() => {
+    setSelectedComparisonFilterId("all");
+  }, [selectedClassId]);
 
   return (
     <TeacherScreen
@@ -185,7 +239,7 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
               <TeacherRow
                 key={`${entry.studentId || index}`}
                 title={name}
-                subtitle={`Blended: ${entry.blendedScore ?? "N/A"} | Threshold: ${entry.thresholdApplied ?? "N/A"} | Before: ${toPercent(comparison?.beforeScorePercent)} | After: ${toPercent(comparison?.afterScorePercent)} | Delta: ${toDelta(comparison?.deltaScorePercent)}`}
+                subtitle={`Blended: ${entry.blendedScore ?? "N/A"} | Threshold: ${entry.thresholdApplied ?? "N/A"} | Before avg: ${toPercent(comparison?.beforeScorePercent)} | After AI avg: ${toPercent(comparison?.afterScorePercent)} | Delta: ${toDelta(comparison?.deltaScorePercent)}`}
                 right={
                   comparison ? (
                     <View
@@ -213,41 +267,70 @@ export function TeacherPerformanceScreen({ navigation }: Props) {
       </TeacherPanel>
 
       <TeacherPanel
-        title="Intervention quiz comparison"
-        subtitle="Before and after score on the same quiz for intervention retry checkpoints."
+        title="Intervention progress comparison"
+        subtitle="Before uses class assessment averages; after uses completed AI remedial quiz averages."
       >
         {comparisonRows.length ? (
-          comparisonRows.map((row) => {
-            const studentName =
-              [row.student?.firstName, row.student?.lastName].filter(Boolean).join(" ").trim() || row.studentId;
-            return (
-              <TeacherRow
-                key={`${row.caseId}-${row.assignmentId}-${row.assessmentId}`}
-                title={`${studentName} - ${row.assessmentTitle}`}
-                subtitle={`Before: ${toPercent(row.beforeScorePercent)} | After: ${toPercent(row.afterScorePercent)} | Delta: ${toDelta(row.deltaScorePercent)}`}
-                right={
-                  <View
-                    style={{
-                      borderRadius: 999,
-                      borderWidth: 1,
-                      borderColor: teacherTheme.border,
-                      backgroundColor: teacherTheme.active,
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: trendColor(row.trend) }}>
-                      {trendLabel(row.trend)}
-                    </Text>
-                  </View>
-                }
+          <>
+            <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {comparisonFilters.map((filter) => (
+                <TeacherChip
+                  key={filter.id}
+                  label={formatFilterLabel(filter)}
+                  active={selectedComparisonFilterId === filter.id}
+                  onPress={() => setSelectedComparisonFilterId(filter.id)}
+                />
+              ))}
+            </View>
+            <TeacherStats
+              items={[
+                { label: "Improved", value: filteredComparisonCounts.improved, tone: "green" },
+                { label: "Declined", value: filteredComparisonCounts.declined, tone: "red" },
+                { label: "Unchanged", value: filteredComparisonCounts.unchanged, tone: "blue" },
+                { label: "Awaiting AI", value: filteredComparisonCounts.awaiting, tone: "amber" },
+              ]}
+            />
+            {filteredComparisonRows.length ? (
+              filteredComparisonRows.map((row) => {
+                const studentName =
+                  [row.student?.firstName, row.student?.lastName].filter(Boolean).join(" ").trim() ||
+                  row.studentId;
+                return (
+                  <TeacherRow
+                    key={`${row.caseId}-${row.assignmentId}-${row.assessmentId}`}
+                    title={`${studentName} - ${row.assessmentTitle}`}
+                    subtitle={`Before avg: ${toPercent(row.beforeScorePercent)} (${row.beforeSampleSize} assessment${row.beforeSampleSize === 1 ? "" : "s"}) | After AI avg: ${toPercent(row.afterScorePercent)} (${row.afterSampleSize} AI quiz${row.afterSampleSize === 1 ? "" : "zes"}) | Delta: ${toDelta(row.deltaScorePercent)}`}
+                    right={
+                      <View
+                        style={{
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: teacherTheme.border,
+                          backgroundColor: teacherTheme.active,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: "700", color: trendColor(row.trend) }}>
+                          {trendLabel(row.trend)}
+                        </Text>
+                      </View>
+                    }
+                  />
+                );
+              })
+            ) : (
+              <TeacherEmpty
+                title="No rows for this filter"
+                subtitle="Try All assessments or another quiz/performance-task filter."
+                icon="filter-outline"
               />
-            );
-          })
+            )}
+          </>
         ) : (
           <TeacherEmpty
-            title="No quiz retries yet"
-            subtitle="Retry results will appear here after students complete intervention quiz checkpoints."
+            title="No intervention quiz data yet"
+            subtitle="Before averages appear after class assessments, and after averages appear once students submit AI remedial quizzes."
             icon="chart-timeline-variant"
           />
         )}

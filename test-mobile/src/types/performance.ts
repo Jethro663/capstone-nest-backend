@@ -70,6 +70,17 @@ export type InterventionQuizTrend =
   | "unchanged"
   | "awaiting_retry";
 
+export type TeacherInterventionComparisonScope = "class_average" | "assessment";
+
+export interface TeacherInterventionComparisonFilterOption {
+  id: string;
+  label: string;
+  assessmentId: string | null;
+  assessmentTitle: string | null;
+  assessmentType: string | null;
+  classRecordCategory: string | null;
+}
+
 export interface TeacherInterventionQuizComparisonRow {
   caseId: string;
   caseStatus: "pending" | "active" | "completed" | "dismissed";
@@ -84,12 +95,16 @@ export interface TeacherInterventionQuizComparisonRow {
   assignmentId: string;
   assessmentId: string;
   assessmentTitle: string;
+  comparisonScope: TeacherInterventionComparisonScope;
+  filterId: string;
   beforeAttemptId: string | null;
   beforeScorePercent: number | null;
   beforeSubmittedAt: string | Date | null;
+  beforeSampleSize: number;
   afterAttemptId: string | null;
   afterScorePercent: number | null;
   afterSubmittedAt: string | Date | null;
+  afterSampleSize: number;
   deltaScorePercent: number | null;
   trend: InterventionQuizTrend;
 }
@@ -101,5 +116,6 @@ export interface TeacherInterventionQuizComparisonResponse {
   declinedCount: number;
   unchangedCount: number;
   awaitingRetryCount: number;
+  filterOptions: TeacherInterventionComparisonFilterOption[];
   comparisons: TeacherInterventionQuizComparisonRow[];
 }

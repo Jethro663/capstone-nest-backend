@@ -228,6 +228,7 @@ export interface AccessStudentsTargetSectionsResponse {
     };
     targetGradeLevel: string;
     targetSchoolYear: string;
+    availableSchoolYears: string[];
     sections: Array<{
       id: string;
       name: string;

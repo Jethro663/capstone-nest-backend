@@ -73,11 +73,13 @@ export const performanceApi = {
       declinedCount: 0,
       unchangedCount: 0,
       awaitingRetryCount: 0,
+      filterOptions: [],
       comparisons: [],
     } as TeacherInterventionQuizComparisonResponse);
 
     return {
       ...payload,
+      filterOptions: normalizeArray(payload.filterOptions),
       comparisons: normalizeArray(payload.comparisons),
     } as TeacherInterventionQuizComparisonResponse;
   },
