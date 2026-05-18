@@ -77,6 +77,7 @@ type JaAccessibleAskSources = {
 };
 
 const JA_QUESTION_COUNT = 10;
+const JA_REVIEW_MAX_ATTEMPTS = 3;
 const JA_SESSION_XP_BASE = 40;
 const JA_SESSION_XP_PER_CORRECT = 6;
 const JA_ASK_MAX_HISTORY = 8;
@@ -846,11 +847,12 @@ export class JaService {
             strikeCount: true,
             rewardState: true,
             groundingStatus: true,
+            sourceSnapshotJson: true,
             startedAt: true,
             completedAt: true,
           },
           orderBy: [desc(jaSessions.updatedAt)],
-          limit: 12,
+          limit: 60,
         }),
         this.db
           .select({
@@ -874,6 +876,53 @@ export class JaService {
     const avgScore = Number(masteryRows[0]?.avgScore ?? 0);
     const masteryPercent = Math.max(0, Math.min(100, Math.round(avgScore)));
     const progress = practice.progress;
+    const reviewAttemptStats = new Map<
+      string,
+      { count: number; activeReviewSessionId: string | null }
+    >();
+
+    reviewSessions.forEach((session) => {
+      const sourceSnapshot = (session.sourceSnapshotJson ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const attemptId =
+        typeof sourceSnapshot.attemptId === 'string'
+          ? sourceSnapshot.attemptId
+          : null;
+      if (!attemptId) return;
+
+      const current =
+        reviewAttemptStats.get(attemptId) ?? {
+          count: 0,
+          activeReviewSessionId: null,
+        };
+      current.count += 1;
+      if (session.status === 'active') {
+        current.activeReviewSessionId = session.id;
+      }
+      reviewAttemptStats.set(attemptId, current);
+    });
+
+    const eligibleAttemptsWithReviewState = eligibleAttempts.map((attempt) => {
+      const stats = reviewAttemptStats.get(attempt.attemptId);
+      const reviewSessionCount = stats?.count ?? 0;
+      const activeReviewSessionId = stats?.activeReviewSessionId ?? null;
+
+      return {
+        ...attempt,
+        reviewSessionCount,
+        maxReviewSessions: JA_REVIEW_MAX_ATTEMPTS,
+        remainingReviewSessions: Math.max(
+          0,
+          JA_REVIEW_MAX_ATTEMPTS - reviewSessionCount,
+        ),
+        locked:
+          !activeReviewSessionId &&
+          reviewSessionCount >= JA_REVIEW_MAX_ATTEMPTS,
+        activeReviewSessionId,
+      };
+    });
 
     const badges = [
       {
@@ -913,8 +962,11 @@ export class JaService {
         guidelines: JA_ASK_GUIDELINES,
       },
       review: {
-        eligibleAttempts,
-        sessions: reviewSessions,
+        eligibleAttempts: eligibleAttemptsWithReviewState,
+        sessions: reviewSessions.map(({ sourceSnapshotJson, ...session }) => ({
+          ...session,
+          sourceSnapshot: sourceSnapshotJson ?? null,
+        })),
       },
     };
   }
@@ -1493,6 +1545,35 @@ export class JaService {
     if (!attempt[0]) {
       throw new BadRequestException(
         'Review session requires one of your submitted assessments in this class.',
+      );
+    }
+
+    const existingReviewSessions = await this.db
+      .select({
+        id: jaSessions.id,
+        status: jaSessions.status,
+      })
+      .from(jaSessions)
+      .where(
+        and(
+          eq(jaSessions.studentId, studentId),
+          eq(jaSessions.classId, dto.classId),
+          eq(jaSessions.mode, 'review'),
+          sql`${jaSessions.sourceSnapshotJson}->>'attemptId' = ${dto.attemptId}`,
+        ),
+      )
+      .orderBy(desc(jaSessions.updatedAt));
+
+    const activeReviewSession = existingReviewSessions.find(
+      (session) => session.status === 'active',
+    );
+    if (activeReviewSession) {
+      return this.getSession(user, activeReviewSession.id, 'review');
+    }
+
+    if (existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS) {
+      throw new BadRequestException(
+        'This assessment already used all 3 JA replay tries.',
       );
     }
 

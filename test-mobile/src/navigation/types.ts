@@ -43,6 +43,7 @@ export type RootStackParamList = {
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
   LXP: { classId?: string; tab?: LxpMobileTab } | undefined;
   StudentGuidedAssessment: { classId: string; assignmentId: string };
+  StudentJaReviewAssessment: { classId: string; assessmentId?: string; attemptId?: string; title?: string };
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
   Transcript: undefined;

@@ -137,13 +137,13 @@ function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, u
   const type = readPayloadString(payload.type);
   const title = readPayloadString(payload.title);
   const referenceId = readPayloadString(payload.referenceId) || null;
-  const id = readPayloadString(payload.id) || (referenceId ? `${type}:${referenceId}` : "");
+  const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
+  const id = readPayloadString(payload.id) || `${type}:${referenceId || "broadcast"}:${createdAt}`;
 
   if (!id || !type || !title) return null;
 
   const body = readPayloadString(payload.body);
   const message = readPayloadString(payload.message) || body;
-  const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
 
   return {
     id,
@@ -194,7 +194,9 @@ function resolveUserId(user: unknown) {
 }
 
 function reminderDateKey() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const bucket = Math.floor(now.getTime() / (30 * 60 * 1000));
+  return `${now.toISOString().slice(0, 10)}:${bucket}`;
 }
 
 function getClassLabel(classItem: ClassItem) {

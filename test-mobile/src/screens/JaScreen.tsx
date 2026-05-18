@@ -8,7 +8,7 @@ import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, 
 import { jaApi } from "../api/services/ja";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
-import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse } from "../types/ja";
+import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse, JaReviewAttemptSummary } from "../types/ja";
 import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
@@ -462,9 +462,33 @@ export function JaScreen({ navigation, route }: Props) {
       );
       return;
     }
+    if (checkpoint.type === "assessment_retry" && selectedLxpClassId) {
+      navigation.navigate(
+        "StudentJaReviewAssessment" as never,
+        {
+          classId: selectedLxpClassId,
+          assessmentId: checkpoint.assessment?.id,
+          title: checkpoint.assessment?.title || checkpoint.label,
+        } as never,
+      );
+      return;
+    }
     if (selectedLxpClassId) setSelectedClassId(selectedLxpClassId);
     setPanel("review");
     setActivityFilter("review");
+  };
+
+  const openReviewAttempt = (attempt: JaReviewAttemptSummary) => {
+    if (!resolvedClassId) return;
+    navigation.navigate(
+      "StudentJaReviewAssessment" as never,
+      {
+        classId: resolvedClassId,
+        assessmentId: attempt.assessmentId,
+        attemptId: attempt.attemptId,
+        title: attempt.assessmentTitle,
+      } as never,
+    );
   };
 
   const classSelectorStyle = {
@@ -629,7 +653,7 @@ export function JaScreen({ navigation, route }: Props) {
             answers={answers}
             setAnswers={setAnswers}
             busy={busy}
-            onStart={startReplay}
+            onStart={openReviewAttempt}
             onSubmit={() => void submitSessionAnswers("review")}
             onComplete={() => void completeSession("review")}
           />
@@ -987,12 +1011,12 @@ function ReplayPanel({
   onSubmit,
   onComplete,
 }: {
-  attempts: Array<{ attemptId: string; assessmentTitle: string; submittedAt: string; score: number | null; passed: boolean | null }>;
+  attempts: JaReviewAttemptSummary[];
   session: JaPracticeSessionResponse | null;
   answers: AnswerState;
   setAnswers: (value: AnswerState | ((current: AnswerState) => AnswerState)) => void;
   busy: boolean;
-  onStart: (attemptId: string) => void;
+  onStart: (attempt: JaReviewAttemptSummary) => void;
   onSubmit: () => void;
   onComplete: () => void;
 }) {
@@ -1003,14 +1027,22 @@ function ReplayPanel({
         <Text style={{ color: dark.text, fontSize: 16, fontWeight: "800" }}>Pick an assessment to replay</Text>
         <Text style={{ marginTop: 5, color: dark.muted, fontSize: 12, lineHeight: 18 }}>Replay mode builds a focused retry session from a submitted assessment attempt.</Text>
       </View>
-      {attempts.length ? attempts.map((attempt) => (
-        <Pressable key={attempt.attemptId} disabled={busy} onPress={() => onStart(attempt.attemptId)}>
-          <DarkPanel>
+      {attempts.length ? attempts.map((attempt) => {
+        const used = Math.max(0, Number(attempt.reviewSessionCount ?? 0));
+        const max = Math.max(1, Number(attempt.maxReviewSessions ?? 3));
+        const locked = Boolean(attempt.locked) || (!attempt.activeReviewSessionId && used >= max);
+        return (
+        <Pressable key={attempt.attemptId} disabled={busy || locked} onPress={() => onStart(attempt)}>
+          <DarkPanel style={{ opacity: locked ? 0.62 : 1 }}>
             <Text style={{ color: dark.text, fontSize: 13, fontWeight: "800" }}>{attempt.assessmentTitle}</Text>
             <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11 }}>Score: {attempt.score ?? "Pending"} - {formatDate(attempt.submittedAt)}</Text>
+            <Text style={{ marginTop: 6, color: locked ? dark.red : dark.green, fontSize: 11, fontWeight: "900" }}>
+              {locked ? "Locked after 3 replay tries" : `${Math.max(0, max - used)} replay ${max - used === 1 ? "try" : "tries"} left`}
+            </Text>
           </DarkPanel>
         </Pressable>
-      )) : (
+        );
+      }) : (
         <DarkPanel>
           <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800", textAlign: "center" }}>No eligible attempts yet</Text>
           <Text style={{ marginTop: 6, color: dark.muted, fontSize: 11, lineHeight: 17, textAlign: "center" }}>Complete an assessment and return here to replay weak areas.</Text>
@@ -1240,7 +1272,7 @@ function CheckpointList({
             {checkpoint.type === "assessment_retry" || checkpoint.type === "guided_assessment" ? (
               <Pressable onPress={() => onOpenReplay(checkpoint)} style={{ borderRadius: 9, backgroundColor: dark.amberSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
                 <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "900" }}>
-                  {checkpoint.type === "guided_assessment" ? "Open AI Quiz" : "Open JA Hub"}
+                  {checkpoint.type === "guided_assessment" ? "Open AI Quiz" : "Open Replay Quiz"}
                 </Text>
               </Pressable>
             ) : checkpoint.lesson?.id || checkpoint.generatedLesson ? (

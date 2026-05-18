@@ -170,7 +170,8 @@ export class ClassesController {
       user?.roles,
       statusQuery === 'active' ||
         statusQuery === 'archived' ||
-        statusQuery === 'hidden'
+        statusQuery === 'hidden' ||
+        statusQuery === 'all'
         ? statusQuery
         : 'active',
     );
@@ -233,7 +234,8 @@ export class ClassesController {
       user?.roles,
       statusQuery === 'active' ||
         statusQuery === 'archived' ||
-        statusQuery === 'hidden'
+        statusQuery === 'hidden' ||
+        statusQuery === 'all'
         ? statusQuery
         : 'active',
     );

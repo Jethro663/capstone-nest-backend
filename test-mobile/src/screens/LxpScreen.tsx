@@ -108,7 +108,11 @@ export function LxpScreen({ navigation }: Props) {
     (navigation as any).navigate("AiTutor", { classId: selectedClassId });
   };
 
-  const handleOpenCheckpoint = (checkpointId: string, type?: string) => {
+  const handleOpenCheckpoint = (
+    checkpointId: string,
+    type?: string,
+    options?: { assessmentId?: string; title?: string },
+  ) => {
     if (!selectedClassId) return;
     if (type === "guided_assessment") {
       (navigation as any).navigate("StudentGuidedAssessment", {
@@ -118,7 +122,11 @@ export function LxpScreen({ navigation }: Props) {
       return;
     }
     if (type === "assessment_retry") {
-      (navigation as any).navigate("JA", { panel: "review", lxpClassId: selectedClassId, lxpTab: "replays" });
+      (navigation as any).navigate("StudentJaReviewAssessment", {
+        classId: selectedClassId,
+        assessmentId: options?.assessmentId,
+        title: options?.title,
+      });
     }
   };
 
@@ -356,7 +364,7 @@ export function LxpScreen({ navigation }: Props) {
                           <Pressable
                             onPress={() => {
                               if (recommendation.type === "retry") {
-                                handleOpenCheckpoint(recommendation.id, "assessment_retry");
+                                handleOpenCheckpoint(recommendation.id, "assessment_retry", { title: recommendation.title });
                                 return;
                               }
                               void handleCompleteCheckpoint(recommendation.id);
@@ -416,7 +424,16 @@ export function LxpScreen({ navigation }: Props) {
                   />
                   {checkpoint.type === "guided_assessment" || checkpoint.type === "assessment_retry" ? (
                     <Pressable
-                      onPress={() => handleOpenCheckpoint(checkpoint.id, checkpoint.type)}
+                      onPress={() =>
+                        handleOpenCheckpoint(checkpoint.id, checkpoint.type, {
+                          assessmentId: checkpoint.assessment?.id,
+                          title:
+                            checkpoint.guidedAssessment?.title ||
+                            checkpoint.assessment?.title ||
+                            checkpoint.generatedLesson?.title ||
+                            checkpoint.label,
+                        })
+                      }
                       style={{
                         marginTop: 8,
                         alignSelf: "flex-start",

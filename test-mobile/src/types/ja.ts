@@ -68,6 +68,7 @@ export interface JaPracticeSessionItem {
   itemType: string;
   prompt: string;
   options?: JaPracticeItemOption[] | null;
+  correctOptionIds?: string[] | null;
   hint?: string | null;
   explanation?: string | null;
   citations?: Array<Record<string, unknown>> | null;
@@ -176,6 +177,11 @@ export interface JaReviewAttemptSummary {
   submittedAt: string;
   score: number | null;
   passed: boolean | null;
+  reviewSessionCount?: number;
+  maxReviewSessions?: number;
+  remainingReviewSessions?: number;
+  locked?: boolean;
+  activeReviewSessionId?: string | null;
 }
 
 export interface JaHubResponse {

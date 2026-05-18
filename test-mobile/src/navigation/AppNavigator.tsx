@@ -15,7 +15,7 @@ import { ModuleDetailScreen } from "../screens/ModuleDetailScreen";
 import { AssessmentsScreen } from "../screens/AssessmentsScreen";
 import { JaScreen } from "../screens/JaScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
-import { AnnouncementsScreen } from "../screens/AnnouncementsScreen";
+import { NotificationsInboxScreen } from "../screens/NotificationsInboxScreen";
 import { SubjectLessonsScreen as ClassWorkspaceScreen } from "../screens/SubjectLessonsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
 import { VerifyEmailScreen } from "../screens/VerifyEmailScreen";
@@ -27,6 +27,7 @@ import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
 import { StudentGuidedAssessmentScreen } from "../screens/StudentGuidedAssessmentScreen";
+import { StudentJaReviewAssessmentScreen } from "../screens/StudentJaReviewAssessmentScreen";
 import { PerformanceScreen } from "../screens/PerformanceScreen";
 import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
@@ -168,7 +169,7 @@ const studentTabScreens = {
   Classes: ClassesRouteScreen,
   Assessments: AssessmentsScreen,
   JA: JaRouteScreen,
-  Announcements: AnnouncementsScreen,
+  Announcements: NotificationsInboxScreen,
   Profile: ProfileScreen,
 } satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
 
@@ -386,6 +387,7 @@ function StudentNavigator() {
       {renderStudentSupportScreen(classWorkspaceRouteName)}
       {studentStackRouteNames.map(renderStudentStackScreen)}
       <RootStack.Screen name="StudentGuidedAssessment" component={StudentGuidedAssessmentScreen} />
+      <RootStack.Screen name="StudentJaReviewAssessment" component={StudentJaReviewAssessmentScreen} />
       {renderStudentSupportScreen(aiTutorRouteName)}
     </RootStack.Navigator>
   );
@@ -452,7 +454,7 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
       <Tab.Screen name="Home">{() => <RoleWorkspaceScreen role={role} section="overview" />}</Tab.Screen>
       <Tab.Screen name="Classes">{() => <RoleWorkspaceScreen role={role} section="classes" />}</Tab.Screen>
       <Tab.Screen name="Assessments">{() => <RoleWorkspaceScreen role={role} section="assessments" />}</Tab.Screen>
-      <Tab.Screen name="Announcements">{() => <RoleWorkspaceScreen role={role} section="announcements" />}</Tab.Screen>
+      <Tab.Screen name="Announcements" component={NotificationsInboxScreen} />
       <Tab.Screen name="Profile">{() => <RoleWorkspaceScreen role={role} section="profile" />}</Tab.Screen>
     </Tab.Navigator>
   );
