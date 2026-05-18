@@ -20,6 +20,7 @@ import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { resolveInitialLxpClassId } from "./screen-flow";
 import { colors, gradients, shadow } from "../theme/tokens";
+import { stripRichText } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "LXP">;
 
@@ -105,6 +106,20 @@ export function LxpScreen({ navigation }: Props) {
     }
     setTutorLaunchError(null);
     (navigation as any).navigate("AiTutor", { classId: selectedClassId });
+  };
+
+  const handleOpenCheckpoint = (checkpointId: string, type?: string) => {
+    if (!selectedClassId) return;
+    if (type === "guided_assessment") {
+      (navigation as any).navigate("StudentGuidedAssessment", {
+        classId: selectedClassId,
+        assignmentId: checkpointId,
+      });
+      return;
+    }
+    if (type === "assessment_retry") {
+      (navigation as any).navigate("JA", { panel: "review", lxpClassId: selectedClassId, lxpTab: "replays" });
+    }
   };
 
   return (
@@ -339,7 +354,13 @@ export function LxpScreen({ navigation }: Props) {
                           <Text style={{ fontSize: 18 }}>✅</Text>
                         ) : (
                           <Pressable
-                            onPress={() => void handleCompleteCheckpoint(recommendation.id)}
+                            onPress={() => {
+                              if (recommendation.type === "retry") {
+                                handleOpenCheckpoint(recommendation.id, "assessment_retry");
+                                return;
+                              }
+                              void handleCompleteCheckpoint(recommendation.id);
+                            }}
                             style={[
                               {
                                 width: 34,
@@ -379,7 +400,9 @@ export function LxpScreen({ navigation }: Props) {
                   <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <Text style={{ fontSize: 14 }}>{selectedSubject?.emoji || "📘"}</Text>
-                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>{checkpoint.label}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "800", color: colors.text }}>
+                        {stripRichText(checkpoint.guidedAssessment?.title || checkpoint.generatedLesson?.title || checkpoint.label)}
+                      </Text>
                     </View>
                     <Text style={{ fontSize: 12, fontWeight: "900", color: checkpoint.isCompleted ? colors.green : colors.indigo }}>
                       {checkpoint.isCompleted ? "Done" : `+${checkpoint.xpAwarded} XP`}
@@ -391,6 +414,23 @@ export function LxpScreen({ navigation }: Props) {
                     trackColor={colors.border}
                     height={8}
                   />
+                  {checkpoint.type === "guided_assessment" || checkpoint.type === "assessment_retry" ? (
+                    <Pressable
+                      onPress={() => handleOpenCheckpoint(checkpoint.id, checkpoint.type)}
+                      style={{
+                        marginTop: 8,
+                        alignSelf: "flex-start",
+                        borderRadius: 999,
+                        backgroundColor: checkpoint.isCompleted ? colors.green : colors.indigo,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text style={{ color: colors.white, fontSize: 11, fontWeight: "900" }}>
+                        {checkpoint.isCompleted ? "View result" : "Open assessment"}
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ))
             )}

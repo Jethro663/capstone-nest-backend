@@ -12,7 +12,7 @@ import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSession
 import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
-import { studentDarkTheme } from "../theme/studentDark";
+import { studentDarkTheme, stripRichText } from "../theme/studentDark";
 
 type Props = {
   navigation: {
@@ -214,8 +214,8 @@ export function JaScreen({ navigation, route }: Props) {
     () => [...(lxpPlaylistQuery.data?.checkpoints ?? [])].sort((left, right) => left.order - right.order),
     [lxpPlaylistQuery.data?.checkpoints],
   );
-  const lessonSteps = checkpoints.filter((checkpoint) => checkpoint.type === "lesson_review");
-  const replaySteps = checkpoints.filter((checkpoint) => checkpoint.type === "assessment_retry");
+  const lessonSteps = checkpoints.filter((checkpoint) => checkpoint.type === "lesson_review" || checkpoint.type === "generated_lesson_review");
+  const replaySteps = checkpoints.filter((checkpoint) => checkpoint.type === "assessment_retry" || checkpoint.type === "guided_assessment");
   const visibleActivities = [
     ...(jaHubQuery.data?.ask.threads ?? []).map((thread) => ({
       id: thread.id,
@@ -454,7 +454,14 @@ export function JaScreen({ navigation, route }: Props) {
     navigation.navigate("LessonDetail" as never, { lessonId: checkpoint.lesson.id, classId: selectedLxpClassId } as never);
   };
 
-  const openReplayFromLxp = () => {
+  const openReplayFromLxp = (checkpoint: LxpCheckpoint) => {
+    if (checkpoint.type === "guided_assessment" && selectedLxpClassId) {
+      navigation.navigate(
+        "StudentGuidedAssessment" as never,
+        { classId: selectedLxpClassId, assignmentId: checkpoint.id } as never,
+      );
+      return;
+    }
     if (selectedLxpClassId) setSelectedClassId(selectedLxpClassId);
     setPanel("review");
     setActivityFilter("review");
@@ -1096,7 +1103,7 @@ function LearnersPathPanel({
   onOpenPath: (path: LxpPathSummary) => void;
   onBack: () => void;
   onOpenLesson: (checkpoint: LxpCheckpoint) => void;
-  onOpenReplay: () => void;
+  onOpenReplay: (checkpoint: LxpCheckpoint) => void;
   onCompleteCheckpoint: (checkpointId: string) => void;
 }) {
   if (!selectedClassId || tab === "paths") {
@@ -1197,7 +1204,7 @@ function CheckpointList({
   checkpoints: LxpCheckpoint[];
   empty: string;
   onOpenLesson: (checkpoint: LxpCheckpoint) => void;
-  onOpenReplay: () => void;
+  onOpenReplay: (checkpoint: LxpCheckpoint) => void;
   onCompleteCheckpoint: (checkpointId: string) => void;
 }) {
   if (!checkpoints.length) {
@@ -1209,20 +1216,40 @@ function CheckpointList({
   }
   return (
     <View style={{ gap: 10 }}>
-      {checkpoints.map((checkpoint, index) => (
+      {checkpoints.map((checkpoint, index) => {
+        const title =
+          checkpoint.generatedLesson?.title ||
+          checkpoint.guidedAssessment?.title ||
+          checkpoint.lesson?.title ||
+          checkpoint.assessment?.title ||
+          checkpoint.label;
+        const detail =
+          checkpoint.generatedLesson?.summary ||
+          checkpoint.guidedAssessment?.description ||
+          checkpoint.lesson?.description ||
+          checkpoint.assessment?.description ||
+          "";
+        return (
         <DarkPanel key={checkpoint.id}>
-          <Text style={{ color: dark.text, fontSize: 13, fontWeight: "800" }}>{index + 1}. {checkpoint.label}</Text>
+          <Text style={{ color: dark.text, fontSize: 13, fontWeight: "800" }}>{index + 1}. {stripRichText(title)}</Text>
           <Text style={{ marginTop: 4, color: dark.muted, fontSize: 11 }}>{checkpoint.xpAwarded} XP - {checkpoint.isCompleted ? "Done" : "Available"}</Text>
+          {detail ? (
+            <Text style={{ marginTop: 7, color: dark.muted, fontSize: 11, lineHeight: 17 }}>{stripRichText(detail)}</Text>
+          ) : null}
           <View style={{ marginTop: 10, flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
-            {checkpoint.type === "assessment_retry" ? (
-              <Pressable onPress={onOpenReplay} style={{ borderRadius: 9, backgroundColor: dark.amberSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
-                <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "900" }}>Open JA Hub</Text>
+            {checkpoint.type === "assessment_retry" || checkpoint.type === "guided_assessment" ? (
+              <Pressable onPress={() => onOpenReplay(checkpoint)} style={{ borderRadius: 9, backgroundColor: dark.amberSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
+                <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "900" }}>
+                  {checkpoint.type === "guided_assessment" ? "Open AI Quiz" : "Open JA Hub"}
+                </Text>
               </Pressable>
-            ) : checkpoint.lesson?.id ? (
+            ) : checkpoint.lesson?.id || checkpoint.generatedLesson ? (
               <>
-                <Pressable onPress={() => onOpenLesson(checkpoint)} style={{ borderRadius: 9, backgroundColor: dark.blueSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
-                  <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "900" }}>Open Lesson</Text>
-                </Pressable>
+                {checkpoint.lesson?.id ? (
+                  <Pressable onPress={() => onOpenLesson(checkpoint)} style={{ borderRadius: 9, backgroundColor: dark.blueSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
+                    <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "900" }}>Open Lesson</Text>
+                  </Pressable>
+                ) : null}
                 {!checkpoint.isCompleted ? (
                   <Pressable onPress={() => onCompleteCheckpoint(checkpoint.id)} style={{ borderRadius: 9, backgroundColor: dark.greenSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
                     <Text style={{ color: dark.green, fontSize: 11, fontWeight: "900" }}>Mark Complete</Text>
@@ -1232,7 +1259,8 @@ function CheckpointList({
             ) : null}
           </View>
         </DarkPanel>
-      ))}
+        );
+      })}
     </View>
   );
 }

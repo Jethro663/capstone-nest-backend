@@ -657,6 +657,7 @@ export interface GuidedAssessmentQuestion {
 export interface GuidedAssessmentAttemptState {
   id: string;
   status: 'in_progress' | 'submitted';
+  attemptNumber?: number;
   currentQuestionIndex: number;
   responses: Array<{
     questionId: string;
@@ -669,11 +670,35 @@ export interface GuidedAssessmentAttemptState {
   submittedAt?: string | null;
 }
 
+export interface GuidedAssessmentAttemptSummary {
+  maxAttempts: number;
+  attemptsUsed: number;
+  remainingAttempts: number;
+  canRetry: boolean;
+  isLocked: boolean;
+  passingScore: number;
+  passed: boolean;
+  bestAttemptId: string | null;
+  bestScorePercent: number | null;
+  latestScorePercent: number | null;
+  attempts: Array<{
+    id: string;
+    attemptNumber: number;
+    status: 'in_progress' | 'submitted';
+    scorePercent: number | null;
+    correctCount: number | null;
+    totalQuestions: number | null;
+    submittedAt?: string | null;
+    startedAt?: string | null;
+  }>;
+}
+
 export interface GuidedAssessmentSessionResponse {
   assignmentId: string;
   checkpointLabel?: string;
   guidedAssessment: GuidedAssessmentContent;
   attempt: GuidedAssessmentAttemptState;
+  attemptSummary: GuidedAssessmentAttemptSummary;
 }
 
 export interface GuidedAssessmentScoreComparison {
@@ -694,6 +719,11 @@ export interface GuidedAssessmentResultResponse {
   guidedAssessment: GuidedAssessmentContent | null;
   scorePercent: number;
   correctCount: number;
+  totalQuestions?: number;
+  attemptNumber?: number;
+  passingScore?: number;
+  passed?: boolean;
+  attemptSummary?: GuidedAssessmentAttemptSummary;
   responses: Array<{
     questionId: string;
     answer?: string | string[];

@@ -110,11 +110,13 @@ export class LxpController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() body: { forceNewAttempt?: boolean } = {},
   ) {
     const data = await this.lxpService.startGuidedAssessment(
       user.userId,
       classId,
       assignmentId,
+      { forceNewAttempt: body.forceNewAttempt === true },
     );
     return { success: true, data };
   }

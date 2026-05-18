@@ -26,6 +26,7 @@ import { AssessmentDetailScreen } from "../screens/AssessmentDetailScreen";
 import { AssessmentHistoryScreen } from "../screens/AssessmentHistoryScreen";
 import { AssessmentTakeScreen } from "../screens/AssessmentTakeScreen";
 import { AssessmentResultsScreen } from "../screens/AssessmentResultsScreen";
+import { StudentGuidedAssessmentScreen } from "../screens/StudentGuidedAssessmentScreen";
 import { PerformanceScreen } from "../screens/PerformanceScreen";
 import { TranscriptScreen } from "../screens/TranscriptScreen";
 import { RoleWorkspaceScreen } from "../screens/RoleWorkspaceScreen";
@@ -384,6 +385,7 @@ function StudentNavigator() {
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
       {renderStudentSupportScreen(classWorkspaceRouteName)}
       {studentStackRouteNames.map(renderStudentStackScreen)}
+      <RootStack.Screen name="StudentGuidedAssessment" component={StudentGuidedAssessmentScreen} />
       {renderStudentSupportScreen(aiTutorRouteName)}
     </RootStack.Navigator>
   );

@@ -8,6 +8,8 @@ import type {
   LxpOverviewResponse,
   LxpPathSummary,
   PlaylistResponse,
+  GuidedAssessmentResultResponse,
+  GuidedAssessmentSessionResponse,
   StudentInterventionAlert,
   StudentInterventionAlertsResponse,
 } from "../../types/lxp";
@@ -173,6 +175,52 @@ export const lxpApi = {
       progress: normalizeObject(payload.progress, emptyPlaylist().progress),
       checkpoints: normalizeArray<LxpCheckpoint>(payload.checkpoints),
     };
+  },
+
+  async startGuidedAssessment(classId: string, assignmentId: string, forceNewAttempt = false) {
+    const response = await apiClient.post<ApiEnvelope<GuidedAssessmentSessionResponse>>(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/start`,
+      forceNewAttempt ? { forceNewAttempt: true } : {},
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateGuidedAssessmentProgress(
+    classId: string,
+    assignmentId: string,
+    payload: {
+      currentQuestionIndex?: number;
+      responses?: GuidedAssessmentSessionResponse["attempt"]["responses"];
+      hintedQuestionIds?: string[];
+    },
+  ) {
+    const response = await apiClient.patch<ApiEnvelope<GuidedAssessmentSessionResponse>>(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/progress`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async submitGuidedAssessment(
+    classId: string,
+    assignmentId: string,
+    payload: {
+      responses: GuidedAssessmentSessionResponse["attempt"]["responses"];
+      hintedQuestionIds: string[];
+    },
+  ) {
+    const response = await apiClient.post<ApiEnvelope<GuidedAssessmentResultResponse>>(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/submit`,
+      payload,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async getGuidedAssessmentResult(classId: string, assignmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<GuidedAssessmentResultResponse>>(
+      `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/result`,
+    );
+    return unwrapEnvelope(response.data);
   },
 
   async getOverview(classId: string) {

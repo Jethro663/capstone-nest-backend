@@ -72,6 +72,7 @@ import { AuditService } from '../audit/audit.service';
 
 const INTERVENTION_THRESHOLD = 74;
 const PATH_REGENERATION_SCORE_THRESHOLD = 60;
+const GUIDED_ASSESSMENT_MAX_ATTEMPTS = 3;
 const LESSON_XP = 20;
 const ASSESSMENT_XP = 30;
 const STAR_XP = 1000;
@@ -737,6 +738,93 @@ export class LxpService {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private async resolveGuidedPassingScore(
+    sourceAssessmentId: string | null | undefined,
+  ) {
+    if (!sourceAssessmentId) return PATH_REGENERATION_SCORE_THRESHOLD;
+
+    const sourceAssessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.id, sourceAssessmentId),
+      columns: { passingScore: true },
+    });
+
+    return (
+      this.toNumber(sourceAssessment?.passingScore) ??
+      PATH_REGENERATION_SCORE_THRESHOLD
+    );
+  }
+
+  private buildGuidedAttemptSummary(
+    attempts: Array<{
+      id: string;
+      status: string;
+      attemptNumber?: number | null;
+      score?: number | null;
+      correctCount?: number | null;
+      totalQuestions?: number | null;
+      submittedAt?: Date | null;
+      startedAt?: Date | null;
+      createdAt?: Date | null;
+    }>,
+    passingScore: number,
+  ) {
+    const orderedAttempts = [...attempts].sort(
+      (left, right) =>
+        (left.attemptNumber ?? 1) - (right.attemptNumber ?? 1),
+    );
+    const submittedAttempts = orderedAttempts.filter(
+      (attempt) => attempt.status === 'submitted',
+    );
+    const bestAttempt = submittedAttempts.reduce<
+      (typeof submittedAttempts)[number] | null
+    >((best, attempt) => {
+      if (!best) return attempt;
+      return (attempt.score ?? -1) > (best.score ?? -1) ? attempt : best;
+    }, null);
+    const highestAttemptNumber = orderedAttempts.reduce(
+      (max, attempt) => Math.max(max, attempt.attemptNumber ?? 1),
+      0,
+    );
+    const hasInProgress = orderedAttempts.some(
+      (attempt) => attempt.status === 'in_progress',
+    );
+    const bestScorePercent =
+      bestAttempt?.score === null || bestAttempt?.score === undefined
+        ? null
+        : bestAttempt.score;
+    const passed =
+      typeof bestScorePercent === 'number' && bestScorePercent >= passingScore;
+
+    return {
+      maxAttempts: GUIDED_ASSESSMENT_MAX_ATTEMPTS,
+      attemptsUsed: submittedAttempts.length,
+      remainingAttempts: Math.max(
+        0,
+        GUIDED_ASSESSMENT_MAX_ATTEMPTS - highestAttemptNumber,
+      ),
+      canRetry: highestAttemptNumber < GUIDED_ASSESSMENT_MAX_ATTEMPTS,
+      isLocked:
+        highestAttemptNumber >= GUIDED_ASSESSMENT_MAX_ATTEMPTS &&
+        !hasInProgress,
+      passingScore,
+      passed,
+      bestAttemptId: bestAttempt?.id ?? null,
+      bestScorePercent,
+      latestScorePercent:
+        submittedAttempts[submittedAttempts.length - 1]?.score ?? null,
+      attempts: orderedAttempts.map((attempt) => ({
+        id: attempt.id,
+        attemptNumber: attempt.attemptNumber ?? 1,
+        status: attempt.status,
+        scorePercent: attempt.score ?? null,
+        correctCount: attempt.correctCount ?? null,
+        totalQuestions: attempt.totalQuestions ?? null,
+        submittedAt: attempt.submittedAt ?? null,
+        startedAt: attempt.startedAt ?? attempt.createdAt ?? null,
+      })),
+    };
   }
 
   private xpToStars(xp: number) {
@@ -1410,7 +1498,7 @@ export class LxpService {
         },
       },
     });
-    if (!cls || !cls.isActive || cls.section?.isActive === false) {
+    if (!cls || cls.isActive === false || cls.section?.isActive === false) {
       throw new NotFoundException(`Class "${classId}" not found`);
     }
     if (!this.isAdmin(user.roles) && cls.teacherId !== user.userId) {
@@ -1437,7 +1525,11 @@ export class LxpService {
         },
       },
     });
-    if (!enrollment || !enrollment.class?.isActive || enrollment.class.section?.isActive === false) {
+    if (
+      !enrollment ||
+      enrollment.class?.isActive === false ||
+      enrollment.class?.section?.isActive === false
+    ) {
       throw new ForbiddenException('Student is not enrolled in an active class');
     }
   }
@@ -1884,7 +1976,11 @@ export class LxpService {
     });
 
     const activeStudentEnrollments = studentEnrollments.filter(
-      (entry) => entry.classId && entry.class?.isActive && entry.class.section?.isActive !== false,
+      (entry) =>
+        entry.classId &&
+        entry.class &&
+        entry.class.isActive !== false &&
+        entry.class.section?.isActive !== false,
     );
 
     const classIds = activeStudentEnrollments
@@ -2072,7 +2168,13 @@ export class LxpService {
     });
 
     const enrolledClasses = studentEnrollments
-      .filter((entry) => entry.classId && entry.class?.isActive && entry.class.section?.isActive !== false)
+      .filter(
+        (entry) =>
+          entry.classId &&
+          entry.class &&
+          entry.class.isActive !== false &&
+          entry.class.section?.isActive !== false,
+      )
       .map((entry) => ({
         classId: entry.classId as string,
         class: entry.class!,
@@ -3149,6 +3251,7 @@ export class LxpService {
     studentId: string,
     classId: string,
     assignmentId: string,
+    options?: { forceNewAttempt?: boolean },
   ) {
     await this.assertStudentEnrollment(studentId, classId);
 
@@ -3185,18 +3288,50 @@ export class LxpService {
       throw new NotFoundException('Generated guided assessment is missing');
     }
 
-    const existingAttempt =
-      await this.db.query.generatedGuidedAssessmentAttempts.findFirst({
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
         where: and(
           eq(generatedGuidedAssessmentAttempts.assignmentId, assignment.id),
           eq(generatedGuidedAssessmentAttempts.studentId, studentId),
         ),
-        orderBy: [desc(generatedGuidedAssessmentAttempts.updatedAt)],
+        orderBy: [
+          desc(generatedGuidedAssessmentAttempts.attemptNumber),
+          desc(generatedGuidedAssessmentAttempts.updatedAt),
+        ],
       });
 
-    const attempt =
-      existingAttempt ??
-      (
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment.sourceAssessmentId,
+    );
+    const latestInProgress = attempts.find(
+      (attempt) => attempt.status === 'in_progress',
+    );
+    const latestSubmitted = attempts.find(
+      (attempt) => attempt.status === 'submitted',
+    );
+    const highestAttemptNumber = attempts.reduce(
+      (max, attempt) => Math.max(max, attempt.attemptNumber ?? 1),
+      0,
+    );
+
+    let attempt = latestInProgress ?? null;
+    const shouldCreateAttempt =
+      !attempt &&
+      (!latestSubmitted || options?.forceNewAttempt === true) &&
+      highestAttemptNumber < GUIDED_ASSESSMENT_MAX_ATTEMPTS;
+
+    if (
+      !attempt &&
+      options?.forceNewAttempt === true &&
+      highestAttemptNumber >= GUIDED_ASSESSMENT_MAX_ATTEMPTS
+    ) {
+      throw new BadRequestException(
+        'This guided remedial assessment is locked after 3 attempts.',
+      );
+    }
+
+    if (shouldCreateAttempt) {
+      attempt = (
         await this.db
           .insert(generatedGuidedAssessmentAttempts)
           .values({
@@ -3205,6 +3340,7 @@ export class LxpService {
             caseId: assignment.interventionCase.id,
             classId,
             studentId,
+            attemptNumber: highestAttemptNumber + 1,
             responses: [],
             hintUsage: [],
             currentQuestionIndex: 0,
@@ -3212,6 +3348,16 @@ export class LxpService {
           })
           .returning()
       )[0];
+      attempts.unshift(attempt);
+    }
+
+    attempt = attempt ?? latestSubmitted ?? attempts[0] ?? null;
+
+    if (!attempt) {
+      throw new BadRequestException(
+        'Unable to prepare guided assessment attempt.',
+      );
+    }
 
     return {
       assignmentId: assignment.id,
@@ -3226,8 +3372,10 @@ export class LxpService {
         responses: attempt.responses ?? [],
         hintedQuestionIds: attempt.hintUsage ?? [],
         scorePercent: attempt.score ?? null,
+        attemptNumber: attempt.attemptNumber ?? 1,
         submittedAt: attempt.submittedAt ?? null,
       },
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
     };
   }
 
@@ -3300,6 +3448,14 @@ export class LxpService {
       })
       .where(eq(generatedGuidedAssessmentAttempts.id, session.attempt.id))
       .returning();
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
 
     return {
       assignmentId,
@@ -3310,8 +3466,15 @@ export class LxpService {
         responses: updatedAttempt.responses ?? [],
         hintedQuestionIds: updatedAttempt.hintUsage ?? [],
         scorePercent: updatedAttempt.score ?? null,
+        attemptNumber: updatedAttempt.attemptNumber ?? 1,
         submittedAt: updatedAttempt.submittedAt ?? null,
       },
+      guidedAssessment: session.guidedAssessment,
+      checkpointLabel: session.checkpointLabel,
+      attemptSummary: this.buildGuidedAttemptSummary(
+        attempts,
+        session.attemptSummary.passingScore,
+      ),
     };
   }
 
@@ -3457,6 +3620,10 @@ export class LxpService {
       totalQuestions > 0
         ? Math.round((correctCount / totalQuestions) * 100)
         : 0;
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment.sourceAssessmentId,
+    );
+    const passed = scorePercent >= passingScore;
     const assessmentWeakConcepts = Array.isArray(
       assignment.generatedGuidedAssessment.weakConcepts,
     )
@@ -3491,20 +3658,35 @@ export class LxpService {
       .where(eq(generatedGuidedAssessmentAttempts.id, session.attempt.id))
       .returning();
 
-    const completionResult = await this.completeInterventionAssignment({
-      assignmentId,
-      studentId,
-      classId,
-      xpAwarded: assignment.xpAwarded,
-      caseId: assignment.interventionCase.id,
-      caseNote: assignment.interventionCase.note,
-      auditActorId: studentId,
-      auditSource: 'guided_assessment',
-      auditMetadata: {
-        guidedAssessmentAttemptId: updatedAttempt.id,
-        scorePercent,
-      },
-    });
+    const completionResult = passed
+      ? await this.completeInterventionAssignment({
+          assignmentId,
+          studentId,
+          classId,
+          xpAwarded: assignment.xpAwarded,
+          caseId: assignment.interventionCase.id,
+          caseNote: assignment.interventionCase.note,
+          auditActorId: studentId,
+          auditSource: 'guided_assessment',
+          auditMetadata: {
+            guidedAssessmentAttemptId: updatedAttempt.id,
+            scorePercent,
+            passingScore,
+          },
+        })
+      : {
+          interventionCompletedByStudent: false,
+          autoCompletedNote: assignment.interventionCase.note,
+        };
+
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
 
     const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
       studentId,
@@ -3522,6 +3704,10 @@ export class LxpService {
       scorePercent,
       correctCount,
       totalQuestions,
+      attemptNumber: updatedAttempt.attemptNumber ?? 1,
+      passingScore,
+      passed,
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
       formativeSummary,
       scoreComparison,
       interventionCompletedByStudent:
@@ -3569,7 +3755,10 @@ export class LxpService {
           eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
           eq(generatedGuidedAssessmentAttempts.studentId, studentId),
         ),
-        orderBy: [desc(generatedGuidedAssessmentAttempts.submittedAt)],
+        orderBy: [
+          desc(generatedGuidedAssessmentAttempts.submittedAt),
+          desc(generatedGuidedAssessmentAttempts.attemptNumber),
+        ],
       });
     if (!attempt || attempt.status !== 'submitted') {
       throw new BadRequestException(
@@ -3578,6 +3767,17 @@ export class LxpService {
     }
 
     const scorePercent = attempt.score ?? 0;
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment?.sourceAssessmentId,
+    );
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
     const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
       studentId,
       sourceAssessmentId: assignment.generatedGuidedAssessment?.sourceAssessmentId,
@@ -3596,6 +3796,11 @@ export class LxpService {
       ),
       scorePercent,
       correctCount: attempt.correctCount ?? 0,
+      totalQuestions: attempt.totalQuestions ?? 0,
+      attemptNumber: attempt.attemptNumber ?? 1,
+      passingScore,
+      passed: scorePercent >= passingScore,
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
       responses: attempt.responses ?? [],
       hintedQuestionIds: attempt.hintUsage ?? [],
       formativeSummary: attempt.formativeSummary ?? null,

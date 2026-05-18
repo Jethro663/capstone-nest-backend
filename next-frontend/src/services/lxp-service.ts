@@ -185,9 +185,11 @@ export const lxpService = {
   async startGuidedAssessment(
     classId: string,
     assignmentId: string,
+    options?: { forceNewAttempt?: boolean },
   ): Promise<Envelope<GuidedAssessmentSessionResponse>> {
     const { data } = await api.post(
       `/lxp/me/playlist/${classId}/guided-assessments/${assignmentId}/start`,
+      options?.forceNewAttempt ? { forceNewAttempt: true } : {},
     );
     return normalizeEnvelope<GuidedAssessmentSessionResponse>(data);
   },

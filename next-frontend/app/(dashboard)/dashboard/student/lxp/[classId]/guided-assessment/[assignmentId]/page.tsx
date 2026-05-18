@@ -21,13 +21,24 @@ function resolveParam(value: string | string[] | undefined) {
 }
 
 function promptToHtml(value: string) {
-  return value
+  return stripRichText(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .split("\n")
     .map((line) => `<p>${line}</p>`)
     .join("");
+}
+
+function stripRichText(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/\s*(p|div|li|h[1-6])\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isAnswered(answer: string | string[] | undefined) {
@@ -45,6 +56,7 @@ function formatAnswer(
       (id) =>
         question.options.find((option) => option.id === id)?.text ?? String(id),
     )
+    .map((value) => stripRichText(value))
     .filter(Boolean);
   return labels.length > 0 ? labels.join(", ") : "No answer";
 }
@@ -53,6 +65,7 @@ function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
   const labels = question.options
     .filter((option) => option.isCorrect)
     .map((option) => option.text)
+    .map((value) => stripRichText(value))
     .filter(Boolean);
   return labels.length > 0 ? labels.join(", ") : "Answer key unavailable";
 }
@@ -238,7 +251,11 @@ export default function StudentGuidedAssessmentPage() {
         },
       );
       setResult(response.data);
-      toast.success("Guided assessment submitted.");
+      toast.success(
+        response.data.passed
+          ? "Guided assessment passed and completed."
+          : "Attempt submitted. Review the answer key and retry if attempts remain.",
+      );
     } catch (err) {
       console.error("Failed to submit guided assessment", err);
       setError(
@@ -246,6 +263,29 @@ export default function StudentGuidedAssessmentPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRetry = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await lxpService.startGuidedAssessment(
+        classId,
+        assignmentId,
+        { forceNewAttempt: true },
+      );
+      setSession(response.data);
+      setResult(null);
+      setCurrentIdx(response.data.attempt.currentQuestionIndex ?? 0);
+      setResponses({});
+      setHintedQuestionIds([]);
+      toast.success("New guided assessment attempt started.");
+    } catch (err) {
+      console.error("Failed to start guided assessment retry", err);
+      toast.error("No retry is available for this guided assessment.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -312,7 +352,7 @@ export default function StudentGuidedAssessmentPage() {
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <strong className="block min-w-0 text-sm text-[var(--student-text-strong)]">
-              Q{index + 1}. {question.stem}
+              Q{index + 1}. {stripRichText(question.stem)}
             </strong>
             <StudentStatusChip
               tone={response?.isCorrect ? "success" : "warning"}
@@ -335,7 +375,7 @@ export default function StudentGuidedAssessmentPage() {
             </p>
           </div>
           <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">
-            {question.explanation}
+            {stripRichText(question.explanation)}
           </p>
           {question.weakConceptTag ? (
             <p className="mt-2 text-xs font-semibold text-[var(--student-text-muted)]">
@@ -379,8 +419,31 @@ export default function StudentGuidedAssessmentPage() {
             </div>
             <p className="text-sm text-[#5f6b84]">
               Score: <strong>{result.scorePercent}%</strong> (
-              {result.correctCount} correct)
+              {result.correctCount} correct) | Passing score:{" "}
+              <strong>{result.passingScore ?? result.attemptSummary?.passingScore ?? 60}%</strong>
             </p>
+            {result.attemptSummary ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {Array.from({ length: result.attemptSummary.maxAttempts }).map((_, index) => {
+                  const attempt = result.attemptSummary?.attempts.find(
+                    (item) => item.attemptNumber === index + 1,
+                  );
+                  return (
+                    <span
+                      key={index}
+                      className="rounded-full border border-[#cbd9ea] bg-white px-3 py-1 text-xs font-black text-[#30415d]"
+                    >
+                      Try {index + 1}: {attempt?.scorePercent ?? "--"}%
+                    </span>
+                  );
+                })}
+                {result.attemptSummary.canRetry && !result.attemptSummary.isLocked ? (
+                  <Button type="button" variant="outline" onClick={() => void handleRetry()}>
+                    Retry guided assessment
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {result.scoreComparison ? (
               <section className="rounded-3xl border border-[#b9d9ff] bg-gradient-to-br from-[#f2f8ff] via-white to-[#eaf7ff] p-4 shadow-[0_18px_38px_rgba(56,116,203,0.13)]">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -515,6 +578,12 @@ export default function StudentGuidedAssessmentPage() {
           <StudentStatusChip tone="info">
             {session.attempt.status.replace("_", " ")}
           </StudentStatusChip>
+          <StudentStatusChip tone="neutral">
+            Try {session.attempt.attemptNumber ?? 1}/{session.attemptSummary.maxAttempts}
+          </StudentStatusChip>
+          <StudentStatusChip tone="neutral">
+            Pass {session.attemptSummary.passingScore}%
+          </StudentStatusChip>
         </div>
       </header>
 
@@ -538,7 +607,7 @@ export default function StudentGuidedAssessmentPage() {
           promptHtml: promptToHtml(activeQuestion.stem),
           options: (activeQuestion.options ?? []).map((option) => ({
             id: option.id,
-            text: option.text,
+            text: stripRichText(option.text),
             isCorrect: option.isCorrect,
           })),
         }}
@@ -581,7 +650,7 @@ export default function StudentGuidedAssessmentPage() {
               className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]"
             >
               <strong className="block text-[#102744]">Hint</strong>
-              <p className="mt-2">{activeQuestion.hint}</p>
+              <p className="mt-2">{stripRichText(activeQuestion.hint)}</p>
             </div>
           ) : null
         }
@@ -631,7 +700,7 @@ export default function StudentGuidedAssessmentPage() {
               <div className="guided-answer-feedback__explanation mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
                 <strong className="block text-[#102744]">Why this works</strong>
                 <p className="mt-2">
-                  {activeQuestion?.explanation}
+                  {stripRichText(activeQuestion?.explanation)}
                   {!currentAnswerCorrect && activeQuestion
                     ? ` Correct answer: ${formatCorrectAnswer(activeQuestion)}.`
                     : ""}

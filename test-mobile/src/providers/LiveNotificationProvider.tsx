@@ -122,11 +122,7 @@ type RealtimeNotificationPayload = {
 };
 
 function getNotificationSeenKeys(notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
-  const keys = [notification.id];
-  if (notification.type && notification.referenceId) {
-    keys.push(`${notification.type}:${notification.referenceId}`);
-  }
-  return keys.filter(Boolean);
+  return notification.id ? [notification.id] : [];
 }
 
 function hasSeenNotification(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
@@ -533,11 +529,10 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       if (!notification.id || hasSeenNotification(seenIdsRef.current, notification)) return false;
       markNotificationSeen(seenIdsRef.current, notification);
       queueRef.current.push(notification);
-      void scheduleNativeNotification(notification);
       tryShowNext();
       return true;
     },
-    [scheduleNativeNotification, tryShowNext],
+    [tryShowNext],
   );
 
   const dismissActive = useCallback(() => {
@@ -710,9 +705,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         });
         hydratedRef.current = true;
         queueRef.current.push(...urgentUnread);
-        urgentUnread.forEach((row) => {
-          void scheduleNativeNotification(row);
-        });
         tryShowNext();
         return;
       }
@@ -729,7 +721,6 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       orderedFresh.forEach((row) => {
         markNotificationSeen(seenIdsRef.current, row);
         queueRef.current.push(row);
-        void scheduleNativeNotification(row);
       });
       tryShowNext();
     } catch {
@@ -737,7 +728,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [isAuthenticated, scheduleNativeNotification, tryShowNext, user?.id]);
+  }, [isAuthenticated, tryShowNext, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {

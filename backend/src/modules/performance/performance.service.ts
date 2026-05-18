@@ -900,7 +900,7 @@ export class PerformanceService {
       assessmentId?: string,
     ) => {
       const openedAtMs = new Date(caseRow.openedAt).getTime();
-      const latestPerAssessment = new Map<
+      const bestPerAssessment = new Map<
         string,
         (typeof officialAttempts)[number]
       >();
@@ -909,11 +909,16 @@ export class PerformanceService {
         if (!attempt.submittedAt) continue;
         if (assessmentId && attempt.assessmentId !== assessmentId) continue;
         if (new Date(attempt.submittedAt).getTime() >= openedAtMs) continue;
-        if (latestPerAssessment.has(attempt.assessmentId)) continue;
-        latestPerAssessment.set(attempt.assessmentId, attempt);
+
+        const current = bestPerAssessment.get(attempt.assessmentId);
+        const attemptScore = this.toNumber(attempt.score) ?? -1;
+        const currentScore = this.toNumber(current?.score) ?? -1;
+        if (!current || attemptScore > currentScore) {
+          bestPerAssessment.set(attempt.assessmentId, attempt);
+        }
       }
 
-      const attempts = [...latestPerAssessment.values()];
+      const attempts = [...bestPerAssessment.values()];
       const scores = attempts
         .map((attempt) => this.toNumber(attempt.score))
         .filter((score): score is number => score !== null);
@@ -930,10 +935,24 @@ export class PerformanceService {
       caseRow: (typeof cases)[number],
       sourceAssessmentId?: string,
     ) => {
-      const attempts = (guidedByCase.get(caseRow.id) ?? []).filter((attempt) => {
+      const matchingAttempts = (guidedByCase.get(caseRow.id) ?? []).filter((attempt) => {
         if (!sourceAssessmentId) return true;
         return attempt.guidedAssessment?.sourceAssessmentId === sourceAssessmentId;
       });
+      const bestPerAssignment = new Map<
+        string,
+        (typeof guidedAttempts)[number]
+      >();
+      for (const attempt of matchingAttempts) {
+        const key = attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id;
+        const current = bestPerAssignment.get(key);
+        const attemptScore = this.toNumber(attempt.score) ?? -1;
+        const currentScore = this.toNumber(current?.score) ?? -1;
+        if (!current || attemptScore > currentScore) {
+          bestPerAssignment.set(key, attempt);
+        }
+      }
+      const attempts = [...bestPerAssignment.values()];
       const scores = attempts
         .map((attempt) => this.toNumber(attempt.score))
         .filter((score): score is number => score !== null);
