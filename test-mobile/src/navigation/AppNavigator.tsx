@@ -400,6 +400,7 @@ function TeacherTabs() {
       <Tab.Screen name="Home" component={TeacherHomeScreen} />
       <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
       <Tab.Screen name="Classes" component={TeacherClassesScreen} />
+      <Tab.Screen name="Announcements" component={NotificationsInboxScreen} />
       <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
       <Tab.Screen name="Profile" component={TeacherProfileScreen} />
     </Tab.Navigator>

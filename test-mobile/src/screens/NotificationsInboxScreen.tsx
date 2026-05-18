@@ -201,7 +201,7 @@ export function NotificationsInboxScreen({ navigation }: Props) {
               <Text style={{ fontSize: 10, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase", color: "#93C5FD" }}>
                 Notification Center
               </Text>
-              <Text style={{ marginTop: 4, fontSize: 25, fontWeight: "900", color: colors.white }}>Announcements</Text>
+              <Text style={{ marginTop: 4, fontSize: 25, fontWeight: "900", color: colors.white }}>Notifications</Text>
             </View>
           </View>
           <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: "rgba(255,255,255,0.78)" }}>

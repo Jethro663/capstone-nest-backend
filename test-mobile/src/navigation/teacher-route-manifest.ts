@@ -6,7 +6,7 @@ function concatRouteNames<const T extends readonly string[], const U extends rea
 }
 
 export const teacherRouteManifest = {
-  tabs: ["Home", "Assessments", "Classes", "Sections", "Profile"] as const,
+  tabs: ["Home", "Assessments", "Classes", "Announcements", "Sections", "Profile"] as const,
   stack: [
     "TeacherClassDetail",
     "TeacherModuleDetail",

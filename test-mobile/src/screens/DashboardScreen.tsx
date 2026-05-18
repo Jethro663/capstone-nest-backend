@@ -19,6 +19,7 @@ import {
 import { findContinueLearning, toAssessmentCard, toLessonCards, toSubjectCard } from "../data/mappers";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { useLiveNotifications } from "../providers/LiveNotificationContext";
 import { computeProfileReadiness } from "./screen-flow";
 import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
@@ -751,6 +752,7 @@ function DashboardNotice({
 
 export function DashboardScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { unreadCount } = useLiveNotifications();
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const profileQuery = useProfile();
   const performanceQuery = usePerformanceSummary();
@@ -996,7 +998,7 @@ export function DashboardScreen({ navigation }: Props) {
     navigation.navigate("Classes");
   };
 
-  const handleOpenAnnouncements = () => {
+  const handleOpenNotifications = () => {
     navigation.navigate("Announcements");
   };
 
@@ -1063,8 +1065,8 @@ export function DashboardScreen({ navigation }: Props) {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Pressable
-                accessibilityLabel="Open announcements"
-                onPress={handleOpenAnnouncements}
+                accessibilityLabel="Open notifications"
+                onPress={handleOpenNotifications}
                 style={{
                   width: 44,
                   height: 44,
@@ -1077,6 +1079,28 @@ export function DashboardScreen({ navigation }: Props) {
                 }}
               >
                 <MaterialCommunityIcons name="bell-outline" size={18} color={theme.text} />
+                {unreadCount > 0 ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -3,
+                      right: -2,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 999,
+                      backgroundColor: theme.red,
+                      borderWidth: 2,
+                      borderColor: theme.topbar,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      paddingHorizontal: 4,
+                    }}
+                  >
+                    <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}>
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
 
               <Pressable

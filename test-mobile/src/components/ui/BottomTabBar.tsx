@@ -55,9 +55,9 @@ const routeConfig: Record<
     inactiveIcon: "robot-happy-outline",
   },
   Announcements: {
-    label: "Updates",
-    activeIcon: "bullhorn",
-    inactiveIcon: "bullhorn-outline",
+    label: "Notifications",
+    activeIcon: "bell",
+    inactiveIcon: "bell-outline",
   },
   Profile: {
     label: "Profile",
@@ -107,10 +107,11 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     state.routes.some((route) => route.name === "Profile");
 
   const visibleRoutes = state.routes.filter((route) => {
-    if (isStudentTabSet && route.name === "Announcements") {
-      return false;
-    }
-    return Boolean(routeConfig[route.name as keyof MainTabParamList]);
+    const routeName = route.name as keyof MainTabParamList;
+    if (!routeConfig[routeName]) return false;
+    if (isStudentTabSet) return studentTabOrder.includes(routeName);
+    if (isTeacherTabSet) return teacherTabOrder.includes(routeName);
+    return true;
   });
 
   const orderedRoutes = isStudentTabSet
