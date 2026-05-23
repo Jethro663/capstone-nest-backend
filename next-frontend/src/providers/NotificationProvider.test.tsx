@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { NotificationProvider, useNotifications } from './NotificationProvider';
 import { getTrackedExtractionNotificationStorageKey } from '@/lib/extraction-notification-tracker';
 import { toast } from 'sonner';
@@ -156,7 +156,7 @@ describe('NotificationProvider', () => {
     });
   });
 
-  it('shows a teacher completion notification when a tracked extraction finishes', async () => {
+  it('adds a teacher extraction completion notification without showing a toast', async () => {
     window.localStorage.setItem(
       getTrackedExtractionNotificationStorageKey('class-1'),
       JSON.stringify([
@@ -186,16 +186,23 @@ describe('NotificationProvider', () => {
 
     render(
       <NotificationProvider>
-        <NotificationProbe />
+        <NotificationSubscriberProbe />
       </NotificationProvider>,
     );
 
     await waitFor(() => {
       expect(getExtractionStatusMock).toHaveBeenCalledWith('extraction-1');
+<<<<<<< Updated upstream
       expect(toast.success).toHaveBeenCalledWith('Extraction ready', expect.objectContaining({
         description: expect.stringContaining('Quarter 1 Module.pdf'),
       }));
     });
+=======
+      expect(screen.getByTestId('subscription-events')).toHaveTextContent('Extraction ready');
+    });
+
+    expect(toast.custom).not.toHaveBeenCalled();
+>>>>>>> Stashed changes
   });
 
   it('allows feature pages to subscribe to incoming notifications and unsubscribe cleanly', async () => {

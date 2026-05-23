@@ -6,7 +6,6 @@ import { queryClient } from "../api/queryClient";
 import { AuthProvider } from "./AuthProvider";
 import { ErrorModalProvider } from "./ErrorModalProvider";
 import { LiveNotificationProvider } from "./LiveNotificationProvider";
-import { StudentInterventionAlertProvider } from "./StudentInterventionAlertProvider";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -15,9 +14,7 @@ export function AppProviders({ children }: PropsWithChildren) {
         <QueryClientProvider client={queryClient}>
           <ErrorModalProvider>
             <AuthProvider>
-              <StudentInterventionAlertProvider>
-                <LiveNotificationProvider>{children}</LiveNotificationProvider>
-              </StudentInterventionAlertProvider>
+              <LiveNotificationProvider>{children}</LiveNotificationProvider>
             </AuthProvider>
           </ErrorModalProvider>
         </QueryClientProvider>

@@ -5,6 +5,7 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Pressable, Text, View } from "react-native";
 import { AnimatedEntrance, Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { MobileNotificationQuickPanel } from "../components/notifications/MobileNotificationQuickPanel";
 import { peekAppError } from "../api/http";
 import {
   useAssessments,
@@ -751,6 +752,11 @@ function DashboardNotice({
 
 export function DashboardScreen({ navigation }: Props) {
   const { user } = useAuth();
+<<<<<<< Updated upstream
+=======
+  const { unreadCount } = useLiveNotifications();
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+>>>>>>> Stashed changes
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const profileQuery = useProfile();
   const performanceQuery = usePerformanceSummary();
@@ -996,8 +1002,13 @@ export function DashboardScreen({ navigation }: Props) {
     navigation.navigate("Classes");
   };
 
+<<<<<<< Updated upstream
   const handleOpenAnnouncements = () => {
     navigation.navigate("Announcements");
+=======
+  const handleOpenNotifications = () => {
+    setNotificationPanelOpen(true);
+>>>>>>> Stashed changes
   };
 
   const handleOpenProfile = () => {
@@ -1728,6 +1739,14 @@ export function DashboardScreen({ navigation }: Props) {
 
         <View style={{ height: 8 }} />
       </View>
+      <MobileNotificationQuickPanel
+        visible={notificationPanelOpen}
+        role="student"
+        onClose={() => setNotificationPanelOpen(false)}
+        navigate={(name, params) => {
+          (navigation.navigate as unknown as (routeName: string, routeParams?: unknown) => void)(name, params);
+        }}
+      />
     </ScreenScroll>
   );
 }

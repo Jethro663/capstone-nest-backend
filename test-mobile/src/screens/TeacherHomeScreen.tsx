@@ -1,4 +1,9 @@
+<<<<<<< Updated upstream
 import { useMemo } from "react";
+=======
+import { useMemo, useState } from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+>>>>>>> Stashed changes
 import { useQueries } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
@@ -19,6 +24,7 @@ import {
   TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import { MobileNotificationQuickPanel } from "../components/notifications/MobileNotificationQuickPanel";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Home">,
@@ -34,6 +40,11 @@ function formatDate(value?: string | null) {
 
 export function TeacherHomeScreen({ navigation }: Props) {
   const { user } = useAuth();
+<<<<<<< Updated upstream
+=======
+  const { unreadCount } = useLiveNotifications();
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+>>>>>>> Stashed changes
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
@@ -136,6 +147,49 @@ export function TeacherHomeScreen({ navigation }: Props) {
       title="Teacher Home"
       subtitle="Review classes, upcoming work, and quick links without leaving the current mobile theme."
       icon="view-dashboard-outline"
+<<<<<<< Updated upstream
+=======
+      rightAction={
+        <Pressable
+          accessibilityLabel="Open notifications"
+          onPress={() => setNotificationPanelOpen(true)}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: theme.border,
+            backgroundColor: theme.active,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <MaterialCommunityIcons name="bell-outline" size={18} color={theme.text} />
+          {unreadCount > 0 ? (
+            <View
+              style={{
+                position: "absolute",
+                top: -3,
+                right: -3,
+                minWidth: 18,
+                height: 18,
+                borderRadius: 999,
+                backgroundColor: theme.red,
+                borderWidth: 2,
+                borderColor: theme.topbar,
+                alignItems: "center",
+                justifyContent: "center",
+                paddingHorizontal: 4,
+              }}
+            >
+              <Text style={{ color: "#FFFFFF", fontSize: 9, fontWeight: "900" }}>
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+      }
+>>>>>>> Stashed changes
       refreshing={refreshing}
       onRefresh={() => {
         void Promise.all([
@@ -358,6 +412,14 @@ export function TeacherHomeScreen({ navigation }: Props) {
           </Pressable>
         </View>
       ) : null}
+      <MobileNotificationQuickPanel
+        visible={notificationPanelOpen}
+        role="teacher"
+        onClose={() => setNotificationPanelOpen(false)}
+        navigate={(name, params) => {
+          (navigation.navigate as unknown as (routeName: string, routeParams?: unknown) => void)(name, params);
+        }}
+      />
     </TeacherScreen>
   );
 }

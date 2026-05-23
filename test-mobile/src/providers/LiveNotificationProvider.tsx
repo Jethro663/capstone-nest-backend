@@ -1,15 +1,37 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import * as Notifications from "expo-notifications";
+<<<<<<< Updated upstream
 import { Animated, AppState, Easing, Image, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { notificationsApi } from "../api/services/notifications";
 import { rootNavigationRef } from "../navigation/navigation-ref";
 import { resolveMobileRole } from "../navigation/role-resolver";
 import { colors, hexToRgba, radii, shadow } from "../theme/tokens";
+=======
+import { io, type Socket } from "socket.io-client";
+import { AppState, Platform } from "react-native";
+import { getAccessToken } from "../api/client";
+import { SOCKET_ORIGIN } from "../api/config";
+import { assessmentsApi } from "../api/services/assessments";
+import { classesApi } from "../api/services/classes";
+import { lxpApi } from "../api/services/lxp";
+import { notificationsApi } from "../api/services/notifications";
+import { rootNavigationRef } from "../navigation/navigation-ref";
+import { resolveMobileRole } from "../navigation/role-resolver";
+import type { Assessment, AssessmentAttempt } from "../types/assessment";
+import type { ClassItem } from "../types/class";
+import type { LxpPathSummary } from "../types/lxp";
+>>>>>>> Stashed changes
 import type { MobileNotification } from "../types/notification";
+import {
+  getMobileNotificationMessage,
+  isMobileInterventionAlertNotification,
+  openMobileNotification,
+} from "../utils/mobile-notification-routing";
 import { useAuth } from "./AuthProvider";
 
+<<<<<<< Updated upstream
 const INTERVENTION_TERMS = [
   "intervention",
   "at risk",
@@ -22,6 +44,15 @@ const INTERVENTION_TERMS = [
 const ASSESSMENT_TYPES = new Set(["assessment_assigned", "assessment_due", "assessment_graded"]);
 const NOTIFICATION_POLL_MS = 4000;
 const AUTO_DISMISS_MS = 7800;
+=======
+const BLUE_REMINDER_TYPES = new Set(["student_pending_task_reminder", "student_pending_intervention_reminder"]);
+const NOTIFICATION_POLL_MS = 4000;
+const STUDENT_REMINDER_POLL_MS = 60_000;
+const TEACHER_REMINDER_POLL_MS = 60_000;
+const LOCAL_REMINDER_BUCKET_MS = 5 * 60 * 1000;
+const STUDENT_REMINDER_CLASS_LIMIT = 6;
+const STUDENT_REMINDER_ASSESSMENT_LIMIT = 16;
+>>>>>>> Stashed changes
 const NATIVE_NOTIFICATION_CHANNEL_ID = "nexora-live";
 const NATIVE_NOTIFICATION_PREFIX = "nexora-notification";
 const NOTIFICATION_TAP_RETRY_MS = 320;
@@ -40,6 +71,7 @@ try {
   // Expo notifications can be unavailable in lightweight test/runtime shells.
 }
 
+<<<<<<< Updated upstream
 type LiveNotificationContextValue = {
   unreadCount: number;
   dismissActive: () => void;
@@ -52,10 +84,10 @@ function normalizeText(value: unknown) {
   return String(value).trim().toLowerCase();
 }
 
+=======
+>>>>>>> Stashed changes
 function messageFromNotification(notification: Pick<MobileNotification, "message" | "body">) {
-  const message = notification.message?.trim();
-  if (message) return message;
-  return notification.body?.trim() || "A new update is available.";
+  return getMobileNotificationMessage(notification);
 }
 
 function readPayloadString(value: unknown) {
@@ -99,6 +131,7 @@ function notificationFromNativeData(data: Record<string, unknown> | undefined): 
   };
 }
 
+<<<<<<< Updated upstream
 function isInterventionAlertNotification(
   notification: Pick<MobileNotification, "type" | "title" | "message" | "body">,
 ) {
@@ -159,40 +192,290 @@ function resolveNotificationNavigation(notification: MobileNotification, role: s
   }
 
   return () => navigateToMainTab(normalizedRole === "teacher" ? "Home" : "Dashboard");
+=======
+type RealtimeNotificationPayload = {
+  id?: unknown;
+  type?: unknown;
+  title?: unknown;
+  body?: unknown;
+  message?: unknown;
+  referenceId?: unknown;
+  createdAt?: unknown;
+};
+
+function getNotificationSeenKeys(notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  return notification.id ? [notification.id] : [];
+}
+
+function hasSeenNotification(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  return getNotificationSeenKeys(notification).some((key) => seen.has(key));
+}
+
+function markNotificationSeen(seen: Set<string>, notification: Pick<MobileNotification, "id" | "type" | "referenceId">) {
+  getNotificationSeenKeys(notification).forEach((key) => seen.add(key));
+}
+
+function notificationFromRealtimePayload(payload: RealtimeNotificationPayload, userId: string): MobileNotification | null {
+  const type = readPayloadString(payload.type);
+  const title = readPayloadString(payload.title);
+  const referenceId = readPayloadString(payload.referenceId) || null;
+  const createdAt = readPayloadString(payload.createdAt) || new Date().toISOString();
+  const id = readPayloadString(payload.id) || `${type}:${referenceId || "broadcast"}:${createdAt}`;
+
+  if (!id || !type || !title) return null;
+
+  const body = readPayloadString(payload.body);
+  const message = readPayloadString(payload.message) || body;
+
+  return {
+    id,
+    userId,
+    type,
+    title,
+    body,
+    message,
+    isRead: false,
+    referenceId,
+    createdAt,
+  };
+}
+
+function isLocalReminderId(value: string) {
+  return value.startsWith("student-reminder:") || value.startsWith("teacher-reminder:");
+}
+
+function isLocalReminderNotification(notification: Pick<MobileNotification, "id" | "type">) {
+  return isLocalReminderId(notification.id) || BLUE_REMINDER_TYPES.has(notification.type);
+}
+
+function resolveUserId(user: unknown) {
+  const record = user as { id?: unknown; userId?: unknown };
+  const id = typeof record.id === "string" ? record.id : "";
+  const userId = typeof record.userId === "string" ? record.userId : "";
+  return id || userId;
+}
+
+function reminderDateKey() {
+  const now = new Date();
+  const bucket = Math.floor(now.getTime() / LOCAL_REMINDER_BUCKET_MS);
+  return `${now.toISOString().slice(0, 10)}:${bucket}`;
+}
+
+function getClassLabel(classItem: ClassItem) {
+  return classItem.subjectName || classItem.subjectCode || classItem.name || classItem.className || "your class";
+}
+
+function getAssessmentDueMs(assessment: Assessment) {
+  if (!assessment.dueDate) return Number.MAX_SAFE_INTEGER;
+  const dueMs = Date.parse(assessment.dueDate);
+  return Number.isFinite(dueMs) ? dueMs : Number.MAX_SAFE_INTEGER;
+}
+
+function getLatestAttempt(attempts: AssessmentAttempt[]) {
+  return [...attempts].sort((left, right) => {
+    const leftTime = Date.parse(left.submittedAt || left.startedAt || left.createdAt || "");
+    const rightTime = Date.parse(right.submittedAt || right.startedAt || right.createdAt || "");
+    return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+  })[0];
+}
+
+async function buildStudentPendingTaskReminder(studentId: string): Promise<MobileNotification | null> {
+  const classRows = await classesApi.getStudentClasses(studentId).catch(() => [] as ClassItem[]);
+  if (classRows.length === 0) return null;
+
+  const batches = await Promise.all(
+    classRows.slice(0, STUDENT_REMINDER_CLASS_LIMIT).map(async (classItem) => {
+      const assessments = await assessmentsApi.getByClass(classItem.id).catch(() => [] as Assessment[]);
+      const published = assessments
+        .filter((assessment) => assessment.id && assessment.isPublished !== false)
+        .slice(0, STUDENT_REMINDER_ASSESSMENT_LIMIT);
+
+      const statuses = await Promise.all(
+        published.map(async (assessment) => {
+          const attempts = await assessmentsApi.getStudentAttempts(assessment.id).catch(() => [] as AssessmentAttempt[]);
+          return { assessment, classItem, latestAttempt: getLatestAttempt(attempts), dueMs: getAssessmentDueMs(assessment) };
+        }),
+      );
+
+      return statuses.filter((entry) => !entry.latestAttempt?.isSubmitted);
+    }),
+  );
+
+  const pending = batches
+    .flat()
+    .sort((left, right) => left.dueMs - right.dueMs || left.assessment.title.localeCompare(right.assessment.title));
+
+  if (pending.length === 0) return null;
+
+  const first = pending[0];
+  const classLabel = getClassLabel(first.classItem);
+  const title = pending.length === 1 ? "1 pending task waiting" : String(pending.length) + " pending tasks waiting";
+  const message =
+    pending.length === 1
+      ? first.assessment.title + " in " + classLabel + " is ready. Tap to open your assessments."
+      : first.assessment.title + " is next, plus " + String(pending.length - 1) + " more task(s). Tap to open your assessments.";
+
+  return {
+    id:
+      "student-reminder:pending-task:" +
+      studentId +
+      ":" +
+      reminderDateKey() +
+      ":" +
+      first.assessment.id +
+      ":" +
+      String(pending.length),
+    userId: studentId,
+    type: "student_pending_task_reminder",
+    title,
+    body: message,
+    message,
+    isRead: true,
+    referenceId: first.assessment.id,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function getPendingPathCount(path: LxpPathSummary) {
+  const explicitPending = Number(path.counts?.pending ?? 0);
+  if (explicitPending > 0) return explicitPending;
+
+  const total = Number(path.progress?.totalCheckpoints ?? path.counts?.total ?? 0);
+  const completed = Number(path.progress?.completedCheckpoints ?? path.counts?.completed ?? 0);
+  return Math.max(0, total - completed);
+}
+
+async function buildStudentPendingInterventionReminder(studentId: string): Promise<MobileNotification | null> {
+  const eligibility = await lxpApi.getEligibility().catch(() => null);
+  const paths = eligibility?.paths || [];
+  const pendingPaths = paths
+    .map((path) => ({ path, pendingCount: getPendingPathCount(path) }))
+    .filter(({ path, pendingCount }) => path.status !== "completed" && pendingCount > 0);
+
+  if (pendingPaths.length === 0) {
+    const alerts = await lxpApi.getInterventionAlerts().catch(() => null);
+    const assignedAlerts = (alerts?.alerts || []).filter((alert) => alert.hasAssignedPath);
+    if (assignedAlerts.length === 0) return null;
+
+    const firstAlert = assignedAlerts[0];
+    const subjectLabel = firstAlert.subjectName || firstAlert.subjectCode || "Learners Path";
+    const message =
+      assignedAlerts.length === 1
+        ? subjectLabel + " has an intervention path ready. JA can guide you through it now."
+        : subjectLabel + " is ready, plus " + String(assignedAlerts.length - 1) + " more intervention path(s). JA can guide you now.";
+
+    return {
+      id:
+        "student-reminder:pending-intervention:" +
+        studentId +
+        ":" +
+        reminderDateKey() +
+        ":" +
+        firstAlert.classId +
+        ":alerts:" +
+        String(assignedAlerts.length),
+      userId: studentId,
+      type: "student_pending_intervention_reminder",
+      title: "Learners Path needs you",
+      body: message,
+      message,
+      isRead: true,
+      referenceId: firstAlert.classId,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  const first = pendingPaths[0];
+  const totalPending = pendingPaths.reduce((sum, item) => sum + item.pendingCount, 0);
+  const subjectLabel = first.path.class?.subjectName || first.path.class?.subjectCode || "Learners Path";
+  const message =
+    totalPending === 1
+      ? subjectLabel + " has 1 pending intervention step. JA can guide you through it now."
+      : subjectLabel + " has " + String(first.pendingCount) + " pending step(s), with " + String(totalPending) + " total across your intervention paths.";
+
+  return {
+    id:
+      "student-reminder:pending-intervention:" +
+      studentId +
+      ":" +
+      reminderDateKey() +
+      ":" +
+      first.path.classId +
+      ":" +
+      String(totalPending),
+    userId: studentId,
+    type: "student_pending_intervention_reminder",
+    title: "Learners Path needs you",
+    body: message,
+    message,
+    isRead: true,
+    referenceId: first.path.classId,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+async function buildTeacherPendingInterventionReminder(userId: string): Promise<MobileNotification | null> {
+  const pending = await lxpApi.getTeacherPendingInterventionCount().catch(() => null);
+  const pendingCount = Number(pending?.pendingCount ?? 0);
+  if (pendingCount <= 0) return null;
+
+  const classBreakdown = (pending?.classBreakdown || []) as Array<{
+    classId?: string | null;
+    subjectName?: string | null;
+    subjectCode?: string | null;
+    pendingCount?: number | null;
+  }>;
+  const firstClass = classBreakdown.find((entry) => Number(entry.pendingCount ?? 0) > 0);
+  const classLabel = firstClass?.subjectName || firstClass?.subjectCode || "your classes";
+  const message =
+    pendingCount === 1
+      ? classLabel + " has 1 learner waiting for intervention review."
+      : classLabel + " has intervention work waiting, with " + String(pendingCount) + " learner(s) needing review.";
+
+  return {
+    id:
+      "teacher-reminder:pending-interventions:" +
+      userId +
+      ":" +
+      reminderDateKey() +
+      ":" +
+      (firstClass?.classId || "all") +
+      ":" +
+      String(pendingCount),
+    userId,
+    type: "teacher_pending_intervention_reminder",
+    title: "Intervention queue needs review",
+    body: message,
+    message,
+    isRead: true,
+    referenceId: firstClass?.classId || null,
+    createdAt: new Date().toISOString(),
+  };
+>>>>>>> Stashed changes
 }
 
 function navigateToNotification(notification: MobileNotification, role: string | null) {
   if (!rootNavigationRef.isReady()) return false;
-  resolveNotificationNavigation(notification, role)();
+  const navigate = rootNavigationRef.navigate as unknown as (name: string, params?: unknown) => void;
+  void openMobileNotification(notification, role, navigate);
   return true;
 }
 
-const interventionCharacterSource = () => require("../../assets/ja/ja_live_notify.png");
-const notificationCharacterSource = () => require("../../assets/ja/ja_wave.png");
-
 export function LiveNotificationProvider({ children }: PropsWithChildren) {
   const { isAuthenticated, user } = useAuth();
-  const insets = useSafeAreaInsets();
-  const [activeNotification, setActiveNotification] = useState<MobileNotification | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const seenIdsRef = useRef<Set<string>>(new Set());
-  const queueRef = useRef<MobileNotification[]>([]);
   const hydratedRef = useRef(false);
-  const activeRef = useRef<MobileNotification | null>(null);
   const mountedRef = useRef(true);
   const pollInFlightRef = useRef(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const autoDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nativeReadyRef = useRef(false);
   const nativeDeniedRef = useRef(false);
   const scheduledNativeIdsRef = useRef<Set<string>>(new Set());
   const pendingNativeOpenRef = useRef<MobileNotification | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
-  const slide = useRef(new Animated.Value(-140)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
   const role = resolveMobileRole(user?.roles);
 
   useEffect(() => {
@@ -202,10 +485,15 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
       }
+<<<<<<< Updated upstream
       if (autoDismissTimerRef.current) {
         clearTimeout(autoDismissTimerRef.current);
         autoDismissTimerRef.current = null;
       }
+=======
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+>>>>>>> Stashed changes
     };
   }, []);
 
@@ -252,7 +540,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       if (!ready) return;
 
       scheduledNativeIdsRef.current.add(notification.id);
-      const interventionAlert = isInterventionAlertNotification(notification);
+      const interventionAlert = isMobileInterventionAlertNotification(notification);
 
       try {
         await Notifications.scheduleNotificationAsync({
@@ -299,6 +587,7 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
     [role],
   );
 
+<<<<<<< Updated upstream
   const tryShowNext = useCallback(() => {
     if (activeRef.current || queueRef.current.length === 0) return;
     const next = queueRef.current.shift() ?? null;
@@ -423,6 +712,64 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       }
     };
   }, [activeNotification, dismissActive, opacity, pulse, slide, tryShowNext]);
+=======
+  const clearLocalReminderSeenKeys = useCallback(() => {
+    seenIdsRef.current.forEach((key) => {
+      if (isLocalReminderId(key)) {
+        seenIdsRef.current.delete(key);
+      }
+    });
+  }, []);
+
+  const enqueueLiveNotification = useCallback(
+    (notification: MobileNotification) => {
+      if (!notification.id || hasSeenNotification(seenIdsRef.current, notification)) return false;
+      markNotificationSeen(seenIdsRef.current, notification);
+      void scheduleNativeNotification(notification);
+      return true;
+    },
+    [scheduleNativeNotification],
+  );
+
+  const syncStudentReminderNotifications = useCallback(async () => {
+    if (!isAuthenticated || role !== "student" || studentReminderInFlightRef.current) return;
+
+    const studentId = resolveUserId(user);
+    if (!studentId) return;
+
+    studentReminderInFlightRef.current = true;
+    try {
+      const [taskReminder, interventionReminder] = await Promise.all([
+        buildStudentPendingTaskReminder(studentId).catch(() => null),
+        buildStudentPendingInterventionReminder(studentId).catch(() => null),
+      ]);
+
+      if (taskReminder) enqueueLiveNotification(taskReminder);
+      if (interventionReminder) enqueueLiveNotification(interventionReminder);
+    } catch {
+      // Local reminders should never interrupt the core notification stream.
+    } finally {
+      studentReminderInFlightRef.current = false;
+    }
+  }, [enqueueLiveNotification, isAuthenticated, role, user]);
+
+  const syncTeacherReminderNotifications = useCallback(async () => {
+    if (!isAuthenticated || role !== "teacher" || teacherReminderInFlightRef.current) return;
+
+    const teacherId = resolveUserId(user);
+    if (!teacherId) return;
+
+    teacherReminderInFlightRef.current = true;
+    try {
+      const interventionReminder = await buildTeacherPendingInterventionReminder(teacherId).catch(() => null);
+      if (interventionReminder) enqueueLiveNotification(interventionReminder);
+    } catch {
+      // Teacher reminders should never interrupt the core notification stream.
+    } finally {
+      teacherReminderInFlightRef.current = false;
+    }
+  }, [enqueueLiveNotification, isAuthenticated, role, user]);
+>>>>>>> Stashed changes
 
   const pollNotifications = useCallback(async () => {
     if (!isAuthenticated || !user?.id || pollInFlightRef.current) return;
@@ -439,24 +786,18 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
 
       const rows = Array.isArray(listResponse.data) ? listResponse.data : [];
       if (!hydratedRef.current) {
-        const urgentUnread = rows
-          .filter(shouldSurfaceNotificationOnHydration)
-          .sort((left, right) => {
-            const leftTs = Date.parse(left.createdAt);
-            const rightTs = Date.parse(right.createdAt);
-            return leftTs - rightTs;
-          })
-          .slice(-3);
-
         rows.forEach((row) => {
           seenIdsRef.current.add(row.id);
         });
         hydratedRef.current = true;
+<<<<<<< Updated upstream
         queueRef.current.push(...urgentUnread);
         urgentUnread.forEach((row) => {
           void scheduleNativeNotification(row);
         });
         tryShowNext();
+=======
+>>>>>>> Stashed changes
         return;
       }
 
@@ -470,27 +811,31 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
       });
 
       orderedFresh.forEach((row) => {
+<<<<<<< Updated upstream
         seenIdsRef.current.add(row.id);
         queueRef.current.push(row);
         void scheduleNativeNotification(row);
+=======
+        enqueueLiveNotification(row);
+>>>>>>> Stashed changes
       });
-      tryShowNext();
     } catch {
       // Keep UI resilient and skip transient notification failures.
     } finally {
       pollInFlightRef.current = false;
     }
+<<<<<<< Updated upstream
   }, [isAuthenticated, scheduleNativeNotification, tryShowNext, user?.id]);
+=======
+  }, [enqueueLiveNotification, isAuthenticated, user?.id]);
+>>>>>>> Stashed changes
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       seenIdsRef.current = new Set();
-      queueRef.current = [];
       hydratedRef.current = false;
-      activeRef.current = null;
       scheduledNativeIdsRef.current = new Set();
       pendingNativeOpenRef.current = null;
-      setActiveNotification(null);
       setUnreadCount(0);
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
@@ -569,31 +914,23 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
   }, [isAuthenticated, unreadCount]);
 
   useEffect(() => {
-    if (!activeNotification) {
-      const pending = pendingNativeOpenRef.current;
-      if (pending && navigateToNotification(pending, role)) {
-        pendingNativeOpenRef.current = null;
-      }
+    const pending = pendingNativeOpenRef.current;
+    if (pending && navigateToNotification(pending, role)) {
+      pendingNativeOpenRef.current = null;
     }
-  }, [activeNotification, role]);
-
-  const interventionAlert = activeNotification ? isInterventionAlertNotification(activeNotification) : false;
-  const message = activeNotification ? messageFromNotification(activeNotification) : "";
-  const pulseTranslate = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -4],
-  });
+  }, [role]);
 
   const value = useMemo(
     () => ({
       unreadCount,
-      dismissActive,
+      dismissActive: () => undefined,
     }),
-    [dismissActive, unreadCount],
+    [unreadCount],
   );
 
   return (
     <LiveNotificationContext.Provider value={value}>
+<<<<<<< Updated upstream
       <View style={{ flex: 1 }}>
         {children}
         {activeNotification ? (
@@ -709,6 +1046,9 @@ export function LiveNotificationProvider({ children }: PropsWithChildren) {
           </View>
         ) : null}
       </View>
+=======
+      {children}
+>>>>>>> Stashed changes
     </LiveNotificationContext.Provider>
   );
 }

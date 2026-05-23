@@ -6,9 +6,8 @@
 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Menu, User } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, User } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
-import { useNotifications } from '@/providers/NotificationProvider';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -24,6 +23,7 @@ import {
   type DashboardRole,
 } from '@/lib/dashboard-route-access';
 import { SystemInfoButton } from './SystemInfoButton';
+import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -42,7 +42,6 @@ export function TopBar({
 }: TopBarProps) {
   const router = useRouter();
   const { user, role } = useAuth();
-  const { unreadCount } = useNotifications();
   const effectiveRole = shellRole ?? normalizeDashboardRole(role);
   const isStudentShell = effectiveRole === 'student';
   const isTeacherShell = effectiveRole === 'teacher';
@@ -56,10 +55,6 @@ export function TopBar({
     : 'U';
   const avatarSrc = resolveUserProfilePicture(user);
   const profileHref = getProfileRoute(effectiveRole);
-  const notificationsLabel =
-    unreadCount > 0
-      ? `Open notifications (${unreadCount > 9 ? '9+' : unreadCount} unread)`
-      : 'Open notifications';
   const studentApkHref = '/downloads/nexora-student-mobile-release.apk';
 
   if (isAdminShell) {
@@ -85,20 +80,10 @@ export function TopBar({
         <div className="admin-topbar__actions">
           <SystemInfoButton buttonClassName="admin-topbar__notif" />
 
-          <button
-            type="button"
-            className="admin-topbar__notif"
-            onClick={() => router.push('/dashboard/notifications')}
-            title={notificationsLabel}
-            aria-label={notificationsLabel}
-          >
-            <div className="relative">
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 ? (
-                <span className="admin-topbar__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-              ) : null}
-            </div>
-          </button>
+          <NotificationBellDropdown
+            buttonClassName="admin-topbar__notif"
+            badgeClassName="admin-topbar__notif-badge"
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -163,18 +148,10 @@ export function TopBar({
         <div className="teacher-topbar-shell__actions">
           <SystemInfoButton buttonClassName="teacher-topbar-shell__notif" />
 
-          <button
-            type="button"
-            className="teacher-topbar-shell__notif"
-            onClick={() => router.push('/dashboard/notifications')}
-            title={notificationsLabel}
-            aria-label={notificationsLabel}
-          >
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 ? (
-              <span className="teacher-topbar-shell__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-            ) : null}
-          </button>
+          <NotificationBellDropdown
+            buttonClassName="teacher-topbar-shell__notif"
+            badgeClassName="teacher-topbar-shell__notif-badge"
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -257,18 +234,10 @@ export function TopBar({
 
           <SystemInfoButton buttonClassName="student-topbar-shell__icon-button" />
 
-          <button
-            type="button"
-            className="student-topbar-shell__notif"
-            onClick={() => router.push('/dashboard/notifications')}
-            title={notificationsLabel}
-            aria-label={notificationsLabel}
-          >
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 ? (
-              <span className="student-topbar-shell__notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-            ) : null}
-          </button>
+          <NotificationBellDropdown
+            buttonClassName="student-topbar-shell__notif"
+            badgeClassName="student-topbar-shell__notif-badge"
+          />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -332,20 +301,14 @@ export function TopBar({
           }
         />
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => router.push('/dashboard/notifications')}
-          title={notificationsLabel}
-          aria-label={notificationsLabel}
-          className={
+        <NotificationBellDropdown
+          buttonClassName={
             isTeacherShell
-                ? 'text-[var(--teacher-text-muted)] hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'
-                : undefined
+              ? 'inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--teacher-text-muted)] transition hover:bg-white/10 hover:text-[var(--teacher-text-strong)]'
+              : 'inline-flex h-10 w-10 items-center justify-center rounded-md text-slate-500 transition hover:bg-slate-100 hover:text-slate-700'
           }
-        >
-          <Bell className="h-5 w-5" />
-        </Button>
+          badgeClassName="absolute -right-2 -top-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e70012] px-1 text-[10px] font-black text-white"
+        />
 
         <div className={`mx-2 h-6 w-px ${isTeacherShell ? 'teacher-divider' : 'bg-slate-200'}`} />
 

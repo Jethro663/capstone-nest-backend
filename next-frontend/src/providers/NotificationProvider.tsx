@@ -12,13 +12,17 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
-import { showLiveNotificationToast } from '@/components/notifications/LiveNotificationToast';
 import {
   isTrackedExtractionTerminalStatus,
   readAllTrackedExtractionNotifications,
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
+<<<<<<< Updated upstream
 import { shouldSurfaceNotificationOnHydration } from '@/lib/notification-routing';
+=======
+import { assessmentService } from '@/services/assessment-service';
+import { classService } from '@/services/class-service';
+>>>>>>> Stashed changes
 import { extractionService } from '@/services/extraction-service';
 import {
   normalizeNotification,
@@ -72,7 +76,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const publishIncomingNotification = useCallback(
-    (notification: Notification, options?: { showToast?: boolean }) => {
+    (notification: Notification) => {
       if (!notification?.id) return false;
 
       const alreadySeen = seenNotificationIdsRef.current.has(notification.id);
@@ -89,17 +93,33 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       });
 
-      if (options?.showToast) {
-        showLiveNotificationToast(notification, role);
-      }
-
       return true;
     },
-    [role],
+    [],
+  );
+
+  const appendLocalNotification = useCallback(
+    (notification: Notification) => {
+      const inserted = publishIncomingNotification(notification);
+      if (!inserted) return;
+
+      setNotifications((prev) => {
+        const next = [
+          notification,
+          ...prev.filter((row) => row.id !== notification.id),
+        ].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+        return next.slice(0, 50);
+      });
+
+      if (!notification.isRead) {
+        setUnreadCount((prev) => prev + 1);
+      }
+    },
+    [publishIncomingNotification],
   );
 
   const syncNotifications = useCallback(
-    async (showToastForFresh: boolean) => {
+    async () => {
       try {
         setLoading(true);
         const [listRes, countRes] = await Promise.all([
@@ -110,19 +130,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         const rows = Array.isArray(listRes.data) ? listRes.data : [];
 
         if (!hasHydratedSeenIdsRef.current) {
-          const initialUrgentRows = rows
-            .filter(shouldSurfaceNotificationOnHydration)
-            .sort((left, right) => {
-              const leftTs = Date.parse(left.createdAt);
-              const rightTs = Date.parse(right.createdAt);
-              return leftTs - rightTs;
-            })
-            .slice(-3);
-
-          initialUrgentRows.forEach((row) => {
-            publishIncomingNotification(row, { showToast: true });
-          });
-
           rows.forEach((row) => {
             if (row?.id) {
               seenNotificationIdsRef.current.add(row.id);
@@ -139,7 +146,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             });
 
           freshRows.forEach((row) => {
-            publishIncomingNotification(row, { showToast: showToastForFresh });
+            publishIncomingNotification(row);
           });
         }
 
@@ -157,7 +164,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   );
 
   const fetchNotifications = useCallback(async () => {
-    await syncNotifications(false);
+    await syncNotifications();
   }, [syncNotifications]);
 
   const markAsRead = useCallback(async (id: string) => {
@@ -211,40 +218,34 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
             nextEntry.notifiedAt = new Date().toISOString();
             if (nextStatus === 'completed' || nextStatus === 'applied') {
               const message = `${entry.originalName} finished processing and is ready for teacher review.`;
-              showLiveNotificationToast(
-                {
-                  id: `extraction:${entry.extractionId}:completed`,
-                  userId: sessionUserId,
-                  type: 'extraction_completed',
-                  title: 'Extraction ready',
-                  body: message,
-                  message,
-                  isRead: false,
-                  referenceId: entry.extractionId,
-                  metadata: { classId: entry.classId },
-                  createdAt: nextEntry.notifiedAt,
-                },
-                role,
-              );
+              appendLocalNotification({
+                id: `extraction:${entry.extractionId}:completed`,
+                userId: sessionUserId,
+                type: 'extraction_completed',
+                title: 'Extraction ready',
+                body: message,
+                message,
+                isRead: false,
+                referenceId: entry.extractionId,
+                metadata: { classId: entry.classId },
+                createdAt: nextEntry.notifiedAt,
+              });
             } else if (nextStatus === 'failed') {
               const message =
                 statusRes.data.errorMessage ||
                 `${entry.originalName} could not be completed. Open the extraction history to review the error.`;
-              showLiveNotificationToast(
-                {
-                  id: `extraction:${entry.extractionId}:failed`,
-                  userId: sessionUserId,
-                  type: 'extraction_failed',
-                  title: 'Extraction failed',
-                  body: message,
-                  message,
-                  isRead: false,
-                  referenceId: entry.extractionId,
-                  metadata: { classId: entry.classId },
-                  createdAt: nextEntry.notifiedAt,
-                },
-                role,
-              );
+              appendLocalNotification({
+                id: `extraction:${entry.extractionId}:failed`,
+                userId: sessionUserId,
+                type: 'extraction_failed',
+                title: 'Extraction failed',
+                body: message,
+                message,
+                isRead: false,
+                referenceId: entry.extractionId,
+                metadata: { classId: entry.classId },
+                createdAt: nextEntry.notifiedAt,
+              });
             }
           }
 
@@ -254,11 +255,37 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       }),
     );
-  }, [role, sessionUserId]);
+  }, [appendLocalNotification, role, sessionUserId]);
 
+<<<<<<< Updated upstream
+=======
+  const syncStudentReminderNotifications = useCallback(async () => {
+    if (!sessionUserId || !isStudentRole(role) || studentReminderInFlightRef.current) return;
+
+    studentReminderInFlightRef.current = true;
+    try {
+      const [taskReminder, interventionReminder] = await Promise.all([
+        buildStudentPendingTaskReminder(sessionUserId).catch(() => null),
+        buildStudentPendingInterventionReminder(sessionUserId).catch(() => null),
+      ]);
+
+      if (taskReminder) {
+        appendLocalNotification(taskReminder);
+      }
+      if (interventionReminder) {
+        appendLocalNotification(interventionReminder);
+      }
+    } catch {
+      // Student reminders are helpful but should never block live backend notifications.
+    } finally {
+      studentReminderInFlightRef.current = false;
+    }
+  }, [appendLocalNotification, role, sessionUserId]);
+
+>>>>>>> Stashed changes
   useEffect(() => {
     if (sessionUserId) {
-      void syncNotifications(false);
+      void syncNotifications();
     } else {
       setNotifications([]);
       setUnreadCount(0);
@@ -271,7 +298,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!sessionUserId) return;
 
     const interval = window.setInterval(() => {
-      void syncNotifications(true);
+      void syncNotifications();
     }, NOTIFICATION_POLL_MS);
 
     return () => {
@@ -330,7 +357,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           createdAt: payload.createdAt,
         });
 
-        const inserted = publishIncomingNotification(newNotification, { showToast: true });
+        const inserted = publishIncomingNotification(newNotification);
         if (!inserted) return;
 
         setNotifications((prev) => [newNotification, ...prev]);
