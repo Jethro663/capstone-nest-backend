@@ -90,6 +90,7 @@ export interface LxpCheckpoint {
   } | null;
   generatedLesson?: GeneratedLessonContent | null;
   guidedAssessment?: GuidedAssessmentContent | null;
+  guidedAttemptSummary?: GuidedAssessmentAttemptSummary | null;
 }
 
 export interface GeneratedLessonContent {
@@ -117,6 +118,7 @@ export interface GuidedAssessmentQuestion {
   stem: string;
   explanation: string;
   hint?: string | null;
+  reviewHint?: string | null;
   weakConceptTag?: string | null;
   options: GuidedAssessmentQuestionOption[];
 }

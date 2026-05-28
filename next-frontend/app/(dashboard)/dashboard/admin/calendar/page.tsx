@@ -67,11 +67,15 @@ function emptyFormState(): SchoolEventFormState {
   };
 }
 
+function toLocalDateInputValue(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 function toDateInputValue(iso?: string): string {
   if (!iso) return '';
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return '';
-  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+  return toLocalDateInputValue(parsed);
 }
 
 function toDateTimeInputValue(iso?: string): string {
@@ -93,6 +97,29 @@ function toIsoDateRange(value: string, endOfDay = false): string {
 
 function toIsoDateTime(value: string): string {
   return new Date(value).toISOString();
+}
+
+function getTodayDateInputValue(): string {
+  return toLocalDateInputValue(new Date());
+}
+
+function getDateInputMinValue(allDay: boolean): string {
+  const today = getTodayDateInputValue();
+  return allDay ? today : `${today}T00:00`;
+}
+
+function getEndInputMinValue(form: SchoolEventFormState): string {
+  const todayMin = getDateInputMinValue(form.allDay);
+  if (!form.startsAt) return todayMin;
+  return form.startsAt > todayMin ? form.startsAt : todayMin;
+}
+
+function getInputLocalDayStartMs(allDay: boolean, value: string): number | null {
+  if (!value) return null;
+  const parsed = allDay ? new Date(`${value}T00:00:00.000`) : new Date(value);
+  const parsedMs = parsed.getTime();
+  if (Number.isNaN(parsedMs)) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
 }
 
 function mapEventToForm(event: SchoolEvent): SchoolEventFormState {
@@ -194,8 +221,19 @@ function validateSchoolEventForm(
     }
   }
 
+  const todayStartMs = getInputLocalDayStartMs(true, getTodayDateInputValue()) ?? 0;
+  const startDayMs = getInputLocalDayStartMs(form.allDay, form.startsAt);
+  const endDayMs = getInputLocalDayStartMs(form.allDay, form.endsAt);
+
+  if (startDayMs !== null && startDayMs < todayStartMs) {
+    errors.startsAt = 'Start date cannot be earlier than today.';
+  }
+  if (endDayMs !== null && endDayMs < todayStartMs) {
+    errors.endsAt = 'End date cannot be earlier than today.';
+  }
+
   const formRange = getValidationDateRange(form);
-  if (!formRange) return errors;
+  if (!formRange || errors.startsAt || errors.endsAt) return errors;
 
   const hasCompleteDateWindow = Boolean(form.startsAt && form.endsAt);
 
@@ -616,6 +654,7 @@ export default function AdminCalendarPage() {
               <Input
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.startsAt}
+                min={getDateInputMinValue(form.allDay)}
                 onChange={(event) => setField('startsAt', event.target.value)}
                 aria-invalid={Boolean(formValidation.startsAt)}
                 aria-describedby={formValidation.startsAt ? 'calendar-start-validation' : undefined}
@@ -631,6 +670,7 @@ export default function AdminCalendarPage() {
               <Input
                 type={form.allDay ? 'date' : 'datetime-local'}
                 value={form.endsAt}
+                min={getEndInputMinValue(form)}
                 onChange={(event) => setField('endsAt', event.target.value)}
                 aria-invalid={Boolean(formValidation.endsAt)}
                 aria-describedby={formValidation.endsAt ? 'calendar-end-validation' : undefined}

@@ -827,6 +827,71 @@ export class LxpService {
     };
   }
 
+  private async buildGuidedAttemptSummaryMap(
+    studentId: string,
+    assignments: Array<{
+      id: string;
+      assignmentType: string;
+      generatedGuidedAssessment?: {
+        sourceAssessmentId?: string | null;
+      } | null;
+    }>,
+  ) {
+    const guidedAssignments = assignments.filter(
+      (assignment) =>
+        assignment.assignmentType === 'guided_assessment' &&
+        assignment.generatedGuidedAssessment,
+    );
+
+    if (guidedAssignments.length === 0) {
+      return new Map<
+        string,
+        ReturnType<typeof this.buildGuidedAttemptSummary>
+      >();
+    }
+
+    const assignmentIds = guidedAssignments.map((assignment) => assignment.id);
+    const attempts = await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+      where: and(
+        eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        inArray(generatedGuidedAssessmentAttempts.assignmentId, assignmentIds),
+      ),
+      orderBy: [
+        asc(generatedGuidedAssessmentAttempts.assignmentId),
+        asc(generatedGuidedAssessmentAttempts.attemptNumber),
+      ],
+    });
+
+    const attemptsByAssignment = new Map<string, typeof attempts>();
+    for (const attempt of attempts) {
+      if (!attempt.assignmentId) continue;
+      const existing = attemptsByAssignment.get(attempt.assignmentId) ?? [];
+      existing.push(attempt);
+      attemptsByAssignment.set(attempt.assignmentId, existing);
+    }
+
+    const passingScoreEntries = await Promise.all(
+      guidedAssignments.map(async (assignment) => [
+        assignment.id,
+        await this.resolveGuidedPassingScore(
+          assignment.generatedGuidedAssessment?.sourceAssessmentId,
+        ),
+      ] as const),
+    );
+    const passingScoreByAssignment = new Map(passingScoreEntries);
+
+    return new Map(
+      guidedAssignments.map((assignment) => [
+        assignment.id,
+        this.buildGuidedAttemptSummary(
+          attemptsByAssignment.get(assignment.id) ?? [],
+          passingScoreByAssignment.get(assignment.id) ??
+            PATH_REGENERATION_SCORE_THRESHOLD,
+        ),
+      ] as const),
+    );
+  }
+
   private xpToStars(xp: number) {
     return Math.round((xp / STAR_XP) * 100) / 100;
   }
@@ -2331,6 +2396,9 @@ export class LxpService {
       orderBy: [asc(interventionAssignments.orderIndex)],
     });
 
+    const guidedAttemptSummaryByAssignmentId =
+      await this.buildGuidedAttemptSummaryMap(studentId, assignments);
+
     const total = assignments.length;
     const completed = assignments.filter((item) => item.isCompleted).length;
 
@@ -2369,6 +2437,8 @@ export class LxpService {
         guidedAssessment: this.serializeGeneratedGuidedAssessment(
           item.generatedGuidedAssessment,
         ),
+        guidedAttemptSummary:
+          guidedAttemptSummaryByAssignmentId.get(item.id) ?? null,
       })),
     };
   }
@@ -3024,6 +3094,7 @@ export class LxpService {
             stem: question.stem,
             explanation: question.explanation,
             hint: question.hint ?? null,
+            reviewHint: question.reviewHint ?? null,
             weakConceptTag: question.weakConceptTag ?? null,
             sourceQuestionId: question.sourceQuestionId ?? null,
             options: question.options.map((option) => ({

@@ -29,6 +29,10 @@ function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
   return labels.length ? labels.join(", ") : "Answer key unavailable";
 }
 
+function getReviewHint(question: GuidedAssessmentQuestion | undefined) {
+  return stripRichText(question?.reviewHint || question?.hint);
+}
+
 function isSelected(answer: string | string[] | undefined, optionId: string) {
   return normalizeAnswer(answer).includes(optionId);
 }
@@ -151,6 +155,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
   const activeAnswer = activeQuestion ? responses[activeQuestion.id] : undefined;
   const answerCorrect = activeQuestion ? isCorrectAnswer(activeQuestion, activeAnswer) : false;
   const tone = scoreTone(result?.passed ?? summary?.passed);
+  const activeReviewHint = getReviewHint(activeQuestion);
 
   return (
     <ScreenScroll
@@ -218,6 +223,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
 
             {questions.map((question, index) => {
               const response = result.responses.find((item) => item.questionId === question.id);
+              const reviewHint = getReviewHint(question);
               return (
                 <View key={question.id} style={[{ borderRadius: 24, backgroundColor: colors.white, padding: 14 }, shadow.card]}>
                   <Text style={{ color: theme.text, fontSize: 14, fontWeight: "900" }}>Q{index + 1}. {stripRichText(question.stem)}</Text>
@@ -240,6 +246,12 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                   <Text style={{ marginTop: 4, color: colors.green, fontSize: 12, fontWeight: "900" }}>
                     Correct answer: {formatCorrectAnswer(question)}
                   </Text>
+                  {reviewHint ? (
+                    <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
+                      <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                      <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{reviewHint}</Text>
+                    </View>
+                  ) : null}
                   <Text style={{ marginTop: 8, color: theme.muted, fontSize: 12, lineHeight: 18 }}>{stripRichText(question.explanation)}</Text>
                 </View>
               );
@@ -272,6 +284,12 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                 <Text style={{ marginTop: 5, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
                   Correct answer: {formatCorrectAnswer(activeQuestion)}. {stripRichText(activeQuestion.explanation)}
                 </Text>
+                {activeReviewHint ? (
+                  <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
+                    <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                    <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{activeReviewHint}</Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
 

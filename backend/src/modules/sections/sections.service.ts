@@ -1189,16 +1189,27 @@ export class SectionsService {
     actorRoles: string[] = [],
   ) {
     const section = await this.findById(id);
+    const now = new Date();
 
     await this.db.transaction(async (tx) => {
       await tx
+        .update(enrollments)
+        .set({ status: 'completed' })
+        .where(
+          and(
+            eq(enrollments.sectionId, id),
+            eq(enrollments.status, 'enrolled'),
+          ),
+        );
+
+      await tx
         .update(classes)
-        .set({ isActive: false, updatedAt: new Date() })
+        .set({ isActive: false, teacherId: null, updatedAt: now })
         .where(eq(classes.sectionId, id));
 
       await tx
         .update(sections)
-        .set({ isActive: false, updatedAt: new Date() })
+        .set({ isActive: false, adviserId: null, updatedAt: now })
         .where(eq(sections.id, id));
     });
 
@@ -1210,39 +1221,22 @@ export class SectionsService {
       metadata: {
         actorRole: this.resolveActorRole(actorRoles),
         previousIsActive: section.isActive,
+        removedAdviserId: section.adviserId,
+        completedEnrollmentStatus: 'completed',
+        linkedClassTeacherStatus: 'cleared',
       },
     });
   }
 
   async restoreSection(
     id: string,
-    actorId?: string,
-    actorRoles: string[] = [],
+    _actorId?: string,
+    _actorRoles: string[] = [],
   ) {
-    const section = await this.findById(id);
-
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(sections)
-        .set({ isActive: true, updatedAt: new Date() })
-        .where(eq(sections.id, id));
-
-      await tx
-        .update(classes)
-        .set({ isActive: true, updatedAt: new Date() })
-        .where(eq(classes.sectionId, id));
-    });
-
-    await this.auditService.log({
-      actorId: actorId ?? section.adviserId ?? 'system',
-      action: 'section.restored',
-      targetType: 'section',
-      targetId: id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        previousIsActive: section.isActive,
-      },
-    });
+    await this.findById(id);
+    throw new ConflictException(
+      'Archived sections cannot be restored. Purge the archived section instead.',
+    );
   }
 
   async deleteSection(id: string, actorId?: string, actorRoles: string[] = []) {
@@ -1265,11 +1259,9 @@ export class SectionsService {
         await this.archiveSection(sectionId, actorId, actorRoles);
         return;
       case 'restore':
-        if (section.isActive) {
-          throw new ConflictException('Section is already active.');
-        }
-        await this.restoreSection(sectionId, actorId, actorRoles);
-        return;
+        throw new ConflictException(
+          'Archived sections cannot be restored. Purge the archived section instead.',
+        );
       case 'purge':
         if (section.isActive) {
           throw new ConflictException(

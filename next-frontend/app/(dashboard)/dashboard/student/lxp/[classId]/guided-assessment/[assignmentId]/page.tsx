@@ -70,6 +70,10 @@ function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
   return labels.length > 0 ? labels.join(", ") : "Answer key unavailable";
 }
 
+function getReviewHint(question: GuidedAssessmentQuestion | undefined) {
+  return stripRichText(question?.reviewHint || question?.hint);
+}
+
 function isGuidedAnswerCorrect(
   question: GuidedAssessmentQuestion | undefined,
   answer: string | string[] | undefined,
@@ -345,6 +349,7 @@ export default function StudentGuidedAssessmentPage() {
       index: number,
     ) => {
       const response = resultByQuestionId[question.id];
+      const reviewHint = getReviewHint(question);
       return (
         <article
           key={question.id}
@@ -374,6 +379,12 @@ export default function StudentGuidedAssessmentPage() {
               Correct answer: {formatCorrectAnswer(question)}
             </p>
           </div>
+          {reviewHint ? (
+            <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-sm leading-6 text-[#155e75]">
+              <strong className="block text-[#0f3f56]">JA clue</strong>
+              <p className="mt-1">{reviewHint}</p>
+            </div>
+          ) : null}
           <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">
             {stripRichText(question.explanation)}
           </p>
@@ -564,6 +575,8 @@ export default function StudentGuidedAssessmentPage() {
     return null;
   }
 
+  const activeQuestionReviewHint = getReviewHint(activeQuestion);
+
   return (
     <div className="student-assessment-take-theme guided-intervention-assessment relative space-y-4 overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -697,6 +710,12 @@ export default function StudentGuidedAssessmentPage() {
                   {currentAnswerCorrect ? "Correct" : "Review"}
                 </StudentStatusChip>
               </div>
+              {activeQuestionReviewHint ? (
+                <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-[#155e75]">
+                  <strong className="block text-[#0f3f56]">JA clue</strong>
+                  <p className="mt-1">{activeQuestionReviewHint}</p>
+                </div>
+              ) : null}
               <div className="guided-answer-feedback__explanation mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
                 <strong className="block text-[#102744]">Why this works</strong>
                 <p className="mt-2">

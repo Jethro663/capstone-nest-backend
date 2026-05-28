@@ -1651,11 +1651,9 @@ export class ClassesService {
         await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'restore':
-        if (classRecord.isActive) {
-          throw new ConflictException('Class is already active.');
-        }
-        await this.toggleActive(classId, actorId, actorRoles);
-        return;
+        throw new ConflictException(
+          'Archived classes cannot be restored. Purge the archived class instead.',
+        );
       case 'purge':
         if (classRecord.isActive) {
           throw new ConflictException(
@@ -2157,19 +2155,36 @@ export class ClassesService {
   }
 
   /**
-   * Toggle class active status
+   * Archive a class. Archived classes are terminal and can only be purged.
    */
   async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
-    const nextIsActive = !classRecord.isActive;
 
-    await this.db
-      .update(classes)
-      .set({
-        isActive: nextIsActive,
-        updatedAt: new Date(),
-      })
-      .where(eq(classes.id, id));
+    if (!classRecord.isActive) {
+      throw new ConflictException(
+        'Archived classes cannot be restored. Purge the archived class instead.',
+      );
+    }
+
+    const now = new Date();
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(enrollments)
+        .set({ status: 'completed' })
+        .where(
+          and(eq(enrollments.classId, id), eq(enrollments.status, 'enrolled')),
+        );
+
+      await tx
+        .update(classes)
+        .set({
+          isActive: false,
+          teacherId: null,
+          updatedAt: now,
+        })
+        .where(eq(classes.id, id));
+    });
 
     const actorRole = actorRoles.includes('admin')
       ? 'admin'
@@ -2185,7 +2200,9 @@ export class ClassesService {
       metadata: {
         actorRole,
         previousIsActive: classRecord.isActive,
-        isActive: nextIsActive,
+        isActive: false,
+        removedTeacherId: classRecord.teacherId,
+        completedEnrollmentStatus: 'completed',
       },
     });
 

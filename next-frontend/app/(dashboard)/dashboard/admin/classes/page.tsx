@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, BookOpen, ChevronDown, Eye, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Archive, BookOpen, ChevronDown, Eye, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   type BulkClassLifecycleAction,
   classService,
@@ -45,14 +45,6 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
   if (tab === 'archived') {
     return [
       {
-        action: 'restore',
-        label: 'Restore selected',
-        confirmLabel: 'Restore classes',
-        title: 'Restore selected classes?',
-        description: 'Selected archived classes will return to the active list.',
-        tone: 'default',
-      },
-      {
         action: 'purge',
         label: 'Purge selected',
         confirmLabel: 'Purge classes',
@@ -70,7 +62,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
       label: 'Archive selected',
       confirmLabel: 'Archive classes',
       title: 'Archive selected classes?',
-      description: 'Selected active classes will move to the archived list.',
+      description: 'Selected active classes will move to the archived list, clear assigned teachers, and complete active student enrollments. Archived classes can only be purged.',
       tone: 'danger',
     },
   ];
@@ -463,9 +455,6 @@ export default function ClassManagementPage() {
                   const archiveOption = bulkActions.find(
                     (option) => option.action === 'archive',
                   );
-                  const restoreOption = bulkActions.find(
-                    (option) => option.action === 'restore',
-                  );
 
                   return (
                     <TableRow
@@ -572,18 +561,6 @@ export default function ClassManagementPage() {
                               title="Archive class"
                             >
                               <Archive className="h-4 w-4" />
-                            </button>
-                          ) : null}
-                          {!classItem.isActive && restoreOption ? (
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() =>
-                                openSingleActionConfirmation(classItem, restoreOption)
-                              }
-                              title="Restore class"
-                            >
-                              <RotateCcw className="h-4 w-4" />
                             </button>
                           ) : null}
                           {!classItem.isActive ? (

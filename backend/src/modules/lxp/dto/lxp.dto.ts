@@ -162,6 +162,10 @@ export class GeneratedGuidedQuestionDto {
 
   @IsOptional()
   @IsString()
+  reviewHint?: string | null;
+
+  @IsOptional()
+  @IsString()
   weakConceptTag?: string | null;
 
   @IsOptional()

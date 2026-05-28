@@ -57,6 +57,7 @@ const guidedAssessment = {
       type: 'multiple_choice' as const,
       stem: 'Pure substances are made of one kind of atom.',
       hint: 'Think about the term for one kind of atom.',
+      reviewHint: 'Review Module 2 and focus on the example about one kind of atom.',
       explanation: 'Elements are pure substances made of one type of atom.',
       weakConceptTag: 'Elements',
       options: [
@@ -65,6 +66,20 @@ const guidedAssessment = {
       ],
     },
   ],
+};
+
+const attemptSummary = {
+  maxAttempts: 3,
+  attemptsUsed: 1,
+  remainingAttempts: 2,
+  canRetry: true,
+  isLocked: false,
+  passingScore: 60,
+  passed: false,
+  bestAttemptId: null,
+  bestScorePercent: null,
+  latestScorePercent: null,
+  attempts: [],
 };
 
 function mockInProgressSession() {
@@ -76,11 +91,13 @@ function mockInProgressSession() {
       attempt: {
         id: 'attempt-1',
         status: 'in_progress',
+        attemptNumber: 1,
         currentQuestionIndex: 0,
         responses: [],
         hintedQuestionIds: [],
         scorePercent: null,
       },
+      attemptSummary,
     },
   } as Awaited<ReturnType<typeof lxpService.startGuidedAssessment>>);
   mockedLxpService.updateGuidedAssessmentProgress.mockResolvedValue({
@@ -106,6 +123,7 @@ function mockSubmittedSession() {
       attempt: {
         id: 'attempt-1',
         status: 'submitted',
+        attemptNumber: 1,
         currentQuestionIndex: 0,
         responses: [
           { questionId: 'q1', answer: 'a', isCorrect: true },
@@ -114,6 +132,23 @@ function mockSubmittedSession() {
         hintedQuestionIds: ['q2'],
         scorePercent: 50,
         submittedAt: '2026-05-05T00:00:00.000Z',
+      },
+      attemptSummary: {
+        ...attemptSummary,
+        attemptsUsed: 1,
+        remainingAttempts: 2,
+        latestScorePercent: 50,
+        attempts: [
+          {
+            id: 'attempt-1',
+            attemptNumber: 1,
+            status: 'submitted',
+            scorePercent: 50,
+            correctCount: 1,
+            totalQuestions: 2,
+            submittedAt: '2026-05-05T00:00:00.000Z',
+          },
+        ],
       },
     },
   } as Awaited<ReturnType<typeof lxpService.startGuidedAssessment>>);
@@ -177,5 +212,6 @@ describe('StudentGuidedAssessmentPage', () => {
     expect(within(reviewSection).getByText(/Pure substances are made of one kind of atom/i)).toBeInTheDocument();
     expect(within(reviewSection).getByText(/Your previous answer: Compounds/i)).toBeInTheDocument();
     expect(within(reviewSection).getByText(/Correct answer: Elements/i)).toBeInTheDocument();
+    expect(within(reviewSection).getByText(/Review Module 2 and focus on the example/i)).toBeInTheDocument();
   });
 });

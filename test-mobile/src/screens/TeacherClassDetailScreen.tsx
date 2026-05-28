@@ -13,6 +13,7 @@ import {
 import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/types";
+import { formatStudentIdentityLine } from "../utils/studentIdentity";
 import { TeacherClassRecordBoard } from "../components/teacher/TeacherClassRecordBoard";
 import { TeacherDiscussionBoard } from "../components/teacher/TeacherDiscussionBoard";
 import { TeacherExtractionBoard } from "../components/teacher/TeacherExtractionBoard";
@@ -350,7 +351,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                 <TeacherRow
                   key={entry.id}
                   title={name}
-                  subtitle={entry.student?.email || "No email available"}
+                  subtitle={formatStudentIdentityLine(entry.student, "No LRN or email available")}
                   onPress={
                     studentId
                       ? () =>

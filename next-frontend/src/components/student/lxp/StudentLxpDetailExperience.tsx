@@ -93,6 +93,52 @@ function getCheckpointTitle(checkpoint: LxpCheckpoint) {
   );
 }
 
+function getGuidedAttemptSlots(summary: LxpCheckpoint['guidedAttemptSummary']) {
+  const maxAttempts = summary?.maxAttempts ?? 3;
+  return Array.from({ length: maxAttempts }, (_, index) => {
+    const attemptNumber = index + 1;
+    const attempt = summary?.attempts.find((item) => item.attemptNumber === attemptNumber) ?? null;
+    return { attemptNumber, attempt };
+  });
+}
+
+function getGuidedCheckpointStatus(
+  checkpoint: LxpCheckpoint,
+  readOnly: boolean,
+): { label: string; tone: 'completed' | 'open' | 'closed' | 'warning' } {
+  const summary = checkpoint.guidedAttemptSummary;
+  const hasSubmittedAttempt = Boolean(
+    summary?.attempts.some((attempt) => attempt.status === 'submitted'),
+  );
+
+  if (checkpoint.isCompleted || summary?.passed) {
+    return { label: 'Completed', tone: 'completed' };
+  }
+  if (readOnly) {
+    return { label: 'Closed', tone: 'closed' };
+  }
+  if (summary?.isLocked) {
+    return { label: 'Locked', tone: 'closed' };
+  }
+  if (hasSubmittedAttempt) {
+    return { label: summary?.canRetry ? 'Retry available' : 'Submitted', tone: 'warning' };
+  }
+  return { label: 'Available', tone: 'open' };
+}
+
+function getGuidedActionLabel(checkpoint: LxpCheckpoint) {
+  const summary = checkpoint.guidedAttemptSummary;
+  const hasSubmittedAttempt = Boolean(
+    summary?.attempts.some((attempt) => attempt.status === 'submitted'),
+  );
+
+  if (checkpoint.isCompleted || summary?.passed) return 'View Result';
+  if (summary?.isLocked) return 'View Locked Result';
+  if (hasSubmittedAttempt && summary?.canRetry) return 'Retry Guided Assessment';
+  if (hasSubmittedAttempt) return 'View Result';
+  return 'Open Guided Assessment';
+}
+
 function getTab(value: string | null): DetailTab {
   if (!value) return 'steps';
   return TAB_ALIASES[value] ?? 'steps';
@@ -156,6 +202,13 @@ function CheckpointCard({
       : isGeneratedLesson
         ? generatedLessonHref
         : lessonHref;
+  const guidedAttemptSummary = checkpoint.guidedAttemptSummary ?? null;
+  const guidedAttemptSlots = isGuidedAssessment ? getGuidedAttemptSlots(guidedAttemptSummary) : [];
+  const guidedStatus = isGuidedAssessment
+    ? getGuidedCheckpointStatus(checkpoint, readOnly)
+    : null;
+  const statusLabel = guidedStatus?.label ?? (checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available');
+  const statusTone = guidedStatus?.tone ?? (checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open');
 
   const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
     if (!(target instanceof Element)) return false;
@@ -195,25 +248,71 @@ function CheckpointCard({
             <h3>{title}</h3>
             <div className="student-lxp-checkpoint-card__meta" aria-label="Checkpoint details">
               <span>{checkpoint.xpAwarded} XP</span>
-              <span>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
-              <span>{isGuidedAssessment ? 'Guided Assessment' : isReplay ? 'Replay' : 'Lesson Step'}</span>
+              <span>{isGuidedAssessment ? statusLabel : checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
+              <span>{isGuidedAssessment ? 'AI Plan Assessment' : isReplay ? 'Replay' : 'Lesson Step'}</span>
             </div>
           </div>
         </header>
       </div>
 
+      {isGuidedAssessment ? (
+        <div className="student-lxp-checkpoint-card__attempts" aria-label="Guided assessment attempts">
+          <div className="student-lxp-checkpoint-card__attempts-summary">
+            <span>AI Plan tries</span>
+            <strong>
+              {guidedAttemptSummary
+                ? `${guidedAttemptSummary.attemptsUsed}/${guidedAttemptSummary.maxAttempts} submitted`
+                : '0/3 submitted'}
+            </strong>
+          </div>
+          <div className="student-lxp-checkpoint-card__attempt-grid">
+            {guidedAttemptSlots.map(({ attemptNumber, attempt }) => {
+              const isSubmitted = attempt?.status === 'submitted';
+              const passedAttempt =
+                isSubmitted &&
+                typeof attempt?.scorePercent === 'number' &&
+                typeof guidedAttemptSummary?.passingScore === 'number' &&
+                attempt.scorePercent >= guidedAttemptSummary.passingScore;
+
+              return (
+                <span
+                  key={attemptNumber}
+                  className={cn(
+                    'student-lxp-checkpoint-card__attempt-chip',
+                    !attempt
+                      ? 'student-lxp-checkpoint-card__attempt-chip--empty'
+                      : passedAttempt
+                        ? 'student-lxp-checkpoint-card__attempt-chip--passed'
+                        : isSubmitted
+                          ? 'student-lxp-checkpoint-card__attempt-chip--failed'
+                          : 'student-lxp-checkpoint-card__attempt-chip--active',
+                  )}
+                >
+                  Try {attemptNumber}: {attempt ? formatPercent(attempt.scorePercent) : 'Not taken'}
+                </span>
+              );
+            })}
+          </div>
+          <p className="student-lxp-checkpoint-card__attempt-note">
+            Best score: {formatPercent(guidedAttemptSummary?.bestScorePercent)} · Passing score: {formatPercent(guidedAttemptSummary?.passingScore)}
+          </p>
+        </div>
+      ) : null}
+
       <footer className="student-lxp-checkpoint-card__footer">
         <span
           className={cn(
             'student-lxp-checkpoint-card__status',
-            checkpoint.isCompleted
+            statusTone === 'completed'
               ? 'student-lxp-checkpoint-card__status--completed'
-              : readOnly
+              : statusTone === 'closed'
                 ? 'student-lxp-checkpoint-card__status--closed'
-                : 'student-lxp-checkpoint-card__status--open',
+                : statusTone === 'warning'
+                  ? 'student-lxp-checkpoint-card__status--warning'
+                  : 'student-lxp-checkpoint-card__status--open',
           )}
         >
-          {checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available'}
+          {statusLabel}
         </span>
         <div className="student-lxp-checkpoint-card__actions">
           {isReplay ? (
@@ -222,7 +321,7 @@ function CheckpointCard({
             </Link>
           ) : isGuidedAssessment && guidedAssessmentHref ? (
             <Link href={guidedAssessmentHref} className="student-lxp-checkpoint-card__link">
-              Open Guided Assessment
+              {getGuidedActionLabel(checkpoint)}
             </Link>
           ) : isGeneratedLesson && generatedLessonHref ? (
             <Link href={generatedLessonHref} className="student-lxp-checkpoint-card__link">

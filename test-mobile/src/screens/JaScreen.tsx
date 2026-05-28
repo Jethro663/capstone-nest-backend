@@ -9,7 +9,7 @@ import { jaApi } from "../api/services/ja";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse, JaReviewAttemptSummary } from "../types/ja";
-import type { LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
+import type { GuidedAssessmentAttemptSummary, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
 import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
 import { studentDarkTheme, stripRichText } from "../theme/studentDark";
@@ -33,6 +33,41 @@ type ActivityFilter = "all" | Extract<JaMode, "ask" | "review">;
 type AnswerState = Record<string, string[]>;
 
 const dark = studentDarkTheme;
+
+function formatGuidedScore(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}%` : "No score";
+}
+
+function getGuidedAttemptSlots(summary?: GuidedAssessmentAttemptSummary | null) {
+  const maxAttempts = summary?.maxAttempts ?? 3;
+  return Array.from({ length: maxAttempts }, (_, index) => {
+    const attemptNumber = index + 1;
+    const attempt = summary?.attempts.find((item) => item.attemptNumber === attemptNumber) ?? null;
+    return { attemptNumber, attempt };
+  });
+}
+
+function getGuidedCheckpointState(checkpoint: LxpCheckpoint) {
+  const summary = checkpoint.guidedAttemptSummary;
+  const hasSubmitted = Boolean(summary?.attempts.some((attempt) => attempt.status === "submitted"));
+
+  if (checkpoint.isCompleted || summary?.passed) return { label: "Done", color: dark.green, bg: dark.greenSoft };
+  if (summary?.isLocked) return { label: "Locked", color: dark.muted, bg: dark.surface2 };
+  if (hasSubmitted && summary?.canRetry) return { label: "Retry available", color: dark.amber, bg: dark.amberSoft };
+  if (hasSubmitted) return { label: "Submitted", color: dark.blue, bg: dark.blueSoft };
+  return { label: "Not yet taken", color: dark.red, bg: dark.redSoft };
+}
+
+function getGuidedReplayButtonLabel(checkpoint: LxpCheckpoint) {
+  const summary = checkpoint.guidedAttemptSummary;
+  const hasSubmitted = Boolean(summary?.attempts.some((attempt) => attempt.status === "submitted"));
+
+  if (checkpoint.isCompleted || summary?.passed) return "View AI Quiz Result";
+  if (summary?.isLocked) return "View Locked Result";
+  if (hasSubmitted && summary?.canRetry) return "Retry AI Quiz";
+  if (hasSubmitted) return "View AI Quiz Result";
+  return "Open AI Quiz";
+}
 
 const MODE_ORDER: Array<{ key: VisibleJaPanel; label: string; icon: string }> = [
   { key: "ask", label: "Ask", icon: "message-text-outline" },
@@ -1261,18 +1296,55 @@ function CheckpointList({
           checkpoint.lesson?.description ||
           checkpoint.assessment?.description ||
           "";
+        const guidedSummary = checkpoint.guidedAttemptSummary ?? null;
+        const guidedState = checkpoint.type === "guided_assessment" ? getGuidedCheckpointState(checkpoint) : null;
+        const guidedSlots = checkpoint.type === "guided_assessment" ? getGuidedAttemptSlots(guidedSummary) : [];
         return (
         <DarkPanel key={checkpoint.id}>
           <Text style={{ color: dark.text, fontSize: 13, fontWeight: "800" }}>{index + 1}. {stripRichText(title)}</Text>
-          <Text style={{ marginTop: 4, color: dark.muted, fontSize: 11 }}>{checkpoint.xpAwarded} XP - {checkpoint.isCompleted ? "Done" : "Available"}</Text>
+          <Text style={{ marginTop: 4, color: guidedState?.color ?? dark.muted, fontSize: 11, fontWeight: guidedState ? "900" : "700" }}>
+            {checkpoint.xpAwarded} XP - {guidedState?.label ?? (checkpoint.isCompleted ? "Done" : "Available")}
+          </Text>
           {detail ? (
             <Text style={{ marginTop: 7, color: dark.muted, fontSize: 11, lineHeight: 17 }}>{stripRichText(detail)}</Text>
+          ) : null}
+          {checkpoint.type === "guided_assessment" ? (
+            <View style={{ marginTop: 10, borderRadius: 14, borderWidth: 1, borderColor: dark.border2, backgroundColor: dark.surface2, padding: 10, gap: 8 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "900" }}>AI Plan tries</Text>
+                <Text style={{ color: dark.text, fontSize: 11, fontWeight: "900" }}>
+                  {guidedSummary ? `${guidedSummary.attemptsUsed}/${guidedSummary.maxAttempts} submitted` : "0/3 submitted"}
+                </Text>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {guidedSlots.map(({ attemptNumber, attempt }) => {
+                  const submitted = attempt?.status === "submitted";
+                  const passed =
+                    submitted &&
+                    typeof attempt?.scorePercent === "number" &&
+                    typeof guidedSummary?.passingScore === "number" &&
+                    attempt.scorePercent >= guidedSummary.passingScore;
+                  const color = !attempt ? dark.muted : passed ? dark.green : submitted ? dark.red : dark.blue;
+                  const bg = !attempt ? dark.surface : passed ? dark.greenSoft : submitted ? dark.redSoft : dark.blueSoft;
+                  return (
+                    <View key={attemptNumber} style={{ borderRadius: 999, borderWidth: 1, borderColor: `${color}55`, backgroundColor: bg, paddingHorizontal: 9, paddingVertical: 5 }}>
+                      <Text style={{ color, fontSize: 10, fontWeight: "900" }}>
+                        Try {attemptNumber}: {attempt ? formatGuidedScore(attempt.scorePercent) : "Not taken"}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              <Text style={{ color: dark.muted, fontSize: 10, fontWeight: "800" }}>
+                Best {formatGuidedScore(guidedSummary?.bestScorePercent)} - Passing {formatGuidedScore(guidedSummary?.passingScore)}
+              </Text>
+            </View>
           ) : null}
           <View style={{ marginTop: 10, flexDirection: "row", gap: 8, justifyContent: "flex-end" }}>
             {checkpoint.type === "assessment_retry" || checkpoint.type === "guided_assessment" ? (
               <Pressable onPress={() => onOpenReplay(checkpoint)} style={{ borderRadius: 9, backgroundColor: dark.amberSoft, paddingHorizontal: 12, paddingVertical: 8 }}>
                 <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "900" }}>
-                  {checkpoint.type === "guided_assessment" ? "Open AI Quiz" : "Open Replay Quiz"}
+                  {checkpoint.type === "guided_assessment" ? getGuidedReplayButtonLabel(checkpoint) : "Open Replay Quiz"}
                 </Text>
               </Pressable>
             ) : checkpoint.lesson?.id || checkpoint.generatedLesson ? (

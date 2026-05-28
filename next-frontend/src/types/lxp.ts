@@ -72,6 +72,7 @@ export interface LxpCheckpoint {
     dueDate?: string | null;
   } | null;
   guidedAssessment?: GuidedAssessmentContent | null;
+  guidedAttemptSummary?: GuidedAssessmentAttemptSummary | null;
 }
 
 export interface GeneratedLessonContent {
@@ -621,6 +622,7 @@ export interface ApproveGeneratedRemedialPayload {
       stem: string;
       explanation: string;
       hint?: string | null;
+      reviewHint?: string | null;
       weakConceptTag?: string | null;
       sourceQuestionId?: string | null;
       options: Array<{
@@ -650,6 +652,7 @@ export interface GuidedAssessmentQuestion {
   stem: string;
   explanation: string;
   hint?: string | null;
+  reviewHint?: string | null;
   weakConceptTag?: string | null;
   options: GuidedAssessmentQuestionOption[];
 }

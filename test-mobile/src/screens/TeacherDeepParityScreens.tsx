@@ -31,6 +31,7 @@ import type {
   TeacherInterventionCaseDetail,
 } from "../types/teacher";
 import { extractLessonBlockText } from "../utils/lessonBlocks";
+import { formatStudentIdentityWithStatus } from "../utils/studentIdentity";
 import { TeacherAssessmentReviewScreen } from "./TeacherAssessmentReviewScreen";
 import {
   TeacherActionButton,
@@ -300,7 +301,11 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
               <TeacherRow
                 key={student.id}
                 title={formatName(student)}
-                subtitle={student.isEligible ? student.email || "Eligible" : student.disabledReason || "Not eligible"}
+                subtitle={
+                  student.isEligible
+                    ? formatStudentIdentityWithStatus(student, "Eligible")
+                    : formatStudentIdentityWithStatus(student, student.disabledReason || "Not eligible")
+                }
                 onPress={() => navigation.navigate("TeacherClassStudentOverview", { classId, studentId: student.id })}
                 right={
                   <Pressable
@@ -343,6 +348,7 @@ export function TeacherSectionAddStudentsScreen({ navigation, route }: SectionAd
       firstName?: string;
       lastName?: string;
       email?: string;
+      lrn?: string | null;
       gradeLevel?: string;
       isEligible?: boolean;
       eligibilityReason?: string | null;
@@ -422,7 +428,11 @@ export function TeacherSectionAddStudentsScreen({ navigation, route }: SectionAd
               <TeacherRow
                 key={student.id}
                 title={formatName(student)}
-                subtitle={eligible ? student.email || "Eligible" : student.eligibilityReason || "Not eligible"}
+                subtitle={
+                  eligible
+                    ? formatStudentIdentityWithStatus(student, "Eligible")
+                    : formatStudentIdentityWithStatus(student, student.eligibilityReason || "Not eligible")
+                }
                 right={
                   <TeacherChip
                     label={selected ? "Selected" : "Select"}
@@ -1591,6 +1601,7 @@ export function TeacherInterventionWorkspaceContent({
                 stem: question.stem,
                 explanation: question.explanation,
                 hint: question.hint,
+                reviewHint: question.reviewHint,
                 weakConceptTag: question.weakConceptTag,
                 sourceQuestionId: question.sourceQuestionId,
                 options: question.options,

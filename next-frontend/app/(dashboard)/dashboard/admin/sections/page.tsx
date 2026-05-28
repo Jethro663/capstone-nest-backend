@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, ChevronDown, Layers3, Pencil, RotateCcw, Search, Trash2, UserPlus, Users } from 'lucide-react';
+import { Archive, ChevronDown, Layers3, Pencil, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import {
   type BulkSectionLifecycleAction,
   sectionService,
@@ -33,14 +33,6 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
   if (tab === 'archived') {
     return [
       {
-        action: 'restore',
-        label: 'Restore selected',
-        confirmLabel: 'Restore sections',
-        title: 'Restore selected sections?',
-        description: 'Selected archived sections will return to the active list.',
-        tone: 'default',
-      },
-      {
         action: 'purge',
         label: 'Purge selected',
         confirmLabel: 'Purge sections',
@@ -57,7 +49,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
       label: 'Archive selected',
       confirmLabel: 'Archive sections',
       title: 'Archive selected sections?',
-      description: 'Selected active sections will move to the archived list.',
+      description: 'Selected active sections will move to the archived list, clear advisers and linked class teachers, and complete active student enrollments. Archived sections can only be purged.',
       tone: 'danger',
     },
   ];
@@ -438,9 +430,6 @@ export default function SectionManagementPage() {
                   const archiveOption = bulkActions.find(
                     (option) => option.action === 'archive',
                   );
-                  const restoreOption = bulkActions.find(
-                    (option) => option.action === 'restore',
-                  );
 
                   return (
                     <TableRow
@@ -536,18 +525,6 @@ export default function SectionManagementPage() {
                               title="Archive section"
                             >
                               <Archive className="h-4 w-4" />
-                            </button>
-                          ) : null}
-                          {!section.isActive && restoreOption ? (
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() =>
-                                openSingleActionConfirmation(section, restoreOption)
-                              }
-                              title="Restore section"
-                            >
-                              <RotateCcw className="h-4 w-4" />
                             </button>
                           ) : null}
                           {!section.isActive ? (

@@ -30,6 +30,11 @@ export interface ClassItem {
       firstName?: string;
       lastName?: string;
       email?: string;
+      lrn?: string | null;
+      profile?: {
+        lrn?: string | null;
+        profilePicture?: string | null;
+      } | null;
     };
   }>;
   isHidden?: boolean;
@@ -50,7 +55,12 @@ export interface EnrollmentRecord {
     firstName?: string;
     lastName?: string;
     email?: string;
+    lrn?: string | null;
     profilePicture?: string;
+    profile?: {
+      lrn?: string | null;
+      profilePicture?: string | null;
+    } | null;
   } | null;
 }
 

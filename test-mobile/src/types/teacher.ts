@@ -186,6 +186,7 @@ export interface GuidedAssessmentQuestion {
   stem: string;
   explanation?: string | null;
   hint?: string | null;
+  reviewHint?: string | null;
   weakConceptTag?: string | null;
   sourceQuestionId?: string | null;
   options?: GuidedAssessmentQuestionOption[];

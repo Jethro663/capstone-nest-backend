@@ -1056,7 +1056,7 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('deleteSection', () => {
-    it('soft-deletes the section by setting isActive to false', async () => {
+    it('archives the section, clears people assignments, and completes active enrollments', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const txUpdateChain = makeUpdateChain();
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
@@ -1068,12 +1068,16 @@ describe('SectionsService', () => {
         ADMIN_USER.roles,
       );
 
-      // archiveSection calls tx.update twice: linked classes inactive + section archive.
-      expect(tx.update).toHaveBeenCalledTimes(2);
+      // archiveSection completes enrollments, archives linked classes, then archives the section.
+      expect(tx.update).toHaveBeenCalledTimes(3);
+      expect(txUpdateChain.set.mock.calls[0][0]).toEqual({ status: 'completed' });
+      expect(txUpdateChain.set.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ isActive: false, teacherId: null }),
+      );
 
-      // Second update (sections table) sets isActive to false
-      const sectionSetArgs = txUpdateChain.set.mock.calls[1][0];
+      const sectionSetArgs = txUpdateChain.set.mock.calls[2][0];
       expect(sectionSetArgs.isActive).toBe(false);
+      expect(sectionSetArgs.adviserId).toBeNull();
       expect(sectionSetArgs).toHaveProperty('updatedAt');
       expect(mockAuditService.log).toHaveBeenCalledWith({
         actorId: ADMIN_USER.userId,
@@ -1083,6 +1087,9 @@ describe('SectionsService', () => {
         metadata: {
           actorRole: 'admin',
           previousIsActive: true,
+          removedAdviserId: ADVISER_ID,
+          completedEnrollmentStatus: 'completed',
+          linkedClassTeacherStatus: 'cleared',
         },
       });
     });
@@ -1107,9 +1114,8 @@ describe('SectionsService', () => {
       expect(mockDb.query.sections.findFirst).toHaveBeenCalledTimes(1);
     });
   });
-
   describe('restoreSection', () => {
-    it('restores the section and writes actor-aware audit metadata', async () => {
+    it('does not restore archived sections', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({ isActive: false }),
       );
@@ -1117,23 +1123,14 @@ describe('SectionsService', () => {
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
       mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await service.restoreSection(
-        SECTION_ID,
-        ADMIN_USER.userId,
-        ADMIN_USER.roles,
+      await expect(
+        service.restoreSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles),
+      ).rejects.toThrow(
+        'Archived sections cannot be restored. Purge the archived section instead.',
       );
 
-      expect(tx.update).toHaveBeenCalledTimes(2);
-      expect(mockAuditService.log).toHaveBeenCalledWith({
-        actorId: ADMIN_USER.userId,
-        action: 'section.restored',
-        targetType: 'section',
-        targetId: SECTION_ID,
-        metadata: {
-          actorRole: 'admin',
-          previousIsActive: false,
-        },
-      });
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 
@@ -1244,29 +1241,33 @@ describe('SectionsService', () => {
       });
     });
 
-    it('fails restore for already-active sections without aborting the batch', async () => {
-      jest
-        .spyOn(service, 'findById')
-        .mockResolvedValueOnce(makeSection({ isActive: false }))
-        .mockResolvedValueOnce(makeSection({ isActive: true }));
-      const restoreSpy = jest
-        .spyOn(service, 'restoreSection')
-        .mockResolvedValueOnce(undefined);
+    it('fails restore for archived sections because restore is retired', async () => {
+      jest.spyOn(service, 'findById').mockResolvedValue(makeSection({ isActive: false }));
+      const restoreSpy = jest.spyOn(service, 'restoreSection');
 
       const result = await service.bulkLifecycleAction({
         action: 'restore',
         sectionIds: ['section-1', 'section-2'],
       });
 
-      expect(restoreSpy).toHaveBeenCalledTimes(1);
+      expect(restoreSpy).not.toHaveBeenCalled();
       expect(result).toEqual({
-        message: '1 section restored; 1 failed.',
+        message: '0 sections restored; 2 failed.',
         data: {
           action: 'restore',
           requested: 2,
-          succeeded: ['section-1'],
+          succeeded: [],
           failed: [
-            { sectionId: 'section-2', reason: 'Section is already active.' },
+            {
+              sectionId: 'section-1',
+              reason:
+                'Archived sections cannot be restored. Purge the archived section instead.',
+            },
+            {
+              sectionId: 'section-2',
+              reason:
+                'Archived sections cannot be restored. Purge the archived section instead.',
+            },
           ],
         },
       });

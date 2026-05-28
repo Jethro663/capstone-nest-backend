@@ -90,6 +90,46 @@ class RemedialServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("homogeneous", hint.lower())
         self.assertIn("same properties", hint.lower())
 
+    def test_generated_guided_assessment_review_hint_uses_lesson_evidence(self) -> None:
+        draft = remedial_service._build_generated_guided_assessment_draft(
+            ["water cycle sequence"],
+            [
+                {
+                    "assessmentId": "assessment-1",
+                    "title": "Water Cycle Quiz",
+                    "reason": "Recent failed assessment.",
+                }
+            ],
+            [
+                {
+                    "id": "question-1",
+                    "type": "multiple_choice",
+                    "content": "Which step happens after vapor cools near the end of the water cycle?",
+                    "concept_tags": ["water cycle sequence"],
+                    "explanation": "Condensation happens when water vapor cools into liquid water.",
+                    "options": [
+                        {"id": "a", "text": "Condensation", "isCorrect": True},
+                        {"id": "b", "text": "Collection", "isCorrect": False},
+                    ],
+                }
+            ],
+            [
+                {
+                    "lessonId": "lesson-1",
+                    "title": "Water Cycle Module",
+                    "sourceReference": "Lesson 3, final steps",
+                    "contentSnippet": "Near the last steps, vapor cools and changes back into liquid water.",
+                    "reason": "Matches weak concepts: water cycle sequence",
+                }
+            ],
+        )
+
+        self.assertIsNotNone(draft)
+        review_hint = draft["questions"][0]["reviewHint"]
+        self.assertIn("Water Cycle Module", review_hint)
+        self.assertIn("vapor cools", review_hint)
+        self.assertNotIn("Condensation", review_hint)
+
     async def test_ensure_intervention_index_ready_reindexes_missing_class_chunks(self) -> None:
         fake_db = AsyncMock()
 

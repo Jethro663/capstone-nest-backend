@@ -12,6 +12,7 @@ import {
 import { sectionsApi } from "../api/services/sections";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
+import { formatStudentIdentityLine, formatStudentIdentityWithStatus } from "../utils/studentIdentity";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -173,8 +174,8 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
                     title={fullName}
                     subtitle={
                       eligible
-                        ? candidate.email || "Eligible"
-                        : disabledReason || candidate.email || "Unavailable"
+                        ? formatStudentIdentityWithStatus(candidate, "Eligible")
+                        : formatStudentIdentityWithStatus(candidate, disabledReason || "Unavailable")
                     }
                     right={
                       <Pressable
@@ -253,7 +254,7 @@ export function TeacherSectionDetailScreen({ navigation, route }: Props) {
                 <TeacherRow
                   key={student.id}
                   title={name}
-                  subtitle={student.email || student.lrn || "No profile details"}
+                  subtitle={formatStudentIdentityLine(student, "No profile details")}
                   onPress={() => navigation.navigate("TeacherSectionStudentProfile", { sectionId, studentId: student.studentId || student.id })}
                   right={
                     <TeacherActionButton

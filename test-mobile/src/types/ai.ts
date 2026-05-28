@@ -253,6 +253,7 @@ export interface InterventionStructuredOutput {
       stem: string;
       explanation: string;
       hint?: string | null;
+      reviewHint?: string | null;
       weakConceptTag?: string | null;
       sourceQuestionId?: string | null;
       options: Array<{ id: string; text: string; isCorrect: boolean }>;
