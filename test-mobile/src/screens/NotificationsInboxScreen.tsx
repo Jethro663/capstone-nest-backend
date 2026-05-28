@@ -11,6 +11,7 @@ import { useAuth } from "../providers/AuthProvider";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import { colors, hexToRgba, shadow } from "../theme/tokens";
 import type { MobileNotification } from "../types/notification";
+import { openMobileNotification } from "../utils/mobile-notification-routing";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Announcements">;
 type FilterMode = "all" | "unread" | "interventions" | "assessments";
@@ -147,27 +148,8 @@ export function NotificationsInboxScreen({ navigation }: Props) {
       void unreadQuery.refetch();
     }
 
-    const tone = toneForNotification(notification);
     const nav = navigation as unknown as { navigate: (name: string, params?: unknown) => void };
-    if (tone.label === "Intervention") {
-      if (role === "teacher") {
-        nav.navigate(notification.referenceId ? "TeacherInterventionDetail" : "TeacherInterventions", notification.referenceId ? { caseId: notification.referenceId } : undefined);
-        return;
-      }
-      nav.navigate("LXP", notification.referenceId ? { classId: notification.referenceId, tab: "paths" } : { tab: "paths" });
-      return;
-    }
-    if (tone.label === "Assessment") {
-      if (role === "teacher") {
-        nav.navigate(notification.referenceId ? "TeacherAssessmentDetail" : "Assessments", notification.referenceId ? { assessmentId: notification.referenceId } : undefined);
-        return;
-      }
-      nav.navigate("AssessmentHistory", notification.referenceId ? { assessmentId: notification.referenceId } : undefined);
-      return;
-    }
-    if (tone.label === "Announcement" && role === "teacher") {
-      nav.navigate("TeacherAnnouncements");
-    }
+    await openMobileNotification(notification, role, nav.navigate);
   };
 
   return (
