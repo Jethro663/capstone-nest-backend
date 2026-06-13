@@ -7,6 +7,7 @@
 /next-FrontendToRecover
 .env.compose
 /ai-service/tests/__pycache__/
+/ai-service/.venv/
 /.serena/cache/
 /.serena/logs/
 /.agents/tmp/*.log
