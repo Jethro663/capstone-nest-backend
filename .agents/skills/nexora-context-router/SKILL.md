@@ -41,9 +41,10 @@ This skill is a selector, not a planner swarm and not a second architecture laye
    - Playwright for real browser execution and evidence in `next-frontend`
    - Chrome DevTools when browser debugging needs lower-level network or performance detail
    - shell for scripts, git, installs, startup, and commands not better handled by MCP
-7. Add a second subsystem slice only when the prompt explicitly crosses boundaries or the selected workflow skill requires it.
-8. Do not load appendix refs unless exact detail is needed.
-9. Emit `ROUTER_TRACE` before substantive work.
+7. Load `references/slices/context-efficiency.md` only for repo-analysis, instruction-authoring, or exploration-heavy tasks where compact inspection and output discipline matter.
+8. Add a second subsystem slice only when the prompt explicitly crosses boundaries or the selected workflow skill requires it.
+9. Do not load appendix refs unless exact detail is needed.
+10. Emit `ROUTER_TRACE` before substantive work.
 
 ## Primary Slice Selection
 
@@ -133,6 +134,7 @@ This skill is a selector, not a planner swarm and not a second architecture laye
 - Router table: `references/router-decision-table.md`
 - Cross-cutting slices: `references/slices/`
 - Tooling slice: `references/slices/tooling.md`
+- Context efficiency slice: `references/slices/context-efficiency.md`
 - Appendices: `references/appendix/`
 - Assembly examples: `references/examples/assembly-examples.md`
 
