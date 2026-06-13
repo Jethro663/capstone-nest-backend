@@ -1,0 +1,5 @@
+interface:
+  display_name: "Agent Orchestration Skill"
+  short_description: "Explicit-only root orchestration. Use only when the prompt contains $agent-orchestration-skill; never invoke implicitly."
+policy:
+  allow_implicit_invocation: false

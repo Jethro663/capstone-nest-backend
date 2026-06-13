@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-orchestration-skill": {
+      "source": "ZypherHQ/agent-orchestration-skill",
+      "sourceType": "github",
+      "skillPath": "skills/agent-orchestration-skill/SKILL.md",
+      "computedHash": "ca9c3433390ef9d35c700055499a58548eeb8548869fd0b8f798fa59755c6b0b"
+    }
+  }
+}
