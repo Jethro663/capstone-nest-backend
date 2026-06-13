@@ -15,8 +15,8 @@ from docx.shared import Inches, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[2]
 AUDIT_DIR = ROOT / "docs" / "research-paper-audit"
 EXTRACTED_DIR = AUDIT_DIR / "extracted"
-DOCX_OUT = ROOT / "RESEARCH_PAPER_RECHECK_MAY03_REV2.docx"
-MD_OUT = ROOT / "paper_recheck_may03_rev2.md"
+DOCX_OUT = AUDIT_DIR / "RESEARCH_PAPER_RECHECK_MAY03_REV2.docx"
+MD_OUT = AUDIT_DIR / "paper_recheck_may03_rev2.md"
 JSON_OUT = AUDIT_DIR / "paper_recheck_may03_rev2.json"
 
 

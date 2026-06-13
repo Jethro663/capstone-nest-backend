@@ -19,15 +19,15 @@ from docx.shared import Inches, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[2]
 AUDIT_DIR = ROOT / "docs" / "research-paper-audit"
 EXTRACTED_DIR = AUDIT_DIR / "extracted"
-OUTPUT_DOCX = ROOT / "RESEARCH_PAPER_FULL_SYSTEM_AUDIT_REPORT.docx"
+OUTPUT_DOCX = ROOT / "docs" / "system-audit" / "RESEARCH_PAPER_FULL_SYSTEM_AUDIT_REPORT.docx"
 OUTPUT_MD = {
-    "audit_notes": ROOT / "audit_notes.md",
-    "paper_claims": ROOT / "paper_claims_extracted.md",
-    "repo_inventory": ROOT / "repo_feature_inventory.md",
-    "truth_table": ROOT / "implementation_truth_table.md",
-    "diagram_audit": ROOT / "chapter4_diagram_audit.md",
-    "live_demo": ROOT / "live_demo_test_log.md",
-    "panelist": ROOT / "panelist_risk_checklist.md",
+    "audit_notes": ROOT / "docs" / "system-audit" / "audit_notes.md",
+    "paper_claims": ROOT / "docs" / "system-audit" / "paper_claims_extracted.md",
+    "repo_inventory": ROOT / "docs" / "system-audit" / "repo_feature_inventory.md",
+    "truth_table": ROOT / "docs" / "system-audit" / "implementation_truth_table.md",
+    "diagram_audit": ROOT / "docs" / "system-audit" / "chapter4_diagram_audit.md",
+    "live_demo": ROOT / "docs" / "demo" / "live_demo_test_log.md",
+    "panelist": ROOT / "docs" / "thesis-defense" / "panelist_risk_checklist.md",
 }
 METADATA_JSON = AUDIT_DIR / "audit_metadata.json"
 
@@ -1951,6 +1951,10 @@ def build_docx():
 
 
 def main():
+    for path in OUTPUT_MD.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DOCX.parent.mkdir(parents=True, exist_ok=True)
+    METADATA_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_MD["audit_notes"].write_text(build_audit_notes_md(), encoding="utf-8")
     OUTPUT_MD["paper_claims"].write_text(build_paper_claims_md(), encoding="utf-8")
     OUTPUT_MD["repo_inventory"].write_text(build_repo_inventory_md(), encoding="utf-8")
