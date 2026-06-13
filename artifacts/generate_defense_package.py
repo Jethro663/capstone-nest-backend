@@ -1042,6 +1042,7 @@ def bullet_lines(items: Iterable[str]) -> str:
 
 
 def write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text.strip() + "\n", encoding="utf-8")
 
 
@@ -1704,20 +1705,21 @@ def build_docx() -> Path:
     add_doc_heading(doc, "Unverified Claims", 2)
     add_doc_bullets(doc, UNVERIFIED_CLAIMS)
 
-    output = ROOT / "THESIS_DEFENSE_SIMULATION_AND_WEAKPOINT_REPORT.docx"
+    output = ROOT / "docs" / "thesis-defense" / "THESIS_DEFENSE_SIMULATION_AND_WEAKPOINT_REPORT.docx"
+    output.parent.mkdir(parents=True, exist_ok=True)
     doc.save(output)
     return output
 
 
 def generate_all() -> dict[str, Path]:
     files = {
-        "defense_question_bank.md": ROOT / "defense_question_bank.md",
-        "defense_best_answers.md": ROOT / "defense_best_answers.md",
-        "top_weakpoints.md": ROOT / "top_weakpoints.md",
-        "demo_battle_plan.md": ROOT / "demo_battle_plan.md",
-        "panelist_persona_simulation.md": ROOT / "panelist_persona_simulation.md",
-        "dangerous_claims_to_avoid.md": ROOT / "dangerous_claims_to_avoid.md",
-        "last_minute_fix_plan.md": ROOT / "last_minute_fix_plan.md",
+        "defense_question_bank.md": ROOT / "docs" / "thesis-defense" / "defense_question_bank.md",
+        "defense_best_answers.md": ROOT / "docs" / "thesis-defense" / "defense_best_answers.md",
+        "top_weakpoints.md": ROOT / "docs" / "thesis-defense" / "top_weakpoints.md",
+        "demo_battle_plan.md": ROOT / "docs" / "demo" / "demo_battle_plan.md",
+        "panelist_persona_simulation.md": ROOT / "docs" / "thesis-defense" / "panelist_persona_simulation.md",
+        "dangerous_claims_to_avoid.md": ROOT / "docs" / "thesis-defense" / "dangerous_claims_to_avoid.md",
+        "last_minute_fix_plan.md": ROOT / "docs" / "thesis-defense" / "last_minute_fix_plan.md",
     }
     write_text(files["defense_question_bank.md"], build_question_bank_markdown())
     write_text(files["defense_best_answers.md"], build_best_answers_markdown())
