@@ -2,6 +2,7 @@
 Ollama HTTP client - mirrors the NestJS OllamaService.
 """
 
+import asyncio
 import base64
 import logging
 import os
@@ -14,6 +15,15 @@ from . import cloud_fallback
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+_ollama_client: httpx.AsyncClient | None = None
+
+
+def _get_ollama_client() -> httpx.AsyncClient:
+    global _ollama_client
+    if _ollama_client is None or getattr(_ollama_client, "is_closed", False):
+        _ollama_client = httpx.AsyncClient(timeout=settings.ollama_timeout_extraction_s)
+    return _ollama_client
 
 TaskName = Literal[
     "chat",
@@ -113,7 +123,7 @@ def _resolve_timeout(task: TaskName) -> int:
     return _get_profile(task)["timeout"]
 
 
-def _resolve_image_payload(images: list[OllamaImage] | None) -> list[str]:
+async def _resolve_image_payload(images: list[OllamaImage] | None) -> list[str]:
     encoded: list[str] = []
     for image in images or []:
         if image.get("base64Data"):
@@ -122,8 +132,12 @@ def _resolve_image_payload(images: list[OllamaImage] | None) -> list[str]:
         file_path = (image.get("filePath") or "").strip()
         if not file_path:
             continue
-        with open(file_path, "rb") as file_obj:
-            encoded.append(base64.b64encode(file_obj.read()).decode("utf-8"))
+
+        def _read() -> str:
+            with open(file_path, "rb") as file_obj:
+                return base64.b64encode(file_obj.read()).decode("utf-8")
+
+        encoded.append(await asyncio.to_thread(_read))
     return encoded
 
 
@@ -143,15 +157,15 @@ def _build_request_options(
 async def is_available() -> dict[str, Any]:
     cloud_status = cloud_fallback.get_status()
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(f"{settings.ollama_base_url}/api/tags")
-            if resp.status_code == 200:
-                body = resp.json()
-                ollama_models = [m["name"] for m in body.get("models", [])]
-                ollama_available = True
-            else:
-                ollama_models = []
-                ollama_available = False
+        client = _get_ollama_client()
+        resp = await client.get(f"{settings.ollama_base_url}/api/tags", timeout=5.0)
+        if resp.status_code == 200:
+            body = resp.json()
+            ollama_models = [m["name"] for m in body.get("models", [])]
+            ollama_available = True
+        else:
+            ollama_models = []
+            ollama_available = False
     except Exception:
         ollama_models = []
         ollama_available = False
@@ -201,7 +215,7 @@ async def generate(
     )
     keep_alive_value = keep_alive if keep_alive is not None else settings.ollama_keep_alive
     timeout = _resolve_timeout(task)
-    encoded_images = _resolve_image_payload(images)
+    encoded_images = await _resolve_image_payload(images)
 
     if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
         return await cloud_fallback.generate_text(
@@ -231,14 +245,15 @@ async def generate(
         if response_format is not None:
             payload["format"] = response_format
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(
-                    f"{settings.ollama_base_url}/api/chat",
-                    json=payload,
-                )
-                resp.raise_for_status()
-                body = resp.json()
-                return body.get("message", {}).get("content", "")
+            client = _get_ollama_client()
+            resp = await client.post(
+                f"{settings.ollama_base_url}/api/chat",
+                json=payload,
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            return body.get("message", {}).get("content", "")
         except Exception:
             raise
 
@@ -256,13 +271,14 @@ async def generate(
         payload["format"] = response_format
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/generate",
-                json=payload,
-            )
-            resp.raise_for_status()
-            return resp.json()["response"]
+        client = _get_ollama_client()
+        resp = await client.post(
+            f"{settings.ollama_base_url}/api/generate",
+            json=payload,
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        return resp.json()["response"]
     except Exception as err:
         if images:
             raise
@@ -311,14 +327,15 @@ async def chat(
     if response_format is not None:
         payload["format"] = response_format
     try:
-        async with httpx.AsyncClient(timeout=_resolve_timeout(task)) as client:
-            resp = await client.post(
-                f"{settings.ollama_base_url}/api/chat",
-                json=payload,
-            )
-            resp.raise_for_status()
-            body = resp.json()
-            return body.get("message", {}).get("content", "")
+        client = _get_ollama_client()
+        resp = await client.post(
+            f"{settings.ollama_base_url}/api/chat",
+            json=payload,
+            timeout=_resolve_timeout(task),
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        return body.get("message", {}).get("content", "")
     except Exception as err:
         merged_prompt = "\n\n".join(
             str(item.get("content", "")).strip() for item in messages if item.get("content")
@@ -346,23 +363,29 @@ async def embed(texts: list[str]) -> list[list[float]]:
     if _runtime_mode() == "cloud" and cloud_fallback.is_enabled():
         return await cloud_fallback.embed_texts(texts)
 
-    async with httpx.AsyncClient(timeout=settings.ollama_timeout_chat_s) as client:
-        results: list[list[float]] = []
-        for text in texts:
-            body = await _post_embedding_request(client, text)
-            embedding = _extract_embedding(body)
-            if not embedding:
-                raise HTTPException(
-                    502,
-                    "Ollama embedding response did not contain a usable vector.",
-                )
-            results.append(embedding)
-        return results
+    client = _get_ollama_client()
+    results: list[list[float]] = []
+    for text in texts:
+        body = await _post_embedding_request(
+            client,
+            text,
+            timeout=settings.ollama_timeout_chat_s,
+        )
+        embedding = _extract_embedding(body)
+        if not embedding:
+            raise HTTPException(
+                502,
+                "Ollama embedding response did not contain a usable vector.",
+            )
+        results.append(embedding)
+    return results
 
 
 async def _post_embedding_request(
     client: httpx.AsyncClient,
     text: str,
+    *,
+    timeout: int,
 ) -> dict[str, Any]:
     payload = {
         "model": settings.ollama_embed_model,
@@ -372,7 +395,11 @@ async def _post_embedding_request(
     last_error: httpx.HTTPStatusError | None = None
 
     for endpoint in endpoints:
-        resp = await client.post(f"{settings.ollama_base_url}{endpoint}", json=payload)
+        resp = await client.post(
+            f"{settings.ollama_base_url}{endpoint}",
+            json=payload,
+            timeout=timeout,
+        )
         if resp.status_code == 404 and endpoint != endpoints[-1]:
             logger.info(
                 "Ollama endpoint %s returned 404, retrying with legacy embeddings endpoint",
@@ -481,12 +508,13 @@ async def preload_model(task: TaskName) -> None:
         "keep_alive": settings.ollama_keep_alive,
         "options": {"num_predict": 1, "temperature": 0},
     }
-    async with httpx.AsyncClient(timeout=_resolve_timeout(task)) as client:
-        resp = await client.post(
-            f"{settings.ollama_base_url}/api/generate",
-            json=payload,
-        )
-        resp.raise_for_status()
+    client = _get_ollama_client()
+    resp = await client.post(
+        f"{settings.ollama_base_url}/api/generate",
+        json=payload,
+        timeout=_resolve_timeout(task),
+    )
+    resp.raise_for_status()
 
 
 def ensure_local_file(file_path: str) -> str:

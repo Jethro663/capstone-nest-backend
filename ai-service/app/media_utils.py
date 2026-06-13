@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from typing import Any
 
 from .backend_uploads import materialize_backend_upload, resolve_local_backend_upload_path
 
 
-def encode_file_to_base64(file_path: str) -> str:
-    with open(file_path, "rb") as file_obj:
-        return base64.b64encode(file_obj.read()).decode("utf-8")
+async def encode_file_to_base64(file_path: str) -> str:
+    def _read():
+        with open(file_path, "rb") as file_obj:
+            return base64.b64encode(file_obj.read()).decode("utf-8")
+
+    return await asyncio.to_thread(_read)
 
 
 async def normalize_attachment_images(
@@ -33,7 +37,7 @@ async def normalize_attachment_images(
         prepared.append(
             {
                 "filePath": resolved_path,
-                "base64Data": encode_file_to_base64(resolved_path),
+                "base64Data": await encode_file_to_base64(resolved_path),
                 "mimeType": mime_type,
             }
         )

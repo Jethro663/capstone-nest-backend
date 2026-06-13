@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import os
 import tempfile
@@ -9,6 +10,15 @@ from urllib.parse import urlencode
 import httpx
 
 from .config import settings
+
+_upload_client: httpx.AsyncClient | None = None
+
+
+def _get_upload_client() -> httpx.AsyncClient:
+    global _upload_client
+    if _upload_client is None or getattr(_upload_client, "is_closed", False):
+        _upload_client = httpx.AsyncClient(timeout=settings.backend_upload_fetch_timeout_s)
+    return _upload_client
 
 
 def _candidate_paths(raw_path: str) -> list[str]:
@@ -75,14 +85,14 @@ async def materialize_backend_upload(raw_path: str) -> str | None:
         }
     )
     url = f"{backend_internal_url}/api/internal/uploads/raw?{query}"
-    async with httpx.AsyncClient(timeout=settings.backend_upload_fetch_timeout_s) as client:
-        response = await client.get(
-            url,
-            headers={
-                "X-Internal-Service-Token": settings.ai_service_shared_secret or ""
-            },
-        )
-        response.raise_for_status()
-        cached_path.write_bytes(response.content)
+    client = _get_upload_client()
+    response = await client.get(
+        url,
+        headers={
+            "X-Internal-Service-Token": settings.ai_service_shared_secret or ""
+        },
+    )
+    response.raise_for_status()
+    await asyncio.to_thread(cached_path.write_bytes, response.content)
 
     return str(cached_path)

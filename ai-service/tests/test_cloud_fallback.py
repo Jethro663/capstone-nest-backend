@@ -33,6 +33,9 @@ class _FakeAsyncClient:
 
 
 class CloudFallbackEmbeddingTests(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self) -> None:
+        cloud_fallback._cloud_client = None
+
     async def test_embed_texts_accepts_values_style_embedding_items(self) -> None:
         body = {
             "data": [

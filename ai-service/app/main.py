@@ -1,4 +1,4 @@
-﻿"""
+"""
 Nexora AI Service â€“ FastAPI application.
 
 All authentication is handled by the NestJS backend proxy.
@@ -99,6 +99,7 @@ _EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
+_BG_SEMAPHORE = asyncio.Semaphore(4)
 AI_JOB_STALE_FAILURE_MESSAGE = (
     "AI generation timed out before completion. Please retry this job."
 )
@@ -271,6 +272,14 @@ async def preload_ollama_models() -> None:
         await ollama_client.preload_model("vision_extraction")
     except Exception as err:
         logger.warning("Failed to preload vision model: %s", err)
+
+
+@app.on_event("shutdown")
+async def shutdown_http_clients() -> None:
+    from . import ollama_client as _oc, cloud_fallback as _cf, backend_uploads as _bu
+    for client in (_oc._ollama_client, _cf._cloud_client, _bu._upload_client):
+        if client and not client.is_closed:
+            await client.aclose()
 
 
 def _set_ai_job_runtime(job_id: str, **values: Any) -> None:
@@ -1838,11 +1847,22 @@ async def chat(
 
     if health["available"]:
         try:
-            reply = await ollama_client.chat(ollama_messages, task="chat")
+            chat_hard_timeout_s = max(settings.ollama_timeout_chat_s + 30, 90)
+            reply = await asyncio.wait_for(
+                ollama_client.chat(ollama_messages, task="chat"),
+                timeout=chat_hard_timeout_s,
+            )
             model_used = ollama_client.get_task_model_name(
                 "chat",
                 images=attachments,
             )
+        except asyncio.TimeoutError:
+            logger.warning("Ollama chat timed out after %ss", chat_hard_timeout_s)
+            reply = (
+                "I'm taking a bit longer than expected. Please try again in a moment. "
+                "If this keeps happening, let your teacher know!"
+            )
+            model_used = "fallback (timeout)"
         except Exception as err:
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
@@ -3338,18 +3358,19 @@ async def extract_module(
 
     # Run extraction in background on the active event loop.
     async def _run():
-        from .database import AsyncSessionLocal
+        async with _BG_SEMAPHORE:
+            from .database import AsyncSessionLocal
 
-        async with AsyncSessionLocal() as bg_db:
-            logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
-            await run_extraction(
-                bg_db,
-                extraction_id,
-                body.file_id,
-                user.id,
-                target_section_count=body.target_section_count,
-                extraction_style=body.extraction_style,
-            )
+            async with AsyncSessionLocal() as bg_db:
+                logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
+                await run_extraction(
+                    bg_db,
+                    extraction_id,
+                    body.file_id,
+                    user.id,
+                    target_section_count=body.target_section_count,
+                    extraction_style=body.extraction_style,
+                )
 
     try:
         loop = asyncio.get_running_loop()
@@ -3962,24 +3983,36 @@ async def apply_extraction(
         if not isinstance(blocks, list):
             blocks = []
 
-        for idx, block in enumerate(blocks):
-            normalized_block = _normalize_extraction_block(block, idx + 1)
-            await db.execute(
-                sa_text(
-                    'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
-                    "VALUES (:lessonId, :type, :order, :content, :metadata)"
-                ).bindparams(
-                    bindparam("content", type_=postgresql.JSONB),
-                    bindparam("metadata", type_=postgresql.JSONB),
-                ),
-                {
+        if blocks:
+            block_rows = []
+            for idx, block in enumerate(blocks):
+                normalized_block = _normalize_extraction_block(block, idx + 1)
+                block_rows.append({
                     "lessonId": new_lesson["id"],
                     "type": normalized_block.get("type"),
                     "order": _safe_int(normalized_block.get("order"), idx),
-                    "content": normalized_block.get("content") or {},
-                    "metadata": normalized_block.get("metadata") or {},
-                },
-            )
+                    "content": json.dumps(normalized_block.get("content") or {}),
+                    "metadata": json.dumps(normalized_block.get("metadata") or {}),
+                })
+            if block_rows:
+                placeholders = ", ".join(
+                    f"(:bl{i}_lid, :bl{i}_type, :bl{i}_order, :bl{i}_content::jsonb, :bl{i}_metadata::jsonb)"
+                    for i in range(len(block_rows))
+                )
+                params: dict[str, Any] = {}
+                for i, row in enumerate(block_rows):
+                    params[f"bl{i}_lid"] = row["lessonId"]
+                    params[f"bl{i}_type"] = row["type"]
+                    params[f"bl{i}_order"] = row["order"]
+                    params[f"bl{i}_content"] = row["content"]
+                    params[f"bl{i}_metadata"] = row["metadata"]
+                await db.execute(
+                    sa_text(
+                        'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
+                        "VALUES " + placeholders
+                    ),
+                    params,
+                )
 
         await db.execute(
             sa_text(
@@ -4056,6 +4089,7 @@ async def apply_extraction(
                     raise HTTPException(500, "Failed to create assessment from section draft")
                 assessment_id = str(assessment_row["id"])
 
+                all_options: list[dict[str, Any]] = []
                 for question_index, question in enumerate(questions, start=1):
                     question_type = str(question.get("type") or "multiple_choice").strip().lower()
                     if question_type not in VALID_QUESTION_TYPES:
@@ -4118,30 +4152,31 @@ async def apply_extraction(
                             option_text = str(option.get("text") or "").strip()
                             if not option_text:
                                 continue
-                            await db.execute(
-                                sa_text(
-                                    """
-                                    INSERT INTO assessment_question_options (
-                                      question_id,
-                                      text,
-                                      is_correct,
-                                      "order"
-                                    )
-                                    VALUES (
-                                      :questionId,
-                                      :text,
-                                      :isCorrect,
-                                      :order
-                                    )
-                                    """
-                                ),
-                                {
-                                    "questionId": question_id,
-                                    "text": option_text,
-                                    "isCorrect": bool(option.get("isCorrect")),
-                                    "order": _safe_int(option.get("order"), option_index),
-                                },
-                            )
+                            all_options.append({
+                                "questionId": question_id,
+                                "text": option_text,
+                                "isCorrect": bool(option.get("isCorrect")),
+                                "order": _safe_int(option.get("order"), option_index),
+                            })
+
+                if all_options:
+                    opt_placeholders = ", ".join(
+                        f"(:o{i}_qid, :o{i}_text, :o{i}_correct, :o{i}_order)"
+                        for i in range(len(all_options))
+                    )
+                    opt_params: dict[str, Any] = {}
+                    for i, opt in enumerate(all_options):
+                        opt_params[f"o{i}_qid"] = opt["questionId"]
+                        opt_params[f"o{i}_text"] = opt["text"]
+                        opt_params[f"o{i}_correct"] = opt["isCorrect"]
+                        opt_params[f"o{i}_order"] = opt["order"]
+                    await db.execute(
+                        sa_text(
+                            'INSERT INTO assessment_question_options (question_id, text, is_correct, "order") '
+                            "VALUES " + opt_placeholders
+                        ),
+                        opt_params,
+                    )
 
                 await db.execute(
                     sa_text(
@@ -4518,9 +4553,12 @@ async def queue_intervention_recommendation_job(
 
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(
-            _run_intervention_generation_job(job_id, case_id, body.note, user)
-        )
+
+        async def _sem_intervention():
+            async with _BG_SEMAPHORE:
+                await _run_intervention_generation_job(job_id, case_id, body.note, user)
+
+        task = loop.create_task(_sem_intervention())
         AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule intervention job %s: %s", job_id, exc)
@@ -4594,7 +4632,12 @@ async def queue_teacher_quiz_draft_job(
 
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(_run_quiz_generation_job(job_id, body, user))
+
+        async def _sem_quiz():
+            async with _BG_SEMAPHORE:
+                await _run_quiz_generation_job(job_id, body, user)
+
+        task = loop.create_task(_sem_quiz())
         AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule quiz job %s: %s", job_id, exc)
@@ -4658,7 +4701,12 @@ async def queue_teacher_lesson_plan_job(
 
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(_run_lesson_plan_generation_job(job_id, body, user))
+
+        async def _sem_lesson_plan():
+            async with _BG_SEMAPHORE:
+                await _run_lesson_plan_generation_job(job_id, body, user)
+
+        task = loop.create_task(_sem_lesson_plan())
         AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule lesson plan job %s: %s", job_id, exc)
@@ -5051,5 +5099,4 @@ async def teacher_generate_quiz_draft(
             "indexing": index_result,
         },
     }
-
 

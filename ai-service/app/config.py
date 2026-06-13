@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     backend_internal_url: str = ""
     backend_upload_fetch_timeout_s: int = 60
     max_raw_text: int = 50_000
+    db_pool_size: int = Field(default=10, validation_alias="DB_POOL_SIZE")
+    db_max_overflow: int = Field(default=15, validation_alias="DB_MAX_OVERFLOW")
+    db_pool_timeout_s: int = Field(default=30, validation_alias="DB_POOL_TIMEOUT_S")
+    db_pool_recycle_s: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_S")
+    db_pool_pre_ping: bool = Field(default=True, validation_alias="DB_POOL_PRE_PING")
     log_level: str = "INFO"
     ai_service_shared_secret: str = ""
     ai_degraded_allowed: bool = False
