@@ -107,3 +107,27 @@ export function resolveNotificationDestination(notification: Notification, role?
 
   return '/dashboard/notifications';
 }
+
+export function getNotificationActionLabel(notification: Notification) {
+  if (isInterventionAlertNotification(notification)) {
+    return 'Review alert';
+  }
+
+  if (ASSESSMENT_TYPES.has(notification.type)) {
+    return 'Open assessment';
+  }
+
+  if (ANNOUNCEMENT_TYPES.has(notification.type)) {
+    return 'View announcement';
+  }
+
+  if (DISCUSSION_TYPES.has(notification.type)) {
+    return 'Open discussion';
+  }
+
+  if (notification.type === 'grade_updated') {
+    return 'View grade';
+  }
+
+  return 'Open notification';
+}

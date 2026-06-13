@@ -7,9 +7,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import {
+  getNotificationActionLabel,
   getNotificationMessage,
-  resolveNotificationAction,
-  resolveValidatedNotificationDestination,
+  resolveNotificationDestination,
 } from '@/lib/notification-routing';
 import { cn } from '@/utils/cn';
 import type { Notification } from '@/types/notification';
@@ -97,7 +97,7 @@ export function NotificationBellDropdown({
         if (!notification.isRead) {
           await markAsRead(notification.id);
         }
-        const destination = await resolveValidatedNotificationDestination(notification, role);
+        const destination = resolveNotificationDestination(notification, role);
         setOpen(false);
         router.push(destination);
       } finally {
@@ -161,7 +161,7 @@ export function NotificationBellDropdown({
           ) : (
             <div className="space-y-1.5">
               {recentNotifications.map((notification) => {
-                const action = resolveNotificationAction(notification, role);
+                const actionLabel = getNotificationActionLabel(notification);
                 const isOpening = openingId === notification.id;
                 return (
                   <button
@@ -200,7 +200,7 @@ export function NotificationBellDropdown({
                         <span className="text-slate-300">/</span>
                         <span>{notification.isRead ? 'Read' : 'Unread'}</span>
                         <span className="text-slate-300">/</span>
-                        <span>{isOpening ? 'Opening...' : action.label}</span>
+                        <span>{isOpening ? 'Opening...' : actionLabel}</span>
                       </span>
                     </span>
                   </button>

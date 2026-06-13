@@ -6,7 +6,7 @@ import { ArrowUpRight, Bell, CheckCheck, Filter, RefreshCcw, TriangleAlert } fro
 import {
   getNotificationMessage,
   isInterventionAlertNotification,
-  resolveValidatedNotificationDestination,
+  resolveNotificationDestination,
 } from '@/lib/notification-routing';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
@@ -136,7 +136,7 @@ export default function NotificationsPage() {
           ),
         );
       }
-      const destination = await resolveValidatedNotificationDestination(notification, role);
+      const destination = resolveNotificationDestination(notification, role);
       router.push(destination);
     },
     [markAsRead, role, router],
