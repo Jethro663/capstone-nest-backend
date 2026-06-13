@@ -1,5 +1,10 @@
 import { Injectable, Logger, HttpException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { CircuitBreaker } from '../../common/circuit-breaker';
+import {
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+  CIRCUIT_BREAKER_COOLDOWN_MS,
+} from '../../common/constants';
 
 /**
  * Proxies AI-related requests to the Python FastAPI ai-service.
@@ -14,6 +19,7 @@ export class AiProxyService {
   private readonly quizTimeoutMs: number;
   private readonly extractionTimeoutMs: number;
   private readonly sharedSecret: string;
+  private readonly breaker: CircuitBreaker;
 
   constructor(private readonly config: ConfigService) {
     this.baseUrl =
@@ -32,12 +38,42 @@ export class AiProxyService {
     );
     this.sharedSecret =
       this.config.get<string>('AI_SERVICE_SHARED_SECRET')?.trim() || '';
+
+    const failureThreshold = parseInt(
+      this.config.get<string>('AI_CB_FAILURE_THRESHOLD') ||
+        String(CIRCUIT_BREAKER_FAILURE_THRESHOLD),
+      10,
+    );
+    const cooldownMs = parseInt(
+      this.config.get<string>('AI_CB_COOLDOWN_MS') ||
+        String(CIRCUIT_BREAKER_COOLDOWN_MS),
+      10,
+    );
+
+    this.breaker = new CircuitBreaker({
+      failureThreshold,
+      cooldownMs,
+      name: 'ai-proxy',
+    });
+
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
     if (!this.sharedSecret) {
       this.logger.warn(
         'AI_SERVICE_SHARED_SECRET is empty. If ai-service expects a shared secret, proxied AI requests will fail with 401.',
       );
     }
+  }
+
+  getCircuitBreakerState(): {
+    state: string;
+    consecutiveFailures: number;
+    cooldownRemainingMs: number;
+  } {
+    return {
+      state: this.breaker.getState(),
+      consecutiveFailures: this.breaker.getConsecutiveFailures(),
+      cooldownRemainingMs: this.breaker.getCooldownRemainingMs(),
+    };
   }
 
   private resolveTimeoutMs(path: string): number {
@@ -55,12 +91,33 @@ export class AiProxyService {
     return this.extractionTimeoutMs;
   }
 
+  private isServiceDownError(err: unknown, statusCode?: number): boolean {
+    if (statusCode !== undefined && statusCode >= 500) return true;
+    if (err instanceof HttpException && err.getStatus() >= 500) return true;
+    if (err instanceof Error && err.name === 'AbortError') return true;
+    if (err instanceof TypeError) return true;
+    return false;
+  }
+
   async forward(
     method: string,
     path: string,
     user: { id?: string; userId?: string; email?: string; roles?: string[] },
     body?: unknown,
   ): Promise<unknown> {
+    if (!this.breaker.allowRequest()) {
+      const remaining = Math.ceil(this.breaker.getCooldownRemainingMs() / 1000);
+      this.logger.warn(
+        `AI proxy circuit breaker OPEN — fast-failing ${method} ${path} (cooldown ${remaining}s remaining)`,
+      );
+      throw new HttpException(
+        {
+          message: `AI service is temporarily unavailable due to repeated failures. Retrying in ${remaining}s.`,
+        },
+        503,
+      );
+    }
+
     const url = `${this.baseUrl}${path}`;
     const userId = user.id ?? user.userId ?? '';
     const headers: Record<string, string> = {
@@ -104,14 +161,19 @@ export class AiProxyService {
           `AI service returned ${res.status} for ${method} ${path}: %j`,
           payload,
         );
-        throw new HttpException(
+        const err = new HttpException(
           {
             message: payload?.detail || payload?.message || 'AI service error',
           },
           res.status,
         );
+        if (this.isServiceDownError(err, res.status)) {
+          this.breaker.recordFailure();
+        }
+        throw err;
       }
 
+      this.breaker.recordSuccess();
       return payload;
     } catch (err) {
       clearTimeout(timer);
@@ -120,9 +182,11 @@ export class AiProxyService {
       }
 
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(
-        `AI service request failed: ${message}`,
-      );
+      this.logger.error(`AI service request failed: ${message}`);
+
+      if (this.isServiceDownError(err)) {
+        this.breaker.recordFailure();
+      }
 
       if (err instanceof Error && err.name === 'AbortError') {
         throw new HttpException(
