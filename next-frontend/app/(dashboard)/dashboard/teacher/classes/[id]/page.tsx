@@ -1513,7 +1513,7 @@ export default function TeacherClassDetailPage() {
     if (!aiDraftJobs.some((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus))) return;
     const interval = window.setInterval(() => {
       void refreshAiDraftJobs();
-    }, 3000);
+    }, 10_000);
     return () => window.clearInterval(interval);
   }, [activeTab, aiDraftJobs, refreshAiDraftJobs]);
 
@@ -1523,10 +1523,16 @@ export default function TeacherClassDetailPage() {
       return;
     }
     const interval = window.setInterval(() => {
-      void fetchData();
-    }, 5000);
+      void extractionService.listByClass(classId).then((res) => {
+        setExtractions((res.data || []).slice().sort((a, b) => {
+          const aTs = new Date(a.createdAt || 0).getTime();
+          const bTs = new Date(b.createdAt || 0).getTime();
+          return bTs - aTs;
+        }));
+      }).catch(() => {});
+    }, 10_000);
     return () => window.clearInterval(interval);
-  }, [activeTab, extractions, fetchData]);
+  }, [activeTab, extractions, classId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

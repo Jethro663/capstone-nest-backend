@@ -264,6 +264,7 @@ APPROVED_ADMIN_SOURCE_IDS = {
 async def preload_ollama_models() -> None:
     AI_JOB_TASKS.clear()
     await _cleanup_stale_ai_jobs()
+    await _recover_orphaned_jobs()
     try:
         await ollama_client.preload_model("chat")
     except Exception as err:
@@ -414,6 +415,39 @@ async def _cleanup_stale_ai_jobs() -> None:
                     "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
                     "staleTimeoutAt": datetime.now(timezone.utc).isoformat(),
                 },
+            )
+
+
+async def _recover_orphaned_jobs() -> None:
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            sa_text(
+                """
+                SELECT id, job_type
+                FROM ai_generation_jobs
+                WHERE status IN ('pending', 'processing')
+                """
+            )
+        )
+        orphan_ids = [(str(row["id"]), str(row["job_type"])) for row in rows.mappings()]
+        if not orphan_ids:
+            return
+        for job_id, job_type in orphan_ids:
+            if job_id in AI_JOB_TASKS:
+                continue
+            logger.info("[ai-job] Marking orphaned %s job %s as failed after restart", job_type, job_id)
+            await _update_ai_job_status(
+                db,
+                job_id=job_id,
+                status="failed",
+                error_message="Job was interrupted by a service restart. Please retry.",
+            )
+            await _record_ai_job_runtime(
+                db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Job interrupted by restart",
+                errorMessage="Job was interrupted by a service restart. Please retry.",
             )
 
 

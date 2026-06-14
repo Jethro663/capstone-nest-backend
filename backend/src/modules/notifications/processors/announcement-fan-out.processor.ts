@@ -90,7 +90,7 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
       body: bodyText,
     }));
 
-    await this.notificationsService.createBulk(inputs);
+    await this.notificationsService.createBulkDeduped(inputs);
 
     const now = new Date();
 

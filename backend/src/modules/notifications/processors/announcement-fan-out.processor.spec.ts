@@ -27,7 +27,7 @@ const makeEnrollmentRow = (studentId: string) => ({ studentId });
 describe('AnnouncementFanOutProcessor', () => {
   let processor: AnnouncementFanOutProcessor;
   let mockDb: any;
-  let mockNotificationsService: { createBulk: jest.Mock };
+  let mockNotificationsService: { createBulk: jest.Mock; createBulkDeduped: jest.Mock };
   let mockGateway: { emitToUser: jest.Mock };
 
   beforeEach(async () => {
@@ -47,6 +47,7 @@ describe('AnnouncementFanOutProcessor', () => {
     });
     mockNotificationsService = {
       createBulk: jest.fn().mockResolvedValue(undefined),
+      createBulkDeduped: jest.fn().mockImplementation((inputs) => Promise.resolve(inputs)),
     };
     mockGateway = { emitToUser: jest.fn() };
 
@@ -76,8 +77,8 @@ describe('AnnouncementFanOutProcessor', () => {
 
     await processor.process(makeJob());
 
-    expect(mockNotificationsService.createBulk).toHaveBeenCalledTimes(1);
-    const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
+    expect(mockNotificationsService.createBulkDeduped).toHaveBeenCalledTimes(1);
+    const [inputs] = mockNotificationsService.createBulkDeduped.mock.calls[0];
     expect(inputs).toHaveLength(3);
     expect(inputs.map((i: any) => i.userId)).toEqual(['s-1', 's-2', 's-3']);
   });
@@ -89,7 +90,7 @@ describe('AnnouncementFanOutProcessor', () => {
 
     await processor.process(makeJob());
 
-    const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
+    const [inputs] = mockNotificationsService.createBulkDeduped.mock.calls[0];
     expect(inputs[0].type).toBe('announcement_posted');
   });
 
@@ -100,7 +101,7 @@ describe('AnnouncementFanOutProcessor', () => {
 
     await processor.process(makeJob());
 
-    const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
+    const [inputs] = mockNotificationsService.createBulkDeduped.mock.calls[0];
     expect(inputs[0].referenceId).toBe(ANN_ID);
   });
 
@@ -135,7 +136,7 @@ describe('AnnouncementFanOutProcessor', () => {
       makeJob({ ...JOB_DATA, content: '<p>Hello <strong>class</strong>!</p>' }),
     );
 
-    const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
+    const [inputs] = mockNotificationsService.createBulkDeduped.mock.calls[0];
     expect(inputs[0].body).not.toContain('<p>');
     expect(inputs[0].body).not.toContain('<strong>');
     expect(inputs[0].body).toContain('Hello');
@@ -149,7 +150,7 @@ describe('AnnouncementFanOutProcessor', () => {
 
     await processor.process(makeJob({ ...JOB_DATA, content: longContent }));
 
-    const [inputs] = mockNotificationsService.createBulk.mock.calls[0];
+    const [inputs] = mockNotificationsService.createBulkDeduped.mock.calls[0];
     expect(inputs[0].body.length).toBeLessThanOrEqual(200);
   });
 
@@ -167,7 +168,7 @@ describe('AnnouncementFanOutProcessor', () => {
     await processor.process(makeJob());
 
     expect(mockDb.query.enrollments.findMany).not.toHaveBeenCalled();
-    expect(mockNotificationsService.createBulk).not.toHaveBeenCalled();
+    expect(mockNotificationsService.createBulkDeduped).not.toHaveBeenCalled();
     expect(mockGateway.emitToUser).not.toHaveBeenCalled();
   });
 
@@ -176,7 +177,7 @@ describe('AnnouncementFanOutProcessor', () => {
 
     await processor.process(makeJob());
 
-    expect(mockNotificationsService.createBulk).not.toHaveBeenCalled();
+    expect(mockNotificationsService.createBulkDeduped).not.toHaveBeenCalled();
     expect(mockGateway.emitToUser).not.toHaveBeenCalled();
   });
 

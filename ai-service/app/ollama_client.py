@@ -364,8 +364,9 @@ async def embed(texts: list[str]) -> list[list[float]]:
         return await cloud_fallback.embed_texts(texts)
 
     client = _get_ollama_client()
-    results: list[list[float]] = []
-    for text in texts:
+    _EMBED_CONCURRENCY = 6
+
+    async def _embed_one(idx: int, text: str) -> tuple[int, list[float]]:
         body = await _post_embedding_request(
             client,
             text,
@@ -377,7 +378,17 @@ async def embed(texts: list[str]) -> list[list[float]]:
                 502,
                 "Ollama embedding response did not contain a usable vector.",
             )
-        results.append(embedding)
+        return idx, embedding
+
+    sem = asyncio.Semaphore(_EMBED_CONCURRENCY)
+    results: list[list[float]] = [[] for _ in texts]
+
+    async def _bounded(idx: int, text: str) -> None:
+        async with sem:
+            i, emb = await _embed_one(idx, text)
+            results[i] = emb
+
+    await asyncio.gather(*[_bounded(i, t) for i, t in enumerate(texts)])
     return results
 
 

@@ -13,4 +13,20 @@ export default registerAs('ollama', () => ({
     process.env.AI_SERVICE_TIMEOUT_EXTRACTION_MS ?? '300000',
     10,
   ),
+  throttleTtlMs: parseInt(
+    process.env.AI_THROTTLE_TTL_MS ?? '60000',
+    10,
+  ),
+  throttleChatLimit: parseInt(
+    process.env.AI_THROTTLE_CHAT_LIMIT ?? '10',
+    10,
+  ),
+  throttleHeavyLimit: parseInt(
+    process.env.AI_THROTTLE_HEAVY_LIMIT ?? '3',
+    10,
+  ),
+  throttlePollLimit: parseInt(
+    process.env.AI_THROTTLE_POLL_LIMIT ?? '30',
+    10,
+  ),
 }));

@@ -211,7 +211,7 @@ export default function ExtractionReviewPage() {
           toast.error(warning);
         }
       }
-    }, 3000);
+    }, 8_000);
   }, [extraction, extractionId, hydrate, stopPolling]);
 
   const isEditable = extraction?.extractionStatus === 'completed';

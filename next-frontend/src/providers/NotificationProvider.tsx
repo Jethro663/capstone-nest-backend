@@ -34,8 +34,10 @@ import type { ExtractionStatus } from '@/types/extraction';
 import type { LxpPathSummary } from '@/types/lxp';
 import type { Notification } from '@/types/notification';
 
-const NOTIFICATION_POLL_MS = 5000;
-const STUDENT_REMINDER_POLL_MS = 60_000;
+const NOTIFICATION_POLL_MS = 15_000;
+const CONNECTED_NOTIFICATION_POLL_MS = 30_000;
+const EXTRACTION_STATUS_POLL_MS = 10_000;
+const STUDENT_REMINDER_POLL_MS = 90_000;
 const STUDENT_REMINDER_CLASS_LIMIT = 6;
 
 type PendingAssessmentReminder = {
@@ -227,11 +229,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const subscribersRef = useRef(new Set<(notification: Notification) => void>());
   const seenNotificationIdsRef = useRef(new Set<string>());
   const hasHydratedSeenIdsRef = useRef(false);
   const studentReminderInFlightRef = useRef(false);
+  const notificationsInFlightRef = useRef(false);
+  const trackedExtractionInFlightRef = useRef(false);
 
   const subscribe = useCallback((listener: (notification: Notification) => void) => {
     subscribersRef.current.add(listener);
@@ -269,8 +274,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const syncNotifications = useCallback(
     async (showToastForFresh: boolean) => {
+      if (notificationsInFlightRef.current) return;
+      notificationsInFlightRef.current = true;
       try {
-        setLoading(true);
+        if (!hasHydratedSeenIdsRef.current) {
+          setLoading(true);
+        }
         const [listRes, countRes] = await Promise.all([
           notificationService.getAll({ limit: 50 }),
           notificationService.getUnreadCount(),
@@ -319,6 +328,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       } catch {
         // silently fail - notifications are non-critical
       } finally {
+        notificationsInFlightRef.current = false;
         setLoading(false);
       }
     },
@@ -351,6 +361,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const syncTrackedExtractionNotifications = useCallback(async () => {
     if (!sessionUserId || role !== 'teacher') return;
+    if (trackedExtractionInFlightRef.current) return;
 
     const tracked = readAllTrackedExtractionNotifications().filter(
       (entry) =>
@@ -359,70 +370,75 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     if (tracked.length === 0) return;
 
-    await Promise.all(
-      tracked.map(async (entry) => {
-        try {
-          const statusRes = await extractionService.getStatus(entry.extractionId);
-          const nextStatus = statusRes.data.status as ExtractionStatus;
-          const nextEntry = {
-            ...entry,
-            lastKnownStatus: nextStatus,
-            lastKnownProgress: statusRes.data.progressPercent,
-            updatedAt: new Date().toISOString(),
-          };
+    trackedExtractionInFlightRef.current = true;
+    try {
+      await Promise.all(
+        tracked.map(async (entry) => {
+          try {
+            const statusRes = await extractionService.getStatus(entry.extractionId);
+            const nextStatus = statusRes.data.status as ExtractionStatus;
+            const nextEntry = {
+              ...entry,
+              lastKnownStatus: nextStatus,
+              lastKnownProgress: statusRes.data.progressPercent,
+              updatedAt: new Date().toISOString(),
+            };
 
-          const shouldNotify =
-            !entry.notifiedAt &&
-            !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) &&
-            isTrackedExtractionTerminalStatus(nextStatus);
+            const shouldNotify =
+              !entry.notifiedAt &&
+              !isTrackedExtractionTerminalStatus(entry.lastKnownStatus) &&
+              isTrackedExtractionTerminalStatus(nextStatus);
 
-          if (shouldNotify) {
-            nextEntry.notifiedAt = new Date().toISOString();
-            if (nextStatus === 'completed' || nextStatus === 'applied') {
-              const message = `${entry.originalName} finished processing and is ready for teacher review.`;
-              showLiveNotificationToast(
-                {
-                  id: `extraction:${entry.extractionId}:completed`,
-                  userId: sessionUserId,
-                  type: 'extraction_completed',
-                  title: 'Extraction ready',
-                  body: message,
-                  message,
-                  isRead: false,
-                  referenceId: entry.extractionId,
-                  metadata: { classId: entry.classId },
-                  createdAt: nextEntry.notifiedAt,
-                },
-                role,
-              );
-            } else if (nextStatus === 'failed') {
-              const message =
-                statusRes.data.errorMessage ||
-                `${entry.originalName} could not be completed. Open the extraction history to review the error.`;
-              showLiveNotificationToast(
-                {
-                  id: `extraction:${entry.extractionId}:failed`,
-                  userId: sessionUserId,
-                  type: 'extraction_failed',
-                  title: 'Extraction failed',
-                  body: message,
-                  message,
-                  isRead: false,
-                  referenceId: entry.extractionId,
-                  metadata: { classId: entry.classId },
-                  createdAt: nextEntry.notifiedAt,
-                },
-                role,
-              );
+            if (shouldNotify) {
+              nextEntry.notifiedAt = new Date().toISOString();
+              if (nextStatus === 'completed' || nextStatus === 'applied') {
+                const message = `${entry.originalName} finished processing and is ready for teacher review.`;
+                showLiveNotificationToast(
+                  {
+                    id: `extraction:${entry.extractionId}:completed`,
+                    userId: sessionUserId,
+                    type: 'extraction_completed',
+                    title: 'Extraction ready',
+                    body: message,
+                    message,
+                    isRead: false,
+                    referenceId: entry.extractionId,
+                    metadata: { classId: entry.classId },
+                    createdAt: nextEntry.notifiedAt,
+                  },
+                  role,
+                );
+              } else if (nextStatus === 'failed') {
+                const message =
+                  statusRes.data.errorMessage ||
+                  `${entry.originalName} could not be completed. Open the extraction history to review the error.`;
+                showLiveNotificationToast(
+                  {
+                    id: `extraction:${entry.extractionId}:failed`,
+                    userId: sessionUserId,
+                    type: 'extraction_failed',
+                    title: 'Extraction failed',
+                    body: message,
+                    message,
+                    isRead: false,
+                    referenceId: entry.extractionId,
+                    metadata: { classId: entry.classId },
+                    createdAt: nextEntry.notifiedAt,
+                  },
+                  role,
+                );
+              }
             }
-          }
 
-          upsertTrackedExtractionNotification(entry.classId, nextEntry);
-        } catch {
-          // Keep the existing tracked state on transient polling failures.
-        }
-      }),
-    );
+            upsertTrackedExtractionNotification(entry.classId, nextEntry);
+          } catch {
+            // Keep the existing tracked state on transient polling failures.
+          }
+        }),
+      );
+    } finally {
+      trackedExtractionInFlightRef.current = false;
+    }
   }, [role, sessionUserId]);
 
   const syncStudentReminderNotifications = useCallback(async () => {
@@ -464,19 +480,19 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const interval = window.setInterval(() => {
       void syncNotifications(true);
-    }, NOTIFICATION_POLL_MS);
+    }, socketConnected ? CONNECTED_NOTIFICATION_POLL_MS : NOTIFICATION_POLL_MS);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [sessionUserId, syncNotifications]);
+  }, [sessionUserId, socketConnected, syncNotifications]);
 
   useEffect(() => {
     if (!sessionUserId || role !== 'teacher') return;
     void syncTrackedExtractionNotifications();
     const interval = window.setInterval(() => {
       void syncTrackedExtractionNotifications();
-    }, 5000);
+    }, EXTRACTION_STATUS_POLL_MS);
     return () => window.clearInterval(interval);
   }, [role, sessionUserId, syncTrackedExtractionNotifications]);
 
@@ -502,13 +518,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const socket = io(`${wsUrl}/notifications`, {
       auth: { token: `Bearer ${token}` },
-      transports: ['polling', 'websocket'],
+      transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 3000,
       reconnectionAttempts: 10,
     });
 
     socket.on('connect', () => {
+      setSocketConnected(true);
       console.log('[WS] Notifications connected');
     });
 
@@ -546,6 +563,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('disconnect', (reason: string) => {
+      setSocketConnected(false);
       console.log('[WS] Notifications disconnected:', reason);
     });
 
@@ -553,6 +571,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     return () => {
       socket.disconnect();
+      setSocketConnected(false);
       socketRef.current = null;
     };
   }, [publishIncomingNotification, sessionUserId]);

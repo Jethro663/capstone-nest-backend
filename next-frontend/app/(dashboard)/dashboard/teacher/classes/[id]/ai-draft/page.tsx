@@ -65,7 +65,7 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
   { value: 'multiple_select', label: 'Multiple Select' },
 ];
 
-const JOB_POLL_INTERVAL_MS = 2500;
+const JOB_POLL_INTERVAL_MS = 10_000;
 
 type DraftWorkflowTab = 'sources' | 'setup' | 'generation' | 'preview';
 

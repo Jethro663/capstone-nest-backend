@@ -532,11 +532,15 @@ export class PerformanceService {
     const uniqueStudentIds = [...new Set(studentIds)];
     if (uniqueStudentIds.length === 0) return { recomputed: 0 };
 
-    await Promise.all(
-      uniqueStudentIds.map((studentId) =>
-        this.recomputeStudent(classId, studentId, triggerSource),
-      ),
-    );
+    const CHUNK_SIZE = 5;
+    for (let i = 0; i < uniqueStudentIds.length; i += CHUNK_SIZE) {
+      const chunk = uniqueStudentIds.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map((studentId) =>
+          this.recomputeStudent(classId, studentId, triggerSource),
+        ),
+      );
+    }
 
     return { recomputed: uniqueStudentIds.length };
   }
@@ -1480,6 +1484,14 @@ export class PerformanceService {
     note?: string,
   ) {
     try {
+      const existing = await this.db.query.aiGenerationJobs.findFirst({
+        where: eq(aiGenerationJobs.id, jobId),
+        columns: { status: true },
+      });
+      if (existing && ['completed', 'approved', 'failed', 'cancelled'].includes(existing.status)) {
+        return;
+      }
+
       await this.db
         .update(aiGenerationJobs)
         .set({
@@ -1576,7 +1588,7 @@ export class PerformanceService {
         userId,
         dto.studentId,
         dto.note,
-      );
+      ).catch(() => {});
     }, 0);
 
     await this.auditService.log({

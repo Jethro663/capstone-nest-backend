@@ -175,7 +175,7 @@ groups:
               to: 0
             model:
               refId: A
-              expr: sum(rate(http_server_requests_total{job="backend",status=~"5.."}[5m])) > 0.05
+              expr: sum(rate(http_requests_total{job="backend",status_code=~"5.."}[5m])) > 0.05
               intervalMs: 1000
               maxDataPoints: 43200
         for: 5m
@@ -210,6 +210,40 @@ groups:
             model:
               refId: A
               expr: sum(changes(container_start_time_seconds[15m])) > 3
+              intervalMs: 1000
+              maxDataPoints: 43200
+        for: 10m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: bullmq-waiting-jobs
+        title: BullMQ Queue Backlog High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: bullmq_waiting_total > 10
+              intervalMs: 5000
+              maxDataPoints: 43200
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+      - uid: ai-job-failure-rate
+        title: AI Job Failure Rate High
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: sum(rate(nexora_ai_http_requests_total{status=~"5.."}[10m])) > 0.1
               intervalMs: 1000
               maxDataPoints: 43200
         for: 10m

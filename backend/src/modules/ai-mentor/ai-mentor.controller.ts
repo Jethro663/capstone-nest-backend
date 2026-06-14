@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Controller,
   ForbiddenException,
@@ -58,6 +58,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../../database/database.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
@@ -926,6 +927,7 @@ export class AiMentorController {
   @Post('chat')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Chat with Ja (JAKIPIR AI Mentor)' })
   @ApiResponse({ status: 200, description: "Ja's reply + session ID" })
   async chat(
@@ -938,6 +940,7 @@ export class AiMentorController {
   @Post('mentor/explain')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get grounded mentoring help for a returned assessment question',
   })
@@ -1123,6 +1126,7 @@ export class AiMentorController {
 
   @Post('student/tutor/session')
   @Roles(RoleName.Student)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Start a student tutor session from a recommended topic',
   })
@@ -1546,6 +1550,7 @@ export class AiMentorController {
   @Post('extract-module')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary: 'Queue extraction of structured lessons from an uploaded PDF',
   })
@@ -2199,6 +2204,7 @@ export class AiMentorController {
   @Post('teacher/interventions/:caseId/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue AI intervention recommendation generation for an active LXP case',
@@ -2231,6 +2237,7 @@ export class AiMentorController {
   @Post('teacher/quizzes/generate-draft')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary: 'Generate a grounded draft assessment from lesson/module sources',
   })
@@ -2262,6 +2269,7 @@ export class AiMentorController {
   @Post('teacher/quizzes/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue grounded AI draft assessment generation from lesson/module sources',
@@ -2295,6 +2303,7 @@ export class AiMentorController {
   @Post('teacher/lesson-plans/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue grounded AI lesson plan generation from a selected class module or lesson',
@@ -2489,6 +2498,7 @@ export class AiMentorController {
 
   @Get('teacher/jobs/:jobId')
   @Roles(RoleName.Teacher, RoleName.Admin)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Poll the status of a teacher AI generation job' })
   async getTeacherJobStatus(
     @Param('jobId', ParseUUIDPipe) jobId: string,

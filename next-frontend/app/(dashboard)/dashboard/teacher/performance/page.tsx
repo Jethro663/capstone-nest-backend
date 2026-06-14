@@ -713,7 +713,7 @@ export default function TeacherPerformancePage() {
         toast.error('Failed to refresh analysis job status.');
         window.clearInterval(interval);
       }
-    }, 2500);
+    }, 10_000);
 
     return () => window.clearInterval(interval);
   }, [analysisJob]);
@@ -745,7 +745,7 @@ export default function TeacherPerformancePage() {
         toast.error('Failed to refresh lesson plan job status.');
         window.clearInterval(interval);
       }
-    }, 2500);
+    }, 10_000);
 
     return () => window.clearInterval(interval);
   }, [lessonPlanJob]);

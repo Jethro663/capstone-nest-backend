@@ -861,18 +861,16 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
         + build_question_chunks(question_rows)
     )
 
-    await db.execute(
-        sa_text(
-            """
-            DELETE FROM content_chunks
-            WHERE class_id = :classId
-            """
-        ),
-        {"classId": class_id},
-    )
-    await db.commit()
+    lesson_chunk_count = len(build_lesson_chunks(lesson_rows))
+    extraction_chunk_count = len(build_extraction_chunks(extraction_rows))
+    question_chunk_count = len(build_question_chunks(question_rows))
 
     if not chunks:
+        await db.execute(
+            sa_text("DELETE FROM content_chunks WHERE class_id = :classId"),
+            {"classId": class_id},
+        )
+        await db.commit()
         return {
             "classId": class_id,
             "chunksIndexed": 0,
@@ -886,16 +884,18 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
             "embeddingModel": get_embedding_model_label(),
         }
 
-    lesson_chunk_count = len(build_lesson_chunks(lesson_rows))
-    extraction_chunk_count = len(build_extraction_chunks(extraction_rows))
-    question_chunk_count = len(build_question_chunks(question_rows))
     embeddings = await embed_texts([chunk.chunk_text for chunk in chunks])
     embedding_model = get_embedding_model_label(embeddings)
     embedding_provider = get_embedding_provider(embeddings)
     embedding_degraded = bool(getattr(embeddings, "degraded", False))
     embedding_warnings = list(getattr(embeddings, "warnings", []) or [])
-    created = 0
 
+    await db.execute(
+        sa_text("DELETE FROM content_chunks WHERE class_id = :classId"),
+        {"classId": class_id},
+    )
+
+    created = 0
     for chunk, embedding in zip(chunks, embeddings):
         content_hash = hashlib.sha256(
             f"{chunk.source_type}:{chunk.source_id}:{chunk.chunk_order}:{chunk.chunk_text}".encode(

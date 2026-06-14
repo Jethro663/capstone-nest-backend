@@ -121,12 +121,10 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const notificationsQuery = useQuery({
     queryKey: ["mobile-notifications", "inbox"],
     queryFn: () => notificationsApi.getAll({ limit: 60 }),
-    refetchInterval: 15_000,
   });
   const unreadQuery = useQuery({
     queryKey: ["mobile-notifications", "unread-count"],
     queryFn: () => notificationsApi.getUnreadCount(),
-    refetchInterval: 15_000,
   });
 
   const notifications = useMemo(() => {
