@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
-import { eq, and, asc, desc, inArray, isNull, sql, sum } from 'drizzle-orm';
+import { eq, and, desc, inArray, isNull, sql, count } from 'drizzle-orm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
@@ -117,7 +117,94 @@ type SubmissionTimelineEntry = {
   metadata: Record<string, unknown> | null;
 };
 
+type CurrentUserLike = {
+  userId?: string | null;
+  id?: string | null;
+  roles?: string[] | null;
+};
+
+type DecoratedAssessmentOption = {
+  id: string;
+  text?: string | null;
+  isCorrect?: boolean | null;
+  imageUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+  imageDisplayMode?: string | null;
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
+  [key: string]: unknown;
+};
+
+type DecoratedAssessmentQuestion = {
+  id: string;
+  assessmentId: string;
+  content?: string | null;
+  type: string;
+  points?: number | null;
+  explanation?: string | null;
+  metadata?: Record<string, unknown> | null;
+  options: DecoratedAssessmentOption[];
+  imageDisplayMode?: string | null;
+  imageZoom?: number | null;
+  imagePositionX?: number | null;
+  imagePositionY?: number | null;
+  [key: string]: unknown;
+};
+
+type AssessmentAttachmentSummary = {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedAt?: Date | string | null;
+};
+
+type AssessmentView = {
+  id: string;
+  title: string;
+  description?: string | null;
+  classId: string;
+  type: AssessmentType;
+  dueDate?: Date | null;
+  closeWhenDue?: boolean | null;
+  randomizeQuestions: boolean;
+  timedQuestionsEnabled?: boolean | null;
+  questionTimeLimitSeconds?: number | null;
+  strictMode?: boolean | null;
+  fileUploadInstructions?: string | null;
+  allowedUploadMimeTypes?: string[] | null;
+  allowedUploadExtensions?: string[] | null;
+  maxUploadSizeBytes?: number | null;
+  totalPoints: number;
+  passingScore?: number | null;
+  maxAttempts: number;
+  timeLimitMinutes?: number | null;
+  isPublished: boolean;
+  feedbackLevel?: string | null;
+  feedbackDelayHours?: number | null;
+  isCoreTemplateAsset?: boolean | null;
+  classRecordCategory?: string | null;
+  quarter?: string | null;
+  rubricCriteria?: RubricCriterion[] | null;
+  rubricParseStatus?: string | null;
+  teacherAttachmentFileId?: string | null;
+  rubricSourceFileId?: string | null;
+  class?: {
+    teacherId?: string | null;
+    [key: string]: unknown;
+  } | null;
+  questions: DecoratedAssessmentQuestion[];
+  teacherAttachmentFile?: AssessmentAttachmentSummary | null;
+  rubricSourceFile?: AssessmentAttachmentSummary | null;
+  classRecordPlacement?: unknown;
+  [key: string]: unknown;
+};
+
+type GradingPeriodCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+
 // pdf-parse ships CommonJS typings that do not expose a callable default import cleanly.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
   text: string;
 }>;
@@ -139,9 +226,7 @@ export class AssessmentsService {
     return this.databaseService.db;
   }
 
-  private normalizeSubmittedFiles(
-    raw: unknown,
-  ): SubmittedAttemptFile[] {
+  private normalizeSubmittedFiles(raw: unknown): SubmittedAttemptFile[] {
     if (!Array.isArray(raw)) return [];
 
     const normalized: SubmittedAttemptFile[] = [];
@@ -178,11 +263,13 @@ export class AssessmentsService {
     return normalized;
   }
 
-  private formatAuditActorName(actor?: {
-    firstName?: string | null;
-    lastName?: string | null;
-    email?: string | null;
-  } | null) {
+  private formatAuditActorName(
+    actor?: {
+      firstName?: string | null;
+      lastName?: string | null;
+      email?: string | null;
+    } | null,
+  ) {
     if (!actor) return null;
     const fullName = [actor.firstName, actor.lastName]
       .map((value) => value?.trim())
@@ -215,17 +302,14 @@ export class AssessmentsService {
       {
         id: attempt.submittedFileId,
         originalName: attempt.submittedFileOriginalName || 'Uploaded file',
-        mimeType:
-          attempt.submittedFileMimeType || 'application/octet-stream',
+        mimeType: attempt.submittedFileMimeType || 'application/octet-stream',
         sizeBytes: attempt.submittedFileSizeBytes || 0,
         uploadedAt: attempt.updatedAt || attempt.createdAt || null,
       },
     ];
   }
 
-  private buildSubmittedFileSnapshot(
-    files: SubmittedAttemptFile[],
-  ) {
+  private buildSubmittedFileSnapshot(files: SubmittedAttemptFile[]) {
     const latestFile = files[files.length - 1] ?? null;
 
     return {
@@ -354,10 +438,12 @@ export class AssessmentsService {
     };
   }
 
-  private decorateAssessmentOption(option: any) {
+  private decorateAssessmentOption(
+    option: DecoratedAssessmentOption,
+  ): DecoratedAssessmentOption {
     const metadata =
       option?.metadata && typeof option.metadata === 'object'
-        ? (option.metadata as Record<string, unknown>)
+        ? option.metadata
         : {};
 
     return {
@@ -377,14 +463,16 @@ export class AssessmentsService {
     };
   }
 
-  private decorateAssessmentQuestion(question: any) {
-    const metadata =
+  private decorateAssessmentQuestion(
+    question: Record<string, unknown>,
+  ): DecoratedAssessmentQuestion {
+    const metadata: Record<string, unknown> =
       question?.metadata && typeof question.metadata === 'object'
         ? (question.metadata as Record<string, unknown>)
         : {};
 
     return {
-      ...question,
+      ...(question as unknown as DecoratedAssessmentQuestion),
       imageDisplayMode: this.normalizeImageDisplayMode(
         metadata.imageDisplayMode,
       ),
@@ -392,7 +480,7 @@ export class AssessmentsService {
       imagePositionX: this.normalizeImagePosition(metadata.imagePositionX),
       imagePositionY: this.normalizeImagePosition(metadata.imagePositionY),
       options: Array.isArray(question?.options)
-        ? question.options.map((option: any) =>
+        ? (question.options as DecoratedAssessmentOption[]).map((option) =>
             this.decorateAssessmentOption(option),
           )
         : [],
@@ -633,10 +721,14 @@ export class AssessmentsService {
       throw new BadRequestException('Invalid class record category');
     }
 
+    if (!this.isGradingPeriodCode(params.quarter)) {
+      throw new BadRequestException('Invalid class record quarter');
+    }
+
     const record = await this.db.query.classRecords.findFirst({
       where: and(
         eq(classRecords.classId, params.classId),
-        eq(classRecords.gradingPeriod, params.quarter as any),
+        eq(classRecords.gradingPeriod, params.quarter),
       ),
     });
 
@@ -767,10 +859,14 @@ export class AssessmentsService {
     criteria: unknown,
     viewerRole?: string,
     parseStatus?: string | null,
-  ) {
+  ): RubricCriterion[] {
     if (!Array.isArray(criteria)) return [];
     if (viewerRole === 'student' && parseStatus !== 'reviewed') return [];
-    return criteria;
+    return criteria as RubricCriterion[];
+  }
+
+  private isGradingPeriodCode(value: unknown): value is GradingPeriodCode {
+    return value === 'Q1' || value === 'Q2' || value === 'Q3' || value === 'Q4';
   }
 
   private stripXmlTags(input: string) {
@@ -916,12 +1012,14 @@ export class AssessmentsService {
   }
 
   private getUserId(currentUser: any) {
-    return currentUser?.userId ?? currentUser?.id;
+    const normalized = currentUser as CurrentUserLike | undefined;
+    return normalized?.userId ?? normalized?.id;
   }
 
   private getUserRole(currentUser: any): 'admin' | 'teacher' | 'student' {
-    const roles: string[] = Array.isArray(currentUser?.roles)
-      ? currentUser.roles
+    const normalized = currentUser as CurrentUserLike | undefined;
+    const roles: string[] = Array.isArray(normalized?.roles)
+      ? normalized.roles
       : [];
 
     if (roles.includes('admin')) return 'admin';
@@ -1003,7 +1101,7 @@ export class AssessmentsService {
     if (!assessment.isPublished) return false;
     if (!assessment.isCoreTemplateAsset) return true;
 
-    const attachedItems = await this.db.query.moduleItems.findMany({
+    const attachedItems = (await this.db.query.moduleItems.findMany({
       where: and(
         eq(moduleItems.assessmentId, assessment.id),
         eq(moduleItems.itemType, 'assessment'),
@@ -1022,13 +1120,23 @@ export class AssessmentsService {
           },
         },
       },
-    });
+    })) as Array<{
+      isGiven?: boolean | null;
+      isVisible?: boolean | null;
+      section?: {
+        module?: {
+          classId?: string | null;
+          isVisible?: boolean | null;
+          isLocked?: boolean | null;
+        } | null;
+      } | null;
+    }>;
 
     if (attachedItems.length === 0) {
       return true;
     }
 
-    return attachedItems.some((item: any) => {
+    return attachedItems.some((item) => {
       const parentModule = item.section?.module;
       return (
         Boolean(item.isGiven) &&
@@ -1325,6 +1433,48 @@ export class AssessmentsService {
     const page = options?.page ?? 1;
     const limit = options?.limit ?? 20;
     const offset = (page - 1) * limit;
+    const isStudent =
+      Boolean(currentUser) && this.getUserRole(currentUser) === 'student';
+
+    // Teacher/admin path: push pagination to DB for efficiency
+    if (!isStudent) {
+      const [assessmentList, totalResult] = await Promise.all([
+        this.db.query.assessments.findMany({
+          where: eq(assessments.classId, classId),
+          with: {
+            questions: {
+              orderBy: (q, { asc }) => [asc(q.order)],
+              with: {
+                options: {
+                  orderBy: (o, { asc }) => [asc(o.order)],
+                },
+              },
+            },
+          },
+          orderBy: (a, { desc }) => [desc(a.createdAt)],
+          limit,
+          offset,
+        }),
+        this.db
+          .select({ value: count() })
+          .from(assessments)
+          .where(eq(assessments.classId, classId)),
+      ]);
+
+      return {
+        data: assessmentList,
+        total: totalResult[0]?.value ?? 0,
+        page,
+        limit,
+        totalPages: Math.max(
+          Math.ceil((totalResult[0]?.value ?? 0) / limit),
+          1,
+        ),
+      };
+    }
+
+    // Student path: must fetch all then filter in-memory
+    // (canStudentAccessAssessment requires per-row DB checks)
     let assessmentList = await this.db.query.assessments.findMany({
       where: eq(assessments.classId, classId),
       with: {
@@ -1340,15 +1490,13 @@ export class AssessmentsService {
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
 
-    if (currentUser && this.getUserRole(currentUser) === 'student') {
-      const visibleAssessments: typeof assessmentList = [];
-      for (const assessment of assessmentList) {
-        if (await this.canStudentAccessAssessment(assessment)) {
-          visibleAssessments.push(assessment);
-        }
+    const visibleAssessments: typeof assessmentList = [];
+    for (const assessment of assessmentList) {
+      if (await this.canStudentAccessAssessment(assessment)) {
+        visibleAssessments.push(assessment);
       }
-      assessmentList = visibleAssessments;
     }
+    assessmentList = visibleAssessments;
 
     if (options?.studentId) {
       const assessmentIds = assessmentList.map((assessment) => assessment.id);
@@ -1441,9 +1589,9 @@ export class AssessmentsService {
   async getAssessmentById(
     assessmentId: string,
     viewerRole?: string,
-    currentUser?: any,
-  ) {
-    const assessment = await this.db.query.assessments.findFirst({
+    currentUser?: CurrentUserLike,
+  ): Promise<AssessmentView> {
+    const assessment = (await this.db.query.assessments.findFirst({
       where: eq(assessments.id, assessmentId),
       with: {
         class: true,
@@ -1456,7 +1604,7 @@ export class AssessmentsService {
           },
         },
       },
-    });
+    })) as AssessmentView | undefined;
 
     if (!assessment) {
       throw new NotFoundException(
@@ -1480,18 +1628,19 @@ export class AssessmentsService {
       }
     }
 
-    let teacherAttachmentFile: any = null;
+    let teacherAttachmentFile: AssessmentAttachmentSummary | null = null;
     if (assessment.teacherAttachmentFileId) {
-      teacherAttachmentFile = await this.db.query.uploadedFiles.findFirst({
-        where: eq(uploadedFiles.id, assessment.teacherAttachmentFileId),
-        columns: {
-          id: true,
-          originalName: true,
-          mimeType: true,
-          sizeBytes: true,
-          uploadedAt: true,
-        },
-      });
+      teacherAttachmentFile =
+        (await this.db.query.uploadedFiles.findFirst({
+          where: eq(uploadedFiles.id, assessment.teacherAttachmentFileId),
+          columns: {
+            id: true,
+            originalName: true,
+            mimeType: true,
+            sizeBytes: true,
+            uploadedAt: true,
+          },
+        })) ?? null;
     }
 
     const rubricSourceFile =
@@ -1506,11 +1655,10 @@ export class AssessmentsService {
       viewerRole === 'student'
         ? assessment.questions.map((question) => {
             const decoratedQuestion = this.decorateAssessmentQuestion(question);
-            return question.type === QuestionType.FILL_BLANK
+            return question.type === 'fill_blank'
               ? { ...decoratedQuestion, options: [] }
               : decoratedQuestion;
-          },
-          )
+          })
         : assessment.questions.map((question) =>
             this.decorateAssessmentQuestion(question),
           );
@@ -1756,7 +1904,7 @@ export class AssessmentsService {
     }
 
     // Validate each question
-    const optionTypes = [
+    const optionTypes: string[] = [
       QuestionType.MULTIPLE_CHOICE,
       QuestionType.MULTIPLE_SELECT,
       QuestionType.TRUE_FALSE,
@@ -1769,7 +1917,7 @@ export class AssessmentsService {
         if (!q.content || !q.content.trim()) {
           errors.push(`Question ${i + 1}: Content is required`);
         }
-        if (optionTypes.includes(q.type as QuestionType)) {
+        if (optionTypes.includes(q.type)) {
           if (!q.options || q.options.length < 2) {
             errors.push(
               `Question ${i + 1}: Choice questions need at least 2 options`,
@@ -1782,7 +1930,7 @@ export class AssessmentsService {
               );
             }
           }
-        } else if (q.type === QuestionType.FILL_BLANK) {
+        } else if (q.type === 'fill_blank') {
           const validAnswerKeys = (q.options || [])
             .filter((option) => option.isCorrect)
             .map((option) => option.text?.trim())
@@ -2965,10 +3113,10 @@ export class AssessmentsService {
     if (assessment.type === AssessmentType.FILE_UPLOAD) {
       const submittedFiles = this.getAttemptSubmittedFiles(attempt);
       if (submittedFiles.length === 0) {
-      throw new BadRequestException(
-        'Please upload a file before submitting this assessment',
-      );
-    }
+        throw new BadRequestException(
+          'Please upload a file before submitting this assessment',
+        );
+      }
     }
 
     const submissionResponses =
@@ -3486,9 +3634,7 @@ export class AssessmentsService {
     const role = this.getUserRole(currentUser);
 
     if (!studentId || role !== 'student') {
-      throw new ForbiddenException(
-        'Only students can remove submission files',
-      );
+      throw new ForbiddenException('Only students can remove submission files');
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
@@ -3514,7 +3660,8 @@ export class AssessmentsService {
     }
 
     const submittedFiles = this.getAttemptSubmittedFiles(attempt);
-    const removedFile = submittedFiles.find((entry) => entry.id === fileId) ?? null;
+    const removedFile =
+      submittedFiles.find((entry) => entry.id === fileId) ?? null;
     const nextSubmittedFiles = submittedFiles.filter(
       (entry) => entry.id !== fileId,
     );
@@ -3534,7 +3681,9 @@ export class AssessmentsService {
     await this.db
       .update(uploadedFiles)
       .set({ deletedAt: new Date() })
-      .where(and(eq(uploadedFiles.id, fileId), isNull(uploadedFiles.deletedAt)));
+      .where(
+        and(eq(uploadedFiles.id, fileId), isNull(uploadedFiles.deletedAt)),
+      );
 
     await this.auditService.log({
       actorId: studentId,
@@ -3643,7 +3792,8 @@ export class AssessmentsService {
       throw new ForbiddenException('You do not have access to this file');
     }
 
-    const targetFileId = fileId || submittedFiles[submittedFiles.length - 1]?.id;
+    const targetFileId =
+      fileId || submittedFiles[submittedFiles.length - 1]?.id;
     const file = await this.db.query.uploadedFiles.findFirst({
       where: and(
         eq(uploadedFiles.id, targetFileId),
@@ -3683,6 +3833,7 @@ export class AssessmentsService {
    * For students: only show score/details if grade has been returned
    * For teachers: always show full results
    */
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
   async getAttemptResults(
     attemptId: string,
     currentUser: any,
@@ -3826,7 +3977,6 @@ export class AssessmentsService {
       rubricScores: attempt.rubricScores ?? [],
     };
   }
-
   // ─── Private helpers (extracted from submitAssessment) ──────────────
 
   private async autoSubmitExpiredAttempt(
@@ -4075,6 +4225,7 @@ export class AssessmentsService {
 
     return { totalPoints, responses };
   }
+  /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument */
 
   /**
    * Emit typed assessment.submitted event for class record auto-sync.
@@ -4100,7 +4251,7 @@ export class AssessmentsService {
     );
   }
 
-  private randomizeAssessmentForStudent(assessment: any) {
+  private randomizeAssessmentForStudent(assessment: AssessmentView) {
     const shuffledQuestions = this.shuffle([...assessment.questions]).map(
       (question) => ({
         ...question,
@@ -4344,7 +4495,9 @@ export class AssessmentsService {
       .flatMap((attempt) =>
         this.getAttemptSubmittedFiles(attempt).map((file) => file.id),
       )
-      .filter((fileId, index, collection) => collection.indexOf(fileId) === index);
+      .filter(
+        (fileId, index, collection) => collection.indexOf(fileId) === index,
+      );
     const submittedFiles =
       submittedFileIds.length > 0
         ? await this.db.query.uploadedFiles.findMany({
@@ -4450,11 +4603,15 @@ export class AssessmentsService {
               ...mapAttemptSummary(latestAttempt),
               submittedFiles: this.getAttemptSubmittedFiles(latestAttempt)
                 .map((file) => submittedFileMap.get(file.id) ?? null)
-                .filter((file): file is NonNullable<typeof file> => Boolean(file)),
+                .filter((file): file is NonNullable<typeof file> =>
+                  Boolean(file),
+                ),
               submittedFile:
                 this.getAttemptSubmittedFiles(latestAttempt)
                   .map((file) => submittedFileMap.get(file.id) ?? null)
-                  .filter((file): file is NonNullable<typeof file> => Boolean(file))
+                  .filter((file): file is NonNullable<typeof file> =>
+                    Boolean(file),
+                  )
                   .at(-1) ?? null,
             }
           : null,
@@ -4503,6 +4660,7 @@ export class AssessmentsService {
   /**
    * Return a grade to a student (make score visible)
    */
+  /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
   async returnGrade(attemptId: string, dto: ReturnGradeDto, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -4572,10 +4730,7 @@ export class AssessmentsService {
           orderBy: (a, { desc }) => [desc(a.submittedAt), desc(a.updatedAt)],
         });
 
-      if (
-        latestSubmittedAttempt &&
-        latestSubmittedAttempt.id !== attempt.id
-      ) {
+      if (latestSubmittedAttempt && latestSubmittedAttempt.id !== attempt.id) {
         throw new BadRequestException(
           'Grades can only be returned for the latest file upload submission',
         );
@@ -4682,7 +4837,10 @@ export class AssessmentsService {
         ]),
       );
       const responseMap = new Map(
-        (attempt.responses ?? []).map((response) => [response.questionId, response]),
+        (attempt.responses ?? []).map((response) => [
+          response.questionId,
+          response,
+        ]),
       );
       const overrideMap = new Map(
         dto.manualResponseScores?.map((responseScore) => [
@@ -4846,10 +5004,7 @@ export class AssessmentsService {
           orderBy: (a, { desc: d }) => [d(a.submittedAt), d(a.updatedAt)],
         });
 
-      if (
-        latestSubmittedAttempt &&
-        latestSubmittedAttempt.id !== attempt.id
-      ) {
+      if (latestSubmittedAttempt && latestSubmittedAttempt.id !== attempt.id) {
         throw new BadRequestException(
           'Only the latest file upload submission can have its posted grade undone',
         );
@@ -4939,25 +5094,26 @@ export class AssessmentsService {
         selectedAttempts.map((attempt) => [attempt.id, attempt]),
       );
 
-      for (const result of results) {
+      const auditEntries = results.map((result) => {
         const sourceAttempt = selectedAttemptMap.get(result.id);
-        await this.auditService.log({
+        return {
           actorId: userId,
-          action: 'assessment.grade.returned',
-          targetType: 'assessment_attempt',
+          action: 'assessment.grade.returned' as const,
+          targetType: 'assessment_attempt' as const,
           targetId: result.id,
           metadata: {
             assessmentId: result.assessmentId ?? sourceAttempt?.assessmentId,
             classId: sourceAttempt?.assessment?.classId ?? null,
             studentId: result.studentId ?? sourceAttempt?.studentId,
-            attemptNumber:
-              result.attemptNumber ?? sourceAttempt?.attemptNumber,
+            attemptNumber: result.attemptNumber ?? sourceAttempt?.attemptNumber,
             score: result.score ?? sourceAttempt?.score,
             passed: result.passed ?? sourceAttempt?.passed,
             bulk: true,
           },
-        });
-      }
+        };
+      });
+
+      await this.auditService.logBulk(auditEntries);
 
       await this.auditService.log({
         actorId: userId,
@@ -4979,6 +5135,7 @@ export class AssessmentsService {
       attemptIds: results.map((r) => r.id),
     };
   }
+  /* eslint-enable @typescript-eslint/no-unsafe-enum-comparison */
 
   /**
    * Get per-question analytics for an assessment (teacher view)

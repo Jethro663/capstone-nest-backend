@@ -771,8 +771,7 @@ export class LxpService {
     passingScore: number,
   ) {
     const orderedAttempts = [...attempts].sort(
-      (left, right) =>
-        (left.attemptNumber ?? 1) - (right.attemptNumber ?? 1),
+      (left, right) => (left.attemptNumber ?? 1) - (right.attemptNumber ?? 1),
     );
     const submittedAttempts = orderedAttempts.filter(
       (attempt) => attempt.status === 'submitted',
@@ -851,16 +850,20 @@ export class LxpService {
     }
 
     const assignmentIds = guidedAssignments.map((assignment) => assignment.id);
-    const attempts = await this.db.query.generatedGuidedAssessmentAttempts.findMany({
-      where: and(
-        eq(generatedGuidedAssessmentAttempts.studentId, studentId),
-        inArray(generatedGuidedAssessmentAttempts.assignmentId, assignmentIds),
-      ),
-      orderBy: [
-        asc(generatedGuidedAssessmentAttempts.assignmentId),
-        asc(generatedGuidedAssessmentAttempts.attemptNumber),
-      ],
-    });
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+          inArray(
+            generatedGuidedAssessmentAttempts.assignmentId,
+            assignmentIds,
+          ),
+        ),
+        orderBy: [
+          asc(generatedGuidedAssessmentAttempts.assignmentId),
+          asc(generatedGuidedAssessmentAttempts.attemptNumber),
+        ],
+      });
 
     const attemptsByAssignment = new Map<string, typeof attempts>();
     for (const attempt of attempts) {
@@ -871,24 +874,30 @@ export class LxpService {
     }
 
     const passingScoreEntries = await Promise.all(
-      guidedAssignments.map(async (assignment) => [
-        assignment.id,
-        await this.resolveGuidedPassingScore(
-          assignment.generatedGuidedAssessment?.sourceAssessmentId,
-        ),
-      ] as const),
+      guidedAssignments.map(
+        async (assignment) =>
+          [
+            assignment.id,
+            await this.resolveGuidedPassingScore(
+              assignment.generatedGuidedAssessment?.sourceAssessmentId,
+            ),
+          ] as const,
+      ),
     );
     const passingScoreByAssignment = new Map(passingScoreEntries);
 
     return new Map(
-      guidedAssignments.map((assignment) => [
-        assignment.id,
-        this.buildGuidedAttemptSummary(
-          attemptsByAssignment.get(assignment.id) ?? [],
-          passingScoreByAssignment.get(assignment.id) ??
-            PATH_REGENERATION_SCORE_THRESHOLD,
-        ),
-      ] as const),
+      guidedAssignments.map(
+        (assignment) =>
+          [
+            assignment.id,
+            this.buildGuidedAttemptSummary(
+              attemptsByAssignment.get(assignment.id) ?? [],
+              passingScoreByAssignment.get(assignment.id) ??
+                PATH_REGENERATION_SCORE_THRESHOLD,
+            ),
+          ] as const,
+      ),
     );
   }
 
@@ -1595,7 +1604,9 @@ export class LxpService {
       enrollment.class?.isActive === false ||
       enrollment.class?.section?.isActive === false
     ) {
-      throw new ForbiddenException('Student is not enrolled in an active class');
+      throw new ForbiddenException(
+        'Student is not enrolled in an active class',
+      );
     }
   }
 
@@ -3591,12 +3602,14 @@ export class LxpService {
     }
 
     const baselineScorePercent =
-      this.toNumber(baselineAttempt?.score) ?? this.toNumber(params.triggerScore);
+      this.toNumber(baselineAttempt?.score) ??
+      this.toNumber(params.triggerScore);
     const currentScorePercent = this.toNumber(params.currentScorePercent) ?? 0;
     const deltaScorePercent =
       baselineScorePercent === null
         ? null
-        : Math.round((currentScorePercent - baselineScorePercent) * 1000) / 1000;
+        : Math.round((currentScorePercent - baselineScorePercent) * 1000) /
+          1000;
     const trend =
       deltaScorePercent === null
         ? 'no_baseline'
@@ -3761,7 +3774,8 @@ export class LxpService {
 
     const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
       studentId,
-      sourceAssessmentId: assignment.generatedGuidedAssessment.sourceAssessmentId,
+      sourceAssessmentId:
+        assignment.generatedGuidedAssessment.sourceAssessmentId,
       interventionOpenedAt: assignment.interventionCase.openedAt,
       triggerScore: assignment.interventionCase.triggerScore,
       currentAttemptId: updatedAttempt.id,
@@ -3851,7 +3865,8 @@ export class LxpService {
       });
     const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
       studentId,
-      sourceAssessmentId: assignment.generatedGuidedAssessment?.sourceAssessmentId,
+      sourceAssessmentId:
+        assignment.generatedGuidedAssessment?.sourceAssessmentId,
       interventionOpenedAt: assignment.interventionCase.openedAt,
       triggerScore: assignment.interventionCase.triggerScore,
       currentAttemptId: attempt.id,
@@ -4601,7 +4616,9 @@ export class LxpService {
         },
       },
     });
-    const activeClassRows = classRows.filter((row) => row.section?.isActive !== false);
+    const activeClassRows = classRows.filter(
+      (row) => row.section?.isActive !== false,
+    );
 
     if (activeClassRows.length === 0) {
       return {

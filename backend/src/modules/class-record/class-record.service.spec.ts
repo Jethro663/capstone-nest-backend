@@ -206,20 +206,20 @@ describe('ClassRecordService', () => {
     db.query.classRecords.findFirst.mockResolvedValue(null);
 
     const insertedCategoryValues: any[] = [];
-    const insertMock = jest
-      .spyOn(db, 'insert')
-      .mockImplementation(() => {
-        return {
-          values: (values: any) => {
-            insertedCategoryValues.push(values);
-            return {
-              returning: jest
-                .fn()
-                .mockResolvedValue([{ id: `cat-${insertedCategoryValues.length}` }]),
-            };
-          },
-        };
-      });
+    const insertMock = jest.spyOn(db, 'insert').mockImplementation(() => {
+      return {
+        values: (values: any) => {
+          insertedCategoryValues.push(values);
+          return {
+            returning: jest
+              .fn()
+              .mockResolvedValue([
+                { id: `cat-${insertedCategoryValues.length}` },
+              ]),
+          };
+        },
+      };
+    });
 
     jest.spyOn(service, 'getClassRecord').mockResolvedValue({
       id: 'record-1',
@@ -234,11 +234,19 @@ describe('ClassRecordService', () => {
 
     const categoryEntries = insertedCategoryValues
       .slice(1, insertedCategoryValues.length)
-      .filter((entry) => entry?.name === 'Written Works' || entry?.name === 'Performance Tasks' || entry?.name === 'Quarterly Assessment');
+      .filter(
+        (entry) =>
+          entry?.name === 'Written Works' ||
+          entry?.name === 'Performance Tasks' ||
+          entry?.name === 'Quarterly Assessment',
+      );
 
     expect(categoryEntries).toHaveLength(3);
     expect(categoryEntries).toEqual([
-      expect.objectContaining({ name: 'Written Works', weightPercentage: '35.00' }),
+      expect.objectContaining({
+        name: 'Written Works',
+        weightPercentage: '35.00',
+      }),
       expect.objectContaining({
         name: 'Performance Tasks',
         weightPercentage: '35.00',

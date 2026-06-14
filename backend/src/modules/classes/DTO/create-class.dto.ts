@@ -34,10 +34,7 @@ import {
 
 @ValidatorConstraint({ name: 'gradingProfileSum', async: false })
 class GradingProfileSumConstraint implements ValidatorConstraintInterface {
-  validate(
-    value: unknown,
-    _args: ValidationArguments,
-  ): boolean {
+  validate(value: unknown, _args: ValidationArguments): boolean {
     if (!value || typeof value !== 'object') {
       return false;
     }
@@ -96,14 +93,15 @@ export class CreateClassDto {
   @Transform(({ value }: { value?: string }) => trimValue(value))
   @Matches(SUBJECT_NAME_REGEX, {
     message:
-      "subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes",
+      'subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes',
   })
   subjectName: string;
 
   @IsString({ message: 'subjectCode must be a string' })
   @Transform(({ value }: { value?: string }) => upperTrimmedValue(value))
   @Matches(SUBJECT_CODE_REGEX, {
-    message: 'subjectCode may only contain uppercase letters, numbers, and hyphens',
+    message:
+      'subjectCode may only contain uppercase letters, numbers, and hyphens',
   })
   subjectCode: string;
 

@@ -63,7 +63,8 @@ export class GenerateLessonPlanDto {
   classId: string;
 
   @ApiProperty({
-    description: 'Whether the teacher selected a module or lesson as the anchor',
+    description:
+      'Whether the teacher selected a module or lesson as the anchor',
     enum: ['module', 'lesson'],
   })
   @IsString()

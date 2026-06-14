@@ -79,9 +79,7 @@ export class AcademicStateService {
   private assertValidSchoolYear(schoolYear: string) {
     const match = schoolYear.match(/^(\d{4})-(\d{4})$/);
     if (!match) {
-      throw new BadRequestException(
-        'schoolYear must follow YYYY-YYYY format',
-      );
+      throw new BadRequestException('schoolYear must follow YYYY-YYYY format');
     }
 
     if (Number(match[2]) !== Number(match[1]) + 1) {
@@ -188,7 +186,9 @@ export class AcademicStateService {
       })
       .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)));
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      );
 
     const recordCountsBySectionId = new Map<
       string,
@@ -218,12 +218,15 @@ export class AcademicStateService {
         eq(classRecords.id, classRecordFinalGrades.classRecordId),
       )
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)));
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      );
 
     const finalGradeRecordIdsBySectionStudent = new Map<string, Set<string>>();
     for (const row of finalGradeRows) {
       const key = `${row.sectionId}:${row.studentId}`;
-      const current = finalGradeRecordIdsBySectionStudent.get(key) ?? new Set<string>();
+      const current =
+        finalGradeRecordIdsBySectionStudent.get(key) ?? new Set<string>();
       current.add(row.classRecordId);
       finalGradeRecordIdsBySectionStudent.set(key, current);
     }
@@ -264,7 +267,6 @@ export class AcademicStateService {
           : null,
     };
   }
-
 
   private async getTransitionTargets(
     fromState: AcademicStateRow,
@@ -317,7 +319,10 @@ export class AcademicStateService {
         eq(sections.schoolYear, fromState.schoolYear),
         eq(sections.isActive, true),
       ),
-      orderBy: (section, { asc }) => [asc(section.gradeLevel), asc(section.name)],
+      orderBy: (section, { asc }) => [
+        asc(section.gradeLevel),
+        asc(section.name),
+      ],
     })) as SectionRow[];
 
     const sourceClasses = (await this.db.query.classes.findMany({
@@ -336,9 +341,8 @@ export class AcademicStateService {
 
     const sectionIdsToArchive = sourceSections.map((section) => section.id);
     const classIdsToArchive = sourceClasses.map((classRow) => classRow.id);
-    const promotionReadiness = await this.getPromotionTransitionReadiness(
-      sectionIdsToArchive,
-    );
+    const promotionReadiness =
+      await this.getPromotionTransitionReadiness(sectionIdsToArchive);
 
     const enrollmentScope =
       sectionIdsToArchive.length > 0 && classIdsToArchive.length > 0
@@ -371,7 +375,10 @@ export class AcademicStateService {
     })) as Array<Pick<SectionRow, 'id' | 'name' | 'gradeLevel'>>;
 
     const targetSectionKeyToId = new Map(
-      targetSections.map((section) => [getSectionCloneKey(section), section.id]),
+      targetSections.map((section) => [
+        getSectionCloneKey(section),
+        section.id,
+      ]),
     );
 
     const sectionsToClone = sourceSections.filter((section) => {
@@ -456,7 +463,9 @@ export class AcademicStateService {
         asc(table.createdAt),
       ],
     });
-    const sourceAssessmentIds = sourceAssessments.map((assessment: any) => assessment.id);
+    const sourceAssessmentIds = sourceAssessments.map(
+      (assessment: any) => assessment.id,
+    );
     const sourceQuestions = sourceAssessmentIds.length
       ? await database.query.assessmentQuestions.findMany({
           where: inArray(assessmentQuestions.assessmentId, sourceAssessmentIds),
@@ -466,10 +475,15 @@ export class AcademicStateService {
           ],
         })
       : [];
-    const sourceQuestionIds = sourceQuestions.map((question: any) => question.id);
+    const sourceQuestionIds = sourceQuestions.map(
+      (question: any) => question.id,
+    );
     const sourceOptions = sourceQuestionIds.length
       ? await database.query.assessmentQuestionOptions.findMany({
-          where: inArray(assessmentQuestionOptions.questionId, sourceQuestionIds),
+          where: inArray(
+            assessmentQuestionOptions.questionId,
+            sourceQuestionIds,
+          ),
           orderBy: (table: typeof assessmentQuestionOptions, { asc }: any) => [
             asc(table.questionId),
             asc(table.order),
@@ -529,7 +543,8 @@ export class AcademicStateService {
           feedbackDelayHours: sourceAssessment.feedbackDelayHours,
           isCoreTemplateAsset: sourceAssessment.isCoreTemplateAsset,
           templateId: sourceAssessment.templateId,
-          templateSourceId: sourceAssessment.templateSourceId ?? sourceAssessment.id,
+          templateSourceId:
+            sourceAssessment.templateSourceId ?? sourceAssessment.id,
           classRecordCategory: sourceAssessment.classRecordCategory,
           quarter: sourceAssessment.quarter,
           aiOrigin: sourceAssessment.aiOrigin,
@@ -670,14 +685,16 @@ export class AcademicStateService {
           }),
           database.query.moduleGradingScaleEntries.findMany({
             where: inArray(moduleGradingScaleEntries.moduleId, sourceModuleIds),
-            orderBy: (table: typeof moduleGradingScaleEntries, { asc }: any) => [
-              asc(table.moduleId),
-              asc(table.order),
-            ],
+            orderBy: (
+              table: typeof moduleGradingScaleEntries,
+              { asc }: any,
+            ) => [asc(table.moduleId), asc(table.order)],
           }),
         ])
       : [[], []];
-    const sourceModuleSectionIds = sourceModuleSections.map((section: any) => section.id);
+    const sourceModuleSectionIds = sourceModuleSections.map(
+      (section: any) => section.id,
+    );
     const sourceModuleItems = sourceModuleSectionIds.length
       ? await database.query.moduleItems.findMany({
           where: inArray(moduleItems.moduleSectionId, sourceModuleSectionIds),
@@ -773,7 +790,9 @@ export class AcademicStateService {
 
     if (sourceModuleItems.length > 0) {
       const itemValues = sourceModuleItems.flatMap((sourceItem: any) => {
-        const targetSectionId = moduleSectionIdMap.get(sourceItem.moduleSectionId);
+        const targetSectionId = moduleSectionIdMap.get(
+          sourceItem.moduleSectionId,
+        );
         if (!targetSectionId) return [];
 
         const metadata =
@@ -911,14 +930,18 @@ export class AcademicStateService {
             status: 'finalized',
             updatedAt: now,
           })
-          .where(inArray(classRecords.id, impactTargets.classRecordIdsToFinalize));
+          .where(
+            inArray(classRecords.id, impactTargets.classRecordIdsToFinalize),
+          );
       }
 
       if (impactTargets.enrollmentIdsToComplete.length > 0) {
         await tx
           .update(enrollments)
           .set({ status: 'completed' })
-          .where(inArray(enrollments.id, impactTargets.enrollmentIdsToComplete));
+          .where(
+            inArray(enrollments.id, impactTargets.enrollmentIdsToComplete),
+          );
       }
 
       if (impactTargets.classIdsToArchive.length > 0) {
@@ -948,7 +971,9 @@ export class AcademicStateService {
             archivedAt: now,
             updatedAt: now,
           })
-          .where(inArray(schoolEvents.id, impactTargets.schoolEventIdsToArchive));
+          .where(
+            inArray(schoolEvents.id, impactTargets.schoolEventIdsToArchive),
+          );
       }
 
       if (impactTargets.sectionsToClone.length > 0) {
@@ -984,7 +1009,10 @@ export class AcademicStateService {
       })) as Array<Pick<SectionRow, 'id' | 'name' | 'gradeLevel'>>;
 
       const targetSectionIdByKey = new Map(
-        targetSections.map((section) => [getSectionCloneKey(section), section.id]),
+        targetSections.map((section) => [
+          getSectionCloneKey(section),
+          section.id,
+        ]),
       );
 
       const existingTargetClasses = await tx
@@ -1036,8 +1064,7 @@ export class AcademicStateService {
               cardPreset: sourceClass.cardPreset,
               cardBannerUrl: sourceClass.cardBannerUrl,
               schoolYear: target.schoolYear,
-              writtenWorkGradingWeight:
-                sourceClass.writtenWorkGradingWeight,
+              writtenWorkGradingWeight: sourceClass.writtenWorkGradingWeight,
               performanceTaskGradingWeight:
                 sourceClass.performanceTaskGradingWeight,
               quarterlyAssessmentGradingWeight:

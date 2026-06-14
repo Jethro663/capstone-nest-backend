@@ -12,15 +12,12 @@ import {
   aiGenerationJobs,
   aiGenerationOutputs,
   assessments,
-  assessmentQuestions,
   assessmentAttempts,
   assessmentResponses,
   classRecords,
   generatedGuidedAssessmentAttempts,
   classes,
-  contentChunks,
   enrollments,
-  interventionAssignments,
   interventionCases,
   performanceLogs,
   performanceSnapshots,
@@ -827,7 +824,9 @@ export class PerformanceService {
     }
 
     const caseIds = cases.map((entry) => entry.id);
-    const studentIds = Array.from(new Set(cases.map((entry) => entry.studentId)));
+    const studentIds = Array.from(
+      new Set(cases.map((entry) => entry.studentId)),
+    );
     const assessmentIds = classAssessments.map((entry) => entry.id);
 
     const officialAttempts =
@@ -931,7 +930,9 @@ export class PerformanceService {
         score: this.averageScoreValues(scores),
         sampleSize: scores.length,
         attemptId: attempts.length === 1 ? attempts[0].id : null,
-        submittedAt: this.getLatestDate(attempts.map((attempt) => attempt.submittedAt)),
+        submittedAt: this.getLatestDate(
+          attempts.map((attempt) => attempt.submittedAt),
+        ),
       };
     };
 
@@ -939,16 +940,21 @@ export class PerformanceService {
       caseRow: (typeof cases)[number],
       sourceAssessmentId?: string,
     ) => {
-      const matchingAttempts = (guidedByCase.get(caseRow.id) ?? []).filter((attempt) => {
-        if (!sourceAssessmentId) return true;
-        return attempt.guidedAssessment?.sourceAssessmentId === sourceAssessmentId;
-      });
+      const matchingAttempts = (guidedByCase.get(caseRow.id) ?? []).filter(
+        (attempt) => {
+          if (!sourceAssessmentId) return true;
+          return (
+            attempt.guidedAssessment?.sourceAssessmentId === sourceAssessmentId
+          );
+        },
+      );
       const bestPerAssignment = new Map<
         string,
         (typeof guidedAttempts)[number]
       >();
       for (const attempt of matchingAttempts) {
-        const key = attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id;
+        const key =
+          attempt.assignmentId ?? attempt.guidedAssessmentId ?? attempt.id;
         const current = bestPerAssignment.get(key);
         const attemptScore = this.toNumber(attempt.score) ?? -1;
         const currentScore = this.toNumber(current?.score) ?? -1;
@@ -965,7 +971,9 @@ export class PerformanceService {
         score: this.averageScoreValues(scores),
         sampleSize: scores.length,
         attemptId: attempts.length === 1 ? attempts[0].id : null,
-        submittedAt: this.getLatestDate(attempts.map((attempt) => attempt.submittedAt)),
+        submittedAt: this.getLatestDate(
+          attempts.map((attempt) => attempt.submittedAt),
+        ),
       };
     };
 
@@ -1325,7 +1333,8 @@ export class PerformanceService {
 
         const studentKey = attempt.studentId;
         const studentConceptMap =
-          perStudentConcept.get(studentKey) ?? new Map();
+          perStudentConcept.get(studentKey) ??
+          new Map<string, { wrongCount: number; evidenceCount: number }>();
         const studentConcept = studentConceptMap.get(concept) ?? {
           wrongCount: 0,
           evidenceCount: 0,
@@ -1353,7 +1362,14 @@ export class PerformanceService {
         LIMIT 3
       `);
 
-      const lessonEvidence = evidenceRows.rows.map((row: any) => ({
+      const lessonEvidence = (
+        evidenceRows.rows as Array<{
+          id: string | number;
+          lesson_id: string | number | null;
+          source_type: string;
+          chunk_text: string | null;
+        }>
+      ).map((row) => ({
         chunkId: String(row.id),
         lessonId: row.lesson_id ? String(row.lesson_id) : null,
         sourceType: String(row.source_type),
@@ -1370,39 +1386,46 @@ export class PerformanceService {
       });
     }
 
+    const masteryRows: {
+      studentId: string;
+      classId: string;
+      conceptKey: string;
+      evidenceCount: number;
+      errorCount: number;
+      masteryScore: number;
+    }[] = [];
+
     for (const [studentKey, concepts] of perStudentConcept.entries()) {
       for (const [concept, values] of concepts.entries()) {
-        const masteryScore = Math.max(0, 100 - values.wrongCount * 12);
-        await this.db.execute(sql`
-          INSERT INTO student_concept_mastery (
-            student_id,
-            class_id,
-            concept_key,
-            evidence_count,
-            error_count,
-            mastery_score,
-            last_seen_at,
-            updated_at
-          )
-          VALUES (
-            ${studentKey},
-            ${classId},
-            ${concept},
-            ${values.evidenceCount},
-            ${values.wrongCount},
-            ${masteryScore},
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (student_id, class_id, concept_key)
-          DO UPDATE SET
-            evidence_count = GREATEST(student_concept_mastery.evidence_count, EXCLUDED.evidence_count),
-            error_count = GREATEST(student_concept_mastery.error_count, EXCLUDED.error_count),
-            mastery_score = LEAST(student_concept_mastery.mastery_score, EXCLUDED.mastery_score),
-            last_seen_at = NOW(),
-            updated_at = NOW()
-        `);
+        masteryRows.push({
+          studentId: studentKey,
+          classId,
+          conceptKey: concept,
+          evidenceCount: values.evidenceCount,
+          errorCount: values.wrongCount,
+          masteryScore: Math.max(0, 100 - values.wrongCount * 12),
+        });
       }
+    }
+
+    if (masteryRows.length > 0) {
+      await this.db
+        .insert(studentConceptMastery)
+        .values(masteryRows)
+        .onConflictDoUpdate({
+          target: [
+            studentConceptMastery.studentId,
+            studentConceptMastery.classId,
+            studentConceptMastery.conceptKey,
+          ],
+          set: {
+            evidenceCount: sql`GREATEST(${studentConceptMastery.evidenceCount}, EXCLUDED.${studentConceptMastery.evidenceCount})`,
+            errorCount: sql`GREATEST(${studentConceptMastery.errorCount}, EXCLUDED.${studentConceptMastery.errorCount})`,
+            masteryScore: sql`LEAST(${studentConceptMastery.masteryScore}, EXCLUDED.${studentConceptMastery.masteryScore})`,
+            lastSeenAt: sql`NOW()`,
+            updatedAt: sql`NOW()`,
+          },
+        });
     }
 
     const scoreBreakdown = [...scoreBreakdownMap.values()]
@@ -1488,7 +1511,12 @@ export class PerformanceService {
         where: eq(aiGenerationJobs.id, jobId),
         columns: { status: true },
       });
-      if (existing && ['completed', 'approved', 'failed', 'cancelled'].includes(existing.status)) {
+      if (
+        existing &&
+        ['completed', 'approved', 'failed', 'cancelled'].includes(
+          existing.status,
+        )
+      ) {
         return;
       }
 

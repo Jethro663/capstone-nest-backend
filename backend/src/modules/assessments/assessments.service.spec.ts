@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -193,6 +194,7 @@ describe('AssessmentsService', () => {
   };
   const mockAuditService = {
     log: jest.fn(),
+    logBulk: jest.fn(),
     logAction: jest.fn(),
   };
 
@@ -1035,7 +1037,12 @@ describe('AssessmentsService', () => {
       db.query.assessmentAttempts.findFirst.mockResolvedValue(null);
       db.query.assessmentAttempts.findMany.mockResolvedValue([
         { ...MOCK_ATTEMPT, isSubmitted: true, attemptNumber: 1 },
-        { ...MOCK_ATTEMPT, id: 'attempt-2', isSubmitted: true, attemptNumber: 2 },
+        {
+          ...MOCK_ATTEMPT,
+          id: 'attempt-2',
+          isSubmitted: true,
+          attemptNumber: 2,
+        },
       ]);
 
       const newAttempt = { ...MOCK_ATTEMPT, id: 'attempt-3', attemptNumber: 3 };
@@ -1346,7 +1353,7 @@ describe('AssessmentsService', () => {
 
       expect(result.score).toBe(100);
       expect(result.passed).toBe(true);
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect(eventEmitter.emit as jest.Mock).toHaveBeenCalledWith(
         'assessment.submitted',
         expect.objectContaining({ studentId: STUDENT_ID }),
       );
@@ -1584,7 +1591,7 @@ describe('AssessmentsService', () => {
 
       expect(result.score).toBeNull();
       expect(result.passed).toBeNull();
-      expect(eventEmitter.emit).not.toHaveBeenCalledWith(
+      expect(eventEmitter.emit as jest.Mock).not.toHaveBeenCalledWith(
         'assessment.submitted',
         expect.anything(),
       );
@@ -2388,7 +2395,7 @@ describe('AssessmentsService', () => {
 
       expect(result.score).toBe(80);
       expect(db.update).toHaveBeenCalledTimes(2);
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
+      expect(eventEmitter.emit as jest.Mock).toHaveBeenCalledWith(
         'assessment.submitted',
         expect.objectContaining({
           assessmentId: ASSESSMENT_ID,
@@ -2466,23 +2473,25 @@ describe('AssessmentsService', () => {
           class: { teacherId: 'teacher-1' },
         },
       });
-      db.query.assessmentAttempts.findFirst.mockResolvedValueOnce({
-        ...MOCK_ATTEMPT,
-        isSubmitted: true,
-        isReturned: true,
-        score: 92,
-        passed: true,
-        assessment: {
-          ...MOCK_FILE_UPLOAD_ASSESSMENT,
-          class: { teacherId: 'teacher-1' },
-        },
-      }).mockResolvedValueOnce({
-        ...MOCK_ATTEMPT,
-        id: ATTEMPT_ID,
-        isSubmitted: true,
-        isReturned: true,
-        submittedAt: new Date('2026-01-02T10:00:00.000Z'),
-      });
+      db.query.assessmentAttempts.findFirst
+        .mockResolvedValueOnce({
+          ...MOCK_ATTEMPT,
+          isSubmitted: true,
+          isReturned: true,
+          score: 92,
+          passed: true,
+          assessment: {
+            ...MOCK_FILE_UPLOAD_ASSESSMENT,
+            class: { teacherId: 'teacher-1' },
+          },
+        })
+        .mockResolvedValueOnce({
+          ...MOCK_ATTEMPT,
+          id: ATTEMPT_ID,
+          isSubmitted: true,
+          isReturned: true,
+          submittedAt: new Date('2026-01-02T10:00:00.000Z'),
+        });
       mockUpdateReturning(db, [
         {
           ...MOCK_ATTEMPT,
@@ -2586,6 +2595,7 @@ describe('AssessmentsService', () => {
     });
 
     it('should write audit metadata when bulkReturnGrades succeeds', async () => {
+      mockAuditService.logBulk.mockResolvedValue([]);
       db.query.assessmentAttempts.findMany.mockResolvedValue([
         {
           id: ATTEMPT_ID,
@@ -2632,16 +2642,18 @@ describe('AssessmentsService', () => {
           }),
         }),
       );
-      expect(mockAuditService.log).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actorId: 'teacher-1',
-          action: 'assessment.grade.returned',
-          targetType: 'assessment_attempt',
-          targetId: ATTEMPT_ID,
-          metadata: expect.objectContaining({
-            assessmentId: ASSESSMENT_ID,
+      expect(mockAuditService.logBulk).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            actorId: 'teacher-1',
+            action: 'assessment.grade.returned',
+            targetType: 'assessment_attempt',
+            targetId: ATTEMPT_ID,
+            metadata: expect.objectContaining({
+              assessmentId: ASSESSMENT_ID,
+            }),
           }),
-        }),
+        ]),
       );
     });
   });

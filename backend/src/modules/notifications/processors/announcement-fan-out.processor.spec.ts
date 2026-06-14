@@ -27,7 +27,10 @@ const makeEnrollmentRow = (studentId: string) => ({ studentId });
 describe('AnnouncementFanOutProcessor', () => {
   let processor: AnnouncementFanOutProcessor;
   let mockDb: any;
-  let mockNotificationsService: { createBulk: jest.Mock; createBulkDeduped: jest.Mock };
+  let mockNotificationsService: {
+    createBulk: jest.Mock;
+    createBulkDeduped: jest.Mock;
+  };
   let mockGateway: { emitToUser: jest.Mock };
 
   beforeEach(async () => {
@@ -47,7 +50,9 @@ describe('AnnouncementFanOutProcessor', () => {
     });
     mockNotificationsService = {
       createBulk: jest.fn().mockResolvedValue(undefined),
-      createBulkDeduped: jest.fn().mockImplementation((inputs) => Promise.resolve(inputs)),
+      createBulkDeduped: jest
+        .fn()
+        .mockImplementation((inputs) => Promise.resolve(inputs)),
     };
     mockGateway = { emitToUser: jest.fn() };
 

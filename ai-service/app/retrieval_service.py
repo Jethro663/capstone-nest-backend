@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import re
@@ -522,7 +523,8 @@ async def similarity_search(
     )
 
     candidate_pool: dict[str, dict[str, Any]] = {}
-    for variant_index, variant in enumerate(query_variants):
+
+    async def _search_variant(variant_index: int, variant: str) -> list[tuple[str, dict[str, Any]]]:
         results = await _vector_search(
             db,
             query_text=variant,
@@ -537,17 +539,30 @@ async def similarity_search(
             source_types=source_types,
             only_published=only_published,
         )
-        for item in results:
-            current = candidate_pool.get(item["id"])
+        return [
+            (item["id"], {
+                **item,
+                "retrievalDiagnostics": {
+                    "queryVariants": query_variants,
+                    "matchedVariant": variant,
+                    "variantIndex": variant_index,
+                },
+            })
+            for item in results
+        ]
+
+    variant_results = await asyncio.gather(
+        *[_search_variant(i, v) for i, v in enumerate(query_variants)],
+        return_exceptions=True,
+    )
+
+    for variant_index, result in enumerate(variant_results):
+        if isinstance(result, Exception):
+            continue
+        for item_id, item in result:
+            current = candidate_pool.get(item_id)
             if current is None or float(item.get("distance") or math.inf) < float(current.get("distance") or math.inf):
-                candidate_pool[item["id"]] = {
-                    **item,
-                    "retrievalDiagnostics": {
-                        "queryVariants": query_variants,
-                        "matchedVariant": variant,
-                        "variantIndex": variant_index,
-                    },
-                }
+                candidate_pool[item_id] = item
 
     ranked = rerank_chunks(
         query_text,

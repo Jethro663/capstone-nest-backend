@@ -103,7 +103,8 @@ export class DiscussionBoardProcessor extends WorkerHost {
   }
 
   private async handleCommentCreated(job: Job<CommentCreatedJobData>) {
-    const { classId, threadId, threadTitle, commenterId, classTeacherId } = job.data;
+    const { classId, threadId, threadTitle, commenterId, classTeacherId } =
+      job.data;
     const enrolledRows = await this.db.query.enrollments.findMany({
       where: and(
         eq(enrollments.classId, classId),

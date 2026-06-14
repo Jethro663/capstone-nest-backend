@@ -791,7 +791,11 @@ describe('SectionsService', () => {
         ); // room availability check
 
       await expect(
-        service.createSection({ ...dto, adviserId: undefined, roomNumber: '101' } as any),
+        service.createSection({
+          ...dto,
+          adviserId: undefined,
+          roomNumber: '101',
+        } as any),
       ).rejects.toThrow(ConflictException);
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
@@ -1070,7 +1074,9 @@ describe('SectionsService', () => {
 
       // archiveSection completes enrollments, archives linked classes, then archives the section.
       expect(tx.update).toHaveBeenCalledTimes(3);
-      expect(txUpdateChain.set.mock.calls[0][0]).toEqual({ status: 'completed' });
+      expect(txUpdateChain.set.mock.calls[0][0]).toEqual({
+        status: 'completed',
+      });
       expect(txUpdateChain.set.mock.calls[1][0]).toEqual(
         expect.objectContaining({ isActive: false, teacherId: null }),
       );
@@ -1242,7 +1248,9 @@ describe('SectionsService', () => {
     });
 
     it('fails restore for archived sections because restore is retired', async () => {
-      jest.spyOn(service, 'findById').mockResolvedValue(makeSection({ isActive: false }));
+      jest
+        .spyOn(service, 'findById')
+        .mockResolvedValue(makeSection({ isActive: false }));
       const restoreSpy = jest.spyOn(service, 'restoreSection');
 
       const result = await service.bulkLifecycleAction({

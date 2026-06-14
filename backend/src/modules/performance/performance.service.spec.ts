@@ -302,11 +302,7 @@ describe('PerformanceService', () => {
       },
     ]);
 
-    await service.recomputeStudent(
-      'class-1',
-      'student-1',
-      'manual_recompute',
-    );
+    await service.recomputeStudent('class-1', 'student-1', 'manual_recompute');
 
     expect(eventEmitter.emit).toHaveBeenCalledWith(
       PerformanceStatusChangedEvent.eventName,

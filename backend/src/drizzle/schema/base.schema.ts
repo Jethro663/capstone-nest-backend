@@ -270,15 +270,17 @@ export const classes = pgTable(
     cardPreset: text('card_preset').notNull().default('aurora'),
     cardBannerUrl: text('card_banner_url'),
     schoolYear: text('school_year').notNull(),
-    writtenWorkGradingWeight: integer(
-      'written_work_grading_weight',
-    ).notNull().default(30),
-    performanceTaskGradingWeight: integer(
-      'performance_task_grading_weight',
-    ).notNull().default(50),
+    writtenWorkGradingWeight: integer('written_work_grading_weight')
+      .notNull()
+      .default(30),
+    performanceTaskGradingWeight: integer('performance_task_grading_weight')
+      .notNull()
+      .default(50),
     quarterlyAssessmentGradingWeight: integer(
       'quarterly_assessment_grading_weight',
-    ).notNull().default(20),
+    )
+      .notNull()
+      .default(20),
 
     isActive: boolean('is_active').notNull().default(true),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -522,54 +524,58 @@ export const lessonVersions = pgTable(
   }),
 );
 
-export const assessments = pgTable('assessments', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  title: text('title').notNull(),
-  description: text('description'),
-  classId: uuid('class_id')
-    .notNull()
-    .references(() => classes.id, { onDelete: 'cascade' }),
-  type: assessmentTypeEnum('type').notNull().default('quiz'),
-  dueDate: timestamp('due_date'),
-  closeWhenDue: boolean('close_when_due').notNull().default(true),
-  randomizeQuestions: boolean('randomize_questions').notNull().default(false),
-  timedQuestionsEnabled: boolean('timed_questions_enabled')
-    .notNull()
-    .default(false),
-  questionTimeLimitSeconds: integer('question_time_limit_seconds'),
-  strictMode: boolean('strict_mode').notNull().default(false),
-  fileUploadInstructions: text('file_upload_instructions'),
-  teacherAttachmentFileId: uuid('teacher_attachment_file_id'),
-  rubricSourceFileId: uuid('rubric_source_file_id'),
-  rubricParseStatus: rubricParseStatusEnum('rubric_parse_status')
-    .notNull()
-    .default('pending'),
-  rubricParsedAt: timestamp('rubric_parsed_at'),
-  rubricRawText: text('rubric_raw_text'),
-  rubricParseError: text('rubric_parse_error'),
-  rubricCriteria: json('rubric_criteria'),
-  allowedUploadMimeTypes: text('allowed_upload_mime_types').array(),
-  allowedUploadExtensions: text('allowed_upload_extensions').array(),
-  maxUploadSizeBytes: integer('max_upload_size_bytes').default(104857600),
-  totalPoints: integer('total_points').notNull().default(0),
-  passingScore: integer('passing_score').default(60),
-  maxAttempts: integer('max_attempts').notNull().default(1),
-  timeLimitMinutes: integer('time_limit_minutes'),
-  isPublished: boolean('is_published').default(false),
-  feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
-  feedbackDelayHours: integer('feedback_delay_hours').default(24),
-  isCoreTemplateAsset: boolean('is_core_template_asset')
-    .notNull()
-    .default(false),
-  templateId: uuid('template_id'),
-  templateSourceId: uuid('template_source_id'),
-  classRecordCategory: classRecordCategoryEnum('class_record_category'),
-  quarter: gradingPeriodEnum('quarter'),
-  aiOrigin: text('ai_origin'),
-  aiGenerationOutputId: uuid('ai_generation_output_id'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+export const assessments = pgTable(
+  'assessments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    title: text('title').notNull(),
+    description: text('description'),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    type: assessmentTypeEnum('type').notNull().default('quiz'),
+    dueDate: timestamp('due_date'),
+    closeWhenDue: boolean('close_when_due').notNull().default(true),
+    randomizeQuestions: boolean('randomize_questions').notNull().default(false),
+    timedQuestionsEnabled: boolean('timed_questions_enabled')
+      .notNull()
+      .default(false),
+    questionTimeLimitSeconds: integer('question_time_limit_seconds'),
+    strictMode: boolean('strict_mode').notNull().default(false),
+    fileUploadInstructions: text('file_upload_instructions'),
+    teacherAttachmentFileId: uuid('teacher_attachment_file_id'),
+    rubricSourceFileId: uuid('rubric_source_file_id'),
+    rubricParseStatus: rubricParseStatusEnum('rubric_parse_status')
+      .notNull()
+      .default('pending'),
+    rubricParsedAt: timestamp('rubric_parsed_at'),
+    rubricRawText: text('rubric_raw_text'),
+    rubricParseError: text('rubric_parse_error'),
+    rubricCriteria: json('rubric_criteria'),
+    allowedUploadMimeTypes: text('allowed_upload_mime_types').array(),
+    allowedUploadExtensions: text('allowed_upload_extensions').array(),
+    maxUploadSizeBytes: integer('max_upload_size_bytes').default(104857600),
+    totalPoints: integer('total_points').notNull().default(0),
+    passingScore: integer('passing_score').default(60),
+    maxAttempts: integer('max_attempts').notNull().default(1),
+    timeLimitMinutes: integer('time_limit_minutes'),
+    isPublished: boolean('is_published').default(false),
+    feedbackLevel: feedbackLevelEnum('feedback_level').default('standard'),
+    feedbackDelayHours: integer('feedback_delay_hours').default(24),
+    isCoreTemplateAsset: boolean('is_core_template_asset')
+      .notNull()
+      .default(false),
+    templateId: uuid('template_id'),
+    templateSourceId: uuid('template_source_id'),
+    classRecordCategory: classRecordCategoryEnum('class_record_category'),
+    quarter: gradingPeriodEnum('quarter'),
+    aiOrigin: text('ai_origin'),
+    aiGenerationOutputId: uuid('ai_generation_output_id'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [index('assessments_class_id_idx').on(table.classId)],
+);
 
 export const assessmentQuestions = pgTable(
   'assessment_questions',

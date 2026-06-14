@@ -204,9 +204,7 @@ export class ClassTemplatesController {
       },
     }),
   )
-  async uploadAssessmentImage(
-    @UploadedFile() file: Express.Multer.File,
-  ) {
+  async uploadAssessmentImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('Image file is required');
     }

@@ -1259,7 +1259,11 @@ describe('AiMentorController', () => {
     it('should forward PATCH /teacher/lesson-plans/jobs/:jobId/draft and audit the save', async () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
 
       const payload = {
@@ -1293,7 +1297,11 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
     });
   });
@@ -1302,7 +1310,11 @@ describe('AiMentorController', () => {
     it('should forward PATCH /teacher/quizzes/jobs/:jobId/draft and audit the save', async () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
 
       const payload = {
@@ -1339,7 +1351,11 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
     });
   });

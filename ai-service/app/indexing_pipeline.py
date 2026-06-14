@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -837,10 +838,12 @@ def build_class_index_status(
 
 
 async def get_class_index_status(db: AsyncSession, class_id: str) -> dict[str, Any]:
-    lesson_rows = await _fetch_lesson_status_rows(db, class_id)
-    extraction_rows = await _fetch_extraction_status_rows(db, class_id)
-    assessment_rows = await _fetch_assessment_status_rows(db, class_id)
-    chunk_rows = await _fetch_chunk_status_rows(db, class_id)
+    lesson_rows, extraction_rows, assessment_rows, chunk_rows = await asyncio.gather(
+        _fetch_lesson_status_rows(db, class_id),
+        _fetch_extraction_status_rows(db, class_id),
+        _fetch_assessment_status_rows(db, class_id),
+        _fetch_chunk_status_rows(db, class_id),
+    )
     return build_class_index_status(
         class_id,
         lesson_rows=lesson_rows,
@@ -895,72 +898,70 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
         {"classId": class_id},
     )
 
-    created = 0
-    for chunk, embedding in zip(chunks, embeddings):
+    # Pre-compute content hashes and token counts
+    chunk_values = []
+    for chunk in chunks:
         content_hash = hashlib.sha256(
             f"{chunk.source_type}:{chunk.source_id}:{chunk.chunk_order}:{chunk.chunk_text}".encode(
                 "utf-8"
             )
         ).hexdigest()
+        chunk_values.append({
+            "sourceType": chunk.source_type,
+            "sourceId": chunk.source_id,
+            "classId": chunk.class_id,
+            "lessonId": chunk.lesson_id,
+            "assessmentId": chunk.assessment_id,
+            "questionId": chunk.question_id,
+            "extractionId": chunk.extraction_id,
+            "chunkText": chunk.chunk_text,
+            "chunkOrder": chunk.chunk_order,
+            "tokenCount": estimate_token_count(chunk.chunk_text),
+            "contentHash": content_hash,
+            "metadataJson": chunk.metadata,
+        })
 
-        insert_result = await db.execute(
-            sa_text(
-                """
-                INSERT INTO content_chunks (
-                  source_type,
-                  source_id,
-                  class_id,
-                  lesson_id,
-                  assessment_id,
-                  question_id,
-                  extraction_id,
-                  chunk_text,
-                  chunk_order,
-                  token_count,
-                  content_hash,
-                  metadata_json
-                )
-                VALUES (
-                  :sourceType,
-                  :sourceId,
-                  :classId,
-                  :lessonId,
-                  :assessmentId,
-                  :questionId,
-                  :extractionId,
-                  :chunkText,
-                  :chunkOrder,
-                  :tokenCount,
-                  :contentHash,
-                  :metadataJson
-                )
-                RETURNING id
-                """
-            ).bindparams(bindparam("metadataJson", type_=postgresql.JSONB)),
+    # Insert chunks one-by-one so RETURNING id stays portable across drivers.
+    # We still batch the embedding insert afterward to cut the write count.
+    if chunk_values:
+        chunk_ids = []
+        for chunk_value in chunk_values:
+            insert_result = await db.execute(
+                sa_text(
+                    """
+                    INSERT INTO content_chunks (
+                      source_type, source_id, class_id, lesson_id,
+                      assessment_id, question_id, extraction_id,
+                      chunk_text, chunk_order, token_count,
+                      content_hash, metadata_json
+                    )
+                    VALUES (
+                      :sourceType, :sourceId, :classId, :lessonId,
+                      :assessmentId, :questionId, :extractionId,
+                      :chunkText, :chunkOrder, :tokenCount,
+                      :contentHash, :metadataJson
+                    )
+                    RETURNING id
+                    """
+                ).bindparams(bindparam("metadataJson", type_=postgresql.JSONB)),
+                chunk_value,
+            )
+            chunk_ids.append(insert_result.scalar_one())
+
+        # Bulk insert all embeddings in one statement
+        embedding_values = [
             {
-                "sourceType": chunk.source_type,
-                "sourceId": chunk.source_id,
-                "classId": chunk.class_id,
-                "lessonId": chunk.lesson_id,
-                "assessmentId": chunk.assessment_id,
-                "questionId": chunk.question_id,
-                "extractionId": chunk.extraction_id,
-                "chunkText": chunk.chunk_text,
-                "chunkOrder": chunk.chunk_order,
-                "tokenCount": estimate_token_count(chunk.chunk_text),
-                "contentHash": content_hash,
-                "metadataJson": chunk.metadata,
-            },
-        )
-        chunk_id = insert_result.scalar_one()
+                "chunkId": chunk_ids[i],
+                "embedding": embedding_to_vector_literal(embeddings[i]),
+                "embeddingModel": embedding_model,
+            }
+            for i in range(len(chunk_ids))
+        ]
         await db.execute(
             sa_text(
                 """
                 INSERT INTO content_chunk_embeddings (
-                  chunk_id,
-                  embedding,
-                  embedding_model,
-                  embedded_at
+                  chunk_id, embedding, embedding_model, embedded_at
                 )
                 VALUES (
                   :chunkId,
@@ -970,15 +971,10 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
                 )
                 """
             ),
-            {
-                "chunkId": chunk_id,
-                "embedding": embedding_to_vector_literal(embedding),
-                "embeddingModel": embedding_model,
-            },
+            embedding_values,
         )
-        created += 1
 
-    await db.commit()
+    created = len(chunk_values)
     logger.info("[index] Reindexed class %s with %d content chunk(s)", class_id, created)
     return {
         "classId": class_id,

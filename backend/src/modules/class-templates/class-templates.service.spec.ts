@@ -49,7 +49,9 @@ describe('ClassTemplatesService', () => {
     mockDb.query.classTemplateModuleSections.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateModuleItems.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([]);
-    mockDb.query.classTemplateAssessmentQuestions.findMany.mockResolvedValue([]);
+    mockDb.query.classTemplateAssessmentQuestions.findMany.mockResolvedValue(
+      [],
+    );
     mockDb.query.classTemplateAssessmentQuestionOptions.findMany.mockResolvedValue(
       [],
     );
@@ -117,24 +119,30 @@ describe('ClassTemplatesService', () => {
         },
       },
     ]);
-    mockDb.query.classTemplateAssessmentQuestionOptions.findMany.mockResolvedValue([
-      {
-        id: 'option-1',
-        templateAssessmentQuestionId: 'question-1',
-        text: 'Option 1',
-        isCorrect: true,
-        order: 1,
-        metadata: {
-          imageUrl: '/api/class-templates/images/option.png',
-          imageDisplayMode: 'default',
-          imageZoom: 100,
+    mockDb.query.classTemplateAssessmentQuestionOptions.findMany.mockResolvedValue(
+      [
+        {
+          id: 'option-1',
+          templateAssessmentQuestionId: 'question-1',
+          text: 'Option 1',
+          isCorrect: true,
+          order: 1,
+          metadata: {
+            imageUrl: '/api/class-templates/images/option.png',
+            imageDisplayMode: 'default',
+            imageZoom: 100,
+          },
         },
-      },
-    ]);
+      ],
+    );
 
-    const result = await service.getContent('11111111-1111-1111-1111-111111111111');
+    const result = await service.getContent(
+      '11111111-1111-1111-1111-111111111111',
+    );
     const firstQuestion = result.assessments[0]?.questions?.[0];
-    const firstOption = firstQuestion?.options?.[0] as Record<string, unknown> | undefined;
+    const firstOption = firstQuestion?.options?.[0] as
+      | Record<string, unknown>
+      | undefined;
 
     expect(firstQuestion).toEqual(
       expect.objectContaining({

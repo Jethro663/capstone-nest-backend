@@ -192,7 +192,9 @@ export class ClassRecordService {
       .returning();
 
     const gradingProfile = {
-      writtenWork: Number(cls.writtenWorkGradingWeight ?? DEFAULT_DEPED_PROFILE.writtenWork),
+      writtenWork: Number(
+        cls.writtenWorkGradingWeight ?? DEFAULT_DEPED_PROFILE.writtenWork,
+      ),
       performanceTask: Number(
         cls.performanceTaskGradingWeight ??
           DEFAULT_DEPED_PROFILE.performanceTask,

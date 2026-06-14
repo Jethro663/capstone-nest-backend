@@ -41,4 +41,3 @@ export function sanitizeRichTextHtml(input: string): string {
   if (!input) return '';
   return sanitizeHtml(input, RTF_SANITIZE_CONFIG).trim();
 }
-

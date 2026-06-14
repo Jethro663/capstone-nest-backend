@@ -146,7 +146,9 @@ describe('engine-manifest', () => {
 
     expect(result.valid).toBe(false);
     expect(
-      result.errors.some((issue) => issue.message.includes('Unknown lesson reference')),
+      result.errors.some((issue) =>
+        issue.message.includes('Unknown lesson reference'),
+      ),
     ).toBe(true);
   });
 
@@ -159,7 +161,9 @@ describe('engine-manifest', () => {
 
     expect(result.valid).toBe(true);
     expect(
-      result.warnings.some((issue) => issue.message.includes('Unsupported blockType')),
+      result.warnings.some((issue) =>
+        issue.message.includes('Unsupported blockType'),
+      ),
     ).toBe(true);
     expect(
       result.warnings.some((issue) =>

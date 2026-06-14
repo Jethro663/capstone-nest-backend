@@ -33,7 +33,7 @@ export class UpdateSectionDto {
   @Transform(({ value }) => trimValue(value))
   @Matches(SECTION_NAME_REGEX, {
     message:
-      "Section name may only contain letters, numbers, spaces, hyphens, and apostrophes",
+      'Section name may only contain letters, numbers, spaces, hyphens, and apostrophes',
   })
   name?: string;
 

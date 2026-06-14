@@ -110,7 +110,9 @@ export class ClassTemplatesService {
     return this.databaseService.db;
   }
 
-  private sanitizeMetadata(metadata: Record<string, unknown> | null | undefined) {
+  private sanitizeMetadata(
+    metadata: Record<string, unknown> | null | undefined,
+  ) {
     if (!metadata || typeof metadata !== 'object' || metadata === null) {
       return metadata as Record<string, unknown> | null;
     }
@@ -140,7 +142,9 @@ export class ClassTemplatesService {
   }
 
   private coerceNumber(value: unknown, fallback = 0) {
-    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback;
   }
 
   private coerceBoolean(value: unknown, fallback = false) {
@@ -216,12 +220,14 @@ export class ClassTemplatesService {
     for (const moduleEntry of modules ?? []) {
       for (const section of moduleEntry.sections ?? []) {
         for (const item of section.items ?? []) {
-          const normalizedItemId = this.coerceOptionalUuid(item.id) ?? randomUUID();
+          const normalizedItemId =
+            this.coerceOptionalUuid(item.id) ?? randomUUID();
           item.id = normalizedItemId;
 
           if (item.itemType === 'lesson') {
             item.templateLessonId =
-              this.coerceOptionalUuid(item.templateLessonId) ?? normalizedItemId;
+              this.coerceOptionalUuid(item.templateLessonId) ??
+              normalizedItemId;
             item.templateAssessmentId = undefined;
             continue;
           }
@@ -310,7 +316,8 @@ export class ClassTemplatesService {
           lessons.push({
             id: lessonId,
             title:
-              this.coerceString(metadata.lessonTitle).trim() || 'Untitled Lesson',
+              this.coerceString(metadata.lessonTitle).trim() ||
+              'Untitled Lesson',
             summary: sanitizeRichTextHtml(
               this.coerceString(metadata.lessonSummary, ''),
             ),
@@ -339,37 +346,39 @@ export class ClassTemplatesService {
       settings: (assessment.settings ?? {}) as JsonRecord,
       totalPoints: assessment.totalPoints ?? 0,
       order: assessment.order ?? assessmentIndex + 1,
-      questions: (assessment.questions ?? []).map((question, questionIndex) => ({
-        id: this.coerceOptionalUuid(question.id) ?? randomUUID(),
-        type: question.type ?? 'multiple_choice',
-        content: sanitizeRichTextHtml(question.content ?? '<p></p>'),
-        points: question.points ?? 1,
-        order: question.order ?? questionIndex + 1,
-        isRequired: question.isRequired ?? true,
-        explanation: question.explanation
-          ? sanitizeRichTextHtml(question.explanation)
-          : null,
-        imageUrl: question.imageUrl ?? null,
-        imageDisplayMode: this.normalizeImageDisplayMode(
-          question.imageDisplayMode,
-        ),
-        imageZoom: this.normalizeImageZoom(question.imageZoom),
-        imagePositionX: this.normalizeImagePosition(question.imagePositionX),
-        imagePositionY: this.normalizeImagePosition(question.imagePositionY),
-        options: (question.options ?? []).map((option, optionIndex) => ({
-          id: this.coerceOptionalUuid(option.id) ?? randomUUID(),
-          text: option.text ?? '',
-          isCorrect: option.isCorrect ?? false,
-          order: option.order ?? optionIndex + 1,
-          imageUrl: option.imageUrl ?? null,
+      questions: (assessment.questions ?? []).map(
+        (question, questionIndex) => ({
+          id: this.coerceOptionalUuid(question.id) ?? randomUUID(),
+          type: question.type ?? 'multiple_choice',
+          content: sanitizeRichTextHtml(question.content ?? '<p></p>'),
+          points: question.points ?? 1,
+          order: question.order ?? questionIndex + 1,
+          isRequired: question.isRequired ?? true,
+          explanation: question.explanation
+            ? sanitizeRichTextHtml(question.explanation)
+            : null,
+          imageUrl: question.imageUrl ?? null,
           imageDisplayMode: this.normalizeImageDisplayMode(
-            option.imageDisplayMode,
+            question.imageDisplayMode,
           ),
-          imageZoom: this.normalizeImageZoom(option.imageZoom),
-          imagePositionX: this.normalizeImagePosition(option.imagePositionX),
-          imagePositionY: this.normalizeImagePosition(option.imagePositionY),
-        })),
-      })),
+          imageZoom: this.normalizeImageZoom(question.imageZoom),
+          imagePositionX: this.normalizeImagePosition(question.imagePositionX),
+          imagePositionY: this.normalizeImagePosition(question.imagePositionY),
+          options: (question.options ?? []).map((option, optionIndex) => ({
+            id: this.coerceOptionalUuid(option.id) ?? randomUUID(),
+            text: option.text ?? '',
+            isCorrect: option.isCorrect ?? false,
+            order: option.order ?? optionIndex + 1,
+            imageUrl: option.imageUrl ?? null,
+            imageDisplayMode: this.normalizeImageDisplayMode(
+              option.imageDisplayMode,
+            ),
+            imageZoom: this.normalizeImageZoom(option.imageZoom),
+            imagePositionX: this.normalizeImagePosition(option.imagePositionX),
+            imagePositionY: this.normalizeImagePosition(option.imagePositionY),
+          })),
+        }),
+      ),
     }));
   }
 
@@ -383,13 +392,15 @@ export class ClassTemplatesService {
 
     const lessonIds = Array.from(new Set(lessons.map((lesson) => lesson.id)));
     if (lessonIds.length > 0) {
-      const existingLessons = await this.db.query.classTemplateLessons.findMany({
-        where: inArray(classTemplateLessons.id, lessonIds),
-        columns: {
-          id: true,
-          templateId: true,
+      const existingLessons = await this.db.query.classTemplateLessons.findMany(
+        {
+          where: inArray(classTemplateLessons.id, lessonIds),
+          columns: {
+            id: true,
+            templateId: true,
+          },
         },
-      });
+      );
       const reservedLessonIds = new Set(existingLessons.map((row) => row.id));
       const crossTemplateLessonIds = new Set(
         existingLessons
@@ -421,13 +432,14 @@ export class ClassTemplatesService {
       new Set(lessonBlocks.map((block) => block.id)),
     );
     if (lessonBlockIds.length > 0) {
-      const existingBlocks = await this.db.query.classTemplateLessonBlocks.findMany({
-        where: inArray(classTemplateLessonBlocks.id, lessonBlockIds),
-        columns: {
-          id: true,
-          templateLessonId: true,
-        },
-      });
+      const existingBlocks =
+        await this.db.query.classTemplateLessonBlocks.findMany({
+          where: inArray(classTemplateLessonBlocks.id, lessonBlockIds),
+          columns: {
+            id: true,
+            templateLessonId: true,
+          },
+        });
       const existingBlockLessonIds = Array.from(
         new Set(existingBlocks.map((row) => row.templateLessonId)),
       );
@@ -448,7 +460,8 @@ export class ClassTemplatesService {
       const crossTemplateBlockIds = new Set(
         existingBlocks
           .filter(
-            (row) => templateByLessonId.get(row.templateLessonId) !== templateId,
+            (row) =>
+              templateByLessonId.get(row.templateLessonId) !== templateId,
           )
           .map((row) => row.id),
       );
@@ -552,21 +565,21 @@ export class ClassTemplatesService {
           content: question.content,
           points: question.points,
           order: question.order,
-        isRequired: question.isRequired,
-        explanation: question.explanation,
-        imageUrl: question.imageUrl,
-        imageDisplayMode: question.imageDisplayMode,
-        imageZoom: question.imageZoom,
-        options: question.options.map((option) => ({
-          id: option.id,
-          text: option.text,
-          isCorrect: option.isCorrect,
-          order: option.order,
-          imageUrl: option.imageUrl,
-          imageDisplayMode: option.imageDisplayMode,
-          imageZoom: option.imageZoom,
+          isRequired: question.isRequired,
+          explanation: question.explanation,
+          imageUrl: question.imageUrl,
+          imageDisplayMode: question.imageDisplayMode,
+          imageZoom: question.imageZoom,
+          options: question.options.map((option) => ({
+            id: option.id,
+            text: option.text,
+            isCorrect: option.isCorrect,
+            order: option.order,
+            imageUrl: option.imageUrl,
+            imageDisplayMode: option.imageDisplayMode,
+            imageZoom: option.imageZoom,
+          })),
         })),
-      })),
       })),
     );
 
@@ -716,8 +729,7 @@ export class ClassTemplatesService {
       .update(classTemplates)
       .set({
         status,
-        publishedAt:
-          status === ClassTemplateStatus.Published ? now : null,
+        publishedAt: status === ClassTemplateStatus.Published ? now : null,
         updatedAt: now,
       })
       .where(eq(classTemplates.id, id))
@@ -770,41 +782,39 @@ export class ClassTemplatesService {
   async getContent(id: string) {
     await this.findOne(id);
 
-    const [
-      modules,
-      assessments,
-      announcements,
-      lessons,
-      chunks,
-    ] = await Promise.all([
-      this.db.query.classTemplateModules.findMany({
-        where: eq(classTemplateModules.templateId, id),
-        orderBy: [asc(classTemplateModules.order)],
-      }),
-      this.db.query.classTemplateAssessments.findMany({
-        where: eq(classTemplateAssessments.templateId, id),
-        orderBy: [asc(classTemplateAssessments.order)],
-      }),
-      this.db.query.classTemplateAnnouncements.findMany({
-        where: eq(classTemplateAnnouncements.templateId, id),
-        orderBy: [asc(classTemplateAnnouncements.order)],
-      }),
-      this.db.query.classTemplateLessons.findMany({
-        where: eq(classTemplateLessons.templateId, id),
-        orderBy: [asc(classTemplateLessons.order)],
-      }),
-      this.db.query.classTemplateEngineChunks.findMany({
-        where: eq(classTemplateEngineChunks.templateId, id),
-        orderBy: [asc(classTemplateEngineChunks.chunkOrder)],
-      }),
-    ]);
+    const [modules, assessments, announcements, lessons, chunks] =
+      await Promise.all([
+        this.db.query.classTemplateModules.findMany({
+          where: eq(classTemplateModules.templateId, id),
+          orderBy: [asc(classTemplateModules.order)],
+        }),
+        this.db.query.classTemplateAssessments.findMany({
+          where: eq(classTemplateAssessments.templateId, id),
+          orderBy: [asc(classTemplateAssessments.order)],
+        }),
+        this.db.query.classTemplateAnnouncements.findMany({
+          where: eq(classTemplateAnnouncements.templateId, id),
+          orderBy: [asc(classTemplateAnnouncements.order)],
+        }),
+        this.db.query.classTemplateLessons.findMany({
+          where: eq(classTemplateLessons.templateId, id),
+          orderBy: [asc(classTemplateLessons.order)],
+        }),
+        this.db.query.classTemplateEngineChunks.findMany({
+          where: eq(classTemplateEngineChunks.templateId, id),
+          orderBy: [asc(classTemplateEngineChunks.chunkOrder)],
+        }),
+      ]);
 
     const lessonIds = lessons.map((entry) => entry.id);
     const assessmentIds = assessments.map((entry) => entry.id);
     const [lessonBlocks, assessmentQuestions] = await Promise.all([
       lessonIds.length
         ? this.db.query.classTemplateLessonBlocks.findMany({
-            where: inArray(classTemplateLessonBlocks.templateLessonId, lessonIds),
+            where: inArray(
+              classTemplateLessonBlocks.templateLessonId,
+              lessonIds,
+            ),
             orderBy: [asc(classTemplateLessonBlocks.order)],
           })
         : Promise.resolve([]),
@@ -1019,7 +1029,9 @@ export class ClassTemplatesService {
       );
 
     await this.db.transaction(async (tx) => {
-      const canonicalLessonIdSet = new Set(canonicalLessons.map((lesson) => lesson.id));
+      const canonicalLessonIdSet = new Set(
+        canonicalLessons.map((lesson) => lesson.id),
+      );
       const canonicalAssessmentIdSet = new Set(
         canonicalAssessments.map((assessment) => assessment.id),
       );
@@ -1052,42 +1064,42 @@ export class ClassTemplatesService {
                 templateAssessmentId: assessment.id,
                 type: question.type,
                 content: question.content,
-              points: question.points,
-              order: question.order,
-              isRequired: question.isRequired,
-              explanation: question.explanation,
-              imageUrl: question.imageUrl,
-              metadata: this.buildImageMetadata(
-                undefined,
-                undefined,
-                question.imageDisplayMode,
-                question.imageZoom,
-                question.imagePositionX,
-                question.imagePositionY,
-              ),
-            })),
-          );
-
-          for (const question of assessment.questions) {
-            if (question.options.length === 0) continue;
-            await tx.insert(classTemplateAssessmentQuestionOptions).values(
-              question.options.map((option) => ({
-                id: option.id,
-                templateAssessmentQuestionId: question.id,
-                text: option.text,
-                isCorrect: option.isCorrect,
-                order: option.order,
+                points: question.points,
+                order: question.order,
+                isRequired: question.isRequired,
+                explanation: question.explanation,
+                imageUrl: question.imageUrl,
                 metadata: this.buildImageMetadata(
                   undefined,
-                  option.imageUrl,
-                  option.imageDisplayMode,
-                  option.imageZoom,
-                  option.imagePositionX,
-                  option.imagePositionY,
+                  undefined,
+                  question.imageDisplayMode,
+                  question.imageZoom,
+                  question.imagePositionX,
+                  question.imagePositionY,
                 ),
               })),
             );
-          }
+
+            for (const question of assessment.questions) {
+              if (question.options.length === 0) continue;
+              await tx.insert(classTemplateAssessmentQuestionOptions).values(
+                question.options.map((option) => ({
+                  id: option.id,
+                  templateAssessmentQuestionId: question.id,
+                  text: option.text,
+                  isCorrect: option.isCorrect,
+                  order: option.order,
+                  metadata: this.buildImageMetadata(
+                    undefined,
+                    option.imageUrl,
+                    option.imageDisplayMode,
+                    option.imageZoom,
+                    option.imagePositionX,
+                    option.imagePositionY,
+                  ),
+                })),
+              );
+            }
           }
         }
       }
@@ -1142,7 +1154,8 @@ export class ClassTemplatesService {
                 const templateLessonIdBase =
                   this.coerceOptionalUuid(item.templateLessonId) ?? itemId;
                 const templateLessonId =
-                  lessonIdRemap.get(templateLessonIdBase) ?? templateLessonIdBase;
+                  lessonIdRemap.get(templateLessonIdBase) ??
+                  templateLessonIdBase;
                 item.templateLessonId = templateLessonId;
                 lessonIdByItem.set(itemId, templateLessonId);
               }
@@ -1189,7 +1202,9 @@ export class ClassTemplatesService {
                   return {
                     templateModuleId: moduleRow.id,
                     title: section.title,
-                    description: sanitizeRichTextHtml(section.description ?? ''),
+                    description: sanitizeRichTextHtml(
+                      section.description ?? '',
+                    ),
                     order: section.order ?? sectionIndex + 1,
                   };
                 }),
@@ -1210,7 +1225,8 @@ export class ClassTemplatesService {
                 itemInputs.map((item, itemIndex) => {
                   const itemId = this.createUniqueUuid(usedItemIds);
                   const templateAssessmentIdBase =
-                    item.itemType === 'assessment' && this.coerceOptionalUuid(item.templateAssessmentId)
+                    item.itemType === 'assessment' &&
+                    this.coerceOptionalUuid(item.templateAssessmentId)
                       ? this.coerceOptionalUuid(item.templateAssessmentId)
                       : null;
                   const templateAssessmentId =
@@ -1219,7 +1235,8 @@ export class ClassTemplatesService {
                       : (assessmentIdRemap.get(templateAssessmentIdBase) ??
                         templateAssessmentIdBase);
                   const normalizedAssessmentId =
-                    templateAssessmentId && canonicalAssessmentIdSet.has(templateAssessmentId)
+                    templateAssessmentId &&
+                    canonicalAssessmentIdSet.has(templateAssessmentId)
                       ? templateAssessmentId
                       : null;
                   const templateLessonId =
@@ -1233,7 +1250,8 @@ export class ClassTemplatesService {
                         })()
                       : null;
                   const normalizedLessonId =
-                    templateLessonId && canonicalLessonIdSet.has(templateLessonId)
+                    templateLessonId &&
+                    canonicalLessonIdSet.has(templateLessonId)
                       ? templateLessonId
                       : null;
                   return {
@@ -1430,7 +1448,9 @@ export class ClassTemplatesService {
           themeKind: this.coerceString(module.themeKind, 'gradient'),
           gradientId: this.coerceString(module.gradientId, 'oceanic-blue'),
           coverImageUrl:
-            typeof module.coverImageUrl === 'string' ? module.coverImageUrl : null,
+            typeof module.coverImageUrl === 'string'
+              ? module.coverImageUrl
+              : null,
           imagePositionX: this.coerceNumber(module.imagePositionX, 50),
           imagePositionY: this.coerceNumber(module.imagePositionY, 50),
           imageScale: this.coerceNumber(module.imageScale, 120),
@@ -1518,18 +1538,24 @@ export class ClassTemplatesService {
                 option.imageDisplayMode,
               ),
               imageZoom: this.normalizeImageZoom(option.imageZoom),
-              imagePositionX: this.normalizeImagePosition(option.imagePositionX),
-              imagePositionY: this.normalizeImagePosition(option.imagePositionY),
+              imagePositionX: this.normalizeImagePosition(
+                option.imagePositionX,
+              ),
+              imagePositionY: this.normalizeImagePosition(
+                option.imagePositionY,
+              ),
             })),
           })),
         })),
-        announcements: (content.announcements ?? []).map((announcement: any) => ({
-          id: announcement.id,
-          title: announcement.title,
-          content: announcement.content,
-          isPinned: announcement.isPinned ?? false,
-          order: announcement.order ?? 0,
-        })),
+        announcements: (content.announcements ?? []).map(
+          (announcement: any) => ({
+            id: announcement.id,
+            title: announcement.title,
+            content: announcement.content,
+            isPinned: announcement.isPinned ?? false,
+            order: announcement.order ?? 0,
+          }),
+        ),
         chunks: derivedChunks,
       };
 
@@ -1561,7 +1587,10 @@ export class ClassTemplatesService {
         yaml: stringifyEngineManifest(normalizedManifest),
       };
     } catch (error) {
-      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+      if (
+        error instanceof BadRequestException ||
+        error instanceof NotFoundException
+      ) {
         throw error;
       }
       throw new BadRequestException(
@@ -1626,232 +1655,234 @@ export class ClassTemplatesService {
     const templateId = manifest.template.id;
     try {
       await this.db.transaction(async (tx) => {
-      const nextStatus = publish
-        ? ClassTemplateStatus.Published
-        : (manifest.template.status as ClassTemplateStatus) ??
-          ClassTemplateStatus.Draft;
+        const nextStatus = publish
+          ? ClassTemplateStatus.Published
+          : ((manifest.template.status as ClassTemplateStatus) ??
+            ClassTemplateStatus.Draft);
 
-      await tx
-        .insert(classTemplates)
-        .values({
-          id: templateId,
-          name: manifest.template.name.trim(),
-          subjectCode: normalizeSubjectCode(manifest.template.subjectCode),
-          subjectGradeLevel: manifest.template.subjectGradeLevel,
-          status: nextStatus,
-          createdBy: actorId,
-          publishedAt:
-            nextStatus === ClassTemplateStatus.Published ? new Date() : null,
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: classTemplates.id,
-          set: {
+        await tx
+          .insert(classTemplates)
+          .values({
+            id: templateId,
             name: manifest.template.name.trim(),
             subjectCode: normalizeSubjectCode(manifest.template.subjectCode),
             subjectGradeLevel: manifest.template.subjectGradeLevel,
             status: nextStatus,
+            createdBy: actorId,
             publishedAt:
               nextStatus === ClassTemplateStatus.Published ? new Date() : null,
             updatedAt: new Date(),
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: classTemplates.id,
+            set: {
+              name: manifest.template.name.trim(),
+              subjectCode: normalizeSubjectCode(manifest.template.subjectCode),
+              subjectGradeLevel: manifest.template.subjectGradeLevel,
+              status: nextStatus,
+              publishedAt:
+                nextStatus === ClassTemplateStatus.Published
+                  ? new Date()
+                  : null,
+              updatedAt: new Date(),
+            },
+          });
 
-      await tx
-        .delete(classTemplateAnnouncements)
-        .where(eq(classTemplateAnnouncements.templateId, templateId));
-      await tx
-        .delete(classTemplateModules)
-        .where(eq(classTemplateModules.templateId, templateId));
-      await tx
-        .delete(classTemplateAssessments)
-        .where(eq(classTemplateAssessments.templateId, templateId));
-      await tx
-        .delete(classTemplateLessons)
-        .where(eq(classTemplateLessons.templateId, templateId));
-      await tx
-        .delete(classTemplateEngineChunks)
-        .where(eq(classTemplateEngineChunks.templateId, templateId));
+        await tx
+          .delete(classTemplateAnnouncements)
+          .where(eq(classTemplateAnnouncements.templateId, templateId));
+        await tx
+          .delete(classTemplateModules)
+          .where(eq(classTemplateModules.templateId, templateId));
+        await tx
+          .delete(classTemplateAssessments)
+          .where(eq(classTemplateAssessments.templateId, templateId));
+        await tx
+          .delete(classTemplateLessons)
+          .where(eq(classTemplateLessons.templateId, templateId));
+        await tx
+          .delete(classTemplateEngineChunks)
+          .where(eq(classTemplateEngineChunks.templateId, templateId));
 
-      if (manifest.announcements.length > 0) {
-        await tx.insert(classTemplateAnnouncements).values(
-          manifest.announcements.map((announcement) => ({
-            id: announcement.id,
-            templateId,
-            title: announcement.title,
-            content: sanitizeRichTextHtml(announcement.content),
-            isPinned: announcement.isPinned,
-            order: announcement.order,
-          })),
-        );
-      }
-
-      if (manifest.lessons.length > 0) {
-        await tx.insert(classTemplateLessons).values(
-          manifest.lessons.map((lesson) => ({
-            id: lesson.id,
-            templateId,
-            title: lesson.title,
-            summary: lesson.summary ?? '',
-            order: lesson.order,
-          })),
-        );
-
-        for (const lesson of manifest.lessons) {
-          if (lesson.blocks.length === 0) continue;
-          await tx.insert(classTemplateLessonBlocks).values(
-            lesson.blocks.map((block) => ({
-              id: block.id,
-              templateLessonId: lesson.id,
-              blockType: block.blockType,
-              blockVersion: block.blockVersion,
-              payload: block.payload,
-              order: block.order,
+        if (manifest.announcements.length > 0) {
+          await tx.insert(classTemplateAnnouncements).values(
+            manifest.announcements.map((announcement) => ({
+              id: announcement.id,
+              templateId,
+              title: announcement.title,
+              content: sanitizeRichTextHtml(announcement.content),
+              isPinned: announcement.isPinned,
+              order: announcement.order,
             })),
           );
         }
-      }
 
-      if (manifest.assessments.length > 0) {
-        await tx.insert(classTemplateAssessments).values(
-          manifest.assessments.map((assessment) => ({
-            id: assessment.id,
-            templateId,
-            title: assessment.title,
-            description: assessment.description ?? '',
-            type: assessment.type,
-            dueDateOffsetDays: assessment.dueDateOffsetDays ?? null,
-            settings: assessment.settings ?? {},
-            totalPoints: assessment.totalPoints,
-            order: assessment.order,
-          })),
-        );
-
-        for (const assessment of manifest.assessments) {
-          if (assessment.questions.length === 0) continue;
-          await tx.insert(classTemplateAssessmentQuestions).values(
-            assessment.questions.map((question) => ({
-              id: question.id,
-              templateAssessmentId: assessment.id,
-              type: question.type,
-              content: sanitizeRichTextHtml(question.content),
-              points: question.points,
-              order: question.order,
-              isRequired: question.isRequired,
-              explanation: question.explanation ?? null,
-              imageUrl: question.imageUrl ?? null,
-              metadata: this.buildImageMetadata(
-                undefined,
-                undefined,
-                question.imageDisplayMode,
-                question.imageZoom,
-                question.imagePositionX,
-                question.imagePositionY,
-              ),
+        if (manifest.lessons.length > 0) {
+          await tx.insert(classTemplateLessons).values(
+            manifest.lessons.map((lesson) => ({
+              id: lesson.id,
+              templateId,
+              title: lesson.title,
+              summary: lesson.summary ?? '',
+              order: lesson.order,
             })),
           );
 
-          for (const question of assessment.questions) {
-            if (question.options.length === 0) continue;
-            await tx.insert(classTemplateAssessmentQuestionOptions).values(
-              question.options.map((option) => ({
-                id: option.id,
-                templateAssessmentQuestionId: question.id,
-                text: option.text,
-                isCorrect: option.isCorrect,
-                order: option.order,
+          for (const lesson of manifest.lessons) {
+            if (lesson.blocks.length === 0) continue;
+            await tx.insert(classTemplateLessonBlocks).values(
+              lesson.blocks.map((block) => ({
+                id: block.id,
+                templateLessonId: lesson.id,
+                blockType: block.blockType,
+                blockVersion: block.blockVersion,
+                payload: block.payload,
+                order: block.order,
+              })),
+            );
+          }
+        }
+
+        if (manifest.assessments.length > 0) {
+          await tx.insert(classTemplateAssessments).values(
+            manifest.assessments.map((assessment) => ({
+              id: assessment.id,
+              templateId,
+              title: assessment.title,
+              description: assessment.description ?? '',
+              type: assessment.type,
+              dueDateOffsetDays: assessment.dueDateOffsetDays ?? null,
+              settings: assessment.settings ?? {},
+              totalPoints: assessment.totalPoints,
+              order: assessment.order,
+            })),
+          );
+
+          for (const assessment of manifest.assessments) {
+            if (assessment.questions.length === 0) continue;
+            await tx.insert(classTemplateAssessmentQuestions).values(
+              assessment.questions.map((question) => ({
+                id: question.id,
+                templateAssessmentId: assessment.id,
+                type: question.type,
+                content: sanitizeRichTextHtml(question.content),
+                points: question.points,
+                order: question.order,
+                isRequired: question.isRequired,
+                explanation: question.explanation ?? null,
+                imageUrl: question.imageUrl ?? null,
                 metadata: this.buildImageMetadata(
                   undefined,
-                  option.imageUrl,
-                  option.imageDisplayMode,
-                  option.imageZoom,
-                  option.imagePositionX,
-                  option.imagePositionY,
+                  undefined,
+                  question.imageDisplayMode,
+                  question.imageZoom,
+                  question.imagePositionX,
+                  question.imagePositionY,
                 ),
               })),
             );
+
+            for (const question of assessment.questions) {
+              if (question.options.length === 0) continue;
+              await tx.insert(classTemplateAssessmentQuestionOptions).values(
+                question.options.map((option) => ({
+                  id: option.id,
+                  templateAssessmentQuestionId: question.id,
+                  text: option.text,
+                  isCorrect: option.isCorrect,
+                  order: option.order,
+                  metadata: this.buildImageMetadata(
+                    undefined,
+                    option.imageUrl,
+                    option.imageDisplayMode,
+                    option.imageZoom,
+                    option.imagePositionX,
+                    option.imagePositionY,
+                  ),
+                })),
+              );
+            }
           }
         }
-      }
 
-      if (manifest.modules.length > 0) {
-        await tx.insert(classTemplateModules).values(
-          manifest.modules.map((module) => ({
-            id: module.id,
-            templateId,
-            title: module.title,
-            description: sanitizeRichTextHtml(module.description ?? ''),
-            order: module.order,
-            themeKind: module.themeKind ?? 'gradient',
-            gradientId: module.gradientId ?? 'oceanic-blue',
-            coverImageUrl: module.coverImageUrl ?? null,
-            imagePositionX: module.imagePositionX ?? 50,
-            imagePositionY: module.imagePositionY ?? 50,
-            imageScale: module.imageScale ?? 120,
-            isVisible: module.isVisible ?? false,
-            isLocked: module.isLocked ?? true,
-            teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
-          })),
-        );
-
-        for (const module of manifest.modules) {
-          if (module.sections.length === 0) continue;
-          await tx.insert(classTemplateModuleSections).values(
-            module.sections.map((section) => ({
-              id: section.id,
-              templateModuleId: module.id,
-              title: section.title,
-              description: sanitizeRichTextHtml(section.description ?? ''),
-              order: section.order,
+        if (manifest.modules.length > 0) {
+          await tx.insert(classTemplateModules).values(
+            manifest.modules.map((module) => ({
+              id: module.id,
+              templateId,
+              title: module.title,
+              description: sanitizeRichTextHtml(module.description ?? ''),
+              order: module.order,
+              themeKind: module.themeKind ?? 'gradient',
+              gradientId: module.gradientId ?? 'oceanic-blue',
+              coverImageUrl: module.coverImageUrl ?? null,
+              imagePositionX: module.imagePositionX ?? 50,
+              imagePositionY: module.imagePositionY ?? 50,
+              imageScale: module.imageScale ?? 120,
+              isVisible: module.isVisible ?? false,
+              isLocked: module.isLocked ?? true,
+              teacherNotes: sanitizeRichTextHtml(module.teacherNotes ?? ''),
             })),
           );
 
-          for (const section of module.sections) {
-            if (section.items.length === 0) continue;
-            await tx.insert(classTemplateModuleItems).values(
-              section.items.map((item) => ({
-                id: item.id,
-                templateSectionId: section.id,
-                itemType: item.itemType,
-                templateAssessmentId:
-                  item.itemType === 'assessment'
-                    ? this.coerceOptionalUuid(item.assessmentId)
-                    : null,
-                templateLessonId:
-                  item.itemType === 'lesson'
-                    ? this.coerceOptionalUuid(item.lessonId)
-                    : null,
-                order: item.order,
-                isRequired: item.isRequired ?? false,
-                metadata:
-                  item.itemType === 'lesson'
-                    ? this.stripCanonicalLessonFields(item.metadata ?? {})
-                    : (item.metadata ?? {}),
-                points: item.points ?? null,
+          for (const module of manifest.modules) {
+            if (module.sections.length === 0) continue;
+            await tx.insert(classTemplateModuleSections).values(
+              module.sections.map((section) => ({
+                id: section.id,
+                templateModuleId: module.id,
+                title: section.title,
+                description: sanitizeRichTextHtml(section.description ?? ''),
+                order: section.order,
               })),
             );
+
+            for (const section of module.sections) {
+              if (section.items.length === 0) continue;
+              await tx.insert(classTemplateModuleItems).values(
+                section.items.map((item) => ({
+                  id: item.id,
+                  templateSectionId: section.id,
+                  itemType: item.itemType,
+                  templateAssessmentId:
+                    item.itemType === 'assessment'
+                      ? this.coerceOptionalUuid(item.assessmentId)
+                      : null,
+                  templateLessonId:
+                    item.itemType === 'lesson'
+                      ? this.coerceOptionalUuid(item.lessonId)
+                      : null,
+                  order: item.order,
+                  isRequired: item.isRequired ?? false,
+                  metadata:
+                    item.itemType === 'lesson'
+                      ? this.stripCanonicalLessonFields(item.metadata ?? {})
+                      : (item.metadata ?? {}),
+                  points: item.points ?? null,
+                })),
+              );
+            }
           }
         }
-      }
 
-      const regeneratedChunks = deriveEngineChunks(
-        manifest.lessons,
-        manifest.assessments,
-      );
-
-      if (regeneratedChunks.length > 0) {
-        await tx.insert(classTemplateEngineChunks).values(
-          regeneratedChunks.map((chunk) => ({
-            id: chunk.id,
-            templateId,
-            sourceType: chunk.sourceType,
-            sourceId: chunk.sourceId,
-            chunkOrder: chunk.chunkOrder,
-            content: chunk.content,
-            metadata: chunk.metadata ?? {},
-          })),
+        const regeneratedChunks = deriveEngineChunks(
+          manifest.lessons,
+          manifest.assessments,
         );
-      }
+
+        if (regeneratedChunks.length > 0) {
+          await tx.insert(classTemplateEngineChunks).values(
+            regeneratedChunks.map((chunk) => ({
+              id: chunk.id,
+              templateId,
+              sourceType: chunk.sourceType,
+              sourceId: chunk.sourceId,
+              chunkOrder: chunk.chunkOrder,
+              content: chunk.content,
+              metadata: chunk.metadata ?? {},
+            })),
+          );
+        }
       });
 
       await this.auditService.log({

@@ -55,12 +55,20 @@ export class ReportsService {
       new Set(rows.flatMap((row) => Object.keys(row))),
     );
     const escape = (value: unknown) => {
+      const isPrimitive =
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        typeof value === 'bigint' ||
+        typeof value === 'symbol';
       const normalized =
         value === null || value === undefined
           ? ''
-          : typeof value === 'object'
-            ? JSON.stringify(value)
-            : String(value);
+          : isPrimitive
+            ? String(value)
+            : typeof value === 'object'
+              ? JSON.stringify(value)
+              : '';
       return `"${normalized.replace(/"/g, '""')}"`;
     };
 
@@ -281,34 +289,58 @@ export class ReportsService {
 
   async getStudentPerformance(query: ReportQuery) {
     const classScopeIds = await this.resolveClassScopeIds(query);
-    const rows =
-      classScopeIds && classScopeIds.length === 0
-        ? []
-        : await this.db.query.performanceSnapshots.findMany({
-            where: and(
-              query.studentId
-                ? eq(performanceSnapshots.studentId, query.studentId)
-                : undefined,
-              classScopeIds
-                ? inArray(performanceSnapshots.classId, classScopeIds)
-                : undefined,
-            ),
-            with: {
-              student: {
-                columns: {
-                  id: true,
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
-              class: {
-                columns: { id: true, subjectName: true, subjectCode: true },
-              },
-            },
-            orderBy: [desc(performanceSnapshots.lastComputedAt)],
-          });
+    if (classScopeIds && classScopeIds.length === 0) {
+      const pagination = this.paginate(0, query);
+      return {
+        data: [],
+        total: 0,
+        page: pagination.page,
+        limit: pagination.limit,
+        totalPages: 0,
+        filters: this.toPublicFilters(query),
+        generatedAt: new Date().toISOString(),
+        csv: this.toCsv([]),
+      };
+    }
 
+    const { page, limit, offset } = this.paginate(0, query);
+
+    const whereClause = and(
+      query.studentId
+        ? eq(performanceSnapshots.studentId, query.studentId)
+        : undefined,
+      classScopeIds
+        ? inArray(performanceSnapshots.classId, classScopeIds)
+        : undefined,
+    );
+
+    const [rows, totalResult] = await Promise.all([
+      this.db.query.performanceSnapshots.findMany({
+        where: whereClause,
+        with: {
+          student: {
+            columns: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          class: {
+            columns: { id: true, subjectName: true, subjectCode: true },
+          },
+        },
+        orderBy: [desc(performanceSnapshots.lastComputedAt)],
+        limit,
+        offset,
+      }),
+      this.db
+        .select({ value: count() })
+        .from(performanceSnapshots)
+        .where(whereClause),
+    ]);
+
+    const total = totalResult[0]?.value ?? 0;
     const data = rows.map((row) => ({
       classId: row.classId,
       subjectName: row.class?.subjectName ?? '',
@@ -333,6 +365,10 @@ export class ReportsService {
 
     return {
       data,
+      total,
+      page,
+      limit,
+      totalPages: total > 0 ? Math.ceil(total / limit) : 0,
       filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(data),
@@ -344,11 +380,17 @@ export class ReportsService {
     if (classScopeIds && classScopeIds.length === 0) {
       return {
         data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
         filters: this.toPublicFilters(query),
         generatedAt: new Date().toISOString(),
         csv: this.toCsv([]),
       };
     }
+
+    const { page, limit, offset } = this.paginate(0, query);
 
     const whereClause = and(
       classScopeIds
@@ -360,30 +402,40 @@ export class ReportsService {
       this.buildDateRange(interventionCases.openedAt, query),
     );
 
-    const cases = await this.db.query.interventionCases.findMany({
-      where: whereClause,
-      with: {
-        class: {
-          columns: {
-            id: true,
-            subjectName: true,
-            subjectCode: true,
-          },
-          with: {
-            section: {
-              columns: { id: true, name: true, gradeLevel: true },
+    const [cases, totalResult] = await Promise.all([
+      this.db.query.interventionCases.findMany({
+        where: whereClause,
+        with: {
+          class: {
+            columns: {
+              id: true,
+              subjectName: true,
+              subjectCode: true,
+            },
+            with: {
+              section: {
+                columns: { id: true, name: true, gradeLevel: true },
+              },
             },
           },
+          student: {
+            columns: { id: true, firstName: true, lastName: true, email: true },
+          },
+          assignments: {
+            columns: { id: true, isCompleted: true, completedAt: true },
+          },
         },
-        student: {
-          columns: { id: true, firstName: true, lastName: true, email: true },
-        },
-        assignments: {
-          columns: { id: true, isCompleted: true, completedAt: true },
-        },
-      },
-      orderBy: [desc(interventionCases.openedAt)],
-    });
+        orderBy: [desc(interventionCases.openedAt)],
+        limit,
+        offset,
+      }),
+      this.db
+        .select({ value: count() })
+        .from(interventionCases)
+        .where(whereClause),
+    ]);
+
+    const total = totalResult[0]?.value ?? 0;
 
     const progressRows = cases.length
       ? await this.db.query.lxpProgress.findMany({
@@ -439,6 +491,10 @@ export class ReportsService {
 
     return {
       data,
+      total,
+      page,
+      limit,
+      totalPages: total > 0 ? Math.ceil(total / limit) : 0,
       filters: this.toPublicFilters(query),
       generatedAt: new Date().toISOString(),
       csv: this.toCsv(data),
@@ -464,6 +520,8 @@ export class ReportsService {
       this.buildDateRange(assessments.createdAt, query),
     );
 
+    const { limit, offset } = this.paginate(0, query);
+
     const rows = await this.db.query.assessments.findMany({
       where: whereClause,
       with: {
@@ -481,6 +539,8 @@ export class ReportsService {
         },
       },
       orderBy: [desc(assessments.createdAt)],
+      limit,
+      offset,
     });
 
     const assessmentIds = rows.map((row) => row.id);
@@ -493,6 +553,7 @@ export class ReportsService {
             isSubmitted: true,
             studentId: true,
           },
+          limit: 1000,
         })
       : [];
 

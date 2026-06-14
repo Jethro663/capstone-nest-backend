@@ -6,7 +6,9 @@ export class FinalizeAccessStudentGradesDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayNotEmpty({ message: 'studentIds must contain at least one student when provided' })
+  @ArrayNotEmpty({
+    message: 'studentIds must contain at least one student when provided',
+  })
   @IsUUID('4', { each: true, message: 'Each studentId must be a valid UUID' })
   studentIds?: string[];
 }

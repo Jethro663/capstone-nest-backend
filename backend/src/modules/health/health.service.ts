@@ -169,7 +169,8 @@ export class HealthService {
           runtimeProvider,
           embeddingRuntime,
           uploadMaterialization,
-          message: 'AI service reachable but upload materialization is degraded',
+          message:
+            'AI service reachable but upload materialization is degraded',
         };
       }
 
@@ -182,10 +183,13 @@ export class HealthService {
       };
     } catch (error) {
       const rawMessage =
-        error instanceof Error ? error.message : 'AI service health check failed';
-      const connectivityFailure = /fetch failed|econnrefused|enotfound|ehostunreach|socket hang up/i.test(
-        rawMessage,
-      );
+        error instanceof Error
+          ? error.message
+          : 'AI service health check failed';
+      const connectivityFailure =
+        /fetch failed|econnrefused|enotfound|ehostunreach|socket hang up/i.test(
+          rawMessage,
+        );
 
       return {
         ok: allowDegradedAi,

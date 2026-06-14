@@ -122,7 +122,8 @@ export class GenerateQuizDraftDto {
   quarter?: Quarter;
 
   @ApiPropertyOptional({
-    description: 'Source policy used by the AI service for quiz evidence selection',
+    description:
+      'Source policy used by the AI service for quiz evidence selection',
     enum: ['published_default', 'published_only', 'any_indexed'],
     default: 'published_default',
   })

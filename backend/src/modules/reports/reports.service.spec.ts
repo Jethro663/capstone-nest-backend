@@ -3,7 +3,10 @@ import { DatabaseService } from '../../database/database.service';
 import { ReportsService } from './reports.service';
 
 describe('ReportsService', () => {
+  const mockSelectWhere = jest.fn();
+  const mockSelectFrom = jest.fn(() => ({ where: mockSelectWhere }));
   const mockDb = {
+    select: jest.fn(() => ({ from: mockSelectFrom })),
     query: {
       classes: { findMany: jest.fn() },
       performanceSnapshots: { findMany: jest.fn() },
@@ -16,6 +19,7 @@ describe('ReportsService', () => {
     jest.clearAllMocks();
     mockDb.query.classes.findMany.mockResolvedValue([]);
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
+    mockSelectWhere.mockResolvedValue([{ value: 0 }]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

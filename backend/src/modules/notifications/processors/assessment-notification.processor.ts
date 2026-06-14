@@ -3,7 +3,11 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
-import { assessmentAttempts, classes, enrollments } from '../../../drizzle/schema';
+import {
+  assessmentAttempts,
+  classes,
+  enrollments,
+} from '../../../drizzle/schema';
 import {
   ASSESSMENT_ASSIGNED_JOB,
   ASSESSMENT_DUE_REMINDER_JOB,
@@ -126,7 +130,9 @@ export class AssessmentNotificationProcessor extends WorkerHost {
 
     if (!classRecord?.isActive || classRecord.section?.isActive === false) {
       this.logger.warn(
-        "[assessment-notifications] Class " + classId + " is archived or inactive. Skipping.",
+        '[assessment-notifications] Class ' +
+          classId +
+          ' is archived or inactive. Skipping.',
       );
       return [];
     }

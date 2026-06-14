@@ -5,6 +5,7 @@ Extraction Pipeline - processes a PDF file through:
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
@@ -2073,7 +2074,7 @@ async def run_extraction(
                 raise ValueError(
                     "Scanned PDF detected, but vision extraction is unavailable. Upload a text-based PDF or start the vision model."
                 )
-            vision_images = _render_pdf_pages_to_images(doc)
+            vision_images = await asyncio.to_thread(_render_pdf_pages_to_images, doc)
             doc.close()
             if not vision_images:
                 raise ValueError("Scanned PDF detected, but no renderable pages were available for vision extraction.")

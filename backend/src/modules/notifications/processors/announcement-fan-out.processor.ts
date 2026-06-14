@@ -52,7 +52,7 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
 
     if (!classRecord?.isActive || classRecord.section?.isActive === false) {
       this.logger.warn(
-        "[fan-out] Class " + classId + " is archived or inactive. Skipping.",
+        '[fan-out] Class ' + classId + ' is archived or inactive. Skipping.',
       );
       return;
     }

@@ -892,11 +892,10 @@ export class JaService {
           : null;
       if (!attemptId) return;
 
-      const current =
-        reviewAttemptStats.get(attemptId) ?? {
-          count: 0,
-          activeReviewSessionId: null,
-        };
+      const current = reviewAttemptStats.get(attemptId) ?? {
+        count: 0,
+        activeReviewSessionId: null,
+      };
       current.count += 1;
       if (session.status === 'active') {
         current.activeReviewSessionId = session.id;
@@ -1029,7 +1028,8 @@ export class JaService {
       dto.classId,
     );
     const selectedLessonContext = dto.lessonId
-      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      ? (lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ??
+        null)
       : null;
 
     if (dto.lessonId && !selectedLessonContext) {
@@ -1166,21 +1166,24 @@ export class JaService {
       );
     }
 
-    const latestContextMessage = await this.db.query.jaThreadMessages.findFirst({
-      where: and(
-        eq(jaThreadMessages.threadId, threadId),
-        eq(jaThreadMessages.role, 'system'),
-      ),
-      columns: {
-        content: true,
+    const latestContextMessage = await this.db.query.jaThreadMessages.findFirst(
+      {
+        where: and(
+          eq(jaThreadMessages.threadId, threadId),
+          eq(jaThreadMessages.role, 'system'),
+        ),
+        columns: {
+          content: true,
+        },
+        orderBy: [desc(jaThreadMessages.createdAt)],
       },
-      orderBy: [desc(jaThreadMessages.createdAt)],
-    });
+    );
     const persistedLessonContext = this.parseAskThreadContextMessage(
       latestContextMessage?.content,
     );
     const requestedLessonContext = dto.lessonId
-      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      ? (lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ??
+        null)
       : null;
 
     if (dto.lessonId && !requestedLessonContext) {

@@ -32,7 +32,7 @@ export class UpdateClassDto {
   @Transform(({ value }: { value?: string }) => trimValue(value))
   @Matches(SUBJECT_NAME_REGEX, {
     message:
-      "subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes",
+      'subjectName may only contain letters, numbers, spaces, hyphens, and apostrophes',
   })
   subjectName?: string;
 
@@ -40,7 +40,8 @@ export class UpdateClassDto {
   @IsString({ message: 'subjectCode must be a string' })
   @Transform(({ value }: { value?: string }) => upperTrimmedValue(value))
   @Matches(SUBJECT_CODE_REGEX, {
-    message: 'subjectCode may only contain uppercase letters, numbers, and hyphens',
+    message:
+      'subjectCode may only contain uppercase letters, numbers, and hyphens',
   })
   subjectCode?: string;
 

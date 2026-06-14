@@ -20,7 +20,7 @@ export class UpdateProfileDto {
   @MaxLength(30)
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "First name may only contain letters, spaces, hyphens, and apostrophes",
+      'First name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value: string }) => value?.trim())
   firstName?: string;
@@ -30,7 +30,7 @@ export class UpdateProfileDto {
   @MaxLength(30)
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "Middle name may only contain letters, spaces, hyphens, and apostrophes",
+      'Middle name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value: string }) => trimValue(value))
   middleName?: string;
@@ -40,7 +40,7 @@ export class UpdateProfileDto {
   @MaxLength(30)
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "Last name may only contain letters, spaces, hyphens, and apostrophes",
+      'Last name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value: string }) => value?.trim())
   lastName?: string;
@@ -89,7 +89,7 @@ export class UpdateProfileDto {
   @MaxLength(80)
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "Guardian name may only contain letters, spaces, hyphens, and apostrophes",
+      'Guardian name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value?: string }) => trimValue(value))
   familyName?: string;

@@ -1710,14 +1710,17 @@ export class SectionsService {
         eq(classRecords.id, classRecordFinalGrades.classRecordId),
       )
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)))
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      )
       .groupBy(classes.sectionId, classRecordFinalGrades.studentId);
 
     const classRecordCountRows = await this.db
       .select({
         sectionId: classes.sectionId,
-        totalRecords:
-          sql<number>`count(distinct ${classRecords.id})`.mapWith(Number),
+        totalRecords: sql<number>`count(distinct ${classRecords.id})`.mapWith(
+          Number,
+        ),
         finalizedRecords:
           sql<number>`count(distinct case when ${classRecords.status} in ('finalized', 'locked') then ${classRecords.id} end)`.mapWith(
             Number,
@@ -1725,7 +1728,9 @@ export class SectionsService {
       })
       .from(classes)
       .leftJoin(classRecords, eq(classRecords.classId, classes.id))
-      .where(and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)))
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      )
       .groupBy(classes.sectionId);
 
     const classRecordCountBySectionId = new Map<
@@ -1783,7 +1788,9 @@ export class SectionsService {
 
       const finalGradeKey = `${row.sectionId}:${row.studentId}`;
       const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
-      const classRecordCounts = classRecordCountBySectionId.get(row.sectionId) ?? {
+      const classRecordCounts = classRecordCountBySectionId.get(
+        row.sectionId,
+      ) ?? {
         totalRecords: 0,
         finalizedRecords: 0,
       };
@@ -2171,7 +2178,9 @@ export class SectionsService {
       })
       .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(and(eq(classes.sectionId, section.id), eq(classes.isActive, true)));
+      .where(
+        and(eq(classes.sectionId, section.id), eq(classes.isActive, true)),
+      );
 
     if (recordRows.length === 0) {
       throw new BadRequestException(
@@ -2179,8 +2188,13 @@ export class SectionsService {
       );
     }
 
-    const draftRecords = recordRows.filter((record) => record.status === 'draft');
-    const finalizedRecords: Array<{ classRecordId: string; subjectName: string }> = [];
+    const draftRecords = recordRows.filter(
+      (record) => record.status === 'draft',
+    );
+    const finalizedRecords: Array<{
+      classRecordId: string;
+      subjectName: string;
+    }> = [];
 
     for (const record of draftRecords) {
       await this.classRecordService.finalizeClassRecord(
@@ -2305,8 +2319,7 @@ export class SectionsService {
 
     if (unfinalizedStudents.length > 0) {
       throw new BadRequestException({
-        message:
-          'Finalize selected student grades before moving students up.',
+        message: 'Finalize selected student grades before moving students up.',
         unfinalizedStudents,
       });
     }

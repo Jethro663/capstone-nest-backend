@@ -152,7 +152,8 @@ export class ClassesService {
   }
 
   private normalizeTemplateAssessmentType(type: unknown) {
-    const normalized = typeof type === 'string' ? type.trim().toLowerCase() : '';
+    const normalized =
+      typeof type === 'string' ? type.trim().toLowerCase() : '';
 
     if (CLASS_ASSESSMENT_TYPES.has(normalized as any)) {
       return normalized as 'quiz' | 'exam' | 'assignment' | 'file_upload';
@@ -270,7 +271,8 @@ export class ClassesService {
   }) {
     return {
       writtenWork: Number(
-        classRecord.writtenWorkGradingWeight ?? DEFAULT_GRADING_PROFILE.writtenWork,
+        classRecord.writtenWorkGradingWeight ??
+          DEFAULT_GRADING_PROFILE.writtenWork,
       ),
       performanceTask: Number(
         classRecord.performanceTaskGradingWeight ??
@@ -489,8 +491,13 @@ export class ClassesService {
         throw new ForbiddenException('You do not have access to this class');
       }
 
-      if (!isAdmin && (!classRecord.isActive || classRecord.section?.isActive === false)) {
-        throw new ForbiddenException('This class is archived and temporarily inactive.');
+      if (
+        !isAdmin &&
+        (!classRecord.isActive || classRecord.section?.isActive === false)
+      ) {
+        throw new ForbiddenException(
+          'This class is archived and temporarily inactive.',
+        );
       }
 
       if (isTeacher && !isAdmin && classRecord.teacherId !== requesterId) {
@@ -786,26 +793,27 @@ export class ClassesService {
 
     const templateAssessmentIds = templateAssessments.map((entry) => entry.id);
     const templateLessonIds = templateLessons.map((entry) => entry.id);
-    const [templateAssessmentQuestions, templateLessonBlocks] = await Promise.all([
-      templateAssessmentIds.length
-        ? database.query.classTemplateAssessmentQuestions.findMany({
-            where: inArray(
-              classTemplateAssessmentQuestions.templateAssessmentId,
-              templateAssessmentIds,
-            ),
-            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-          })
-        : Promise.resolve([]),
-      templateLessonIds.length
-        ? database.query.classTemplateLessonBlocks.findMany({
-            where: inArray(
-              classTemplateLessonBlocks.templateLessonId,
-              templateLessonIds,
-            ),
-            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-          })
-        : Promise.resolve([]),
-    ]);
+    const [templateAssessmentQuestions, templateLessonBlocks] =
+      await Promise.all([
+        templateAssessmentIds.length
+          ? database.query.classTemplateAssessmentQuestions.findMany({
+              where: inArray(
+                classTemplateAssessmentQuestions.templateAssessmentId,
+                templateAssessmentIds,
+              ),
+              orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+            })
+          : Promise.resolve([]),
+        templateLessonIds.length
+          ? database.query.classTemplateLessonBlocks.findMany({
+              where: inArray(
+                classTemplateLessonBlocks.templateLessonId,
+                templateLessonIds,
+              ),
+              orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+            })
+          : Promise.resolve([]),
+      ]);
 
     const templateQuestionIds = templateAssessmentQuestions.map(
       (entry) => entry.id,
@@ -1266,25 +1274,23 @@ export class ClassesService {
     // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
 
     // If updating section, verify it exists
-    let targetSection:
-      | {
-          id: string;
-          name: string;
-          gradeLevel: string;
-          roomNumber: string | null;
-        }
-      | null = null;
+    let targetSection: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+      roomNumber: string | null;
+    } | null = null;
     if (updateClassDto.sectionId) {
       targetSection =
         (await this.db.query.sections.findFirst({
-        where: eq(sections.id, updateClassDto.sectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          roomNumber: true,
-        },
-      })) ?? null;
+          where: eq(sections.id, updateClassDto.sectionId),
+          columns: {
+            id: true,
+            name: true,
+            gradeLevel: true,
+            roomNumber: true,
+          },
+        })) ?? null;
 
       if (!targetSection) {
         throw new BadRequestException(
@@ -1337,14 +1343,14 @@ export class ClassesService {
       if (!targetSection) {
         targetSection =
           (await this.db.query.sections.findFirst({
-          where: eq(sections.id, existing.sectionId),
-          columns: {
-            id: true,
-            name: true,
-            gradeLevel: true,
-            roomNumber: true,
-          },
-        })) ?? null;
+            where: eq(sections.id, existing.sectionId),
+            columns: {
+              id: true,
+              name: true,
+              gradeLevel: true,
+              roomNumber: true,
+            },
+          })) ?? null;
       }
 
       if (!targetSection) {
@@ -1527,7 +1533,8 @@ export class ClassesService {
         isHidden: hiddenClassIds.has(classRecord.id),
       }))
       .filter((classRecord) => {
-        const isArchived = !classRecord.isActive || classRecord.section?.isActive === false;
+        const isArchived =
+          !classRecord.isActive || classRecord.section?.isActive === false;
         if (status === 'hidden') return classRecord.isHidden;
         if (classRecord.isHidden) return false;
         if (status === 'active') return !isArchived;

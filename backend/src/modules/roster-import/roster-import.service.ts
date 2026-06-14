@@ -56,7 +56,9 @@ export class RosterImportService {
     return this.databaseService.db;
   }
 
-  private toMiddleInitial(middleName: string | null | undefined): string | null {
+  private toMiddleInitial(
+    middleName: string | null | undefined,
+  ): string | null {
     if (!middleName) return null;
     const trimmed = middleName.trim();
     if (!trimmed) return null;
@@ -551,17 +553,16 @@ export class RosterImportService {
           );
         }
 
-        let studentRole =
-          tx.query?.roles
-            ? await tx.query.roles.findFirst({
-                where: eq(roles.name, 'student'),
-              })
-            : (
-                await tx
-                  .select({ id: roles.id })
-                  .from(roles)
-                  .where(eq(roles.name, 'student'))
-              )[0];
+        let studentRole = tx.query?.roles
+          ? await tx.query.roles.findFirst({
+              where: eq(roles.name, 'student'),
+            })
+          : (
+              await tx
+                .select({ id: roles.id })
+                .from(roles)
+                .where(eq(roles.name, 'student'))
+            )[0];
 
         if (!studentRole) {
           try {
@@ -574,17 +575,16 @@ export class RosterImportService {
               .returning({ id: roles.id });
             studentRole = createdRoles[0] ?? null;
           } catch {
-            studentRole =
-              tx.query?.roles
-                ? await tx.query.roles.findFirst({
-                    where: eq(roles.name, 'student'),
-                  })
-                : (
-                    await tx
-                      .select({ id: roles.id })
-                      .from(roles)
-                      .where(eq(roles.name, 'student'))
-                  )[0];
+            studentRole = tx.query?.roles
+              ? await tx.query.roles.findFirst({
+                  where: eq(roles.name, 'student'),
+                })
+              : (
+                  await tx
+                    .select({ id: roles.id })
+                    .from(roles)
+                    .where(eq(roles.name, 'student'))
+                )[0];
           }
         }
 

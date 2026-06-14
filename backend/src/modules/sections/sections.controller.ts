@@ -145,9 +145,8 @@ export class SectionsController {
   async getAccessStudentsTargetSections(
     @Query() query: AccessStudentsTargetSectionsQueryDto,
   ) {
-    const data = await this.sectionsService.getAccessStudentsTargetSections(
-      query,
-    );
+    const data =
+      await this.sectionsService.getAccessStudentsTargetSections(query);
     return { success: true, data };
   }
 

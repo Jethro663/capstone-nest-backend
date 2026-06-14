@@ -27,7 +27,8 @@ export class ExtractModuleDto {
   fileId: string;
 
   @ApiProperty({
-    description: 'Teacher-selected target section count for structured extraction.',
+    description:
+      'Teacher-selected target section count for structured extraction.',
     example: 4,
     enum: [3, 4, 5],
   })
@@ -250,7 +251,9 @@ export class ExtractionMediaCandidateDto {
   @IsNumber()
   score: number;
 
-  @ApiPropertyOptional({ description: 'Whether the candidate was an explicit citation match' })
+  @ApiPropertyOptional({
+    description: 'Whether the candidate was an explicit citation match',
+  })
   @IsOptional()
   @IsBoolean()
   explicitMatch?: boolean;
@@ -322,7 +325,9 @@ export class ExtractionMediaAssetDto {
   @Type(() => ExtractionMediaCandidateDto)
   candidateSections?: ExtractionMediaCandidateDto[];
 
-  @ApiPropertyOptional({ description: 'Whether a teacher has reviewed this image placement' })
+  @ApiPropertyOptional({
+    description: 'Whether a teacher has reviewed this image placement',
+  })
   @IsOptional()
   @IsBoolean()
   teacherReviewed?: boolean;
@@ -410,7 +415,8 @@ export class UpdateExtractionDto {
   sections?: ExtractionSectionDto[];
 
   @ApiPropertyOptional({
-    description: 'Teacher review issue state from the extraction review workspace',
+    description:
+      'Teacher review issue state from the extraction review workspace',
     type: [Object],
   })
   @IsOptional()

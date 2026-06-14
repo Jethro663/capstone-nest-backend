@@ -1855,7 +1855,9 @@ export class AiMentorController {
 
   @Post('extractions/:id/apply/preview')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Preview extraction apply result before writing draft content' })
+  @ApiOperation({
+    summary: 'Preview extraction apply result before writing draft content',
+  })
   async previewApplyExtraction(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ApplyExtractionDto,
@@ -1877,7 +1879,9 @@ export class AiMentorController {
         error instanceof Error
           ? error.message
           : 'Unknown extraction apply preview error';
-      this.logger.warn(`AI extraction apply preview unavailable for ${id}: ${message}`);
+      this.logger.warn(
+        `AI extraction apply preview unavailable for ${id}: ${message}`,
+      );
       throw new ServiceUnavailableException(
         'AI extraction apply preview is temporarily unavailable. Please retry shortly.',
       );
@@ -1933,9 +1937,13 @@ export class AiMentorController {
           ),
           moduleId: this.readStringField(result, 'moduleId'),
           alreadyApplied: Boolean(
-            (result as { data?: { alreadyApplied?: unknown }; alreadyApplied?: unknown })
-              ?.data?.alreadyApplied ??
-              (result as { alreadyApplied?: unknown })?.alreadyApplied,
+            (
+              result as {
+                data?: { alreadyApplied?: unknown };
+                alreadyApplied?: unknown;
+              }
+            )?.data?.alreadyApplied ??
+            (result as { alreadyApplied?: unknown })?.alreadyApplied,
           ),
         },
       });
@@ -2386,7 +2394,9 @@ export class AiMentorController {
 
   @Post('teacher/quizzes/jobs/:jobId/apply/preview')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Preview AI quiz draft apply result before assessment creation' })
+  @ApiOperation({
+    summary: 'Preview AI quiz draft apply result before assessment creation',
+  })
   async previewQuizDraftApply(
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -2409,7 +2419,9 @@ export class AiMentorController {
 
   @Post('teacher/quizzes/jobs/:jobId/apply')
   @Roles(RoleName.Teacher, RoleName.Admin)
-  @ApiOperation({ summary: 'Apply reviewed AI quiz draft as an unpublished assessment' })
+  @ApiOperation({
+    summary: 'Apply reviewed AI quiz draft as an unpublished assessment',
+  })
   async applyQuizDraft(
     @Param('jobId', ParseUUIDPipe) jobId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
@@ -2751,11 +2763,7 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherClassAccess(classId, user);
-    return this.proxy.forward(
-      'GET',
-      `/index/classes/${classId}/status`,
-      user,
-    );
+    return this.proxy.forward('GET', `/index/classes/${classId}/status`, user);
   }
 
   @Post('index/classes/:classId')

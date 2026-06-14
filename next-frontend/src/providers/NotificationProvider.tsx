@@ -89,7 +89,7 @@ async function buildStudentPendingTaskReminder(studentId: string): Promise<Notif
   const [classesRes, historyRes] = await Promise.all([
     classService.getByStudent(studentId, 'active').catch(() => classService.getByStudent(studentId, 'all')),
     profileService
-      .getAssessmentHistory({ page: 1, limit: 300, submission: 'submitted' })
+      .getAssessmentHistory({ page: 1, limit: 100, submission: 'submitted' })
       .catch(() => null),
   ]);
 

@@ -132,7 +132,8 @@ export class LibraryFileValidationPipe implements PipeTransform {
       header[7] === 0x0a;
     const riffHeader = header.subarray(0, 4).toString('ascii');
     const webpHeader = await this.readBytes(file, 8, 4);
-    const isWebp = riffHeader === 'RIFF' && webpHeader.toString('ascii') === 'WEBP';
+    const isWebp =
+      riffHeader === 'RIFF' && webpHeader.toString('ascii') === 'WEBP';
     const isZip = header[0] === 0x50 && header[1] === 0x4b;
     const looksBinary = header.includes(0x00);
 

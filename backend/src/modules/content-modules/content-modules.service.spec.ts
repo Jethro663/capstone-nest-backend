@@ -387,7 +387,11 @@ describe('ContentModulesService', () => {
     db.select.mockReturnValue({ from });
 
     const values = jest.fn().mockImplementation((payload) => ({
-      returning: jest.fn().mockResolvedValue([{ id: `item-${values.mock.calls.length}`, ...payload }]),
+      returning: jest
+        .fn()
+        .mockResolvedValue([
+          { id: `item-${values.mock.calls.length}`, ...payload },
+        ]),
     }));
     db.insert.mockReturnValue({ values });
 
@@ -444,7 +448,11 @@ describe('ContentModulesService', () => {
     db.select.mockReturnValue({ from });
 
     const values = jest.fn().mockImplementation((payload) => ({
-      returning: jest.fn().mockResolvedValue([{ id: `item-${values.mock.calls.length}`, ...payload }]),
+      returning: jest
+        .fn()
+        .mockResolvedValue([
+          { id: `item-${values.mock.calls.length}`, ...payload },
+        ]),
     }));
     db.insert.mockReturnValue({ values });
 
@@ -587,7 +595,9 @@ describe('ContentModulesService', () => {
 
     const returning = jest
       .fn()
-      .mockResolvedValue([{ id: MODULE_ID, classId: CLASS_ID, isVisible: true, isLocked: false }]);
+      .mockResolvedValue([
+        { id: MODULE_ID, classId: CLASS_ID, isVisible: true, isLocked: false },
+      ]);
     const where = jest.fn().mockReturnValue({ returning });
     const set = jest.fn().mockReturnValue({ where });
     db.update.mockReturnValueOnce({ set });

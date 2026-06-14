@@ -296,7 +296,7 @@ export default function AdminCalendarPage() {
     const initialize = async () => {
       try {
         setLoading(true);
-        const classResponse = await classService.getAll({ limit: 300 });
+        const classResponse = await classService.getAll({ limit: 100 });
         if (!active) return;
         const classRows = classResponse.data?.data || [];
         setClasses(classRows);
