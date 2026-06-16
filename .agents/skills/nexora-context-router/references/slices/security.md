@@ -8,7 +8,7 @@ Load this for auth, RBAC, PII, session, or audit-sensitive work.
 - Global validation and CORS: `backend/src/main.ts`
 - Auth module and guards: `backend/src/modules/auth`
 - Web auth client: `next-frontend/src/lib/api-client.ts`, `next-frontend/src/providers/AuthProvider.tsx`
-- Mobile auth client: `test-mobile/src/api/client.ts`, `test-mobile/src/providers/AuthProvider.tsx`
+- Mobile auth client: `mobile/src/api/client.ts`, `mobile/src/providers/AuthProvider.tsx`
 - Audit logging: `backend/src/modules/audit`
 
 ## Guardrails

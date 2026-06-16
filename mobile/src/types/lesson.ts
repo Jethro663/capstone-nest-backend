@@ -1,4 +1,4 @@
-export type ContentBlockType = 'text' | 'image' | 'video' | 'question' | 'file' | 'divider';
+export type ContentBlockType = "text" | "image" | "video" | "question" | "file" | "divider";
 
 export interface ContentBlock {
   id: string;
@@ -19,6 +19,11 @@ export interface Lesson {
   contentBlocks?: ContentBlock[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface BulkLessonDraftStateDto {
+  lessonIds: string[];
+  isDraft: boolean;
 }
 
 export interface LessonCompletion {

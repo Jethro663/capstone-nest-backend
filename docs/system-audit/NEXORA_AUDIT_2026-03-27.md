@@ -9,7 +9,7 @@ The main risk before this pass was not missing core modules. It was verification
 - `next-frontend`: `npm run lint` completes with `0` errors and `22` warnings, `npm run test` passes, and `npm run build` passes.
 - `backend`: `npm run build` passes.
 - `ai-service`: `python scripts/run_tests.py` passes and no longer depends on shell-specific `PYTHONPATH` setup.
-- `test-mobile`: `npm run typecheck` passes.
+- `mobile`: `npm run typecheck` passes.
 
 ## Concept Paper Alignment
 
@@ -52,7 +52,7 @@ The main risk before this pass was not missing core modules. It was verification
 - Import/start path is healthy.
 - A repo-owned runner now exists so validation is stable across shells and working directories.
 
-### `test-mobile`
+### `mobile`
 
 - `npm run typecheck`: passes.
 - The mobile target currently reflects the student experience, which is consistent with the current repo architecture even if it is not teacher/admin parity on mobile.

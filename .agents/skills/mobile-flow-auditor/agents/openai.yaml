@@ -1,4 +1,4 @@
 interface:
   display_name: "Mobile Flow Auditor"
   short_description: "Audit student mobile auth, navigation, and API flows"
-  default_prompt: "Use $mobile-flow-auditor to audit student login and navigation flows in test-mobile for this repo."
+  default_prompt: "Use $mobile-flow-auditor to audit student login and navigation flows in mobile for this repo."

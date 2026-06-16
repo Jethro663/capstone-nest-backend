@@ -1,10 +1,12 @@
-import type { PropsWithChildren } from 'react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from '@/api/queryClient';
-import { AuthProvider } from '@/providers/AuthProvider';
-import { ErrorModalProvider } from '@/providers/ErrorModalProvider';
+import type { PropsWithChildren } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { queryClient } from "../api/queryClient";
+import { AuthProvider } from "./AuthProvider";
+import { ErrorModalProvider } from "./ErrorModalProvider";
+import { LiveNotificationProvider } from "./LiveNotificationProvider";
+import { StudentInterventionAlertProvider } from "./StudentInterventionAlertProvider";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -12,7 +14,11 @@ export function AppProviders({ children }: PropsWithChildren) {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <ErrorModalProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <StudentInterventionAlertProvider>
+                <LiveNotificationProvider>{children}</LiveNotificationProvider>
+              </StudentInterventionAlertProvider>
+            </AuthProvider>
           </ErrorModalProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

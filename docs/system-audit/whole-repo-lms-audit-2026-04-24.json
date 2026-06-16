@@ -3,7 +3,7 @@
   "repo": "C:\\Users\\jethr\\Desktop\\capstone-nest-react-lms",
   "scope": {
     "live": ["backend", "next-frontend", "ai-service"],
-    "excluded_live": ["test-mobile"]
+    "excluded_live": ["mobile"]
   },
   "services": {
     "backendReady": true,

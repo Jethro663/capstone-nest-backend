@@ -1,19 +1,19 @@
 ---
 name: mobile-flow-auditor
-description: Use when auditing student mobile login, navigation, query invalidation, or backend-contract health in test-mobile for capstone-nest-react-lms.
+description: Use when auditing student mobile login, navigation, query invalidation, or backend-contract health in mobile for capstone-nest-react-lms.
 ---
 
 # Mobile Flow Auditor
 
-Audit the `test-mobile` app as the default Nexora mobile target. Treat it as a student-scoped flow audit, not a generic Expo styling pass.
+Audit the `mobile` app as the default Nexora mobile target. Treat it as a student-scoped flow audit, not a generic Expo styling pass.
 
 ## Quick Start
 
 - Emit:
-  `ROUTER_TRACE task=mobile-audit include=kernel,test-mobile optional_skipped=<unneeded slices> exclude=mobile,betamochi,<other unrelated slices> reason=<one line>`
+  `ROUTER_TRACE task=mobile-audit include=kernel,mobile optional_skipped=<unneeded slices> exclude=mobile,betamochi,<other unrelated slices> reason=<one line>`
 - Load:
   - root `AGENTS.md`
-  - `test-mobile/AGENTS.md`
+  - `mobile/AGENTS.md`
   - backend slice when the audited flow depends on live API behavior
 
 ## Scope

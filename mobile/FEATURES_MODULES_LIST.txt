@@ -1,9 +1,9 @@
 Test-Mobile (Expo) — Modules & Features Inventory
 
-Repository path: test-mobile/
+Repository path: mobile/
 Generated: 2026-04-20
 
-Purpose: concise inventory of modules, exported components, types, and features in the `test-mobile` Expo app. Use this as the basis for Figma design prompts (features, screens, components, and flows to improve).
+Purpose: concise inventory of modules, exported components, types, and features in the `mobile` Expo app. Use this as the basis for Figma design prompts (features, screens, components, and flows to improve).
 
 Overview - Primary Features
 - Authentication & session (login flow, auth provider)

@@ -121,11 +121,11 @@ INSIGHTS = {
     "mobile_partial": {
         "best": "The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.",
         "short": "Mobile exists, but parity is not equal across roles.",
-        "long": "The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.",
+        "long": "The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.",
         "evidence": [
-            "Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.",
-            "Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.",
-            "Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections."
+            "Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.",
+            "Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.",
+            "Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections."
         ],
         "avoid": "Do not say all web features are fully available on mobile.",
         "incomplete": "If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.",
@@ -223,10 +223,10 @@ INSIGHTS = {
     "admin_mobile_placeholder": {
         "best": "Admin mobile support should be treated as limited. The current mobile codebase includes placeholder-style admin workspace sections rather than full parity.",
         "short": "Admin mobile is not a defense centerpiece.",
-        "long": "The test-mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.",
+        "long": "The mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.",
         "evidence": [
-            "Repo: test-mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.",
-            "Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text."
+            "Repo: mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.",
+            "Repo: mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text."
         ],
         "avoid": "Do not offer to demo admin mobile unless explicitly required and clearly framed as limited.",
         "incomplete": "If asked, say administration remains strongest on web in the current scope.",
@@ -235,10 +235,10 @@ INSIGHTS = {
     "teacher_mobile_partial": {
         "best": "Teacher mobile is materially better than a placeholder because teacher tabs and detail screens exist, but it still should not be described as full web parity unless verified live.",
         "short": "Teacher mobile exists in code, but it is still safer to treat web as the primary teacher surface.",
-        "long": "The current test-mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.",
+        "long": "The current mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.",
         "evidence": [
             "Repo: AppNavigator includes TeacherTabs and TeacherNavigator.",
-            "Repo: teacher screens exist under test-mobile/src/screens."
+            "Repo: teacher screens exist under mobile/src/screens."
         ],
         "avoid": "Do not promise full feature parity until you have live proof on the defense device.",
         "incomplete": "Use 'teacher mobile workflows are present in prototype scope' if you cannot verify every flow live.",
@@ -325,7 +325,7 @@ GENERAL_QUESTIONS = [
     q("Why not just recommend Google Classroom plus a separate tutor bot?", "This attacks the need for integration.", "High", "overview_honest"),
     q("What school process becomes easier because of Nexora?", "They want a workflow-level benefit, not just a feature list.", "Medium", "overview_honest"),
     q("Why is targeted intervention better than generic review for everyone in this project?", "This probes the intervention philosophy.", "High", "fairness_access"),
-    q("What evidence shows the project is more than mock UI?", "They want proof of implementation depth.", "High", "overview_honest", evidence_extra=["Repo: backend, next-frontend, ai-service, and test-mobile all have substantive modules and routes."]),
+    q("What evidence shows the project is more than mock UI?", "They want proof of implementation depth.", "High", "overview_honest", evidence_extra=["Repo: backend, next-frontend, ai-service, and mobile all have substantive modules and routes."]),
     q("If the panel remembers only one sentence, what should it be?", "This reveals the maturity of the team's narrative.", "Medium", "overview_honest"),
 ]
 
@@ -1386,7 +1386,7 @@ def build_main_report_markdown() -> str:
         "docker-compose.yml",
         "backend/package.json",
         "next-frontend/package.json",
-        "test-mobile/package.json",
+        "mobile/package.json",
         "ai-service/README.md",
         "backend/src/modules/lxp/lxp.service.ts",
         "backend/src/main.ts",
@@ -1396,11 +1396,11 @@ def build_main_report_markdown() -> str:
         "backend/src/drizzle/schema/ai-mentor.schema.ts",
         "backend/src/modules/otp/otp.service.ts",
         "backend/src/modules/auth/auth.controller.ts",
-        "test-mobile/src/navigation/types.ts",
-        "test-mobile/src/navigation/AppNavigator.tsx",
-        "test-mobile/src/screens/LoginScreen.tsx",
-        "test-mobile/src/screens/VerifyEmailScreen.tsx",
-        "test-mobile/src/screens/RoleWorkspaceScreen.tsx",
+        "mobile/src/navigation/types.ts",
+        "mobile/src/navigation/AppNavigator.tsx",
+        "mobile/src/screens/LoginScreen.tsx",
+        "mobile/src/screens/VerifyEmailScreen.tsx",
+        "mobile/src/screens/RoleWorkspaceScreen.tsx",
         "ai-service/app/retrieval_service.py",
         "paper_claims_extracted.md",
         "implementation_truth_table.md",

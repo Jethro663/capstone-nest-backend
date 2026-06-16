@@ -45,7 +45,7 @@ The current system also contains features not called out clearly in the DOCX, es
 | 2 | LXP Module | 80% | Exists | Covered by `LxpScreen`, LXP service, checkpoint actions, class-linked playlist flow, rendered regression coverage. |
 | 3 | AI Mentor (AI NPC) | 80% | Exists | Covered by `AiTutorScreen`, `JaScreen`, AI/JA services, Ask/Practice/Review contracts. |
 | 4 | Security & Data Management Module | 100% | Exists | Covered by mobile auth endpoints, secure token storage, API client, refresh/logout flows, shared backend RBAC. |
-| 5 | Mobile Access Module | 100% | Exists | Covered by Expo `test-mobile`, student route manifest, screen parity tests, mobile API/service hooks. |
+| 5 | Mobile Access Module | 100% | Exists | Covered by Expo `mobile`, student route manifest, screen parity tests, mobile API/service hooks. |
 
 ## Evidence Inventory
 
@@ -119,7 +119,7 @@ No DOCX module is fully absent. The items below are the closest thing to impleme
 | Reporting | Export and scope proof | Verify each report endpoint/page with admin and teacher scopes, including CSV/export behavior and audit log creation. |
 | System Evaluation | End-to-end proof | Verify teacher/student feedback submission and admin/teacher aggregation views against real records, not only unit/e2e coverage. |
 | Security & Data Management | Regression breadth | Continue expanding regression checks for sensitive write paths and include a short security evidence appendix in the final report. |
-| Mobile Access | Emulator proof | Run `test-mobile` typecheck/tests plus one live Android login/data-backed flow when preparing the next report update. |
+| Mobile Access | Emulator proof | Run `mobile` typecheck/tests plus one live Android login/data-backed flow when preparing the next report update. |
 
 ## Suggested Updated Percentages
 
@@ -192,8 +192,8 @@ Local services used: Postgres local service, local Ollama, `ai-service` via loca
 
 | Check | Result | Evidence |
 |---|---|---|
-| `test-mobile npm run typecheck` | Pass | TypeScript completed with no errors. |
-| `test-mobile npm run test` | Pass | `17` suites, `128` tests passed. |
+| `mobile npm run typecheck` | Pass | TypeScript completed with no errors. |
+| `mobile npm run test` | Pass | `17` suites, `128` tests passed. |
 | Emulator/live Android flow | Not run | This pass verified mobile code/test runtime only; no ADB/emulator session was launched. |
 
 ### Web Runtime Route Sweep

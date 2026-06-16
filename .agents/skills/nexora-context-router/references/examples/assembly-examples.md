@@ -8,14 +8,14 @@
 
 ## Add an Assessment Column and Wire It to Mobile
 
-- Include: kernel, `contract-change-orchestrator`, backend, schema, `test-mobile`
+- Include: kernel, `contract-change-orchestrator`, backend, schema, `mobile`
 - Optional: `next-frontend` if the shared API contract also feeds web, plus testing and security as needed
 - Exclude by default: unrelated slices
 
 ## Docker Compose Starts but AI Service Is Unhealthy
 
 - Include: kernel, `dev-stack-doctor`, backend, ai-service
-- Optional: next-frontend or `test-mobile` only if the failure symptom names them
+- Optional: next-frontend or `mobile` only if the failure symptom names them
 - Exclude by default: unrelated slices
 
 ## Run the Safest Checks After Changing Submission Flow
@@ -26,9 +26,9 @@
 
 ## Audit Student Mobile Login and Navigation
 
-- Include: kernel, `mobile-flow-auditor`, `test-mobile`, backend, testing
+- Include: kernel, `mobile-flow-auditor`, `mobile`, backend, testing
 - Optional: security for refresh or secure-storage symptoms
-- Exclude by default: `mobile/`, `betamochi/`, unrelated slices
+- Exclude by default: unrelated slices
 
 ## Optimize Backend and AI Latency
 
@@ -46,7 +46,7 @@
 
 - Include: kernel, backend, security
 - Optional: schema if DTO/query/table shape changes; testing if tests are requested
-- Exclude by default: frontend, `test-mobile`, ai-service
+- Exclude by default: frontend, `mobile`, ai-service
 
 ## Fix a Teacher Dashboard Bug
 

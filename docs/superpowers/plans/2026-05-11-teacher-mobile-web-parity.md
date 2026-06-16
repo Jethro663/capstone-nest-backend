@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring `test-mobile/` teacher functionality to practical 1:1 feature parity with the current Next.js teacher web surface before any push, without touching unrelated subsystems.
+**Goal:** Bring `mobile/` teacher functionality to practical 1:1 feature parity with the current Next.js teacher web surface before any push, without touching unrelated subsystems.
 
 **Architecture:** Keep the mobile app as a React Native client over the existing NestJS API contracts. Add mobile route coverage, missing teacher screens, service wrappers, and focused parity tests. Reuse current teacher mobile primitives and service styles instead of redesigning the app.
 
@@ -43,7 +43,7 @@
 ## Verification Commands
 
 ```powershell
-cd C:\Users\jethr\Desktop\capstone-nest-react-lms\test-mobile
+cd C:\Users\jethr\Desktop\capstone-nest-react-lms\mobile
 npm run typecheck
 npm test -- --runInBand
 ```

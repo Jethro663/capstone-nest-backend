@@ -126,7 +126,7 @@ NEXT_PUBLIC_WS_URL=https://<backend-fqdn>
 
 ### Mobile
 
-Use [`mobile/.env.example`](../mobile/.env.example) or [`test-mobile/.env.example`](../test-mobile/.env.example).
+Use [`mobile/.env.example`](../mobile/.env.example) or [`mobile/.env.example`](../mobile/.env.example).
 
 ```env
 EXPO_PUBLIC_API_URL=https://<backend-fqdn>/api

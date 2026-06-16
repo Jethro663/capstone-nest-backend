@@ -42,5 +42,5 @@ Use available MCP tools by default when they are a better fit than raw shell ins
 ## Do Not Force MCP Tools When
 
 - the task is package, git, build, seed, test, or server startup work
-- the target is `test-mobile` runtime behavior that Playwright does not cover
+- the target is `mobile` runtime behavior that Playwright does not cover
 - a repo script already gives the highest-signal answer

@@ -4,6 +4,10 @@ export interface Announcement {
   title: string;
   content: string;
   isPinned: boolean;
+  isVisible?: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   scheduledAt?: string;
   isArchived: boolean;
   fileIds?: string[];
@@ -11,4 +15,19 @@ export interface Announcement {
   author?: { firstName?: string; lastName?: string };
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CreateAnnouncementDto {
+  title: string;
+  content: string;
+  isPinned?: boolean;
+  scheduledAt?: string;
+  fileIds?: string[];
+}
+
+export interface UpdateAnnouncementDto {
+  title?: string;
+  content?: string;
+  isPinned?: boolean;
+  scheduledAt?: string;
 }

@@ -6,7 +6,7 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 ## Identity
 - Repo: Nexora LMS/LXP for Gat Andres Bonifacio High School.
 - Stack: NestJS 11 + Drizzle + PostgreSQL, Next.js App Router + React + Tailwind, Expo mobile, FastAPI + Ollama, BullMQ + Redis, JWT + refresh tokens.
-- Default mobile target for generic `mobile` work: `test-mobile/`.
+- Default mobile target for generic `mobile` work: `mobile/`.
 - Priority order: correctness, security, maintainability, performance, then speed.
 
 ## Router Contract
@@ -39,10 +39,10 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 - `backend/AGENTS.md`
 - `next-frontend/AGENTS.md`
 - `ai-service/AGENTS.md`
-- `test-mobile/AGENTS.md`
+- `mobile/AGENTS.md`
 
 ## Legacy Exclusions
-- `mobile/` and `betamochi/` are legacy-target notices. Do not route generic mobile work there unless the prompt names the folder.
+- If archived mobile folders are restored for reference, do not route generic mobile work there unless the prompt names the folder explicitly.
 
 ## References
 - Router skill: `.agents/skills/nexora-context-router/SKILL.md`

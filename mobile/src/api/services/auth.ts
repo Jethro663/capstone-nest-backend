@@ -1,16 +1,18 @@
-import { apiClient, clearAuthSession, publicClient, setAccessToken } from '@/api/client';
-import { persistAccessToken } from '@/api/storage';
-import { unwrapEnvelope } from '@/api/http';
+import { apiClient, clearAuthSession, getRefreshToken, persistAuthTokens, publicClient } from "../client";
+import { unwrapEnvelope } from "../http";
+import type { ApiEnvelope } from "../../types/api";
 import type {
   AuthSession,
+  ForgotPasswordPayload,
   LoginPayload,
+  ResendOtpPayload,
   ResetPasswordPayload,
   SetActivationPasswordPayload,
-  VerifyEmailPayload,
-} from '@/types/auth';
-import type { ApiEnvelope } from '@/types/api';
-import type { UpdateProfileDto } from '@/types/profile';
-import type { User } from '@/types/user';
+  ValidateCredentialsPayload,
+  VerifyOtpPayload,
+} from "../../types/auth";
+import type { UpdateProfileDto } from "../../types/profile";
+import type { User } from "../../types/user";
 
 export const authApi = {
   async login(payload: LoginPayload): Promise<AuthSession> {
@@ -18,61 +20,76 @@ export const authApi = {
       ApiEnvelope<{
         user: User;
         accessToken: string;
+        refreshToken: string;
       }>
-    >('/auth/login', payload);
+    >("/auth/mobile/login", payload);
+
     const data = unwrapEnvelope(response.data);
-    setAccessToken(data.accessToken);
-    await persistAccessToken(data.accessToken);
+    await persistAuthTokens({
+      accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
+    });
+
     return {
       accessToken: data.accessToken,
+      refreshToken: data.refreshToken,
       user: data.user,
     };
   },
 
   async logout() {
-    await apiClient.post('/auth/logout', {});
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      await publicClient.post("/auth/mobile/logout", { refreshToken });
+    }
     await clearAuthSession();
   },
 
   async getCurrentUser() {
-    const response = await apiClient.get<ApiEnvelope<{ user: User }>>('/auth/me');
+    const response = await apiClient.get<ApiEnvelope<{ user: User }>>("/auth/me");
     return unwrapEnvelope(response.data).user;
-  },
-
-  async forgotPassword(email: string) {
-    await publicClient.post('/auth/forgot-password', { email });
-  },
-
-  async resetPassword(payload: ResetPasswordPayload) {
-    await publicClient.post('/auth/reset-password', payload);
-  },
-
-  async validateCredentials(payload: LoginPayload) {
-    await publicClient.post('/auth/validate-credentials', payload);
-  },
-
-  async verifyEmail(payload: VerifyEmailPayload) {
-    await publicClient.post('/otp/verify', payload);
-  },
-
-  async resendOtp(email: string) {
-    await publicClient.post('/otp/resend', { email });
-  },
-
-  async setActivationPassword(payload: SetActivationPasswordPayload) {
-    await publicClient.post('/auth/set-activation-password', payload);
   },
 
   async updateProfile(payload: UpdateProfileDto) {
-    const response = await apiClient.patch<ApiEnvelope<{ user: User }>>('/auth/profile', payload);
+    const response = await apiClient.patch<ApiEnvelope<{ user: User }>>("/auth/profile", payload);
     return unwrapEnvelope(response.data).user;
   },
 
-  async changePassword(payload: {
-    oldPassword: string;
-    newPassword: string;
-    confirmPassword: string;
-  }) {
-    await apiClient.post('/auth/change-password', payload);
+  async validateCredentials(payload: ValidateCredentialsPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ valid?: boolean }> & { success?: boolean }>(
+      "/auth/validate-credentials",
+      payload,
+    );
+    const data = unwrapEnvelope(response.data);
+    if (typeof data.valid === "boolean") {
+      return data.valid;
+    }
+
+    return response.data.success === true;
+  },
+
+  async verifyEmail(payload: VerifyOtpPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ verified?: boolean }>>("/otp/verify", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async resendOtp(payload: ResendOtpPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ sent?: boolean }>>("/otp/resend", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async forgotPassword(payload: ForgotPasswordPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ sent?: boolean }>>("/auth/forgot-password", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async resetPassword(payload: ResetPasswordPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ success?: boolean }>>("/auth/reset-password", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async setActivationPassword(payload: SetActivationPasswordPayload) {
+    const response = await publicClient.post<ApiEnvelope<{ success?: boolean }>>("/auth/set-activation-password", payload);
+    return unwrapEnvelope(response.data);
   },
 };

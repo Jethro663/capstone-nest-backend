@@ -46,7 +46,7 @@ Verdict: **Better, but still needs revision before panel.**
 - Evidence:
   - Research paper: docs/research-paper-audit/extracted/full_text.txt:563-564
   - Repo: backend/src/drizzle/schema/base.schema.ts shows lesson_completions and separately assessment_attempts with time_spent_seconds
-  - Repo: test-mobile/src/screens/AssessmentTakeScreen.tsx: timeSpentSeconds is submitted for assessments
+  - Repo: mobile/src/screens/AssessmentTakeScreen.tsx: timeSpentSeconds is submitted for assessments
 - Correction: Rewrite Figure 11 to describe the actual lesson completion/progress logic, or explicitly tie `timeSpentSeconds` to assessments rather than module viewing.
 
 ### R-004 - Major

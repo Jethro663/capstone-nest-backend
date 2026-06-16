@@ -30,7 +30,7 @@ This skill is a selector, not a planner swarm and not a second architecture laye
    - `backend/AGENTS.md`
    - `next-frontend/AGENTS.md`
    - `ai-service/AGENTS.md`
-   - `test-mobile/AGENTS.md`
+   - `mobile/AGENTS.md`
 5. Add cross-cutting slices only on trigger words or touched paths:
    - schema -> DB, Drizzle, migration, enum, table, column, contract shape
    - security -> auth, role, guard, cookie, token, PII, permission, audit
@@ -51,8 +51,8 @@ This skill is a selector, not a planner swarm and not a second architecture laye
 - Backend CRUD, DTO, controller, service, queue orchestration -> `backend/AGENTS.md`
 - Frontend page, route, component, auth shell, web client bug -> `next-frontend/AGENTS.md`
 - AI mentor, proxy, extraction, retrieval, Ollama, FastAPI -> `ai-service/AGENTS.md`
-- Generic mobile or Expo task -> `test-mobile/AGENTS.md`
-- Prompt explicitly names `mobile/` or `betamochi/` -> load that folder's `AGENTS.md` notice and only proceed there if the request stays explicit
+- Generic mobile or Expo task -> `mobile/AGENTS.md`
+- Prompt explicitly names an archived mobile folder -> load that folder's `AGENTS.md` notice and only proceed there if the request stays explicit
 
 ## Workflow Skill Dispatch
 
@@ -69,8 +69,8 @@ This skill is a selector, not a planner swarm and not a second architecture laye
   - Use when the user wants the smallest valid smoke suite after a change.
   - Usually includes kernel + affected slices + `testing`.
 - `mobile-flow-auditor`
-  - Use for student-scoped mobile flow audits in `test-mobile`.
-  - Usually includes kernel + `test-mobile` + optional backend, `security`, and `testing`.
+  - Use for student-scoped mobile flow audits in `mobile`.
+  - Usually includes kernel + `mobile` + optional backend, `security`, and `testing`.
 - `queue-ai-pipeline-auditor`
   - Use for BullMQ, AI proxy, extraction, retrieval, indexing, and queued orchestration correctness.
   - Usually includes kernel + backend + ai-service + optional `schema`, `security`, and `testing`.
@@ -91,7 +91,7 @@ This skill is a selector, not a planner swarm and not a second architecture laye
   exclude unrelated slices
 - Dev stack:
   include kernel + backend + ai-service
-  optional frontend, `test-mobile`, `security`
+  optional frontend, `mobile`, `security`
   exclude unrelated slices
 - Cross-platform smoke:
   include kernel + affected slices + `testing`
@@ -106,13 +106,13 @@ This skill is a selector, not a planner swarm and not a second architecture laye
   optional `debugging`, `security`, `testing`
   exclude mobile, AI, schema by default
 - Mobile integration:
-  include kernel + `test-mobile`
+  include kernel + `mobile`
   optional backend, `security`, `testing`
-  exclude `mobile/` and `betamochi/` unless named
+  exclude unrelated slices by default
 - Mobile audit:
-  include kernel + `test-mobile` + `testing`
+  include kernel + `mobile` + `testing`
   optional backend, `security`
-  exclude `mobile/`, `betamochi/`, and unrelated web or AI slices
+  exclude unrelated web or AI slices
 - AI mentor / queue / extraction:
   include kernel + backend + ai-service
   optional `schema`, `security`, `testing`

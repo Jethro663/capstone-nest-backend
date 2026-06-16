@@ -1,12 +1,18 @@
-import { apiClient } from '@/api/client';
-import { unwrapEnvelope } from '@/api/http';
-import type { ApiEnvelope } from '@/types/api';
-import type { StudentProfile, UpdateProfileDto } from '@/types/profile';
+import { apiClient } from "../client";
+import { normalizeObject, unwrapEnvelope } from "../http";
+import type { ApiEnvelope } from "../../types/api";
+import type { StudentProfile, UpdateProfileDto } from "../../types/profile";
+
+const emptyProfile = (): StudentProfile => ({
+  id: "",
+  userId: "",
+});
 
 export const profileApi = {
   async getMine() {
-    const response = await apiClient.get<ApiEnvelope<StudentProfile | null>>('/profiles/me');
-    return unwrapEnvelope(response.data);
+    const response = await apiClient.get<ApiEnvelope<StudentProfile | null>>("/profiles/me");
+    const data = unwrapEnvelope(response.data);
+    return data ? normalizeObject(data, emptyProfile()) : null;
   },
 
   async updateByUserId(userId: string, payload: UpdateProfileDto) {
@@ -16,19 +22,21 @@ export const profileApi = {
 
   async uploadAvatar(file: { uri: string; name: string; type: string }) {
     const formData = new FormData();
-    formData.append('image', {
+    formData.append("image", {
       uri: file.uri,
       name: file.name,
       type: file.type,
     } as never);
 
-    const response = await apiClient.post<
-      ApiEnvelope<{ profile: StudentProfile; profilePicture: string }>
-    >('/profiles/me/avatar', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    const response = await apiClient.post<ApiEnvelope<{ profile: StudentProfile; profilePicture: string }>>(
+      "/profiles/me/avatar",
+      formData,
+      {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       },
-    });
+    );
     return unwrapEnvelope(response.data);
   },
 };

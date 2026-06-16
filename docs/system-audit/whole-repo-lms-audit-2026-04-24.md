@@ -4,7 +4,7 @@
 - Repo: `C:\Users\jethr\Desktop\capstone-nest-react-lms`
 - Audit date: 2026-04-24
 - Live scope: `backend`, `next-frontend`, `ai-service`
-- Out of live scope for this pass: `test-mobile` execution, except where concept-paper coverage depends on it
+- Out of live scope for this pass: `mobile` execution, except where concept-paper coverage depends on it
 - Method: code inventory, seeded-account browser sweeps, build/test baselines, performance smokes, and AI-service probes
 
 ## Executive Summary

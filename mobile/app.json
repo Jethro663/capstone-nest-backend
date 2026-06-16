@@ -1,27 +1,34 @@
 {
   "expo": {
-    "name": "Nexora LMS",
-    "slug": "nexora-lms",
-    "version": "0.1.0",
-    "orientation": "portrait",
-    "scheme": "nexora-lms",
+    "name": "Nexora Mobile",
+    "slug": "nexora-lms-mobile",
+    "version": "0.1.1",
+    "orientation": "default",
+    "scheme": "nexora-lms-mobile",
     "userInterfaceStyle": "light",
+    "icon": "./assets/ja/apk_logo.png",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
-      "supportsTabletMode": true,
-      "buildNumber": "1"
+      "buildNumber": "2"
     },
     "android": {
-      "versionCode": 1
-    },
-    "web": {
+      "package": "com.nexora.lms.mobile",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/ja/apk_logo.png",
+        "backgroundColor": "#000000"
+      },
+      "versionCode": 2,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE"
+      ]
     },
     "plugins": [
-      "expo-font",
-      "expo-secure-store",
-      "expo-image-picker"
+      "expo-document-picker",
+      "expo-notifications"
     ]
   }
 }

@@ -1,4 +1,4 @@
-# test-mobile Placeholder and Mapping Notes
+# mobile Placeholder and Mapping Notes
 
 ## Backend-backed derivations
 - Subject emoji, card color, and gradient are local visual metadata derived from `classes.subjectName`.

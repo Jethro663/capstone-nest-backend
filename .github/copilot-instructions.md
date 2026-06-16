@@ -14,7 +14,7 @@ Use this document as a thin bridge for humans and tools that still open `.github
 
 - Nexora is an LMS/LXP for Gat Andres Bonifacio High School.
 - Stack: NestJS 11 + Drizzle + PostgreSQL, Next.js App Router + React + Tailwind, Expo mobile, FastAPI + Ollama, BullMQ + Redis, JWT + refresh tokens.
-- Default mobile target for generic mobile work is `test-mobile/`, not `betamochi/`.
+- Default mobile target for generic mobile work is `mobile/`, not `betamochi/`.
 - Priority order: correctness, security, maintainability, performance.
 
 ## Kernel Rules
@@ -45,7 +45,7 @@ Use this document as a thin bridge for humans and tools that still open `.github
 ## Routing Summary
 
 - Start from `AGENTS.md`.
-- Load one primary slice only by default: backend, frontend, ai-service, or `test-mobile`.
+- Load one primary slice only by default: backend, frontend, ai-service, or `mobile`.
 - Add `schema`, `security`, `testing`, or `debugging` refs only when the task requires them.
 - Add a second subsystem slice only for explicit cross-boundary work.
 - Keep appendix refs unloaded unless exact detail is needed.

@@ -6,7 +6,7 @@ Load this when the task is primarily about tests or when a risky change needs ve
 
 - Backend: `npm run test`, `npm run test:e2e`, `npm run build`, `npm run lint`
 - Frontend: `npm run test`, `npm run build`, `npm run lint`
-- `test-mobile`: `npm run typecheck`, then `npm run start` for flow checks
+- `mobile`: `npm run typecheck`, then `npm run start` for flow checks
 - AI service: `python -m unittest ai-service.tests.test_student_tutor_service` or targeted Python tests
 
 ## Preferred Scope

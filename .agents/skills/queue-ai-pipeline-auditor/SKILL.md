@@ -10,7 +10,7 @@ Audit the backend-to-AI pipeline for correctness, orchestration safety, and cont
 ## Quick Start
 
 - Emit:
-  `ROUTER_TRACE task=ai-pipeline-audit include=kernel,backend,ai-service optional_skipped=<unneeded slices> exclude=next-frontend,test-mobile reason=<one line>`
+  `ROUTER_TRACE task=ai-pipeline-audit include=kernel,backend,ai-service optional_skipped=<unneeded slices> exclude=next-frontend,mobile reason=<one line>`
 - Load:
   - root `AGENTS.md`
   - `backend/AGENTS.md`

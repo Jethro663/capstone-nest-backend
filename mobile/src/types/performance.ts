@@ -37,3 +37,85 @@ export interface StudentOwnPerformanceSummary {
     averageBlendedScore: number | null;
   };
 }
+
+export interface TeacherClassPerformanceSummary {
+  classId: string;
+  totalStudents?: number;
+  atRiskCount?: number;
+  averageBlendedScore?: number | null;
+  thresholdApplied?: number;
+  [key: string]: unknown;
+}
+
+export interface TeacherClassAtRiskStudentRow {
+  studentId?: string;
+  firstName?: string;
+  lastName?: string;
+  blendedScore?: number | null;
+  assessmentAverage?: number | null;
+  classRecordAverage?: number | null;
+  thresholdApplied?: number;
+  [key: string]: unknown;
+}
+
+export interface TeacherClassAtRiskResponse {
+  classId?: string;
+  students?: TeacherClassAtRiskStudentRow[];
+  [key: string]: unknown;
+}
+
+export type InterventionQuizTrend =
+  | "improved"
+  | "declined"
+  | "unchanged"
+  | "awaiting_retry";
+
+export type TeacherInterventionComparisonScope = "class_average" | "assessment";
+
+export interface TeacherInterventionComparisonFilterOption {
+  id: string;
+  label: string;
+  assessmentId: string | null;
+  assessmentTitle: string | null;
+  assessmentType: string | null;
+  classRecordCategory: string | null;
+}
+
+export interface TeacherInterventionQuizComparisonRow {
+  caseId: string;
+  caseStatus: "pending" | "active" | "completed" | "dismissed";
+  caseOpenedAt: string | Date;
+  studentId: string;
+  student: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  assignmentId: string;
+  assessmentId: string;
+  assessmentTitle: string;
+  comparisonScope: TeacherInterventionComparisonScope;
+  filterId: string;
+  beforeAttemptId: string | null;
+  beforeScorePercent: number | null;
+  beforeSubmittedAt: string | Date | null;
+  beforeSampleSize: number;
+  afterAttemptId: string | null;
+  afterScorePercent: number | null;
+  afterSubmittedAt: string | Date | null;
+  afterSampleSize: number;
+  deltaScorePercent: number | null;
+  trend: InterventionQuizTrend;
+}
+
+export interface TeacherInterventionQuizComparisonResponse {
+  classId: string;
+  count: number;
+  improvedCount: number;
+  declinedCount: number;
+  unchangedCount: number;
+  awaitingRetryCount: number;
+  filterOptions: TeacherInterventionComparisonFilterOption[];
+  comparisons: TeacherInterventionQuizComparisonRow[];
+}

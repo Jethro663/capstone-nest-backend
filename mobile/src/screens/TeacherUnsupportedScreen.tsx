@@ -37,12 +37,12 @@ export function TeacherUnsupportedScreen() {
           <MaterialCommunityIcons name="school" size={26} color={colors.amber} />
         </View>
         <Text style={{ marginTop: 14, fontSize: 22, fontWeight: "900", color: colors.text }}>
-          Teacher mobile is coming soon
+          This teacher screen is not available yet
         </Text>
         <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
           Signed in as {user?.email ?? "teacher"}.
           {"\n"}
-          The current test-mobile build is student-focused while we finish the teacher workspace.
+          This route is still limited while we finish the remaining teacher workspace.
         </Text>
         <Pressable
           onPress={() => void logout()}

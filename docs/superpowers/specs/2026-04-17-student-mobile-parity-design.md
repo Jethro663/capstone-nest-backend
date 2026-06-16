@@ -2,12 +2,12 @@
 
 Date: 2026-04-17
 Repo: `capstone-nest-react-lms`
-Target: `test-mobile/`
+Target: `mobile/`
 Source of truth: `next-frontend/app/(dashboard)/dashboard/student/*` and matching `next-frontend/src/services/*`
 
 ## Goal
 
-Update `test-mobile` so the student mobile app can do everything the current student web app can do, using the real live backend API and matching the web UI structure as closely as practical on a phone screen.
+Update `mobile` so the student mobile app can do everything the current student web app can do, using the real live backend API and matching the web UI structure as closely as practical on a phone screen.
 
 This is parity work, not a native redesign. The web student experience is the product baseline.
 
@@ -48,11 +48,11 @@ The mobile target covers the full current student route surface from `next-front
 - Mobile should preserve the web feature set and user expectations.
 - Visual parity is preferred over a native reinterpretation.
 - If a backend contract is missing or incompatible with mobile, surface it as a concrete blocker instead of faking a UI state.
-- Existing `test-mobile` auth, secure storage, and student-only assumptions must remain intact.
+- Existing `mobile` auth, secure storage, and student-only assumptions must remain intact.
 
 ## Current Gap Summary
 
-`test-mobile` already has partial student coverage for login, classes, announcements, assessments, JA, LXP, profile, performance, and AI tutor. It does not yet represent the full web student route tree or the full service/type surface required for parity.
+`mobile` already has partial student coverage for login, classes, announcements, assessments, JA, LXP, profile, performance, and AI tutor. It does not yet represent the full web student route tree or the full service/type surface required for parity.
 
 Known missing or incomplete parity areas include:
 
@@ -74,11 +74,11 @@ The mobile implementation will follow the web student implementation directly:
 
 - route inventory from `next-frontend/app/(dashboard)/dashboard/student/*`
 - backend-facing capabilities from `next-frontend/src/services/*`
-- mobile implementation in `test-mobile/src/navigation/*`, `src/screens/*`, `src/api/services/*`, and `src/types/*`
+- mobile implementation in `mobile/src/navigation/*`, `src/screens/*`, `src/api/services/*`, and `src/types/*`
 
 ### Navigation Model
 
-`test-mobile` will be reshaped into a student route hierarchy that mirrors the web feature tree instead of keeping the current smaller tab-only shell.
+`mobile` will be reshaped into a student route hierarchy that mirrors the web feature tree instead of keeping the current smaller tab-only shell.
 
 The student navigation will include:
 
@@ -95,8 +95,8 @@ Each screen will consume backend data through repo-native mobile service wrapper
 
 Rules:
 
-- expand `test-mobile/src/api/services/*` until every required student web capability has a mobile equivalent
-- keep `test-mobile/src/types/*` aligned with backend and web contract shapes
+- expand `mobile/src/api/services/*` until every required student web capability has a mobile equivalent
+- keep `mobile/src/types/*` aligned with backend and web contract shapes
 - preserve React Query and existing mobile provider patterns
 - keep mobile auth on secure storage and mobile auth endpoints
 - do not bypass mobile service wrappers from screens
@@ -168,7 +168,7 @@ Verification is required per touched slice, not only at the end.
 
 For each slice:
 
-- run `npm run typecheck` in `test-mobile`
+- run `npm run typecheck` in `mobile`
 - run `npm run test` where existing coverage applies to touched logic
 - boot Expo Android
 - verify the touched student flow against live backend data
@@ -209,7 +209,7 @@ ADB/manual verification should explicitly cover:
 
 ## Success Criteria
 
-This work is complete when all current student web capabilities have a corresponding mobile implementation in `test-mobile`, using real backend data, and the Android flow can complete the same core student tasks the web app can complete.
+This work is complete when all current student web capabilities have a corresponding mobile implementation in `mobile`, using real backend data, and the Android flow can complete the same core student tasks the web app can complete.
 
 Minimum acceptance checks:
 
@@ -223,5 +223,5 @@ Minimum acceptance checks:
 
 - the current student web route tree is the intended parity baseline
 - the backend already exposes the required student capabilities used by the web app
-- `test-mobile` remains student-scoped for this work
+- `mobile` remains student-scoped for this work
 - small viewport adaptations are acceptable as long as capability and structure remain aligned with the web

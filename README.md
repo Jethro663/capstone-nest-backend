@@ -6,7 +6,7 @@ This repository contains the full platform stack:
 - Backend API (NestJS + Drizzle + PostgreSQL)
 - Web app (Next.js App Router)
 - AI service (FastAPI + Ollama)
-- Mobile app target (Expo in `test-mobile/`)
+- Mobile app target (Expo in `mobile/`)
 
 ## Current Project Status (April 2026)
 
@@ -17,7 +17,7 @@ Based on the latest repo audit (`docs/NEXORA_AUDIT_2026-03-27.md`):
   - `next-frontend`: lint passes (warnings only), tests pass, build passes
   - `backend`: build passes
   - `ai-service`: tests pass via `python scripts/run_tests.py`
-  - `test-mobile`: typecheck passes
+  - `mobile`: typecheck passes
 - Remaining work is mostly polish and alignment:
   - lesson versioning depth
   - stronger teacher-facing AI policy/UX surfacing
@@ -30,13 +30,12 @@ Top-level apps and services:
 - `backend/` - NestJS 11 API, auth/RBAC, LMS domains, reporting, AI proxy, BullMQ orchestration
 - `next-frontend/` - Next.js 16 web client (App Router), role-based dashboards and workflows
 - `ai-service/` - FastAPI microservice for AI mentor, extraction, retrieval/indexing flows
-- `test-mobile/` - default Expo mobile target (student-scoped app)
+- `mobile/` - default Expo mobile target (student-scoped app)
 
 Other notable folders:
 
 - `docs/` - architecture, audits, deployment notes, testing references
 - `monitoring/` - Prometheus/Tempo config
-- `mobile/` and `betamochi/` - legacy/alternate mobile tracks, not default target
 
 ## Architecture At A Glance
 
@@ -248,7 +247,7 @@ AI readiness endpoint: `http://localhost:8000/ready`
 ### 4. Mobile (Default Target)
 
 ```bash
-cd test-mobile
+cd mobile
 npm install
 npm run start
 ```
@@ -288,7 +287,7 @@ npm run build
 python scripts/run_tests.py
 ```
 
-### Test Mobile
+### Mobile
 
 ```bash
 npm run typecheck
@@ -301,7 +300,7 @@ Primary templates:
 - `.env.compose.example`
 - `backend/.env.example`
 - `ai-service/.env.example`
-- `test-mobile/.env.example`
+- `mobile/.env.example`
 
 Container-specific env files used by compose:
 
