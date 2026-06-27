@@ -103,11 +103,19 @@ DATABASE_URL=postgresql+asyncpg://postgres:<password>@<postgres-host>:5432/capst
 UPLOAD_DIR=/app/uploads
 AI_SERVICE_SHARED_SECRET=<same secret as backend>
 AI_DEGRADED_ALLOWED=true
+AI_RUNTIME_MODE=cloud
+AI_CLOUD_FALLBACK_PROVIDER=openrouter
+AI_CLOUD_FALLBACK_ENABLED=true
+AI_CLOUD_FALLBACK_BASE_URL=https://openrouter.ai/api/v1
+AI_CLOUD_FALLBACK_API_KEY=<openrouter-api-key>
+AI_CLOUD_FALLBACK_MODEL=openrouter/auto
+OPENROUTER_EMBEDDING_MODEL=google/gemini-embedding-2-preview
 ```
 
 Phase 1:
 
 - Leave `OLLAMA_BASE_URL` unset
+- OpenRouter-backed cloud mode is the primary production path
 
 Phase 2:
 

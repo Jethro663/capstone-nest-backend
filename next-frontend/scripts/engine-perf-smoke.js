@@ -7,6 +7,11 @@ const WORKSPACE_PATH =
   '/dashboard/admin/class-templates';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@lms.local';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Test@123';
+const WORKSPACE_EXPECTED_ACTIONS = [
+  'save-draft-button',
+  'workspace-tab-modules',
+  'add-module-button',
+];
 
 function toRoutePrefixRegex(routePrefix) {
   return new RegExp(
@@ -96,29 +101,25 @@ async function main() {
       }),
     );
 
-    const exportButton = page.getByRole('button', {
-      name: /export engine yaml/i,
-    });
-    await exportButton.waitFor({ state: 'visible', timeout: 15000 });
-    metrics.exportActionMs = await measure(async () => {
-      await exportButton.click();
-      await page.waitForFunction(() => {
-        const area = document.querySelector('textarea');
-        return Boolean(area && area.value && area.value.trim().length > 0);
+    metrics.workspaceControlsReadyMs = await measure(async () => {
+      await page.getByTestId('save-draft-button').waitFor({
+        state: 'visible',
+        timeout: 15000,
+      });
+      await page
+        .locator(
+          '[data-testid="publish-template-button"], [data-testid="unpublish-template-button"]',
+        )
+        .first()
+        .waitFor({ state: 'visible', timeout: 15000 });
+      await page.getByTestId('workspace-tab-modules').click();
+      await page.getByTestId('add-module-button').waitFor({
+        state: 'visible',
+        timeout: 15000,
       });
     });
 
-    const validateButton = page.getByRole('button', {
-      name: /validate import/i,
-    });
-    await validateButton.waitFor({ state: 'visible', timeout: 15000 });
-    metrics.validateActionMs = await measure(async () => {
-      await validateButton.click();
-      await page.waitForFunction(() => {
-        const text = document.body?.innerText ?? '';
-        return /Validation:\s+(Valid|Invalid)/i.test(text);
-      });
-    });
+    metrics.workspaceActionsChecked = WORKSPACE_EXPECTED_ACTIONS;
 
     console.log(
       JSON.stringify(

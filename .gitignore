@@ -8,6 +8,8 @@
 .env.compose
 /ai-service/tests/__pycache__/
 /ai-service/.venv/
+/ai-service/.env
+/ai-service/.env.local
 /.serena/cache/
 /.serena/logs/
 /.agents/tmp/*.log

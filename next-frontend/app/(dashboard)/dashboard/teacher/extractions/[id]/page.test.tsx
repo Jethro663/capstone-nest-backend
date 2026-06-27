@@ -197,16 +197,29 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
 const mockedExtractionService = extractionService as jest.Mocked<typeof extractionService>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
+function hasConsoleMessage(mock: jest.Mock, fragment: string) {
+  return mock.mock.calls.some((call) =>
+    call.some((argument) => typeof argument === 'string' && argument.includes(fragment)),
+  );
+}
+
 describe('ExtractionReviewPage', () => {
+  let consoleWarnSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     backMock.mockReset();
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
     jest.runOnlyPendingTimers();
     jest.useRealTimers();
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 
   it('renders a calmer lesson-editor-style workspace and hides legacy image review UI', async () => {
@@ -228,6 +241,7 @@ describe('ExtractionReviewPage', () => {
     expect(screen.getByText('Source content did not safely support the requested section count.')).toBeInTheDocument();
     expect(screen.queryByText('Unassigned images')).not.toBeInTheDocument();
     expect(screen.queryByAltText('Extracted visual')).not.toBeInTheDocument();
+    expect(hasConsoleMessage(consoleWarnSpy, "Duplicate extension names found: ['underline']")).toBe(false);
   });
 
   it('keeps extraction status summary inside the header without standalone stat cards', async () => {
@@ -272,11 +286,13 @@ describe('ExtractionReviewPage', () => {
   });
 
   it('renders load error state and retries fetching extraction', async () => {
+    const outageMessage = 'Live extraction updates are temporarily unavailable.';
+
     mockedExtractionService.getById
       .mockRejectedValueOnce({
         response: {
           data: {
-            message: 'AI extraction queue is temporarily unavailable. Please retry shortly.',
+            message: outageMessage,
           },
         },
       } as never)
@@ -288,9 +304,7 @@ describe('ExtractionReviewPage', () => {
 
     render(<ExtractionReviewPage />);
 
-    expect(
-      await screen.findByText('AI extraction queue is temporarily unavailable. Please retry shortly.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(outageMessage)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
@@ -299,9 +313,7 @@ describe('ExtractionReviewPage', () => {
     });
 
     expect(mockedExtractionService.getById).toHaveBeenCalledTimes(2);
-    expect(mockedToast.error).toHaveBeenCalledWith(
-      'AI extraction queue is temporarily unavailable. Please retry shortly.',
-    );
+    expect(mockedToast.error).toHaveBeenCalledWith(outageMessage);
   });
 
   it('keeps a Back action visible when extraction loading fails', async () => {
@@ -324,7 +336,7 @@ describe('ExtractionReviewPage', () => {
   });
 
   it('stops polling and surfaces warning after repeated status failures', async () => {
-    const outageMessage = 'AI extraction queue is temporarily unavailable. Please retry shortly.';
+    const outageMessage = 'Live extraction updates are temporarily unavailable.';
 
     mockedExtractionService.getById.mockResolvedValue({
       success: true,
@@ -342,7 +354,7 @@ describe('ExtractionReviewPage', () => {
     });
 
     await act(async () => {
-      jest.advanceTimersByTime(9000);
+      jest.advanceTimersByTime(24000);
       await Promise.resolve();
     });
 
@@ -484,12 +496,23 @@ describe('ExtractionReviewPage', () => {
     expect(screen.getByText(/Module Title/i)).toBeInTheDocument();
     expect(screen.getByText(/1 lesson/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm & Apply' }));
+      await Promise.resolve();
+    });
+
     await waitFor(() => {
       expect(mockedExtractionService.apply).toHaveBeenCalledWith('extraction-1', {
         sectionIndices: [0],
       });
     });
+    await waitFor(() => {
+      expect(mockedExtractionService.getById).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(mockedToast.success).toHaveBeenCalledWith('Extraction applied successfully');
+    });
+    expect(hasConsoleMessage(consoleErrorSpy, 'not wrapped in act')).toBe(false);
   });
 
   it('lets the teacher edit a block and save the extraction draft', async () => {

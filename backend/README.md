@@ -1,98 +1,74 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Nexora Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS 11 backend for the Nexora LMS/LXP platform.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## What It Does
 
-## Description
+This service is the system of record for:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+- authentication, refresh-token rotation, OTP verification, and role-based access
+- users, sections, classes, teacher and student profiles
+- lessons, modules, assessments, class records, announcements, and notifications
+- reports, analytics, performance snapshots, and intervention workflows
+- AI proxying to `../ai-service` for tutor, extraction, quiz drafting, lesson-plan drafting, and related jobs
 
-## Project setup
+Main entry points:
+
+- boot: `src/main.ts`
+- module graph root: `src/app.module.ts`
+- schema source of truth: `src/drizzle/schema/`
+- migrations: `drizzle/`
+
+## Common Commands
 
 ```bash
-$ npm install
+npm install
+npm run start:dev
+npm run build
+npm run test
+npm run test:e2e
+npm run seed:smoke
 ```
 
-## Compile and run the project
+## Environment
 
-```bash
-# development
-$ npm run start
+Start from `backend/.env.example`.
 
-# watch mode
-$ npm run start:dev
+Key variables:
 
-# production mode
-$ npm run start:prod
-```
+- `DATABASE_URL` - PostgreSQL connection string
+- `REDIS_URL` - BullMQ / Redis connection
+- `JWT_SECRET` - access-token signing secret
+- `JWT_REFRESH_SECRET` - refresh-token signing secret
+- `OTP_PEPPER` - OTP hashing pepper
+- `FRONTEND_URL`, `NEXT_FRONTEND_URL`, `MOBILE_URL` - CORS/session origin inputs
+- `AI_SERVICE_URL` - backend-to-ai-service base URL; use the internal Railway/private service URL in production
+- `AI_SERVICE_SHARED_SECRET` - shared secret forwarded to `ai-service` as `X-Internal-Service-Token`; it must exactly match the ai-service value
+- `AI_DEGRADED_ALLOWED` - keep this aligned with ai-service so backend readiness and ai-service readiness agree on degraded runtime policy
 
-## Run tests
+Production AI notes:
 
-```bash
-# unit tests
-$ npm run test
+- Backend proxies AI traffic to ai-service; web and mobile do not talk to ai-service directly.
+- Railway/production should treat OpenRouter-backed cloud mode as the primary AI runtime.
+- Backend readiness now depends on ai-service readiness semantics, not just ai-service reachability.
 
-# e2e tests
-$ npm run test:e2e
+## API Shape
 
-# test coverage
-$ npm run test:cov
-```
+- global prefix: `/api`
+- global auth guard is enabled by default; public routes use `@Public()`
+- most responses follow the backend envelope style: `success`, `message`, `data`
 
-## Deployment
+## Related Files
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+- setup guide: `BACKEND_SETUP.md`
+- AI architecture notes: `AI_MENTOR_README.md`
+- compose runtime env: `../.env.compose.example`
+- root product overview: `../README.md`
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Verification Notes
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- `npm run build` checks backend compilation
+- `npm run test` runs unit specs under `src/`
+- `npm run test:e2e` runs e2e specs under `test/`
+- `npm run seed:smoke` validates seeded LMS/LXP data assumptions
+- `npm run test -- --runInBand src/modules/health/health.service.spec.ts` verifies backend readiness handling for ai-service

@@ -101,4 +101,18 @@ describe('HealthService', () => {
       message: 'AI service reachable but embedding runtime is degraded',
     });
   });
+
+  it('probes ai-service readiness instead of generic health reachability', async () => {
+    const service = new HealthService(mockDatabaseService, mockConfigService);
+
+    await service.getReadiness();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:8000/ready',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      }),
+    );
+  });
 });

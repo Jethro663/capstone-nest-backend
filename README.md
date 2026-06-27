@@ -5,7 +5,7 @@ Nexora is a learning management and learning experience platform for Gat Andres 
 This repository contains the full platform stack:
 - Backend API (NestJS + Drizzle + PostgreSQL)
 - Web app (Next.js App Router)
-- AI service (FastAPI + Ollama)
+- AI service (FastAPI with OpenRouter-primary production runtime and optional Ollama local fallback)
 - Mobile app target (Expo in `mobile/`)
 
 ## Current Project Status (April 2026)
@@ -234,15 +234,21 @@ python -m venv .venv
 # source .venv/bin/activate
 
 pip install -r requirements.txt
-cp .env.example .env
+cp .env.example .env.local
 
-# Ensure Ollama embedding model exists
+# Optional for local Ollama development only
 ollama pull nomic-embed-text
 
 uvicorn app.main:app --reload --port 8000
 ```
 
 AI readiness endpoint: `http://localhost:8000/ready`
+
+Production note:
+
+- Railway/production should treat OpenRouter as the primary AI runtime.
+- Local Ollama is optional and mainly for non-cloud development.
+- Backend and ai-service must share the same `AI_SERVICE_SHARED_SECRET`.
 
 ### 4. Mobile (Default Target)
 
@@ -285,7 +291,11 @@ npm run build
 
 ```bash
 python scripts/run_tests.py
+./.venv/bin/python -m unittest tests.test_config tests.test_cloud_fallback
+./.venv/bin/python -c "from app.main import app; print(app.title)"
 ```
+
+For startup-path verification, run `uvicorn app.main:app --reload --port 8000` and check `GET /ready` rather than relying on import success alone.
 
 ### Mobile
 

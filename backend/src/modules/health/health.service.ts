@@ -104,7 +104,7 @@ export class HealthService {
       (process.env.AI_DEGRADED_ALLOWED ?? 'false').toLowerCase() === 'true';
 
     try {
-      const response = await fetch(`${aiServiceUrl}/health`, {
+      const response = await fetch(`${aiServiceUrl}/ready`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
@@ -119,6 +119,14 @@ export class HealthService {
 
       const payload = (await response.json()) as {
         data?: {
+          ready?: boolean;
+          partialDegraded?: boolean;
+          degradedMode?: boolean;
+          dependencies?: {
+            runtime?: {
+              provider?: string;
+            };
+          };
           runtimeAvailable?: boolean;
           runtimeProvider?: string;
           ollamaAvailable?: boolean;
@@ -127,13 +135,15 @@ export class HealthService {
           uploadMaterialization?: { ok?: boolean };
         };
       };
-      const runtimeAvailable =
-        payload?.data?.runtimeAvailable ??
-        payload?.data?.ollamaAvailable !== false;
+      const runtimeAvailable = payload?.data?.ready ?? true;
       const version = payload?.data?.version;
-      const runtimeProvider = payload?.data?.runtimeProvider;
+      const runtimeProvider =
+        payload?.data?.dependencies?.runtime?.provider ??
+        payload?.data?.runtimeProvider;
       const embeddingRuntime = payload?.data?.embeddingRuntime;
       const uploadMaterialization = payload?.data?.uploadMaterialization;
+      const degradedMode = payload?.data?.degradedMode === true;
+      const partialDegraded = payload?.data?.partialDegraded === true;
 
       if (!runtimeAvailable) {
         return {
@@ -146,6 +156,18 @@ export class HealthService {
           message: allowDegradedAi
             ? 'AI service reachable but running without an available AI runtime'
             : 'AI service reachable but no AI runtime is available',
+        };
+      }
+
+      if (degradedMode) {
+        return {
+          ok: true,
+          degraded: true,
+          version,
+          runtimeProvider,
+          embeddingRuntime,
+          uploadMaterialization,
+          message: 'AI service ready but running in degraded mode',
         };
       }
 
@@ -171,6 +193,18 @@ export class HealthService {
           uploadMaterialization,
           message:
             'AI service reachable but upload materialization is degraded',
+        };
+      }
+
+      if (partialDegraded) {
+        return {
+          ok: true,
+          degraded: true,
+          version,
+          runtimeProvider,
+          embeddingRuntime,
+          uploadMaterialization,
+          message: 'AI service ready but partially degraded',
         };
       }
 

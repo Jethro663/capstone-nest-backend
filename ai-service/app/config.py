@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://postgres:200411@localhost:5432/capstone"
+    database_url: str = "postgresql+asyncpg://postgres:CHANGE_ME_DB_PASSWORD@localhost:5432/capstone"
     ollama_base_url: str = "http://localhost:11434"
     ollama_text_model: str = Field(
         default="qwen2.5:3b",
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
         validation_alias="OPENROUTER_X_TITLE",
     )
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": (".env", ".env.local"), "extra": "ignore"}
 
 
 settings = Settings()

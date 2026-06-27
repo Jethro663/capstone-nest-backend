@@ -27,6 +27,10 @@ def _provider_name() -> str:
     return settings.ai_cloud_fallback_provider.strip().lower() or "openai"
 
 
+def _is_supported_provider() -> bool:
+    return _provider_name() in {"openai", "openrouter"}
+
+
 def is_enabled() -> bool:
     return bool(settings.ai_cloud_fallback_enabled and settings.ai_cloud_fallback_api_key)
 
@@ -150,8 +154,8 @@ async def generate_text(
 ) -> str:
     if not is_enabled():
         raise CloudFallbackUnavailable("Cloud fallback is disabled or missing credentials.")
-    provider = settings.ai_cloud_fallback_provider.strip().lower()
-    if provider != "openai":
+    provider = _provider_name()
+    if not _is_supported_provider():
         raise CloudFallbackUnavailable(f'Unsupported cloud fallback provider "{provider}".')
 
     resolved_model = (model or (get_vision_model() if images else get_text_model())).strip()

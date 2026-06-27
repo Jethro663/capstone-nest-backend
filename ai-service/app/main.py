@@ -263,8 +263,14 @@ APPROVED_ADMIN_SOURCE_IDS = {
 @app.on_event("startup")
 async def preload_ollama_models() -> None:
     AI_JOB_TASKS.clear()
-    await _cleanup_stale_ai_jobs()
-    await _recover_orphaned_jobs()
+    try:
+        await _cleanup_stale_ai_jobs()
+    except Exception as err:
+        logger.warning("Failed to cleanup stale AI jobs at startup: %s", err)
+    try:
+        await _recover_orphaned_jobs()
+    except Exception as err:
+        logger.warning("Failed to recover orphaned AI jobs at startup: %s", err)
     try:
         await ollama_client.preload_model("chat")
     except Exception as err:
@@ -5133,4 +5139,3 @@ async def teacher_generate_quiz_draft(
             "indexing": index_result,
         },
     }
-

@@ -1064,7 +1064,6 @@ npm run test
 
 - `next-frontend/README.md` and `backend/README.md` are mostly starter boilerplate and do not match the actual product.
 - Root README references `docs/NEXORA_AUDIT_2026-03-27.md`, but the file actually lives at `docs/system-audit/NEXORA_AUDIT_2026-03-27.md`.
-- `ThemeProvider` is effectively stubbed to one default theme with `setTheme` as a no-op (`next-frontend/src/providers/ThemeProvider.tsx`).
 - WebSocket notification gateway allows all origins instead of using a proper allowlist (`backend/src/modules/notifications/notifications.gateway.ts`).
 - `BACKEND_SETUP.md` includes real-looking secrets and default credentials in documentation form.
 - `ai-service/.env` is tracked in git and should be reviewed for secret leakage risk.
