@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Constants from "expo-constants";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Updates from "expo-updates";
 import { publicClient } from "../../api/client";
