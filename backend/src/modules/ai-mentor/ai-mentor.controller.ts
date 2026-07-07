@@ -1260,6 +1260,7 @@ export class AiMentorController {
   }
 
   @Post('student/tutor/session/:sessionId/message')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   @Roles(RoleName.Student)
   @ApiOperation({
     summary: 'Send a follow-up message to a student tutor session',

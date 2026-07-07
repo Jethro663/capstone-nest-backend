@@ -58,6 +58,12 @@ import ollamaConfig from './config/ollama.config';
         connection: {
           url: config.get<string>('redis.url'),
         },
+        defaultJobOptions: {
+          removeOnComplete: { age: 3600, count: 100 },
+          removeOnFail: { age: 86400, count: 50 },
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+        },
       }),
     }),
     ThrottlerModule.forRoot([

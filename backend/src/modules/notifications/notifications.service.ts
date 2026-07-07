@@ -79,43 +79,35 @@ export class NotificationsService {
       return inputs;
     }
 
-    const userIds = Array.from(
-      new Set(referenceInputs.map((input) => input.userId)),
-    );
-    const types = Array.from(
-      new Set(referenceInputs.map((input) => input.type)),
-    );
-    const referenceIds = Array.from(
-      new Set(referenceInputs.map((input) => input.referenceId as string)),
-    );
+    const insertedRows = await this.db
+      .insert(notifications)
+      .values(
+        inputs.map((n) => ({
+          userId: n.userId,
+          type: n.type,
+          referenceId: n.referenceId ?? null,
+          title: n.title,
+          body: n.body,
+          isRead: false,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [
+          notifications.userId,
+          notifications.type,
+          notifications.referenceId,
+        ],
+        targetWhere: sql`${notifications.referenceId} IS NOT NULL`,
+      })
+      .returning();
 
-    const existingRows = await this.db.query.notifications.findMany({
-      where: and(
-        inArray(notifications.userId, userIds),
-        inArray(notifications.type, types),
-        inArray(notifications.referenceId, referenceIds),
-      ),
-      columns: {
-        userId: true,
-        type: true,
-        referenceId: true,
-      },
-    });
-
-    const existingKeys = new Set(
-      existingRows.map(
-        (row) => `${row.userId}:${row.type}:${row.referenceId ?? ''}`,
-      ),
-    );
-    const nextInputs = inputs.filter((input) => {
-      if (!input.referenceId) return true;
-      return !existingKeys.has(
-        `${input.userId}:${input.type}:${input.referenceId}`,
-      );
-    });
-
-    await this.createBulk(nextInputs);
-    return nextInputs;
+    return insertedRows.map((row) => ({
+      userId: row.userId,
+      type: row.type,
+      referenceId: row.referenceId ?? undefined,
+      title: row.title,
+      body: row.body,
+    }));
   }
 
   async findByUser(userId: string, query: QueryNotificationsDto) {

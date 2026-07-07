@@ -37,6 +37,7 @@ import {
   MAX_FILE_SIZE_BYTES,
   ALLOWED_MIME_TYPES,
   UPLOAD_DEST,
+  UPLOAD_ROOT,
 } from './constants/file-upload.constants';
 import {
   CreateLibraryFolderDto,
@@ -123,7 +124,7 @@ export class FileUploadController {
         storedName: file.filename,
         mimeType: file.mimetype,
         sizeBytes: file.size,
-        filePath: path.posix.join('uploads', 'library', file.filename),
+        filePath: path.posix.join(UPLOAD_DEST, file.filename),
         subjectKey: query.subjectKey,
         gradeLevel: query.gradeLevel,
         teacherVisible: query.teacherVisible,
@@ -293,7 +294,7 @@ export class FileUploadController {
     );
     const filePath = record.filePath;
     const absolutePath = path.resolve(filePath);
-    const uploadsRoot = path.resolve('uploads');
+    const uploadsRoot = path.resolve(UPLOAD_ROOT);
 
     if (!absolutePath.startsWith(uploadsRoot)) {
       res.status(403).json({

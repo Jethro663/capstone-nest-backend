@@ -12,6 +12,11 @@ export class AppThrottlerGuard extends ThrottlerGuard {
       return `user:${userId}`;
     }
 
+    const email = req.body?.email ?? req.body?.username;
+    if (typeof email === 'string' && email.trim().length > 0) {
+      return `login:${email.toLowerCase().trim()}`;
+    }
+
     const forwardedFor = req.headers?.['x-forwarded-for'];
     const forwardedIp = Array.isArray(forwardedFor)
       ? forwardedFor[0]

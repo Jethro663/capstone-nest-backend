@@ -25,7 +25,7 @@ interface AssessmentNotificationJobData {
   dueDate?: string | null;
 }
 
-@Processor('notifications')
+@Processor('notifications', { concurrency: 3 })
 export class AssessmentNotificationProcessor extends WorkerHost {
   private readonly logger = new Logger(AssessmentNotificationProcessor.name);
 

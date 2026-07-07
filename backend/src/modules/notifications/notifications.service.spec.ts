@@ -33,11 +33,16 @@ describe('NotificationsService', () => {
     const insertChain: {
       values: jest.Mock;
       onConflictDoUpdate: jest.Mock;
+      onConflictDoNothing: jest.Mock;
+      returning: jest.Mock;
     } = {
       values: jest.fn(),
       onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
+      onConflictDoNothing: jest.fn(),
+      returning: jest.fn().mockResolvedValue([]),
     };
     insertChain.values.mockReturnValue(insertChain);
+    insertChain.onConflictDoNothing.mockReturnValue(insertChain);
     return insertChain;
   };
 
@@ -244,11 +249,13 @@ describe('NotificationsService', () => {
     it('skips notifications that already exist for the same user, type, and reference', async () => {
       const insertChain = createInsertChain();
       mockDb.insert.mockReturnValue(insertChain);
-      mockDb.query.notifications.findMany.mockResolvedValue([
+      insertChain.returning.mockResolvedValue([
         {
-          userId: 'u1',
+          userId: 'u2',
           type: 'assessment_assigned',
           referenceId: 'assessment-1',
+          title: 'New assessment',
+          body: 'A new assessment is available.',
         },
       ]);
 
@@ -270,13 +277,7 @@ describe('NotificationsService', () => {
       ]);
 
       expect(inserted.map((item) => item.userId)).toEqual(['u2']);
-      expect(insertChain.values).toHaveBeenCalledWith([
-        expect.objectContaining({
-          userId: 'u2',
-          type: 'assessment_assigned',
-          referenceId: 'assessment-1',
-        }),
-      ]);
+      expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
     });
   });
 

@@ -23,7 +23,7 @@ interface CommentCreatedJobData {
   classTeacherId: string | null;
 }
 
-@Processor('discussion-board')
+@Processor('discussion-board', { concurrency: 3 })
 export class DiscussionBoardProcessor extends WorkerHost {
   private readonly logger = new Logger(DiscussionBoardProcessor.name);
 

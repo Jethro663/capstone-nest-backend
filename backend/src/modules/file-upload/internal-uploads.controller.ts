@@ -12,6 +12,7 @@ import type { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Public } from '../auth/decorators/public.decorator';
+import { UPLOAD_ROOT } from './constants/file-upload.constants';
 
 @Controller('internal/uploads')
 export class InternalUploadsController {
@@ -40,10 +41,12 @@ export class InternalUploadsController {
       throw new NotFoundException('Upload path is required');
     }
 
-    const uploadsRoot = path.resolve('uploads');
+    const uploadsRoot = path.resolve(UPLOAD_ROOT);
+    const rootDirName = path.basename(uploadsRoot);
     const normalizedSlashes = normalized.replace(/\\/g, '/');
     const uploadRelativePath = normalizedSlashes
       .replace(/^\.\//, '')
+      .replace(new RegExp(`^${rootDirName}\/`), '')
       .replace(/^uploads\//, '');
     const absolutePath = path.isAbsolute(normalized)
       ? path.resolve(normalized)

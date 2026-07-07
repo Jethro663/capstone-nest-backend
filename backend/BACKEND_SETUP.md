@@ -96,24 +96,22 @@ If successful, you should see the `capstone=#` prompt. Exit with `\q`.
 
 ### Step 3: Run Drizzle Migrations
 
-The schema is defined in `src/drizzle/schema/` using Drizzle ORM.
+The database schema is defined strictly in `src/drizzle/schema/` using Drizzle ORM.
+We use a **linear forward-only baseline migration architecture**. All legacy migrations have been squashed into a single active baseline (`drizzle/0000_baseline_nexora.sql`).
 
-Generate and push the current schema:
+To verify migration integrity and apply active migrations locally:
 
 ```bash
-npx drizzle-kit generate:pg
-npx drizzle-kit push:pg
+npm run check:migrations
+node run-migrations.js
 ```
 
 **What this does:**
-- `generate:pg`: Creates migration files based on schema changes
-- `push:pg`: Applies migrations directly to the database
+- `check:migrations`: Verifies that all `.sql` files in `drizzle/` are linearly sequenced and registered in `meta/_journal.json`.
+- `run-migrations.js`: Applies journal-listed migrations inside safe savepoint transactions and records them in `_applied_migrations`.
 
-**Expected Output:**
-```
-✓ Migrations generated successfully
-✓ Migrations applied successfully
-```
+> [!IMPORTANT]
+> **Railway & Live Environment Cutovers:** When deploying to an existing populated database that already has legacy tables, you can run the runner in explicit stamp mode by setting `MIGRATION_BASELINE_STAMP_ONLY=true`. This stamps `0000_baseline_nexora.sql` into `_applied_migrations` without replaying table creation commands. Note that `run-migrations.js` also includes an automatic failsafe that detects existing legacy databases and stamps the baseline seamlessly. Do NOT use `drizzle-kit push` on shared or deployed environments.
 
 ---
 

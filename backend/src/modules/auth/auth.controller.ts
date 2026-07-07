@@ -104,7 +104,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts / 60 s per IP
+  @Throttle({ default: { limit: 15, ttl: 60000 } }) // 15 attempts / 60 s per Account Email (NAT IP safe)
   @ApiOperation({ summary: 'Authenticate user and obtain tokens' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Login successful' })
@@ -138,7 +138,7 @@ export class AuthController {
   @Public()
   @Post('mobile/login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ default: { limit: 15, ttl: 60000 } }) // 15 attempts / 60 s per Account Email (NAT IP safe)
   @ApiOperation({
     summary:
       'Authenticate a mobile client and return access and refresh tokens',

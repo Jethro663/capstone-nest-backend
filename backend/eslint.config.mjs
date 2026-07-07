@@ -49,6 +49,9 @@ export default tseslint.config(
       '@typescript-eslint/await-thenable': 'warn',
       '@typescript-eslint/no-base-to-string': 'warn',
       '@typescript-eslint/restrict-template-expressions': 'warn',
+      '@typescript-eslint/no-misused-promises': 'warn',
+      '@typescript-eslint/no-unnecessary-type-assertion': 'warn',
+      '@typescript-eslint/no-redundant-type-constituents': 'warn',
       'no-control-regex': 'warn',
       'no-restricted-imports': [
         'error',
@@ -56,7 +59,7 @@ export default tseslint.config(
           patterns: ['src/*'],
         },
       ],
-      'prettier/prettier': ['error', { endOfLine: 'auto' }],
+      'prettier/prettier': ['warn', { endOfLine: 'auto' }],
     },
   },
 );

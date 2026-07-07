@@ -57,10 +57,11 @@ export function useDiscussionRealtimeRefresh({
       } finally {
         refreshInFlightRef.current = false;
         if (queuedThreadIdsRef.current.size > 0) {
+          const jitterMs = 180 + Math.floor(Math.random() * 2000);
           flushTimerRef.current = window.setTimeout(() => {
             flushTimerRef.current = null;
             void flushQueue();
-          }, 180);
+          }, jitterMs);
         }
       }
     }
@@ -83,10 +84,11 @@ export function useDiscussionRealtimeRefresh({
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
       }
+      const jitterMs = 180 + Math.floor(Math.random() * 2000);
       flushTimerRef.current = window.setTimeout(() => {
         flushTimerRef.current = null;
         void flushQueue();
-      }, 180);
+      }, jitterMs);
     });
 
     return () => {

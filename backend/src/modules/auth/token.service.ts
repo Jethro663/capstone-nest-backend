@@ -9,6 +9,10 @@ import { parseExpiryMs } from './utils/parse-expiry.util';
 @Injectable()
 export class TokenService {
   private readonly logger = new Logger(TokenService.name);
+  private readonly rotationGraceCache = new Map<
+    string,
+    { newRawToken: string; userId: string; rotatedAt: number }
+  >();
 
   constructor(
     private readonly dbService: DatabaseService,
@@ -83,6 +87,11 @@ export class TokenService {
     const tokenHash = this.hashToken(rawToken);
     const now = new Date();
 
+    const cached = this.rotationGraceCache.get(tokenHash);
+    if (cached && Date.now() - cached.rotatedAt < 45000) {
+      return { newRawToken: cached.newRawToken, userId: cached.userId };
+    }
+
     return await this.dbService.db.transaction(async (tx) => {
       // Atomically revoke only if the token is valid and not yet consumed
       const [consumed] = await tx
@@ -141,6 +150,18 @@ export class TokenService {
         revoked: false,
         expiresAt,
       });
+
+      this.rotationGraceCache.set(tokenHash, {
+        newRawToken,
+        userId: consumed.userId,
+        rotatedAt: Date.now(),
+      });
+      if (this.rotationGraceCache.size > 500) {
+        const threshold = Date.now() - 45000;
+        for (const [key, val] of this.rotationGraceCache.entries()) {
+          if (val.rotatedAt < threshold) this.rotationGraceCache.delete(key);
+        }
+      }
 
       return { newRawToken, userId: consumed.userId };
     });

@@ -7,7 +7,8 @@ export const ALLOWED_MIME_TYPES = [
   'image/png',
   'image/webp',
 ] as const;
-export const UPLOAD_DEST = './uploads/library';
+export const UPLOAD_ROOT = process.env.UPLOAD_DIR || './uploads';
+export const UPLOAD_DEST = `${UPLOAD_ROOT}/library`;
 
 export const LIBRARY_FILE_EXTENSIONS = [
   '.pdf',

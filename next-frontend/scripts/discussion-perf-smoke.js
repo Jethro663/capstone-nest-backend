@@ -105,7 +105,7 @@ async function getFirstClassHref(page, profile) {
 }
 
 async function measureThreadOpen(page) {
-  const openButtons = page.getByRole('button', { name: /^(Open|Open Thread)$/i });
+  const openButtons = page.getByRole('button', { name: /^(Open|Open Thread|Viewing|Viewing Thread)$/i });
   await openButtons
     .first()
     .waitFor({ state: 'visible', timeout: 5000 })
@@ -118,8 +118,8 @@ async function measureThreadOpen(page) {
   const startedAt = Date.now();
   await openButtons.first().click();
   await Promise.race([
-    page.getByRole('button', { name: /close thread/i }).waitFor({ state: 'visible', timeout: 15000 }),
-    page.getByRole('button', { name: /viewing thread/i }).first().waitFor({ state: 'visible', timeout: 15000 }),
+    page.getByRole('button', { name: /close thread( view)?/i }).waitFor({ state: 'visible', timeout: 15000 }),
+    page.getByRole('button', { name: /viewing( thread)?/i }).first().waitFor({ state: 'visible', timeout: 15000 }),
   ]).catch(() => null);
   return Date.now() - startedAt;
 }

@@ -39,6 +39,26 @@ class Settings(BaseSettings):
     db_pool_recycle_s: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_S")
     db_pool_pre_ping: bool = Field(default=True, validation_alias="DB_POOL_PRE_PING")
     log_level: str = "INFO"
+    ai_tutor_max_inflight: int = Field(
+        default=8,
+        validation_alias="AI_TUTOR_MAX_INFLIGHT",
+    )
+    ai_tutor_reject_status: int = Field(
+        default=429,
+        validation_alias="AI_TUTOR_REJECT_STATUS",
+    )
+    ai_tutor_retry_after_s: int = Field(
+        default=5,
+        validation_alias="AI_TUTOR_RETRY_AFTER_S",
+    )
+    ai_teacher_bg_max_concurrency: int = Field(
+        default=2,
+        validation_alias="AI_TEACHER_BG_MAX_CONCURRENCY",
+    )
+    ai_extraction_bg_max_concurrency: int = Field(
+        default=1,
+        validation_alias="AI_EXTRACTION_BG_MAX_CONCURRENCY",
+    )
     ai_service_shared_secret: str = ""
     ai_degraded_allowed: bool = False
     retrieval_min_final_score: float = Field(

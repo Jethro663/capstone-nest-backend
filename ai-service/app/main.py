@@ -8,6 +8,7 @@ User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import re
@@ -99,7 +100,24 @@ _EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
-_BG_SEMAPHORE = asyncio.Semaphore(4)
+_TEACHER_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_teacher_bg_max_concurrency)
+_EXTRACTION_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_extraction_bg_max_concurrency)
+_TUTOR_SEMAPHORE = asyncio.Semaphore(settings.ai_tutor_max_inflight)
+
+
+@asynccontextmanager
+async def acquire_tutor_capacity():
+    if _TUTOR_SEMAPHORE.locked():
+        raise HTTPException(
+            status_code=settings.ai_tutor_reject_status,
+            detail="AI Tutor service currently at maximum capacity. Please retry shortly.",
+            headers={"Retry-After": str(settings.ai_tutor_retry_after_s)},
+        )
+    await _TUTOR_SEMAPHORE.acquire()
+    try:
+        yield
+    finally:
+        _TUTOR_SEMAPHORE.release()
 AI_JOB_STALE_FAILURE_MESSAGE = (
     "AI generation timed out before completion. Please retry this job."
 )
@@ -2248,12 +2266,13 @@ async def student_tutor_start(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    data = await start_student_tutor_session(
-        db,
-        user,
-        class_id=body.class_id,
-        recommendation=body.recommendation,
-    )
+    async with acquire_tutor_capacity():
+        data = await start_student_tutor_session(
+            db,
+            user,
+            class_id=body.class_id,
+            recommendation=body.recommendation,
+        )
     return {
         "success": True,
         "message": "Tutor session started",
@@ -2284,13 +2303,14 @@ async def student_tutor_message(
 ):
     if body.session_id != session_id:
         raise HTTPException(400, "Session ID mismatch")
-    data = await continue_student_tutor_session(
-        db,
-        user,
-        session_id=session_id,
-        message=body.message,
-        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
-    )
+    async with acquire_tutor_capacity():
+        data = await continue_student_tutor_session(
+            db,
+            user,
+            session_id=session_id,
+            message=body.message,
+            attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
+        )
     return {
         "success": True,
         "message": "Tutor follow-up generated",
@@ -2307,13 +2327,14 @@ async def student_tutor_answers(
 ):
     if body.session_id != session_id:
         raise HTTPException(400, "Session ID mismatch")
-    data = await submit_student_tutor_answers(
-        db,
-        user,
-        session_id=session_id,
-        answers=body.answers,
-        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
-    )
+    async with acquire_tutor_capacity():
+        data = await submit_student_tutor_answers(
+            db,
+            user,
+            session_id=session_id,
+            answers=body.answers,
+            attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
+        )
     return {
         "success": True,
         "message": "Tutor answers evaluated",
@@ -3398,7 +3419,7 @@ async def extract_module(
 
     # Run extraction in background on the active event loop.
     async def _run():
-        async with _BG_SEMAPHORE:
+        async with _EXTRACTION_BG_SEMAPHORE:
             from .database import AsyncSessionLocal
 
             async with AsyncSessionLocal() as bg_db:
@@ -4595,7 +4616,7 @@ async def queue_intervention_recommendation_job(
         loop = asyncio.get_running_loop()
 
         async def _sem_intervention():
-            async with _BG_SEMAPHORE:
+            async with _TEACHER_BG_SEMAPHORE:
                 await _run_intervention_generation_job(job_id, case_id, body.note, user)
 
         task = loop.create_task(_sem_intervention())
@@ -4674,7 +4695,7 @@ async def queue_teacher_quiz_draft_job(
         loop = asyncio.get_running_loop()
 
         async def _sem_quiz():
-            async with _BG_SEMAPHORE:
+            async with _TEACHER_BG_SEMAPHORE:
                 await _run_quiz_generation_job(job_id, body, user)
 
         task = loop.create_task(_sem_quiz())
@@ -4743,7 +4764,7 @@ async def queue_teacher_lesson_plan_job(
         loop = asyncio.get_running_loop()
 
         async def _sem_lesson_plan():
-            async with _BG_SEMAPHORE:
+            async with _TEACHER_BG_SEMAPHORE:
                 await _run_lesson_plan_generation_job(job_id, body, user)
 
         task = loop.create_task(_sem_lesson_plan())

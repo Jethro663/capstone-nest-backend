@@ -25,7 +25,7 @@ export class AiProxyService {
     this.baseUrl =
       this.config.get<string>('AI_SERVICE_URL') || 'http://localhost:8000';
     this.chatTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '70000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '25000',
       10,
     );
     this.quizTimeoutMs = parseInt(

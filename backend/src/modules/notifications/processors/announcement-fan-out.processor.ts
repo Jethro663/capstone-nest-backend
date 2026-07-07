@@ -17,7 +17,7 @@ interface FanOutJobData {
   content: string;
 }
 
-@Processor('announcements')
+@Processor('announcements', { concurrency: 3 })
 export class AnnouncementFanOutProcessor extends WorkerHost {
   private readonly logger = new Logger(AnnouncementFanOutProcessor.name);
 
@@ -90,17 +90,17 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
       body: bodyText,
     }));
 
-    await this.notificationsService.createBulkDeduped(inputs);
+    const inserted = await this.notificationsService.createBulkDeduped(inputs);
 
     const now = new Date();
 
-    // 3. Emit real-time event to every student (if they are online)
-    for (const userId of studentIds) {
-      this.notificationsGateway.emitToUser(userId, {
+    // 3. Emit real-time event ONLY to students whose notification was actually inserted (not deduplicated/skipped)
+    for (const item of inserted) {
+      this.notificationsGateway.emitToUser(item.userId, {
         id: announcementId, // referenceId as the identifier on the frontend
         type: 'announcement_posted',
-        title,
-        body: bodyText,
+        title: item.title,
+        body: item.body,
         referenceId: announcementId,
         createdAt: now,
       });

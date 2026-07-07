@@ -23,6 +23,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       connectionTimeoutMillis: this.configService.get(
         'database.connectionTimeout',
       ),
+      statement_timeout: this.configService.get('database.statementTimeout'),
     });
 
     // Pass the full schema object to drizzle
