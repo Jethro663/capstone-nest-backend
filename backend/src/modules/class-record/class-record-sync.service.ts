@@ -230,7 +230,10 @@ export class ClassRecordSyncService {
    * Matches assessment's classRecordCategory + quarter to find the correct
    * class record + category, then auto-links and syncs the score.
    */
-  @OnEvent(AssessmentSubmittedEvent.eventName, { async: true, promisify: false })
+  @OnEvent(AssessmentSubmittedEvent.eventName, {
+    async: true,
+    promisify: false,
+  })
   async handleAssessmentSubmitted(
     event: AssessmentSubmittedEvent,
   ): Promise<void> {

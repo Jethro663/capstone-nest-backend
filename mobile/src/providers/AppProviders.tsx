@@ -7,6 +7,7 @@ import { AuthProvider } from "./AuthProvider";
 import { ErrorModalProvider } from "./ErrorModalProvider";
 import { LiveNotificationProvider } from "./LiveNotificationProvider";
 import { StudentInterventionAlertProvider } from "./StudentInterventionAlertProvider";
+import { UpdateProvider } from "./UpdateProvider";
 
 export function AppProviders({ children }: PropsWithChildren) {
   return (
@@ -16,7 +17,9 @@ export function AppProviders({ children }: PropsWithChildren) {
           <ErrorModalProvider>
             <AuthProvider>
               <StudentInterventionAlertProvider>
-                <LiveNotificationProvider>{children}</LiveNotificationProvider>
+                <UpdateProvider>
+                  <LiveNotificationProvider>{children}</LiveNotificationProvider>
+                </UpdateProvider>
               </StudentInterventionAlertProvider>
             </AuthProvider>
           </ErrorModalProvider>

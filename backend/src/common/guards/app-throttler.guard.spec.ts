@@ -55,4 +55,3 @@ describe('AppThrottlerGuard', () => {
     ).resolves.toBe('login:student1@school.edu');
   });
 });
-

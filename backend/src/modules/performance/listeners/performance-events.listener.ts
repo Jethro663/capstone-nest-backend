@@ -14,7 +14,10 @@ export class PerformanceEventsListener {
     private readonly recomputeQueue: PerformanceRecomputeQueueService,
   ) {}
 
-  @OnEvent(AssessmentSubmittedEvent.eventName, { async: true, promisify: false })
+  @OnEvent(AssessmentSubmittedEvent.eventName, {
+    async: true,
+    promisify: false,
+  })
   async handleAssessmentSubmitted(event: AssessmentSubmittedEvent) {
     try {
       await this.recomputeQueue.enqueueAssessmentSubmission(
@@ -28,7 +31,10 @@ export class PerformanceEventsListener {
     }
   }
 
-  @OnEvent(ClassRecordScoresUpdatedEvent.eventName, { async: true, promisify: false })
+  @OnEvent(ClassRecordScoresUpdatedEvent.eventName, {
+    async: true,
+    promisify: false,
+  })
   async handleClassRecordScoresUpdated(event: ClassRecordScoresUpdatedEvent) {
     try {
       await this.recomputeQueue.enqueueClassRecordScores(
