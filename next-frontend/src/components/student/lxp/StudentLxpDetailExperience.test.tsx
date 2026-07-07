@@ -242,6 +242,82 @@ describe('StudentLxpDetailExperience', () => {
     expect(screen.queryByRole('button', { name: 'Mark Complete' })).not.toBeInTheDocument();
   });
 
+  it('shows submitted AI Plan assessment tries and score indicators', async () => {
+    searchParamsState.tab = 'replays';
+    mockedLxpService.getPlaylist.mockResolvedValue({
+      data: {
+        ...activePlaylistResponse.data,
+        checkpoints: [
+          {
+            id: 'checkpoint-guided',
+            type: 'guided_assessment',
+            label: 'AI Plan Quiz',
+            order: 1,
+            isCompleted: false,
+            completedAt: null,
+            xpAwarded: 30,
+            lesson: null,
+            assessment: null,
+            guidedAssessment: {
+              id: 'guided-1',
+              title: 'Fractions Recovery Quiz',
+              description: 'Answer the AI-generated quiz.',
+              weakConcepts: ['Fractions'],
+              sourceAssessmentId: 'assessment-1',
+              sourceReferences: [],
+              formativeSummary: null,
+              questions: [],
+              status: 'approved',
+            },
+            guidedAttemptSummary: {
+              maxAttempts: 3,
+              attemptsUsed: 2,
+              remainingAttempts: 1,
+              canRetry: true,
+              isLocked: false,
+              passingScore: 75,
+              passed: false,
+              bestAttemptId: 'attempt-2',
+              bestScorePercent: 68,
+              latestScorePercent: 68,
+              attempts: [
+                {
+                  id: 'attempt-1',
+                  attemptNumber: 1,
+                  status: 'submitted',
+                  scorePercent: 54,
+                  correctCount: 3,
+                  totalQuestions: 6,
+                },
+                {
+                  id: 'attempt-2',
+                  attemptNumber: 2,
+                  status: 'submitted',
+                  scorePercent: 68,
+                  correctCount: 4,
+                  totalQuestions: 6,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    } as never);
+
+    render(<StudentLxpDetailExperience />);
+
+    expect(await screen.findByText('AI Plan Quiz')).toBeInTheDocument();
+    expect(screen.getByText('2/3 submitted')).toBeInTheDocument();
+    expect(screen.getByText('Try 1: 54%')).toBeInTheDocument();
+    expect(screen.getByText('Try 2: 68%')).toBeInTheDocument();
+    expect(screen.getByText('Try 3: Not taken')).toBeInTheDocument();
+    expect(screen.getByText(/Best score: 68%/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Retry Guided Assessment' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/lxp/class-active/guided-assessment/checkpoint-guided',
+    );
+  });
+
   it('opens JA review when the replay card itself is clicked', async () => {
     searchParamsState.tab = 'replays';
 

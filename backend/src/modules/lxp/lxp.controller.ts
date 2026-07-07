@@ -43,6 +43,17 @@ export class LxpController {
     return { success: true, data };
   }
 
+  @Get('me/intervention-alerts')
+  @Roles(RoleName.Student)
+  async getInterventionAlerts(
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.lxpService.getStudentInterventionAlerts(
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
   @Get('me/playlist/:classId')
   @Roles(RoleName.Student)
   async getPlaylist(
@@ -99,11 +110,13 @@ export class LxpController {
     @Param('classId', ParseUUIDPipe) classId: string,
     @Param('assignmentId', ParseUUIDPipe) assignmentId: string,
     @CurrentUser() user: { userId: string; roles: string[] },
+    @Body() body: { forceNewAttempt?: boolean } = {},
   ) {
     const data = await this.lxpService.startGuidedAssessment(
       user.userId,
       classId,
       assignmentId,
+      { forceNewAttempt: body.forceNewAttempt === true },
     );
     return { success: true, data };
   }

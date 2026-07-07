@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Bring `test-mobile` to full student-web parity using live backend data, with Android-verified navigation, read flows, and write flows matching the current student web app.
+**Goal:** Bring `mobile` to full student-web parity using live backend data, with Android-verified navigation, read flows, and write flows matching the current student web app.
 
-**Architecture:** Treat `next-frontend/app/(dashboard)/dashboard/student/*` as the route and UI source of truth and `next-frontend/src/services/*` as the backend capability map. Expand `test-mobile` by first widening typed navigation and service coverage, then implementing parity screens in vertical slices, and verifying each slice through Jest/typecheck plus Expo Android/ADB checks.
+**Architecture:** Treat `next-frontend/app/(dashboard)/dashboard/student/*` as the route and UI source of truth and `next-frontend/src/services/*` as the backend capability map. Expand `mobile` by first widening typed navigation and service coverage, then implementing parity screens in vertical slices, and verifying each slice through Jest/typecheck plus Expo Android/ADB checks.
 
 **Tech Stack:** Expo 54, React Native 0.81, React Navigation, React Query, TypeScript, Jest, Android emulator/ADB, existing NestJS backend APIs
 
@@ -14,102 +14,102 @@
 
 ### Existing files to modify
 
-- `test-mobile/src/navigation/types.ts`
+- `mobile/src/navigation/types.ts`
   - Expand the student route tree so every student web route has a typed mobile counterpart.
-- `test-mobile/src/navigation/AppNavigator.tsx`
+- `mobile/src/navigation/AppNavigator.tsx`
   - Replace the current limited student stack with the parity stack and tab shell.
-- `test-mobile/src/api/hooks.ts`
+- `mobile/src/api/hooks.ts`
   - Add query keys, hooks, and invalidation rules for all new parity services and screens.
-- `test-mobile/src/api/services/assessments.ts`
+- `mobile/src/api/services/assessments.ts`
   - Extend student assessment coverage to include history and any missing detail/result calls.
-- `test-mobile/src/api/services/classes.ts`
+- `mobile/src/api/services/classes.ts`
   - Support richer class detail parity.
-- `test-mobile/src/api/services/lessons.ts`
+- `mobile/src/api/services/lessons.ts`
   - Support lesson detail parity and any missing completion-related endpoints.
-- `test-mobile/src/api/services/modules.ts`
+- `mobile/src/api/services/modules.ts`
   - Add module detail parity call mirroring the web service.
-- `test-mobile/src/api/services/announcements.ts`
+- `mobile/src/api/services/announcements.ts`
   - Preserve parity for class-scoped announcements and any dashboard aggregation needs.
-- `test-mobile/src/api/services/ai.ts`
+- `mobile/src/api/services/ai.ts`
   - Reuse for chatbot/tutor parity, only widening if student web uses an additional AI endpoint.
-- `test-mobile/src/api/services/profile.ts`
+- `mobile/src/api/services/profile.ts`
   - Preserve profile parity and add any student-facing record fields needed by transcript/profile screens.
-- `test-mobile/src/types/class.ts`
+- `mobile/src/types/class.ts`
   - Align student class and class-detail fields with web usage.
-- `test-mobile/src/types/lesson.ts`
+- `mobile/src/types/lesson.ts`
   - Align lesson list/detail fields with web usage.
-- `test-mobile/src/types/module.ts`
+- `mobile/src/types/module.ts`
   - Align class module detail shape with web usage.
-- `test-mobile/src/types/assessment.ts`
+- `mobile/src/types/assessment.ts`
   - Align attempt, history, result, and submission shapes with web usage.
-- `test-mobile/src/types/performance.ts`
+- `mobile/src/types/performance.ts`
   - Align performance summary usage with the web student page.
-- `test-mobile/src/types/profile.ts`
+- `mobile/src/types/profile.ts`
   - Align profile completeness and student metadata fields.
-- `test-mobile/src/components/ui/BottomTabBar.tsx`
+- `mobile/src/components/ui/BottomTabBar.tsx`
   - Update labels/icons/order if required by the new parity shell.
-- `test-mobile/src/screens/AnnouncementsScreen.tsx`
+- `mobile/src/screens/AnnouncementsScreen.tsx`
   - Match web student announcements behavior and layout more closely.
-- `test-mobile/src/screens/AssessmentsScreen.tsx`
+- `mobile/src/screens/AssessmentsScreen.tsx`
   - Match web student assessments list behavior and entry actions.
-- `test-mobile/src/screens/AssessmentDetailScreen.tsx`
+- `mobile/src/screens/AssessmentDetailScreen.tsx`
   - Match web student assessment detail behavior.
-- `test-mobile/src/screens/AssessmentTakeScreen.tsx`
+- `mobile/src/screens/AssessmentTakeScreen.tsx`
   - Preserve parity for attempt start/submission.
-- `test-mobile/src/screens/AssessmentResultsScreen.tsx`
+- `mobile/src/screens/AssessmentResultsScreen.tsx`
   - Match web student attempt result behavior.
-- `test-mobile/src/screens/LessonsScreen.tsx`
+- `mobile/src/screens/LessonsScreen.tsx`
   - Reframe toward dashboard/classes or reuse as the classes list shell.
-- `test-mobile/src/screens/SubjectLessonsScreen.tsx`
+- `mobile/src/screens/SubjectLessonsScreen.tsx`
   - Expand toward class-detail workspace parity.
-- `test-mobile/src/screens/JaScreen.tsx`
+- `mobile/src/screens/JaScreen.tsx`
   - Match web student JA parity.
-- `test-mobile/src/screens/LxpScreen.tsx`
+- `mobile/src/screens/LxpScreen.tsx`
   - Match web student LXP parity.
-- `test-mobile/src/screens/AiTutorScreen.tsx`
+- `mobile/src/screens/AiTutorScreen.tsx`
   - Match web chatbot/tutor parity where the backend contract overlaps.
-- `test-mobile/src/screens/ProgressScreen.tsx`
+- `mobile/src/screens/ProgressScreen.tsx`
   - Either evolve into performance parity or fold behavior into a renamed screen.
-- `test-mobile/src/screens/ProfileScreen.tsx`
+- `mobile/src/screens/ProfileScreen.tsx`
   - Match web student profile parity.
-- `test-mobile/src/screens/screen-flow.ts`
+- `mobile/src/screens/screen-flow.ts`
   - Keep route inventory metadata in sync with the new parity set.
-- `test-mobile/src/screens/__tests__/screen-flow.test.ts`
+- `mobile/src/screens/__tests__/screen-flow.test.ts`
   - Assert route inventory parity.
-- `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- `mobile/src/screens/__tests__/screen-render.test.tsx`
   - Add render smoke coverage for new parity screens.
-- `test-mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts`
+- `mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts`
   - Preserve student-only route boot behavior after navigator expansion.
 
 ### New files to create
 
-- `test-mobile/src/api/services/dashboard.ts`
+- `mobile/src/api/services/dashboard.ts`
   - Student dashboard aggregation service for school events and home-screen helpers where direct student APIs are needed.
-- `test-mobile/src/api/services/reports.ts`
+- `mobile/src/api/services/reports.ts`
   - Transcript/report service wrapper for student transcript parity.
-- `test-mobile/src/api/services/school-events.ts`
+- `mobile/src/api/services/school-events.ts`
   - School event service wrapper used by the dashboard calendar/feed.
-- `test-mobile/src/types/report.ts`
+- `mobile/src/types/report.ts`
   - Transcript/report response types used by the mobile transcript screen.
-- `test-mobile/src/types/school-event.ts`
+- `mobile/src/types/school-event.ts`
   - Calendar and event feed types for the dashboard parity screen.
-- `test-mobile/src/screens/DashboardScreen.tsx`
+- `mobile/src/screens/DashboardScreen.tsx`
   - Student home dashboard parity screen.
-- `test-mobile/src/screens/ClassDetailScreen.tsx`
+- `mobile/src/screens/ClassDetailScreen.tsx`
   - Student class detail parity screen.
-- `test-mobile/src/screens/ModuleDetailScreen.tsx`
+- `mobile/src/screens/ModuleDetailScreen.tsx`
   - Student module detail parity screen.
-- `test-mobile/src/screens/CoursesScreen.tsx`
+- `mobile/src/screens/CoursesScreen.tsx`
   - Student courses parity screen.
-- `test-mobile/src/screens/LessonDetailScreen.tsx`
+- `mobile/src/screens/LessonDetailScreen.tsx`
   - Student lesson detail parity screen.
-- `test-mobile/src/screens/AssessmentHistoryScreen.tsx`
+- `mobile/src/screens/AssessmentHistoryScreen.tsx`
   - Student assessment history parity screen.
-- `test-mobile/src/screens/PerformanceScreen.tsx`
+- `mobile/src/screens/PerformanceScreen.tsx`
   - Student performance parity screen, replacing or superseding `ProgressScreen.tsx`.
-- `test-mobile/src/screens/TranscriptScreen.tsx`
+- `mobile/src/screens/TranscriptScreen.tsx`
   - Student transcript parity screen.
-- `test-mobile/src/screens/__tests__/student-parity-navigation.test.tsx`
+- `mobile/src/screens/__tests__/student-parity-navigation.test.tsx`
   - Focused parity navigation coverage for new routes.
 
 ### Web references to consult while implementing
@@ -146,9 +146,9 @@
 
 ### Verification commands
 
-- `cd test-mobile && npm run typecheck`
-- `cd test-mobile && npm run test`
-- `cd test-mobile && npm run android:emulator`
+- `cd mobile && npm run typecheck`
+- `cd mobile && npm run test`
+- `cd mobile && npm run android:emulator`
 - `adb devices`
 - `adb shell screencap -p /sdcard/student-mobile-parity.png`
 - `adb pull /sdcard/student-mobile-parity.png .`
@@ -156,16 +156,16 @@
 ## Task 1: Expand Student Navigation Types And Parity Inventory
 
 **Files:**
-- Modify: `test-mobile/src/navigation/types.ts`
-- Modify: `test-mobile/src/navigation/AppNavigator.tsx`
-- Modify: `test-mobile/src/screens/screen-flow.ts`
-- Test: `test-mobile/src/screens/__tests__/screen-flow.test.ts`
-- Test: `test-mobile/src/screens/__tests__/student-parity-navigation.test.tsx`
+- Modify: `mobile/src/navigation/types.ts`
+- Modify: `mobile/src/navigation/AppNavigator.tsx`
+- Modify: `mobile/src/screens/screen-flow.ts`
+- Test: `mobile/src/screens/__tests__/screen-flow.test.ts`
+- Test: `mobile/src/screens/__tests__/student-parity-navigation.test.tsx`
 
 - [ ] **Step 1: Write the failing parity inventory tests**
 
 ```tsx
-// test-mobile/src/screens/__tests__/student-parity-navigation.test.tsx
+// mobile/src/screens/__tests__/student-parity-navigation.test.tsx
 import { screenFlow } from '../screen-flow';
 
 describe('student mobile parity inventory', () => {
@@ -199,14 +199,14 @@ describe('student mobile parity inventory', () => {
 
 - [ ] **Step 2: Run the focused tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- student-parity-navigation screen-flow`
+Run: `cd mobile && npm run test -- student-parity-navigation screen-flow`
 
 Expected: FAIL because the new student parity routes are not yet present in `screen-flow.ts` or the navigator type map.
 
 - [ ] **Step 3: Expand the typed route map and screen-flow inventory**
 
 ```ts
-// test-mobile/src/navigation/types.ts
+// mobile/src/navigation/types.ts
 export type RootStackParamList = {
   MainTabs: undefined;
   Dashboard: undefined;
@@ -223,7 +223,7 @@ export type RootStackParamList = {
   Chatbot: { classId?: string } | undefined;
 };
 
-// test-mobile/src/screens/screen-flow.ts
+// mobile/src/screens/screen-flow.ts
 export const screenFlow = {
   studentRoutes: [
     'Dashboard',
@@ -252,7 +252,7 @@ export const screenFlow = {
 - [ ] **Step 4: Wire placeholder route entries into the student navigator**
 
 ```tsx
-// test-mobile/src/navigation/AppNavigator.tsx
+// mobile/src/navigation/AppNavigator.tsx
 <RootStack.Navigator screenOptions={{ headerShown: false }}>
   <RootStack.Screen name="MainTabs" component={StudentTabs} />
   <RootStack.Screen name="Dashboard" component={DashboardScreen} />
@@ -271,35 +271,35 @@ export const screenFlow = {
 
 - [ ] **Step 5: Re-run the focused tests and ensure they pass**
 
-Run: `cd test-mobile && npm run test -- student-parity-navigation screen-flow`
+Run: `cd mobile && npm run test -- student-parity-navigation screen-flow`
 
 Expected: PASS with the parity route inventory present.
 
 - [ ] **Step 6: Commit the navigation inventory slice**
 
 ```bash
-git add test-mobile/src/navigation/types.ts test-mobile/src/navigation/AppNavigator.tsx test-mobile/src/screens/screen-flow.ts test-mobile/src/screens/__tests__/screen-flow.test.ts test-mobile/src/screens/__tests__/student-parity-navigation.test.tsx
+git add mobile/src/navigation/types.ts mobile/src/navigation/AppNavigator.tsx mobile/src/screens/screen-flow.ts mobile/src/screens/__tests__/screen-flow.test.ts mobile/src/screens/__tests__/student-parity-navigation.test.tsx
 git commit -m "feat: add student mobile parity route inventory"
 ```
 
 ## Task 2: Add Missing Student Services, Types, And Queries
 
 **Files:**
-- Create: `test-mobile/src/api/services/dashboard.ts`
-- Create: `test-mobile/src/api/services/reports.ts`
-- Create: `test-mobile/src/api/services/school-events.ts`
-- Create: `test-mobile/src/types/report.ts`
-- Create: `test-mobile/src/types/school-event.ts`
-- Modify: `test-mobile/src/api/services/modules.ts`
-- Modify: `test-mobile/src/api/services/assessments.ts`
-- Modify: `test-mobile/src/api/services/lessons.ts`
-- Modify: `test-mobile/src/api/hooks.ts`
-- Test: `test-mobile/src/api/__tests__/hooks.test.ts`
+- Create: `mobile/src/api/services/dashboard.ts`
+- Create: `mobile/src/api/services/reports.ts`
+- Create: `mobile/src/api/services/school-events.ts`
+- Create: `mobile/src/types/report.ts`
+- Create: `mobile/src/types/school-event.ts`
+- Modify: `mobile/src/api/services/modules.ts`
+- Modify: `mobile/src/api/services/assessments.ts`
+- Modify: `mobile/src/api/services/lessons.ts`
+- Modify: `mobile/src/api/hooks.ts`
+- Test: `mobile/src/api/__tests__/hooks.test.ts`
 
 - [ ] **Step 1: Write failing hook/service tests for the new parity calls**
 
 ```ts
-// test-mobile/src/api/__tests__/hooks.test.ts
+// mobile/src/api/__tests__/hooks.test.ts
 it('registers transcript and dashboard query keys', () => {
   expect(queryKeys.transcript).toEqual(['transcript']);
   expect(queryKeys.schoolEvents('2025-2026')).toEqual(['school-events', '2025-2026']);
@@ -309,14 +309,14 @@ it('registers transcript and dashboard query keys', () => {
 
 - [ ] **Step 2: Run the targeted tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- hooks`
+Run: `cd mobile && npm run test -- hooks`
 
 Expected: FAIL because the new query keys and wrappers do not exist yet.
 
 - [ ] **Step 3: Add the new mobile service wrappers**
 
 ```ts
-// test-mobile/src/api/services/reports.ts
+// mobile/src/api/services/reports.ts
 import { apiClient } from '../client';
 import { unwrapEnvelope } from '../http';
 import type { ApiEnvelope } from '../../types/api';
@@ -329,7 +329,7 @@ export const reportsApi = {
   },
 };
 
-// test-mobile/src/api/services/school-events.ts
+// mobile/src/api/services/school-events.ts
 import { apiClient } from '../client';
 import { unwrapEnvelope } from '../http';
 import type { ApiEnvelope } from '../../types/api';
@@ -344,7 +344,7 @@ export const schoolEventsApi = {
   },
 };
 
-// test-mobile/src/api/services/modules.ts
+// mobile/src/api/services/modules.ts
 async getByClassAndModule(classId: string, moduleId: string) {
   const response = await apiClient.get<ApiEnvelope<ClassModule>>(`/modules/class/${classId}/${moduleId}`);
   return unwrapEnvelope(response.data);
@@ -354,7 +354,7 @@ async getByClassAndModule(classId: string, moduleId: string) {
 - [ ] **Step 4: Add the corresponding query keys and hooks**
 
 ```ts
-// test-mobile/src/api/hooks.ts
+// mobile/src/api/hooks.ts
 export const queryKeys = {
   // existing keys...
   schoolEvents: (schoolYear?: string) => ['school-events', schoolYear ?? 'current'] as const,
@@ -380,33 +380,33 @@ export const useTranscript = () =>
 
 - [ ] **Step 5: Re-run the hook tests and typecheck**
 
-Run: `cd test-mobile && npm run test -- hooks`
+Run: `cd mobile && npm run test -- hooks`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 6: Commit the parity service slice**
 
 ```bash
-git add test-mobile/src/api/services/dashboard.ts test-mobile/src/api/services/reports.ts test-mobile/src/api/services/school-events.ts test-mobile/src/api/services/modules.ts test-mobile/src/api/services/assessments.ts test-mobile/src/api/services/lessons.ts test-mobile/src/api/hooks.ts test-mobile/src/types/report.ts test-mobile/src/types/school-event.ts test-mobile/src/api/__tests__/hooks.test.ts
+git add mobile/src/api/services/dashboard.ts mobile/src/api/services/reports.ts mobile/src/api/services/school-events.ts mobile/src/api/services/modules.ts mobile/src/api/services/assessments.ts mobile/src/api/services/lessons.ts mobile/src/api/hooks.ts mobile/src/types/report.ts mobile/src/types/school-event.ts mobile/src/api/__tests__/hooks.test.ts
 git commit -m "feat: add student mobile parity service coverage"
 ```
 
 ## Task 3: Implement Dashboard Home Parity
 
 **Files:**
-- Create: `test-mobile/src/screens/DashboardScreen.tsx`
-- Modify: `test-mobile/src/navigation/AppNavigator.tsx`
-- Modify: `test-mobile/src/components/ui/BottomTabBar.tsx`
-- Test: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- Create: `mobile/src/screens/DashboardScreen.tsx`
+- Modify: `mobile/src/navigation/AppNavigator.tsx`
+- Modify: `mobile/src/components/ui/BottomTabBar.tsx`
+- Test: `mobile/src/screens/__tests__/screen-render.test.tsx`
 
 - [ ] **Step 1: Add a failing render test for the student dashboard**
 
 ```tsx
-// test-mobile/src/screens/__tests__/screen-render.test.tsx
+// mobile/src/screens/__tests__/screen-render.test.tsx
 it('renders the student dashboard parity shell', () => {
   const tree = render(<DashboardScreen />);
   expect(tree.getByText('Your Learning Hub')).toBeTruthy();
@@ -417,14 +417,14 @@ it('renders the student dashboard parity shell', () => {
 
 - [ ] **Step 2: Run the render test to verify it fails**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: FAIL because `DashboardScreen` does not exist yet.
 
 - [ ] **Step 3: Build the dashboard screen using the new hooks**
 
 ```tsx
-// test-mobile/src/screens/DashboardScreen.tsx
+// mobile/src/screens/DashboardScreen.tsx
 export function DashboardScreen() {
   const { user } = useAuth();
   const classes = useStudentClasses(user?.id);
@@ -450,7 +450,7 @@ export function DashboardScreen() {
 - [ ] **Step 4: Make the dashboard the mobile home tab entry**
 
 ```tsx
-// test-mobile/src/navigation/AppNavigator.tsx
+// mobile/src/navigation/AppNavigator.tsx
 function StudentTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <BottomTabBar {...props} />}>
@@ -466,32 +466,32 @@ function StudentTabs() {
 
 - [ ] **Step 5: Re-run render tests and typecheck**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 6: Commit the dashboard parity slice**
 
 ```bash
-git add test-mobile/src/screens/DashboardScreen.tsx test-mobile/src/navigation/AppNavigator.tsx test-mobile/src/components/ui/BottomTabBar.tsx test-mobile/src/screens/__tests__/screen-render.test.tsx
+git add mobile/src/screens/DashboardScreen.tsx mobile/src/navigation/AppNavigator.tsx mobile/src/components/ui/BottomTabBar.tsx mobile/src/screens/__tests__/screen-render.test.tsx
 git commit -m "feat: add student dashboard mobile parity"
 ```
 
 ## Task 4: Implement Classes, Modules, Lessons, And Courses Parity
 
 **Files:**
-- Create: `test-mobile/src/screens/ClassDetailScreen.tsx`
-- Create: `test-mobile/src/screens/ModuleDetailScreen.tsx`
-- Create: `test-mobile/src/screens/CoursesScreen.tsx`
-- Create: `test-mobile/src/screens/LessonDetailScreen.tsx`
-- Modify: `test-mobile/src/screens/LessonsScreen.tsx`
-- Modify: `test-mobile/src/screens/SubjectLessonsScreen.tsx`
-- Modify: `test-mobile/src/api/hooks.ts`
-- Test: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- Create: `mobile/src/screens/ClassDetailScreen.tsx`
+- Create: `mobile/src/screens/ModuleDetailScreen.tsx`
+- Create: `mobile/src/screens/CoursesScreen.tsx`
+- Create: `mobile/src/screens/LessonDetailScreen.tsx`
+- Modify: `mobile/src/screens/LessonsScreen.tsx`
+- Modify: `mobile/src/screens/SubjectLessonsScreen.tsx`
+- Modify: `mobile/src/api/hooks.ts`
+- Test: `mobile/src/screens/__tests__/screen-render.test.tsx`
 
 - [ ] **Step 1: Add failing render tests for the new parity screens**
 
@@ -509,14 +509,14 @@ it('renders the transcript of module sections on the module detail screen', () =
 
 - [ ] **Step 2: Run the render tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: FAIL because the new screens do not yet exist.
 
 - [ ] **Step 3: Implement class, module, lesson, and course detail screens**
 
 ```tsx
-// test-mobile/src/screens/ClassDetailScreen.tsx
+// mobile/src/screens/ClassDetailScreen.tsx
 export function ClassDetailScreen({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'ClassDetail'>) {
   const detail = useClassDetail(route.params.classId);
   const modules = useClassModules(route.params.classId);
@@ -543,42 +543,42 @@ export function ClassDetailScreen({ route, navigation }: NativeStackScreenProps<
 - [ ] **Step 4: Repoint the existing class workspace/list screens into the new stack**
 
 ```tsx
-// test-mobile/src/screens/LessonsScreen.tsx
+// mobile/src/screens/LessonsScreen.tsx
 onPress={() => navigation.navigate('ClassDetail', { classId: item.id })}
 
-// test-mobile/src/screens/SubjectLessonsScreen.tsx
+// mobile/src/screens/SubjectLessonsScreen.tsx
 onPress={() => navigation.navigate('LessonDetail', { lessonId: lesson.id, classId })}
 ```
 
 - [ ] **Step 5: Re-run render tests and typecheck**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 6: Commit the class/module/lesson/course parity slice**
 
 ```bash
-git add test-mobile/src/screens/ClassDetailScreen.tsx test-mobile/src/screens/ModuleDetailScreen.tsx test-mobile/src/screens/CoursesScreen.tsx test-mobile/src/screens/LessonDetailScreen.tsx test-mobile/src/screens/LessonsScreen.tsx test-mobile/src/screens/SubjectLessonsScreen.tsx test-mobile/src/api/hooks.ts test-mobile/src/screens/__tests__/screen-render.test.tsx
+git add mobile/src/screens/ClassDetailScreen.tsx mobile/src/screens/ModuleDetailScreen.tsx mobile/src/screens/CoursesScreen.tsx mobile/src/screens/LessonDetailScreen.tsx mobile/src/screens/LessonsScreen.tsx mobile/src/screens/SubjectLessonsScreen.tsx mobile/src/api/hooks.ts mobile/src/screens/__tests__/screen-render.test.tsx
 git commit -m "feat: add student learning path mobile parity"
 ```
 
 ## Task 5: Implement Assessment History And End-To-End Assessment Parity
 
 **Files:**
-- Create: `test-mobile/src/screens/AssessmentHistoryScreen.tsx`
-- Modify: `test-mobile/src/api/services/assessments.ts`
-- Modify: `test-mobile/src/api/hooks.ts`
-- Modify: `test-mobile/src/screens/AssessmentsScreen.tsx`
-- Modify: `test-mobile/src/screens/AssessmentDetailScreen.tsx`
-- Modify: `test-mobile/src/screens/AssessmentTakeScreen.tsx`
-- Modify: `test-mobile/src/screens/AssessmentResultsScreen.tsx`
-- Test: `test-mobile/src/api/__tests__/hooks.test.ts`
-- Test: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- Create: `mobile/src/screens/AssessmentHistoryScreen.tsx`
+- Modify: `mobile/src/api/services/assessments.ts`
+- Modify: `mobile/src/api/hooks.ts`
+- Modify: `mobile/src/screens/AssessmentsScreen.tsx`
+- Modify: `mobile/src/screens/AssessmentDetailScreen.tsx`
+- Modify: `mobile/src/screens/AssessmentTakeScreen.tsx`
+- Modify: `mobile/src/screens/AssessmentResultsScreen.tsx`
+- Test: `mobile/src/api/__tests__/hooks.test.ts`
+- Test: `mobile/src/screens/__tests__/screen-render.test.tsx`
 
 - [ ] **Step 1: Add failing tests for assessment history query coverage**
 
@@ -590,20 +590,20 @@ it('registers assessment history parity key', () => {
 
 - [ ] **Step 2: Run the targeted tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- hooks screen-render`
+Run: `cd mobile && npm run test -- hooks screen-render`
 
 Expected: FAIL because assessment history coverage is missing.
 
 - [ ] **Step 3: Add the missing assessment history service and hook**
 
 ```ts
-// test-mobile/src/api/services/assessments.ts
+// mobile/src/api/services/assessments.ts
 async getHistory() {
   const response = await apiClient.get<ApiEnvelope<AssessmentAttempt[]>>('/assessments/student/history');
   return unwrapEnvelope(response.data);
 }
 
-// test-mobile/src/api/hooks.ts
+// mobile/src/api/hooks.ts
 export const useAssessmentHistory = () =>
   useQuery({
     queryKey: queryKeys.assessmentHistory,
@@ -614,7 +614,7 @@ export const useAssessmentHistory = () =>
 - [ ] **Step 4: Implement the history screen and wire parity actions**
 
 ```tsx
-// test-mobile/src/screens/AssessmentHistoryScreen.tsx
+// mobile/src/screens/AssessmentHistoryScreen.tsx
 export function AssessmentHistoryScreen({ navigation }: NativeStackScreenProps<RootStackParamList, 'AssessmentHistory'>) {
   const history = useAssessmentHistory();
 
@@ -637,12 +637,12 @@ export function AssessmentHistoryScreen({ navigation }: NativeStackScreenProps<R
 - [ ] **Step 5: Tighten the existing assessment list/detail/take/result screens to mirror web actions**
 
 ```tsx
-// test-mobile/src/screens/AssessmentsScreen.tsx
+// mobile/src/screens/AssessmentsScreen.tsx
 <Pressable onPress={() => navigation.navigate('AssessmentHistory')}>
   <Text>View history</Text>
 </Pressable>
 
-// test-mobile/src/screens/AssessmentDetailScreen.tsx
+// mobile/src/screens/AssessmentDetailScreen.tsx
 <Pressable onPress={() => navigation.navigate('AssessmentTake', { assessmentId })}>
   <Text>Start assessment</Text>
 </Pressable>
@@ -650,32 +650,32 @@ export function AssessmentHistoryScreen({ navigation }: NativeStackScreenProps<R
 
 - [ ] **Step 6: Re-run hooks, render tests, and typecheck**
 
-Run: `cd test-mobile && npm run test -- hooks screen-render`
+Run: `cd mobile && npm run test -- hooks screen-render`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 7: Commit the assessment parity slice**
 
 ```bash
-git add test-mobile/src/api/services/assessments.ts test-mobile/src/api/hooks.ts test-mobile/src/screens/AssessmentsScreen.tsx test-mobile/src/screens/AssessmentDetailScreen.tsx test-mobile/src/screens/AssessmentTakeScreen.tsx test-mobile/src/screens/AssessmentResultsScreen.tsx test-mobile/src/screens/AssessmentHistoryScreen.tsx test-mobile/src/api/__tests__/hooks.test.ts test-mobile/src/screens/__tests__/screen-render.test.tsx
+git add mobile/src/api/services/assessments.ts mobile/src/api/hooks.ts mobile/src/screens/AssessmentsScreen.tsx mobile/src/screens/AssessmentDetailScreen.tsx mobile/src/screens/AssessmentTakeScreen.tsx mobile/src/screens/AssessmentResultsScreen.tsx mobile/src/screens/AssessmentHistoryScreen.tsx mobile/src/api/__tests__/hooks.test.ts mobile/src/screens/__tests__/screen-render.test.tsx
 git commit -m "feat: complete student assessment mobile parity"
 ```
 
 ## Task 6: Implement Announcements, JA, LXP, Chatbot, And Performance Parity
 
 **Files:**
-- Create: `test-mobile/src/screens/PerformanceScreen.tsx`
-- Modify: `test-mobile/src/screens/AnnouncementsScreen.tsx`
-- Modify: `test-mobile/src/screens/JaScreen.tsx`
-- Modify: `test-mobile/src/screens/LxpScreen.tsx`
-- Modify: `test-mobile/src/screens/AiTutorScreen.tsx`
-- Modify: `test-mobile/src/screens/ProgressScreen.tsx`
-- Modify: `test-mobile/src/navigation/AppNavigator.tsx`
-- Test: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- Create: `mobile/src/screens/PerformanceScreen.tsx`
+- Modify: `mobile/src/screens/AnnouncementsScreen.tsx`
+- Modify: `mobile/src/screens/JaScreen.tsx`
+- Modify: `mobile/src/screens/LxpScreen.tsx`
+- Modify: `mobile/src/screens/AiTutorScreen.tsx`
+- Modify: `mobile/src/screens/ProgressScreen.tsx`
+- Modify: `mobile/src/navigation/AppNavigator.tsx`
+- Test: `mobile/src/screens/__tests__/screen-render.test.tsx`
 
 - [ ] **Step 1: Add failing render expectations for student support surfaces**
 
@@ -688,14 +688,14 @@ it('renders the performance parity screen', () => {
 
 - [ ] **Step 2: Run the render tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: FAIL because `PerformanceScreen` does not exist yet.
 
 - [ ] **Step 3: Implement the parity surfaces against live hooks**
 
 ```tsx
-// test-mobile/src/screens/PerformanceScreen.tsx
+// mobile/src/screens/PerformanceScreen.tsx
 export function PerformanceScreen() {
   const summary = usePerformanceSummary();
 
@@ -707,7 +707,7 @@ export function PerformanceScreen() {
   );
 }
 
-// test-mobile/src/screens/AiTutorScreen.tsx
+// mobile/src/screens/AiTutorScreen.tsx
 <Text>Ask Nexora</Text>
 <TextInput value={message} onChangeText={setMessage} placeholder="Ask a question about your lesson" />
 ```
@@ -715,37 +715,37 @@ export function PerformanceScreen() {
 - [ ] **Step 4: Route the parity screens from tabs and detail actions**
 
 ```tsx
-// test-mobile/src/navigation/AppNavigator.tsx
+// mobile/src/navigation/AppNavigator.tsx
 <RootStack.Screen name="Performance" component={PerformanceScreen} />
 <RootStack.Screen name="Chatbot" component={AiTutorScreen} />
 ```
 
 - [ ] **Step 5: Re-run render tests and typecheck**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 6: Commit the student support parity slice**
 
 ```bash
-git add test-mobile/src/screens/PerformanceScreen.tsx test-mobile/src/screens/AnnouncementsScreen.tsx test-mobile/src/screens/JaScreen.tsx test-mobile/src/screens/LxpScreen.tsx test-mobile/src/screens/AiTutorScreen.tsx test-mobile/src/screens/ProgressScreen.tsx test-mobile/src/navigation/AppNavigator.tsx test-mobile/src/screens/__tests__/screen-render.test.tsx
+git add mobile/src/screens/PerformanceScreen.tsx mobile/src/screens/AnnouncementsScreen.tsx mobile/src/screens/JaScreen.tsx mobile/src/screens/LxpScreen.tsx mobile/src/screens/AiTutorScreen.tsx mobile/src/screens/ProgressScreen.tsx mobile/src/navigation/AppNavigator.tsx mobile/src/screens/__tests__/screen-render.test.tsx
 git commit -m "feat: add student support mobile parity screens"
 ```
 
 ## Task 7: Implement Profile And Transcript Parity
 
 **Files:**
-- Create: `test-mobile/src/screens/TranscriptScreen.tsx`
-- Modify: `test-mobile/src/screens/ProfileScreen.tsx`
-- Modify: `test-mobile/src/api/services/profile.ts`
-- Modify: `test-mobile/src/api/services/reports.ts`
-- Modify: `test-mobile/src/api/hooks.ts`
-- Test: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
+- Create: `mobile/src/screens/TranscriptScreen.tsx`
+- Modify: `mobile/src/screens/ProfileScreen.tsx`
+- Modify: `mobile/src/api/services/profile.ts`
+- Modify: `mobile/src/api/services/reports.ts`
+- Modify: `mobile/src/api/hooks.ts`
+- Test: `mobile/src/screens/__tests__/screen-render.test.tsx`
 
 - [ ] **Step 1: Add failing render tests for transcript parity**
 
@@ -758,14 +758,14 @@ it('renders the transcript parity screen', () => {
 
 - [ ] **Step 2: Run the render tests to verify they fail**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: FAIL because `TranscriptScreen` does not exist yet.
 
 - [ ] **Step 3: Implement transcript and profile parity screens**
 
 ```tsx
-// test-mobile/src/screens/TranscriptScreen.tsx
+// mobile/src/screens/TranscriptScreen.tsx
 export function TranscriptScreen() {
   const transcript = useTranscript();
 
@@ -782,7 +782,7 @@ export function TranscriptScreen() {
   );
 }
 
-// test-mobile/src/screens/ProfileScreen.tsx
+// mobile/src/screens/ProfileScreen.tsx
 <Pressable onPress={() => navigation.navigate('Transcript')}>
   <Text>Open transcript</Text>
 </Pressable>
@@ -790,18 +790,18 @@ export function TranscriptScreen() {
 
 - [ ] **Step 4: Re-run render tests and typecheck**
 
-Run: `cd test-mobile && npm run test -- screen-render`
+Run: `cd mobile && npm run test -- screen-render`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 5: Commit the profile/transcript parity slice**
 
 ```bash
-git add test-mobile/src/screens/TranscriptScreen.tsx test-mobile/src/screens/ProfileScreen.tsx test-mobile/src/api/services/profile.ts test-mobile/src/api/services/reports.ts test-mobile/src/api/hooks.ts test-mobile/src/screens/__tests__/screen-render.test.tsx
+git add mobile/src/screens/TranscriptScreen.tsx mobile/src/screens/ProfileScreen.tsx mobile/src/api/services/profile.ts mobile/src/api/services/reports.ts mobile/src/api/hooks.ts mobile/src/screens/__tests__/screen-render.test.tsx
 git commit -m "feat: add student profile and transcript mobile parity"
 ```
 
@@ -809,14 +809,14 @@ git commit -m "feat: add student profile and transcript mobile parity"
 
 **Files:**
 - Modify: `docs/testing/student-mobile-parity-audit.md`
-- Modify: `test-mobile/src/screens/__tests__/screen-render.test.tsx`
-- Modify: `test-mobile/src/screens/__tests__/screen-flow.test.ts`
-- Modify: `test-mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts`
+- Modify: `mobile/src/screens/__tests__/screen-render.test.tsx`
+- Modify: `mobile/src/screens/__tests__/screen-flow.test.ts`
+- Modify: `mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts`
 
 - [ ] **Step 1: Add a final route coverage assertion before running Android**
 
 ```ts
-// test-mobile/src/screens/__tests__/screen-flow.test.ts
+// mobile/src/screens/__tests__/screen-flow.test.ts
 it('keeps all student web parity routes reachable in mobile', () => {
   expect(screenFlow.studentRoutes).toHaveLength(19);
 });
@@ -824,17 +824,17 @@ it('keeps all student web parity routes reachable in mobile', () => {
 
 - [ ] **Step 2: Run the full mobile automated verification**
 
-Run: `cd test-mobile && npm run test`
+Run: `cd mobile && npm run test`
 
 Expected: PASS
 
-Run: `cd test-mobile && npm run typecheck`
+Run: `cd mobile && npm run typecheck`
 
 Expected: PASS
 
 - [ ] **Step 3: Boot Android and validate the live student flow**
 
-Run: `cd test-mobile && npm run android:emulator`
+Run: `cd mobile && npm run android:emulator`
 
 Expected: Expo starts, Metro serves the app, and the Android emulator launches the student build.
 
@@ -861,7 +861,7 @@ Expected: At least one screenshot artifact plus manual verification of login, da
 - [ ] **Step 6: Commit the final parity verification sweep**
 
 ```bash
-git add docs/testing/student-mobile-parity-audit.md test-mobile/src/screens/__tests__/screen-render.test.tsx test-mobile/src/screens/__tests__/screen-flow.test.ts test-mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts
+git add docs/testing/student-mobile-parity-audit.md mobile/src/screens/__tests__/screen-render.test.tsx mobile/src/screens/__tests__/screen-flow.test.ts mobile/src/navigation/__tests__/app-navigator-role-resolution.test.ts
 git commit -m "test: verify student mobile parity on android"
 ```
 

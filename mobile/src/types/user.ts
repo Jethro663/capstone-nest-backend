@@ -8,7 +8,7 @@ export interface User {
   middleName?: string;
   lastName?: string;
   roles: UserRole[];
-  status: 'ACTIVE' | 'PENDING' | 'SUSPENDED' | 'DELETED';
+  status: "ACTIVE" | "PENDING" | "SUSPENDED" | "DELETED";
   isEmailVerified: boolean;
   lastLoginAt?: string;
   createdAt?: string;

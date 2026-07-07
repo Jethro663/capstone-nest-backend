@@ -14,6 +14,7 @@ RUN npm ci
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY scripts/ ./scripts/
 COPY src/ ./src/
+COPY drizzle/ ./drizzle/
 
 RUN npm run build
 

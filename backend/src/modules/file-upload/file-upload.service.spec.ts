@@ -453,7 +453,9 @@ describe('FileUploadService', () => {
         classId: CLASS_ID,
       });
       mockDb.query.uploadedFiles.findFirst.mockResolvedValue(record);
-      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment-1' });
+      mockDb.query.enrollments.findFirst.mockResolvedValue({
+        id: 'enrollment-1',
+      });
 
       const result = await service.findOne(FILE_ID, STUDENT_USER);
 

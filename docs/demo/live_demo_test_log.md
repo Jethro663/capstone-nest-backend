@@ -17,8 +17,8 @@
 - `..\.venv\Scripts\python.exe scripts/run_tests.py (from ai-service cwd)`
 - `npm run build (backend)`
 - `npm run build (next-frontend)`
-- `npm run typecheck (test-mobile)`
-- `npm run test (test-mobile)`
+- `npm run typecheck (mobile)`
+- `npm run test (mobile)`
 
 ## Key Results
 - `GET /api/health/ready` succeeded with database, redis, and aiService all healthy.
@@ -29,7 +29,7 @@
 - Playwright crawl captured screenshots for major admin, teacher, and student pages with no console errors recorded.
 - `backend/scripts/post-seed-smoke.js` succeeded after rerun from the backend cwd.
 - `ai-service/scripts/run_tests.py` passed 60 tests after rerun from the ai-service cwd.
-- `npm run build` passed in backend and web; `npm run typecheck` and `npm run test` passed in `test-mobile`.
+- `npm run build` passed in backend and web; `npm run typecheck` and `npm run test` passed in `mobile`.
 
 ## Important Runtime Findings
 - Admin diagnostics page is real and populated.

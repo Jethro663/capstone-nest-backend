@@ -32,11 +32,13 @@ describe('extractionService', () => {
     await extractionService.extractModule({
       fileId: 'file-queue',
       targetSectionCount: 4,
+      extractionStyle: 'student_friendly',
     });
 
     expect(mockedApi.post).toHaveBeenCalledWith('/ai/extract-module', {
       fileId: 'file-queue',
       targetSectionCount: 4,
+      extractionStyle: 'student_friendly',
     });
   });
 
@@ -147,6 +149,20 @@ describe('extractionService', () => {
             ],
             audit: {
               imageAssignmentSummary: { assigned: 1, unassigned: 0 },
+              reviewState: 'needs_review',
+              reviewIssues: [
+                {
+                  id: 'issue-1',
+                  code: 'low-section-confidence',
+                  severity: 'blocking',
+                  scope: 'section',
+                  message: 'Review section',
+                  sectionIndex: 0,
+                  blockIndex: null,
+                  resolved: false,
+                  resolution: null,
+                },
+              ],
             },
           },
         },
@@ -161,6 +177,11 @@ describe('extractionService', () => {
       id: 'image-1',
       selectedSectionIndex: 0,
       teacherReviewed: true,
+    });
+    expect(result.data.structuredContent?.audit?.reviewState).toBe('needs_review');
+    expect(result.data.structuredContent?.audit?.reviewIssues?.[0]).toMatchObject({
+      id: 'issue-1',
+      severity: 'blocking',
     });
   });
 
@@ -258,5 +279,94 @@ describe('extractionService', () => {
       description: 'Legacy lesson description',
     });
     expect(result.data.structuredContent?.sections[0].lessonBlocks).toHaveLength(1);
+  });
+
+  it('normalizes provenance metadata on lesson blocks', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        message: 'ok',
+        data: {
+          id: 'extraction-provenance',
+          fileId: 'file-1',
+          classId: 'class-1',
+          teacherId: 'teacher-1',
+          extractionStatus: 'completed',
+          isApplied: false,
+          progressPercent: 100,
+          totalChunks: 1,
+          processedChunks: 1,
+          createdAt: '2026-04-04T00:00:00.000Z',
+          updatedAt: '2026-04-04T00:00:00.000Z',
+          structuredContent: {
+            title: 'Module',
+            description: '',
+            sections: [
+              {
+                title: 'Section',
+                lessonBlocks: [
+                  {
+                    type: 'text',
+                    order: 0,
+                    content: { text: 'Body' },
+                    metadata: {
+                      instructionalRole: 'explanation',
+                      reviewIssueIds: ['issue-1'],
+                      provenance: {
+                        pageStart: 1,
+                        pageEnd: 1,
+                        sourceMethod: 'text',
+                        confidence: 0.7,
+                        sourceSnippet: 'Body',
+                        chunkIndex: 1,
+                      },
+                    },
+                  },
+                ],
+              },
+            ],
+            mediaAssets: [],
+            audit: {},
+          },
+        },
+      },
+    });
+
+    const result = await extractionService.getById('extraction-provenance');
+
+    expect(result.data.structuredContent?.sections[0].lessonBlocks[0].metadata).toMatchObject({
+      instructionalRole: 'explanation',
+      reviewIssueIds: ['issue-1'],
+      provenance: expect.objectContaining({ sourceSnippet: 'Body' }),
+    });
+  });
+
+  it('calls cancel, retry, and apply preview endpoints', async () => {
+    mockedApi.post
+      .mockResolvedValueOnce({ data: { success: true, data: { id: 'extraction-1' } } })
+      .mockResolvedValueOnce({ data: { success: true, data: { extractionId: 'retry-1' } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            sectionsCreated: 1,
+            lessonsCreated: 1,
+            assessmentsCreated: 0,
+            blockedReasons: [],
+          },
+        },
+      });
+
+    await extractionService.cancel('extraction-1');
+    await extractionService.retry('extraction-1', { extractionStyle: 'faithful' });
+    await extractionService.previewApply('extraction-1', { sectionIndices: [0] });
+
+    expect(mockedApi.post).toHaveBeenNthCalledWith(1, '/ai/extractions/extraction-1/cancel', {});
+    expect(mockedApi.post).toHaveBeenNthCalledWith(2, '/ai/extractions/extraction-1/retry', {
+      extractionStyle: 'faithful',
+    });
+    expect(mockedApi.post).toHaveBeenNthCalledWith(3, '/ai/extractions/extraction-1/apply/preview', {
+      sectionIndices: [0],
+    });
   });
 });

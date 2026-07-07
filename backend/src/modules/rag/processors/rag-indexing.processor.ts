@@ -12,7 +12,7 @@ type ReindexJobData = {
 };
 
 @Injectable()
-@Processor('rag-indexing')
+@Processor('rag-indexing', { concurrency: 1 })
 export class RagIndexingProcessor extends WorkerHost {
   private readonly logger = new Logger(RagIndexingProcessor.name);
 

@@ -1004,10 +1004,7 @@ export class AssessmentsController {
     @Param('attemptId') attemptId: string,
     @CurrentUser() user: any,
   ) {
-    const result = await this.assessmentsService.unreturnGrade(
-      attemptId,
-      user,
-    );
+    const result = await this.assessmentsService.unreturnGrade(attemptId, user);
 
     return {
       success: true,

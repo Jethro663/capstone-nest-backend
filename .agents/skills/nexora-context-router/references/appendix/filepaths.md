@@ -29,12 +29,12 @@ Load this only when exact path recall matters.
 
 ## Mobile
 
-- `test-mobile/src/bootstrap/`
-- `test-mobile/src/navigation/`
-- `test-mobile/src/api/`
-- `test-mobile/src/providers/`
-- `test-mobile/src/screens/`
-- `test-mobile/src/types/`
+- `mobile/src/bootstrap/`
+- `mobile/src/navigation/`
+- `mobile/src/api/`
+- `mobile/src/providers/`
+- `mobile/src/screens/`
+- `mobile/src/types/`
 
 ## AI Service
 

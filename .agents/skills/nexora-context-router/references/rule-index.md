@@ -53,3 +53,4 @@ Use rule IDs in reasoning, reviews, and implementation notes instead of repeatin
 | `ROUTER-8` | Prefer repo-native smoke or perf scripts over generic broad verification when they cover the touched flow. |
 | `ROUTER-9` | Slice docs must name real commands, scripts, and entrypoints that exist in the repo today. |
 | `ROUTER-10` | Prefer available MCP tools when they fit: Serena for code discovery, Playwright for browser execution, shell for command-oriented work. |
+| `ROUTER-11` | When `rtk` is installed, prefer RTK-filtered shell output for large supported shell commands without replacing narrower MCP or file tools. |

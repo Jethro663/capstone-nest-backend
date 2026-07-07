@@ -8,7 +8,7 @@
 ## Key Evidence Sources
 - Uploaded research paper DOCX and extracted text/media
 - `Concept Paper.pdf` plus extracted `Concept paper.txt`
-- `backend/package.json`, `next-frontend/package.json`, `test-mobile/package.json`
+- `backend/package.json`, `next-frontend/package.json`, `mobile/package.json`
 - `docker-compose.yml`
 - `backend/src/drizzle/schema/*`
 - `backend/src/modules/*`
@@ -20,8 +20,8 @@
 - Threshold anchor: `backend/src/modules/lxp/lxp.service.ts:35`
 - Threshold default anchor: `backend/src/drizzle/schema/performance.schema.ts:47`
 - Grade-level anchor: `backend/src/drizzle/schema/base.schema.ts:68`
-- Mobile teacher limitation: `test-mobile/src/screens/TeacherUnsupportedScreen.tsx:40,45`
-- Mobile discussion limitation: `test-mobile/src/screens/ClassDetailScreen.tsx:1228`
+- Mobile teacher limitation: `mobile/src/screens/TeacherUnsupportedScreen.tsx:40,45`
+- Mobile discussion limitation: `mobile/src/screens/ClassDetailScreen.tsx:1228`
 - Swagger route anchor: `backend/src/main.ts:123-124`
 - Real-time notification anchor: `backend/src/modules/notifications/notifications.gateway.ts:13`
 - AI fallback anchor: `ai-service/app/config.py:51-87` and `ai-service/app/cloud_fallback.py`

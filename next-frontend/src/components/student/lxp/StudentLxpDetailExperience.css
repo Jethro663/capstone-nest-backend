@@ -127,6 +127,85 @@
   color: #6a5e59;
 }
 
+.student-lxp-checkpoint-card__status--warning {
+  background: #fff7df;
+  border-color: #f6d783;
+  color: #97620e;
+}
+
+.student-lxp-checkpoint-card__attempts {
+  border: 1px solid #dfe8f8;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f6f9ff 0%, #fff9ef 100%);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.student-lxp-checkpoint-card__attempts-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #42526d;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.student-lxp-checkpoint-card__attempts-summary strong {
+  color: #163f7a;
+  font-size: 0.8rem;
+}
+
+.student-lxp-checkpoint-card__attempt-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.student-lxp-checkpoint-card__attempt-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 0 10px;
+  font-size: 0.73rem;
+  font-weight: 800;
+}
+
+.student-lxp-checkpoint-card__attempt-chip--passed {
+  background: #e7f8ee;
+  border-color: #a9e1bf;
+  color: #10713d;
+}
+
+.student-lxp-checkpoint-card__attempt-chip--failed {
+  background: #fff0f1;
+  border-color: #efbdc4;
+  color: #a91e31;
+}
+
+.student-lxp-checkpoint-card__attempt-chip--active {
+  background: #eef4ff;
+  border-color: #c7d9fb;
+  color: #2259a5;
+}
+
+.student-lxp-checkpoint-card__attempt-chip--empty {
+  background: #ffffff;
+  border-color: #e4dad1;
+  color: #746b66;
+}
+
+.student-lxp-checkpoint-card__attempt-note {
+  margin: 0;
+  color: #5b6577;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .student-lxp-checkpoint-card__actions {
   display: inline-flex;
   align-items: center;

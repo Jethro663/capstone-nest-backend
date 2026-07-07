@@ -39,9 +39,11 @@ import { RichTextEditor } from '@/components/shared/rich-text/RichTextEditor';
 import { LessonBlockTeacherEditor, LessonBlockTeacherPreview } from '@/features/lesson-blocks/LessonBlockTeacherEditor';
 import type { ContentBlock } from '@/types/lesson';
 import type {
+  ApplyExtractionResult,
   Extraction,
   ExtractionBlock,
   ExtractionMediaAsset,
+  ExtractionReviewIssue,
   ExtractionSection,
   ExtractionStatus,
 } from '@/types/extraction';
@@ -88,6 +90,22 @@ function isNestedInteractiveTarget(
   return target instanceof HTMLElement && Boolean(target.closest('button, input, textarea, select, a, [role="button"]'));
 }
 
+function getBlockText(block: ExtractionBlock) {
+  if (typeof block.content === 'string') return block.content;
+  const html = block.content.html;
+  if (typeof html === 'string') return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const text = block.content.text;
+  return typeof text === 'string' ? text : '';
+}
+
+function getIssueLocation(issue: ExtractionReviewIssue) {
+  const sectionNumber = typeof issue.sectionIndex === 'number' ? issue.sectionIndex + 1 : null;
+  const blockNumber = typeof issue.blockIndex === 'number' ? issue.blockIndex + 1 : null;
+  if (sectionNumber && blockNumber) return `Section ${sectionNumber}, block ${blockNumber}`;
+  if (sectionNumber) return `Section ${sectionNumber}`;
+  return 'Module';
+}
+
 export default function ExtractionReviewPage() {
   const params = useParams();
   const router = useRouter();
@@ -109,6 +127,10 @@ export default function ExtractionReviewPage() {
   const [selectedSections, setSelectedSections] = useState<Set<number>>(new Set());
   const [dirty, setDirty] = useState(false);
   const [editingBlockKey, setEditingBlockKey] = useState<string | null>(null);
+  const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
+  const [applyPreview, setApplyPreview] = useState<ApplyExtractionResult | null>(null);
+  const [loadingApplyPreview, setLoadingApplyPreview] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingFailuresRef = useRef(0);
@@ -189,7 +211,7 @@ export default function ExtractionReviewPage() {
           toast.error(warning);
         }
       }
-    }, 3000);
+    }, 8_000);
   }, [extraction, extractionId, hydrate, stopPolling]);
 
   const isEditable = extraction?.extractionStatus === 'completed';
@@ -219,6 +241,10 @@ export default function ExtractionReviewPage() {
   const hiddenMediaCount = hiddenMediaAssets.length;
   const reviewNotes = extraction?.repairNotes || [];
   const coherenceWarnings = extraction?.structuredContent?.audit?.coherenceWarnings || [];
+  const reviewIssues = extraction?.structuredContent?.audit?.reviewIssues || [];
+  const unresolvedBlockingIssues = reviewIssues.filter(
+    (issue) => !issue.resolved && issue.severity === 'blocking',
+  );
   const requestedSectionCount = extraction?.structuredContent?.audit?.requestedSectionCount;
   const finalSectionCount = extraction?.structuredContent?.audit?.finalSectionCount;
   const sectionCountAdjustmentReason =
@@ -231,9 +257,10 @@ export default function ExtractionReviewPage() {
     if (dirty) return 'Save extraction changes before applying.';
     if (selectedSections.size === 0) return 'Select at least one section to apply.';
     if (extraction?.qualityGate === 'fail') return 'Extraction quality is too low to apply.';
+    if (unresolvedBlockingIssues.length > 0) return 'Resolve blocking review issues before applying.';
     if (extraction?.reviewRequired) return 'Teacher review is still required before apply.';
     return null;
-  }, [dirty, extraction?.qualityGate, extraction?.reviewRequired, selectedSections.size]);
+  }, [dirty, extraction?.qualityGate, extraction?.reviewRequired, selectedSections.size, unresolvedBlockingIssues.length]);
 
   const summaryItems: Array<{
     key: string;
@@ -310,12 +337,12 @@ export default function ExtractionReviewPage() {
         </Button>
         <Button
           type="button"
-          onClick={() => setShowApplyDialog(true)}
-          disabled={!canMutate || Boolean(applyBlockedReason)}
+          onClick={() => void handleOpenApplyDialog()}
+          disabled={!canMutate || Boolean(applyBlockedReason) || loadingApplyPreview}
           className="teacher-button-solid rounded-xl font-black"
           aria-label="Apply Extraction"
         >
-          Apply Extraction
+          {loadingApplyPreview ? 'Loading Preview...' : 'Apply Extraction'}
         </Button>
       </div>
     </div>
@@ -325,11 +352,17 @@ export default function ExtractionReviewPage() {
     if (!extraction) return;
     try {
       setSaving(true);
+      const nextReviewIssues = extraction.structuredContent?.audit?.reviewIssues || [];
+      const hasUnresolvedBlockingIssue = nextReviewIssues.some(
+        (issue) => !issue.resolved && issue.severity === 'blocking',
+      );
       const response = await extractionService.update(extraction.id, {
         title: editTitle,
         description: editDescription,
         sections: editSections,
         mediaAssets: hiddenMediaAssets,
+        reviewIssues: nextReviewIssues,
+        reviewState: hasUnresolvedBlockingIssue ? 'needs_review' : 'ready',
       });
       setExtraction(response.data);
       hydrate(response.data);
@@ -356,6 +389,133 @@ export default function ExtractionReviewPage() {
     } finally {
       setApplying(false);
     }
+  }
+
+  async function handleOpenApplyDialog() {
+    if (!extraction || applyBlockedReason) return;
+    const sectionIndices = Array.from(selectedSections).sort((left, right) => left - right);
+    try {
+      setLoadingApplyPreview(true);
+      setApplyPreview({
+        moduleTitle: editTitle || extraction.structuredContent?.title || 'Draft module',
+        sectionsCreated: sectionIndices.length,
+        lessonsCreated: sectionIndices.length,
+        assessmentsCreated: 0,
+        blockedReasons: [],
+      });
+      setShowApplyDialog(true);
+      const response = await extractionService.previewApply(extraction.id, { sectionIndices });
+      setApplyPreview(response.data);
+    } catch (error: unknown) {
+      setShowApplyDialog(false);
+      setApplyPreview(null);
+      toast.error(getErrorMessage(error, 'Failed to load apply preview'));
+    } finally {
+      setLoadingApplyPreview(false);
+    }
+  }
+
+  function getIssueBlock(issue: ExtractionReviewIssue) {
+    if (typeof issue.sectionIndex !== 'number' || typeof issue.blockIndex !== 'number') return null;
+    return editSections[issue.sectionIndex]?.lessonBlocks?.[issue.blockIndex] || null;
+  }
+
+  function getIssueSourceLabel(issue: ExtractionReviewIssue) {
+    const block = getIssueBlock(issue);
+    const provenance = block?.metadata?.provenance as Record<string, unknown> | undefined;
+    const pageStart = provenance && typeof provenance.pageStart === 'number' ? provenance.pageStart : null;
+    const pageEnd = provenance && typeof provenance.pageEnd === 'number' ? provenance.pageEnd : pageStart;
+    if (!pageStart) return 'Source unavailable';
+    return pageEnd && pageEnd !== pageStart ? `Pages ${pageStart}-${pageEnd}` : `Page ${pageStart}`;
+  }
+
+  function getIssueSnippet(issue: ExtractionReviewIssue) {
+    const block = getIssueBlock(issue);
+    const provenance = block?.metadata?.provenance as Record<string, unknown> | undefined;
+    const snippet = provenance?.sourceSnippet;
+    if (typeof snippet === 'string' && snippet.trim().length > 0) return snippet;
+    return block ? getBlockText(block) : 'No source snippet available.';
+  }
+
+  function markIssueReviewed(issueId: string) {
+    setExtraction((current) => {
+      if (!current?.structuredContent?.audit?.reviewIssues) return current;
+      return {
+        ...current,
+        structuredContent: {
+          ...current.structuredContent,
+          audit: {
+            ...current.structuredContent.audit,
+            reviewIssues: current.structuredContent.audit.reviewIssues.map((issue) =>
+              issue.id === issueId
+                ? { ...issue, resolved: true, resolution: 'teacher-reviewed' }
+                : issue,
+            ),
+          },
+        },
+      };
+    });
+    setDirty(true);
+    setActionNotice(`Resolved ${issueId}`);
+  }
+
+  function mergeSectionWithPrevious(sectionIndex: number) {
+    if (sectionIndex <= 0) return;
+    setEditSections((current) => {
+      const previous = current[sectionIndex - 1];
+      const section = current[sectionIndex];
+      if (!previous || !section) return current;
+      const merged = current.slice();
+      merged[sectionIndex - 1] = {
+        ...previous,
+        description: [previous.description, section.description].filter(Boolean).join('\n\n'),
+        lessonBlocks: [...previous.lessonBlocks, ...section.lessonBlocks].map((block, index) => ({ ...block, order: index })),
+        assessmentDraft: previous.assessmentDraft || section.assessmentDraft,
+      };
+      merged.splice(sectionIndex, 1);
+      return merged.map((item, index) => ({ ...item, order: index + 1 }));
+    });
+    setDirty(true);
+    setActionNotice(`Section ${sectionIndex + 1} merged`);
+  }
+
+  function splitSectionAtBlock(sectionIndex: number, blockIndex: number) {
+    setEditSections((current) => {
+      const section = current[sectionIndex];
+      if (!section || blockIndex >= section.lessonBlocks.length - 1) return current;
+      const firstBlocks = section.lessonBlocks.slice(0, blockIndex + 1);
+      const secondBlocks = section.lessonBlocks.slice(blockIndex + 1);
+      const next = current.slice();
+      next[sectionIndex] = {
+        ...section,
+        lessonBlocks: firstBlocks.map((block, index) => ({ ...block, order: index })),
+      };
+      next.splice(sectionIndex + 1, 0, {
+        ...section,
+        title: `${section.title} continued`,
+        description: '',
+        lessonBlocks: secondBlocks.map((block, index) => ({ ...block, order: index })),
+        assessmentDraft: null,
+      });
+      return next.map((item, index) => ({ ...item, order: index + 1 }));
+    });
+    setDirty(true);
+    setActionNotice(`Section ${sectionIndex + 1} split`);
+  }
+
+  function convertBlockToList(sectionIndex: number, blockIndex: number) {
+    const block = editSections[sectionIndex]?.lessonBlocks?.[blockIndex];
+    if (!block) return;
+    const text = getBlockText(block) || 'Reviewed list item';
+    updateBlock(sectionIndex, blockIndex, {
+      content: { html: `<ul><li>${text}</li></ul>` },
+      metadata: {
+        ...block.metadata,
+        instructionalRole: 'reference',
+        convertedTo: 'list',
+      },
+    });
+    setActionNotice(`Block ${blockIndex + 1} converted`);
   }
 
   function updateSection(sectionIndex: number, patch: Partial<ExtractionSection>) {
@@ -518,7 +678,7 @@ export default function ExtractionReviewPage() {
             <TabsContent value="overview" className="mt-0">
               <TeacherSectionCard
                 title="Extraction Details"
-                description="Review the module title, context, and cleanup notes before moving into the content blocks."
+                description="Review the module name, context, and cleanup notes before moving into the content blocks."
                 className="rounded-[1.55rem]"
                 contentClassName="p-5 md:p-6"
               >
@@ -533,6 +693,81 @@ export default function ExtractionReviewPage() {
                       Extraction quality is too low to apply. Rerun or revise the text before continuing.
                     </div>
                   ) : null}
+
+                  <div className="rounded-[1.2rem] border border-[var(--teacher-outline)] bg-white px-4 py-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-black text-[var(--teacher-text-strong)]">Review queue</p>
+                        <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
+                          Resolve blocking extraction issues before applying reviewed content.
+                        </p>
+                      </div>
+                      <Badge variant={unresolvedBlockingIssues.length > 0 ? 'destructive' : 'secondary'}>
+                        {unresolvedBlockingIssues.length} blocking
+                      </Badge>
+                    </div>
+                    {reviewIssues.length > 0 ? (
+                      <div className="mt-3 space-y-3">
+                        {reviewIssues.map((issue) => (
+                          <div
+                            key={issue.id}
+                            className={cn(
+                              'rounded-xl border px-3 py-3',
+                              issue.resolved
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                                : issue.severity === 'blocking'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                                  : 'border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] text-[var(--teacher-text-strong)]',
+                            )}
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant={issue.severity === 'blocking' ? 'destructive' : 'outline'}>{issue.code}</Badge>
+                                  <span className="text-xs font-black uppercase tracking-[0.16em]">
+                                    {issue.resolved ? 'Resolved' : issue.severity}
+                                  </span>
+                                  <span className="text-xs font-semibold">{getIssueLocation(issue)}</span>
+                                </div>
+                                <p className="mt-2 text-sm font-semibold">{issue.message}</p>
+                                {focusedIssueId === issue.id ? (
+                                  <div className="mt-3 rounded-lg border border-white/70 bg-white/70 px-3 py-2 text-sm">
+                                    <p className="font-black">{getIssueSourceLabel(issue)}</p>
+                                    <p className="mt-1 text-[var(--teacher-text-strong)]">{getIssueSnippet(issue)}</p>
+                                  </div>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-xl bg-white font-black"
+                                  onClick={() => setFocusedIssueId((current) => (current === issue.id ? null : issue.id))}
+                                >
+                                  View source for {issue.id}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-xl bg-white font-black"
+                                  onClick={() => markIssueReviewed(issue.id)}
+                                  disabled={!canMutate || issue.resolved}
+                                >
+                                  Mark {issue.id} reviewed
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-3 py-2 text-sm text-[var(--teacher-text-muted)]">
+                        No review issues were reported for this extraction.
+                      </p>
+                    )}
+                  </div>
 
                   <div className="space-y-2">
                     <Label className="text-sm font-black text-[var(--teacher-text-strong)]">Title</Label>
@@ -650,6 +885,11 @@ export default function ExtractionReviewPage() {
                   data-testid="extraction-content-scroll-region"
                   className="max-h-[calc(100vh-18rem)] space-y-4 overflow-y-auto pr-2"
                 >
+                  {actionNotice ? (
+                    <div className="rounded-[1.2rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
+                      {actionNotice}
+                    </div>
+                  ) : null}
                   {visibleSections.map((section, sectionIndex) => (
                     <div
                       key={`section-${sectionIndex}`}
@@ -680,6 +920,18 @@ export default function ExtractionReviewPage() {
                         <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
                           {section.visibleBlocks.length} visible block{section.visibleBlocks.length === 1 ? '' : 's'}
                         </span>
+                        {sectionIndex > 0 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-xl border-[var(--teacher-outline)] bg-white font-black text-[var(--teacher-text-strong)] hover:bg-[var(--teacher-surface-soft)]"
+                            onClick={() => mergeSectionWithPrevious(sectionIndex)}
+                            disabled={!canMutate}
+                          >
+                            Merge with previous section
+                          </Button>
+                        ) : null}
                       </div>
 
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,0.4fr)_minmax(0,1fr)]">
@@ -752,10 +1004,25 @@ export default function ExtractionReviewPage() {
                                         <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-50 text-rose-700">
                                           {block.type}
                                         </Badge>
+                                        {typeof block.metadata?.instructionalRole === 'string' ? (
+                                          <Badge variant="secondary" className="rounded-full">
+                                            {block.metadata.instructionalRole}
+                                          </Badge>
+                                        ) : null}
+                                        {block.metadata?.convertedTo === 'list' ? (
+                                          <Badge variant="secondary" className="rounded-full">
+                                            list
+                                          </Badge>
+                                        ) : null}
                                         <span className="text-xs font-semibold text-[var(--teacher-text-muted)]">
                                           {isEditing ? 'Editing in place' : block.type === 'divider' ? 'Section divider' : 'Click block to edit'}
                                         </span>
                                       </div>
+                                      {block.metadata?.provenance ? (
+                                        <p className="text-xs font-semibold text-[var(--teacher-text-muted)]">
+                                          Source: page {String(((block.metadata.provenance as Record<string, unknown>).pageStart as number | string | undefined) ?? '?')}
+                                        </p>
+                                      ) : null}
                                       {isEditing ? (
                                         <LessonBlockTeacherEditor
                                           block={lessonBlock}
@@ -789,6 +1056,32 @@ export default function ExtractionReviewPage() {
                                       </Button>
                                     ) : null}
                                     <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl border-[var(--teacher-outline)] bg-white font-black text-[var(--teacher-text-strong)] hover:bg-[var(--teacher-surface-soft)]"
+                                      onClick={() => convertBlockToList(sectionIndex, originalIndex)}
+                                      disabled={!canMutate || block.type !== 'text'}
+                                    >
+                                      {block.metadata?.convertedTo === 'list'
+                                        ? 'Converted'
+                                        : sectionIndex === 0
+                                          ? `Convert block ${blockIndex + 1} to list`
+                                          : `Convert section ${sectionIndex + 1} block ${blockIndex + 1}`}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl border-[var(--teacher-outline)] bg-white font-black text-[var(--teacher-text-strong)] hover:bg-[var(--teacher-surface-soft)]"
+                                      onClick={() => splitSectionAtBlock(sectionIndex, originalIndex)}
+                                      disabled={!canMutate || originalIndex >= editSections[sectionIndex].lessonBlocks.length - 1}
+                                    >
+                                      {sectionIndex === 0
+                                        ? `Split section ${sectionIndex + 1} at block ${blockIndex + 1}`
+                                        : `Split section ${sectionIndex + 1} after block ${blockIndex + 1}`}
+                                    </Button>
+                                    <Button
                                       variant="outline"
                                       size="icon"
                                       className="rounded-xl border-[var(--teacher-outline)] bg-white text-[var(--teacher-text-muted)] hover:bg-[var(--teacher-surface-soft)]"
@@ -812,6 +1105,7 @@ export default function ExtractionReviewPage() {
                                       variant="outline"
                                       size="sm"
                                       className="rounded-xl border-rose-200 bg-white font-black text-rose-600 hover:bg-rose-50"
+                                      aria-label={sectionIndex === 0 ? `Remove block ${blockIndex + 1}` : `Remove section ${sectionIndex + 1} block ${blockIndex + 1}`}
                                       onClick={() => removeBlock(sectionIndex, originalIndex)}
                                       disabled={!canMutate}
                                     >
@@ -848,7 +1142,13 @@ export default function ExtractionReviewPage() {
         </div>
       )}
 
-      <Dialog open={showApplyDialog} onOpenChange={setShowApplyDialog}>
+      <Dialog
+        open={showApplyDialog}
+        onOpenChange={(open) => {
+          setShowApplyDialog(open);
+          if (!open) setApplyPreview(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Apply Extraction</DialogTitle>
@@ -859,9 +1159,39 @@ export default function ExtractionReviewPage() {
           {applyBlockedReason ? (
             <p className="text-sm text-amber-700">{applyBlockedReason}</p>
           ) : (
-            <p className="text-sm text-[var(--teacher-text-muted)]">
-              Continue only after you are satisfied with the extracted structure and cleanup notes.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-[var(--teacher-text-muted)]">
+                Continue only after you are satisfied with the extracted structure and cleanup notes.
+              </p>
+              {applyPreview ? (
+                <div className="rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface-soft)] px-4 py-3 text-sm">
+                  <p className="font-black text-[var(--teacher-text-strong)]">
+                    {applyPreview.moduleTitle || editTitle || 'Draft module'}
+                  </p>
+                  <div className="mt-2 grid gap-2 text-[var(--teacher-text-muted)] sm:grid-cols-3">
+                    <span>{applyPreview.sectionsCreated ?? selectedSections.size} section{(applyPreview.sectionsCreated ?? selectedSections.size) === 1 ? '' : 's'}</span>
+                    <span>{applyPreview.lessonsCreated ?? 0} lesson{(applyPreview.lessonsCreated ?? 0) === 1 ? '' : 's'}</span>
+                    <span>{applyPreview.assessmentsCreated ?? 0} draft assessment{(applyPreview.assessmentsCreated ?? 0) === 1 ? '' : 's'}</span>
+                  </div>
+                  {applyPreview.sections && applyPreview.sections.length > 0 ? (
+                    <div className="mt-3 space-y-1">
+                      {applyPreview.sections.map((section, index) => (
+                        <p key={`${section.title || 'section'}-${index}`} className="text-xs font-semibold text-[var(--teacher-text-strong)]">
+                          {section.title || `Section ${index + 1}`} - {section.lessonBlocks ?? 0} block{(section.lessonBlocks ?? 0) === 1 ? '' : 's'}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                  {applyPreview.blockedReasons && applyPreview.blockedReasons.length > 0 ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+                      {applyPreview.blockedReasons.map((reason) => (
+                        <p key={reason}>{reason}</p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setShowApplyDialog(false)}>

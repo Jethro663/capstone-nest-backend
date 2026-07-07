@@ -113,6 +113,65 @@ class ExtractionNormalizationTests(unittest.TestCase):
         self.assertEqual(normalized["mediaAssets"][0]["selectedSectionIndex"], 0)
         self.assertTrue(normalized["mediaAssets"][0]["teacherReviewed"])
 
+    def test_review_issues_provenance_and_apply_result_are_preserved(self) -> None:
+        payload = {
+            "title": "Module",
+            "description": "",
+            "sections": [
+                {
+                    "title": "Section 1",
+                    "description": "",
+                    "reviewState": "needs_review",
+                    "lessonBlocks": [
+                        {
+                            "type": "text",
+                            "order": 0,
+                            "content": {"text": "Body"},
+                            "metadata": {
+                                "instructionalRole": "explanation",
+                                "provenance": {
+                                    "pageStart": 1,
+                                    "pageEnd": 1,
+                                    "sourceMethod": "text",
+                                    "confidence": 0.6,
+                                    "sourceSnippet": "Body",
+                                    "chunkIndex": 1,
+                                },
+                                "reviewIssueIds": ["issue-1"],
+                            },
+                        }
+                    ],
+                }
+            ],
+            "audit": {
+                "reviewState": "needs_review",
+                "reviewIssues": [
+                    {
+                        "id": "issue-1",
+                        "code": "low-section-confidence",
+                        "severity": "warning",
+                        "scope": "section",
+                        "message": "Review this section.",
+                        "sectionIndex": 0,
+                        "blockIndex": None,
+                        "resolved": False,
+                        "resolution": None,
+                    }
+                ],
+                "applyResult": {"alreadyApplied": True, "lessonsCreated": 1},
+            },
+        }
+
+        normalized = _normalize_structured_content(payload)
+
+        self.assertEqual(normalized["sections"][0]["reviewState"], "needs_review")
+        metadata = normalized["sections"][0]["lessonBlocks"][0]["metadata"]
+        self.assertEqual(metadata["instructionalRole"], "explanation")
+        self.assertEqual(metadata["provenance"]["sourceSnippet"], "Body")
+        self.assertEqual(metadata["reviewIssueIds"], ["issue-1"])
+        self.assertEqual(normalized["audit"]["reviewIssues"][0]["id"], "issue-1")
+        self.assertEqual(normalized["audit"]["applyResult"]["lessonsCreated"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

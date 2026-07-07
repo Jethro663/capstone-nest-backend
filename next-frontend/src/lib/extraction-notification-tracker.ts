@@ -6,6 +6,7 @@ export interface TrackedExtractionNotificationEntry {
   createdAt: string;
   originalName: string;
   targetSectionCount?: number;
+  extractionStyle?: string;
   lastKnownStatus: ExtractionStatus;
   lastKnownProgress: number;
   updatedAt?: string | null;
@@ -64,6 +65,7 @@ function toTrackedEntry(value: unknown): TrackedExtractionNotificationEntry | nu
     createdAt: value.createdAt,
     originalName: value.originalName,
     targetSectionCount: typeof value.targetSectionCount === 'number' ? value.targetSectionCount : undefined,
+    extractionStyle: typeof value.extractionStyle === 'string' ? value.extractionStyle : undefined,
     lastKnownStatus: status,
     lastKnownProgress: clampProgress(value.lastKnownProgress),
     updatedAt: typeof value.updatedAt === 'string' ? value.updatedAt : null,

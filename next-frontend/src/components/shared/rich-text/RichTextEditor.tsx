@@ -7,7 +7,6 @@ import StarterKit from '@tiptap/starter-kit';
 import { Editor } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
-import Underline from '@tiptap/extension-underline';
 import {
   Bold,
   Eraser,
@@ -77,7 +76,6 @@ export function RichTextEditor({
         defaultProtocol: 'https',
         protocols: ['http', 'https', 'mailto', 'tel'],
       }),
-      Underline,
       Placeholder.configure({
         placeholder,
       }),

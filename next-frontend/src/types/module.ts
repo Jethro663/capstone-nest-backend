@@ -1,3 +1,5 @@
+import type { LibraryFileKind } from './file';
+
 export type ModuleItemType = 'lesson' | 'assessment' | 'file';
 
 export interface ModuleLessonRef {
@@ -25,6 +27,7 @@ export interface ModuleFileRef {
   classId?: string | null;
   originalName: string;
   mimeType: string;
+  fileKind?: LibraryFileKind;
   sizeBytes: number;
   scope: 'private' | 'general';
 }

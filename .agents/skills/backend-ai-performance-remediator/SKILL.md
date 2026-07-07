@@ -10,7 +10,7 @@ Audit both `backend/` and `ai-service/` as one bounded system. Capture a baselin
 ## Quick Start
 
 - Emit:
-  `ROUTER_TRACE task=performance-audit include=kernel,backend,ai-service optional_skipped=next-frontend,test-mobile exclude=<extra unloaded slices> reason=<one line>`
+  `ROUTER_TRACE task=performance-audit include=kernel,backend,ai-service optional_skipped=next-frontend,mobile exclude=<extra unloaded slices> reason=<one line>`
 - Load:
   - root `AGENTS.md`
   - `backend/AGENTS.md`

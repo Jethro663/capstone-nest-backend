@@ -27,13 +27,44 @@ export class ExtractModuleDto {
   fileId: string;
 
   @ApiProperty({
-    description: 'Teacher-selected target section count for structured extraction.',
+    description:
+      'Teacher-selected target section count for structured extraction.',
     example: 4,
     enum: [3, 4, 5],
   })
   @IsInt()
   @IsIn([3, 4, 5])
   targetSectionCount: 3 | 4 | 5;
+
+  @ApiPropertyOptional({
+    description: 'Extraction output style.',
+    enum: ['faithful', 'clean', 'student_friendly'],
+    default: 'clean',
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['faithful', 'clean', 'student_friendly'])
+  extractionStyle?: 'faithful' | 'clean' | 'student_friendly';
+}
+
+export class RetryExtractionDto {
+  @ApiPropertyOptional({
+    description: 'Optional target section count override for retry.',
+    enum: [3, 4, 5],
+  })
+  @IsOptional()
+  @IsInt()
+  @IsIn([3, 4, 5])
+  targetSectionCount?: 3 | 4 | 5;
+
+  @ApiPropertyOptional({
+    description: 'Optional extraction style override for retry.',
+    enum: ['faithful', 'clean', 'student_friendly'],
+  })
+  @IsOptional()
+  @IsString()
+  @IsIn(['faithful', 'clean', 'student_friendly'])
+  extractionStyle?: 'faithful' | 'clean' | 'student_friendly';
 }
 
 /**
@@ -220,7 +251,9 @@ export class ExtractionMediaCandidateDto {
   @IsNumber()
   score: number;
 
-  @ApiPropertyOptional({ description: 'Whether the candidate was an explicit citation match' })
+  @ApiPropertyOptional({
+    description: 'Whether the candidate was an explicit citation match',
+  })
   @IsOptional()
   @IsBoolean()
   explicitMatch?: boolean;
@@ -292,7 +325,9 @@ export class ExtractionMediaAssetDto {
   @Type(() => ExtractionMediaCandidateDto)
   candidateSections?: ExtractionMediaCandidateDto[];
 
-  @ApiPropertyOptional({ description: 'Whether a teacher has reviewed this image placement' })
+  @ApiPropertyOptional({
+    description: 'Whether a teacher has reviewed this image placement',
+  })
   @IsOptional()
   @IsBoolean()
   teacherReviewed?: boolean;
@@ -378,6 +413,23 @@ export class UpdateExtractionDto {
   @ValidateNested({ each: true })
   @Type(() => ExtractionSectionDto)
   sections?: ExtractionSectionDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Teacher review issue state from the extraction review workspace',
+    type: [Object],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  reviewIssues?: Record<string, unknown>[];
+
+  @ApiPropertyOptional({
+    description: 'Teacher review state after local issue resolution',
+  })
+  @IsOptional()
+  @IsString()
+  reviewState?: string;
 
   @ApiPropertyOptional({
     description: 'Legacy lessons payload alias (accepted for compatibility)',

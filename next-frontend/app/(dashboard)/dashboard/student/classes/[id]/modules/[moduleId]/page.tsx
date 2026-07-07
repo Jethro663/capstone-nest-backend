@@ -27,6 +27,7 @@ import {
   LESSON_COMPLETE_WAIT_SECONDS,
   StudentLessonReaderPanel,
 } from '@/components/student/lesson/StudentLessonReaderPanel';
+import { PptxDeckViewer } from '@/components/student/lesson/PptxDeckViewer';
 import { getTeacherName } from '@/utils/helpers';
 import {
   getStudentAssessmentAvailability,
@@ -40,6 +41,7 @@ import {
   getLessonCheckpointGate,
   normalizeStructuredLessonBlock,
 } from '@/features/lesson-blocks/structured-content';
+import { isPptxFile } from '@/lib/pptx-viewer';
 import {
   type LessonCheckpointResults,
   type LessonCheckpointSelections,
@@ -82,6 +84,7 @@ export default function StudentModuleDetailPage() {
   const moduleId = toParamValue(params.moduleId);
   const selectedLessonId = searchParams.get('lessonId');
   const selectedAssessmentId = searchParams.get('assessmentId');
+  const selectedFileItemId = searchParams.get('fileItemId');
 
   const [loading, setLoading] = useState(true);
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
@@ -124,6 +127,14 @@ export default function StudentModuleDetailPage() {
     [flatItems, selectedAssessmentId],
   );
 
+  const selectedFileItem = useMemo(
+    () =>
+      flatItems.find(
+        (item) => item.itemType === 'file' && item.id === selectedFileItemId,
+      ) ?? null,
+    [flatItems, selectedFileItemId],
+  );
+
   const lessonAttachments = useMemo(() => {
     if (!module || !selectedLessonItem) return [];
     const section = module.sections.find((entry) =>
@@ -155,7 +166,9 @@ export default function StudentModuleDetailPage() {
     ? 'lesson'
     : selectedAssessmentId
       ? 'assessment'
-      : 'overview';
+      : selectedFileItemId
+        ? 'file'
+        : 'overview';
 
   const refreshModule = useCallback(async () => {
     if (!classId || !moduleId) return;
@@ -264,6 +277,18 @@ export default function StudentModuleDetailPage() {
     };
     void run();
   }, [classId, moduleId, router, selectedAssessmentId, selectedAssessmentItem?.assessmentId]);
+
+  useEffect(() => {
+    if (!selectedFileItemId || loading || !module) return;
+    if (!selectedFileItem?.fileId || !isPptxFile({
+      fileName: selectedFileItem.file?.originalName,
+      mimeType: selectedFileItem.file?.mimeType,
+      fileKind: selectedFileItem.file?.fileKind,
+      metadata: selectedFileItem.metadata,
+    })) {
+      router.replace(`/dashboard/student/classes/${classId}/modules/${moduleId}`);
+    }
+  }, [classId, loading, module, moduleId, router, selectedFileItem, selectedFileItemId]);
 
   useEffect(() => {
     if (currentMode !== 'lesson' || lessonCompleted || !checkpointGate.ready) {
@@ -380,6 +405,26 @@ export default function StudentModuleDetailPage() {
     }
   }, []);
 
+  const openFile = useCallback(
+    (item: ModuleItem) => {
+      if (!item.fileId) return;
+      const shouldOpenDeck = isPptxFile({
+        fileName: item.file?.originalName,
+        mimeType: item.file?.mimeType,
+        fileKind: item.file?.fileKind,
+        metadata: item.metadata,
+      });
+      if (!shouldOpenDeck) {
+        void handleDownloadAttachment(item);
+        return;
+      }
+      router.push(
+        `/dashboard/student/classes/${classId}/modules/${moduleId}?fileItemId=${item.id}`,
+      );
+    },
+    [classId, handleDownloadAttachment, moduleId, router],
+  );
+
   const handleCheckpointAnswer = useCallback((
     blockId: string,
     selectedChoiceIds: string[],
@@ -408,9 +453,9 @@ export default function StudentModuleDetailPage() {
         openAssessment(item);
         return;
       }
-      void handleDownloadAttachment(item);
+      openFile(item);
     },
-    [handleDownloadAttachment, openAssessment, openLesson],
+    [openAssessment, openFile, openLesson],
   );
 
   const handleItemCardClick = useCallback(
@@ -455,6 +500,13 @@ export default function StudentModuleDetailPage() {
       setStartingAttempt(false);
     }
   }, [assessment?.id, assessmentAvailability.canStart, router, startingAttempt]);
+
+  const loadSelectedDeck = useCallback(async () => {
+    if (!selectedFileItem) {
+      throw new Error('Selected module file is unavailable');
+    }
+    return moduleService.downloadAttachedFile(selectedFileItem.id);
+  }, [selectedFileItem]);
 
   if (loading) {
     return (
@@ -521,6 +573,8 @@ export default function StudentModuleDetailPage() {
                 ? lesson?.title || module.title
                 : currentMode === 'assessment'
                   ? assessment?.title || module.title
+                  : currentMode === 'file'
+                    ? selectedFileItem?.file?.originalName || module.title
                   : module.title}
             </h1>
             {currentMode === 'overview' ? (
@@ -574,6 +628,12 @@ export default function StudentModuleDetailPage() {
                 <div className="space-y-3">
                   {section.items.map((item) => {
                     const isAssessment = item.itemType === 'assessment';
+                    const isDeck = item.itemType === 'file' && isPptxFile({
+                      fileName: item.file?.originalName,
+                      mimeType: item.file?.mimeType,
+                      fileKind: item.file?.fileKind,
+                      metadata: item.metadata,
+                    });
                     const isDraft =
                       item.itemType === 'lesson'
                         ? Boolean(item.lesson?.isDraft)
@@ -623,12 +683,14 @@ export default function StudentModuleDetailPage() {
                             <p className="student-module-view__item-meta">
                               {item.itemType === 'assessment'
                                 ? `Due ${formatDate(item.assessment?.dueDate)} - ${item.assessment?.totalPoints ?? 0} pts`
-                                : item.itemType === 'lesson'
-                                  ? `${item.lessonPoints ?? 0} pts`
-                                  : 'Attachment'}
-                            </p>
-                          </div>
-                        </div>
+                                 : item.itemType === 'lesson'
+                                   ? `${item.lessonPoints ?? 0} pts`
+                                   : isDeck
+                                     ? 'PowerPoint deck'
+                                     : item.file?.mimeType || 'Attachment'}
+                             </p>
+                           </div>
+                         </div>
                         {item.itemType === 'lesson' ? (
                           <button
                             type="button"
@@ -645,16 +707,16 @@ export default function StudentModuleDetailPage() {
                           >
                             Take
                           </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="student-module-view__open"
-                            onClick={() => void handleDownloadAttachment(item)}
-                          >
-                            Download
-                          </button>
-                        )}
-                      </article>
+                         ) : (
+                           <button
+                             type="button"
+                             className="student-module-view__open"
+                             onClick={() => openFile(item)}
+                           >
+                             {isDeck ? 'Open' : 'Download'}
+                           </button>
+                         )}
+                       </article>
                     );
                   })}
                 </div>
@@ -767,6 +829,26 @@ export default function StudentModuleDetailPage() {
                 </article>
               </>
             )}
+          </div>
+        ) : null}
+
+        {currentMode === 'file' && selectedFileItem && !module.isLocked ? (
+          <div className="student-module-view__file">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={openOverview}
+              className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+            >
+              <ArrowLeft className="mr-1 h-4 w-4" />
+              Back to Module
+            </Button>
+            <PptxDeckViewer
+              title={selectedFileItem.file?.originalName || 'PowerPoint deck'}
+              subtitle={selectedFileItem.file?.mimeType || 'PowerPoint presentation'}
+              loadFile={loadSelectedDeck}
+              onDownload={() => handleDownloadAttachment(selectedFileItem)}
+            />
           </div>
         ) : null}
       </section>

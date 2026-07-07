@@ -34,6 +34,29 @@ export class AuditService {
     return created;
   }
 
+  async logBulk(
+    entries: {
+      actorId: string;
+      action: string;
+      targetType: string;
+      targetId: string;
+      metadata?: AuditMetadata;
+    }[],
+  ) {
+    if (entries.length === 0) return [];
+
+    const values = entries.map((entry) => ({
+      actorId: entry.actorId,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      metadata: entry.metadata ?? null,
+    }));
+
+    const created = await this.db.insert(auditLogs).values(values).returning();
+    return created;
+  }
+
   async list(params: {
     page?: number;
     limit?: number;

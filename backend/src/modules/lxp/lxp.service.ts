@@ -17,7 +17,11 @@ import {
   sql,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
-import { NotificationsService } from '../notifications/notifications.service';
+import {
+  NotificationsService,
+  type CreateNotificationInput,
+} from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import {
   academicSystemStates,
   assessments,
@@ -68,6 +72,7 @@ import { AuditService } from '../audit/audit.service';
 
 const INTERVENTION_THRESHOLD = 74;
 const PATH_REGENERATION_SCORE_THRESHOLD = 60;
+const GUIDED_ASSESSMENT_MAX_ATTEMPTS = 3;
 const LESSON_XP = 20;
 const ASSESSMENT_XP = 30;
 const STAR_XP = 1000;
@@ -249,6 +254,7 @@ export class LxpService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
   ) {}
 
@@ -732,6 +738,167 @@ export class LxpService {
     if (typeof value === 'number') return Number.isFinite(value) ? value : null;
     const parsed = Number.parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  private async resolveGuidedPassingScore(
+    sourceAssessmentId: string | null | undefined,
+  ) {
+    if (!sourceAssessmentId) return PATH_REGENERATION_SCORE_THRESHOLD;
+
+    const sourceAssessment = await this.db.query.assessments.findFirst({
+      where: eq(assessments.id, sourceAssessmentId),
+      columns: { passingScore: true },
+    });
+
+    return (
+      this.toNumber(sourceAssessment?.passingScore) ??
+      PATH_REGENERATION_SCORE_THRESHOLD
+    );
+  }
+
+  private buildGuidedAttemptSummary(
+    attempts: Array<{
+      id: string;
+      status: string;
+      attemptNumber?: number | null;
+      score?: number | null;
+      correctCount?: number | null;
+      totalQuestions?: number | null;
+      submittedAt?: Date | null;
+      startedAt?: Date | null;
+      createdAt?: Date | null;
+    }>,
+    passingScore: number,
+  ) {
+    const orderedAttempts = [...attempts].sort(
+      (left, right) => (left.attemptNumber ?? 1) - (right.attemptNumber ?? 1),
+    );
+    const submittedAttempts = orderedAttempts.filter(
+      (attempt) => attempt.status === 'submitted',
+    );
+    const bestAttempt = submittedAttempts.reduce<
+      (typeof submittedAttempts)[number] | null
+    >((best, attempt) => {
+      if (!best) return attempt;
+      return (attempt.score ?? -1) > (best.score ?? -1) ? attempt : best;
+    }, null);
+    const highestAttemptNumber = orderedAttempts.reduce(
+      (max, attempt) => Math.max(max, attempt.attemptNumber ?? 1),
+      0,
+    );
+    const hasInProgress = orderedAttempts.some(
+      (attempt) => attempt.status === 'in_progress',
+    );
+    const bestScorePercent =
+      bestAttempt?.score === null || bestAttempt?.score === undefined
+        ? null
+        : bestAttempt.score;
+    const passed =
+      typeof bestScorePercent === 'number' && bestScorePercent >= passingScore;
+
+    return {
+      maxAttempts: GUIDED_ASSESSMENT_MAX_ATTEMPTS,
+      attemptsUsed: submittedAttempts.length,
+      remainingAttempts: Math.max(
+        0,
+        GUIDED_ASSESSMENT_MAX_ATTEMPTS - highestAttemptNumber,
+      ),
+      canRetry: highestAttemptNumber < GUIDED_ASSESSMENT_MAX_ATTEMPTS,
+      isLocked:
+        highestAttemptNumber >= GUIDED_ASSESSMENT_MAX_ATTEMPTS &&
+        !hasInProgress,
+      passingScore,
+      passed,
+      bestAttemptId: bestAttempt?.id ?? null,
+      bestScorePercent,
+      latestScorePercent:
+        submittedAttempts[submittedAttempts.length - 1]?.score ?? null,
+      attempts: orderedAttempts.map((attempt) => ({
+        id: attempt.id,
+        attemptNumber: attempt.attemptNumber ?? 1,
+        status: attempt.status,
+        scorePercent: attempt.score ?? null,
+        correctCount: attempt.correctCount ?? null,
+        totalQuestions: attempt.totalQuestions ?? null,
+        submittedAt: attempt.submittedAt ?? null,
+        startedAt: attempt.startedAt ?? attempt.createdAt ?? null,
+      })),
+    };
+  }
+
+  private async buildGuidedAttemptSummaryMap(
+    studentId: string,
+    assignments: Array<{
+      id: string;
+      assignmentType: string;
+      generatedGuidedAssessment?: {
+        sourceAssessmentId?: string | null;
+      } | null;
+    }>,
+  ) {
+    const guidedAssignments = assignments.filter(
+      (assignment) =>
+        assignment.assignmentType === 'guided_assessment' &&
+        assignment.generatedGuidedAssessment,
+    );
+
+    if (guidedAssignments.length === 0) {
+      return new Map<
+        string,
+        ReturnType<typeof this.buildGuidedAttemptSummary>
+      >();
+    }
+
+    const assignmentIds = guidedAssignments.map((assignment) => assignment.id);
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+          inArray(
+            generatedGuidedAssessmentAttempts.assignmentId,
+            assignmentIds,
+          ),
+        ),
+        orderBy: [
+          asc(generatedGuidedAssessmentAttempts.assignmentId),
+          asc(generatedGuidedAssessmentAttempts.attemptNumber),
+        ],
+      });
+
+    const attemptsByAssignment = new Map<string, typeof attempts>();
+    for (const attempt of attempts) {
+      if (!attempt.assignmentId) continue;
+      const existing = attemptsByAssignment.get(attempt.assignmentId) ?? [];
+      existing.push(attempt);
+      attemptsByAssignment.set(attempt.assignmentId, existing);
+    }
+
+    const passingScoreEntries = await Promise.all(
+      guidedAssignments.map(
+        async (assignment) =>
+          [
+            assignment.id,
+            await this.resolveGuidedPassingScore(
+              assignment.generatedGuidedAssessment?.sourceAssessmentId,
+            ),
+          ] as const,
+      ),
+    );
+    const passingScoreByAssignment = new Map(passingScoreEntries);
+
+    return new Map(
+      guidedAssignments.map(
+        (assignment) =>
+          [
+            assignment.id,
+            this.buildGuidedAttemptSummary(
+              attemptsByAssignment.get(assignment.id) ?? [],
+              passingScoreByAssignment.get(assignment.id) ??
+                PATH_REGENERATION_SCORE_THRESHOLD,
+            ),
+          ] as const,
+      ),
+    );
   }
 
   private xpToStars(xp: number) {
@@ -1398,9 +1565,16 @@ export class LxpService {
   private async assertTeacherClassAccess(classId: string, user: UserContext) {
     const cls = await this.db.query.classes.findFirst({
       where: eq(classes.id, classId),
-      columns: { id: true, teacherId: true },
+      columns: { id: true, teacherId: true, isActive: true },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
     });
-    if (!cls) throw new NotFoundException(`Class "${classId}" not found`);
+    if (!cls || cls.isActive === false || cls.section?.isActive === false) {
+      throw new NotFoundException(`Class "${classId}" not found`);
+    }
     if (!this.isAdmin(user.roles) && cls.teacherId !== user.userId) {
       throw new ForbiddenException('Access denied');
     }
@@ -1414,9 +1588,25 @@ export class LxpService {
         eq(enrollments.status, 'enrolled'),
       ),
       columns: { id: true },
+      with: {
+        class: {
+          columns: { id: true, isActive: true },
+          with: {
+            section: {
+              columns: { id: true, isActive: true },
+            },
+          },
+        },
+      },
     });
-    if (!enrollment) {
-      throw new ForbiddenException('Student is not enrolled in this class');
+    if (
+      !enrollment ||
+      enrollment.class?.isActive === false ||
+      enrollment.class?.section?.isActive === false
+    ) {
+      throw new ForbiddenException(
+        'Student is not enrolled in an active class',
+      );
     }
   }
 
@@ -1654,30 +1844,88 @@ export class LxpService {
     }
   }
 
-  private async notifyInterventionPending(studentId: string, classId: string) {
-    const cls = await this.db.query.classes.findFirst({
-      where: eq(classes.id, classId),
-      columns: { teacherId: true, subjectName: true, subjectCode: true },
+  private async createAndEmitNotifications(
+    inputs: CreateNotificationInput[],
+    options: { dedupe?: boolean } = {},
+  ) {
+    const shouldDedupe = options.dedupe ?? true;
+    const createdInputs = shouldDedupe
+      ? await this.notificationsService.createBulkDeduped(inputs)
+      : inputs;
+
+    if (!shouldDedupe) {
+      await this.notificationsService.createBulk(inputs);
+    }
+    const createdAt = new Date();
+
+    createdInputs.forEach((input, index) => {
+      this.notificationsGateway.emitToUser(input.userId, {
+        id: input.referenceId
+          ? `${input.type}:${input.referenceId}:${input.userId}`
+          : `${input.type}:${input.userId}:${createdAt.getTime()}:${index}`,
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        referenceId: input.referenceId,
+        createdAt,
+      });
     });
+  }
+
+  private async notifyInterventionPending(
+    studentId: string,
+    classId: string,
+    caseId: string,
+    event?: Pick<
+      PerformanceStatusChangedEvent,
+      'blendedScore' | 'thresholdApplied'
+    >,
+  ) {
+    const [cls, student] = await Promise.all([
+      this.db.query.classes.findFirst({
+        where: eq(classes.id, classId),
+        columns: { teacherId: true, subjectName: true, subjectCode: true },
+      }),
+      this.db.query.users.findFirst({
+        where: eq(users.id, studentId),
+        columns: { firstName: true, lastName: true },
+      }),
+    ]);
     if (!cls) return;
 
-    const notifications: Array<{
-      userId: string;
-      type: 'grade_updated';
-      title: string;
-      body: string;
-    }> = [];
+    const subjectLabel =
+      cls.subjectCode || cls.subjectName || 'the enrolled class';
+    const studentName =
+      [student?.firstName, student?.lastName].filter(Boolean).join(' ') ||
+      'A student';
+    const scoreText =
+      typeof event?.blendedScore === 'number'
+        ? ` Current score: ${event.blendedScore.toFixed(1)}%, threshold: ${
+            event.thresholdApplied
+          }%.`
+        : '';
+
+    const notifications: CreateNotificationInput[] = [
+      {
+        userId: studentId,
+        type: 'grade_updated',
+        referenceId: caseId,
+        title: 'Intervention warning: grades at risk',
+        body: `Your performance in ${subjectLabel} is at risk for intervention. Open Learners Path to view the support plan.${scoreText}`,
+      },
+    ];
     if (cls.teacherId) {
       notifications.push({
         userId: cls.teacherId,
-        type: 'grade_updated' as const,
+        type: 'grade_updated',
+        referenceId: caseId,
         title: 'Student flagged for intervention',
-        body: `A student is pending intervention approval in ${cls.subjectCode}.`,
+        body: `${studentName} is at risk and pending intervention review in ${subjectLabel}.${scoreText}`,
       });
     }
 
     if (notifications.length > 0) {
-      await this.notificationsService.createBulk(notifications);
+      await this.createAndEmitNotifications(notifications);
     }
   }
 
@@ -1695,7 +1943,12 @@ export class LxpService {
         'performance_status_changed',
       );
 
-      await this.notifyInterventionPending(event.studentId, event.classId);
+      await this.notifyInterventionPending(
+        event.studentId,
+        event.classId,
+        interventionCase.id,
+        event,
+      );
 
       if (auditActorId) {
         await this.auditService.log({
@@ -1782,6 +2035,7 @@ export class LxpService {
             id: true,
             subjectName: true,
             subjectCode: true,
+            isActive: true,
           },
           with: {
             section: {
@@ -1789,6 +2043,7 @@ export class LxpService {
                 id: true,
                 name: true,
                 gradeLevel: true,
+                isActive: true,
               },
             },
           },
@@ -1796,7 +2051,15 @@ export class LxpService {
       },
     });
 
-    const classIds = studentEnrollments
+    const activeStudentEnrollments = studentEnrollments.filter(
+      (entry) =>
+        entry.classId &&
+        entry.class &&
+        entry.class.isActive !== false &&
+        entry.class.section?.isActive !== false,
+    );
+
+    const classIds = activeStudentEnrollments
       .map((entry) => entry.classId)
       .filter((id): id is string => !!id);
 
@@ -1877,7 +2140,7 @@ export class LxpService {
 
     const paths = selectedCases
       .map((entry) => {
-        const enrollment = studentEnrollments.find(
+        const enrollment = activeStudentEnrollments.find(
           (row) => row.classId === entry.classId,
         );
         if (!enrollment?.class) return null;
@@ -1948,6 +2211,111 @@ export class LxpService {
       threshold: INTERVENTION_THRESHOLD,
       eligibleClasses,
       paths,
+    };
+  }
+
+  async getStudentInterventionAlerts(userId: string) {
+    const studentEnrollments = await this.db.query.enrollments.findMany({
+      where: and(
+        eq(enrollments.studentId, userId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { classId: true },
+      with: {
+        class: {
+          columns: {
+            id: true,
+            subjectName: true,
+            subjectCode: true,
+            isActive: true,
+          },
+          with: {
+            section: {
+              columns: {
+                id: true,
+                name: true,
+                gradeLevel: true,
+                isActive: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const enrolledClasses = studentEnrollments
+      .filter(
+        (entry) =>
+          entry.classId &&
+          entry.class &&
+          entry.class.isActive !== false &&
+          entry.class.section?.isActive !== false,
+      )
+      .map((entry) => ({
+        classId: entry.classId as string,
+        class: entry.class!,
+      }));
+
+    const classIds = enrolledClasses.map((entry) => entry.classId);
+    if (classIds.length === 0) {
+      return { alerts: [], count: 0 };
+    }
+
+    const cases = await this.db.query.interventionCases.findMany({
+      where: and(
+        eq(interventionCases.studentId, userId),
+        inArray(interventionCases.classId, classIds),
+        inArray(interventionCases.status, ['pending', 'active']),
+      ),
+      columns: {
+        id: true,
+        classId: true,
+        status: true,
+        triggerScore: true,
+        thresholdApplied: true,
+        openedAt: true,
+      },
+      orderBy: [desc(interventionCases.openedAt)],
+    });
+
+    if (cases.length === 0) {
+      return { alerts: [], count: 0 };
+    }
+
+    const caseIds = cases.map((entry) => entry.id);
+    const assignments = await this.db.query.interventionAssignments.findMany({
+      where: inArray(interventionAssignments.caseId, caseIds),
+      columns: { caseId: true },
+    });
+    const assignedCaseIds = new Set(assignments.map((entry) => entry.caseId));
+    const classById = new Map(
+      enrolledClasses.map((entry) => [entry.classId, entry.class]),
+    );
+
+    const alerts = cases
+      .map((entry) => {
+        const classRecord = classById.get(entry.classId);
+        if (!classRecord) return null;
+
+        return {
+          caseId: entry.id,
+          classId: entry.classId,
+          status: entry.status,
+          subjectName: classRecord.subjectName,
+          subjectCode: classRecord.subjectCode,
+          section: classRecord.section ?? null,
+          triggerScore: this.toNumber(entry.triggerScore),
+          thresholdApplied:
+            this.toNumber(entry.thresholdApplied) ?? INTERVENTION_THRESHOLD,
+          openedAt: entry.openedAt,
+          hasAssignedPath: assignedCaseIds.has(entry.id),
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    return {
+      alerts,
+      count: alerts.length,
     };
   }
 
@@ -2039,6 +2407,9 @@ export class LxpService {
       orderBy: [asc(interventionAssignments.orderIndex)],
     });
 
+    const guidedAttemptSummaryByAssignmentId =
+      await this.buildGuidedAttemptSummaryMap(studentId, assignments);
+
     const total = assignments.length;
     const completed = assignments.filter((item) => item.isCompleted).length;
 
@@ -2077,6 +2448,8 @@ export class LxpService {
         guidedAssessment: this.serializeGeneratedGuidedAssessment(
           item.generatedGuidedAssessment,
         ),
+        guidedAttemptSummary:
+          guidedAttemptSummaryByAssignmentId.get(item.id) ?? null,
       })),
     };
   }
@@ -2558,6 +2931,8 @@ export class LxpService {
             classId: true,
             status: true,
             note: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
       },
@@ -2730,6 +3105,7 @@ export class LxpService {
             stem: question.stem,
             explanation: question.explanation,
             hint: question.hint ?? null,
+            reviewHint: question.reviewHint ?? null,
             weakConceptTag: question.weakConceptTag ?? null,
             sourceQuestionId: question.sourceQuestionId ?? null,
             options: question.options.map((option) => ({
@@ -2957,6 +3333,7 @@ export class LxpService {
     studentId: string,
     classId: string,
     assignmentId: string,
+    options?: { forceNewAttempt?: boolean },
   ) {
     await this.assertStudentEnrollment(studentId, classId);
 
@@ -2993,18 +3370,50 @@ export class LxpService {
       throw new NotFoundException('Generated guided assessment is missing');
     }
 
-    const existingAttempt =
-      await this.db.query.generatedGuidedAssessmentAttempts.findFirst({
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
         where: and(
           eq(generatedGuidedAssessmentAttempts.assignmentId, assignment.id),
           eq(generatedGuidedAssessmentAttempts.studentId, studentId),
         ),
-        orderBy: [desc(generatedGuidedAssessmentAttempts.updatedAt)],
+        orderBy: [
+          desc(generatedGuidedAssessmentAttempts.attemptNumber),
+          desc(generatedGuidedAssessmentAttempts.updatedAt),
+        ],
       });
 
-    const attempt =
-      existingAttempt ??
-      (
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment.sourceAssessmentId,
+    );
+    const latestInProgress = attempts.find(
+      (attempt) => attempt.status === 'in_progress',
+    );
+    const latestSubmitted = attempts.find(
+      (attempt) => attempt.status === 'submitted',
+    );
+    const highestAttemptNumber = attempts.reduce(
+      (max, attempt) => Math.max(max, attempt.attemptNumber ?? 1),
+      0,
+    );
+
+    let attempt = latestInProgress ?? null;
+    const shouldCreateAttempt =
+      !attempt &&
+      (!latestSubmitted || options?.forceNewAttempt === true) &&
+      highestAttemptNumber < GUIDED_ASSESSMENT_MAX_ATTEMPTS;
+
+    if (
+      !attempt &&
+      options?.forceNewAttempt === true &&
+      highestAttemptNumber >= GUIDED_ASSESSMENT_MAX_ATTEMPTS
+    ) {
+      throw new BadRequestException(
+        'This guided remedial assessment is locked after 3 attempts.',
+      );
+    }
+
+    if (shouldCreateAttempt) {
+      attempt = (
         await this.db
           .insert(generatedGuidedAssessmentAttempts)
           .values({
@@ -3013,6 +3422,7 @@ export class LxpService {
             caseId: assignment.interventionCase.id,
             classId,
             studentId,
+            attemptNumber: highestAttemptNumber + 1,
             responses: [],
             hintUsage: [],
             currentQuestionIndex: 0,
@@ -3020,6 +3430,16 @@ export class LxpService {
           })
           .returning()
       )[0];
+      attempts.unshift(attempt);
+    }
+
+    attempt = attempt ?? latestSubmitted ?? attempts[0] ?? null;
+
+    if (!attempt) {
+      throw new BadRequestException(
+        'Unable to prepare guided assessment attempt.',
+      );
+    }
 
     return {
       assignmentId: assignment.id,
@@ -3034,8 +3454,10 @@ export class LxpService {
         responses: attempt.responses ?? [],
         hintedQuestionIds: attempt.hintUsage ?? [],
         scorePercent: attempt.score ?? null,
+        attemptNumber: attempt.attemptNumber ?? 1,
         submittedAt: attempt.submittedAt ?? null,
       },
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
     };
   }
 
@@ -3108,6 +3530,14 @@ export class LxpService {
       })
       .where(eq(generatedGuidedAssessmentAttempts.id, session.attempt.id))
       .returning();
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
 
     return {
       assignmentId,
@@ -3118,8 +3548,87 @@ export class LxpService {
         responses: updatedAttempt.responses ?? [],
         hintedQuestionIds: updatedAttempt.hintUsage ?? [],
         scorePercent: updatedAttempt.score ?? null,
+        attemptNumber: updatedAttempt.attemptNumber ?? 1,
         submittedAt: updatedAttempt.submittedAt ?? null,
       },
+      guidedAssessment: session.guidedAssessment,
+      checkpointLabel: session.checkpointLabel,
+      attemptSummary: this.buildGuidedAttemptSummary(
+        attempts,
+        session.attemptSummary.passingScore,
+      ),
+    };
+  }
+
+  private async buildGuidedAssessmentScoreComparison(params: {
+    studentId: string;
+    sourceAssessmentId: string | null | undefined;
+    interventionOpenedAt?: Date | string | null;
+    triggerScore?: string | number | null;
+    currentAttemptId: string;
+    currentScorePercent: number;
+    currentSubmittedAt?: Date | string | null;
+  }) {
+    const sourceAssessmentId = params.sourceAssessmentId ?? null;
+    let baselineAttempt:
+      | { id: string; score: number | null; submittedAt: Date | null }
+      | undefined;
+
+    if (sourceAssessmentId) {
+      const conditions: SQL<unknown>[] = [
+        eq(assessmentAttempts.studentId, params.studentId),
+        eq(assessmentAttempts.assessmentId, sourceAssessmentId),
+        eq(assessmentAttempts.isSubmitted, true),
+      ];
+      const openedAt = params.interventionOpenedAt
+        ? new Date(params.interventionOpenedAt)
+        : null;
+      if (openedAt && !Number.isNaN(openedAt.getTime())) {
+        conditions.push(lte(assessmentAttempts.submittedAt, openedAt));
+      }
+
+      baselineAttempt = await this.db.query.assessmentAttempts.findFirst({
+        where: and(...conditions),
+        columns: {
+          id: true,
+          score: true,
+          submittedAt: true,
+        },
+        orderBy: [
+          desc(assessmentAttempts.submittedAt),
+          desc(assessmentAttempts.attemptNumber),
+        ],
+      });
+    }
+
+    const baselineScorePercent =
+      this.toNumber(baselineAttempt?.score) ??
+      this.toNumber(params.triggerScore);
+    const currentScorePercent = this.toNumber(params.currentScorePercent) ?? 0;
+    const deltaScorePercent =
+      baselineScorePercent === null
+        ? null
+        : Math.round((currentScorePercent - baselineScorePercent) * 1000) /
+          1000;
+    const trend =
+      deltaScorePercent === null
+        ? 'no_baseline'
+        : deltaScorePercent > 0
+          ? 'improved'
+          : deltaScorePercent < 0
+            ? 'declined'
+            : 'unchanged';
+
+    return {
+      sourceAssessmentId,
+      baselineAttemptId: baselineAttempt?.id ?? null,
+      baselineScorePercent,
+      baselineSubmittedAt: baselineAttempt?.submittedAt ?? null,
+      currentAttemptId: params.currentAttemptId,
+      currentScorePercent,
+      currentSubmittedAt: params.currentSubmittedAt ?? null,
+      deltaScorePercent,
+      trend,
     };
   }
 
@@ -3149,6 +3658,8 @@ export class LxpService {
             classId: true,
             status: true,
             note: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
         generatedGuidedAssessment: true,
@@ -3193,6 +3704,10 @@ export class LxpService {
       totalQuestions > 0
         ? Math.round((correctCount / totalQuestions) * 100)
         : 0;
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment.sourceAssessmentId,
+    );
+    const passed = scorePercent >= passingScore;
     const assessmentWeakConcepts = Array.isArray(
       assignment.generatedGuidedAssessment.weakConcepts,
     )
@@ -3227,19 +3742,45 @@ export class LxpService {
       .where(eq(generatedGuidedAssessmentAttempts.id, session.attempt.id))
       .returning();
 
-    const completionResult = await this.completeInterventionAssignment({
-      assignmentId,
+    const completionResult = passed
+      ? await this.completeInterventionAssignment({
+          assignmentId,
+          studentId,
+          classId,
+          xpAwarded: assignment.xpAwarded,
+          caseId: assignment.interventionCase.id,
+          caseNote: assignment.interventionCase.note,
+          auditActorId: studentId,
+          auditSource: 'guided_assessment',
+          auditMetadata: {
+            guidedAssessmentAttemptId: updatedAttempt.id,
+            scorePercent,
+            passingScore,
+          },
+        })
+      : {
+          interventionCompletedByStudent: false,
+          autoCompletedNote: assignment.interventionCase.note,
+        };
+
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
+
+    const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
       studentId,
-      classId,
-      xpAwarded: assignment.xpAwarded,
-      caseId: assignment.interventionCase.id,
-      caseNote: assignment.interventionCase.note,
-      auditActorId: studentId,
-      auditSource: 'guided_assessment',
-      auditMetadata: {
-        guidedAssessmentAttemptId: updatedAttempt.id,
-        scorePercent,
-      },
+      sourceAssessmentId:
+        assignment.generatedGuidedAssessment.sourceAssessmentId,
+      interventionOpenedAt: assignment.interventionCase.openedAt,
+      triggerScore: assignment.interventionCase.triggerScore,
+      currentAttemptId: updatedAttempt.id,
+      currentScorePercent: scorePercent,
+      currentSubmittedAt: updatedAttempt.submittedAt,
     });
 
     return {
@@ -3248,7 +3789,12 @@ export class LxpService {
       scorePercent,
       correctCount,
       totalQuestions,
+      attemptNumber: updatedAttempt.attemptNumber ?? 1,
+      passingScore,
+      passed,
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
       formativeSummary,
+      scoreComparison,
       interventionCompletedByStudent:
         completionResult.interventionCompletedByStudent,
     };
@@ -3269,6 +3815,8 @@ export class LxpService {
             id: true,
             studentId: true,
             classId: true,
+            openedAt: true,
+            triggerScore: true,
           },
         },
         generatedGuidedAssessment: true,
@@ -3292,7 +3840,10 @@ export class LxpService {
           eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
           eq(generatedGuidedAssessmentAttempts.studentId, studentId),
         ),
-        orderBy: [desc(generatedGuidedAssessmentAttempts.submittedAt)],
+        orderBy: [
+          desc(generatedGuidedAssessmentAttempts.submittedAt),
+          desc(generatedGuidedAssessmentAttempts.attemptNumber),
+        ],
       });
     if (!attempt || attempt.status !== 'submitted') {
       throw new BadRequestException(
@@ -3300,17 +3851,46 @@ export class LxpService {
       );
     }
 
+    const scorePercent = attempt.score ?? 0;
+    const passingScore = await this.resolveGuidedPassingScore(
+      assignment.generatedGuidedAssessment?.sourceAssessmentId,
+    );
+    const attempts =
+      await this.db.query.generatedGuidedAssessmentAttempts.findMany({
+        where: and(
+          eq(generatedGuidedAssessmentAttempts.assignmentId, assignmentId),
+          eq(generatedGuidedAssessmentAttempts.studentId, studentId),
+        ),
+        orderBy: [asc(generatedGuidedAssessmentAttempts.attemptNumber)],
+      });
+    const scoreComparison = await this.buildGuidedAssessmentScoreComparison({
+      studentId,
+      sourceAssessmentId:
+        assignment.generatedGuidedAssessment?.sourceAssessmentId,
+      interventionOpenedAt: assignment.interventionCase.openedAt,
+      triggerScore: assignment.interventionCase.triggerScore,
+      currentAttemptId: attempt.id,
+      currentScorePercent: scorePercent,
+      currentSubmittedAt: attempt.submittedAt,
+    });
+
     return {
       assignmentId,
       attemptId: attempt.id,
       guidedAssessment: this.serializeGeneratedGuidedAssessment(
         assignment.generatedGuidedAssessment,
       ),
-      scorePercent: attempt.score ?? 0,
+      scorePercent,
       correctCount: attempt.correctCount ?? 0,
+      totalQuestions: attempt.totalQuestions ?? 0,
+      attemptNumber: attempt.attemptNumber ?? 1,
+      passingScore,
+      passed: scorePercent >= passingScore,
+      attemptSummary: this.buildGuidedAttemptSummary(attempts, passingScore),
       responses: attempt.responses ?? [],
       hintedQuestionIds: attempt.hintUsage ?? [],
       formativeSummary: attempt.formativeSummary ?? null,
+      scoreComparison,
       submittedAt: attempt.submittedAt,
     };
   }
@@ -3924,14 +4504,18 @@ export class LxpService {
         .where(eq(interventionCases.id, interventionCase.id));
     });
 
-    await this.notificationsService.createBulk([
-      {
-        userId: interventionCase.studentId,
-        type: 'grade_updated',
-        title: 'New intervention checklist assigned',
-        body: 'Your teacher updated your Learners Path tasks. Open Learners Path to continue.',
-      },
-    ]);
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'New intervention checklist assigned',
+          body: 'Your teacher updated your intervention checklist in Learners Path. Open Learners Path to continue.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,
@@ -3988,14 +4572,18 @@ export class LxpService {
       })
       .where(eq(interventionCases.id, caseId));
 
-    await this.notificationsService.createBulk([
-      {
-        userId: interventionCase.studentId,
-        type: 'grade_updated',
-        title: 'Intervention case resolved',
-        body: 'Your teacher marked your current intervention cycle as resolved.',
-      },
-    ]);
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'Intervention case resolved',
+          body: 'Your teacher marked your current intervention cycle as resolved.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,
@@ -4015,23 +4603,31 @@ export class LxpService {
   async getTeacherPendingInterventionCount(user: UserContext) {
     const classRows = await this.db.query.classes.findMany({
       where: this.isAdmin(user.roles)
-        ? undefined
-        : eq(classes.teacherId, user.userId),
+        ? eq(classes.isActive, true)
+        : and(eq(classes.teacherId, user.userId), eq(classes.isActive, true)),
       columns: {
         id: true,
         subjectName: true,
         subjectCode: true,
       },
+      with: {
+        section: {
+          columns: { id: true, isActive: true },
+        },
+      },
     });
+    const activeClassRows = classRows.filter(
+      (row) => row.section?.isActive !== false,
+    );
 
-    if (classRows.length === 0) {
+    if (activeClassRows.length === 0) {
       return {
         pendingCount: 0,
         classBreakdown: [],
       };
     }
 
-    const classIds = classRows.map((row) => row.id);
+    const classIds = activeClassRows.map((row) => row.id);
     const pendingRows = await this.db.query.interventionCases.findMany({
       where: and(
         inArray(interventionCases.classId, classIds),
@@ -4053,7 +4649,7 @@ export class LxpService {
 
     return {
       pendingCount: pendingRows.length,
-      classBreakdown: classRows
+      classBreakdown: activeClassRows
         .map((cls) => ({
           classId: cls.id,
           subjectName: cls.subjectName,
@@ -4092,6 +4688,19 @@ export class LxpService {
         updatedAt: new Date(),
       })
       .where(eq(interventionCases.id, caseId));
+
+    await this.createAndEmitNotifications(
+      [
+        {
+          userId: interventionCase.studentId,
+          type: 'grade_updated',
+          referenceId: interventionCase.id,
+          title: 'Intervention support plan approved',
+          body: 'Your intervention support plan is now active. Open Learners Path to start the recommended steps.',
+        },
+      ],
+      { dedupe: false },
+    );
 
     await this.auditService.log({
       actorId: user.userId,

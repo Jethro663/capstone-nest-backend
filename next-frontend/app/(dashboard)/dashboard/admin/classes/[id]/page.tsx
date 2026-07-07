@@ -14,7 +14,6 @@ import {
   Eye,
   EyeOff,
   FileSpreadsheet,
-  ListChecks,
   Megaphone,
   MessageSquare,
   Plus,
@@ -479,18 +478,22 @@ export default function AdminClassDetailPage() {
 
   const toggleClassStatus = () => {
     if (!classItem) return;
-    const nextLabel = classItem.isActive ? 'Archive class' : 'Restore class';
+
+    if (!classItem.isActive) {
+      toast.info('Archived classes can only be purged from the Classes archive list.');
+      return;
+    }
+
     setConfirmation({
-      title: `${nextLabel}?`,
-      description: classItem.isActive
-        ? 'Archiving disables active use until restored.'
-        : 'Restoring reopens the class for active operations.',
-      confirmLabel: nextLabel,
-      tone: classItem.isActive ? 'danger' : 'default',
+      title: 'Archive class?',
+      description:
+        'Archiving clears the assigned teacher and completes active student enrollments. Archived classes cannot be restored; purge them from the archive list if they are no longer needed.',
+      confirmLabel: 'Archive class',
+      tone: 'danger',
       onConfirm: async () => {
         await executeControlledAction('class-status', async () => {
           await classService.toggleStatus(classItem.id);
-          toast.success(classItem.isActive ? 'Class archived' : 'Class restored');
+          toast.success('Class archived');
         });
       },
     });
@@ -1083,15 +1086,21 @@ export default function AdminClassDetailPage() {
                 </>
               )}
             </Button>
-            <Button
-              type="button"
-              className="admin-button-solid rounded-xl font-black"
-              onClick={toggleClassStatus}
-              disabled={busyAction === 'class-status'}
-            >
-              <Power className="h-4 w-4" />
-              {classItem.isActive ? 'Archive' : 'Restore'}
-            </Button>
+            {classItem.isActive ? (
+              <Button
+                type="button"
+                className="admin-button-solid rounded-xl font-black"
+                onClick={toggleClassStatus}
+                disabled={busyAction === 'class-status'}
+              >
+                <Power className="h-4 w-4" />
+                Archive
+              </Button>
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-800">
+                Archived classes can only be purged from the Classes archive list.
+              </div>
+            )}
           </div>
         }
       >
@@ -1167,8 +1176,8 @@ export default function AdminClassDetailPage() {
                   <Link href={`/dashboard/admin/sections/${classItem.sectionId}/roster`}>Section Roster</Link>
                 </Button>
                 <Button asChild variant="outline" className="admin-button-outline rounded-xl font-black">
-                  <Link href={`/dashboard/admin/sections/${classItem.sectionId}/students/add`}>
-                    Add Section Students
+                  <Link href={`/dashboard/admin/classes/${classItem.id}/students/add`}>
+                    Add Class Students
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="admin-button-outline rounded-xl font-black">
@@ -1914,7 +1923,7 @@ export default function AdminClassDetailPage() {
                   <Link href={`/dashboard/admin/sections/${classItem.sectionId}/roster`}>Open Section Roster</Link>
                 </Button>
                 <Button asChild className="teacher-class-workspace__solid">
-                  <Link href={`/dashboard/admin/sections/${classItem.sectionId}/students/add`}>
+                  <Link href={`/dashboard/admin/classes/${classItem.id}/students/add`}>
                     Add Students
                   </Link>
                 </Button>

@@ -268,6 +268,31 @@ class AiJobRuntimeTests(unittest.IsolatedAsyncioTestCase):
         cutoff = fake_db.execute.await_args_list[0].args[1]["cutoff"]
         self.assertIsNone(cutoff.tzinfo)
 
+    async def test_startup_tolerates_stale_job_cleanup_failure(self) -> None:
+        with (
+            patch.object(
+                main,
+                "_cleanup_stale_ai_jobs",
+                AsyncMock(side_effect=RuntimeError("db offline")),
+            ),
+            patch.object(main, "_recover_orphaned_jobs", AsyncMock()) as mocked_recover,
+            patch.object(main.ollama_client, "preload_model", AsyncMock()) as mocked_preload,
+            patch.object(main.logger, "warning") as mocked_warning,
+        ):
+            await main.preload_ollama_models()
+
+        mocked_recover.assert_awaited_once()
+        self.assertEqual(mocked_preload.await_count, 2)
+        warning_args = [call.args for call in mocked_warning.call_args_list]
+        self.assertTrue(
+            any(
+                args[:1] == ("Failed to cleanup stale AI jobs at startup: %s",)
+                and len(args) > 1
+                and str(args[1]) == "db offline"
+                for args in warning_args
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

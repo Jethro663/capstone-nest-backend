@@ -191,6 +191,10 @@ describe('AdminClassDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Modules' })).toBeInTheDocument();
     expect(screen.getByText('Numbers and Operations')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Classes/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add Class Students/i })).toHaveAttribute(
+      'href',
+      '/dashboard/admin/classes/class-1/students/add',
+    );
   });
 
   it('renders the calendar workspace when view=calendar', async () => {

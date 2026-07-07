@@ -71,6 +71,20 @@ class AdminChatRequest(BaseModel):
 class ExtractRequest(BaseModel):
     file_id: str = Field(..., alias="fileId")
     target_section_count: Literal[3, 4, 5] = Field(..., alias="targetSectionCount")
+    extraction_style: Literal["faithful", "clean", "student_friendly"] = Field(
+        default="clean",
+        alias="extractionStyle",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
+class RetryExtractionRequest(BaseModel):
+    target_section_count: Literal[3, 4, 5] | None = Field(default=None, alias="targetSectionCount")
+    extraction_style: Literal["faithful", "clean", "student_friendly"] | None = Field(
+        default=None,
+        alias="extractionStyle",
+    )
 
     model_config = {"populate_by_name": True}
 
@@ -179,6 +193,8 @@ class UpdateExtractionRequest(BaseModel):
     description: str | None = None
     sections: list[ExtractionSectionDto] | None = None
     lessons: list[ExtractionLessonDto] | None = None
+    review_issues: list[dict[str, Any]] | None = Field(default=None, alias="reviewIssues")
+    review_state: str | None = Field(default=None, alias="reviewState")
     media_assets: list[ExtractionMediaAssetDto] | None = Field(
         default=None,
         alias="mediaAssets",
@@ -227,6 +243,9 @@ class GenerateQuizDraftRequest(BaseModel):
     feedback_level: str = Field(default="standard", alias="feedbackLevel")
     class_record_category: str | None = Field(default=None, alias="classRecordCategory")
     quarter: str | None = None
+    source_policy: str = Field(default="published_default", alias="sourcePolicy")
+    allow_draft_sources: bool = Field(default=False, alias="allowDraftSources")
+    retry_of_job_id: str | None = Field(default=None, alias="retryOfJobId")
 
     model_config = {"populate_by_name": True}
 

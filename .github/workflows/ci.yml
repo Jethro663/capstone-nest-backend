@@ -102,6 +102,9 @@ jobs:
   ai_service:
     name: AI Service
     runs-on: ubuntu-latest
+    env:
+      AI_SERVICE_SHARED_SECRET: test-shared-secret
+      AI_RUNTIME_MODE: test
     defaults:
       run:
         working-directory: ai-service

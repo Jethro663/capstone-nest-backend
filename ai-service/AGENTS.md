@@ -51,7 +51,7 @@ Scope: `ai-service/` only.
 - Nest backend owns auth, RBAC, and forwarded-header policy.
 - Extraction apply flows and AI content generation must stay compatible with retrieval reindexing.
 - Shared-secret validation must stay compatible with `backend/src/modules/ai-mentor/ai-proxy.service.ts`.
-- `next-frontend` and `test-mobile` reach AI through backend routes, not directly.
+- `next-frontend` and `mobile` reach AI through backend routes, not directly.
 
 ## Verification
 

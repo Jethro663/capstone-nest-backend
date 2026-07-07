@@ -143,7 +143,10 @@ export class RosterImportController {
     @Param('sectionId', ParseUUIDPipe) sectionId: string,
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
-    const data = await this.rosterImportService.getPendingRoster(sectionId, user);
+    const data = await this.rosterImportService.getPendingRoster(
+      sectionId,
+      user,
+    );
     return {
       success: true,
       message: 'Roster import history loaded.',

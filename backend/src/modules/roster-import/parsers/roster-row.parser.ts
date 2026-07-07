@@ -85,7 +85,10 @@ export function findColumnHeaderRow(
   return null;
 }
 
-function findKeywordIndex(rowLower: string[], keywords: readonly string[]): number {
+function findKeywordIndex(
+  rowLower: string[],
+  keywords: readonly string[],
+): number {
   return rowLower.findIndex((cell) => keywords.some((kw) => cell.includes(kw)));
 }
 

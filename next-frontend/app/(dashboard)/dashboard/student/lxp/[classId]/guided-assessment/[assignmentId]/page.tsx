@@ -1,32 +1,44 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Lightbulb, Send } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { StudentObjectiveAssessmentSurface } from '@/components/student/assessment/StudentObjectiveAssessmentSurface';
-import { StudentStatusChip } from '@/components/student/student-primitives';
-import { lxpService } from '@/services/lxp-service';
-import type { SharedQuestionType } from '@/components/assessment/shared-answer-input';
-import type { GuidedAssessmentQuestion } from '@/types/lxp';
-import '../../../../assessments/[id]/take/take-page.css';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, CheckCircle2, Lightbulb, Send } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StudentObjectiveAssessmentSurface } from "@/components/student/assessment/StudentObjectiveAssessmentSurface";
+import { StudentStatusChip } from "@/components/student/student-primitives";
+import { lxpService } from "@/services/lxp-service";
+import type { SharedQuestionType } from "@/components/assessment/shared-answer-input";
+import type { GuidedAssessmentQuestion } from "@/types/lxp";
+import "../../../../assessments/[id]/take/take-page.css";
 
 function resolveParam(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] ?? '' : value ?? '';
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
 
 function promptToHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .split('\n')
+  return stripRichText(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .split("\n")
     .map((line) => `<p>${line}</p>`)
-    .join('');
+    .join("");
+}
+
+function stripRichText(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/\s*(p|div|li|h[1-6])\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function isAnswered(answer: string | string[] | undefined) {
@@ -37,20 +49,68 @@ function formatAnswer(
   question: GuidedAssessmentQuestion | undefined,
   answer: string | string[] | undefined,
 ) {
-  if (!question || answer === undefined || answer === null) return 'No answer';
+  if (!question || answer === undefined || answer === null) return "No answer";
   const ids = Array.isArray(answer) ? answer : [answer];
   const labels = ids
-    .map((id) => question.options.find((option) => option.id === id)?.text ?? String(id))
+    .map(
+      (id) =>
+        question.options.find((option) => option.id === id)?.text ?? String(id),
+    )
+    .map((value) => stripRichText(value))
     .filter(Boolean);
-  return labels.length > 0 ? labels.join(', ') : 'No answer';
+  return labels.length > 0 ? labels.join(", ") : "No answer";
 }
 
 function formatCorrectAnswer(question: GuidedAssessmentQuestion) {
   const labels = question.options
     .filter((option) => option.isCorrect)
     .map((option) => option.text)
+    .map((value) => stripRichText(value))
     .filter(Boolean);
-  return labels.length > 0 ? labels.join(', ') : 'Answer key unavailable';
+  return labels.length > 0 ? labels.join(", ") : "Answer key unavailable";
+}
+
+function getReviewHint(question: GuidedAssessmentQuestion | undefined) {
+  return stripRichText(question?.reviewHint || question?.hint);
+}
+
+function isGuidedAnswerCorrect(
+  question: GuidedAssessmentQuestion | undefined,
+  answer: string | string[] | undefined,
+) {
+  if (!question || answer === undefined || answer === null) return false;
+  const correctIds = question.options
+    .filter((option) => option.isCorrect)
+    .map((option) => option.id)
+    .sort();
+  if (correctIds.length === 0) return false;
+
+  if (Array.isArray(answer)) {
+    const selectedIds = [...answer].sort();
+    return (
+      selectedIds.length === correctIds.length &&
+      selectedIds.every((id, index) => id === correctIds[index])
+    );
+  }
+
+  return correctIds.includes(answer);
+}
+
+function formatComparisonScore(value: number | null | undefined) {
+  return typeof value === "number" ? value.toFixed(1) + "%" : "No baseline";
+}
+
+function formatComparisonDelta(value: number | null | undefined) {
+  if (typeof value !== "number") return "Baseline unavailable";
+  const sign = value > 0 ? "+" : "";
+  return sign + value.toFixed(1) + " pts";
+}
+
+function getComparisonCopy(trend: string | undefined) {
+  if (trend === "improved") return "Improved after intervention";
+  if (trend === "declined") return "Needs another guided review";
+  if (trend === "unchanged") return "Steady score";
+  return "Baseline quiz not found";
 }
 
 export default function StudentGuidedAssessmentPage() {
@@ -64,14 +124,17 @@ export default function StudentGuidedAssessmentPage() {
   const [, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [session, setSession] = useState<Awaited<
-    ReturnType<typeof lxpService.startGuidedAssessment>
-  >['data'] | null>(null);
-  const [result, setResult] = useState<Awaited<
-    ReturnType<typeof lxpService.getGuidedAssessmentResult>
-  >['data'] | null>(null);
+  const [session, setSession] = useState<
+    Awaited<ReturnType<typeof lxpService.startGuidedAssessment>>["data"] | null
+  >(null);
+  const [result, setResult] = useState<
+    | Awaited<ReturnType<typeof lxpService.getGuidedAssessmentResult>>["data"]
+    | null
+  >(null);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [responses, setResponses] = useState<Record<string, string | string[]>>({});
+  const [responses, setResponses] = useState<Record<string, string | string[]>>(
+    {},
+  );
   const [hintedQuestionIds, setHintedQuestionIds] = useState<string[]>([]);
 
   const fetchSession = useCallback(async () => {
@@ -79,7 +142,10 @@ export default function StudentGuidedAssessmentPage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await lxpService.startGuidedAssessment(classId, assignmentId);
+      const response = await lxpService.startGuidedAssessment(
+        classId,
+        assignmentId,
+      );
       setSession(response.data);
       setCurrentIdx(response.data.attempt.currentQuestionIndex ?? 0);
       const restoredResponses = Object.fromEntries(
@@ -91,15 +157,18 @@ export default function StudentGuidedAssessmentPage() {
       setResponses(restoredResponses);
       setHintedQuestionIds(response.data.attempt.hintedQuestionIds ?? []);
 
-      if (response.data.attempt.status === 'submitted') {
-        const resultResponse = await lxpService.getGuidedAssessmentResult(classId, assignmentId);
+      if (response.data.attempt.status === "submitted") {
+        const resultResponse = await lxpService.getGuidedAssessmentResult(
+          classId,
+          assignmentId,
+        );
         setResult(resultResponse.data);
       } else {
         setResult(null);
       }
     } catch (err) {
-      console.error('Failed to load guided assessment session', err);
-      setError('The guided remedial assessment could not be loaded right now.');
+      console.error("Failed to load guided assessment session", err);
+      setError("The guided remedial assessment could not be loaded right now.");
     } finally {
       setLoading(false);
     }
@@ -121,22 +190,36 @@ export default function StudentGuidedAssessmentPage() {
     if (!session || result) return;
     try {
       setSaving(true);
-      const response = await lxpService.updateGuidedAssessmentProgress(classId, assignmentId, {
-        currentQuestionIndex: currentIdx,
-        hintedQuestionIds,
-        responses: Object.entries(responses).map(([questionId, answer]) => ({
-          questionId,
-          answer,
-          explanationShown: false,
-        })),
-      });
-      setSession((current) => (current ? { ...current, attempt: response.data.attempt } : current));
+      const response = await lxpService.updateGuidedAssessmentProgress(
+        classId,
+        assignmentId,
+        {
+          currentQuestionIndex: currentIdx,
+          hintedQuestionIds,
+          responses: Object.entries(responses).map(([questionId, answer]) => ({
+            questionId,
+            answer,
+            explanationShown: false,
+          })),
+        },
+      );
+      setSession((current) =>
+        current ? { ...current, attempt: response.data.attempt } : current,
+      );
     } catch (err) {
-      console.error('Failed to persist guided assessment progress', err);
+      console.error("Failed to persist guided assessment progress", err);
     } finally {
       setSaving(false);
     }
-  }, [assignmentId, classId, currentIdx, hintedQuestionIds, responses, result, session]);
+  }, [
+    assignmentId,
+    classId,
+    currentIdx,
+    hintedQuestionIds,
+    responses,
+    result,
+    session,
+  ]);
 
   useEffect(() => {
     if (!session || result) return;
@@ -149,7 +232,9 @@ export default function StudentGuidedAssessmentPage() {
   const handleHint = () => {
     if (!activeQuestion) return;
     setHintedQuestionIds((current) =>
-      current.includes(activeQuestion.id) ? current : [...current, activeQuestion.id],
+      current.includes(activeQuestion.id)
+        ? current
+        : [...current, activeQuestion.id],
     );
   };
 
@@ -157,32 +242,74 @@ export default function StudentGuidedAssessmentPage() {
     if (!session) return;
     try {
       setSubmitting(true);
-      const response = await lxpService.submitGuidedAssessment(classId, assignmentId, {
-        hintedQuestionIds,
-        responses: questionIds.map((questionId) => ({
-          questionId,
-          answer: responses[questionId],
-          explanationShown: true,
-        })),
-      });
+      const response = await lxpService.submitGuidedAssessment(
+        classId,
+        assignmentId,
+        {
+          hintedQuestionIds,
+          responses: questionIds.map((questionId) => ({
+            questionId,
+            answer: responses[questionId],
+            explanationShown: true,
+          })),
+        },
+      );
       setResult(response.data);
-      toast.success('Guided assessment submitted.');
+      toast.success(
+        response.data.passed
+          ? "Guided assessment passed and completed."
+          : "Attempt submitted. Review the answer key and retry if attempts remain.",
+      );
     } catch (err) {
-      console.error('Failed to submit guided assessment', err);
-      setError('The guided remedial assessment could not be submitted right now.');
+      console.error("Failed to submit guided assessment", err);
+      setError(
+        "The guided remedial assessment could not be submitted right now.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const currentAnswer = activeQuestion ? responses[activeQuestion.id] : undefined;
-  const hintVisible = activeQuestion ? hintedQuestionIds.includes(activeQuestion.id) : false;
+  const handleRetry = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await lxpService.startGuidedAssessment(
+        classId,
+        assignmentId,
+        { forceNewAttempt: true },
+      );
+      setSession(response.data);
+      setResult(null);
+      setCurrentIdx(response.data.attempt.currentQuestionIndex ?? 0);
+      setResponses({});
+      setHintedQuestionIds([]);
+      toast.success("New guided assessment attempt started.");
+    } catch (err) {
+      console.error("Failed to start guided assessment retry", err);
+      toast.error("No retry is available for this guided assessment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const currentAnswer = activeQuestion
+    ? responses[activeQuestion.id]
+    : undefined;
+  const hintVisible = activeQuestion
+    ? hintedQuestionIds.includes(activeQuestion.id)
+    : false;
   const explanationVisible = Boolean(
     activeQuestion &&
-      ((Array.isArray(currentAnswer) && currentAnswer.length > 0) ||
-        (!Array.isArray(currentAnswer) && currentAnswer)),
+    ((Array.isArray(currentAnswer) && currentAnswer.length > 0) ||
+      (!Array.isArray(currentAnswer) && currentAnswer)),
   );
-  const progressValue = questions.length > 0 ? ((currentIdx + 1) / questions.length) * 100 : 0;
+  const currentAnswerCorrect = isGuidedAnswerCorrect(
+    activeQuestion,
+    currentAnswer,
+  );
+  const progressValue =
+    questions.length > 0 ? ((currentIdx + 1) / questions.length) * 100 : 0;
   const resultByQuestionId = useMemo(
     () =>
       Object.fromEntries(
@@ -203,7 +330,7 @@ export default function StudentGuidedAssessmentPage() {
   if (error || (!session && !result)) {
     return (
       <section className="teacher-class-workspace__not-found">
-        <p>{error || 'Guided remedial assessment not found.'}</p>
+        <p>{error || "Guided remedial assessment not found."}</p>
         <Link href={returnHref}>Back to Learners Path</Link>
       </section>
     );
@@ -217,29 +344,50 @@ export default function StudentGuidedAssessmentPage() {
       (question) => !resultByQuestionId[question.id]?.isCorrect,
     );
 
-    const renderResultQuestion = (question: GuidedAssessmentQuestion, index: number) => {
+    const renderResultQuestion = (
+      question: GuidedAssessmentQuestion,
+      index: number,
+    ) => {
       const response = resultByQuestionId[question.id];
+      const reviewHint = getReviewHint(question);
       return (
-        <article key={question.id} className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] p-4">
+        <article
+          key={question.id}
+          className="guided-result-question rounded-xl border border-[var(--student-outline)] bg-[var(--student-elevated)] p-4"
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <strong className="block min-w-0 text-sm text-[var(--student-text-strong)]">
-              Q{index + 1}. {question.stem}
+              Q{index + 1}. {stripRichText(question.stem)}
             </strong>
-            <StudentStatusChip tone={response?.isCorrect ? 'success' : 'warning'}>
-              {response?.isCorrect ? 'Correct' : 'Review'}
+            <StudentStatusChip
+              tone={response?.isCorrect ? "success" : "warning"}
+            >
+              {response?.isCorrect ? "Correct" : "Review"}
             </StudentStatusChip>
           </div>
-          <div className="mt-3 grid gap-2 text-sm text-[var(--student-text-soft)] sm:grid-cols-2">
-            <p className="font-semibold text-[var(--student-text-strong)]">
-              Your answer: {formatAnswer(question, response?.answer)}
+          <div className="guided-answer-feedback__summary mt-3 grid gap-2 text-sm text-[var(--student-text-soft)] sm:grid-cols-2">
+            <p
+              className={
+                response?.isCorrect
+                  ? "guided-answer-feedback__student"
+                  : "guided-answer-feedback__student is-wrong"
+              }
+            >
+              Your previous answer: {formatAnswer(question, response?.answer)}
             </p>
-            {!response?.isCorrect ? (
-              <p className="font-semibold text-[var(--student-text-strong)]">
-                Correct answer: {formatCorrectAnswer(question)}
-              </p>
-            ) : null}
+            <p className="guided-answer-feedback__correct">
+              Correct answer: {formatCorrectAnswer(question)}
+            </p>
           </div>
-          <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">{question.explanation}</p>
+          {reviewHint ? (
+            <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-sm leading-6 text-[#155e75]">
+              <strong className="block text-[#0f3f56]">JA clue</strong>
+              <p className="mt-1">{reviewHint}</p>
+            </div>
+          ) : null}
+          <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">
+            {stripRichText(question.explanation)}
+          </p>
           {question.weakConceptTag ? (
             <p className="mt-2 text-xs font-semibold text-[var(--student-text-muted)]">
               Focus concept: {question.weakConceptTag}
@@ -250,7 +398,7 @@ export default function StudentGuidedAssessmentPage() {
     };
 
     return (
-      <div className="student-assessment-take-theme space-y-5">
+      <div className="student-assessment-take-theme guided-intervention-assessment relative space-y-5 overflow-hidden">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => router.push(returnHref)}>
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -259,28 +407,111 @@ export default function StudentGuidedAssessmentPage() {
           <StudentStatusChip tone="success">Submitted</StudentStatusChip>
         </header>
 
+        <div
+          className="guided-ja-corner guided-ja-corner--result"
+          aria-hidden="true"
+        >
+          <Image
+            src="/images/JA/ja_cheer.png"
+            alt=""
+            width={168}
+            height={168}
+            priority
+          />
+        </div>
+
         <Card className="student-card">
           <CardContent className="space-y-4 p-6">
             <div className="flex items-center gap-2 text-[#102744]">
               <CheckCircle2 className="h-5 w-5 text-[#109c4a]" />
-              <h1 className="text-2xl font-semibold">{session.guidedAssessment.title}</h1>
+              <h1 className="text-2xl font-semibold">
+                {session.guidedAssessment.title}
+              </h1>
             </div>
             <p className="text-sm text-[#5f6b84]">
-              Score: <strong>{result.scorePercent}%</strong> ({result.correctCount} correct)
+              Score: <strong>{result.scorePercent}%</strong> (
+              {result.correctCount} correct) | Passing score:{" "}
+              <strong>{result.passingScore ?? result.attemptSummary?.passingScore ?? 60}%</strong>
             </p>
-            {result.formativeSummary && typeof result.formativeSummary === 'object' ? (
+            {result.attemptSummary ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {Array.from({ length: result.attemptSummary.maxAttempts }).map((_, index) => {
+                  const attempt = result.attemptSummary?.attempts.find(
+                    (item) => item.attemptNumber === index + 1,
+                  );
+                  return (
+                    <span
+                      key={index}
+                      className="rounded-full border border-[#cbd9ea] bg-white px-3 py-1 text-xs font-black text-[#30415d]"
+                    >
+                      Try {index + 1}: {attempt?.scorePercent ?? "--"}%
+                    </span>
+                  );
+                })}
+                {result.attemptSummary.canRetry && !result.attemptSummary.isLocked ? (
+                  <Button type="button" variant="outline" onClick={() => void handleRetry()}>
+                    Retry guided assessment
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {result.scoreComparison ? (
+              <section className="rounded-3xl border border-[#b9d9ff] bg-gradient-to-br from-[#f2f8ff] via-white to-[#eaf7ff] p-4 shadow-[0_18px_38px_rgba(56,116,203,0.13)]">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#2870c8]">
+                      Before vs after
+                    </p>
+                    <h2 className="mt-1 text-lg font-black text-[#102744]">
+                      {getComparisonCopy(result.scoreComparison.trend)}
+                    </h2>
+                  </div>
+                  <StudentStatusChip
+                    tone={result.scoreComparison.trend === "improved" ? "success" : "warning"}
+                  >
+                    {formatComparisonDelta(result.scoreComparison.deltaScorePercent)}
+                  </StudentStatusChip>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-[#d8e7f8] bg-white/80 p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6b7d96]">
+                      Previous quiz score
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-[#30415d]">
+                      {formatComparisonScore(result.scoreComparison.baselineScorePercent)}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-[#bfefd7] bg-[#f1fff7] p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#198554]">
+                      Current AI quiz score
+                    </p>
+                    <p className="mt-1 text-2xl font-black text-[#0f7a45]">
+                      {formatComparisonScore(result.scoreComparison.currentScorePercent)}
+                    </p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+            {result.formativeSummary &&
+            typeof result.formativeSummary === "object" ? (
               <div className="rounded-2xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm text-[#30415d]">
-                <strong className="block text-[#102744]">Formative summary</strong>
-                {'improvedConcepts' in result.formativeSummary &&
+                <strong className="block text-[#102744]">
+                  Formative summary
+                </strong>
+                {"improvedConcepts" in result.formativeSummary &&
                 Array.isArray(result.formativeSummary.improvedConcepts) ? (
                   <p className="mt-2">
-                    Improved: {result.formativeSummary.improvedConcepts.join(', ') || 'None yet'}
+                    Improved:{" "}
+                    {result.formativeSummary.improvedConcepts.join(", ") ||
+                      "None yet"}
                   </p>
                 ) : null}
-                {'stillWeakConcepts' in result.formativeSummary &&
+                {"stillWeakConcepts" in result.formativeSummary &&
                 Array.isArray(result.formativeSummary.stillWeakConcepts) ? (
                   <p className="mt-2">
-                    Still weak: {result.formativeSummary.stillWeakConcepts.join(', ') || 'None listed'}
+                    Still weak:{" "}
+                    {result.formativeSummary.stillWeakConcepts.join(", ") ||
+                      "None listed"}
                   </p>
                 ) : null}
               </div>
@@ -291,15 +522,22 @@ export default function StudentGuidedAssessmentPage() {
               className="space-y-3 rounded-2xl border border-[var(--student-success-border)] bg-[var(--student-success-bg)] p-4"
             >
               <div>
-                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Correct Answers</h2>
+                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">
+                  Correct Answers
+                </h2>
                 <p className="text-sm text-[var(--student-text-soft)]">
-                  These items show concepts you handled correctly in this guided retry.
+                  These items show concepts you handled correctly in this guided
+                  retry.
                 </p>
               </div>
               {correctQuestions.length > 0 ? (
-                correctQuestions.map((question, index) => renderResultQuestion(question, index))
+                correctQuestions.map((question, index) =>
+                  renderResultQuestion(question, index),
+                )
               ) : (
-                <p className="text-sm text-[var(--student-text-soft)]">No correct answers yet.</p>
+                <p className="text-sm text-[var(--student-text-soft)]">
+                  No correct answers yet.
+                </p>
               )}
             </section>
 
@@ -309,15 +547,22 @@ export default function StudentGuidedAssessmentPage() {
               className="space-y-3 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4"
             >
               <div>
-                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Review These Answers</h2>
+                <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">
+                  Review These Answers
+                </h2>
                 <p className="text-sm text-[var(--student-text-soft)]">
-                  Recheck these items with the explanation and correct answer before returning to the source lesson.
+                  Recheck these items with the explanation and correct answer
+                  before returning to the source lesson.
                 </p>
               </div>
               {reviewQuestions.length > 0 ? (
-                reviewQuestions.map((question, index) => renderResultQuestion(question, index))
+                reviewQuestions.map((question, index) =>
+                  renderResultQuestion(question, index),
+                )
               ) : (
-                <p className="text-sm text-[var(--student-text-soft)]">No review items left from this attempt.</p>
+                <p className="text-sm text-[var(--student-text-soft)]">
+                  No review items left from this attempt.
+                </p>
               )}
             </section>
           </CardContent>
@@ -330,18 +575,40 @@ export default function StudentGuidedAssessmentPage() {
     return null;
   }
 
+  const activeQuestionReviewHint = getReviewHint(activeQuestion);
+
   return (
-    <div className="student-assessment-take-theme space-y-4">
+    <div className="student-assessment-take-theme guided-intervention-assessment relative space-y-4 overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => router.push(returnHref)}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Learners Path
         </Button>
         <div className="flex items-center gap-2">
-          <StudentStatusChip tone="neutral">Guided remediation</StudentStatusChip>
-          <StudentStatusChip tone="info">{session.attempt.status.replace('_', ' ')}</StudentStatusChip>
+          <StudentStatusChip tone="neutral">
+            Guided remediation
+          </StudentStatusChip>
+          <StudentStatusChip tone="info">
+            {session.attempt.status.replace("_", " ")}
+          </StudentStatusChip>
+          <StudentStatusChip tone="neutral">
+            Try {session.attempt.attemptNumber ?? 1}/{session.attemptSummary.maxAttempts}
+          </StudentStatusChip>
+          <StudentStatusChip tone="neutral">
+            Pass {session.attemptSummary.passingScore}%
+          </StudentStatusChip>
         </div>
       </header>
+
+      <div className="guided-ja-corner" aria-hidden="true">
+        <Image
+          src="/images/JA/ja_wave.png"
+          alt=""
+          width={180}
+          height={180}
+          priority
+        />
+      </div>
 
       <StudentObjectiveAssessmentSurface
         title={session.guidedAssessment.title}
@@ -353,7 +620,8 @@ export default function StudentGuidedAssessmentPage() {
           promptHtml: promptToHtml(activeQuestion.stem),
           options: (activeQuestion.options ?? []).map((option) => ({
             id: option.id,
-            text: option.text,
+            text: stripRichText(option.text),
+            isCorrect: option.isCorrect,
           })),
         }}
         currentIdx={currentIdx}
@@ -378,9 +646,13 @@ export default function StudentGuidedAssessmentPage() {
         }
         metaBadges={
           <>
-            <StudentStatusChip tone="neutral">{activeQuestion.type.replace('_', ' ')}</StudentStatusChip>
+            <StudentStatusChip tone="neutral">
+              {activeQuestion.type.replace("_", " ")}
+            </StudentStatusChip>
             {activeQuestion.weakConceptTag ? (
-              <StudentStatusChip tone="info">{activeQuestion.weakConceptTag}</StudentStatusChip>
+              <StudentStatusChip tone="info">
+                {activeQuestion.weakConceptTag}
+              </StudentStatusChip>
             ) : null}
           </>
         }
@@ -391,15 +663,68 @@ export default function StudentGuidedAssessmentPage() {
               className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]"
             >
               <strong className="block text-[#102744]">Hint</strong>
-              <p className="mt-2">{activeQuestion.hint}</p>
+              <p className="mt-2">{stripRichText(activeQuestion.hint)}</p>
             </div>
           ) : null
         }
+        showCorrectness={explanationVisible}
         feedback={
           explanationVisible ? (
-            <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]">
-              <strong className="block text-[#102744]">Explanation</strong>
-              <p className="mt-2">{activeQuestion.explanation}</p>
+            <div
+              className={`guided-answer-feedback rounded-3xl border p-4 text-sm ${
+                currentAnswerCorrect
+                  ? "guided-answer-feedback--correct"
+                  : "guided-answer-feedback--review"
+              }`}
+              aria-live="polite"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <strong className="block text-base text-[#102744]">
+                    {currentAnswerCorrect
+                      ? "Nice hit. You got it."
+                      : "Good try. Here is the answer key."}
+                  </strong>
+                  <div className="guided-answer-feedback__summary mt-3 grid gap-2 sm:grid-cols-2">
+                    <p
+                      className={
+                        currentAnswerCorrect
+                          ? "guided-answer-feedback__student"
+                          : "guided-answer-feedback__student is-wrong"
+                      }
+                    >
+                      Your previous answer:{" "}
+                      {formatAnswer(activeQuestion, currentAnswer)}
+                    </p>
+                    <p className="guided-answer-feedback__correct">
+                      Correct answer:{" "}
+                      {activeQuestion
+                        ? formatCorrectAnswer(activeQuestion)
+                        : "Answer key unavailable"}
+                    </p>
+                  </div>
+                </div>
+                <StudentStatusChip
+                  tone={currentAnswerCorrect ? "success" : "warning"}
+                >
+                  {currentAnswerCorrect ? "Correct" : "Review"}
+                </StudentStatusChip>
+              </div>
+              {activeQuestionReviewHint ? (
+                <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-[#155e75]">
+                  <strong className="block text-[#0f3f56]">JA clue</strong>
+                  <p className="mt-1">{activeQuestionReviewHint}</p>
+                </div>
+              ) : null}
+              <div className="guided-answer-feedback__explanation mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
+                <strong className="block text-[#102744]">Why this works</strong>
+                <p className="mt-2">
+                  {stripRichText(activeQuestion?.explanation)}
+                  {!currentAnswerCorrect && activeQuestion
+                    ? ` Correct answer: ${formatCorrectAnswer(activeQuestion)}.`
+                    : ""}
+                </p>
+              </div>
             </div>
           ) : null
         }
@@ -407,10 +732,11 @@ export default function StudentGuidedAssessmentPage() {
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" onClick={handleHint}>
               <Lightbulb className="mr-2 h-4 w-4" />
-              {hintVisible ? 'Hint unlocked' : 'Show hint'}
+              {hintVisible ? "Hint unlocked" : "Show hint"}
             </Button>
             <span className="text-xs font-medium text-[#7b8aa5]">
-              Optional hints before answer. Explanation appears after you respond.
+              Optional hints before answer. Explanation appears after you
+              respond.
             </span>
           </div>
         }
@@ -419,7 +745,9 @@ export default function StudentGuidedAssessmentPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setCurrentIdx((current) => Math.max(0, current - 1))}
+              onClick={() =>
+                setCurrentIdx((current) => Math.max(0, current - 1))
+              }
               disabled={currentIdx === 0}
             >
               Previous
@@ -428,15 +756,21 @@ export default function StudentGuidedAssessmentPage() {
               <Button
                 type="button"
                 onClick={() =>
-                  setCurrentIdx((current) => Math.min(questions.length - 1, current + 1))
+                  setCurrentIdx((current) =>
+                    Math.min(questions.length - 1, current + 1),
+                  )
                 }
               >
                 Next
               </Button>
             ) : (
-              <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
+              <Button
+                type="button"
+                onClick={() => void handleSubmit()}
+                disabled={submitting}
+              >
                 <Send className="mr-2 h-4 w-4" />
-                {submitting ? 'Submitting...' : 'Submit guided assessment'}
+                {submitting ? "Submitting..." : "Submit guided assessment"}
               </Button>
             )}
           </div>
@@ -444,7 +778,9 @@ export default function StudentGuidedAssessmentPage() {
       />
 
       <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-3 text-sm font-medium text-[var(--student-text-soft)]">
-        This guided remedial assessment is part of your Learners Path only. It supports remediation and teacher reference, not an official class-record grade.
+        This guided remedial assessment is part of your Learners Path only. It
+        supports remediation and teacher reference, not an official class-record
+        grade.
       </div>
     </div>
   );

@@ -202,6 +202,7 @@ export class ContentModulesService {
         mimeType: true,
         sizeBytes: true,
         scope: true,
+        fileKind: true,
       },
     });
 
@@ -332,6 +333,40 @@ export class ContentModulesService {
       ...(dto.points !== undefined ? { points: dto.points } : {}),
     };
     return Object.keys(merged).length > 0 ? merged : null;
+  }
+
+  private assertFileCanBeAttached(
+    file: {
+      id: string;
+      classId: string | null;
+      teacherId: string;
+      scope: string;
+      teacherVisible: boolean;
+    },
+    classId: string,
+    userId: string,
+    userRoles: string[],
+  ) {
+    if (file.classId && file.classId !== classId) {
+      throw new BadRequestException(
+        'Class-scoped file must belong to the same class as the module',
+      );
+    }
+
+    if (this.hasRole(userRoles, RoleName.Admin)) return;
+
+    if (file.scope === 'general') {
+      if (!file.teacherVisible) {
+        throw new ForbiddenException(
+          'This general module is hidden from teachers',
+        );
+      }
+      return;
+    }
+
+    if (!file.classId && file.teacherId !== userId) {
+      throw new ForbiddenException('You do not have access to this file');
+    }
   }
 
   private normalizeItemMetadataForUpdate(
@@ -1092,19 +1127,26 @@ export class ContentModulesService {
 
     if (dto.fileId) {
       const file = await this.db.query.uploadedFiles.findFirst({
-        where: eq(uploadedFiles.id, dto.fileId),
+        where: and(
+          eq(uploadedFiles.id, dto.fileId),
+          isNull(uploadedFiles.deletedAt),
+        ),
         columns: {
           id: true,
           classId: true,
+          teacherId: true,
+          scope: true,
+          teacherVisible: true,
         },
       });
       if (!file)
         throw new NotFoundException(`File with ID "${dto.fileId}" not found`);
-      if (file.classId && file.classId !== section.module.classId) {
-        throw new BadRequestException(
-          'Class-scoped file must belong to the same class as the module',
-        );
-      }
+      this.assertFileCanBeAttached(
+        file,
+        section.module.classId,
+        userId,
+        userRoles,
+      );
     }
 
     const maxOrderResult = await this.db

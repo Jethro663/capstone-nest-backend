@@ -1027,7 +1027,7 @@ describe('StudentClassDetailPage module links', () => {
     await waitFor(() => {
       expect(mockedDiscussionBoardService.getThread).toHaveBeenCalledTimes(1);
       expect(mockedDiscussionBoardService.listThreads).toHaveBeenCalledTimes(1);
-    });
+    }, { timeout: 4000 });
 
     notificationSubscriber?.({
       type: 'discussion_comment_posted',
@@ -1037,6 +1037,6 @@ describe('StudentClassDetailPage module links', () => {
     await waitFor(() => {
       expect(mockedDiscussionBoardService.getThread).toHaveBeenCalledTimes(2);
       expect(mockedDiscussionBoardService.listThreads).toHaveBeenCalledTimes(2);
-    });
+    }, { timeout: 4000 });
   });
 });

@@ -1,19 +1,17 @@
-import type { PropsWithChildren } from 'react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { authApi } from '@/api/services/auth';
-import { clearAuthSession, getAccessToken, refreshSession, setAccessToken } from '@/api/client';
-import { readSessionSnapshot, writeSessionSnapshot } from '@/api/storage';
-import { getRoleName } from '@/shared/utils/helpers';
-import type { AuthSession } from '@/types/auth';
-import type { UpdateProfileDto } from '@/types/profile';
-import type { User } from '@/types/user';
+import type { PropsWithChildren } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { authApi } from "../api/services/auth";
+import { clearAuthSession, getAccessToken, getRefreshToken, refreshSession } from "../api/client";
+import { readSessionSnapshot, writeSessionSnapshot } from "../api/storage";
+import type { AuthSession } from "../types/auth";
+import type { UpdateProfileDto } from "../types/profile";
+import type { User } from "../types/user";
 
 type AuthContextValue = {
   session: AuthSession | null;
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  role: string | null;
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
@@ -35,8 +33,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   const updateLocalUser = useCallback(
     async (user: User | null) => {
-      const accessToken = getAccessToken();
-      await persistSession(user && accessToken ? { accessToken, user } : null);
+      const access = getAccessToken();
+      const refresh = getRefreshToken();
+      await persistSession(user && access && refresh ? { accessToken: access, refreshToken: refresh, user } : null);
     },
     [persistSession],
   );
@@ -44,20 +43,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const bootstrap = useCallback(async () => {
     setLoading(true);
     const snapshot = await readSessionSnapshot();
-    if (snapshot?.accessToken) {
-      setAccessToken(snapshot.accessToken);
+    if (snapshot?.accessToken && snapshot?.refreshToken) {
       setSession(snapshot);
     }
 
     try {
-      const accessToken = await refreshSession();
-      if (!accessToken) {
+      const refreshed = await refreshSession();
+      if (!refreshed) {
         await clearAuthSession();
         await persistSession(null);
         return;
       }
+
       const currentUser = await authApi.getCurrentUser();
-      await persistSession({ accessToken, user: currentUser });
+      await persistSession({
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        user: currentUser,
+      });
     } catch {
       await clearAuthSession();
       await persistSession(null);
@@ -89,13 +92,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, [persistSession]);
 
   const refreshAuth = useCallback(async () => {
-    const accessToken = await refreshSession();
-    if (!accessToken) {
+    const refreshed = await refreshSession();
+    if (!refreshed) {
       await persistSession(null);
       return;
     }
+
     const currentUser = await authApi.getCurrentUser();
-    await persistSession({ accessToken, user: currentUser });
+    await persistSession({
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+      user: currentUser,
+    });
   }, [persistSession]);
 
   const updateProfile = useCallback(
@@ -113,7 +121,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user: session?.user ?? null,
       loading,
       isAuthenticated: !!session?.user,
-      role: getRoleName(session?.user?.roles?.[0]) || null,
       bootstrap,
       login,
       logout,
@@ -130,7 +137,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
+    throw new Error("useAuth must be used within AuthProvider");
   }
+
   return context;
 }

@@ -22,6 +22,7 @@ export interface ClassesQuery {
   teacherId?: string;
   room?: string;
   schoolYear?: string;
+  subjectGradeLevel?: string;
   isActive?: string;
   search?: string;
   page?: number;
@@ -59,7 +60,7 @@ export const classService = {
   /** GET /classes/teacher/:teacherId — Admin, Teacher */
   async getByTeacher(
     teacherId: string,
-    status: ClassVisibilityStatus = 'all',
+    status: ClassVisibilityStatus = 'active',
   ): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
     const { data } = await api.get(`/classes/teacher/${teacherId}`, {
       params: { status },
@@ -82,7 +83,7 @@ export const classService = {
   /** GET /classes/student/:studentId — All roles */
   async getByStudent(
     studentId: string,
-    status: ClassVisibilityStatus = 'all',
+    status: ClassVisibilityStatus = 'active',
   ): Promise<{ success: boolean; message: string; data: ClassItem[] }> {
     const { data } = await api.get(`/classes/student/${studentId}`, {
       params: { status },

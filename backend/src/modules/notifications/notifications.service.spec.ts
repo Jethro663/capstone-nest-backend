@@ -29,6 +29,23 @@ describe('NotificationsService', () => {
   let service: NotificationsService;
   let mockDb: any;
 
+  const createInsertChain = () => {
+    const insertChain: {
+      values: jest.Mock;
+      onConflictDoUpdate: jest.Mock;
+      onConflictDoNothing: jest.Mock;
+      returning: jest.Mock;
+    } = {
+      values: jest.fn(),
+      onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
+      onConflictDoNothing: jest.fn(),
+      returning: jest.fn().mockResolvedValue([]),
+    };
+    insertChain.values.mockReturnValue(insertChain);
+    insertChain.onConflictDoNothing.mockReturnValue(insertChain);
+    return insertChain;
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -60,9 +77,7 @@ describe('NotificationsService', () => {
 
   describe('createBulk()', () => {
     it('calls db.insert with all provided inputs', async () => {
-      const insertChain = {
-        values: jest.fn().mockResolvedValue(undefined),
-      };
+      const insertChain = createInsertChain();
       mockDb.insert.mockReturnValue(insertChain);
 
       const inputs = [
@@ -87,6 +102,7 @@ describe('NotificationsService', () => {
       expect(passedRows).toHaveLength(2);
       expect(passedRows[0].userId).toBe('u1');
       expect(passedRows[1].userId).toBe('u2');
+      expect(insertChain.onConflictDoUpdate).toHaveBeenCalled();
     });
 
     it('does nothing when inputs array is empty (no DB call)', async () => {
@@ -96,12 +112,12 @@ describe('NotificationsService', () => {
 
     it('sets isRead=false on every inserted notification', async () => {
       const capturedRows: any[] = [];
-      mockDb.insert = jest.fn().mockReturnValue({
-        values: jest.fn().mockImplementation((rows) => {
-          capturedRows.push(...rows);
-          return Promise.resolve(undefined);
-        }),
+      const insertChain = createInsertChain();
+      insertChain.values.mockImplementation((rows) => {
+        capturedRows.push(...rows);
+        return insertChain;
       });
+      mockDb.insert = jest.fn().mockReturnValue(insertChain);
 
       await service.createBulk([
         {
@@ -117,12 +133,12 @@ describe('NotificationsService', () => {
 
     it('propagates referenceId when provided', async () => {
       const capturedRows: any[] = [];
-      mockDb.insert = jest.fn().mockReturnValue({
-        values: jest.fn().mockImplementation((rows) => {
-          capturedRows.push(...rows);
-          return Promise.resolve(undefined);
-        }),
+      const insertChain = createInsertChain();
+      insertChain.values.mockImplementation((rows) => {
+        capturedRows.push(...rows);
+        return insertChain;
       });
+      mockDb.insert = jest.fn().mockReturnValue(insertChain);
 
       await service.createBulk([
         {
@@ -135,6 +151,35 @@ describe('NotificationsService', () => {
       ]);
 
       expect(capturedRows[0].referenceId).toBe(ANN_ID);
+    });
+
+    it('upserts duplicate reference notifications instead of throwing', async () => {
+      const insertChain = createInsertChain();
+      mockDb.insert.mockReturnValue(insertChain);
+
+      await service.createBulk([
+        {
+          userId: 'u1',
+          type: 'grade_updated',
+          referenceId: 'case-1',
+          title: 'New intervention checklist assigned',
+          body: 'Open Learners Path to continue.',
+        },
+      ]);
+
+      expect(insertChain.onConflictDoUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: expect.any(Array),
+          where: expect.anything(),
+          set: expect.objectContaining({
+            title: expect.anything(),
+            body: expect.anything(),
+            isRead: false,
+            readAt: null,
+            createdAt: expect.any(Date),
+          }),
+        }),
+      );
     });
   });
 
@@ -202,15 +247,15 @@ describe('NotificationsService', () => {
 
   describe('createBulkDeduped()', () => {
     it('skips notifications that already exist for the same user, type, and reference', async () => {
-      const insertChain = {
-        values: jest.fn().mockResolvedValue(undefined),
-      };
+      const insertChain = createInsertChain();
       mockDb.insert.mockReturnValue(insertChain);
-      mockDb.query.notifications.findMany.mockResolvedValue([
+      insertChain.returning.mockResolvedValue([
         {
-          userId: 'u1',
+          userId: 'u2',
           type: 'assessment_assigned',
           referenceId: 'assessment-1',
+          title: 'New assessment',
+          body: 'A new assessment is available.',
         },
       ]);
 
@@ -232,13 +277,7 @@ describe('NotificationsService', () => {
       ]);
 
       expect(inserted.map((item) => item.userId)).toEqual(['u2']);
-      expect(insertChain.values).toHaveBeenCalledWith([
-        expect.objectContaining({
-          userId: 'u2',
-          type: 'assessment_assigned',
-          referenceId: 'assessment-1',
-        }),
-      ]);
+      expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
     });
   });
 

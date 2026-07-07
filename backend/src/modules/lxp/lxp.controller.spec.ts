@@ -21,6 +21,7 @@ describe('LxpController', () => {
 
   const mockLxpService = {
     getStudentEligibility: jest.fn(),
+    getStudentInterventionAlerts: jest.fn(),
     getStudentPlaylist: jest.fn(),
     getStudentOverview: jest.fn(),
     completeCheckpoint: jest.fn(),
@@ -86,6 +87,27 @@ describe('LxpController', () => {
     const res = await controller.getEligibility(STUDENT_USER);
 
     expect(mockLxpService.getStudentEligibility).toHaveBeenCalledWith(
+      STUDENT_USER.userId,
+    );
+    expect(res).toEqual({ success: true, data });
+  });
+
+  it('returns student intervention alerts in a success envelope', async () => {
+    const data = {
+      alerts: [
+        {
+          caseId: '00000000-0000-0000-0000-000000000301',
+          classId: '00000000-0000-0000-0000-000000000201',
+          status: 'pending',
+        },
+      ],
+      count: 1,
+    };
+    mockLxpService.getStudentInterventionAlerts.mockResolvedValue(data);
+
+    const res = await controller.getInterventionAlerts(STUDENT_USER);
+
+    expect(mockLxpService.getStudentInterventionAlerts).toHaveBeenCalledWith(
       STUDENT_USER.userId,
     );
     expect(res).toEqual({ success: true, data });

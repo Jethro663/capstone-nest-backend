@@ -17,9 +17,7 @@ const ROLE_PROFILES = [
     password: process.env.TEACHER_PASSWORD || 'Teacher123!',
     firstRoute: '/dashboard/teacher',
     classesRoute: '/dashboard/teacher/classes',
-    classId:
-      process.env.TEACHER_CLASS_ID ||
-      'f71bebea-e122-4cd4-9d01-10d543ff1bf1',
+    classId: process.env.TEACHER_CLASS_ID || null,
     classHrefPrefix: '/dashboard/teacher/classes/',
   },
   {
@@ -28,9 +26,7 @@ const ROLE_PROFILES = [
     password: process.env.STUDENT_PASSWORD || 'Student123!',
     firstRoute: '/dashboard/student',
     classesRoute: '/dashboard/student/courses',
-    classId:
-      process.env.STUDENT_CLASS_ID ||
-      'f71bebea-e122-4cd4-9d01-10d543ff1bf1',
+    classId: process.env.STUDENT_CLASS_ID || null,
     classHrefPrefix: '/dashboard/student/classes/',
   },
 ];
@@ -51,7 +47,20 @@ async function measureNavigation(page, route) {
     waitUntil: 'load',
     timeout: 120000,
   });
+  await page.waitForLoadState('domcontentloaded');
   return Date.now() - startedAt;
+}
+
+async function waitForDiscussionBoard(page) {
+  await page.waitForFunction(() => {
+    const text = document.body?.innerText ?? '';
+    return (
+      text.includes('Discussion Board') &&
+      (text.includes('Open Thread') ||
+        text.includes('Viewing Thread') ||
+        text.includes('No discussion threads yet.'))
+    );
+  }, { timeout: 15000 });
 }
 
 async function login(page, profile) {
@@ -71,6 +80,8 @@ async function getFirstClassHref(page, profile) {
   if (profile.classId) {
     return `${profile.classHrefPrefix}${profile.classId}`;
   }
+
+  await page.waitForLoadState('load');
 
   const hrefs = await page.evaluate(() =>
     Array.from(document.querySelectorAll('a[href]'))
@@ -94,7 +105,7 @@ async function getFirstClassHref(page, profile) {
 }
 
 async function measureThreadOpen(page) {
-  const openButtons = page.getByRole('button', { name: /^(Open|Open Thread)$/i });
+  const openButtons = page.getByRole('button', { name: /^(Open|Open Thread|Viewing|Viewing Thread)$/i });
   await openButtons
     .first()
     .waitFor({ state: 'visible', timeout: 5000 })
@@ -105,23 +116,11 @@ async function measureThreadOpen(page) {
   }
 
   const startedAt = Date.now();
-  const responsePromise = page
-    .waitForResponse(
-      (response) => {
-        if (response.request().method() !== 'GET') return false;
-        try {
-          const url = new URL(response.url());
-          return /\/api\/classes\/[^/]+\/discussion-threads\/[^/?]+$/.test(url.pathname);
-        } catch {
-          return false;
-        }
-      },
-      { timeout: 15000 },
-    )
-    .catch(() => null);
-
   await openButtons.first().click();
-  await responsePromise;
+  await Promise.race([
+    page.getByRole('button', { name: /close thread( view)?/i }).waitFor({ state: 'visible', timeout: 15000 }),
+    page.getByRole('button', { name: /viewing( thread)?/i }).first().waitFor({ state: 'visible', timeout: 15000 }),
+  ]).catch(() => null);
   return Date.now() - startedAt;
 }
 
@@ -152,7 +151,9 @@ async function runRoleProfile(browser, profile) {
     metrics.classDetailColdMs = await measureNavigation(page, classHref);
     metrics.classDetailWarmMs = await measureNavigation(page, classHref);
     metrics.discussionColdMs = await measureNavigation(page, `${classHref}?view=discussion`);
+    await waitForDiscussionBoard(page);
     metrics.discussionWarmMs = await measureNavigation(page, `${classHref}?view=discussion`);
+    await waitForDiscussionBoard(page);
     metrics.threadOpenMs = await measureThreadOpen(page);
     return metrics;
   } finally {

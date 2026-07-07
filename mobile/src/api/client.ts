@@ -1,36 +1,56 @@
-import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
-import { API_BASE_URL } from '@/api/config';
-import { clearSecureSession, persistAccessToken, readAccessToken } from '@/api/storage';
+import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axios";
+import { API_BASE_URL } from "./config";
+import {
+  clearSecureSession,
+  persistAccessToken,
+  persistRefreshToken,
+  readAccessToken,
+  readRefreshToken,
+} from "./storage";
 
 let accessToken: string | null = null;
-let refreshPromise: Promise<string | null> | null = null;
+let refreshToken: string | null = null;
+let refreshPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
 
 export function getAccessToken() {
   return accessToken;
 }
 
-export function setAccessToken(token: string | null) {
-  accessToken = token;
+export function getRefreshToken() {
+  return refreshToken;
 }
 
-export const apiClient = createApiClient();
+async function hydrateTokens() {
+  if (!accessToken) {
+    accessToken = await readAccessToken();
+  }
+
+  if (!refreshToken) {
+    refreshToken = await readRefreshToken();
+  }
+}
+
+export async function persistAuthTokens(tokens: { accessToken: string | null; refreshToken: string | null }) {
+  accessToken = tokens.accessToken;
+  refreshToken = tokens.refreshToken;
+  await Promise.all([persistAccessToken(tokens.accessToken), persistRefreshToken(tokens.refreshToken)]);
+}
+
 export const publicClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
-  withCredentials: true,
 });
+
+export const apiClient = createApiClient();
 
 function createApiClient(): AxiosInstance {
   const client = axios.create({
     baseURL: API_BASE_URL,
     timeout: 30000,
-    withCredentials: true,
   });
 
   client.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-    if (!accessToken) {
-      accessToken = await readAccessToken();
-    }
+    await hydrateTokens();
     if (accessToken) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -40,22 +60,25 @@ function createApiClient(): AxiosInstance {
   client.interceptors.response.use(
     (response) => response,
     async (error) => {
-      const originalRequest = error.config as (InternalAxiosRequestConfig & {
-        _retry?: boolean;
-      }) | null;
+      const originalRequest = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | null;
 
-      if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
+      if (
+        error.response?.status === 401 &&
+        originalRequest &&
+        !originalRequest._retry &&
+        !String(originalRequest.url ?? "").includes("/auth/mobile/refresh")
+      ) {
         originalRequest._retry = true;
 
         if (!refreshPromise) {
           refreshPromise = refreshSession();
         }
 
-        const nextToken = await refreshPromise;
+        const nextTokens = await refreshPromise;
         refreshPromise = null;
 
-        if (nextToken) {
-          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+        if (nextTokens?.accessToken) {
+          originalRequest.headers.Authorization = `Bearer ${nextTokens.accessToken}`;
           return client(originalRequest);
         }
 
@@ -70,20 +93,40 @@ function createApiClient(): AxiosInstance {
 }
 
 export async function refreshSession() {
+  await hydrateTokens();
+  if (!refreshToken) {
+    return null;
+  }
+
   try {
-    const response = await publicClient.post('/auth/refresh', {});
-    const nextToken = response.data?.data?.accessToken ?? response.data?.accessToken ?? null;
-    setAccessToken(nextToken);
-    await persistAccessToken(nextToken);
-    return nextToken;
+    const response = await publicClient.post("/auth/mobile/refresh", {
+      refreshToken,
+    });
+    const nextAccessToken = response.data?.data?.accessToken ?? null;
+    const nextRefreshToken = response.data?.data?.refreshToken ?? null;
+
+    if (!nextAccessToken || !nextRefreshToken) {
+      await clearAuthSession();
+      return null;
+    }
+
+    await persistAuthTokens({
+      accessToken: nextAccessToken,
+      refreshToken: nextRefreshToken,
+    });
+
+    return {
+      accessToken: nextAccessToken,
+      refreshToken: nextRefreshToken,
+    };
   } catch {
-    setAccessToken(null);
-    await persistAccessToken(null);
+    await clearAuthSession();
     return null;
   }
 }
 
 export async function clearAuthSession() {
-  setAccessToken(null);
+  accessToken = null;
+  refreshToken = null;
   await clearSecureSession();
 }

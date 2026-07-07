@@ -8,6 +8,7 @@ import {
 import { SectionsService } from './sections.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { ClassRecordService } from '../class-record/class-record.service';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -127,6 +128,9 @@ describe('SectionsService', () => {
 
   const mockDatabaseService = { db: mockDb };
   const mockAuditService = { log: jest.fn() };
+  const mockClassRecordService = {
+    generateClassRecord: jest.fn(),
+  };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -137,6 +141,7 @@ describe('SectionsService', () => {
         SectionsService,
         { provide: DatabaseService, useValue: mockDatabaseService },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: ClassRecordService, useValue: mockClassRecordService },
       ],
     }).compile();
 
@@ -445,6 +450,13 @@ describe('SectionsService', () => {
       tx.select.mockReturnValueOnce(
         makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
       );
+      // Verify student grade level
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '7' },
+        ]),
+      );
       // Already enrolled check (none)
       tx.select.mockReturnValueOnce(makeSelectChain([]));
       // Bulk insert
@@ -511,6 +523,13 @@ describe('SectionsService', () => {
       tx.select.mockReturnValueOnce(
         makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
       );
+      // Verify student grade level
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '7' },
+        ]),
+      );
       // Both already enrolled
       tx.select.mockReturnValueOnce(
         makeSelectChain([
@@ -525,6 +544,34 @@ describe('SectionsService', () => {
 
       expect(result.createdCount).toBe(0);
       expect(result.skipped).toBe(2);
+      expect(tx.insert).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when submitted students do not match the section grade level', async () => {
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ capacity: 40, gradeLevel: '7' }),
+      );
+
+      const tx = makeTx();
+      tx.select.mockReturnValueOnce(makeSelectChain([{ count: '0' }]));
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ id: STUDENT_ID }, { id: STUDENT_ID_2 }]),
+      );
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([{ userId: STUDENT_ID }, { userId: STUDENT_ID_2 }]),
+      );
+      tx.select.mockReturnValueOnce(
+        makeSelectChain([
+          { userId: STUDENT_ID, gradeLevel: '7' },
+          { userId: STUDENT_ID_2, gradeLevel: '8' },
+        ]),
+      );
+
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
+
+      await expect(
+        service.addStudentsToSection(SECTION_ID, dto as any),
+      ).rejects.toThrow(BadRequestException);
       expect(tx.insert).not.toHaveBeenCalled();
     });
 
@@ -744,7 +791,11 @@ describe('SectionsService', () => {
         ); // room availability check
 
       await expect(
-        service.createSection({ ...dto, adviserId: undefined, roomNumber: '101' } as any),
+        service.createSection({
+          ...dto,
+          adviserId: undefined,
+          roomNumber: '101',
+        } as any),
       ).rejects.toThrow(ConflictException);
       expect(mockDb.insert).not.toHaveBeenCalled();
     });
@@ -1009,7 +1060,7 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('deleteSection', () => {
-    it('soft-deletes the section by setting isActive to false', async () => {
+    it('archives the section, clears people assignments, and completes active enrollments', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const txUpdateChain = makeUpdateChain();
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
@@ -1021,12 +1072,18 @@ describe('SectionsService', () => {
         ADMIN_USER.roles,
       );
 
-      // archiveSection calls tx.update twice: enrollments drop + section archive
-      expect(tx.update).toHaveBeenCalledTimes(2);
+      // archiveSection completes enrollments, archives linked classes, then archives the section.
+      expect(tx.update).toHaveBeenCalledTimes(3);
+      expect(txUpdateChain.set.mock.calls[0][0]).toEqual({
+        status: 'completed',
+      });
+      expect(txUpdateChain.set.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ isActive: false, teacherId: null }),
+      );
 
-      // Second update (sections table) sets isActive to false
-      const sectionSetArgs = txUpdateChain.set.mock.calls[1][0];
+      const sectionSetArgs = txUpdateChain.set.mock.calls[2][0];
       expect(sectionSetArgs.isActive).toBe(false);
+      expect(sectionSetArgs.adviserId).toBeNull();
       expect(sectionSetArgs).toHaveProperty('updatedAt');
       expect(mockAuditService.log).toHaveBeenCalledWith({
         actorId: ADMIN_USER.userId,
@@ -1036,6 +1093,9 @@ describe('SectionsService', () => {
         metadata: {
           actorRole: 'admin',
           previousIsActive: true,
+          removedAdviserId: ADVISER_ID,
+          completedEnrollmentStatus: 'completed',
+          linkedClassTeacherStatus: 'cleared',
         },
       });
     });
@@ -1060,31 +1120,23 @@ describe('SectionsService', () => {
       expect(mockDb.query.sections.findFirst).toHaveBeenCalledTimes(1);
     });
   });
-
   describe('restoreSection', () => {
-    it('restores the section and writes actor-aware audit metadata', async () => {
+    it('does not restore archived sections', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(
         makeSection({ isActive: false }),
       );
-      mockDb.update.mockReturnValue(makeUpdateChain());
+      const txUpdateChain = makeUpdateChain();
+      const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
+      mockDb.transaction.mockImplementation((cb: Function) => cb(tx));
 
-      await service.restoreSection(
-        SECTION_ID,
-        ADMIN_USER.userId,
-        ADMIN_USER.roles,
+      await expect(
+        service.restoreSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles),
+      ).rejects.toThrow(
+        'Archived sections cannot be restored. Purge the archived section instead.',
       );
 
-      expect(mockDb.update).toHaveBeenCalledTimes(1);
-      expect(mockAuditService.log).toHaveBeenCalledWith({
-        actorId: ADMIN_USER.userId,
-        action: 'section.restored',
-        targetType: 'section',
-        targetId: SECTION_ID,
-        metadata: {
-          actorRole: 'admin',
-          previousIsActive: false,
-        },
-      });
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(mockAuditService.log).not.toHaveBeenCalled();
     });
   });
 
@@ -1195,29 +1247,35 @@ describe('SectionsService', () => {
       });
     });
 
-    it('fails restore for already-active sections without aborting the batch', async () => {
+    it('fails restore for archived sections because restore is retired', async () => {
       jest
         .spyOn(service, 'findById')
-        .mockResolvedValueOnce(makeSection({ isActive: false }))
-        .mockResolvedValueOnce(makeSection({ isActive: true }));
-      const restoreSpy = jest
-        .spyOn(service, 'restoreSection')
-        .mockResolvedValueOnce(undefined);
+        .mockResolvedValue(makeSection({ isActive: false }));
+      const restoreSpy = jest.spyOn(service, 'restoreSection');
 
       const result = await service.bulkLifecycleAction({
         action: 'restore',
         sectionIds: ['section-1', 'section-2'],
       });
 
-      expect(restoreSpy).toHaveBeenCalledTimes(1);
+      expect(restoreSpy).not.toHaveBeenCalled();
       expect(result).toEqual({
-        message: '1 section restored; 1 failed.',
+        message: '0 sections restored; 2 failed.',
         data: {
           action: 'restore',
           requested: 2,
-          succeeded: ['section-1'],
+          succeeded: [],
           failed: [
-            { sectionId: 'section-2', reason: 'Section is already active.' },
+            {
+              sectionId: 'section-1',
+              reason:
+                'Archived sections cannot be restored. Purge the archived section instead.',
+            },
+            {
+              sectionId: 'section-2',
+              reason:
+                'Archived sections cannot be restored. Purge the archived section instead.',
+            },
           ],
         },
       });
@@ -1340,6 +1398,43 @@ describe('SectionsService', () => {
       await expect(
         service.getSectionSchedule('bad-id', ADMIN_USER),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // =========================================================================
+  // getAccessStudentsTargetSections
+  // =========================================================================
+
+  describe('getAccessStudentsTargetSections', () => {
+    it('returns selectable school years and filters target sections by the selected year', async () => {
+      const targetSection = makeSection({
+        id: 'target-section-uuid',
+        name: 'Bonifacio',
+        gradeLevel: '8',
+        schoolYear: '2027-2028',
+      });
+
+      mockDb.query.sections.findFirst.mockResolvedValue(
+        makeSection({ gradeLevel: '7', schoolYear: '2025-2026' }),
+      );
+      mockDb.query.sections.findMany
+        .mockResolvedValueOnce([
+          { schoolYear: '2026-2027' },
+          { schoolYear: '2027-2028' },
+        ])
+        .mockResolvedValueOnce([targetSection]);
+
+      const result = await service.getAccessStudentsTargetSections({
+        fromSectionId: SECTION_ID,
+        mode: 'promote',
+        schoolYear: '2027-2028',
+      });
+
+      expect(result.targetGradeLevel).toBe('8');
+      expect(result.targetSchoolYear).toBe('2027-2028');
+      expect(result.availableSchoolYears).toEqual(['2026-2027', '2027-2028']);
+      expect(result.sections).toEqual([targetSection]);
+      expect(mockDb.query.sections.findMany).toHaveBeenCalledTimes(2);
     });
   });
 

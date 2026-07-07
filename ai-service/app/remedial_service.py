@@ -381,6 +381,146 @@ def _correct_option_labels(question: dict[str, Any]) -> list[str]:
     return labels
 
 
+CLUE_STOPWORDS = {
+    "about",
+    "after",
+    "answer",
+    "before",
+    "choose",
+    "class",
+    "correct",
+    "lesson",
+    "module",
+    "question",
+    "review",
+    "student",
+    "that",
+    "this",
+    "with",
+}
+
+
+def _clue_terms(*values: Any) -> set[str]:
+    terms: set[str] = set()
+    for value in values:
+        cleaned = _sanitize_plain_text(value, max_length=600).lower()
+        for token in re.findall(r"[a-z0-9][a-z0-9\-]{2,}", cleaned):
+            if token not in CLUE_STOPWORDS:
+                terms.add(token)
+    return terms
+
+
+def _lesson_clue_text(lesson: dict[str, Any]) -> str:
+    evidence = lesson.get("evidence") if isinstance(lesson.get("evidence"), dict) else {}
+    candidates = [
+        lesson.get("contentSnippet"),
+        evidence.get("snippet") if isinstance(evidence, dict) else None,
+        lesson.get("reason"),
+        lesson.get("sourceReference"),
+    ]
+    parts = [
+        _sanitize_plain_text(candidate, max_length=220)
+        for candidate in candidates
+        if _sanitize_plain_text(candidate, max_length=220)
+    ]
+    return " ".join(parts)
+
+
+def _split_clue_sentences(value: Any) -> list[str]:
+    cleaned = _sanitize_plain_text(value, max_length=420)
+    if not cleaned:
+        return []
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", cleaned)
+    return [
+        sentence.strip(" -")
+        for sentence in sentences
+        if 18 <= len(sentence.strip(" -")) <= 190
+    ]
+
+
+def _is_direct_answer_sentence(sentence: str, question: dict[str, Any]) -> bool:
+    lowered = sentence.lower()
+    for label in _correct_option_labels(question):
+        normalized = _sanitize_plain_text(label, max_length=80).lower()
+        if len(normalized) >= 4 and normalized in lowered:
+            return True
+    return False
+
+
+def _best_lesson_clue(
+    question: dict[str, Any],
+    concept_label: str | None,
+    recommended_lessons: list[dict[str, Any]] | None,
+) -> tuple[str, str, str]:
+    lessons = recommended_lessons or []
+    if not lessons:
+        return "", "", ""
+
+    stem = question.get("content") or question.get("stem") or ""
+    question_terms = _clue_terms(stem, concept_label)
+    best_title = ""
+    best_reference = ""
+    best_sentence = ""
+    best_score = -1
+
+    for lesson in lessons:
+        title = _sanitize_plain_text(lesson.get("title"), max_length=90) or "the review module"
+        source_reference = _sanitize_plain_text(lesson.get("sourceReference"), max_length=90)
+        clue_text = _lesson_clue_text(lesson)
+        lesson_terms = _clue_terms(title, source_reference, clue_text, lesson.get("reason"))
+        base_score = len(question_terms.intersection(lesson_terms))
+
+        if base_score > best_score:
+            best_title = title
+            best_reference = source_reference
+            best_sentence = ""
+            best_score = base_score
+
+        for sentence in _split_clue_sentences(clue_text):
+            if _is_direct_answer_sentence(sentence, question):
+                continue
+            sentence_score = base_score + len(question_terms.intersection(_clue_terms(sentence)))
+            if sentence_score > best_score:
+                best_title = title
+                best_reference = source_reference
+                best_sentence = sentence
+                best_score = sentence_score
+
+    return best_title, best_reference, best_sentence
+
+
+def _build_guided_question_review_hint(
+    question: dict[str, Any],
+    concept_label: str | None,
+    recommended_lessons: list[dict[str, Any]] | None,
+) -> str:
+    stem = _sanitize_plain_text(question.get("content") or question.get("stem"), max_length=240)
+    focus = _clean_hint_focus(concept_label) or _clean_hint_focus(_derive_question_focus_label(stem))
+    correct_labels = {
+        _sanitize_plain_text(label, max_length=80).lower()
+        for label in _correct_option_labels(question)
+    }
+    if focus.lower() in correct_labels:
+        focus = _clean_hint_focus(_derive_question_focus_label(stem))
+    if not focus:
+        focus = "the key idea from the lesson"
+
+    title, source_reference, sentence = _best_lesson_clue(question, concept_label, recommended_lessons)
+    reference_copy = f" ({source_reference})" if source_reference else ""
+
+    if sentence and title:
+        return (
+            f"Review {title}{reference_copy}: {sentence} "
+            "Use that clue to connect the lesson step to this question."
+        )
+    if title:
+        return (
+            f"Revisit {title}{reference_copy} and focus on the part about {focus}. "
+            "Compare that lesson step with the clue in this question."
+        )
+    return f"Look back at the module section about {focus}, then explain why the answer fits."
+
+
 def _build_guided_question_hint(
     question: dict[str, Any],
     concept_label: str | None,
@@ -410,6 +550,7 @@ def _build_generated_guided_assessment_draft(
     weak_concepts: list[str],
     recommended_assessments: list[dict[str, Any]],
     source_questions: list[dict[str, Any]],
+    recommended_lessons: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any] | None:
     if not recommended_assessments or not source_questions:
         return None
@@ -420,6 +561,7 @@ def _build_generated_guided_assessment_draft(
         concept_tag = question.get("concept_tags", [])
         concept_label = concept_tag[0] if concept_tag else (weak_concepts[0] if weak_concepts else None)
         hint = _build_guided_question_hint(question, concept_label)
+        review_hint = _build_guided_question_review_hint(question, concept_label, recommended_lessons)
         explanation = question.get("explanation") or (
             f"This item checks your understanding of {concept_label}."
             if concept_label
@@ -431,6 +573,7 @@ def _build_generated_guided_assessment_draft(
                 "type": question.get("type"),
                 "stem": question.get("content") or f"Guided question {index}",
                 "hint": _sanitize_plain_text(hint, max_length=180),
+                "reviewHint": _sanitize_plain_text(review_hint, max_length=260),
                 "explanation": _sanitize_plain_text(explanation, max_length=220),
                 "weakConceptTag": concept_label,
                 "sourceQuestionId": question.get("id"),
@@ -598,6 +741,7 @@ async def recommend_intervention_case(
                 "reason": chunk.get("selectionReason")
                 or f"Matches weak concepts: {', '.join(weak_concepts[:2])}",
                 "chunkId": chunk["id"],
+                "contentSnippet": _sanitize_plain_text(chunk.get("chunkText"), max_length=260),
                 "scoreBreakdown": chunk.get("scoreBreakdown") or {},
                 "sourceReference": chunk.get("sourceReference"),
                 "confidence": round(
@@ -611,6 +755,7 @@ async def recommend_intervention_case(
                     "selectionReason": chunk.get("selectionReason"),
                     "chunkId": chunk.get("id"),
                     "sourceReference": chunk.get("sourceReference"),
+                    "snippet": _sanitize_plain_text(chunk.get("chunkText"), max_length=260),
                 },
             }
         )
@@ -856,6 +1001,7 @@ Recommended lesson evidence:
         weak_concepts,
         recommended_assessments,
         source_question_bank,
+        recommended_lessons,
     )
 
     structured_output = {

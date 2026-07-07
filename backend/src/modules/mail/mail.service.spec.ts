@@ -151,7 +151,11 @@ describe('MailService', () => {
     });
 
     it('returns production mode', async () => {
-      const result = await service.sendOtpEmail(EMAIL, OTP, 'email_verification');
+      const result = await service.sendOtpEmail(
+        EMAIL,
+        OTP,
+        'email_verification',
+      );
       expect(result).toEqual({ success: true, mode: 'production' });
     });
 

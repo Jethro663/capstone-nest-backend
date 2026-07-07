@@ -84,7 +84,7 @@ export class CreateUserDto {
   @IsString()
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "First name may only contain letters, spaces, hyphens, and apostrophes",
+      'First name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value: string }) => trimValue(value))
   firstName: string;
@@ -93,7 +93,7 @@ export class CreateUserDto {
   @IsString()
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "Middle name may only contain letters, spaces, hyphens, and apostrophes",
+      'Middle name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value?: string }) => trimValue(value))
   middleName?: string;
@@ -101,7 +101,7 @@ export class CreateUserDto {
   @IsString()
   @Matches(PERSON_NAME_REGEX, {
     message:
-      "Last name may only contain letters, spaces, hyphens, and apostrophes",
+      'Last name may only contain letters, spaces, hyphens, and apostrophes',
   })
   @Transform(({ value }: { value: string }) => trimValue(value))
   lastName: string;

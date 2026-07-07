@@ -1,5 +1,5 @@
-import axios from 'axios';
-import type { AppError, ErrorPresentationPayload, FieldErrorMap } from '@/types/api';
+import axios from "axios";
+import type { AppError, ErrorPresentationPayload, FieldErrorMap } from "../types/api";
 
 let globalPresenter: ((payload: ErrorPresentationPayload) => void) | null = null;
 
@@ -15,16 +15,20 @@ export function presentGlobalError(payload: ErrorPresentationPayload) {
   globalPresenter?.(payload);
 }
 
+type NormalizeApiErrorOptions = {
+  present?: boolean;
+};
+
 function toFieldErrors(message: unknown): FieldErrorMap | undefined {
-  if (!message || typeof message !== 'object') return undefined;
+  if (!message || typeof message !== "object") return undefined;
   return message as FieldErrorMap;
 }
 
-export function normalizeApiError(error: unknown): AppError {
+export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOptions): AppError {
   if (!axios.isAxiosError(error)) {
     return {
-      title: 'Unexpected Error',
-      message: 'The app hit an unexpected state.',
+      title: "Unexpected Error",
+      message: "The app hit an unexpected state.",
       shouldShowModal: true,
     };
   }
@@ -36,48 +40,43 @@ export function normalizeApiError(error: unknown): AppError {
 
   const details = Array.isArray(payload?.message)
     ? payload.message
-    : typeof payload?.message === 'string'
+    : typeof payload?.message === "string"
       ? [payload.message]
       : undefined;
 
   const fieldErrors =
-    payload?.message && typeof payload.message === 'object' && !Array.isArray(payload.message)
+    payload?.message && typeof payload.message === "object" && !Array.isArray(payload.message)
       ? toFieldErrors(payload.message)
       : undefined;
 
   const message =
-    typeof payload?.message === 'string'
+    typeof payload?.message === "string"
       ? payload.message
-      : details?.[0] ||
-        error.message ||
-        'The request could not be completed.';
+      : details?.[0] || error.message || "The request could not be completed.";
 
   const appError: AppError = {
     status,
     code: payload?.code,
     title:
       status === 401
-        ? 'Session Expired'
+        ? "Session Expired"
         : status === 403
-          ? 'Access Denied'
+          ? "Access Denied"
           : status === 404
-            ? 'Not Found'
+            ? "Not Found"
             : status === 422
-              ? 'Validation Failed'
-              : error.code === 'ERR_NETWORK'
-                ? 'Network Error'
-                : 'Request Failed',
+              ? "Validation Failed"
+              : error.code === "ERR_NETWORK"
+                ? "Network Error"
+                : "Request Failed",
     message,
     details,
     fieldErrors,
-    isNetworkError: error.code === 'ERR_NETWORK',
-    shouldShowModal:
-      error.code === 'ERR_NETWORK' ||
-      (status !== undefined && status >= 500) ||
-      status === 404,
+    isNetworkError: error.code === "ERR_NETWORK",
+    shouldShowModal: error.code === "ERR_NETWORK" || (status !== undefined && status >= 500) || status === 404,
   };
 
-  if (appError.shouldShowModal) {
+  if (options?.present !== false && appError.shouldShowModal) {
     presentGlobalError({
       title: appError.title,
       message: appError.message,

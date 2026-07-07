@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { fileService } from '@/services/file-service';
 import { moduleService } from '@/services/module-service';
+import { PPTX_MIME, getFileSubtype } from '@/lib/pptx-viewer';
 import type { UploadedFile } from '@/types/file';
 import type { ClassModule, ModuleItem, ModuleSection } from '@/types/module';
 import './file-editor.css';
@@ -123,8 +124,9 @@ export default function TeacherModuleFileEditorPage() {
   const handleReplace = async (nextFile: File) => {
     if (!itemRecord || !sectionRecord || !fileRecord || replacing) return;
 
-    if (nextFile.type !== 'application/pdf') {
-      toast.error('Only PDF replacement is supported for now');
+    const fileSubtype = getFileSubtype(nextFile);
+    if (fileSubtype !== 'pdf' && fileSubtype !== 'pptx') {
+      toast.error('Only PDF or PowerPoint replacement is supported for now');
       return;
     }
 
@@ -142,8 +144,7 @@ export default function TeacherModuleFileEditorPage() {
         isRequired: itemRecord.isRequired,
         metadata: {
           ...(itemRecord.metadata || {}),
-          fileSubtype:
-            (itemRecord.metadata as Record<string, unknown> | null | undefined)?.fileSubtype || 'pdf',
+          fileSubtype,
         },
       });
 
@@ -168,7 +169,7 @@ export default function TeacherModuleFileEditorPage() {
       );
       await moduleService.detachItem(itemRecord.id);
 
-      toast.success('PDF block replaced');
+      toast.success('File block replaced');
       router.replace(
         `/dashboard/teacher/classes/${classId}/modules/${moduleId}/files/${uploaded.data.id}`,
       );
@@ -242,7 +243,7 @@ export default function TeacherModuleFileEditorPage() {
         <div className="teacher-module-file__head">
           <div>
             <h2>File Details</h2>
-            <p>Manage this module PDF block and keep resource naming consistent.</p>
+            <p>Manage this module file block and keep resource naming consistent.</p>
           </div>
           <div className="teacher-module-file__actions">
             <Button type="button" variant="outline" onClick={() => void handleDownload()}>
@@ -297,14 +298,14 @@ export default function TeacherModuleFileEditorPage() {
         </div>
 
         <div className="teacher-module-file__replace">
-          <h3>Replace PDF</h3>
-          <p>Upload a new PDF and keep this block in the same module position.</p>
+          <h3>Replace file</h3>
+          <p>Upload a new PDF or PowerPoint deck and keep this block in the same module position.</p>
           <label className="teacher-module-file__upload">
             <Upload className="h-4 w-4" />
-            {replacing ? 'Replacing...' : 'Upload Replacement PDF'}
+            {replacing ? 'Replacing...' : 'Upload Replacement File'}
             <input
               type="file"
-              accept="application/pdf"
+              accept={`application/pdf,${PPTX_MIME},.pdf,.pptx`}
               className="hidden"
               disabled={replacing}
               onChange={(event) => {

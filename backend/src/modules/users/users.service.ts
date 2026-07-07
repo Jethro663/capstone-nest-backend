@@ -93,10 +93,7 @@ export class UsersService {
 
     const record = metadata as Record<string, unknown>;
     const candidate =
-      record.ip ??
-      record.ipAddress ??
-      record.clientIp ??
-      record.remoteIp;
+      record.ip ?? record.ipAddress ?? record.clientIp ?? record.remoteIp;
 
     if (typeof candidate !== 'string') {
       return null;
@@ -321,7 +318,10 @@ export class UsersService {
         total: Number(totalRow?.total ?? 0),
         page,
         limit,
-        totalPages: Math.max(1, Math.ceil(Number(totalRow?.total ?? 0) / limit)),
+        totalPages: Math.max(
+          1,
+          Math.ceil(Number(totalRow?.total ?? 0) / limit),
+        ),
       };
     }
 
@@ -407,14 +407,15 @@ export class UsersService {
       const lastLogoutAt = lastLogoutAtByUserId.get(row.id) ?? null;
       const isCurrentlyActive =
         row.status === 'ACTIVE' && activeSessionByUserId.has(row.id);
-      const inactivityAnchor =
-        isCurrentlyActive
-          ? null
-          : lastLogoutAt ?? lastLoginAt ?? row.createdAt ?? null;
+      const inactivityAnchor = isCurrentlyActive
+        ? null
+        : (lastLogoutAt ?? lastLoginAt ?? row.createdAt ?? null);
       const inactiveFor =
         inactivityAnchor === null
           ? 'No activity'
-          : this.formatInactiveDuration(now.getTime() - inactivityAnchor.getTime());
+          : this.formatInactiveDuration(
+              now.getTime() - inactivityAnchor.getTime(),
+            );
       const activityIp =
         activeSessionIpByUserId.get(row.id) ??
         lastLoginIpByUserId.get(row.id) ??
@@ -424,7 +425,9 @@ export class UsersService {
         ...publicUser,
         lastLoginAt: lastLoginAt ? lastLoginAt.toISOString() : null,
         lastLogoutAt: lastLogoutAt ? lastLogoutAt.toISOString() : null,
-        lastActivityAt: inactivityAnchor ? inactivityAnchor.toISOString() : null,
+        lastActivityAt: inactivityAnchor
+          ? inactivityAnchor.toISOString()
+          : null,
         activityIp,
         inactiveFor,
         isCurrentlyActive,

@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
+import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
@@ -35,6 +36,10 @@ const ADMIN_USER = {
 // ---------------------------------------------------------------------------
 
 const mockProxy = { forward: jest.fn() };
+const mockQueueService = {
+  enqueueLessonPlanJob: jest.fn(),
+  cancelQueuedLessonPlanJob: jest.fn(),
+};
 const mockAudit = { log: jest.fn() };
 const mockAdminAnalyticsChat = {
   chat: jest.fn(),
@@ -66,6 +71,10 @@ describe('AiMentorController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockQueueService.enqueueLessonPlanJob.mockReset();
+    mockQueueService.enqueueLessonPlanJob.mockResolvedValue(undefined);
+    mockQueueService.cancelQueuedLessonPlanJob.mockReset();
+    mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
     mockAudit.log.mockReset();
     mockAudit.log.mockResolvedValue(undefined);
     mockAdminAnalyticsChat.chat.mockReset();
@@ -139,6 +148,10 @@ describe('AiMentorController', () => {
       controllers: [AiMentorController],
       providers: [
         { provide: AiProxyService, useValue: mockProxy },
+        {
+          provide: AiGenerationQueueService,
+          useValue: mockQueueService,
+        },
         {
           provide: AdminAnalyticsChatService,
           useValue: mockAdminAnalyticsChat,
@@ -291,7 +304,11 @@ describe('AiMentorController', () => {
 
   describe('extractModule()', () => {
     it('should forward POST /extract with dto and user', async () => {
-      const dto = { fileId: 'file-uuid-1', targetSectionCount: 4 };
+      const dto = {
+        fileId: 'file-uuid-1',
+        targetSectionCount: 4,
+        extractionStyle: 'student_friendly',
+      };
       mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
 
       const result = await controller.extractModule(dto, TEACHER_USER);
@@ -310,6 +327,7 @@ describe('AiMentorController', () => {
           targetId: dto.fileId,
           metadata: expect.objectContaining({
             extractionId: EXTRACTION_ID,
+            extractionStyle: 'student_friendly',
           }),
         }),
       );
@@ -666,9 +684,40 @@ describe('AiMentorController', () => {
   // =========================================================================
 
   describe('applyExtraction()', () => {
+    it('should forward POST /extractions/:id/apply/preview with dto', async () => {
+      const dto = { sectionIndices: [0] };
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { sectionsCreated: 1, lessonsCreated: 1 },
+      });
+
+      const result = await controller.previewApplyExtraction(
+        EXTRACTION_ID,
+        dto,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/apply/preview`,
+        TEACHER_USER,
+        dto,
+      );
+      expect(mockAudit.log).not.toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'ai.extraction.applied' }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { sectionsCreated: 1, lessonsCreated: 1 },
+      });
+    });
+
     it('should forward POST /extractions/:id/apply with dto', async () => {
       const dto = { sectionIndices: [0] };
-      mockProxy.forward.mockResolvedValue({ lessonsCreated: 3 });
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { lessonsCreated: 3, alreadyApplied: false },
+      });
 
       const result = await controller.applyExtraction(
         EXTRACTION_ID,
@@ -690,10 +739,14 @@ describe('AiMentorController', () => {
           targetId: EXTRACTION_ID,
           metadata: expect.objectContaining({
             lessonsCreated: 3,
+            alreadyApplied: false,
           }),
         }),
       );
-      expect(result).toEqual({ lessonsCreated: 3 });
+      expect(result).toEqual({
+        success: true,
+        data: { lessonsCreated: 3, alreadyApplied: false },
+      });
     });
 
     it('should return cached applied fallback when apply endpoint is unreachable but extraction is already applied', async () => {
@@ -747,6 +800,73 @@ describe('AiMentorController', () => {
       ).rejects.toThrow(
         'AI extraction apply is temporarily unavailable. Please retry shortly.',
       );
+    });
+  });
+
+  describe('cancelExtraction()', () => {
+    it('should forward POST /extractions/:id/cancel with ownership check', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { id: EXTRACTION_ID, status: 'failed', cancelledByTeacher: true },
+      });
+
+      const result = await controller.cancelExtraction(
+        EXTRACTION_ID,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/cancel`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.cancelled',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
+    });
+  });
+
+  describe('retryExtraction()', () => {
+    it('should forward POST /extractions/:id/retry with style override', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          extractionId: 'retry-extraction-1',
+          retryOfExtractionId: EXTRACTION_ID,
+        },
+      });
+
+      const result = await controller.retryExtraction(
+        EXTRACTION_ID,
+        { extractionStyle: 'faithful' } as any,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/extractions/${EXTRACTION_ID}/retry`,
+        TEACHER_USER,
+        { extractionStyle: 'faithful' },
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.extraction.retry_queued',
+          targetType: 'extraction',
+          targetId: EXTRACTION_ID,
+          metadata: expect.objectContaining({
+            retryExtractionId: 'retry-extraction-1',
+          }),
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
     });
   });
 
@@ -1038,6 +1158,9 @@ describe('AiMentorController', () => {
         assessmentType: 'quiz',
         passingScore: 60,
         feedbackLevel: 'standard',
+        sourcePolicy: 'published_default',
+        allowDraftSources: true,
+        retryOfJobId: JOB_ID,
       };
       mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
 
@@ -1096,7 +1219,11 @@ describe('AiMentorController', () => {
         anchorId: 'lesson-1',
         teacherNote: 'Focus on mixed readiness.',
       };
-      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        message: 'Lesson plan generation job queued',
+        data: { jobId: JOB_ID, jobType: 'class_lesson_plan_generation', status: 'pending' },
+      });
 
       const result = await controller.queueLessonPlanJob(
         dto as any,
@@ -1108,6 +1235,10 @@ describe('AiMentorController', () => {
         '/teacher/lesson-plans/jobs',
         TEACHER_USER,
         dto,
+      );
+      expect(mockQueueService.enqueueLessonPlanJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1122,7 +1253,11 @@ describe('AiMentorController', () => {
           }),
         }),
       );
-      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+      expect(result).toEqual({
+        success: true,
+        message: 'Lesson plan generation job queued',
+        data: expect.objectContaining({ jobId: JOB_ID, status: 'pending' }),
+      });
     });
 
     it('should block lesson plan queue when teacher does not own class', async () => {
@@ -1142,6 +1277,7 @@ describe('AiMentorController', () => {
         ),
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
+      expect(mockQueueService.enqueueLessonPlanJob).not.toHaveBeenCalled();
     });
   });
 
@@ -1149,7 +1285,11 @@ describe('AiMentorController', () => {
     it('should forward PATCH /teacher/lesson-plans/jobs/:jobId/draft and audit the save', async () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
 
       const payload = {
@@ -1183,7 +1323,11 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
     });
   });
@@ -1192,7 +1336,11 @@ describe('AiMentorController', () => {
     it('should forward PATCH /teacher/quizzes/jobs/:jobId/draft and audit the save', async () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
       });
 
       const payload = {
@@ -1229,7 +1377,139 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        data: { jobId: JOB_ID, status: 'completed', statusMessage: 'Draft saved' },
+        data: {
+          jobId: JOB_ID,
+          status: 'completed',
+          statusMessage: 'Draft saved',
+        },
+      });
+    });
+  });
+
+  describe('quiz draft apply/retry actions', () => {
+    it('should forward POST /teacher/quizzes/jobs/:jobId/apply/preview and audit the preview', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { canApply: true, assessment: { questionCount: 2 } },
+      });
+
+      const result = await controller.previewQuizDraftApply(
+        JOB_ID,
+        TEACHER_USER,
+      );
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/apply/preview`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.apply_previewed',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { canApply: true, assessment: { questionCount: 2 } },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/apply and audit idempotent apply', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: {
+          alreadyApplied: true,
+          applyResult: { assessmentId: 'assessment-1' },
+        },
+      });
+
+      const result = await controller.applyQuizDraft(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/apply`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.applied',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({
+            alreadyApplied: true,
+            assessmentId: 'assessment-1',
+          }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: {
+          alreadyApplied: true,
+          applyResult: { assessmentId: 'assessment-1' },
+        },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/retry and audit the retry', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: 'retry-job-1', retryOfJobId: JOB_ID },
+      });
+
+      const result = await controller.retryQuizDraftJob(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/retry`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.retried',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+          metadata: expect.objectContaining({ retryJobId: 'retry-job-1' }),
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: 'retry-job-1', retryOfJobId: JOB_ID },
+      });
+    });
+
+    it('should forward POST /teacher/quizzes/jobs/:jobId/cancel and audit the cancellation', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      });
+
+      const result = await controller.cancelQuizDraftJob(JOB_ID, TEACHER_USER);
+
+      expect(mockProxy.forward).toHaveBeenCalledWith(
+        'POST',
+        `/teacher/quizzes/jobs/${JOB_ID}/cancel`,
+        TEACHER_USER,
+        {},
+      );
+      expect(mockAudit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: TEACHER_USER.id,
+          action: 'ai.quiz_draft.cancelled',
+          targetType: 'ai_generation_job',
+          targetId: JOB_ID,
+        }),
+      );
+      expect(result).toEqual({
+        success: true,
+        data: { jobId: JOB_ID, status: 'cancelled' },
       });
     });
   });
@@ -1633,7 +1913,8 @@ describe('AiMentorController', () => {
   });
 
   describe('deleteTeacherJob()', () => {
-    it('should forward DELETE /teacher/jobs/:jobId and audit the cancellation', async () => {
+    it('should remove queued job from BullMQ and return cancelled status when job is waiting', async () => {
+      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(true);
       mockProxy.forward.mockResolvedValue({
         success: true,
         data: { jobId: JOB_ID, status: 'cancelled' },
@@ -1641,6 +1922,9 @@ describe('AiMentorController', () => {
 
       const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
 
+      expect(mockQueueService.cancelQueuedLessonPlanJob).toHaveBeenCalledWith(
+        JOB_ID,
+      );
       expect(mockProxy.forward).toHaveBeenCalledWith(
         'DELETE',
         `/teacher/jobs/${JOB_ID}`,
@@ -1656,8 +1940,23 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
+        message: 'Lesson plan generation cancelled before execution started',
         data: { jobId: JOB_ID, status: 'cancelled' },
       });
+    });
+
+    it('should forward downstream cancellation response when job is not in queue', async () => {
+      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+      const downstreamResponse = {
+        success: true,
+        message: 'Generation cancelled',
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      };
+      mockProxy.forward.mockResolvedValue(downstreamResponse);
+
+      const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
+
+      expect(result).toEqual(downstreamResponse);
     });
 
     it('should block deletion when teacher does not own AI generation job', async () => {
@@ -1672,6 +1971,7 @@ describe('AiMentorController', () => {
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
+
 
   describe('getIndexClassStatus()', () => {
     it('should forward GET /index/classes/:classId/status for owned teacher class', async () => {

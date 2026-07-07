@@ -168,7 +168,9 @@ export class FileUploadService {
     return undefined;
   }
 
-  private normalizeGradeLevel(value?: string | null): GradeLevelDto | undefined {
+  private normalizeGradeLevel(
+    value?: string | null,
+  ): GradeLevelDto | undefined {
     const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
     if (!match) {
       return undefined;
@@ -257,7 +259,12 @@ export class FileUploadService {
   private isIndexableFileKind(
     fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx' | 'image' | null,
   ) {
-    return !fileKind || fileKind === 'pdf' || fileKind === 'txt' || fileKind === 'pptx';
+    return (
+      !fileKind ||
+      fileKind === 'pdf' ||
+      fileKind === 'txt' ||
+      fileKind === 'pptx'
+    );
   }
 
   private async logFileAction(
@@ -372,7 +379,7 @@ export class FileUploadService {
     };
     const fileKind = dto.fileKind ?? LibraryFileKindDto.Pdf;
     const aiEnabled = this.isIndexableFileKind(fileKind)
-      ? dto.aiEnabled ?? true
+      ? (dto.aiEnabled ?? true)
       : false;
     const scope = dto.scope ?? FileScopeDto.Private;
     let classContext: Awaited<
@@ -815,8 +822,12 @@ export class FileUploadService {
 
   async retryIndex(id: string, user: RequestUser) {
     const record = await this.ensureFileWritable(id, user);
-    if (!this.isIndexableFileKind(record.fileKind as LibraryFileKindDto | null)) {
-      throw new BadRequestException('Image files cannot be indexed for AI search.');
+    if (
+      !this.isIndexableFileKind(record.fileKind as LibraryFileKindDto | null)
+    ) {
+      throw new BadRequestException(
+        'Image files cannot be indexed for AI search.',
+      );
     }
     if (!record.aiEnabled) {
       throw new BadRequestException('Only AI-enabled files can be indexed.');

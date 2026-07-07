@@ -88,6 +88,7 @@ export class ClassesController {
     @Query('sectionId') sectionId?: string,
     @Query('teacherId') teacherId?: string,
     @Query('schoolYear') schoolYear?: string,
+    @Query('subjectGradeLevel') subjectGradeLevel?: string,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
     @Query('room') room?: string,
@@ -99,6 +100,7 @@ export class ClassesController {
       sectionId,
       teacherId,
       schoolYear,
+      subjectGradeLevel,
       isActive,
       search,
       room,
@@ -118,6 +120,7 @@ export class ClassesController {
     @Query('sectionId') sectionId?: string,
     @Query('teacherId') teacherId?: string,
     @Query('schoolYear') schoolYear?: string,
+    @Query('subjectGradeLevel') subjectGradeLevel?: string,
     @Query('isActive') isActive?: string,
     @Query('search') search?: string,
     @Query('room') room?: string,
@@ -133,6 +136,7 @@ export class ClassesController {
     if (sectionId) filters.sectionId = sectionId;
     if (teacherId) filters.teacherId = teacherId;
     if (schoolYear) filters.schoolYear = schoolYear;
+    if (subjectGradeLevel) filters.subjectGradeLevel = subjectGradeLevel;
     if (room) filters.room = room;
     if (isActive !== undefined) filters.isActive = isActive === 'true';
     if (search) filters.search = search;
@@ -166,9 +170,10 @@ export class ClassesController {
       user?.roles,
       statusQuery === 'active' ||
         statusQuery === 'archived' ||
-        statusQuery === 'hidden'
+        statusQuery === 'hidden' ||
+        statusQuery === 'all'
         ? statusQuery
-        : 'all',
+        : 'active',
     );
 
     return {
@@ -229,9 +234,10 @@ export class ClassesController {
       user?.roles,
       statusQuery === 'active' ||
         statusQuery === 'archived' ||
-        statusQuery === 'hidden'
+        statusQuery === 'hidden' ||
+        statusQuery === 'all'
         ? statusQuery
-        : 'all',
+        : 'active',
     );
 
     return {

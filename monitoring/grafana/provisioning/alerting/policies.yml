@@ -1,3 +1,13 @@
 apiVersion: 1
 
-policies: []
+policies:
+  - orgId: 1
+    receiver: nexora-alerts-email
+    group_by: ['alertname', 'grafana_folder']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      - receiver: nexora-alerts-email
+        group_by: ['alertname', 'grafana_folder']
+        continue: false

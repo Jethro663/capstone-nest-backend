@@ -163,6 +163,15 @@ function trendLabel(trend: InterventionQuizComparisonRow['trend']): string {
   return 'Awaiting Retry';
 }
 
+function formatComparisonFilterLabel(
+  filter: ClassInterventionQuizComparisonResponse['filterOptions'][number],
+): string {
+  if (filter.id === 'all') return filter.label;
+  const category = filter.classRecordCategory ?? filter.assessmentType;
+  const categoryLabel = category ? formatTriggerSource(category) : '';
+  return categoryLabel ? `${filter.label} - ${categoryLabel}` : filter.label;
+}
+
 function formatConceptLabel(rawConcept: string): string {
   const cleaned = richTextToPlainText(rawConcept)
     .replace(/[_-]+/g, ' ')
@@ -295,6 +304,7 @@ export default function TeacherPerformancePage() {
   const [atRisk, setAtRisk] = useState<ClassAtRiskResponse | null>(null);
   const [interventionComparisons, setInterventionComparisons] =
     useState<ClassInterventionQuizComparisonResponse | null>(null);
+  const [selectedComparisonFilterId, setSelectedComparisonFilterId] = useState('all');
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<ClassDiagnosticsResponse | null>(null);
   const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(null);
@@ -361,9 +371,44 @@ export default function TeacherPerformancePage() {
         .sort((left, right) => left.masteryScore - right.masteryScore),
     [diagnostics?.conceptHotspots],
   );
+  const comparisonFilterOptions = useMemo(
+    () =>
+      interventionComparisons?.filterOptions?.length
+        ? interventionComparisons.filterOptions
+        : [
+            {
+              id: 'all',
+              label: 'All assessments',
+              assessmentId: null,
+              assessmentTitle: null,
+              assessmentType: null,
+              classRecordCategory: null,
+            },
+          ],
+    [interventionComparisons?.filterOptions],
+  );
+  const filteredInterventionComparisons = useMemo(
+    () =>
+      (interventionComparisons?.comparisons ?? []).filter(
+        (row) => (row.filterId ?? row.assessmentId) === selectedComparisonFilterId,
+      ),
+    [interventionComparisons?.comparisons, selectedComparisonFilterId],
+  );
+  const filteredComparisonCounts = useMemo(
+    () => ({
+      improved: filteredInterventionComparisons.filter((entry) => entry.trend === 'improved').length,
+      declined: filteredInterventionComparisons.filter((entry) => entry.trend === 'declined').length,
+      unchanged: filteredInterventionComparisons.filter((entry) => entry.trend === 'unchanged').length,
+      awaiting: filteredInterventionComparisons.filter((entry) => entry.trend === 'awaiting_retry').length,
+    }),
+    [filteredInterventionComparisons],
+  );
   const latestComparisonByStudent = useMemo(() => {
     const map = new Map<string, InterventionQuizComparisonRow>();
-    for (const row of interventionComparisons?.comparisons ?? []) {
+    const classAverageRows = (interventionComparisons?.comparisons ?? []).filter(
+      (row) => (row.comparisonScope ?? 'class_average') === 'class_average' || row.filterId === 'all',
+    );
+    for (const row of classAverageRows) {
       const current = map.get(row.studentId);
       if (!current) {
         map.set(row.studentId, row);
@@ -608,6 +653,10 @@ export default function TeacherPerformancePage() {
   }, [fetchPerformance]);
 
   useEffect(() => {
+    setSelectedComparisonFilterId('all');
+  }, [selectedClassId]);
+
+  useEffect(() => {
     fetchLessonPlanSources();
   }, [fetchLessonPlanSources]);
 
@@ -664,7 +713,7 @@ export default function TeacherPerformancePage() {
         toast.error('Failed to refresh analysis job status.');
         window.clearInterval(interval);
       }
-    }, 2500);
+    }, 10_000);
 
     return () => window.clearInterval(interval);
   }, [analysisJob]);
@@ -696,7 +745,7 @@ export default function TeacherPerformancePage() {
         toast.error('Failed to refresh lesson plan job status.');
         window.clearInterval(interval);
       }
-    }, 2500);
+    }, 10_000);
 
     return () => window.clearInterval(interval);
   }, [lessonPlanJob]);
@@ -1032,8 +1081,8 @@ export default function TeacherPerformancePage() {
                           <TableHead>Student</TableHead>
                           <TableHead>Assessment Avg</TableHead>
                           <TableHead>Class Record Avg</TableHead>
-                          <TableHead>Before Quiz</TableHead>
-                          <TableHead>After Retry</TableHead>
+                          <TableHead>Before Assessments</TableHead>
+                          <TableHead>After AI Quizzes</TableHead>
                           <TableHead>Delta</TableHead>
                           <TableHead>Overall Avg</TableHead>
                           <TableHead>Status</TableHead>
@@ -1105,29 +1154,45 @@ export default function TeacherPerformancePage() {
               </TeacherSectionCard>
 
               <TeacherSectionCard
-                title="Intervention Quiz Comparison"
-                description="Compare the same quiz score before intervention and after the intervention retry."
+                title="Intervention Progress Comparison"
+                description="Compare each learner's assessment average before intervention against completed AI remedial quiz averages."
                 className="teacher-figma-stagger"
               >
                 {(interventionComparisons?.comparisons.length ?? 0) === 0 ? (
                   <TeacherEmptyState
-                    title="No intervention quiz retries yet"
-                    description="Once a learner retries an intervention quiz, before-and-after scores will appear here."
+                    title="No intervention quiz data yet"
+                    description="Before averages appear after class assessments, and after averages appear once students submit AI remedial quizzes."
                   />
                 ) : (
                   <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {comparisonFilterOptions.map((filter) => (
+                        <button
+                          key={filter.id}
+                          type="button"
+                          onClick={() => setSelectedComparisonFilterId(filter.id)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-black transition ${
+                            selectedComparisonFilterId === filter.id
+                              ? 'border-cyan-200 bg-cyan-300/20 text-cyan-50 shadow-[0_0_18px_rgba(34,211,238,0.22)]'
+                              : 'border-white/15 bg-white/5 text-[var(--teacher-text-muted)] hover:border-cyan-200/50 hover:text-cyan-50'
+                          }`}
+                        >
+                          {formatComparisonFilterLabel(filter)}
+                        </button>
+                      ))}
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <Badge variant="secondary">
-                        Improved: {interventionComparisons?.improvedCount ?? 0}
+                        Improved: {filteredComparisonCounts.improved}
                       </Badge>
                       <Badge variant="secondary">
-                        Declined: {interventionComparisons?.declinedCount ?? 0}
+                        Declined: {filteredComparisonCounts.declined}
                       </Badge>
                       <Badge variant="secondary">
-                        Unchanged: {interventionComparisons?.unchangedCount ?? 0}
+                        Unchanged: {filteredComparisonCounts.unchanged}
                       </Badge>
                       <Badge variant="secondary">
-                        Awaiting Retry: {interventionComparisons?.awaitingRetryCount ?? 0}
+                        Awaiting AI Quiz: {filteredComparisonCounts.awaiting}
                       </Badge>
                     </div>
                     <div className="teacher-table-shell">
@@ -1135,47 +1200,71 @@ export default function TeacherPerformancePage() {
                         <TableHeader className="teacher-table-head [&_tr]:border-white/15">
                           <TableRow className="border-white/10 hover:bg-transparent">
                             <TableHead>Student</TableHead>
-                            <TableHead>Quiz</TableHead>
-                            <TableHead>Before</TableHead>
-                            <TableHead>After</TableHead>
+                            <TableHead>Focus</TableHead>
+                            <TableHead>Before Avg</TableHead>
+                            <TableHead>After AI Avg</TableHead>
                             <TableHead>Delta</TableHead>
                             <TableHead>Trend</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody className="[&_tr:last-child]:border-0">
-                          {(interventionComparisons?.comparisons ?? []).map((entry) => (
-                            <TableRow
-                              key={`${entry.caseId}-${entry.assignmentId}-${entry.assessmentId}`}
-                              className="teacher-table-row border-white/10"
-                            >
-                              <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
-                                {entry.student
-                                  ? `${entry.student.lastName ?? ''}, ${entry.student.firstName ?? ''}`
-                                      .replace(/^,\s*/, '')
-                                      .trim() || entry.student.email || entry.studentId
-                                  : entry.studentId}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {entry.assessmentTitle}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(entry.beforeScorePercent)}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {toPercent(entry.afterScorePercent)}
-                              </TableCell>
-                              <TableCell className="text-[var(--teacher-text-strong)]">
-                                {formatSignedDelta(entry.deltaScorePercent)}
-                              </TableCell>
-                              <TableCell>
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(entry.trend)}`}
-                                >
-                                  {trendLabel(entry.trend)}
-                                </span>
+                          {filteredInterventionComparisons.length ? (
+                            filteredInterventionComparisons.map((entry) => (
+                              <TableRow
+                                key={`${entry.caseId}-${entry.assignmentId}-${entry.assessmentId}`}
+                                className="teacher-table-row border-white/10"
+                              >
+                                <TableCell className="font-semibold text-[var(--teacher-text-strong)]">
+                                  {entry.student
+                                    ? `${entry.student.lastName ?? ''}, ${entry.student.firstName ?? ''}`
+                                        .replace(/^,\s*/, '')
+                                        .trim() || entry.student.email || entry.studentId
+                                    : entry.studentId}
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {entry.assessmentTitle}
+                                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--teacher-text-muted)]">
+                                    {entry.comparisonScope === 'class_average'
+                                      ? 'Class average'
+                                      : 'Assessment filter'}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {toPercent(entry.beforeScorePercent)}
+                                  <div className="text-[10px] text-[var(--teacher-text-muted)]">
+                                    {entry.beforeSampleSize} assessment
+                                    {entry.beforeSampleSize === 1 ? '' : 's'}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {toPercent(entry.afterScorePercent)}
+                                  <div className="text-[10px] text-[var(--teacher-text-muted)]">
+                                    {entry.afterSampleSize} AI quiz
+                                    {entry.afterSampleSize === 1 ? '' : 'zes'}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-[var(--teacher-text-strong)]">
+                                  {formatSignedDelta(entry.deltaScorePercent)}
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trendBadgeClass(entry.trend)}`}
+                                  >
+                                    {trendLabel(entry.trend)}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow className="border-white/10 hover:bg-transparent">
+                              <TableCell
+                                colSpan={6}
+                                className="py-8 text-center text-sm text-[var(--teacher-text-muted)]"
+                              >
+                                No comparison rows for this filter yet. Try All assessments or another quiz/performance task.
                               </TableCell>
                             </TableRow>
-                          ))}
+                          )}
                         </TableBody>
                       </Table>
                     </div>

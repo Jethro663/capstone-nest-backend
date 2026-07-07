@@ -25,7 +25,7 @@ export class AiProxyService {
     this.baseUrl =
       this.config.get<string>('AI_SERVICE_URL') || 'http://localhost:8000';
     this.chatTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '70000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '25000',
       10,
     );
     this.quizTimeoutMs = parseInt(
@@ -205,6 +205,62 @@ export class AiProxyService {
         },
         503,
       );
+    }
+  }
+
+  /**
+   * Internal worker call: trigger lesson-plan execution on ai-service.
+   *
+   * This bypasses the circuit breaker because BullMQ owns retry/backoff.
+   * Uses a dedicated 5-minute AbortController timeout so hung inference
+   * is detected and the job can be retried by BullMQ.
+   */
+  async runInternalLessonPlanJob(
+    jobId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 300_000);
+
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/internal/teacher/lesson-plans/jobs/${jobId}/run`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.sharedSecret
+              ? { 'X-Internal-Service-Token': this.sharedSecret }
+              : {}),
+          },
+          body: JSON.stringify(meta ?? {}),
+          signal: controller.signal,
+        },
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        this.logger.error(
+          `Internal lesson-plan execution failed (${response.status}): ${text}`,
+        );
+        throw new Error(
+          `ai-service internal execution returned ${response.status}: ${text}`,
+        );
+      }
+
+      return response.json();
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        this.logger.error(
+          `Internal lesson-plan execution timed out for job ${jobId}`,
+        );
+        throw new Error(
+          `ai-service internal execution timed out after 300s for job ${jobId}`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

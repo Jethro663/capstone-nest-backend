@@ -5,6 +5,7 @@ import JSZip from 'jszip';
 import RosterImportPage from './page';
 import { sectionService } from '@/services/section-service';
 import { rosterImportService } from '@/services/roster-import-service';
+import { toast } from 'sonner';
 
 jest.mock('sonner', () => ({
   toast: {
@@ -29,6 +30,7 @@ jest.mock('@/services/roster-import-service', () => ({
 
 const mockedSectionService = sectionService as jest.Mocked<typeof sectionService>;
 const mockedRosterImportService = rosterImportService as jest.Mocked<typeof rosterImportService>;
+const mockedToast = toast as unknown as { success: jest.Mock; error: jest.Mock };
 type SectionListResponse = Awaited<ReturnType<typeof sectionService.getAll>>;
 type PendingResponse = Awaited<ReturnType<typeof rosterImportService.getPending>>;
 type PreviewResponse = Awaited<ReturnType<typeof rosterImportService.preview>>;
@@ -134,6 +136,22 @@ describe('RosterImportPage', () => {
       expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file),
     );
     await waitFor(() => expect(mockedRosterImportService.commit).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows a file attachment notification and local spreadsheet preview when a CSV is attached', async () => {
+    const { container } = render(<RosterImportPage />);
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(
+      ['Last Name,First Name,Middle Name,LRN,Email\nDela Cruz,Ana,Santos,202407000010,ana@nexora.edu'],
+      'roster.csv',
+      { type: 'text/csv' },
+    );
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    expect(await screen.findByText('Attached file preview')).toBeInTheDocument();
+    expect(screen.getByText('Dela Cruz')).toBeInTheDocument();
+    expect(screen.getByText('202407000010')).toBeInTheDocument();
+    expect(screen.getByText('ana@nexora.edu')).toBeInTheDocument();
+    expect(mockedToast.success).toHaveBeenCalledWith(expect.stringContaining('attached and ready for preview'));
   });
 
   it('downloads a protected Excel template for the selected section', async () => {

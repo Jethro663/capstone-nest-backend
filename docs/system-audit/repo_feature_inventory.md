@@ -3,7 +3,7 @@
 ## Actual System Identity
 - Repository: `capstone-nest-react-lms`
 - Product name in code and routes: Nexora
-- Primary apps: `backend/`, `next-frontend/`, `ai-service/`, `test-mobile/`
+- Primary apps: `backend/`, `next-frontend/`, `ai-service/`, `mobile/`
 
 ## Actual Stack Versions
 - Web frontend: Next 16.2.4, React 19.2.3, React DOM 19.2.3
@@ -27,7 +27,7 @@
 
 ## Actual Mobile Surface
 - Mobile screens discovered: 23
-- Current `test-mobile` build is student-focused.
+- Current `mobile` build is student-focused.
 - Teacher mobile is explicitly marked unsupported in the app shell.
 
 ## Actual Database Reality
@@ -55,7 +55,7 @@
 - Health endpoint returned database/redis/ai-service all OK
 
 ## Partial or Missing Areas
-- Teacher mobile not implemented in the current `test-mobile` build
+- Teacher mobile not implemented in the current `mobile` build
 - Mobile discussion board not backed by a live data source yet
 - No verified mobile push-notification stack found
 - No confirmed 30-second lesson-completion rule found

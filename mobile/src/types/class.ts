@@ -12,7 +12,7 @@ export interface ClassItem {
   subjectGradeLevel?: string;
   sectionId: string;
   section?: { id: string; name: string; gradeLevel: string } | null;
-  teacherId: string;
+  teacherId?: string | null;
   teacher?: { id: string; firstName?: string; lastName?: string; email?: string } | null;
   schoolYear: string;
   room?: string;
@@ -23,4 +23,146 @@ export interface ClassItem {
   updatedAt?: string;
   className?: string;
   name?: string;
+  enrollments?: Array<{
+    id: string;
+    student?: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+      lrn?: string | null;
+      profile?: {
+        lrn?: string | null;
+        profilePicture?: string | null;
+      } | null;
+    };
+  }>;
+  isHidden?: boolean;
+  cardBannerUrl?: string | null;
+  cardPreset?: string | null;
+}
+
+export type ClassVisibilityStatus = "all" | "active" | "inactive";
+
+export interface EnrollmentRecord {
+  id: string;
+  studentId?: string;
+  userId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  student?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    lrn?: string | null;
+    profilePicture?: string;
+    profile?: {
+      lrn?: string | null;
+      profilePicture?: string | null;
+    } | null;
+  } | null;
+}
+
+export interface EnrollStudentDto {
+  studentId: string;
+}
+
+export interface TeacherStudentAssessmentHistoryItem {
+  assessmentId: string;
+  title: string;
+  type: string;
+  dueDate?: string | null;
+  statusLabel: string;
+  submittedAt?: string | null;
+  score?: number | null;
+  totalPoints?: number | null;
+}
+
+export interface TeacherClassStudentOverview {
+  student: {
+    id: string;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+    status?: string | null;
+    profile?: {
+      lrn?: string | null;
+      profilePicture?: string | null;
+      phone?: string | null;
+      address?: string | null;
+      gradeLevel?: string | null;
+    } | null;
+  };
+  classInfo: {
+    classId: string;
+    subjectName?: string | null;
+    subjectCode?: string | null;
+    sectionLabel?: string | null;
+  };
+  standing: {
+    gradingPeriod?: string | null;
+    overallGradePercent?: number | null;
+    components: {
+      writtenWorkPercent?: number | null;
+      performanceTaskPercent?: number | null;
+      quarterlyExamPercent?: number | null;
+    };
+  };
+  history: {
+    finished: TeacherStudentAssessmentHistoryItem[];
+    late: TeacherStudentAssessmentHistoryItem[];
+    pending: TeacherStudentAssessmentHistoryItem[];
+  };
+}
+
+export type TeacherClassStudentProfile = TeacherClassStudentOverview["student"] & {
+  profile?: TeacherClassStudentOverview["student"]["profile"];
+};
+
+export interface StudentMasterlistSection {
+  id: string;
+  name: string;
+  gradeLevel: string;
+  schoolYear: string;
+}
+
+export interface StudentMasterlistItem {
+  id: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  email?: string;
+  status?: string;
+  profilePicture?: string | null;
+  lrn?: string | null;
+  gradeLevel?: string | null;
+  section: StudentMasterlistSection | null;
+  isEligible: boolean;
+  disabledReason: string | null;
+}
+
+export interface StudentMasterlistQuery {
+  gradeLevel?: string;
+  sectionId?: string;
+  search?: string;
+  eligibility?: "all" | "eligible" | "mismatch";
+  sortBy?: "lastName" | "firstName" | "email" | "gradeLevel" | "lrn" | "eligibility";
+  sortDirection?: "asc" | "desc";
+  prioritizeEligible?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface StudentMasterlistResponse {
+  data: StudentMasterlistItem[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
+  classContext?: {
+    classId: string;
+    sectionId?: string;
+    classGradeLevel?: string;
+  };
 }

@@ -61,23 +61,33 @@ async function recordMigration(filename) {
  * No more hardcoded EXTRA_MIGRATIONS list — just drop a .sql file in
  * the drizzle/ folder and it gets picked up automatically.
  */
+/**
+ * Discovers ALL .sql migration files from Drizzle Kit's journal.
+ * Enforces strict adherence to meta/_journal.json.
+ */
 function discoverMigrationFiles() {
-  // 1. Collect journal-tracked filenames (in order)
+  if (!fs.existsSync(JOURNAL_PATH)) {
+    throw new Error(`Migration journal not found at ${JOURNAL_PATH}. Cannot proceed.`);
+  }
   const journal = JSON.parse(fs.readFileSync(JOURNAL_PATH, 'utf-8'));
   const journalFiles = journal.entries.map((e) => `${e.tag}.sql`);
   const journalSet = new Set(journalFiles);
 
-  // 2. Collect ALL .sql files on disk
+  // Collect ALL .sql files on disk
   const allFiles = fs
     .readdirSync(DRIZZLE_DIR)
-    .filter((f) => f.endsWith('.sql'))
-    .sort(); // Numeric prefix gives correct order: 0000, 0001, …
+    .filter((f) => f.endsWith('.sql'));
 
-  // 3. Separate into "journal first" + "extras after" (preserving order)
+  // Check for unregistered extras (hard guardrail against split-brain migrations)
   const extras = allFiles.filter((f) => !journalSet.has(f));
+  if (extras.length > 0) {
+    throw new Error(
+      `Unregistered migration files found in drizzle/: ${extras.join(', ')}. ` +
+      `All active DB changes must come from generated migrations registered in meta/_journal.json.`
+    );
+  }
 
-  // Final order: journal entries (their intended order) → extras (sorted)
-  return [...journalFiles, ...extras];
+  return journalFiles;
 }
 
 /**
@@ -233,11 +243,58 @@ async function runMigrations() {
     // Check what's already been applied
     const applied = await getAppliedMigrations();
     if (applied.size > 0) {
-      console.log(`📋 ${applied.size} migration(s) already applied — skipping those.\n`);
+      console.log(`📋 ${applied.size} migration(s) already applied — checking baseline state.\n`);
     }
 
-    // Discover all migration files (journal + extras, auto-sorted)
+    const STAMP_TAG = process.env.MIGRATION_BASELINE_STAMP_TAG || '0000_baseline_nexora.sql';
+    const STAMP_ONLY = process.env.MIGRATION_BASELINE_STAMP_ONLY === 'true';
+
+    // Phase D3 / F2: Explicit baseline stamp mode
+    if (STAMP_ONLY) {
+      console.log(`⚡ MIGRATION_BASELINE_STAMP_ONLY=true detected. Running in explicit stamp mode for ${STAMP_TAG}...`);
+      
+      // Check if DB is populated (either has existing applied migrations or user tables)
+      const { rows: tableRows } = await client.query(
+        "SELECT count(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name != '_applied_migrations'"
+      );
+      const tableCount = parseInt(tableRows[0].count, 10);
+
+      if (applied.size === 0 && tableCount === 0) {
+        throw new Error(
+          `MIGRATION_BASELINE_STAMP_ONLY=true was passed, but the database appears to be completely empty (0 tables, 0 applied migrations)! Stamp mode must only be run against an existing, populated database.`
+        );
+      }
+
+      if (applied.has(STAMP_TAG)) {
+        console.log(`✅ Baseline migration '${STAMP_TAG}' is already stamped in _applied_migrations. Nothing to do.`);
+      } else {
+        await recordMigration(STAMP_TAG);
+        console.log(`✅ Successfully stamped baseline migration '${STAMP_TAG}' into _applied_migrations without running DDL!`);
+      }
+      return;
+    }
+
+    // Discover all migration files from journal (strict order)
     const allFiles = discoverMigrationFiles();
+
+    // Automatic legacy transition failsafe:
+    // If the baseline is NOT applied, but we detect legacy applied migrations (e.g. from before the squash)
+    // or pre-existing user tables, automatically stamp the baseline so we don't replay DDL on an existing DB.
+    if (allFiles.length > 0 && allFiles[0] === STAMP_TAG && !applied.has(STAMP_TAG)) {
+      const { rows: tableRows } = await client.query(
+        "SELECT count(*) as count FROM information_schema.tables WHERE table_schema = 'public' AND table_name != '_applied_migrations'"
+      );
+      const tableCount = parseInt(tableRows[0].count, 10);
+
+      if (applied.size > 0 || tableCount > 0) {
+        console.log(`⚡ Detected existing populated database (${applied.size} legacy migration records, ${tableCount} public tables).`);
+        console.log(`⚡ Automatically stamping baseline '${STAMP_TAG}' into _applied_migrations without replaying DDL...`);
+        await recordMigration(STAMP_TAG);
+        applied.add(STAMP_TAG);
+        console.log(`✅ Baseline stamped successfully.\n`);
+      }
+    }
+
     let newCount = 0;
 
     for (const filename of allFiles) {
@@ -248,8 +305,7 @@ async function runMigrations() {
 
       const filePath = path.join(DRIZZLE_DIR, filename);
       if (!fs.existsSync(filePath)) {
-        console.log(`⚠ Missing file: ${filename} (in journal but not on disk) — skipping`);
-        continue;
+        throw new Error(`Missing file: ${filename} (listed in _journal.json but not found on disk at ${filePath})`);
       }
 
       console.log(`▶ Applying: ${filename}`);
@@ -273,3 +329,4 @@ async function runMigrations() {
 }
 
 runMigrations();
+

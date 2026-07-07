@@ -6,6 +6,15 @@ import httpx
 
 from .config import settings
 
+_cloud_client: httpx.AsyncClient | None = None
+
+
+def _get_cloud_client() -> httpx.AsyncClient:
+    global _cloud_client
+    if _cloud_client is None or getattr(_cloud_client, "is_closed", False):
+        _cloud_client = httpx.AsyncClient(timeout=45)
+    return _cloud_client
+
 
 class CloudFallbackUnavailable(RuntimeError):
     pass
@@ -16,6 +25,10 @@ def _provider_name() -> str:
     if "openrouter.ai" in base_url:
         return "openrouter"
     return settings.ai_cloud_fallback_provider.strip().lower() or "openai"
+
+
+def _is_supported_provider() -> bool:
+    return _provider_name() in {"openai", "openrouter"}
 
 
 def is_enabled() -> bool:
@@ -141,8 +154,8 @@ async def generate_text(
 ) -> str:
     if not is_enabled():
         raise CloudFallbackUnavailable("Cloud fallback is disabled or missing credentials.")
-    provider = settings.ai_cloud_fallback_provider.strip().lower()
-    if provider != "openai":
+    provider = _provider_name()
+    if not _is_supported_provider():
         raise CloudFallbackUnavailable(f'Unsupported cloud fallback provider "{provider}".')
 
     resolved_model = (model or (get_vision_model() if images else get_text_model())).strip()
@@ -167,11 +180,11 @@ async def generate_text(
         payload["response_format"] = json_format
 
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/chat/completions"
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(endpoint, headers=_headers(), json=payload)
-        response.raise_for_status()
-        body = response.json()
-        return _normalize_response_text(body)
+    client = _get_cloud_client()
+    response = await client.post(endpoint, headers=_headers(), json=payload, timeout=timeout)
+    response.raise_for_status()
+    body = response.json()
+    return _normalize_response_text(body)
 
 
 def _normalize_chat_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -221,11 +234,11 @@ async def chat(
         payload["response_format"] = json_format
 
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/chat/completions"
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(endpoint, headers=_headers(), json=payload)
-        response.raise_for_status()
-        body = response.json()
-        return _normalize_response_text(body)
+    client = _get_cloud_client()
+    response = await client.post(endpoint, headers=_headers(), json=payload, timeout=timeout)
+    response.raise_for_status()
+    body = response.json()
+    return _normalize_response_text(body)
 
 
 def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
@@ -241,12 +254,15 @@ def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
 async def _post_embedding_payload(
     client: httpx.AsyncClient,
     texts: list[str],
+    *,
+    timeout: int,
 ) -> dict[str, Any]:
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/embeddings"
     response = await client.post(
         endpoint,
         headers=_headers(),
         json=_build_embedding_payload(texts),
+        timeout=timeout,
     )
     response.raise_for_status()
     return response.json()
@@ -300,18 +316,26 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    async with httpx.AsyncClient(timeout=settings.ollama_timeout_chat_s) as client:
-        body = await _post_embedding_payload(client, texts)
-        ordered_embeddings = _collect_embedding_response(body, text_count=len(texts))
+    client = _get_cloud_client()
+    body = await _post_embedding_payload(
+        client,
+        texts,
+        timeout=settings.ollama_timeout_chat_s,
+    )
+    ordered_embeddings = _collect_embedding_response(body, text_count=len(texts))
 
-        missing_indexes = [
-            index for index, embedding in enumerate(ordered_embeddings) if embedding is None
-        ]
-        for index in missing_indexes:
-            retry_body = await _post_embedding_payload(client, [texts[index]])
-            retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
-            if retry_embeddings and retry_embeddings[0] is not None:
-                ordered_embeddings[index] = retry_embeddings[0]
+    missing_indexes = [
+        index for index, embedding in enumerate(ordered_embeddings) if embedding is None
+    ]
+    for index in missing_indexes:
+        retry_body = await _post_embedding_payload(
+            client,
+            [texts[index]],
+            timeout=settings.ollama_timeout_chat_s,
+        )
+        retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
+        if retry_embeddings and retry_embeddings[0] is not None:
+            ordered_embeddings[index] = retry_embeddings[0]
 
     if any(item is None for item in ordered_embeddings):
         raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")

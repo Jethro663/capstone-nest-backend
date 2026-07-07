@@ -1,4 +1,4 @@
-﻿import {
+import {
   BadRequestException,
   Controller,
   ForbiddenException,
@@ -27,12 +27,14 @@ import {
 } from '@nestjs/swagger';
 
 import { AiProxyService } from './ai-proxy.service';
+import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { ChatRequestDto } from './DTO/chat.dto';
 import { AdminAnalyticsChatRequestDto } from './DTO/admin-chat.dto';
 import { MentorExplainDto } from './DTO/mentor-explain.dto';
 import {
   ExtractModuleDto,
   ApplyExtractionDto,
+  RetryExtractionDto,
   UpdateExtractionDto,
 } from './DTO/extract-module.dto';
 import {
@@ -57,6 +59,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { Throttle } from '@nestjs/throttler';
 import { AuditService } from '../audit/audit.service';
 import { DatabaseService } from '../../database/database.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
@@ -95,6 +98,7 @@ export class AiMentorController {
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
     private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
+    private readonly aiGenerationQueueService: AiGenerationQueueService,
   ) {}
 
   private get db() {
@@ -925,6 +929,7 @@ export class AiMentorController {
   @Post('chat')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Chat with Ja (JAKIPIR AI Mentor)' })
   @ApiResponse({ status: 200, description: "Ja's reply + session ID" })
   async chat(
@@ -937,6 +942,7 @@ export class AiMentorController {
   @Post('mentor/explain')
   @Roles(RoleName.Student, RoleName.Admin)
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Get grounded mentoring help for a returned assessment question',
   })
@@ -1122,6 +1128,7 @@ export class AiMentorController {
 
   @Post('student/tutor/session')
   @Roles(RoleName.Student)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({
     summary: 'Start a student tutor session from a recommended topic',
   })
@@ -1255,6 +1262,7 @@ export class AiMentorController {
   }
 
   @Post('student/tutor/session/:sessionId/message')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   @Roles(RoleName.Student)
   @ApiOperation({
     summary: 'Send a follow-up message to a student tutor session',
@@ -1545,6 +1553,7 @@ export class AiMentorController {
   @Post('extract-module')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary: 'Queue extraction of structured lessons from an uploaded PDF',
   })
@@ -1566,6 +1575,7 @@ export class AiMentorController {
         targetId: dto.fileId,
         metadata: {
           extractionId: this.extractStringField(result, 'extractionId'),
+          extractionStyle: dto.extractionStyle ?? 'clean',
         },
       });
       return result;
@@ -1846,6 +1856,41 @@ export class AiMentorController {
 
   // â”€â”€â”€ Apply extraction â†’ create lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+  @Post('extractions/:id/apply/preview')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'Preview extraction apply result before writing draft content',
+  })
+  async previewApplyExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApplyExtractionDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      return await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/apply/preview`,
+        user,
+        dto,
+      );
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Unknown extraction apply preview error';
+      this.logger.warn(
+        `AI extraction apply preview unavailable for ${id}: ${message}`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction apply preview is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
   /**
    * POST /api/ai/extractions/:id/apply
    * Takes a completed extraction and creates hidden module sections
@@ -1894,6 +1939,15 @@ export class AiMentorController {
             'assessmentsCreated',
           ),
           moduleId: this.readStringField(result, 'moduleId'),
+          alreadyApplied: Boolean(
+            (
+              result as {
+                data?: { alreadyApplied?: unknown };
+                alreadyApplied?: unknown;
+              }
+            )?.data?.alreadyApplied ??
+            (result as { alreadyApplied?: unknown })?.alreadyApplied,
+          ),
         },
       });
       return result;
@@ -1938,6 +1992,86 @@ export class AiMentorController {
 
       throw new ServiceUnavailableException(
         'AI extraction apply is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
+  @Post('extractions/:id/cancel')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Cancel a queued or running extraction' })
+  async cancelExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/cancel`,
+        user,
+        {},
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.cancelled',
+        targetType: 'extraction',
+        targetId: id,
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.warn(
+        `AI extraction cancel unavailable for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction cancel is temporarily unavailable. Please retry shortly.',
+      );
+    }
+  }
+
+  @Post('extractions/:id/retry')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Retry an extraction from the same uploaded file' })
+  async retryExtraction(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RetryExtractionDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherExtractionAccess(id, user);
+    try {
+      const result = await this.proxy.forward(
+        'POST',
+        `/extractions/${id}/retry`,
+        user,
+        dto,
+      );
+      await this.logAuditSafe({
+        actorId: user.id,
+        action: 'ai.extraction.retry_queued',
+        targetType: 'extraction',
+        targetId: id,
+        metadata: {
+          retryExtractionId: this.extractStringField(result, 'extractionId'),
+          extractionStyle: dto.extractionStyle ?? null,
+        },
+      });
+      return result;
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.warn(
+        `AI extraction retry unavailable for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      throw new ServiceUnavailableException(
+        'AI extraction retry is temporarily unavailable. Please retry shortly.',
       );
     }
   }
@@ -2081,6 +2215,7 @@ export class AiMentorController {
   @Post('teacher/interventions/:caseId/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue AI intervention recommendation generation for an active LXP case',
@@ -2113,6 +2248,7 @@ export class AiMentorController {
   @Post('teacher/quizzes/generate-draft')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.CREATED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary: 'Generate a grounded draft assessment from lesson/module sources',
   })
@@ -2144,6 +2280,7 @@ export class AiMentorController {
   @Post('teacher/quizzes/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue grounded AI draft assessment generation from lesson/module sources',
@@ -2177,6 +2314,7 @@ export class AiMentorController {
   @Post('teacher/lesson-plans/jobs')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @HttpCode(HttpStatus.ACCEPTED)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @ApiOperation({
     summary:
       'Queue grounded AI lesson plan generation from a selected class module or lesson',
@@ -2192,13 +2330,20 @@ export class AiMentorController {
       user,
       dto,
     );
+    const jobId = this.extractStringField(result, 'jobId');
+    if (jobId) {
+      await this.aiGenerationQueueService.enqueueLessonPlanJob(
+        jobId,
+        user.id,
+      );
+    }
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.lesson_plan.queued',
       targetType: 'class',
       targetId: dto.classId,
       metadata: {
-        jobId: this.extractStringField(result, 'jobId'),
+        jobId,
         anchorType: dto.anchorType,
         anchorId: dto.anchorId,
         noteProvided: Boolean(dto.teacherNote?.trim()),
@@ -2257,8 +2402,125 @@ export class AiMentorController {
     return result;
   }
 
+  @Post('teacher/quizzes/jobs/:jobId/apply/preview')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'Preview AI quiz draft apply result before assessment creation',
+  })
+  async previewQuizDraftApply(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/apply/preview`,
+      user,
+      {},
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.apply_previewed',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/apply')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'Apply reviewed AI quiz draft as an unpublished assessment',
+  })
+  async applyQuizDraft(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/apply`,
+      user,
+      {},
+    );
+    const data =
+      result && typeof result === 'object' && 'data' in result
+        ? (result as { data?: Record<string, unknown> }).data
+        : undefined;
+    const applyResult =
+      data?.applyResult && typeof data.applyResult === 'object'
+        ? (data.applyResult as Record<string, unknown>)
+        : {};
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.applied',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+      metadata: {
+        alreadyApplied: Boolean(data?.alreadyApplied),
+        assessmentId: this.extractStringField(applyResult, 'assessmentId'),
+      },
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/retry')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Retry an AI quiz draft generation job' })
+  async retryQuizDraftJob(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/retry`,
+      user,
+      {},
+    );
+    const retryJobId = this.extractStringField(
+      result && typeof result === 'object' && 'data' in result
+        ? (result as { data?: Record<string, unknown> }).data
+        : result,
+      'jobId',
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.retried',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+      metadata: { retryJobId },
+    });
+    return result;
+  }
+
+  @Post('teacher/quizzes/jobs/:jobId/cancel')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({ summary: 'Cancel an AI quiz draft generation job' })
+  async cancelQuizDraftJob(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    await this.assertTeacherJobAccess(jobId, user);
+    const result = await this.proxy.forward(
+      'POST',
+      `/teacher/quizzes/jobs/${jobId}/cancel`,
+      user,
+      {},
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.cancelled',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return result;
+  }
+
   @Get('teacher/jobs/:jobId')
   @Roles(RoleName.Teacher, RoleName.Admin)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @ApiOperation({ summary: 'Poll the status of a teacher AI generation job' })
   async getTeacherJobStatus(
     @Param('jobId', ParseUUIDPipe) jobId: string,
@@ -2487,18 +2749,23 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherJobAccess(jobId, user);
-    const result = await this.proxy.forward(
-      'DELETE',
-      `/teacher/jobs/${jobId}`,
-      user,
-    );
+    const removedFromQueue =
+      await this.aiGenerationQueueService.cancelQueuedLessonPlanJob(jobId);
+    const downstreamResponse = await this.proxy.forward('DELETE', `/teacher/jobs/${jobId}`, user);
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.generation_job.cancelled',
       targetType: 'ai_generation_job',
       targetId: jobId,
     });
-    return result;
+    if (removedFromQueue) {
+      return {
+        success: true,
+        message: 'Lesson plan generation cancelled before execution started',
+        data: { jobId, status: 'cancelled' },
+      };
+    }
+    return downstreamResponse;
   }
 
   @Get('index/classes/:classId/status')
@@ -2511,11 +2778,7 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherClassAccess(classId, user);
-    return this.proxy.forward(
-      'GET',
-      `/index/classes/${classId}/status`,
-      user,
-    );
+    return this.proxy.forward('GET', `/index/classes/${classId}/status`, user);
   }
 
   @Post('index/classes/:classId')

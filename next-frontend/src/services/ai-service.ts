@@ -15,6 +15,8 @@ import type {
   MentorExplainResponse,
   IndexingSummary,
   LessonPlanStructuredOutput,
+  QuizDraftApplyPreview,
+  QuizDraftApplyResponse,
   QuizDraftStructuredOutput,
   StudentTutorAnswerResponse,
   StudentTutorBootstrapResponse,
@@ -282,6 +284,31 @@ export const aiService = {
   async deleteTeacherJob(jobId: string): Promise<Envelope<AiGenerationJob>> {
     const { data } = await api.delete(`/ai/teacher/jobs/${jobId}`);
     return normalizeJobEnvelope(data);
+  },
+
+  async cancelQuizDraftJob(jobId: string): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.post(`/ai/teacher/quizzes/jobs/${jobId}/cancel`, {});
+    return normalizeJobEnvelope(data);
+  },
+
+  async retryQuizDraftJob(jobId: string): Promise<Envelope<AiGenerationJob>> {
+    const { data } = await api.post(`/ai/teacher/quizzes/jobs/${jobId}/retry`, {});
+    return normalizeJobEnvelope(data);
+  },
+
+  async previewQuizDraftApply(
+    jobId: string,
+  ): Promise<Envelope<QuizDraftApplyPreview>> {
+    const { data } = await api.post(
+      `/ai/teacher/quizzes/jobs/${jobId}/apply/preview`,
+      {},
+    );
+    return normalizeEnvelope<QuizDraftApplyPreview>(data);
+  },
+
+  async applyQuizDraft(jobId: string): Promise<Envelope<QuizDraftApplyResponse>> {
+    const { data } = await api.post(`/ai/teacher/quizzes/jobs/${jobId}/apply`, {});
+    return normalizeEnvelope<QuizDraftApplyResponse>(data);
   },
 
   async getQuizDraftJobResult(

@@ -60,6 +60,9 @@ const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
 const mockedLessonService = lessonService as jest.Mocked<typeof lessonService>;
 
 describe('StudentModuleDetailPage library downloads', () => {
+  const pptxMime =
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+
   beforeEach(() => {
     jest.clearAllMocks();
     pushMock.mockReset();
@@ -150,6 +153,76 @@ describe('StudentModuleDetailPage library downloads', () => {
 
     await waitFor(() => {
       expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith('item-file-1');
+    });
+  });
+
+  it('opens PPTX module files in the built-in deck viewer before downloading', async () => {
+    mockedModuleService.getByClassAndModule.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {
+        id: 'module-1',
+        classId: 'class-1',
+        title: 'Module 1',
+        description: 'Desc',
+        order: 1,
+        isVisible: true,
+        isLocked: false,
+        sections: [
+          {
+            id: 'section-1',
+            moduleId: 'module-1',
+            title: 'Section A',
+            order: 1,
+            items: [
+              {
+                id: 'item-pptx-1',
+                moduleSectionId: 'section-1',
+                itemType: 'file',
+                fileId: 'deck-file-1',
+                order: 1,
+                isVisible: true,
+                isRequired: false,
+                isGiven: true,
+                file: {
+                  id: 'deck-file-1',
+                  originalName: 'Quarter 1 Slides.pptx',
+                  mimeType: pptxMime,
+                  sizeBytes: 4096,
+                  scope: 'private',
+                },
+              },
+            ],
+          },
+        ],
+        gradingScaleEntries: [],
+      } as never,
+    });
+    mockedModuleService.downloadAttachedFile.mockResolvedValue(
+      new Blob(['not-a-real-pptx'], { type: pptxMime }),
+    );
+
+    const { rerender } = render(<StudentModuleDetailPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+    expect(pushMock).toHaveBeenCalledWith(
+      '/dashboard/student/classes/class-1/modules/module-1?fileItemId=item-pptx-1',
+    );
+
+    searchParamsMock.get.mockImplementation((key: string) =>
+      key === 'fileItemId' ? 'item-pptx-1' : null,
+    );
+    rerender(<StudentModuleDetailPage />);
+
+    expect(await screen.findByText('Deck Preview')).toBeInTheDocument();
+    expect(screen.getAllByText('Quarter 1 Slides.pptx')).toHaveLength(2);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith('item-pptx-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /Download deck/i }));
+
+    await waitFor(() => {
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
     });
   });
 

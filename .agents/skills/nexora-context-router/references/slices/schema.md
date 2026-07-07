@@ -7,7 +7,7 @@ Load this only for DB-shape or contract-shape work.
 - Persistent schema: `backend/src/drizzle/schema/*`
 - Migrations: `backend/drizzle/*`
 - Backend wiring root: `backend/src/app.module.ts`
-- Client contracts most likely to drift: `next-frontend/src/types/*`, `next-frontend/src/services/*`, `test-mobile/src/types/*`, `test-mobile/src/api/services/*`
+- Client contracts most likely to drift: `next-frontend/src/types/*`, `next-frontend/src/services/*`, `mobile/src/types/*`, `mobile/src/api/services/*`
 
 ## Workflow
 

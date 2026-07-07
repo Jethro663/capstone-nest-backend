@@ -42,6 +42,17 @@ export type InterventionQuizTrend =
   | 'unchanged'
   | 'awaiting_retry';
 
+export type InterventionComparisonScope = 'class_average' | 'assessment';
+
+export interface InterventionComparisonFilterOption {
+  id: string;
+  label: string;
+  assessmentId: string | null;
+  assessmentTitle: string | null;
+  assessmentType: string | null;
+  classRecordCategory: string | null;
+}
+
 export interface InterventionQuizComparisonRow {
   caseId: string;
   caseStatus: 'pending' | 'active' | 'completed' | 'dismissed';
@@ -56,12 +67,16 @@ export interface InterventionQuizComparisonRow {
   assignmentId: string;
   assessmentId: string;
   assessmentTitle: string;
+  comparisonScope: InterventionComparisonScope;
+  filterId: string;
   beforeAttemptId: string | null;
   beforeScorePercent: number | null;
   beforeSubmittedAt: string | Date | null;
+  beforeSampleSize: number;
   afterAttemptId: string | null;
   afterScorePercent: number | null;
   afterSubmittedAt: string | Date | null;
+  afterSampleSize: number;
   deltaScorePercent: number | null;
   trend: InterventionQuizTrend;
 }
@@ -73,6 +88,7 @@ export interface ClassInterventionQuizComparisonResponse {
   declinedCount: number;
   unchangedCount: number;
   awaitingRetryCount: number;
+  filterOptions: InterventionComparisonFilterOption[];
   comparisons: InterventionQuizComparisonRow[];
 }
 

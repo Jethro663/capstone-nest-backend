@@ -108,7 +108,8 @@ export class LessonsService {
               return null;
             }
             const item = { ...(entry as Record<string, unknown>) };
-            item.id = typeof item.id === 'string' ? item.id : `item-${index + 1}`;
+            item.id =
+              typeof item.id === 'string' ? item.id : `item-${index + 1}`;
             item.html =
               typeof item.html === 'string'
                 ? this.sanitizeOptionalRichText(item.html) || ''
@@ -127,8 +128,10 @@ export class LessonsService {
               return null;
             }
             const step = { ...(entry as Record<string, unknown>) };
-            step.id = typeof step.id === 'string' ? step.id : `step-${index + 1}`;
-            step.title = typeof step.title === 'string' ? step.title.trim() : '';
+            step.id =
+              typeof step.id === 'string' ? step.id : `step-${index + 1}`;
+            step.title =
+              typeof step.title === 'string' ? step.title.trim() : '';
             step.html =
               typeof step.html === 'string'
                 ? this.sanitizeOptionalRichText(step.html) || ''
@@ -140,9 +143,15 @@ export class LessonsService {
           .filter(Boolean);
       }
 
-      for (const key of ['scenarioHtml', 'answerHtml', 'takeawayHtml', 'promptHtml']) {
+      for (const key of [
+        'scenarioHtml',
+        'answerHtml',
+        'takeawayHtml',
+        'promptHtml',
+      ]) {
         if (typeof normalized[key] === 'string') {
-          normalized[key] = this.sanitizeOptionalRichText(normalized[key] as string) || '';
+          normalized[key] =
+            this.sanitizeOptionalRichText(normalized[key]) || '';
         }
       }
 
@@ -166,10 +175,13 @@ export class LessonsService {
       };
       const normalized: Record<string, unknown> = { ...content };
       if (typeof normalized.prompt === 'string') {
-        normalized.prompt = this.sanitizeOptionalRichText(normalized.prompt) || '';
+        normalized.prompt =
+          this.sanitizeOptionalRichText(normalized.prompt) || '';
       }
       if (typeof normalized.answerType === 'string') {
-        normalized.answerType = this.normalizeQuestionAnswerType(normalized.answerType);
+        normalized.answerType = this.normalizeQuestionAnswerType(
+          normalized.answerType,
+        );
       }
 
       const choices = Array.isArray(normalized.choices)
@@ -178,7 +190,10 @@ export class LessonsService {
               if (typeof entry === 'string') {
                 const html = this.sanitizeOptionalRichText(entry) || '';
                 return html.trim()
-                  ? ({ id: `choice-${index + 1}`, html } satisfies SanitizedChoice)
+                  ? ({
+                      id: `choice-${index + 1}`,
+                      html,
+                    } satisfies SanitizedChoice)
                   : null;
               }
 
@@ -196,7 +211,10 @@ export class LessonsService {
               if (!html.trim()) return null;
               return {
                 ...choice,
-                id: typeof choice.id === 'string' ? choice.id : `choice-${index + 1}`,
+                id:
+                  typeof choice.id === 'string'
+                    ? choice.id
+                    : `choice-${index + 1}`,
                 html,
               } satisfies SanitizedChoice;
             })
@@ -212,17 +230,23 @@ export class LessonsService {
 
   private sanitizeLessonBlockMetadata(metadata: unknown, blockType: string) {
     if (metadata === undefined || metadata === null) return metadata;
-    if (typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+    if (typeof metadata !== 'object' || Array.isArray(metadata))
+      return metadata;
 
     const normalized = { ...metadata } as Record<string, unknown>;
 
-    if (blockType === 'question' && typeof normalized.explanation === 'string') {
-      normalized.explanation = this.sanitizeOptionalRichText(normalized.explanation) || '';
+    if (
+      blockType === 'question' &&
+      typeof normalized.explanation === 'string'
+    ) {
+      normalized.explanation =
+        this.sanitizeOptionalRichText(normalized.explanation) || '';
     }
 
     if (blockType === 'question' && Array.isArray(normalized.correctAnswers)) {
       normalized.correctAnswers = normalized.correctAnswers.filter(
-        (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0,
+        (entry): entry is string =>
+          typeof entry === 'string' && entry.trim().length > 0,
       );
     }
 
@@ -242,7 +266,10 @@ export class LessonsService {
           ? this.sanitizeQuestionBlockContent(content)
           : content;
 
-    const sanitizedMetadata = this.sanitizeLessonBlockMetadata(metadata, effectiveType);
+    const sanitizedMetadata = this.sanitizeLessonBlockMetadata(
+      metadata,
+      effectiveType,
+    );
 
     return { sanitizedContent, sanitizedMetadata };
   }
@@ -515,7 +542,11 @@ export class LessonsService {
         .values({
           title: createLessonDto.title,
           ...(createLessonDto.description !== undefined
-            ? { description: this.sanitizeOptionalRichText(createLessonDto.description) }
+            ? {
+                description: this.sanitizeOptionalRichText(
+                  createLessonDto.description,
+                ),
+              }
             : {}),
           classId: createLessonDto.classId,
           order: createLessonDto.order ?? nextOrder,
@@ -1035,11 +1066,12 @@ export class LessonsService {
       'auto',
       'Auto snapshot before block add',
     );
-    const { sanitizedContent, sanitizedMetadata } = this.sanitizeLessonBlockForStorage(
-      createBlockDto.type,
-      createBlockDto.content,
-      createBlockDto.metadata,
-    );
+    const { sanitizedContent, sanitizedMetadata } =
+      this.sanitizeLessonBlockForStorage(
+        createBlockDto.type,
+        createBlockDto.content,
+        createBlockDto.metadata,
+      );
 
     const [newBlock] = await this.db
       .insert(lessonContentBlocks)
@@ -1104,7 +1136,10 @@ export class LessonsService {
       updateData.type = updateBlockDto.type as any;
     if (updateBlockDto.order !== undefined)
       updateData.order = updateBlockDto.order;
-    if (updateBlockDto.content !== undefined || updateBlockDto.metadata !== undefined) {
+    if (
+      updateBlockDto.content !== undefined ||
+      updateBlockDto.metadata !== undefined
+    ) {
       const sanitizedBlock = this.sanitizeLessonBlockForStorage(
         effectiveType,
         updateBlockDto.content,

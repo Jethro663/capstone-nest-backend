@@ -54,9 +54,9 @@ describe('AiProxyService', () => {
 
   it('uses the extraction timeout for non-chat non-quiz paths', () => {
     expect((service as any).resolveTimeoutMs('/extract')).toBe(300000);
-    expect((service as any).resolveTimeoutMs('/index/classes/class-1/status')).toBe(
-      300000,
-    );
+    expect(
+      (service as any).resolveTimeoutMs('/index/classes/class-1/status'),
+    ).toBe(300000);
   });
 
   it('converts AI service connection failures into a clear 503', async () => {
@@ -163,9 +163,11 @@ describe('AiProxyService', () => {
       jest.advanceTimersByTime(60_000);
 
       // Next request should attempt fetch (HALF_OPEN)
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        );
 
       await service.forward('GET', '/test', { id: '1', roles: [] });
       expect(globalThis.fetch).toHaveBeenCalled();
@@ -187,9 +189,11 @@ describe('AiProxyService', () => {
 
       jest.advanceTimersByTime(60_000);
 
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        );
 
       await service.forward('GET', '/test', { id: '1', roles: [] });
       expect(service.getCircuitBreakerState().state).toBe('CLOSED');
@@ -242,9 +246,11 @@ describe('AiProxyService', () => {
       expect(service.getCircuitBreakerState().consecutiveFailures).toBe(4);
 
       // Success resets counter
-      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      );
+      jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        );
       await service.forward('GET', '/test', { id: '1', roles: [] });
 
       expect(service.getCircuitBreakerState().consecutiveFailures).toBe(0);
@@ -253,7 +259,9 @@ describe('AiProxyService', () => {
 
     it('does not trip on 4xx responses from AI service', async () => {
       jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-        new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
+        new Response(JSON.stringify({ detail: 'not found' }), {
+          status: 404,
+        }),
       );
 
       try {

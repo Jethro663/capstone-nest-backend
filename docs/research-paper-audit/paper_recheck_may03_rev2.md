@@ -19,12 +19,12 @@ Verdict: **Close, but still needs one short accuracy pass before panel.**
 - Location: Chapter 4, Figures 8 and 9
 - Approx. page: Approx. pp. 102-104
 - Exact issue: Figure 8 claims mobile OTP verification and mandatory first-login password update, while Figure 9 claims mobile forgot-password and account-recovery flows with reset-link handling.
-- Why it matters: The current `test-mobile` app does not expose OTP verification, password-reset, or account-recovery screens. Its auth stack contains only a `Login` route, and the login screen literally says `Forgot password? Contact your administrator`.
+- Why it matters: The current `mobile` app does not expose OTP verification, password-reset, or account-recovery screens. Its auth stack contains only a `Login` route, and the login screen literally says `Forgot password? Contact your administrator`.
 - Evidence:
   - Research paper: docs/research-paper-audit/extracted/full_text.txt:545-564
-  - Repo: test-mobile/src/navigation/types.ts -> AuthStackParamList only contains `Login`
-  - Repo: test-mobile/src/screens/LoginScreen.tsx:431 -> `Forgot password? Contact your administrator`
-  - Repo search: no OTP or mobile reset/account-recovery screens found under test-mobile/src
+  - Repo: mobile/src/navigation/types.ts -> AuthStackParamList only contains `Login`
+  - Repo: mobile/src/screens/LoginScreen.tsx:431 -> `Forgot password? Contact your administrator`
+  - Repo search: no OTP or mobile reset/account-recovery screens found under mobile/src
 - Correction: Rewrite Figures 8 and 9 to match the actual mobile login flow, or explicitly move OTP and password-recovery logic to the web-only or future-scope section.
 
 ### R2-002 - Major
@@ -45,7 +45,7 @@ Verdict: **Close, but still needs one short accuracy pass before panel.**
 - Evidence:
   - Research paper: docs/research-paper-audit/extracted/full_text.txt:567-568
   - Repo: backend/src/drizzle/schema/base.schema.ts -> `lesson_completions` table and separate `assessment_attempts.time_spent_seconds` field
-  - Repo: test-mobile/src/screens/AssessmentTakeScreen.tsx:190 submits `timeSpentSeconds` for an assessment attempt
+  - Repo: mobile/src/screens/AssessmentTakeScreen.tsx:190 submits `timeSpentSeconds` for an assessment attempt
 - Correction: Rewrite Figure 11 to describe lesson completion/progress honestly, or explicitly say the timing metric belongs to assessment attempts rather than module interaction.
 
 ### R2-004 - Moderate

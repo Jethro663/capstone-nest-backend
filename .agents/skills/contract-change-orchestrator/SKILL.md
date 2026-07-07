@@ -33,7 +33,7 @@ Coordinate contract changes from the backend source of truth out to every real c
    - AI proxy shape -> backend AI proxy plus `ai-service/app/schemas.py` or route handlers
 2. Enumerate downstream consumers before editing:
    - `next-frontend/src/services/*`, `src/types/*`, `src/schemas/*`
-   - `test-mobile/src/api/services/*`, `src/types/*`, screen expectations
+   - `mobile/src/api/services/*`, `src/types/*`, screen expectations
    - `ai-service/app/*` when backend-to-AI headers, paths, or envelopes change
 3. Change the backend source of truth first.
 4. Update every affected consumer in the same pass. Do not stop at backend if the contract escaped backend.

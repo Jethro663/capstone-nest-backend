@@ -81,6 +81,15 @@ function normalizeGradingInput(rawValue: string): number | string | null {
   return Number.isFinite(value) && Number.isInteger(value) ? value : null;
 }
 
+function normalizeSubjectKey(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getTeacherDisplayName(teacher: Pick<User, 'firstName' | 'lastName' | 'email'>) {
+  const fullName = `${teacher.firstName || ''} ${teacher.lastName || ''}`.trim();
+  return fullName || teacher.email || 'Unnamed Teacher';
+}
+
 export type ClassFormValues = {
   subjectName: string;
   subjectCode: string;
@@ -146,6 +155,8 @@ export default function ClassForm({
 }: ClassFormProps) {
   const [form, setForm] = useState<ClassFormValues>(initialValues);
   const [existingSlots, setExistingSlots] = useState<ExistingScheduleSlot[]>([]);
+  const [sectionAssignments, setSectionAssignments] = useState<ClassItem[]>([]);
+  const [loadingSectionAssignments, setLoadingSectionAssignments] = useState(false);
   const [loadingSection, setLoadingSection] = useState(false);
   const [gradingProfile, setGradingProfile] =
     useState<GradingProfile>(DEFAULT_GRADING_PROFILE);
@@ -243,6 +254,75 @@ export default function ClassForm({
   const selectedSection = useMemo(
     () => sections.find((section) => section.id === form.sectionId),
     [form.sectionId, sections],
+  );
+  useEffect(() => {
+    let mounted = true;
+
+    if (!form.sectionId || !form.schoolYear) {
+      setSectionAssignments([]);
+      setLoadingSectionAssignments(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const fetchSectionAssignments = async () => {
+      try {
+        setLoadingSectionAssignments(true);
+        const res = await classService.getAll({
+          sectionId: form.sectionId,
+          schoolYear: form.schoolYear,
+          isActive: 'true',
+          page: 1,
+          limit: 200,
+        });
+        if (!mounted) return;
+        const assignedClasses = (res.data?.data || []).filter(
+          (classItem) => !editingClassId || classItem.id !== editingClassId,
+        );
+        setSectionAssignments(assignedClasses);
+      } catch {
+        if (mounted) setSectionAssignments([]);
+      } finally {
+        if (mounted) setLoadingSectionAssignments(false);
+      }
+    };
+
+    void fetchSectionAssignments();
+
+    return () => {
+      mounted = false;
+    };
+  }, [editingClassId, form.schoolYear, form.sectionId]);
+
+  const assignedSubjectNames = useMemo(() => {
+    const subjectNames = new Set<string>();
+    sectionAssignments.forEach((classItem) => {
+      const subjectKey = normalizeSubjectKey(classItem.subjectName || '');
+      if (subjectKey) subjectNames.add(subjectKey);
+    });
+    return subjectNames;
+  }, [sectionAssignments]);
+
+  const assignedTeacherIds = useMemo(() => {
+    const teacherIds = new Set<string>();
+    sectionAssignments.forEach((classItem) => {
+      if (classItem.teacherId) teacherIds.add(classItem.teacherId);
+    });
+    return teacherIds;
+  }, [sectionAssignments]);
+
+  const isSubjectUnavailable = (subjectName: string) =>
+    Boolean(form.sectionId && assignedSubjectNames.has(normalizeSubjectKey(subjectName)));
+
+  const isTeacherUnavailable = (teacherId: string) =>
+    Boolean(form.sectionId && assignedTeacherIds.has(teacherId));
+
+  const selectedSubjectUnavailable = Boolean(
+    form.subjectName && isSubjectUnavailable(form.subjectName),
+  );
+  const selectedTeacherUnavailable = Boolean(
+    form.teacherId && isTeacherUnavailable(form.teacherId),
   );
   const sectionRoomNumber = selectedSection?.roomNumber?.trim() ?? '';
   const sectionHasAssignedRoom = Boolean(sectionRoomNumber);
@@ -376,7 +456,11 @@ export default function ClassForm({
       return Number.isInteger(profileValue) && profileValue > 0;
     }) &&
     gradingTotal === 100;
-  const isCreateBlocked = isEditingGrading || !isGradingProfileValid;
+  const isCreateBlocked =
+    isEditingGrading ||
+    !isGradingProfileValid ||
+    selectedSubjectUnavailable ||
+    selectedTeacherUnavailable;
 
   const canSaveGrading = isGradingProfileValid;
 
@@ -435,6 +519,15 @@ export default function ClassForm({
       toast.error('Section and teacher are required');
       return;
     }
+
+    if (selectedSubjectUnavailable) {
+      toast.error('This subject already exists in the selected section. Choose another subject.');
+      return;
+    }
+    if (selectedTeacherUnavailable) {
+      toast.error('This teacher already has a class in the selected section. Choose another teacher.');
+      return;
+    }
     if (sectionRequiresRoomAssignment) {
       toast.error(
         'Selected section has no assigned room. Assign a room in section setup first.',
@@ -479,12 +572,33 @@ export default function ClassForm({
               className={SELECT_CLS}
             >
               <option value="">Select subject</option>
-              {subjectOptions.map((subject) => (
-                <option key={subject} value={subject}>
-                  {subject}
-                </option>
-              ))}
+              {subjectOptions.map((subject) => {
+                const unavailable = isSubjectUnavailable(subject);
+                return (
+                  <option key={subject} value={subject} disabled={unavailable}>
+                    {subject}{unavailable ? ' (already in this section)' : ''}
+                  </option>
+                );
+              })}
             </select>
+
+            {form.sectionId ? (
+              <p
+                className={`text-[11px] ${
+                  selectedSubjectUnavailable
+                    ? 'font-semibold text-red-600'
+                    : 'text-[var(--admin-text-muted)]'
+                }`}
+              >
+                {loadingSectionAssignments
+                  ? 'Checking subjects already assigned to this section...'
+                  : selectedSubjectUnavailable
+                    ? 'This subject is already assigned in the selected section.'
+                    : assignedSubjectNames.size > 0
+                      ? `${assignedSubjectNames.size} subject${assignedSubjectNames.size === 1 ? ' is' : 's are'} already assigned here and disabled.`
+                      : 'All subject options are available for this section.'}
+              </p>
+            ) : null}
 
             {onTemplateChange ? (
               <div className="rounded-xl border border-[var(--admin-outline)] bg-[#f8fbff] p-3">
@@ -597,12 +711,32 @@ export default function ClassForm({
             className={SELECT_CLS}
           >
             <option value="">Select teacher</option>
-            {teachers.map((teacher) => (
-              <option key={teacher.id} value={teacher.id}>
-                {teacher.firstName} {teacher.lastName}
-              </option>
-            ))}
+            {teachers.map((teacher) => {
+              const unavailable = isTeacherUnavailable(teacher.id);
+              return (
+                <option key={teacher.id} value={teacher.id} disabled={unavailable}>
+                  {getTeacherDisplayName(teacher)}{unavailable ? ' (already assigned in this section)' : ''}
+                </option>
+              );
+            })}
           </select>
+          {form.sectionId ? (
+            <p
+              className={`text-[11px] ${
+                selectedTeacherUnavailable
+                  ? 'font-semibold text-red-600'
+                  : 'text-[var(--admin-text-muted)]'
+              }`}
+            >
+              {loadingSectionAssignments
+                ? 'Checking teachers already assigned to this section...'
+                : selectedTeacherUnavailable
+                  ? 'This teacher already has a class in the selected section.'
+                  : assignedTeacherIds.size > 0
+                    ? `${assignedTeacherIds.size} teacher${assignedTeacherIds.size === 1 ? ' is' : 's are'} already assigned here and disabled.`
+                    : 'All teachers are available for this section.'}
+            </p>
+          ) : null}
         </Field>
       </div>
 

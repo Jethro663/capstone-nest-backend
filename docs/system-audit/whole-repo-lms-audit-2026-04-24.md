@@ -4,7 +4,7 @@
 - Repo: `C:\Users\jethr\Desktop\capstone-nest-react-lms`
 - Audit date: 2026-04-24
 - Live scope: `backend`, `next-frontend`, `ai-service`
-- Out of live scope for this pass: `test-mobile` execution, except where concept-paper coverage depends on it
+- Out of live scope for this pass: `mobile` execution, except where concept-paper coverage depends on it
 - Method: code inventory, seeded-account browser sweeps, build/test baselines, performance smokes, and AI-service probes
 
 ## Executive Summary
@@ -13,6 +13,7 @@
 - AI-service readiness, import probe, and Python test suite are healthy.
 - Admin, teacher, and student seeded web logins work.
 - Sidebar route sweeps for admin, teacher, and student returned `200` with no console errors and no failed non-static requests on the swept routes.
+- Remediation note (2026-06-17): `next-frontend/scripts/engine-perf-smoke.js` was updated to the current template-workspace controls, and `next-frontend/scripts/discussion-perf-smoke.js` was hardened to discover current class routes instead of relying on stale seeded IDs. Treat findings 1-2 below as historical until the smoke suite is rerun.
 - The highest-signal remaining issues are:
   1. `perf:engine-smoke` is out of sync with the current admin template workspace because the expected `Export Engine YAML` control is no longer visible there.
   2. `perf:discussion-smoke` is stable for teacher, but its student leg timed out on 2026-04-24 and needs script hardening.

@@ -78,7 +78,7 @@ findings = [
         "evidence": [
             "Research paper: docs/research-paper-audit/extracted/full_text.txt:563-564",
             "Repo: backend/src/drizzle/schema/base.schema.ts shows lesson_completions and separately assessment_attempts with time_spent_seconds",
-            "Repo: test-mobile/src/screens/AssessmentTakeScreen.tsx: timeSpentSeconds is submitted for assessments",
+            "Repo: mobile/src/screens/AssessmentTakeScreen.tsx: timeSpentSeconds is submitted for assessments",
         ],
         "correction": "Rewrite Figure 11 to describe the actual lesson completion/progress logic, or explicitly tie `timeSpentSeconds` to assessments rather than module viewing.",
     },
@@ -293,8 +293,8 @@ def build_docx():
     add_bullets(doc, [
         "Web frontend version: `next-frontend/package.json` -> Next `^16.2.4`, React `19.2.3`.",
         "Implemented grade levels: `backend/src/common/utils/grade-level.util.ts` and `backend/src/drizzle/schema/base.schema.ts` -> `7`, `8`, `9`, `10`.",
-        "Teacher mobile limitation: `test-mobile/src/screens/TeacherUnsupportedScreen.tsx`.",
-        "Mobile discussion limitation: `test-mobile/src/screens/ClassDetailScreen.tsx`.",
+        "Teacher mobile limitation: `mobile/src/screens/TeacherUnsupportedScreen.tsx`.",
+        "Mobile discussion limitation: `mobile/src/screens/ClassDetailScreen.tsx`.",
         "Intervention threshold: `backend/src/modules/lxp/lxp.service.ts` -> `INTERVENTION_THRESHOLD = 74`.",
         "Profile locking reality: `next-frontend/src/components/profile/StudentProfilePage.tsx`.",
         "Swagger path: `backend/src/main.ts` -> `SwaggerModule.setup('api', ...)`.",

@@ -241,10 +241,9 @@ export const classTemplateEngineChunks = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
-    templateOrderIdx: index('class_template_engine_chunks_template_order_idx').on(
-      table.templateId,
-      table.chunkOrder,
-    ),
+    templateOrderIdx: index(
+      'class_template_engine_chunks_template_order_idx',
+    ).on(table.templateId, table.chunkOrder),
     sourceIdx: index('class_template_engine_chunks_source_idx').on(
       table.templateId,
       table.sourceType,

@@ -82,7 +82,7 @@ CREATE DATABASE capstone;
 Or, using a GUI tool like **pgAdmin** or **DBeaver**:
 - Create a new database named `capstone`
 - Make sure the server is running on `localhost:5432`
-- Default credentials: `postgres` / `password`
+- Use your own local PostgreSQL user/password; do not rely on shared or copied defaults.
 
 ### Step 2: Verify Connection
 
@@ -96,24 +96,22 @@ If successful, you should see the `capstone=#` prompt. Exit with `\q`.
 
 ### Step 3: Run Drizzle Migrations
 
-The schema is defined in `src/drizzle/schema/` using Drizzle ORM.
+The database schema is defined strictly in `src/drizzle/schema/` using Drizzle ORM.
+We use a **linear forward-only baseline migration architecture**. All legacy migrations have been squashed into a single active baseline (`drizzle/0000_baseline_nexora.sql`).
 
-Generate and push the current schema:
+To verify migration integrity and apply active migrations locally:
 
 ```bash
-npx drizzle-kit generate:pg
-npx drizzle-kit push:pg
+npm run check:migrations
+node run-migrations.js
 ```
 
 **What this does:**
-- `generate:pg`: Creates migration files based on schema changes
-- `push:pg`: Applies migrations directly to the database
+- `check:migrations`: Verifies that all `.sql` files in `drizzle/` are linearly sequenced and registered in `meta/_journal.json`.
+- `run-migrations.js`: Applies journal-listed migrations inside safe savepoint transactions and records them in `_applied_migrations`.
 
-**Expected Output:**
-```
-✓ Migrations generated successfully
-✓ Migrations applied successfully
-```
+> [!IMPORTANT]
+> **Railway & Live Environment Cutovers:** When deploying to an existing populated database that already has legacy tables, you can run the runner in explicit stamp mode by setting `MIGRATION_BASELINE_STAMP_ONLY=true`. This stamps `0000_baseline_nexora.sql` into `_applied_migrations` without replaying table creation commands. Note that `run-migrations.js` also includes an automatic failsafe that detects existing legacy databases and stamps the baseline seamlessly. Do NOT use `drizzle-kit push` on shared or deployed environments.
 
 ---
 
@@ -121,15 +119,15 @@ npx drizzle-kit push:pg
 
 ### Step 1: Create `.env` File
 
-Create a `.env` file in the `backend/` directory with the following content:
+Create a `.env` file in the `backend/` directory with project-specific secrets. Start from placeholders like these and replace every `CHANGE_ME_*` value before running the app:
 
 ```env
 # ===== DATABASE =====
-DATABASE_URL=postgresql://postgres:200411@localhost:5432/capstone
+DATABASE_URL=postgresql://postgres:CHANGE_ME_DB_PASSWORD@localhost:5432/capstone
 
 # ===== JWT SECRETS =====
-JWT_SECRET=36595a92b327457e615656bd28107c7f15c588f4ab4035a29734011f508e1371
-JWT_REFRESH_SECRET=5d7f0c94d3568445e4ebff893c31596f328967d57151ca1d8ceed6651ad6b7a4
+JWT_SECRET=CHANGE_ME_JWT_SECRET
+JWT_REFRESH_SECRET=CHANGE_ME_JWT_REFRESH_SECRET
 
 # ===== SERVER =====
 PORT=3000
@@ -144,11 +142,11 @@ EMAIL_FROM=Nexora LMS <your-email@gmail.com>
 
 ### Step 2: Customize Variables
 
-Replace the following with your actual values:
+Replace the following with your actual values. Treat every value here as a placeholder and URL-encode special characters in database passwords:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:password@host:port/dbname` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:URL_ENCODED_PASSWORD@host:port/dbname` |
 | `JWT_SECRET` | Secret for signing JWT tokens | Generate with: `openssl rand -hex 32` |
 | `JWT_REFRESH_SECRET` | Secret for refresh tokens | Generate with: `openssl rand -hex 32` |
 | `PORT` | Server port | `3000` |
@@ -222,7 +220,7 @@ node seed-database.js
 
 ### Step 2: What Gets Created
 
-The seed script automatically creates:
+The seed script automatically creates local demo data for development:
 
 **Roles:**
 - ✅ Admin role
@@ -230,20 +228,11 @@ The seed script automatically creates:
 - ✅ Student role
 
 **Users:**
-- ✅ Admin user
-  - Email: `admin@lms.local`
-  - Password: `Admin123!`
-  - Role: Admin
+- ✅ Demo admin user
+- ✅ Demo teacher user
+- ✅ Demo student user
 
-- ✅ Teacher user
-  - Email: `teacher@lms.local`
-  - Password: `Teacher123!`
-  - Role: Teacher
-
-- ✅ Student user
-  - Email: `student@lms.local`
-  - Password: `Student123!`
-  - Role: Student
+Inspect `seed-database.js` or the seed script output for the current local-only demo credentials instead of copying credentials from documentation.
 
 **Academic Structure:**
 - ✅ Section: "Grade 7 - Section A"
@@ -269,9 +258,9 @@ The seed script automatically creates:
 ✅ [10:30:15]   ✓ Role 'teacher' created
 ✅ [10:30:15]   ✓ Role 'student' created
 ℹ️  [10:30:15] Creating users...
-✅ [10:30:16]   ✓ Admin user created (admin@lms.local)
-✅ [10:30:16]   ✓ Teacher user created (teacher@lms.local)
-✅ [10:30:16]   ✓ Student user created (student@lms.local)
+✅ [10:30:16]   ✓ Demo admin user created
+✅ [10:30:16]   ✓ Demo teacher user created
+✅ [10:30:16]   ✓ Demo student user created
 ℹ️  [10:30:16] Assigning roles to users...
 ✅ [10:30:16]   ✓ Admin role assigned
 ✅ [10:30:16]   ✓ Teacher role assigned
@@ -290,20 +279,20 @@ DATABASE SEEDING COMPLETED SUCCESSFULLY!
 
 ### Step 4: Customize Seed Data
 
-Edit `seed-database.js` to change default users, password, or section/class data:
+Edit `seed-database.js` to change local demo users, passwords, or section/class data:
 
 ```javascript
 // Line ~20-50: Customize these objects
 const ADMIN_USER = {
-  email: 'admin@lms.local',
-  password: 'Admin123!',
+  email: 'change-me-admin@lms.local',
+  password: 'CHANGE_ME_ADMIN_PASSWORD',
   firstName: 'System',
   lastName: 'Admin',
 };
 
 const TEACHER_USER = {
-  email: 'teacher@lms.local',
-  password: 'Teacher123!',
+  email: 'change-me-teacher@lms.local',
+  password: 'CHANGE_ME_TEACHER_PASSWORD',
   firstName: 'John',
   lastName: 'Doe',
 };
@@ -381,7 +370,7 @@ backend/
 Once the server is running, access the interactive API documentation:
 
 ```
-http://localhost:3000/api/docs
+http://localhost:3000/api
 ```
 
 This provides:
@@ -410,8 +399,8 @@ Authorization: Bearer <your-jwt-token>
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@lms.local",
-    "password": "Admin123!"
+    "email": "<seeded-admin-email>",
+    "password": "<seeded-admin-password>"
   }'
 ```
 
@@ -448,7 +437,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 | POST | `/assessments` | Create assessment |
 | POST | `/assessments/:id/submit` | Submit assessment |
 
-Full documentation available at `/api/docs` when server is running.
+Full documentation available at `/api` when server is running.
 
 ---
 
@@ -595,7 +584,7 @@ npm run
 4. ✅ Run migrations: `npx drizzle-kit push:pg`
 5. ✅ Seed database: `node seed-database.js`
 6. ✅ Start server: `npm run start:dev`
-7. ✅ Test API at `http://localhost:3000/api/docs`
+7. ✅ Test API at `http://localhost:3000/api`
 
 ---
 

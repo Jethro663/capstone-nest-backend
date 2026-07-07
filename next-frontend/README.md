@@ -1,47 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Nexora Web Frontend
 
-## Getting Started
+Next.js 16 App Router web client for Nexora LMS/LXP.
 
-First, run the development server:
+## What It Does
+
+This app provides the main browser experience for:
+
+- public landing and guided demo flows
+- auth, profile completion, and session bootstrap
+- admin dashboards for users, classes, sections, reports, audits, templates, and settings
+- teacher dashboards for classes, lessons, modules, assessments, interventions, performance, library, and reports
+- student dashboards for classes, lessons, assessments, JA, LXP, transcript, performance, calendar, and announcements
+
+The app talks to backend `/api` routes through a local rewrite rather than calling the Python AI service directly.
+
+## Common Commands
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
-
-Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
-
-## Demo Runs
-
-For demos, prefer the production path instead of the live dev server:
-
-```bash
+npm run dev:smoke
 npm run build
 npm run start
+npm run lint
+npm run test
+npm run test:e2e
 ```
 
-Use `npm run dev` for day-to-day editing. `npm run dev:webpack` is kept only as a fallback when Turbopack-specific debugging is needed.
+Default local URL: `http://localhost:3001`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Runtime Notes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `next.config.ts` rewrites `/api/:path*` to the backend origin.
+- `proxy.ts` performs high-level public/protected route gating.
+- `src/lib/api-client.ts` keeps the access token in memory and relies on backend refresh cookies for web session recovery.
 
-## Learn More
+## Important App Paths
 
-To learn more about Next.js, take a look at the following resources:
+- root layout: `app/layout.tsx`
+- protected shell: `app/(dashboard)/layout.tsx`
+- auth routes: `app/(auth)/`
+- admin pages: `app/(dashboard)/dashboard/admin/`
+- teacher pages: `app/(dashboard)/dashboard/teacher/`
+- student pages: `app/(dashboard)/dashboard/student/`
+- service wrappers: `src/services/`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment Inputs
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Commonly used values:
 
-## Deploy on Vercel
+- `NEXT_PUBLIC_API_URL`
+- `BACKEND_INTERNAL_URL`
+- `API_INTERNAL_URL`
+- `NEXT_PUBLIC_WS_URL`
+- `PLAYWRIGHT_BASE_URL`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+For Docker builds, see `next-frontend/Dockerfile` and root `docker-compose.yml`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Verification Notes
+
+- `npm run test` runs Jest unit/integration tests
+- `npm run test:e2e` runs Playwright browser tests
+- `npm run dev:smoke` boots the dev server and checks the local health route
+- perf scripts under `scripts/` are targeted operator/debugging tools, not the main development loop

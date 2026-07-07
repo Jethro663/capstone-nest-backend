@@ -54,7 +54,13 @@ describe('LibraryFileValidationPipe image support', () => {
     header = PNG_MAGIC;
     webpTag = Buffer.alloc(4);
     mockReadSync.mockImplementation(
-      (_fd: number, buffer: Buffer, _offset: number, length: number, position: number) => {
+      (
+        _fd: number,
+        buffer: Buffer,
+        _offset: number,
+        length: number,
+        position: number,
+      ) => {
         const source = position === 8 ? webpTag : header;
         source.copy(buffer);
         return Math.min(length, source.length);
@@ -63,10 +69,26 @@ describe('LibraryFileValidationPipe image support', () => {
   });
 
   it('classifies supported image extensions as image library files', () => {
-    expect(getLibraryFileKind(makeFile({ originalname: 'photo.jpg', mimetype: 'image/jpeg' }))).toBe('image');
-    expect(getLibraryFileKind(makeFile({ originalname: 'photo.jpeg', mimetype: 'image/jpeg' }))).toBe('image');
-    expect(getLibraryFileKind(makeFile({ originalname: 'diagram.png', mimetype: 'image/png' }))).toBe('image');
-    expect(getLibraryFileKind(makeFile({ originalname: 'graphic.webp', mimetype: 'image/webp' }))).toBe('image');
+    expect(
+      getLibraryFileKind(
+        makeFile({ originalname: 'photo.jpg', mimetype: 'image/jpeg' }),
+      ),
+    ).toBe('image');
+    expect(
+      getLibraryFileKind(
+        makeFile({ originalname: 'photo.jpeg', mimetype: 'image/jpeg' }),
+      ),
+    ).toBe('image');
+    expect(
+      getLibraryFileKind(
+        makeFile({ originalname: 'diagram.png', mimetype: 'image/png' }),
+      ),
+    ).toBe('image');
+    expect(
+      getLibraryFileKind(
+        makeFile({ originalname: 'graphic.webp', mimetype: 'image/webp' }),
+      ),
+    ).toBe('image');
   });
 
   it('accepts a PNG upload with a valid image signature', async () => {
@@ -79,22 +101,32 @@ describe('LibraryFileValidationPipe image support', () => {
   it('accepts a WEBP upload with a valid RIFF WEBP signature', async () => {
     header = WEBP_RIFF;
     webpTag = WEBP_TAG;
-    const file = makeFile({ originalname: 'graphic.webp', mimetype: 'image/webp' });
+    const file = makeFile({
+      originalname: 'graphic.webp',
+      mimetype: 'image/webp',
+    });
 
     await expect(pipe.transform(file)).resolves.toBe(file);
   });
 
   it('rejects spoofed images and removes the temporary file', async () => {
     header = PDF_MAGIC;
-    const file = makeFile({ originalname: 'diagram.png', mimetype: 'image/png' });
+    const file = makeFile({
+      originalname: 'diagram.png',
+      mimetype: 'image/png',
+    });
 
-    await expect(pipe.transform(file)).rejects.toThrow(UnsupportedMediaTypeException);
+    await expect(pipe.transform(file)).rejects.toThrow(
+      UnsupportedMediaTypeException,
+    );
     expect(mockUnlink).toHaveBeenCalledWith(path.resolve(file.path));
   });
 
   it('rejects unsupported image types such as GIF', async () => {
     expect(() =>
-      getLibraryFileKind(makeFile({ originalname: 'animation.gif', mimetype: 'image/gif' })),
+      getLibraryFileKind(
+        makeFile({ originalname: 'animation.gif', mimetype: 'image/gif' }),
+      ),
     ).toThrow(UnsupportedMediaTypeException);
   });
 });

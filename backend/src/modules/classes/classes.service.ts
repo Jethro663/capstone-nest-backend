@@ -152,7 +152,8 @@ export class ClassesService {
   }
 
   private normalizeTemplateAssessmentType(type: unknown) {
-    const normalized = typeof type === 'string' ? type.trim().toLowerCase() : '';
+    const normalized =
+      typeof type === 'string' ? type.trim().toLowerCase() : '';
 
     if (CLASS_ASSESSMENT_TYPES.has(normalized as any)) {
       return normalized as 'quiz' | 'exam' | 'assignment' | 'file_upload';
@@ -270,7 +271,8 @@ export class ClassesService {
   }) {
     return {
       writtenWork: Number(
-        classRecord.writtenWorkGradingWeight ?? DEFAULT_GRADING_PROFILE.writtenWork,
+        classRecord.writtenWorkGradingWeight ??
+          DEFAULT_GRADING_PROFILE.writtenWork,
       ),
       performanceTask: Number(
         classRecord.performanceTaskGradingWeight ??
@@ -342,6 +344,12 @@ export class ClassesService {
     if (filters?.subjectName) {
       whereConditions.push(
         ilike(classes.subjectName, `%${filters.subjectName}%`),
+      );
+    }
+
+    if (filters?.subjectGradeLevel) {
+      whereConditions.push(
+        eq(classes.subjectGradeLevel, filters.subjectGradeLevel),
       );
     }
 
@@ -481,6 +489,15 @@ export class ClassesService {
 
       if (!isAdmin && !isTeacher && !isStudent) {
         throw new ForbiddenException('You do not have access to this class');
+      }
+
+      if (
+        !isAdmin &&
+        (!classRecord.isActive || classRecord.section?.isActive === false)
+      ) {
+        throw new ForbiddenException(
+          'This class is archived and temporarily inactive.',
+        );
       }
 
       if (isTeacher && !isAdmin && classRecord.teacherId !== requesterId) {
@@ -776,26 +793,27 @@ export class ClassesService {
 
     const templateAssessmentIds = templateAssessments.map((entry) => entry.id);
     const templateLessonIds = templateLessons.map((entry) => entry.id);
-    const [templateAssessmentQuestions, templateLessonBlocks] = await Promise.all([
-      templateAssessmentIds.length
-        ? database.query.classTemplateAssessmentQuestions.findMany({
-            where: inArray(
-              classTemplateAssessmentQuestions.templateAssessmentId,
-              templateAssessmentIds,
-            ),
-            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-          })
-        : Promise.resolve([]),
-      templateLessonIds.length
-        ? database.query.classTemplateLessonBlocks.findMany({
-            where: inArray(
-              classTemplateLessonBlocks.templateLessonId,
-              templateLessonIds,
-            ),
-            orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
-          })
-        : Promise.resolve([]),
-    ]);
+    const [templateAssessmentQuestions, templateLessonBlocks] =
+      await Promise.all([
+        templateAssessmentIds.length
+          ? database.query.classTemplateAssessmentQuestions.findMany({
+              where: inArray(
+                classTemplateAssessmentQuestions.templateAssessmentId,
+                templateAssessmentIds,
+              ),
+              orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+            })
+          : Promise.resolve([]),
+        templateLessonIds.length
+          ? database.query.classTemplateLessonBlocks.findMany({
+              where: inArray(
+                classTemplateLessonBlocks.templateLessonId,
+                templateLessonIds,
+              ),
+              orderBy: (table, { asc: byAsc }) => [byAsc(table.order)],
+            })
+          : Promise.resolve([]),
+      ]);
 
     const templateQuestionIds = templateAssessmentQuestions.map(
       (entry) => entry.id,
@@ -1256,25 +1274,23 @@ export class ClassesService {
     // We accept subjectName/subjectCode/subjectGradeLevel directly in the DTO.
 
     // If updating section, verify it exists
-    let targetSection:
-      | {
-          id: string;
-          name: string;
-          gradeLevel: string;
-          roomNumber: string | null;
-        }
-      | null = null;
+    let targetSection: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+      roomNumber: string | null;
+    } | null = null;
     if (updateClassDto.sectionId) {
       targetSection =
         (await this.db.query.sections.findFirst({
-        where: eq(sections.id, updateClassDto.sectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          roomNumber: true,
-        },
-      })) ?? null;
+          where: eq(sections.id, updateClassDto.sectionId),
+          columns: {
+            id: true,
+            name: true,
+            gradeLevel: true,
+            roomNumber: true,
+          },
+        })) ?? null;
 
       if (!targetSection) {
         throw new BadRequestException(
@@ -1327,14 +1343,14 @@ export class ClassesService {
       if (!targetSection) {
         targetSection =
           (await this.db.query.sections.findFirst({
-          where: eq(sections.id, existing.sectionId),
-          columns: {
-            id: true,
-            name: true,
-            gradeLevel: true,
-            roomNumber: true,
-          },
-        })) ?? null;
+            where: eq(sections.id, existing.sectionId),
+            columns: {
+              id: true,
+              name: true,
+              gradeLevel: true,
+              roomNumber: true,
+            },
+          })) ?? null;
       }
 
       if (!targetSection) {
@@ -1509,7 +1525,7 @@ export class ClassesService {
   private applyClassVisibilityFilter(
     classList: any[],
     hiddenClassIds: Set<string>,
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     return classList
       .map((classRecord) => ({
@@ -1517,10 +1533,12 @@ export class ClassesService {
         isHidden: hiddenClassIds.has(classRecord.id),
       }))
       .filter((classRecord) => {
+        const isArchived =
+          !classRecord.isActive || classRecord.section?.isActive === false;
         if (status === 'hidden') return classRecord.isHidden;
         if (classRecord.isHidden) return false;
-        if (status === 'active') return classRecord.isActive;
-        if (status === 'archived') return !classRecord.isActive;
+        if (status === 'active') return !isArchived;
+        if (status === 'archived') return isArchived;
         return true;
       });
   }
@@ -1640,11 +1658,9 @@ export class ClassesService {
         await this.toggleActive(classId, actorId, actorRoles);
         return;
       case 'restore':
-        if (classRecord.isActive) {
-          throw new ConflictException('Class is already active.');
-        }
-        await this.toggleActive(classId, actorId, actorRoles);
-        return;
+        throw new ConflictException(
+          'Archived classes cannot be restored. Purge the archived class instead.',
+        );
       case 'purge':
         if (classRecord.isActive) {
           throw new ConflictException(
@@ -1730,7 +1746,7 @@ export class ClassesService {
     teacherId: string,
     requesterId?: string,
     requesterRoles?: string[],
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     if (
       requesterId &&
@@ -1829,7 +1845,7 @@ export class ClassesService {
     studentId: string,
     requesterId?: string,
     requesterRoles?: string[],
-    status: 'active' | 'archived' | 'hidden' | 'all' = 'all',
+    status: 'active' | 'archived' | 'hidden' | 'all' = 'active',
   ) {
     if (
       requesterId &&
@@ -1844,7 +1860,10 @@ export class ClassesService {
 
     // First, get all enrollments for this student
     const studentEnrollments = await this.db.query.enrollments.findMany({
-      where: eq(enrollments.studentId, studentId),
+      where: and(
+        eq(enrollments.studentId, studentId),
+        eq(enrollments.status, 'enrolled'),
+      ),
       columns: { classId: true },
     });
 
@@ -2143,19 +2162,36 @@ export class ClassesService {
   }
 
   /**
-   * Toggle class active status
+   * Archive a class. Archived classes are terminal and can only be purged.
    */
   async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
-    const nextIsActive = !classRecord.isActive;
 
-    await this.db
-      .update(classes)
-      .set({
-        isActive: nextIsActive,
-        updatedAt: new Date(),
-      })
-      .where(eq(classes.id, id));
+    if (!classRecord.isActive) {
+      throw new ConflictException(
+        'Archived classes cannot be restored. Purge the archived class instead.',
+      );
+    }
+
+    const now = new Date();
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(enrollments)
+        .set({ status: 'completed' })
+        .where(
+          and(eq(enrollments.classId, id), eq(enrollments.status, 'enrolled')),
+        );
+
+      await tx
+        .update(classes)
+        .set({
+          isActive: false,
+          teacherId: null,
+          updatedAt: now,
+        })
+        .where(eq(classes.id, id));
+    });
 
     const actorRole = actorRoles.includes('admin')
       ? 'admin'
@@ -2171,7 +2207,9 @@ export class ClassesService {
       metadata: {
         actorRole,
         previousIsActive: classRecord.isActive,
-        isActive: nextIsActive,
+        isActive: false,
+        removedTeacherId: classRecord.teacherId,
+        completedEnrollmentStatus: 'completed',
       },
     });
 
@@ -2689,10 +2727,15 @@ export class ClassesService {
     const classRecord = await this.findById(classId);
     this.ensureTeacherCanAccessClass(classRecord, requesterId, requesterRoles);
 
-    const classGradeLevel = classRecord.section?.gradeLevel;
-    const effectiveGradeLevel =
-      (filters?.gradeLevel as '7' | '8' | '9' | '10' | undefined) ??
-      classGradeLevel;
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
+    const requestedGradeLevel = filters?.gradeLevel as
+      | '7'
+      | '8'
+      | '9'
+      | '10'
+      | undefined;
+    const effectiveGradeLevel = classGradeLevel ?? requestedGradeLevel;
     const page = Math.max(1, Number(filters?.page ?? 1) || 1);
     const limit = Math.max(
       1,
@@ -2921,8 +2964,10 @@ export class ClassesService {
    * Returns students from the same section who are not yet enrolled in this class
    */
   async getCandidates(classId: string) {
-    // Get the class to find its section
+    // Get the class to find its section and designated grade level
     const classRecord = await this.findById(classId);
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
 
     // IDs of students already enrolled in this specific class
     const classEnrollments = await this.db.query.enrollments.findMany({
@@ -2963,7 +3008,11 @@ export class ClassesService {
       },
     });
 
-    return candidates;
+    if (!classGradeLevel) return candidates;
+
+    return candidates.filter(
+      (candidate) => candidate.student?.profile?.gradeLevel === classGradeLevel,
+    );
   }
 
   /**
@@ -2974,12 +3023,26 @@ export class ClassesService {
   async enrollStudent(classId: string, studentId: string, actorId: string) {
     // Pre-flight checks outside the transaction (cheap, read-only)
     const classRecord = await this.findById(classId);
+    const classGradeLevel =
+      classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
 
     const student = await this.db.query.users.findFirst({
       where: eq(users.id, studentId),
+      columns: { id: true },
+      with: {
+        profile: {
+          columns: { gradeLevel: true },
+        },
+      },
     });
     if (!student) {
       throw new BadRequestException(`Student with ID "${studentId}" not found`);
+    }
+
+    if (classGradeLevel && student.profile?.gradeLevel !== classGradeLevel) {
+      throw new BadRequestException(
+        `Only Grade ${classGradeLevel} students can be added to this class`,
+      );
     }
 
     // Run the duplicate-check + write atomically
@@ -3153,6 +3216,7 @@ export class ClassesService {
       )}]::text[]`;
 
       const conditions: SQL[] = [
+        eq(classes.isActive, true),
         // Day overlap: stored days array has at least one day in common with incoming days
         sql`${classSchedules.days} && ${daysArray}`,
         // Time overlap: existing.start < new.end AND existing.end > new.start

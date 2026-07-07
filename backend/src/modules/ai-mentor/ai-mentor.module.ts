@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
+import { AiGenerationQueueService } from './ai-generation-queue.service';
+import { AiGenerationProcessor } from './processors/ai-generation.processor';
 import { DatabaseModule } from '../../database/database.module';
 import { AuditModule } from '../audit/audit.module';
 import { AdminModule } from '../admin/admin.module';
@@ -17,6 +20,10 @@ import { LxpModule } from '../lxp/lxp.module';
  * content safety, Ollama integration) has been migrated to the Python FastAPI
  * ai-service. This module retains JWT/Role guards and forwards authenticated
  * requests via AiProxyService.
+ *
+ * Lesson-plan (and later quiz) generation is orchestrated through a durable
+ * BullMQ queue (`ai-teacher-generation`). The backend owns retry, backoff,
+ * and concurrency control; ai-service is the stateless execution engine.
  */
 @Module({
   imports: [
@@ -27,9 +34,15 @@ import { LxpModule } from '../lxp/lxp.module';
     AnalyticsModule,
     PerformanceModule,
     LxpModule,
+    BullModule.registerQueue({ name: 'ai-teacher-generation' }),
   ],
   controllers: [AiMentorController],
-  providers: [AiProxyService, AdminAnalyticsChatService],
+  providers: [
+    AiProxyService,
+    AdminAnalyticsChatService,
+    AiGenerationQueueService,
+    AiGenerationProcessor,
+  ],
   exports: [AiProxyService, AdminAnalyticsChatService],
 })
 export class AiMentorModule {}

@@ -43,4 +43,15 @@ describe('AppThrottlerGuard', () => {
       }),
     ).resolves.toBe('ip:10.0.0.7');
   });
+
+  it('tracks anonymous requests by body email when present', async () => {
+    const guard = new TestAppThrottlerGuard(options, storage, reflector);
+
+    await expect(
+      guard.exposeTracker({
+        body: { email: 'Student1@School.edu ' },
+        ip: '10.0.0.1',
+      }),
+    ).resolves.toBe('login:student1@school.edu');
+  });
 });

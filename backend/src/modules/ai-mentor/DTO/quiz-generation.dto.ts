@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsObject,
@@ -119,6 +120,32 @@ export class GenerateQuizDraftDto {
   @IsOptional()
   @IsEnum(Quarter)
   quarter?: Quarter;
+
+  @ApiPropertyOptional({
+    description:
+      'Source policy used by the AI service for quiz evidence selection',
+    enum: ['published_default', 'published_only', 'any_indexed'],
+    default: 'published_default',
+  })
+  @IsOptional()
+  @IsString()
+  sourcePolicy?: string = 'published_default';
+
+  @ApiPropertyOptional({
+    description:
+      'Teacher acknowledgement that explicitly selected draft sources may be used when indexed',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  allowDraftSources?: boolean = false;
+
+  @ApiPropertyOptional({
+    description: 'Previous quiz generation job that this request retries',
+  })
+  @IsOptional()
+  @IsUUID()
+  retryOfJobId?: string;
 }
 
 export class UpdateQuizDraftDto {

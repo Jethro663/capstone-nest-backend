@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, BookOpen, ChevronDown, Eye, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { Archive, BookOpen, ChevronDown, Eye, Pencil, Search, Trash2 } from 'lucide-react';
 import {
   type BulkClassLifecycleAction,
   classService,
@@ -45,14 +45,6 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
   if (tab === 'archived') {
     return [
       {
-        action: 'restore',
-        label: 'Restore selected',
-        confirmLabel: 'Restore classes',
-        title: 'Restore selected classes?',
-        description: 'Selected archived classes will return to the active list.',
-        tone: 'default',
-      },
-      {
         action: 'purge',
         label: 'Purge selected',
         confirmLabel: 'Purge classes',
@@ -70,7 +62,7 @@ function getBulkActions(tab: StatusTab): BulkActionOption[] {
       label: 'Archive selected',
       confirmLabel: 'Archive classes',
       title: 'Archive selected classes?',
-      description: 'Selected active classes will move to the archived list.',
+      description: 'Selected active classes will move to the archived list, clear assigned teachers, and complete active student enrollments. Archived classes can only be purged.',
       tone: 'danger',
     },
   ];
@@ -83,6 +75,7 @@ export default function ClassManagementPage() {
   const [tableLoading, setTableLoading] = useState(false);
   const [tab, setTab] = useState<StatusTab>('active');
   const [gradeFilter, setGradeFilter] = useState('all');
+  const [schoolYearFilter, setSchoolYearFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [purgeTarget, setPurgeTarget] = useState<ClassItem | null>(null);
@@ -98,7 +91,7 @@ export default function ClassManagementPage() {
         setTableLoading(true);
       }
 
-      const classesRes = await classService.getAll();
+      const classesRes = await classService.getAll({ limit: 100 });
       setClasses(classesRes.data?.data || []);
     } catch {
       toast.error('Failed to load classes');
@@ -123,6 +116,17 @@ export default function ClassManagementPage() {
     () => classes.filter((classItem) => !classItem.isActive).length,
     [classes],
   );
+  const schoolYearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          classes
+            .map((classItem) => classItem.schoolYear)
+            .filter((schoolYear): schoolYear is string => Boolean(schoolYear)),
+        ),
+      ).sort((left, right) => right.localeCompare(left)),
+    [classes],
+  );
 
   const filtered = useMemo(
     () =>
@@ -130,6 +134,9 @@ export default function ClassManagementPage() {
         if (tab === 'active' && !classItem.isActive) return false;
         if (tab === 'archived' && classItem.isActive) return false;
         if (gradeFilter !== 'all' && classItem.subjectGradeLevel !== gradeFilter) {
+          return false;
+        }
+        if (schoolYearFilter !== 'all' && classItem.schoolYear !== schoolYearFilter) {
           return false;
         }
         if (!search) return true;
@@ -144,7 +151,7 @@ export default function ClassManagementPage() {
           classItem.room?.toLowerCase().includes(query)
         );
       }),
-    [classes, gradeFilter, search, tab],
+    [classes, gradeFilter, schoolYearFilter, search, tab],
   );
 
   const selectableVisibleIds = useMemo(
@@ -313,6 +320,7 @@ export default function ClassManagementPage() {
             setTab(value as StatusTab);
             setSearch('');
             setGradeFilter('all');
+            setSchoolYearFilter('all');
             setSelectedClassIds([]);
           }}
           className="space-y-5"
@@ -353,8 +361,26 @@ export default function ClassManagementPage() {
                 </select>
                 <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
               </div>
+              <div className="relative">
+                <select
+                  value={schoolYearFilter}
+                  onChange={(event) => setSchoolYearFilter(event.target.value)}
+                  className="admin-select min-w-[10rem] appearance-none pr-10 text-sm font-semibold text-[#6f83a3]"
+                >
+                  <option value="all">All School Years</option>
+                  {schoolYearOptions.map((schoolYear) => (
+                    <option key={schoolYear} value={schoolYear}>
+                      {schoolYear}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8ea0bc]" />
+              </div>
               {gradeFilter !== 'all' ? (
-                <span className="admin-filter-badge">Filtered by Grade {gradeFilter}</span>
+                <span className="admin-filter-badge">Grade {gradeFilter}</span>
+              ) : null}
+              {schoolYearFilter !== 'all' ? (
+                <span className="admin-filter-badge">SY {schoolYearFilter}</span>
               ) : null}
             </div>
           </div>
@@ -414,6 +440,7 @@ export default function ClassManagementPage() {
                   <TableHead>Subject</TableHead>
                   <TableHead>Section</TableHead>
                   <TableHead>Grade</TableHead>
+                  <TableHead>School Year</TableHead>
                   <TableHead>Teacher</TableHead>
                   <TableHead>Schedule</TableHead>
                   <TableHead>Room</TableHead>
@@ -427,9 +454,6 @@ export default function ClassManagementPage() {
                   const classPath = `/dashboard/admin/classes/${classItem.id}`;
                   const archiveOption = bulkActions.find(
                     (option) => option.action === 'archive',
-                  );
-                  const restoreOption = bulkActions.find(
-                    (option) => option.action === 'restore',
                   );
 
                   return (
@@ -466,6 +490,12 @@ export default function ClassManagementPage() {
                         <span className="admin-role-pill admin-role-pill--teacher">
                           Grade {classItem.subjectGradeLevel}
                         </span>
+                      </TableCell>
+                      <TableCell
+                        className="admin-table-row-link text-[#9aaed0]"
+                        onClick={() => router.push(classPath)}
+                      >
+                        {classItem.schoolYear}
                       </TableCell>
                       <TableCell
                         className="admin-table-row-link text-[#7083a4]"
@@ -531,18 +561,6 @@ export default function ClassManagementPage() {
                               title="Archive class"
                             >
                               <Archive className="h-4 w-4" />
-                            </button>
-                          ) : null}
-                          {!classItem.isActive && restoreOption ? (
-                            <button
-                              type="button"
-                              className="admin-icon-button"
-                              onClick={() =>
-                                openSingleActionConfirmation(classItem, restoreOption)
-                              }
-                              title="Restore class"
-                            >
-                              <RotateCcw className="h-4 w-4" />
                             </button>
                           ) : null}
                           {!classItem.isActive ? (

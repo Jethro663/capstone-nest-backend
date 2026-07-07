@@ -1,28 +1,37 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ['./App.tsx', './src/**/*.{ts,tsx}'],
-  presets: [require('nativewind/preset')],
+  content: ["./App.tsx", "./src/**/*.{ts,tsx}"],
+  presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#fff1f2',
-          100: '#ffe4e6',
-          200: '#fecdd3',
-          300: '#fda4af',
-          400: '#fb7185',
-          500: '#ef4444',
-          600: '#dc2626',
-          700: '#b91c1c',
-          800: '#991b1b',
-          900: '#7f1d1d'
+        figma: {
+          surface: "#F7F9FB",
+          text: "#191C1E",
+          muted: "#64748B",
+          amber: "#B45309",
+          orange: "#C2410C",
+          red: "#BA1A1A",
+          blue: "#1E40AF",
+          green: "#166534",
+          purple: "#434B60",
+          indigo: "#00288E"
+        },
+        academic: {
+          background: "#F7F9FB",
+          card: "#FFFFFF",
+          border: "#E2E8F0",
+          primary: "#00288E",
+          primaryContainer: "#1E40AF",
+          text: "#191C1E",
+          muted: "#444653"
         }
       },
       boxShadow: {
-        soft: '0 10px 24px rgba(15, 23, 42, 0.08)'
+        card: "0 4px 12px rgba(15, 23, 42, 0.05)"
       },
       borderRadius: {
-        '4xl': '28px'
+        "4xl": "28px"
       }
     }
   },

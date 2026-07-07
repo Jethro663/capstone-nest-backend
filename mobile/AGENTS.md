@@ -1,7 +1,59 @@
-# Mobile Legacy Notice
+# Mobile Slice
 
-This folder is not the default Codex mobile target for Nexora.
+Scope: `mobile/` only.
+This is the default mobile target for generic Nexora mobile work.
 
-- Generic `mobile` or Expo requests should route to `test-mobile/`.
-- Work in `mobile/` only when the prompt explicitly names this folder or the files under it.
-- Do not silently redirect generic mobile fixes here.
+## Rule IDs In Play
+
+- `RESP-1`, `SEC-1`, `AUTH-1`, `AUTH-2`
+- Backend-alignment rules commonly touched: `DOM-2`, `AI-1`
+
+## Entrypoints
+
+- Install: `npm install`
+- Start Expo: `npm run start`
+- Android: `npm run android`
+- Android emulator: `npm run android:emulator`
+- Android emulator clean start: `npm run android:emulator:clean`
+- iOS: `npm run ios`
+- Web: `npm run web`
+- Typecheck: `npm run typecheck`
+- Tests: `npm run test`
+- App boot: `App.tsx`
+- Root composition: `src/bootstrap/AppRoot.tsx`
+
+## Owning Paths
+
+- `src/bootstrap/*`: root composition
+- `src/providers/*`: auth, React Query, error handling
+- `src/navigation/*`: route structure and typed params
+- `src/screens/*`: screen-level UI and flows
+- `src/api/*`: config, clients, storage, hooks, services
+- `src/types/*`: request/response/domain types
+- `src/theme/*` and `global.css`: visual tokens and utilities
+
+## Working Rules
+
+- Auth gating lives in `AppNavigator`; preserve the student-focused flow.
+- Use `apiClient` for authenticated requests and `publicClient` for unauthenticated flows.
+- Tokens live in secure storage; do not assume web cookie behavior here.
+- Keep `src/types/*`, `src/api/services/*`, and screen expectations aligned with backend contracts.
+- Prefer React Query hooks and shared theme tokens over one-off fetch or styling patterns.
+- Use Serena first for navigation, service, and type ownership discovery before broad file dumping.
+
+## Do Not Break
+
+- This app is currently student-scoped, not teacher/admin UX.
+- Refresh depends on backend mobile auth endpoints.
+- `API_BASE_URL` fallback assumes backend port `3000` with `/api`.
+- Query invalidation must stay aligned with mutations or screens will stale.
+- The app reaches AI through backend contracts, not directly to `ai-service`.
+
+## Verification
+
+- Required: `npm run typecheck`
+- Run `npm run test` for touched React Native logic and screen behavior that already has Jest coverage.
+- Run Expo after navigation, auth bootstrap, or API-config changes.
+- Prefer `npm run android:emulator` for Android-specific auth, storage, or deep-link issues; use `npm run android:emulator:clean` when port `8081` is wedged.
+- Verify login, refresh, logout, and one data-backed student flow after auth or API edits.
+- Recheck route params and query invalidation after screen or mutation changes.

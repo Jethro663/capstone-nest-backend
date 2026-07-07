@@ -10,7 +10,7 @@ Stress-test `ai-service/` as a product surface, not just a unit-test package. Di
 ## Quick Start
 
 - Emit:
-  `ROUTER_TRACE task=ai-stress-test include=kernel,ai-service,backend optional_skipped=schema,security,debugging exclude=next-frontend,test-mobile reason=<one line>`
+  `ROUTER_TRACE task=ai-stress-test include=kernel,ai-service,backend optional_skipped=schema,security,debugging exclude=next-frontend,mobile reason=<one line>`
 - Load:
   - root `AGENTS.md`
   - `ai-service/AGENTS.md`

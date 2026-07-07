@@ -226,23 +226,102 @@ export interface QuizDraftStructuredOutput {
     }>;
   };
   questions: Array<{
+    id?: string;
     type: QuestionType;
     content: string;
     points?: number;
     explanation?: string;
     conceptTags?: string[];
+    difficulty?: string;
+    cognitiveLevel?: string;
+    provenance?: QuizDraftProvenance;
+    groundingScore?: number;
+    issueIds?: string[];
+    expectedAnswer?: string;
+    rubric?: string;
+    reviewed?: boolean;
     options?: Array<{
       text: string;
       isCorrect: boolean;
       order?: number;
     }>;
   }>;
+  qualityGate?: 'pass' | 'warn' | 'fail';
+  reviewRequired?: boolean;
+  reviewState?: string;
+  reviewIssues?: QuizDraftReviewIssue[];
+  sourceManifest?: QuizDraftProvenance[];
+  audit?: {
+    applyResult?: QuizDraftApplyResult | null;
+    [key: string]: unknown;
+  };
   assessmentId?: string;
   runtime?: {
     assessmentId?: string;
     outputId?: string;
     indexing?: IndexingSummary;
   };
+}
+
+export interface QuizDraftProvenance {
+  chunkId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  sourceReference?: string;
+  sourceTitle?: string;
+  sourceSnippet?: string;
+  confidence?: number;
+  selectionReason?: string;
+}
+
+export interface QuizDraftReviewIssue {
+  id: string;
+  code: string;
+  severity: 'blocking' | 'warning' | 'info' | string;
+  scope: string;
+  message: string;
+  questionIndex?: number | null;
+  optionIndex?: number | null;
+  resolved: boolean;
+  resolution?: string | null;
+}
+
+export interface QuizDraftApplyResult {
+  assessmentId: string;
+  outputId?: string;
+  questionsCreated?: number;
+  totalPoints?: number;
+  appliedAt?: string;
+}
+
+export interface QuizDraftApplyPreview {
+  jobId?: string;
+  outputId?: string;
+  canApply: boolean;
+  alreadyApplied?: boolean;
+  blockedReasons: string[];
+  applyResult?: QuizDraftApplyResult | null;
+  assessment: {
+    title: string;
+    description?: string;
+    type?: AssessmentType;
+    passingScore?: number;
+    feedbackLevel?: FeedbackLevel;
+    classRecordCategory?: ClassRecordCategory;
+    quarter?: GradingPeriod;
+    totalPoints: number;
+    questionCount: number;
+  };
+  questions?: QuizDraftStructuredOutput['questions'];
+  reviewIssues?: QuizDraftReviewIssue[];
+}
+
+export interface QuizDraftApplyResponse {
+  jobId: string;
+  outputId?: string;
+  alreadyApplied: boolean;
+  applyResult: QuizDraftApplyResult;
+  preview?: QuizDraftApplyPreview;
 }
 
 export interface GenerateQuizDraftDto {
@@ -258,12 +337,15 @@ export interface GenerateQuizDraftDto {
   feedbackLevel: FeedbackLevel;
   classRecordCategory?: ClassRecordCategory;
   quarter?: GradingPeriod;
+  sourcePolicy?: 'published_default' | 'published_only' | 'any_indexed' | string;
+  allowDraftSources?: boolean;
+  retryOfJobId?: string;
 }
 
 export interface GenerateQuizDraftResponse {
   jobId: string;
   outputId: string;
-  assessmentId: string;
+  assessmentId?: string | null;
   title: string;
   blueprint?: QuizDraftStructuredOutput['blueprint'];
   sourceCitations?: Array<{
@@ -321,6 +403,7 @@ export interface InterventionStructuredOutput {
       stem: string;
       explanation: string;
       hint?: string | null;
+      reviewHint?: string | null;
       weakConceptTag?: string | null;
       sourceQuestionId?: string | null;
       options: Array<{

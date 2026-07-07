@@ -47,7 +47,7 @@ Scope: `backend/` only.
 3. Keep business logic in the service and persistence in Drizzle calls through `DatabaseService`.
 4. Update `src/drizzle/schema/*` plus `drizzle/*` when the persistent model changes.
 5. Register feature wiring in `<feature>.module.ts`; only touch `AppModule` for top-level wiring.
-6. If DTOs, schema, or the `success/message/data` envelope change, trace impact into `next-frontend`, `test-mobile`, and `ai-service` when those consumers are in play.
+6. If DTOs, schema, or the `success/message/data` envelope change, trace impact into `next-frontend`, `mobile`, and `ai-service` when those consumers are in play.
 
 ## Current Repo Anchors
 

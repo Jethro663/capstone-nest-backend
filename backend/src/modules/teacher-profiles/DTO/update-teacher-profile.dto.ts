@@ -1,5 +1,12 @@
 import { Transform } from 'class-transformer';
-import { IsDateString, IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 import {
   ADDRESS_REGEX,
   EMPLOYEE_ID_REGEX,

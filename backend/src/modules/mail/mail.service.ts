@@ -6,7 +6,8 @@ import { OTP_TTL_MINUTES } from '../../common/constants';
 export class MailService {
   private transporter: nodemailer.Transporter;
   private readonly logger = new Logger(MailService.name);
-  private readonly emailService = process.env.EMAIL_SERVICE?.toLowerCase() || '';
+  private readonly emailService =
+    process.env.EMAIL_SERVICE?.toLowerCase() || '';
   private readonly resendApiKey = process.env.RESEND_API_KEY || '';
   private smtpReady = false;
   private smtpError: string | null = null;
@@ -178,9 +179,7 @@ export class MailService {
     purpose: 'email_verification' | 'password_reset',
   ) {
     const isVerification = purpose === 'email_verification';
-    const title = isVerification
-      ? 'Confirm your email'
-      : 'Reset your password';
+    const title = isVerification ? 'Confirm your email' : 'Reset your password';
     const intro = isVerification
       ? 'Use this one-time code to activate your Nexora account.'
       : 'Use this one-time code to continue your password reset request.';

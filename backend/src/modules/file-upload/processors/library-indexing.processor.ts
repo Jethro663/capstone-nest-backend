@@ -16,7 +16,7 @@ type LibraryIndexJobData = {
 };
 
 @Injectable()
-@Processor('library-indexing')
+@Processor('library-indexing', { concurrency: 2 })
 export class LibraryIndexingProcessor extends WorkerHost {
   private readonly logger = new Logger(LibraryIndexingProcessor.name);
 

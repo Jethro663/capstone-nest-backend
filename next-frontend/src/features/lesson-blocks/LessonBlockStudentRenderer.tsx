@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,8 +17,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { PptxDeckViewer } from '@/components/student/lesson/PptxDeckViewer';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { fileService } from '@/services/file-service';
+import { isPptxFile } from '@/lib/pptx-viewer';
 import { normalizeRichText } from '@/lib/rich-text';
 import type { ContentBlock } from '@/types/lesson';
 import {
@@ -281,6 +283,95 @@ function LessonCheckpoint({
   );
 }
 
+function LessonFileBlockCard({ block }: { block: ContentBlock }) {
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const file = getLessonFileBlockModel(block);
+  const isDeck = isPptxFile({
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+  });
+
+  const loadDeck = useCallback(async () => {
+    if (!file.fileId) {
+      throw new Error('PowerPoint file is unavailable.');
+    }
+    return fileService.download(file.fileId);
+  }, [file.fileId]);
+
+  const downloadFile = useCallback(
+    async (mode: 'preview' | 'download') => {
+      if (mode === 'preview' && isDeck && file.fileId) {
+        setViewerOpen(true);
+        return;
+      }
+      if (!file.fileId) {
+        if (file.legacyUrl) {
+          window.open(file.legacyUrl, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+      try {
+        const blob = await fileService.download(file.fileId);
+        const url = URL.createObjectURL(blob);
+        if (mode === 'preview') {
+          window.open(url, '_blank', 'noopener,noreferrer');
+          window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+          return;
+        }
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = file.fileName || 'lesson-file';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      } catch {
+        toast.error('Unable to open this lesson file.');
+      }
+    },
+    [file.fileId, file.fileName, file.legacyUrl, isDeck],
+  );
+
+  return (
+    <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-[#f7eee7] text-[#8a5148]">
+            <FileText className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-black text-[#211b1b]">{file.fileName || stripHtml(file.legacyUrl || '') || 'Lesson file'}</p>
+            <p className="text-xs font-semibold text-[#7b6d69]">
+              {isDeck ? 'PowerPoint deck' : file.mimeType || 'File'} - {formatFileSize(file.sizeBytes)}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => void downloadFile('preview')}>
+            <Eye className="h-3.5 w-3.5" />
+            {isDeck ? 'Open' : 'Preview'}
+          </Button>
+          <Button type="button" size="sm" className="student-button-solid rounded-full" onClick={() => void downloadFile('download')}>
+            <Download className="h-3.5 w-3.5" />
+            Download
+          </Button>
+        </div>
+      </div>
+
+      {viewerOpen && isDeck && file.fileId ? (
+        <div className="mt-4">
+          <PptxDeckViewer
+            title={file.fileName || 'PowerPoint deck'}
+            subtitle="Lesson PowerPoint"
+            loadFile={loadDeck}
+            onDownload={() => downloadFile('download')}
+          />
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 export function LessonBlockStudentRenderer({
   block,
   checkpointSelections = {},
@@ -458,59 +549,7 @@ export function LessonBlockStudentRenderer({
   }
 
   if (normalizedBlock.type === 'file') {
-    const file = getLessonFileBlockModel(normalizedBlock);
-    const downloadFile = async (mode: 'preview' | 'download') => {
-      if (!file.fileId) {
-        if (file.legacyUrl) {
-          window.open(file.legacyUrl, '_blank', 'noopener,noreferrer');
-        }
-        return;
-      }
-      try {
-        const blob = await fileService.download(file.fileId);
-        const url = URL.createObjectURL(blob);
-        if (mode === 'preview') {
-          window.open(url, '_blank', 'noopener,noreferrer');
-          window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-          return;
-        }
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = file.fileName || 'lesson-file';
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        URL.revokeObjectURL(url);
-      } catch {
-        toast.error('Unable to open this lesson file.');
-      }
-    };
-
-    return (
-      <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-[#f7eee7] text-[#8a5148]">
-              <FileText className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="truncate font-black text-[#211b1b]">{file.fileName || stripHtml(file.legacyUrl || '') || 'Lesson file'}</p>
-              <p className="text-xs font-semibold text-[#7b6d69]">{file.mimeType || 'File'} - {formatFileSize(file.sizeBytes)}</p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => void downloadFile('preview')}>
-              <Eye className="h-3.5 w-3.5" />
-              Preview
-            </Button>
-            <Button type="button" size="sm" className="student-button-solid rounded-full" onClick={() => void downloadFile('download')}>
-              <Download className="h-3.5 w-3.5" />
-              Download
-            </Button>
-          </div>
-        </div>
-      </article>
-    );
+    return <LessonFileBlockCard block={normalizedBlock} />;
   }
 
   if (normalizedBlock.type === 'divider') {

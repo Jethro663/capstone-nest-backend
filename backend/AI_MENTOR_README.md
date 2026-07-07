@@ -1,7 +1,9 @@
 # AI Mentor Module — Architecture & Setup Guide
 
 > **Nexora LMS** — Module Extraction + AI Mentor for Gat Andres Bonifacio High School
-> SDG 4 – Quality Education | NestJS + PostgreSQL + Ollama (Local LLM)
+> SDG 4 – Quality Education | NestJS + PostgreSQL + OpenRouter-primary production runtime + optional local Ollama fallback
+
+> **Current operating note:** This document contains useful historical architecture context, but production deployments no longer assume Ollama-only AI. On Railway, ai-service is internal-only, the backend proxies all AI traffic, and OpenRouter-backed cloud mode is the primary production runtime. Treat local Ollama setup below as optional development guidance unless a deployment explicitly provisions Ollama.
 
 ---
 
@@ -52,19 +54,17 @@
 
 ---
 
-## Why Ollama (Local LLM)
+## Why Ollama (Local Development Option)
 
-| Factor | Cloud API (Gemini/OpenAI) | Local Ollama | Decision |
-|--------|--------------------------|--------------|----------|
-| **Cost** | Per-token pricing; scales with students | $0 per request forever | ✅ Ollama |
-| **Rate limits** | 15 RPM free (Gemini), paid for more | Unlimited (hardware-bound) | ✅ Ollama |
-| **Privacy** | Student data leaves campus | All data stays on-premise | ✅ Ollama |
-| **Internet dependency** | Requires stable internet | Works 100% offline | ✅ Ollama |
-| **Quality** | GPT-4o/Gemini superior for complex tasks | Llama 3.2 3B is "good enough" for extraction | Acceptable |
-| **Hardware** | None required | 4GB RAM minimum, 8GB recommended | Acceptable |
-| **Setup** | API key only | Install Ollama + pull model | Slightly more work |
+| Factor | OpenRouter-backed cloud runtime | Local Ollama | Recommended usage |
+|--------|---------------------------------|--------------|-------------------|
+| **Railway deploy simplicity** | No local model host required | Requires separate Ollama service | ✅ OpenRouter for production |
+| **Offline/local development** | Requires internet and API key | Works fully local | ✅ Ollama for local dev |
+| **Rate-limit/cost control** | Token priced | Hardware-bound | depends on deployment goals |
+| **Operational complexity** | Mostly env configuration | Extra runtime/service to operate | ✅ OpenRouter for Railway |
+| **Privacy posture** | Data leaves the local network | Can stay on local infrastructure | deployment-specific |
 
-**Verdict:** For a public high school deployment where many students will be using the system simultaneously, a local model eliminates all cost/rate-limit concerns. The `llama3.2:3b` model runs on modest hardware (even a school laptop with 8GB RAM) and is sufficient for structured text extraction.
+**Current verdict:** For this repository's current Railway production path, use OpenRouter-backed cloud mode first and keep Ollama as an optional local/dev or later self-hosted runtime.
 
 ### Upgrading the model later
 
@@ -133,14 +133,24 @@ curl http://localhost:11434/api/tags
 
 ### 4. Environment variables
 
-Add to your `.env` file (or set in terminal):
+Production / Railway baseline:
+```env
+AI_RUNTIME_MODE=cloud
+AI_CLOUD_FALLBACK_PROVIDER=openrouter
+AI_CLOUD_FALLBACK_ENABLED=true
+AI_CLOUD_FALLBACK_BASE_URL=https://openrouter.ai/api/v1
+AI_CLOUD_FALLBACK_API_KEY=CHANGE_ME_OPENROUTER_KEY
+AI_CLOUD_FALLBACK_MODEL=openrouter/auto
+OPENROUTER_EMBEDDING_MODEL=google/gemini-embedding-2-preview
+AI_SERVICE_SHARED_SECRET=CHANGE_ME_INTERNAL_SHARED_SECRET
+```
+
+Optional local Ollama additions:
 ```env
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2:3b
 OLLAMA_TIMEOUT_MS=120000
 ```
-
-All three have sensible defaults — you can skip this step for local development.
 
 ### 5. Run the database migration
 

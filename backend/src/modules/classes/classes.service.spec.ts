@@ -1558,7 +1558,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
 
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
@@ -1584,7 +1587,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
 
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
@@ -1621,7 +1627,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
       txMock.query.enrollments.findFirst.mockResolvedValueOnce(
         makeEnrollment(),
       );
@@ -1641,7 +1650,10 @@ describe('ClassesService', () => {
       };
 
       mockDb.query.classes.findFirst.mockResolvedValue(makeClass());
-      mockDb.query.users.findFirst.mockResolvedValue({ id: STUDENT_ID });
+      mockDb.query.users.findFirst.mockResolvedValue({
+        id: STUDENT_ID,
+        profile: { gradeLevel: '7' },
+      });
       txMock.query.enrollments.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
@@ -2094,29 +2106,37 @@ describe('ClassesService', () => {
   // =========================================================================
 
   describe('toggleActive', () => {
-    it('toggles isActive from true to false', async () => {
+    it('archives an active class, clears the teacher, and completes active enrollments', async () => {
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass({ isActive: true }))
-        .mockResolvedValueOnce(makeClass({ isActive: false }));
-      mockDb.update.mockReturnValue(makeUpdateChain());
+        .mockResolvedValueOnce(makeClass({ isActive: false, teacherId: null }));
+      const updateChain = makeUpdateChain();
+      mockDb.update.mockReturnValue(updateChain);
 
       const result = await service.toggleActive(CLASS_ID);
 
       expect(result.isActive).toBe(false);
-      expect(
-        mockDb.update.mock.results[0].value.set.mock.calls[0][0].isActive,
-      ).toBe(false);
+      expect(mockDb.update).toHaveBeenCalledTimes(2);
+      expect(updateChain.set.mock.calls[0][0]).toEqual({ status: 'completed' });
+      expect(updateChain.set.mock.calls[1][0]).toEqual(
+        expect.objectContaining({
+          isActive: false,
+          teacherId: null,
+        }),
+      );
+      expect(updateChain.set.mock.calls[1][0]).toHaveProperty('updatedAt');
     });
 
-    it('toggles isActive from false to true', async () => {
-      mockDb.query.classes.findFirst
-        .mockResolvedValueOnce(makeClass({ isActive: false }))
-        .mockResolvedValueOnce(makeClass({ isActive: true }));
+    it('does not restore archived classes', async () => {
+      mockDb.query.classes.findFirst.mockResolvedValueOnce(
+        makeClass({ isActive: false }),
+      );
       mockDb.update.mockReturnValue(makeUpdateChain());
 
-      const result = await service.toggleActive(CLASS_ID);
-
-      expect(result.isActive).toBe(true);
+      await expect(service.toggleActive(CLASS_ID)).rejects.toThrow(
+        'Archived classes cannot be restored. Purge the archived class instead.',
+      );
+      expect(mockDb.update).not.toHaveBeenCalled();
     });
 
     it('writes an audit log with actor context when status is toggled', async () => {
@@ -2136,6 +2156,8 @@ describe('ClassesService', () => {
           actorRole: 'admin',
           previousIsActive: true,
           isActive: false,
+          removedTeacherId: TEACHER_ID,
+          completedEnrollmentStatus: 'completed',
         },
       });
     });

@@ -4,39 +4,47 @@ import {
   AssessmentSubmittedEvent,
   ClassRecordScoresUpdatedEvent,
 } from '../../../common/events';
-import { PerformanceService } from '../performance.service';
+import { PerformanceRecomputeQueueService } from '../performance-recompute-queue.service';
 
 @Injectable()
 export class PerformanceEventsListener {
   private readonly logger = new Logger(PerformanceEventsListener.name);
 
-  constructor(private readonly performanceService: PerformanceService) {}
+  constructor(
+    private readonly recomputeQueue: PerformanceRecomputeQueueService,
+  ) {}
 
-  @OnEvent(AssessmentSubmittedEvent.eventName)
+  @OnEvent(AssessmentSubmittedEvent.eventName, {
+    async: true,
+    promisify: false,
+  })
   async handleAssessmentSubmitted(event: AssessmentSubmittedEvent) {
     try {
-      await this.performanceService.recomputeFromAssessmentSubmission(
+      await this.recomputeQueue.enqueueAssessmentSubmission(
         event.assessmentId,
         event.studentId,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to recompute performance for assessment ${event.assessmentId}: ${(error as Error).message}`,
+        `Failed to enqueue performance recompute for assessment ${event.assessmentId}: ${(error as Error).message}`,
       );
     }
   }
 
-  @OnEvent(ClassRecordScoresUpdatedEvent.eventName)
+  @OnEvent(ClassRecordScoresUpdatedEvent.eventName, {
+    async: true,
+    promisify: false,
+  })
   async handleClassRecordScoresUpdated(event: ClassRecordScoresUpdatedEvent) {
     try {
-      await this.performanceService.recomputeStudentsForClass(
+      await this.recomputeQueue.enqueueClassRecordScores(
         event.classId,
         event.studentIds,
         event.triggerSource,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to recompute class-record projection for class ${event.classId}: ${(error as Error).message}`,
+        `Failed to enqueue class-record projection for class ${event.classId}: ${(error as Error).message}`,
       );
     }
   }

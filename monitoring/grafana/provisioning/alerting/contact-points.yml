@@ -1,3 +1,12 @@
 apiVersion: 1
 
-contactPoints: []
+contactPoints:
+  - orgId: 1
+    name: nexora-alerts-email
+    receivers:
+      - uid: nexora-email-01
+        type: email
+        settings:
+          addresses: ${GRAFANA_ALERT_EMAIL:-ops@localhost}
+          singleAddress: false
+        disableResolveMessage: false

@@ -31,6 +31,7 @@ import { AccessStudentsOverviewQueryDto } from './DTO/access-students-overview.d
 import { AccessStudentsTargetSectionsQueryDto } from './DTO/access-students-target-sections.dto';
 import { MoveUpStudentsDto } from './DTO/move-up-students.dto';
 import { FailStudentsDto } from './DTO/fail-students.dto';
+import { FinalizeAccessStudentGradesDto } from './DTO/finalize-access-student-grades.dto';
 import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
@@ -144,10 +145,31 @@ export class SectionsController {
   async getAccessStudentsTargetSections(
     @Query() query: AccessStudentsTargetSectionsQueryDto,
   ) {
-    const data = await this.sectionsService.getAccessStudentsTargetSections(
-      query,
-    );
+    const data =
+      await this.sectionsService.getAccessStudentsTargetSections(query);
     return { success: true, data };
+  }
+
+  @Post('access-students/finalize-grades')
+  @Roles(RoleName.Admin)
+  async finalizeAccessStudentGrades(
+    @Body() dto: FinalizeAccessStudentGradesDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.sectionsService.finalizeAccessStudentGrades(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message:
+        data.finalizedClassRecordCount > 0
+          ? `${data.finalizedClassRecordCount} class record(s) finalized successfully`
+          : 'All class records were already finalized',
+      data,
+    };
   }
 
   @Post('access-students/move-up')

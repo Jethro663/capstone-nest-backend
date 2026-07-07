@@ -87,24 +87,13 @@ describe('LXP evaluations (e2e)', () => {
     await app.close();
   });
 
-  it('allows teacher role and returns evaluation summary payload', async () => {
+  it('rejects teacher role for evaluation listing', async () => {
     await request(app.getHttpServer())
       .get('/api/lxp/evaluations?targetModule=lxp')
       .set('x-test-role', 'teacher')
-      .expect(200)
-      .expect((response) => {
-        expect(response.body.success).toBe(true);
-        expect(response.body.data.count).toBe(1);
-        expect(response.body.data.summary.averages.usabilityScore).toBe(4);
-      });
+      .expect(403);
 
-    expect(mockLxpService.listSystemEvaluations).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'teacher-1',
-        roles: ['teacher'],
-      }),
-      'lxp',
-    );
+    expect(mockLxpService.listSystemEvaluations).not.toHaveBeenCalled();
   });
 
   it('allows admin role for evaluation listing', async () => {
@@ -118,7 +107,7 @@ describe('LXP evaluations (e2e)', () => {
         userId: 'admin-1',
         roles: ['admin'],
       }),
-      undefined,
+      {},
     );
   });
 

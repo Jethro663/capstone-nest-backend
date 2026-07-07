@@ -77,6 +77,7 @@ type JaAccessibleAskSources = {
 };
 
 const JA_QUESTION_COUNT = 10;
+const JA_REVIEW_MAX_ATTEMPTS = 3;
 const JA_SESSION_XP_BASE = 40;
 const JA_SESSION_XP_PER_CORRECT = 6;
 const JA_ASK_MAX_HISTORY = 8;
@@ -334,6 +335,60 @@ export class JaService {
     }
 
     return { isCorrect: false, scoreDelta: 0 };
+  }
+
+  private getCorrectOptionIdsForItem(
+    itemType: string,
+    answerKey: Record<string, unknown>,
+    options?: unknown[] | null,
+  ) {
+    const uniqueStrings = (values: unknown[]) =>
+      Array.from(
+        new Set(
+          values.filter(
+            (value): value is string =>
+              typeof value === 'string' && value.trim().length > 0,
+          ),
+        ),
+      );
+
+    if (itemType === 'multiple_choice' || itemType === 'dropdown') {
+      return uniqueStrings([answerKey.correctOptionId]);
+    }
+
+    if (itemType === 'multiple_select') {
+      return uniqueStrings(
+        Array.isArray(answerKey.correctOptionIds)
+          ? answerKey.correctOptionIds
+          : [],
+      );
+    }
+
+    if (itemType === 'true_false') {
+      const directOptionIds = uniqueStrings([answerKey.correctOptionId]);
+      if (directOptionIds.length > 0) return directOptionIds;
+      if (
+        typeof answerKey.correctValue !== 'boolean' ||
+        !Array.isArray(options)
+      ) {
+        return [];
+      }
+
+      const expectedText = String(answerKey.correctValue).toLowerCase();
+      const matchingOption = options.find((option) => {
+        if (!option || typeof option !== 'object') return false;
+        const optionRecord = option as { id?: unknown; text?: unknown };
+        return (
+          typeof optionRecord.id === 'string' &&
+          typeof optionRecord.text === 'string' &&
+          optionRecord.text.trim().toLowerCase() === expectedText
+        );
+      }) as { id?: unknown } | undefined;
+
+      return typeof matchingOption?.id === 'string' ? [matchingOption.id] : [];
+    }
+
+    return [];
   }
 
   private async getAccessibleAskSources(
@@ -792,11 +847,12 @@ export class JaService {
             strikeCount: true,
             rewardState: true,
             groundingStatus: true,
+            sourceSnapshotJson: true,
             startedAt: true,
             completedAt: true,
           },
           orderBy: [desc(jaSessions.updatedAt)],
-          limit: 12,
+          limit: 60,
         }),
         this.db
           .select({
@@ -820,6 +876,52 @@ export class JaService {
     const avgScore = Number(masteryRows[0]?.avgScore ?? 0);
     const masteryPercent = Math.max(0, Math.min(100, Math.round(avgScore)));
     const progress = practice.progress;
+    const reviewAttemptStats = new Map<
+      string,
+      { count: number; activeReviewSessionId: string | null }
+    >();
+
+    reviewSessions.forEach((session) => {
+      const sourceSnapshot = (session.sourceSnapshotJson ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const attemptId =
+        typeof sourceSnapshot.attemptId === 'string'
+          ? sourceSnapshot.attemptId
+          : null;
+      if (!attemptId) return;
+
+      const current = reviewAttemptStats.get(attemptId) ?? {
+        count: 0,
+        activeReviewSessionId: null,
+      };
+      current.count += 1;
+      if (session.status === 'active') {
+        current.activeReviewSessionId = session.id;
+      }
+      reviewAttemptStats.set(attemptId, current);
+    });
+
+    const eligibleAttemptsWithReviewState = eligibleAttempts.map((attempt) => {
+      const stats = reviewAttemptStats.get(attempt.attemptId);
+      const reviewSessionCount = stats?.count ?? 0;
+      const activeReviewSessionId = stats?.activeReviewSessionId ?? null;
+
+      return {
+        ...attempt,
+        reviewSessionCount,
+        maxReviewSessions: JA_REVIEW_MAX_ATTEMPTS,
+        remainingReviewSessions: Math.max(
+          0,
+          JA_REVIEW_MAX_ATTEMPTS - reviewSessionCount,
+        ),
+        locked:
+          !activeReviewSessionId &&
+          reviewSessionCount >= JA_REVIEW_MAX_ATTEMPTS,
+        activeReviewSessionId,
+      };
+    });
 
     const badges = [
       {
@@ -859,8 +961,11 @@ export class JaService {
         guidelines: JA_ASK_GUIDELINES,
       },
       review: {
-        eligibleAttempts,
-        sessions: reviewSessions,
+        eligibleAttempts: eligibleAttemptsWithReviewState,
+        sessions: reviewSessions.map(({ sourceSnapshotJson, ...session }) => ({
+          ...session,
+          sourceSnapshot: sourceSnapshotJson ?? null,
+        })),
       },
     };
   }
@@ -923,7 +1028,8 @@ export class JaService {
       dto.classId,
     );
     const selectedLessonContext = dto.lessonId
-      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      ? (lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ??
+        null)
       : null;
 
     if (dto.lessonId && !selectedLessonContext) {
@@ -1060,21 +1166,24 @@ export class JaService {
       );
     }
 
-    const latestContextMessage = await this.db.query.jaThreadMessages.findFirst({
-      where: and(
-        eq(jaThreadMessages.threadId, threadId),
-        eq(jaThreadMessages.role, 'system'),
-      ),
-      columns: {
-        content: true,
+    const latestContextMessage = await this.db.query.jaThreadMessages.findFirst(
+      {
+        where: and(
+          eq(jaThreadMessages.threadId, threadId),
+          eq(jaThreadMessages.role, 'system'),
+        ),
+        columns: {
+          content: true,
+        },
+        orderBy: [desc(jaThreadMessages.createdAt)],
       },
-      orderBy: [desc(jaThreadMessages.createdAt)],
-    });
+    );
     const persistedLessonContext = this.parseAskThreadContextMessage(
       latestContextMessage?.content,
     );
     const requestedLessonContext = dto.lessonId
-      ? lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ?? null
+      ? (lessonContexts.find((entry) => entry.lessonId === dto.lessonId) ??
+        null)
       : null;
 
     if (dto.lessonId && !requestedLessonContext) {
@@ -1442,6 +1551,35 @@ export class JaService {
       );
     }
 
+    const existingReviewSessions = await this.db
+      .select({
+        id: jaSessions.id,
+        status: jaSessions.status,
+      })
+      .from(jaSessions)
+      .where(
+        and(
+          eq(jaSessions.studentId, studentId),
+          eq(jaSessions.classId, dto.classId),
+          eq(jaSessions.mode, 'review'),
+          sql`${jaSessions.sourceSnapshotJson}->>'attemptId' = ${dto.attemptId}`,
+        ),
+      )
+      .orderBy(desc(jaSessions.updatedAt));
+
+    const activeReviewSession = existingReviewSessions.find(
+      (session) => session.status === 'active',
+    );
+    if (activeReviewSession) {
+      return this.getSession(user, activeReviewSession.id, 'review');
+    }
+
+    if (existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS) {
+      throw new BadRequestException(
+        'This assessment already used all 3 JA replay tries.',
+      );
+    }
+
     const { allowedLessonIds, allowedAssessmentIds } =
       await this.getAccessibleAskSources(studentId, dto.classId);
 
@@ -1555,17 +1693,8 @@ export class JaService {
         startedAt: session.startedAt,
         completedAt: session.completedAt,
       },
-      items: session.items.map((item) => ({
-        id: item.id,
-        orderIndex: item.orderIndex,
-        itemType: item.itemType,
-        prompt: item.prompt,
-        options: item.optionsJson,
-        hint: item.hint,
-        explanation: item.explanation,
-        citations: item.citationsJson,
-        validation: item.validationJson,
-        response: item.responses[0]
+      items: session.items.map((item) => {
+        const response = item.responses[0]
           ? {
               id: item.responses[0].id,
               studentAnswer: item.responses[0].studentAnswerJson,
@@ -1574,8 +1703,32 @@ export class JaService {
               feedback: item.responses[0].feedback,
               answeredAt: item.responses[0].answeredAt,
             }
-          : null,
-      })),
+          : null;
+        const answerKey =
+          item.answerKeyJson && typeof item.answerKeyJson === 'object'
+            ? (item.answerKeyJson as Record<string, unknown>)
+            : {};
+
+        return {
+          id: item.id,
+          orderIndex: item.orderIndex,
+          itemType: item.itemType,
+          prompt: item.prompt,
+          options: item.optionsJson,
+          correctOptionIds: response
+            ? this.getCorrectOptionIdsForItem(
+                item.itemType,
+                answerKey,
+                Array.isArray(item.optionsJson) ? item.optionsJson : [],
+              )
+            : null,
+          hint: item.hint,
+          explanation: item.explanation,
+          citations: item.citationsJson,
+          validation: item.validationJson,
+          response,
+        };
+      }),
     };
   }
 

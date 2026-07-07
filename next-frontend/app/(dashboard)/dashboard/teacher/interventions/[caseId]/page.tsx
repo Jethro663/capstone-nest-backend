@@ -569,7 +569,7 @@ export default function TeacherInterventionWorkspacePage() {
           window.clearInterval(interval);
         }
       }
-    }, 2500);
+    }, 10_000);
 
     return () => window.clearInterval(interval);
   }, [job, loadInterventionJobResult]);

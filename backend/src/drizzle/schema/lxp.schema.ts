@@ -288,6 +288,7 @@ export const generatedGuidedAssessmentAttempts = pgTable(
     assignmentId: uuid('assignment_id')
       .notNull()
       .references(() => interventionAssignments.id, { onDelete: 'cascade' }),
+    attemptNumber: integer('attempt_number').notNull().default(1),
     status: lxpGuidedAttemptStatusEnum('status')
       .notNull()
       .default('in_progress'),
@@ -314,9 +315,13 @@ export const generatedGuidedAssessmentAttempts = pgTable(
       table.caseId,
       table.studentId,
     ),
-    assignmentIdx: uniqueIndex(
-      'lxp_generated_guided_attempts_assignment_unique',
-    ).on(table.assignmentId, table.studentId),
+    assignmentIdx: index('lxp_generated_guided_attempts_assignment_idx').on(
+      table.assignmentId,
+      table.studentId,
+    ),
+    assignmentAttemptIdx: uniqueIndex(
+      'lxp_generated_guided_attempts_assignment_attempt_unique',
+    ).on(table.assignmentId, table.studentId, table.attemptNumber),
   }),
 );
 

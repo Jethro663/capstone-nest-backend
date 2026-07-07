@@ -33,6 +33,9 @@ class _FakeAsyncClient:
 
 
 class CloudFallbackEmbeddingTests(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self) -> None:
+        cloud_fallback._cloud_client = None
+
     async def test_embed_texts_accepts_values_style_embedding_items(self) -> None:
         body = {
             "data": [
@@ -104,6 +107,31 @@ class CloudFallbackEmbeddingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, [[0.1, 0.2], [0.9, 1.0]])
         self.assertEqual(fake_client.requests[0]["kwargs"]["json"]["input"], ["first", "second"])
         self.assertEqual(fake_client.requests[1]["kwargs"]["json"]["input"], ["second"])
+
+    async def test_generate_text_accepts_openrouter_provider_alias(self) -> None:
+        fake_client = _FakeAsyncClient(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "OpenRouter reply",
+                        }
+                    }
+                ]
+            }
+        )
+
+        with (
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_enabled", True),
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_api_key", "test-key"),
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_provider", "openrouter"),
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_base_url", "https://openrouter.ai/api/v1"),
+            patch.object(cloud_fallback.settings, "ai_cloud_fallback_model", "openrouter/auto"),
+            patch("app.cloud_fallback.httpx.AsyncClient", return_value=fake_client),
+        ):
+            result = await cloud_fallback.generate_text(prompt="Hello")
+
+        self.assertEqual(result, "OpenRouter reply")
 
 
 if __name__ == "__main__":

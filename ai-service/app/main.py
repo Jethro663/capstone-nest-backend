@@ -1,4 +1,4 @@
-﻿"""
+"""
 Nexora AI Service â€“ FastAPI application.
 
 All authentication is handled by the NestJS backend proxy.
@@ -8,6 +8,7 @@ User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 import json
 import re
@@ -44,7 +45,12 @@ from .lesson_plan_service import (
     save_lesson_plan_draft,
     _normalize_lesson_plan_output,
 )
-from .quiz_generation_service import generate_quiz_draft, save_quiz_draft
+from .quiz_generation_service import (
+    apply_quiz_draft,
+    generate_quiz_draft,
+    preview_quiz_draft_apply,
+    save_quiz_draft,
+)
 from .retrieval_service import preview_retrieval
 from .remedial_service import recommend_intervention_case
 from .llamaindex_adapter import build_text_node, llamaindex_available
@@ -74,6 +80,7 @@ from .schemas import (
     InterventionRecommendationRequest,
     MentorExplainRequest,
     RequestUser,
+    RetryExtractionRequest,
     StudentTutorAnswerRequest,
     StudentTutorMessageRequest,
     StudentTutorStartRequest,
@@ -93,6 +100,24 @@ _EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
+_TEACHER_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_teacher_bg_max_concurrency)
+_EXTRACTION_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_extraction_bg_max_concurrency)
+_TUTOR_SEMAPHORE = asyncio.Semaphore(settings.ai_tutor_max_inflight)
+
+
+@asynccontextmanager
+async def acquire_tutor_capacity():
+    if _TUTOR_SEMAPHORE.locked():
+        raise HTTPException(
+            status_code=settings.ai_tutor_reject_status,
+            detail="AI Tutor service currently at maximum capacity. Please retry shortly.",
+            headers={"Retry-After": str(settings.ai_tutor_retry_after_s)},
+        )
+    await _TUTOR_SEMAPHORE.acquire()
+    try:
+        yield
+    finally:
+        _TUTOR_SEMAPHORE.release()
 AI_JOB_STALE_FAILURE_MESSAGE = (
     "AI generation timed out before completion. Please retry this job."
 )
@@ -256,7 +281,14 @@ APPROVED_ADMIN_SOURCE_IDS = {
 @app.on_event("startup")
 async def preload_ollama_models() -> None:
     AI_JOB_TASKS.clear()
-    await _cleanup_stale_ai_jobs()
+    try:
+        await _cleanup_stale_ai_jobs()
+    except Exception as err:
+        logger.warning("Failed to cleanup stale AI jobs at startup: %s", err)
+    try:
+        await _recover_orphaned_jobs()
+    except Exception as err:
+        logger.warning("Failed to recover orphaned AI jobs at startup: %s", err)
     try:
         await ollama_client.preload_model("chat")
     except Exception as err:
@@ -265,6 +297,14 @@ async def preload_ollama_models() -> None:
         await ollama_client.preload_model("vision_extraction")
     except Exception as err:
         logger.warning("Failed to preload vision model: %s", err)
+
+
+@app.on_event("shutdown")
+async def shutdown_http_clients() -> None:
+    from . import ollama_client as _oc, cloud_fallback as _cf, backend_uploads as _bu
+    for client in (_oc._ollama_client, _cf._cloud_client, _bu._upload_client):
+        if client and not client.is_closed:
+            await client.aclose()
 
 
 def _set_ai_job_runtime(job_id: str, **values: Any) -> None:
@@ -399,6 +439,39 @@ async def _cleanup_stale_ai_jobs() -> None:
                     "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
                     "staleTimeoutAt": datetime.now(timezone.utc).isoformat(),
                 },
+            )
+
+
+async def _recover_orphaned_jobs() -> None:
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(
+            sa_text(
+                """
+                SELECT id, job_type
+                FROM ai_generation_jobs
+                WHERE status IN ('pending', 'processing')
+                """
+            )
+        )
+        orphan_ids = [(str(row["id"]), str(row["job_type"])) for row in rows.mappings()]
+        if not orphan_ids:
+            return
+        for job_id, job_type in orphan_ids:
+            if job_id in AI_JOB_TASKS:
+                continue
+            logger.info("[ai-job] Marking orphaned %s job %s as failed after restart", job_type, job_id)
+            await _update_ai_job_status(
+                db,
+                job_id=job_id,
+                status="failed",
+                error_message="Job was interrupted by a service restart. Please retry.",
+            )
+            await _record_ai_job_runtime(
+                db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Job interrupted by restart",
+                errorMessage="Job was interrupted by a service restart. Please retry.",
             )
 
 
@@ -748,6 +821,7 @@ async def _ensure_quiz_sources_ready(
     job_id: str | None = None,
     lesson_ids: list[str] | None = None,
     extraction_ids: list[str] | None = None,
+    allow_draft_sources: bool = False,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     if job_id:
         await _record_ai_job_runtime(
@@ -794,6 +868,11 @@ async def _ensure_quiz_sources_ready(
             ready_lessons.get(lesson_id) or lesson_blockers.get(lesson_id)
             for lesson_id in selected_lesson_ids
             if int((ready_lessons.get(lesson_id) or {}).get("chunkCount") or 0) <= 0
+            and not (
+                allow_draft_sources
+                and "draft" in str((lesson_blockers.get(lesson_id) or {}).get("reason") or "").lower()
+                and int((lesson_blockers.get(lesson_id) or {}).get("chunkCount") or 0) > 0
+            )
         ]
         if missing_selected:
             labels = [
@@ -863,6 +942,7 @@ async def _run_quiz_generation_job(
                 job_id=job_id,
                 lesson_ids=body.lesson_ids,
                 extraction_ids=body.extraction_ids,
+                allow_draft_sources=body.allow_draft_sources,
             )
 
             async def _operation(attempt: int) -> dict[str, Any]:
@@ -1065,6 +1145,7 @@ async def _run_lesson_plan_generation_job(
                 job_id=job_id,
                 progressPercent=100,
                 statusMessage="Lesson plan ready",
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
                 resultSummary={
                     "outputId": result.get("outputId"),
                     "classProfile": result.get("classProfile"),
@@ -1086,6 +1167,7 @@ async def _run_lesson_plan_generation_job(
                 progressPercent=100,
                 statusMessage="Generation cancelled",
                 errorMessage="Generation cancelled by teacher.",
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
             logger.info("[ai-job] Lesson plan generation %s cancelled", job_id)
             raise
@@ -1103,6 +1185,7 @@ async def _run_lesson_plan_generation_job(
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
             logger.exception("[ai-job] Lesson plan generation %s failed", job_id)
         finally:
@@ -1161,9 +1244,7 @@ def require_internal_service(
 ) -> None:
     expected_secret = (settings.ai_service_shared_secret or "").strip()
     provided_secret = (x_internal_service_token or "").strip()
-    if not expected_secret:
-        return
-    if provided_secret != expected_secret:
+    if not expected_secret or provided_secret != expected_secret:
         raise HTTPException(401, "Invalid internal service token")
 
 
@@ -1825,11 +1906,22 @@ async def chat(
 
     if health["available"]:
         try:
-            reply = await ollama_client.chat(ollama_messages, task="chat")
+            chat_hard_timeout_s = max(settings.ollama_timeout_chat_s + 30, 90)
+            reply = await asyncio.wait_for(
+                ollama_client.chat(ollama_messages, task="chat"),
+                timeout=chat_hard_timeout_s,
+            )
             model_used = ollama_client.get_task_model_name(
                 "chat",
                 images=attachments,
             )
+        except asyncio.TimeoutError:
+            logger.warning("Ollama chat timed out after %ss", chat_hard_timeout_s)
+            reply = (
+                "I'm taking a bit longer than expected. Please try again in a moment. "
+                "If this keeps happening, let your teacher know!"
+            )
+            model_used = "fallback (timeout)"
         except Exception as err:
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
@@ -2175,12 +2267,13 @@ async def student_tutor_start(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    data = await start_student_tutor_session(
-        db,
-        user,
-        class_id=body.class_id,
-        recommendation=body.recommendation,
-    )
+    async with acquire_tutor_capacity():
+        data = await start_student_tutor_session(
+            db,
+            user,
+            class_id=body.class_id,
+            recommendation=body.recommendation,
+        )
     return {
         "success": True,
         "message": "Tutor session started",
@@ -2211,13 +2304,14 @@ async def student_tutor_message(
 ):
     if body.session_id != session_id:
         raise HTTPException(400, "Session ID mismatch")
-    data = await continue_student_tutor_session(
-        db,
-        user,
-        session_id=session_id,
-        message=body.message,
-        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
-    )
+    async with acquire_tutor_capacity():
+        data = await continue_student_tutor_session(
+            db,
+            user,
+            session_id=session_id,
+            message=body.message,
+            attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
+        )
     return {
         "success": True,
         "message": "Tutor follow-up generated",
@@ -2234,13 +2328,14 @@ async def student_tutor_answers(
 ):
     if body.session_id != session_id:
         raise HTTPException(400, "Session ID mismatch")
-    data = await submit_student_tutor_answers(
-        db,
-        user,
-        session_id=session_id,
-        answers=body.answers,
-        attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
-    )
+    async with acquire_tutor_capacity():
+        data = await submit_student_tutor_answers(
+            db,
+            user,
+            session_id=session_id,
+            answers=body.answers,
+            attachments=[item.model_dump(by_alias=True) for item in (body.attachments or [])],
+        )
     return {
         "success": True,
         "message": "Tutor answers evaluated",
@@ -3194,6 +3289,7 @@ def _normalize_extraction_section(section: Any, index: int) -> dict[str, Any]:
         "confidence": float(confidence) if isinstance(confidence, (int, float)) else None,
         "graphKeywords": _normalize_string_list(section.get("graphKeywords")),
         "figureReferences": _normalize_string_list(section.get("figureReferences")),
+        "reviewState": str(section.get("reviewState") or "").strip() or None,
     }
 
 
@@ -3251,6 +3347,15 @@ def _normalize_structured_content(payload: Any) -> dict[str, Any]:
         "mediaAssets": media_assets,
     }
     _refresh_media_review_state(structured_content)
+    audit = structured_content.get("audit") if isinstance(structured_content.get("audit"), dict) else {}
+    if not isinstance(audit.get("reviewIssues"), list):
+        audit["reviewIssues"] = []
+    audit["reviewState"] = str(audit.get("reviewState") or "").strip() or (
+        "needs_review"
+        if any(isinstance(issue, dict) and not issue.get("resolved") for issue in audit.get("reviewIssues", []))
+        else "ready"
+    )
+    structured_content["audit"] = audit
     return structured_content
 
 
@@ -3291,6 +3396,9 @@ async def extract_module(
             "requestedSectionCount": body.target_section_count,
             "finalSectionCount": 0,
             "sectionCountAdjustmentReason": None,
+            "extractionStyle": body.extraction_style,
+            "reviewIssues": [],
+            "reviewState": "pending",
         },
     }
     result = await db.execute(
@@ -3312,17 +3420,19 @@ async def extract_module(
 
     # Run extraction in background on the active event loop.
     async def _run():
-        from .database import AsyncSessionLocal
+        async with _EXTRACTION_BG_SEMAPHORE:
+            from .database import AsyncSessionLocal
 
-        async with AsyncSessionLocal() as bg_db:
-            logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
-            await run_extraction(
-                bg_db,
-                extraction_id,
-                body.file_id,
-                user.id,
-                target_section_count=body.target_section_count,
-            )
+            async with AsyncSessionLocal() as bg_db:
+                logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
+                await run_extraction(
+                    bg_db,
+                    extraction_id,
+                    body.file_id,
+                    user.id,
+                    target_section_count=body.target_section_count,
+                    extraction_style=body.extraction_style,
+                )
 
     try:
         loop = asyncio.get_running_loop()
@@ -3571,6 +3681,30 @@ async def update_extraction(
     else:
         raw_media_assets = existing_content.get("mediaAssets") or []
 
+    audit = existing_content.get("audit") if isinstance(existing_content.get("audit"), dict) else {}
+    audit = dict(audit)
+    if body.review_issues is not None:
+        audit["reviewIssues"] = [
+            issue
+            for issue in body.review_issues
+            if isinstance(issue, dict) and str(issue.get("id") or "").strip()
+        ]
+    if body.review_state is not None:
+        audit["reviewState"] = str(body.review_state or "").strip() or None
+    if body.review_issues is not None or body.review_state is not None:
+        unresolved_blocking = any(
+            isinstance(issue, dict)
+            and not issue.get("resolved")
+            and str(issue.get("severity") or "").strip().lower() == "blocking"
+            for issue in audit.get("reviewIssues", [])
+        )
+        review_state = str(audit.get("reviewState") or "").strip().lower()
+        audit["reviewRequired"] = (
+            str(audit.get("qualityGate") or "").strip().lower() == "fail"
+            or unresolved_blocking
+            or review_state in {"blocked", "needs_review"}
+        )
+
     structured_content = _normalize_structured_content(
         {
             "title": body.title if body.title is not None else existing_content.get("title"),
@@ -3580,7 +3714,7 @@ async def update_extraction(
                 else existing_content.get("description")
             ),
             "sections": raw_sections,
-            "audit": existing_content.get("audit") or {},
+            "audit": audit,
             "mediaAssets": raw_media_assets,
         }
     )
@@ -3601,6 +3735,130 @@ async def update_extraction(
 # ---------------------------------------------------------------------------
 # POST /extractions/:id/apply
 # ---------------------------------------------------------------------------
+
+def _unresolved_blocking_review_issues(content: dict[str, Any]) -> list[dict[str, Any]]:
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    issues = audit.get("reviewIssues") if isinstance(audit.get("reviewIssues"), list) else []
+    return [
+        issue
+        for issue in issues
+        if isinstance(issue, dict)
+        and not issue.get("resolved")
+        and str(issue.get("severity") or "").lower() == "blocking"
+    ]
+
+
+def _select_sections_for_apply(
+    content: dict[str, Any],
+    body: ApplyExtractionRequest,
+) -> list[tuple[dict[str, Any], int]]:
+    all_sections = content.get("sections") or []
+    if not all_sections:
+        raise HTTPException(400, "No sections found in extraction result")
+
+    selected_indices = (
+        body.section_indices
+        if body.section_indices is not None
+        else body.lesson_indices
+    )
+    if selected_indices:
+        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
+        if invalid:
+            raise HTTPException(
+                400,
+                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
+            )
+        return [(all_sections[i], i) for i in selected_indices]
+    return [(section, i) for i, section in enumerate(all_sections)]
+
+
+def _validate_apply_ready(content: dict[str, Any]) -> None:
+    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
+    if quality_gate == "fail":
+        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
+    if bool(audit.get("reviewRequired")):
+        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
+    unresolved = _unresolved_blocking_review_issues(content)
+    if unresolved:
+        raise HTTPException(400, "Extraction has unresolved blocking review issues before it can be applied.")
+
+
+def _build_apply_preview(content: dict[str, Any], body: ApplyExtractionRequest) -> dict[str, Any]:
+    sections_to_apply = _select_sections_for_apply(content, body)
+    prepared = [
+        (
+            _prepare_section_for_apply(
+                section_data,
+                fallback_title=f"Section {source_section_index + 1}",
+            ),
+            source_section_index,
+        )
+        for section_data, source_section_index in sections_to_apply
+    ]
+    preview_sections = []
+    assessment_count = 0
+    for section, source_index in prepared:
+        question_count = len(section.get("assessmentDraft", {}).get("questions", [])) if isinstance(section.get("assessmentDraft"), dict) else 0
+        if question_count > 0:
+            assessment_count += 1
+        preview_sections.append(
+            {
+                "title": section["title"],
+                "sourceSectionIndex": source_index,
+                "lessonBlocks": len(section.get("lessonBlocks") or []),
+                "assessmentQuestions": question_count,
+            }
+        )
+    return {
+        "moduleTitle": str(content.get("title") or "Extracted Module"),
+        "moduleDescription": str(content.get("description") or ""),
+        "sectionsCreated": len(prepared),
+        "lessonsCreated": len(prepared),
+        "assessmentsCreated": assessment_count,
+        "blockedReasons": [],
+        "sections": preview_sections,
+    }
+
+
+@app.post("/extractions/{extraction_id}/apply/preview")
+async def preview_apply_extraction(
+    extraction_id: str,
+    body: ApplyExtractionRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, extraction_status, is_applied, teacher_id, "
+            "class_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only view your own extractions")
+    if extraction["extraction_status"] not in {"completed", "applied"}:
+        raise HTTPException(
+            400,
+            f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be previewed',
+        )
+
+    content = _normalize_structured_content(extraction["structured_content"])
+    if not extraction["is_applied"]:
+        _validate_apply_ready(content)
+    preview = _build_apply_preview(content, body)
+    preview["alreadyApplied"] = bool(extraction["is_applied"])
+    return {
+        "success": True,
+        "message": "Extraction apply preview",
+        "data": preview,
+    }
 
 
 @app.post("/extractions/{extraction_id}/apply", status_code=201)
@@ -3626,40 +3884,34 @@ async def apply_extraction(
     if not is_admin and str(extraction["teacher_id"]) != user.id:
         raise HTTPException(403, "You can only view your own extractions")
 
+    content = _normalize_structured_content(extraction["structured_content"])
+    if extraction["is_applied"]:
+        audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
+        apply_result = audit.get("applyResult") if isinstance(audit.get("applyResult"), dict) else {}
+        return {
+            "success": True,
+            "message": "Extraction was already applied earlier.",
+            "data": {
+                "alreadyApplied": True,
+                "sectionsCreated": _safe_int(apply_result.get("sectionsCreated"), 0),
+                "lessonsCreated": _safe_int(apply_result.get("lessonsCreated"), 0),
+                "assessmentsCreated": _safe_int(apply_result.get("assessmentsCreated"), 0),
+                "sections": apply_result.get("sections") if isinstance(apply_result.get("sections"), list) else [],
+                "lessons": apply_result.get("lessons") if isinstance(apply_result.get("lessons"), list) else [],
+                "assessments": apply_result.get("assessments") if isinstance(apply_result.get("assessments"), list) else [],
+                "moduleId": apply_result.get("moduleId"),
+            },
+        }
+
     if extraction["extraction_status"] != "completed":
         raise HTTPException(
             400,
             f'Extraction is "{extraction["extraction_status"]}" - only completed extractions can be applied',
         )
-    if extraction["is_applied"]:
-        raise HTTPException(400, "This extraction has already been applied")
 
-    content = _normalize_structured_content(extraction["structured_content"])
-    audit = content.get("audit") if isinstance(content.get("audit"), dict) else {}
-    quality_gate = str(audit.get("qualityGate") or "pass").strip().lower()
-    if quality_gate == "fail":
-        raise HTTPException(400, "Extraction quality is too low to apply. Review or rerun the extraction first.")
-    if bool(audit.get("reviewRequired")):
-        raise HTTPException(400, "Extraction still requires teacher review before it can be applied.")
+    _validate_apply_ready(content)
     all_sections = content.get("sections") or []
-    if not all_sections:
-        raise HTTPException(400, "No sections found in extraction result")
-
-    selected_indices = (
-        body.section_indices
-        if body.section_indices is not None
-        else body.lesson_indices
-    )
-    if selected_indices:
-        invalid = [i for i in selected_indices if i < 0 or i >= len(all_sections)]
-        if invalid:
-            raise HTTPException(
-                400,
-                f"Invalid section indices: {invalid}. Valid range: 0-{len(all_sections) - 1}",
-            )
-        sections_to_apply = [(all_sections[i], i) for i in selected_indices]
-    else:
-        sections_to_apply = [(section, i) for i, section in enumerate(all_sections)]
+    sections_to_apply = _select_sections_for_apply(content, body)
 
     prepared_sections = [
         (
@@ -3793,24 +4045,36 @@ async def apply_extraction(
         if not isinstance(blocks, list):
             blocks = []
 
-        for idx, block in enumerate(blocks):
-            normalized_block = _normalize_extraction_block(block, idx + 1)
-            await db.execute(
-                sa_text(
-                    'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
-                    "VALUES (:lessonId, :type, :order, :content, :metadata)"
-                ).bindparams(
-                    bindparam("content", type_=postgresql.JSONB),
-                    bindparam("metadata", type_=postgresql.JSONB),
-                ),
-                {
+        if blocks:
+            block_rows = []
+            for idx, block in enumerate(blocks):
+                normalized_block = _normalize_extraction_block(block, idx + 1)
+                block_rows.append({
                     "lessonId": new_lesson["id"],
                     "type": normalized_block.get("type"),
                     "order": _safe_int(normalized_block.get("order"), idx),
-                    "content": normalized_block.get("content") or {},
-                    "metadata": normalized_block.get("metadata") or {},
-                },
-            )
+                    "content": json.dumps(normalized_block.get("content") or {}),
+                    "metadata": json.dumps(normalized_block.get("metadata") or {}),
+                })
+            if block_rows:
+                placeholders = ", ".join(
+                    f"(:bl{i}_lid, :bl{i}_type, :bl{i}_order, :bl{i}_content::jsonb, :bl{i}_metadata::jsonb)"
+                    for i in range(len(block_rows))
+                )
+                params: dict[str, Any] = {}
+                for i, row in enumerate(block_rows):
+                    params[f"bl{i}_lid"] = row["lessonId"]
+                    params[f"bl{i}_type"] = row["type"]
+                    params[f"bl{i}_order"] = row["order"]
+                    params[f"bl{i}_content"] = row["content"]
+                    params[f"bl{i}_metadata"] = row["metadata"]
+                await db.execute(
+                    sa_text(
+                        'INSERT INTO lesson_content_blocks (lesson_id, type, "order", content, metadata) '
+                        "VALUES " + placeholders
+                    ),
+                    params,
+                )
 
         await db.execute(
             sa_text(
@@ -3887,6 +4151,7 @@ async def apply_extraction(
                     raise HTTPException(500, "Failed to create assessment from section draft")
                 assessment_id = str(assessment_row["id"])
 
+                all_options: list[dict[str, Any]] = []
                 for question_index, question in enumerate(questions, start=1):
                     question_type = str(question.get("type") or "multiple_choice").strip().lower()
                     if question_type not in VALID_QUESTION_TYPES:
@@ -3949,30 +4214,31 @@ async def apply_extraction(
                             option_text = str(option.get("text") or "").strip()
                             if not option_text:
                                 continue
-                            await db.execute(
-                                sa_text(
-                                    """
-                                    INSERT INTO assessment_question_options (
-                                      question_id,
-                                      text,
-                                      is_correct,
-                                      "order"
-                                    )
-                                    VALUES (
-                                      :questionId,
-                                      :text,
-                                      :isCorrect,
-                                      :order
-                                    )
-                                    """
-                                ),
-                                {
-                                    "questionId": question_id,
-                                    "text": option_text,
-                                    "isCorrect": bool(option.get("isCorrect")),
-                                    "order": _safe_int(option.get("order"), option_index),
-                                },
-                            )
+                            all_options.append({
+                                "questionId": question_id,
+                                "text": option_text,
+                                "isCorrect": bool(option.get("isCorrect")),
+                                "order": _safe_int(option.get("order"), option_index),
+                            })
+
+                if all_options:
+                    opt_placeholders = ", ".join(
+                        f"(:o{i}_qid, :o{i}_text, :o{i}_correct, :o{i}_order)"
+                        for i in range(len(all_options))
+                    )
+                    opt_params: dict[str, Any] = {}
+                    for i, opt in enumerate(all_options):
+                        opt_params[f"o{i}_qid"] = opt["questionId"]
+                        opt_params[f"o{i}_text"] = opt["text"]
+                        opt_params[f"o{i}_correct"] = opt["isCorrect"]
+                        opt_params[f"o{i}_order"] = opt["order"]
+                    await db.execute(
+                        sa_text(
+                            'INSERT INTO assessment_question_options (question_id, text, is_correct, "order") '
+                            "VALUES " + opt_placeholders
+                        ),
+                        opt_params,
+                    )
 
                 await db.execute(
                     sa_text(
@@ -3993,6 +4259,22 @@ async def apply_extraction(
                     {"id": assessment_id, "title": str(assessment_row["title"])}
                 )
 
+    apply_result = {
+        "alreadyApplied": False,
+        "classId": class_id,
+        "extractionId": extraction_id,
+        "moduleId": module_id,
+        "sectionsCreated": len(created_sections),
+        "lessonsCreated": len(created_lessons),
+        "assessmentsCreated": len(created_assessments),
+        "totalSectionsAvailable": len(all_sections),
+        "totalLessonsAvailable": len(all_sections),
+        "sections": created_sections,
+        "lessons": created_lessons,
+        "assessments": created_assessments,
+    }
+    content.setdefault("audit", {})["applyResult"] = apply_result
+
     await db.execute(
         sa_text(
             "UPDATE extracted_modules "
@@ -4002,7 +4284,11 @@ async def apply_extraction(
         {"id": extraction_id, "sc": content},
     )
     await db.commit()
-    index_result = await reindex_class_content(db, str(class_id))
+    try:
+        index_result = await reindex_class_content(db, str(class_id))
+    except Exception as err:
+        logger.warning("[extraction] Reindex failed after apply %s: %s", extraction_id, err)
+        index_result = {"ok": False, "message": str(err)}
 
     return {
         "success": True,
@@ -4014,6 +4300,7 @@ async def apply_extraction(
             "classId": class_id,
             "extractionId": extraction_id,
             "moduleId": module_id,
+            "alreadyApplied": False,
             "sectionsCreated": len(created_sections),
             "lessonsCreated": len(created_lessons),
             "assessmentsCreated": len(created_assessments),
@@ -4023,6 +4310,137 @@ async def apply_extraction(
             "lessons": created_lessons,
             "assessments": created_assessments,
             "indexing": index_result,
+        },
+    }
+
+
+@app.post("/extractions/{extraction_id}/cancel")
+async def cancel_extraction(
+    extraction_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, extraction_status, is_applied, teacher_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only cancel your own extractions")
+    if extraction["is_applied"]:
+        raise HTTPException(400, "Cannot cancel an extraction that has already been applied")
+
+    content = _normalize_structured_content(extraction.get("structured_content"))
+    content.setdefault("audit", {}).update(
+        {
+            "cancelRequested": True,
+            "cancelledByTeacher": True,
+            "reviewState": "cancelled",
+        }
+    )
+    await db.execute(
+        sa_text(
+            "UPDATE extracted_modules "
+            "SET extraction_status = 'failed', error_message = :message, structured_content = :sc, updated_at = NOW() "
+            "WHERE id = :id"
+        ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
+        {
+            "id": extraction_id,
+            "message": "Extraction cancelled by teacher.",
+            "sc": content,
+        },
+    )
+    await db.commit()
+    return {
+        "success": True,
+        "message": "Extraction cancelled",
+        "data": {"id": extraction_id, "status": "failed", "cancelledByTeacher": True},
+    }
+
+
+@app.post("/extractions/{extraction_id}/retry", status_code=202)
+async def retry_extraction(
+    extraction_id: str,
+    body: RetryExtractionRequest,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await db.execute(
+        sa_text(
+            "SELECT id, file_id, class_id, teacher_id, structured_content "
+            "FROM extracted_modules WHERE id = :id"
+        ),
+        {"id": extraction_id},
+    )
+    extraction = row.mappings().first()
+    if not extraction:
+        raise HTTPException(404, f'Extraction "{extraction_id}" not found')
+    is_admin = "admin" in user.roles
+    if not is_admin and str(extraction["teacher_id"]) != user.id:
+        raise HTTPException(403, "You can only retry your own extractions")
+
+    existing_content = _normalize_structured_content(extraction.get("structured_content"))
+    audit = existing_content.get("audit") if isinstance(existing_content.get("audit"), dict) else {}
+    target_section_count = body.target_section_count or _safe_int(audit.get("requestedSectionCount"), 4)
+    if target_section_count not in {3, 4, 5}:
+        target_section_count = 4
+    extraction_style = body.extraction_style or str(audit.get("extractionStyle") or "clean")
+    initial_structured_content = {
+        "title": "",
+        "description": "",
+        "sections": [],
+        "mediaAssets": [],
+        "audit": {
+            "requestedSectionCount": target_section_count,
+            "finalSectionCount": 0,
+            "retryOfExtractionId": extraction_id,
+            "extractionStyle": extraction_style,
+            "reviewIssues": [],
+            "reviewState": "pending",
+        },
+    }
+    result = await db.execute(
+        sa_text(
+            "INSERT INTO extracted_modules "
+            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
+            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
+            "RETURNING id"
+        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
+        {
+            "fileId": extraction["file_id"],
+            "classId": extraction["class_id"],
+            "teacherId": user.id,
+            "structuredContent": initial_structured_content,
+        },
+    )
+    await db.commit()
+    new_extraction_id = result.scalar_one()
+
+    async def _run():
+        async with AsyncSessionLocal() as bg_db:
+            await run_extraction(
+                bg_db,
+                str(new_extraction_id),
+                str(extraction["file_id"]),
+                user.id,
+                target_section_count=target_section_count,
+                extraction_style=extraction_style,
+            )
+
+    asyncio.get_running_loop().create_task(_run())
+    return {
+        "success": True,
+        "message": "Extraction retry queued",
+        "data": {
+            "extractionId": new_extraction_id,
+            "status": "pending",
+            "retryOfExtractionId": extraction_id,
         },
     }
 
@@ -4197,9 +4615,12 @@ async def queue_intervention_recommendation_job(
 
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(
-            _run_intervention_generation_job(job_id, case_id, body.note, user)
-        )
+
+        async def _sem_intervention():
+            async with _TEACHER_BG_SEMAPHORE:
+                await _run_intervention_generation_job(job_id, case_id, body.note, user)
+
+        task = loop.create_task(_sem_intervention())
         AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule intervention job %s: %s", job_id, exc)
@@ -4259,13 +4680,26 @@ async def queue_teacher_quiz_draft_job(
             "questionType": body.question_type,
             "assessmentType": body.assessment_type,
             "title": body.title,
+            "teacherNote": body.teacher_note,
+            "passingScore": body.passing_score,
+            "feedbackLevel": body.feedback_level,
+            "classRecordCategory": body.class_record_category,
+            "quarter": body.quarter,
+            "sourcePolicy": body.source_policy,
+            "allowDraftSources": body.allow_draft_sources,
+            "retryOfJobId": body.retry_of_job_id,
         },
         max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
     )
 
     try:
         loop = asyncio.get_running_loop()
-        task = loop.create_task(_run_quiz_generation_job(job_id, body, user))
+
+        async def _sem_quiz():
+            async with _TEACHER_BG_SEMAPHORE:
+                await _run_quiz_generation_job(job_id, body, user)
+
+        task = loop.create_task(_sem_quiz())
         AI_JOB_TASKS[job_id] = task
     except RuntimeError as exc:
         logger.exception("[ai-job] Failed to schedule quiz job %s: %s", job_id, exc)
@@ -4327,13 +4761,9 @@ async def queue_teacher_lesson_plan_job(
         max_attempts=2,
     )
 
-    try:
-        loop = asyncio.get_running_loop()
-        task = loop.create_task(_run_lesson_plan_generation_job(job_id, body, user))
-        AI_JOB_TASKS[job_id] = task
-    except RuntimeError as exc:
-        logger.exception("[ai-job] Failed to schedule lesson plan job %s: %s", job_id, exc)
-        raise HTTPException(500, "Failed to schedule lesson plan generation job") from exc
+    # NOTE: Execution is no longer scheduled in-process via create_task.
+    # The NestJS backend BullMQ worker owns execution orchestration and
+    # will call POST /internal/teacher/lesson-plans/jobs/{job_id}/run.
 
     return {
         "success": True,
@@ -4345,6 +4775,103 @@ async def queue_teacher_lesson_plan_job(
             "progressPercent": 5,
             "statusMessage": "Queued",
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /internal/teacher/lesson-plans/jobs/:id/run  (BullMQ worker entrypoint)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/internal/teacher/lesson-plans/jobs/{job_id}/run")
+async def run_teacher_lesson_plan_job(
+    job_id: str,
+    meta: dict[str, Any] | None = Body(None),
+    _auth: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Internal execution entrypoint called by the NestJS BullMQ worker.
+
+    This route is NOT called by frontend clients. It triggers the actual
+    LLM-backed lesson plan generation for a job that was already created
+    by the public POST /teacher/lesson-plans/jobs route.
+    """
+    # Fetch the job row and its source_filters (which contain the original request body)
+    job_row = await db.execute(
+        sa_text(
+            """
+            SELECT id, job_type, class_id, teacher_id, status, source_filters
+            FROM ai_generation_jobs
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
+    job = job_row.mappings().first()
+    if not job:
+        raise HTTPException(404, f"Job {job_id} not found")
+
+    # Idempotency guard: don't re-run completed or already-running jobs
+    if job["status"] == "completed":
+        return {
+            "success": True,
+            "message": "Lesson plan generation already completed",
+            "data": {"jobId": job_id, "status": "completed"},
+        }
+
+    meta_dict = meta if isinstance(meta, dict) else {}
+    attempt = int(meta_dict.get("attempt", 1))
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
+    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
+    is_stale_processing = bool(
+        worker_started_at
+        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    )
+
+    # Distributed Deadlock & Execution Lifecycle Contract:
+    # 1. workerStartedAt is written below at the start of each worker execution attempt.
+    # 2. When an attempt completes, cancels, or fails, workerFinishedAt is recorded in runtime and terminal status supersedes stale markers.
+    # 3. If a worker process crashes abruptly without writing workerFinishedAt, the DB row remains in "processing".
+    # 4. When BullMQ retries the job (attempt > 1), if workerStartedAt is older than 6 minutes (stale), we override the conflict check
+    #    and allow re-entry. The new attempt immediately overwrites workerStartedAt with a fresh timestamp below.
+    if job["status"] in ("processing", "running"):
+        if attempt <= 1 or not is_stale_processing:
+            raise HTTPException(409, f"Job {job_id} is already running")
+
+    # Record durable worker execution metadata
+    runtime_patch = {
+        "broker": "bullmq",
+        "attempt": attempt,
+        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
+        "bullmqJobId": meta_dict.get("bullmqJobId"),
+    }
+    _set_ai_job_runtime(job_id, **runtime_patch)
+    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
+
+    # Reconstruct the request body from source_filters
+    source_filters = job["source_filters"] or {}
+    body = GenerateLessonPlanRequest(
+        classId=str(job["class_id"]) if job["class_id"] else "",
+        anchorType=source_filters.get("anchorType", "module"),
+        anchorId=source_filters.get("anchorId", ""),
+        teacherNote=source_filters.get("teacherNote"),
+        header=source_filters.get("header"),
+    )
+    user = RequestUser(
+        id=str(job["teacher_id"]),
+        email="internal-worker@nexora.local",
+        roles=["teacher"],
+    )
+
+    # Run the actual generation (this is the long-running LLM call)
+    await _run_lesson_plan_generation_job(job_id, body, user)
+
+    return {
+        "success": True,
+        "message": "Lesson plan generation completed",
+        "data": {"jobId": job_id},
     }
 
 
@@ -4430,6 +4957,104 @@ async def update_teacher_quiz_draft(
             "outputId": result["outputId"],
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/apply/preview
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/apply/preview")
+async def preview_teacher_quiz_draft_apply(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    preview = await preview_quiz_draft_apply(db, job_id=job_id, user=user)
+    return {
+        "success": True,
+        "message": "Quiz draft apply preview generated",
+        "data": preview,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/apply
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/apply")
+async def apply_teacher_quiz_draft(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await apply_quiz_draft(db, job_id=job_id, user=user)
+    await _record_ai_job_runtime(
+        db,
+        job_id=job_id,
+        progressPercent=100,
+        statusMessage="Draft applied",
+        resultSummary={
+            "assessmentId": (result.get("applyResult") or {}).get("assessmentId"),
+            "outputId": result.get("outputId"),
+            "applyResult": result.get("applyResult"),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Quiz draft applied",
+        "data": result,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/retry
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/retry", status_code=202)
+async def retry_teacher_quiz_draft_job(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    job, _runtime, _assessment_id = await _load_ai_job_context(db, job_id, user)
+    if job.get("job_type") != "quiz_generation":
+        raise HTTPException(400, "Only quiz generation jobs can be retried here")
+    filters = job.get("source_filters") if isinstance(job.get("source_filters"), dict) else {}
+    body = GenerateQuizDraftRequest(
+        classId=str(job["class_id"]),
+        lessonIds=filters.get("lessonIds"),
+        extractionIds=filters.get("extractionIds"),
+        title=filters.get("title"),
+        questionCount=filters.get("questionCount") or 5,
+        questionType=filters.get("questionType") or "multiple_choice",
+        assessmentType=filters.get("assessmentType") or "quiz",
+        passingScore=filters.get("passingScore") or 60,
+        teacherNote=filters.get("teacherNote"),
+        feedbackLevel=filters.get("feedbackLevel") or "standard",
+        classRecordCategory=filters.get("classRecordCategory"),
+        quarter=filters.get("quarter"),
+        sourcePolicy=filters.get("sourcePolicy") or "published_default",
+        allowDraftSources=bool(filters.get("allowDraftSources")),
+        retryOfJobId=job_id,
+    )
+    return await queue_teacher_quiz_draft_job(body, user=user, db=db)
+
+
+# ---------------------------------------------------------------------------
+# POST /teacher/quizzes/jobs/:id/cancel
+# ---------------------------------------------------------------------------
+
+
+@app.post("/teacher/quizzes/jobs/{job_id}/cancel")
+async def cancel_teacher_quiz_draft_job(
+    job_id: str,
+    user: RequestUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await delete_teacher_ai_job(job_id, user=user, db=db)
 
 
 # ---------------------------------------------------------------------------
@@ -4624,5 +5249,3 @@ async def teacher_generate_quiz_draft(
             "indexing": index_result,
         },
     }
-
-

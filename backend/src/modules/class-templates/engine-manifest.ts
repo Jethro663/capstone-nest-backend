@@ -169,7 +169,10 @@ function stripHtml(value: unknown): string {
   if (typeof value !== 'string') {
     return '';
   }
-  return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function toChunkTextFromPayload(payload: Record<string, unknown>): string {
@@ -290,7 +293,9 @@ export function deriveEngineChunks(
   return chunks;
 }
 
-export function parseEngineManifest(manifestText: string): EngineTemplateManifest {
+export function parseEngineManifest(
+  manifestText: string,
+): EngineTemplateManifest {
   const parsed = YAML.parse(manifestText);
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Manifest must be a YAML object');
@@ -298,7 +303,9 @@ export function parseEngineManifest(manifestText: string): EngineTemplateManifes
   return parsed as EngineTemplateManifest;
 }
 
-export function stringifyEngineManifest(manifest: EngineTemplateManifest): string {
+export function stringifyEngineManifest(
+  manifest: EngineTemplateManifest,
+): string {
   return YAML.stringify(manifest, {
     sortMapEntries: true,
     lineWidth: 120,
@@ -368,7 +375,11 @@ export function validateEngineManifest(
     modules.map((entry) => entry.id),
     'modules',
   );
-  pushDuplicateIssues(errors, lessons.map((entry) => entry.id), 'lessons');
+  pushDuplicateIssues(
+    errors,
+    lessons.map((entry) => entry.id),
+    'lessons',
+  );
   pushDuplicateIssues(
     errors,
     assessments.map((entry) => entry.id),
@@ -490,14 +501,16 @@ export function validateEngineManifest(
     if (!provided) {
       warnings.push({
         path: `chunks.${chunk.id}`,
-        message: 'Missing derived chunk; import will regenerate runtime chunks.',
+        message:
+          'Missing derived chunk; import will regenerate runtime chunks.',
       });
       continue;
     }
     if (provided.content !== chunk.content) {
       warnings.push({
         path: `chunks.${chunk.id}.content`,
-        message: 'Chunk content drift detected against canonical lesson/assessment assets.',
+        message:
+          'Chunk content drift detected against canonical lesson/assessment assets.',
       });
     }
   }

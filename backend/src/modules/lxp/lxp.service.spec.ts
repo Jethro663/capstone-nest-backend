@@ -3,11 +3,16 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { LxpService } from './lxp.service';
 import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
 
 describe('LxpService', () => {
   let service: LxpService;
-  const mockNotificationsService = { createBulk: jest.fn() };
+  const mockNotificationsService = {
+    createBulk: jest.fn(),
+    createBulkDeduped: jest.fn(),
+  };
+  const mockNotificationsGateway = { emitToUser: jest.fn() };
   const mockAuditService = { log: jest.fn() };
 
   const mockDb: any = {
@@ -31,7 +36,7 @@ describe('LxpService', () => {
         findMany: jest.fn(),
       },
       lessons: { findMany: jest.fn() },
-      assessments: { findMany: jest.fn() },
+      assessments: { findFirst: jest.fn(), findMany: jest.fn() },
     },
     select: jest.fn(),
     insert: jest.fn(),
@@ -41,6 +46,10 @@ describe('LxpService', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    mockNotificationsService.createBulk.mockResolvedValue(undefined);
+    mockNotificationsService.createBulkDeduped.mockImplementation(
+      async (inputs) => inputs,
+    );
     mockDb.query.performanceSnapshots.findMany.mockResolvedValue([]);
     mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue(
       [],
@@ -63,6 +72,7 @@ describe('LxpService', () => {
         LxpService,
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: NotificationsGateway, useValue: mockNotificationsGateway },
         { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
@@ -213,6 +223,74 @@ describe('LxpService', () => {
     );
   });
 
+  it('returns open student intervention alerts for enrolled classes', async () => {
+    mockDb.query.enrollments.findMany.mockResolvedValueOnce([
+      {
+        classId: 'class-pending',
+        class: {
+          id: 'class-pending',
+          subjectName: 'English 7',
+          subjectCode: 'ENG-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+      {
+        classId: 'class-active',
+        class: {
+          id: 'class-active',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          section: { id: 'sec-1', name: 'Section A', gradeLevel: '7' },
+        },
+      },
+    ]);
+    mockDb.query.interventionCases.findMany.mockResolvedValueOnce([
+      {
+        id: 'case-pending',
+        classId: 'class-pending',
+        status: 'pending',
+        triggerScore: '71.25',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-05-01T00:00:00.000Z'),
+      },
+      {
+        id: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        triggerScore: '68.5',
+        thresholdApplied: '74',
+        openedAt: new Date('2026-05-02T00:00:00.000Z'),
+      },
+    ]);
+    mockDb.query.interventionAssignments.findMany.mockResolvedValueOnce([
+      { caseId: 'case-active' },
+    ]);
+
+    const result = await service.getStudentInterventionAlerts('student-1');
+
+    expect(result.count).toBe(2);
+    expect(result.alerts).toEqual([
+      expect.objectContaining({
+        caseId: 'case-pending',
+        classId: 'class-pending',
+        status: 'pending',
+        subjectCode: 'ENG-7',
+        triggerScore: 71.25,
+        thresholdApplied: 74,
+        hasAssignedPath: false,
+      }),
+      expect.objectContaining({
+        caseId: 'case-active',
+        classId: 'class-active',
+        status: 'active',
+        subjectCode: 'MATH-7',
+        triggerScore: 68.5,
+        thresholdApplied: 74,
+        hasAssignedPath: true,
+      }),
+    ]);
+  });
+
   it('hides active intervention cases from student eligibility until assignments exist', async () => {
     mockDb.query.enrollments.findMany.mockResolvedValueOnce([
       {
@@ -325,6 +403,111 @@ describe('LxpService', () => {
     expect(result.progress.completionPercent).toBe(100);
     expect(result.checkpoints).toHaveLength(2);
     expect(ensureDefaultAssignmentsSpy).not.toHaveBeenCalled();
+  });
+
+  it('includes guided assessment attempt summaries in the student playlist', async () => {
+    mockDb.query.enrollments.findFirst.mockResolvedValue({
+      id: 'enrollment-1',
+      class: { id: 'class-1', isActive: true, section: { isActive: true } },
+    });
+    mockDb.query.interventionCases.findFirst.mockResolvedValueOnce({
+      id: 'case-active',
+      classId: 'class-1',
+      studentId: 'student-1',
+      status: 'active',
+      triggerScore: '64',
+      thresholdApplied: '74',
+      openedAt: new Date('2026-02-01T00:00:00.000Z'),
+      closedAt: null,
+      createdAt: new Date('2026-02-01T00:00:00.000Z'),
+    });
+    mockDb.query.interventionAssignments.findFirst.mockResolvedValue({
+      id: 'assignment-guided',
+    });
+    mockDb.query.lxpProgress.findFirst.mockResolvedValue({
+      studentId: 'student-1',
+      classId: 'class-1',
+      xpTotal: 30,
+      streakDays: 1,
+      checkpointsCompleted: 0,
+      lastActivityAt: null,
+    });
+    mockDb.query.interventionAssignments.findMany.mockResolvedValue([
+      {
+        id: 'assignment-guided',
+        assignmentType: 'guided_assessment',
+        checkpointLabel: 'AI guided assessment: Fractions recovery',
+        orderIndex: 1,
+        isCompleted: false,
+        completedAt: null,
+        xpAwarded: 30,
+        lesson: null,
+        assessment: null,
+        generatedRemedialLesson: null,
+        generatedGuidedAssessment: {
+          id: 'guided-1',
+          title: 'Fractions recovery',
+          description: 'Guided practice',
+          weakConcepts: ['Fractions'],
+          sourceAssessmentId: 'assessment-1',
+          sourceReferences: [],
+          formativeSummary: 'Keep practicing',
+          questions: [],
+          approvalStatus: 'approved',
+          approvedAt: new Date('2026-02-02T00:00:00.000Z'),
+          rejectedAt: null,
+        },
+      },
+    ]);
+    mockDb.query.generatedGuidedAssessmentAttempts.findMany.mockResolvedValue([
+      {
+        id: 'attempt-1',
+        assignmentId: 'assignment-guided',
+        studentId: 'student-1',
+        attemptNumber: 1,
+        status: 'submitted',
+        score: 58,
+        correctCount: 3,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-02-03T00:00:00.000Z'),
+        startedAt: new Date('2026-02-03T00:00:00.000Z'),
+      },
+      {
+        id: 'attempt-2',
+        assignmentId: 'assignment-guided',
+        studentId: 'student-1',
+        attemptNumber: 2,
+        status: 'submitted',
+        score: 82,
+        correctCount: 4,
+        totalQuestions: 5,
+        submittedAt: new Date('2026-02-04T00:00:00.000Z'),
+        startedAt: new Date('2026-02-04T00:00:00.000Z'),
+      },
+    ]);
+    mockDb.query.assessments.findFirst.mockResolvedValue({
+      passingScore: '75',
+    });
+
+    const result = await service.getStudentPlaylist('student-1', 'class-1');
+    const guidedCheckpoint = result.checkpoints[0];
+
+    expect(guidedCheckpoint.guidedAttemptSummary).toMatchObject({
+      maxAttempts: 3,
+      attemptsUsed: 2,
+      remainingAttempts: 1,
+      canRetry: true,
+      isLocked: false,
+      passingScore: 75,
+      passed: true,
+      bestAttemptId: 'attempt-2',
+      bestScorePercent: 82,
+      latestScorePercent: 82,
+    });
+    expect(guidedCheckpoint.guidedAttemptSummary?.attempts).toEqual([
+      expect.objectContaining({ attemptNumber: 1, scorePercent: 58 }),
+      expect.objectContaining({ attemptNumber: 2, scorePercent: 82 }),
+    ]);
   });
 
   it('loads a completed student overview without creating default assignments', async () => {

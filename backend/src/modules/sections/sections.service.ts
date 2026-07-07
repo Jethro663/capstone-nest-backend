@@ -22,6 +22,7 @@ import {
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
+import { ClassRecordService } from '../class-record/class-record.service';
 import {
   sections,
   classes,
@@ -54,6 +55,22 @@ export interface RequestingUser {
   roles: string[];
 }
 
+type AccessStudentGradeStatus = 'pending' | 'passing' | 'failing';
+
+type AccessStudentPromotionReadiness = {
+  studentId: string;
+  finalGrade: number | null;
+  gradeStatus: AccessStudentGradeStatus;
+  isFinalized: boolean;
+  isPassing: boolean;
+  isFailing: boolean;
+  requiredClassRecordCount: number;
+  finalizedClassRecordCount: number;
+  finalGradeRecordCount: number;
+  missingFinalGradeCount: number;
+  finalizationLabel: string;
+};
+
 export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
 
 @Injectable()
@@ -61,6 +78,7 @@ export class SectionsService {
   constructor(
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly classRecordService: ClassRecordService,
   ) {}
 
   private get db() {
@@ -467,12 +485,9 @@ export class SectionsService {
       );
 
     // Collect only defined extra conditions — avoids unsafe and(...undefined[]) spread.
-    const extraConditions: SQL<unknown>[] = [];
-    if (filters?.gradeLevel) {
-      extraConditions.push(
-        eq(studentProfiles.gradeLevel, filters.gradeLevel as any),
-      );
-    }
+    const extraConditions: SQL<unknown>[] = [
+      eq(studentProfiles.gradeLevel, section.gradeLevel as any),
+    ];
     if (filters?.search) {
       const searchCond = or(
         ilike(users.firstName, `%${filters.search}%`),
@@ -700,6 +715,28 @@ export class SectionsService {
       if (nonStudentIds.length > 0) {
         throw new BadRequestException(
           `The following user(s) do not have the student role: ${nonStudentIds.join(', ')}`,
+        );
+      }
+
+      // 2c. Validate grade level server-side so clients cannot bypass the
+      // section candidate filter and assign students to the wrong grade.
+      const profileRows = await tx
+        .select({
+          userId: studentProfiles.userId,
+          gradeLevel: studentProfiles.gradeLevel,
+        })
+        .from(studentProfiles)
+        .where(inArray(studentProfiles.userId, dto.studentIds));
+
+      const profileByStudentId = new Map(
+        profileRows.map((row) => [row.userId, row.gradeLevel]),
+      );
+      const mismatchedIds = dto.studentIds.filter(
+        (id) => profileByStudentId.get(id) !== section.gradeLevel,
+      );
+      if (mismatchedIds.length > 0) {
+        throw new BadRequestException(
+          `Student grade level must match Grade ${section.gradeLevel}. Mismatched student IDs: ${mismatchedIds.join(', ')}`,
         );
       }
 
@@ -1152,11 +1189,12 @@ export class SectionsService {
     actorRoles: string[] = [],
   ) {
     const section = await this.findById(id);
+    const now = new Date();
 
     await this.db.transaction(async (tx) => {
       await tx
         .update(enrollments)
-        .set({ status: 'dropped' })
+        .set({ status: 'completed' })
         .where(
           and(
             eq(enrollments.sectionId, id),
@@ -1165,8 +1203,13 @@ export class SectionsService {
         );
 
       await tx
+        .update(classes)
+        .set({ isActive: false, teacherId: null, updatedAt: now })
+        .where(eq(classes.sectionId, id));
+
+      await tx
         .update(sections)
-        .set({ isActive: false, updatedAt: new Date() })
+        .set({ isActive: false, adviserId: null, updatedAt: now })
         .where(eq(sections.id, id));
     });
 
@@ -1178,32 +1221,22 @@ export class SectionsService {
       metadata: {
         actorRole: this.resolveActorRole(actorRoles),
         previousIsActive: section.isActive,
+        removedAdviserId: section.adviserId,
+        completedEnrollmentStatus: 'completed',
+        linkedClassTeacherStatus: 'cleared',
       },
     });
   }
 
   async restoreSection(
     id: string,
-    actorId?: string,
-    actorRoles: string[] = [],
+    _actorId?: string,
+    _actorRoles: string[] = [],
   ) {
-    const section = await this.findById(id);
-
-    await this.db
-      .update(sections)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(eq(sections.id, id));
-
-    await this.auditService.log({
-      actorId: actorId ?? section.adviserId ?? 'system',
-      action: 'section.restored',
-      targetType: 'section',
-      targetId: id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        previousIsActive: section.isActive,
-      },
-    });
+    await this.findById(id);
+    throw new ConflictException(
+      'Archived sections cannot be restored. Purge the archived section instead.',
+    );
   }
 
   async deleteSection(id: string, actorId?: string, actorRoles: string[] = []) {
@@ -1226,11 +1259,9 @@ export class SectionsService {
         await this.archiveSection(sectionId, actorId, actorRoles);
         return;
       case 'restore':
-        if (section.isActive) {
-          throw new ConflictException('Section is already active.');
-        }
-        await this.restoreSection(sectionId, actorId, actorRoles);
-        return;
+        throw new ConflictException(
+          'Archived sections cannot be restored. Purge the archived section instead.',
+        );
       case 'purge':
         if (section.isActive) {
           throw new ConflictException(
@@ -1458,38 +1489,130 @@ export class SectionsService {
     return `${start}-${end}`;
   }
 
-  private async computeSectionStudentFinalGrades(
+  private roundFinalGrade(value: number | null | undefined) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) {
+      return null;
+    }
+
+    return Math.round(Number(value) * 1000) / 1000;
+  }
+
+  private buildPromotionReadiness(input: {
+    studentId: string;
+    averageFinal: number | null;
+    requiredClassRecordCount: number;
+    finalizedClassRecordCount: number;
+    finalGradeRecordCount: number;
+  }): AccessStudentPromotionReadiness {
+    const finalGrade = this.roundFinalGrade(input.averageFinal);
+    const missingFinalGradeCount = Math.max(
+      input.requiredClassRecordCount - input.finalGradeRecordCount,
+      0,
+    );
+    const isFinalized =
+      input.requiredClassRecordCount > 0 &&
+      input.finalizedClassRecordCount >= input.requiredClassRecordCount &&
+      missingFinalGradeCount === 0 &&
+      finalGrade !== null;
+    const isPassing = isFinalized && finalGrade !== null && finalGrade >= 75;
+    const isFailing = isFinalized && finalGrade !== null && finalGrade < 75;
+    const gradeStatus: AccessStudentGradeStatus = !isFinalized
+      ? 'pending'
+      : isPassing
+        ? 'passing'
+        : 'failing';
+    const finalizationLabel = !isFinalized
+      ? input.requiredClassRecordCount === 0
+        ? 'No class records found to finalize'
+        : `${input.finalizedClassRecordCount}/${input.requiredClassRecordCount} class records finalized, ${input.finalGradeRecordCount}/${input.requiredClassRecordCount} final grades posted`
+      : isPassing
+        ? 'Finalized and passing'
+        : 'Finalized and failing';
+
+    return {
+      studentId: input.studentId,
+      finalGrade,
+      gradeStatus,
+      isFinalized,
+      isPassing,
+      isFailing,
+      requiredClassRecordCount: input.requiredClassRecordCount,
+      finalizedClassRecordCount: input.finalizedClassRecordCount,
+      finalGradeRecordCount: input.finalGradeRecordCount,
+      missingFinalGradeCount,
+      finalizationLabel,
+    };
+  }
+
+  private async getSectionStudentPromotionReadiness(
     sectionId: string,
     studentIds: string[],
   ) {
-    if (studentIds.length === 0) {
-      return new Map<string, number>();
+    const uniqueStudentIds = [...new Set(studentIds)];
+    if (uniqueStudentIds.length === 0) {
+      return new Map<string, AccessStudentPromotionReadiness>();
     }
 
-    const rows = await this.db
+    const recordRows = await this.db
       .select({
-        studentId: classRecordFinalGrades.studentId,
-        avgFinal:
-          sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
-            Number,
-          ),
+        id: classRecords.id,
+        status: classRecords.status,
       })
-      .from(classRecordFinalGrades)
-      .innerJoin(
-        classRecords,
-        eq(classRecords.id, classRecordFinalGrades.classRecordId),
-      )
+      .from(classRecords)
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(
-          eq(classes.sectionId, sectionId),
-          inArray(classRecordFinalGrades.studentId, studentIds),
-        ),
-      )
-      .groupBy(classRecordFinalGrades.studentId);
+      .where(and(eq(classes.sectionId, sectionId), eq(classes.isActive, true)));
+
+    const requiredClassRecordCount = recordRows.length;
+    const finalizedClassRecordCount = recordRows.filter((record) =>
+      ['finalized', 'locked'].includes(record.status),
+    ).length;
+    const classRecordIds = recordRows.map((record) => record.id);
+
+    const gradeRows = classRecordIds.length
+      ? await this.db
+          .select({
+            studentId: classRecordFinalGrades.studentId,
+            avgFinal:
+              sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
+                Number,
+              ),
+            finalGradeRecordCount:
+              sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
+                Number,
+              ),
+          })
+          .from(classRecordFinalGrades)
+          .where(
+            and(
+              inArray(classRecordFinalGrades.classRecordId, classRecordIds),
+              inArray(classRecordFinalGrades.studentId, uniqueStudentIds),
+            ),
+          )
+          .groupBy(classRecordFinalGrades.studentId)
+      : [];
+
+    const gradeByStudentId = new Map(
+      gradeRows.map((row) => [
+        row.studentId,
+        {
+          averageFinal: Number(row.avgFinal ?? 0),
+          finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
+        },
+      ]),
+    );
 
     return new Map(
-      rows.map((row) => [row.studentId, Number(row.avgFinal ?? 0)]),
+      uniqueStudentIds.map((studentId) => {
+        const gradeInfo = gradeByStudentId.get(studentId);
+        const readiness = this.buildPromotionReadiness({
+          studentId,
+          averageFinal: gradeInfo?.averageFinal ?? null,
+          requiredClassRecordCount,
+          finalizedClassRecordCount,
+          finalGradeRecordCount: gradeInfo?.finalGradeRecordCount ?? 0,
+        });
+        return [studentId, readiness];
+      }),
     );
   }
 
@@ -1565,7 +1688,6 @@ export class SectionsService {
         and(
           inArray(enrollments.sectionId, sectionIds),
           eq(enrollments.status, 'enrolled'),
-          isNull(enrollments.classId),
         ),
       );
 
@@ -1577,6 +1699,10 @@ export class SectionsService {
           sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
             Number,
           ),
+        finalGradeRecordCount:
+          sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
+            Number,
+          ),
       })
       .from(classRecordFinalGrades)
       .innerJoin(
@@ -1584,14 +1710,17 @@ export class SectionsService {
         eq(classRecords.id, classRecordFinalGrades.classRecordId),
       )
       .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(inArray(classes.sectionId, sectionIds))
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      )
       .groupBy(classes.sectionId, classRecordFinalGrades.studentId);
 
     const classRecordCountRows = await this.db
       .select({
         sectionId: classes.sectionId,
-        totalRecords:
-          sql<number>`count(distinct ${classRecords.id})`.mapWith(Number),
+        totalRecords: sql<number>`count(distinct ${classRecords.id})`.mapWith(
+          Number,
+        ),
         finalizedRecords:
           sql<number>`count(distinct case when ${classRecords.status} in ('finalized', 'locked') then ${classRecords.id} end)`.mapWith(
             Number,
@@ -1599,7 +1728,9 @@ export class SectionsService {
       })
       .from(classes)
       .leftJoin(classRecords, eq(classRecords.classId, classes.id))
-      .where(inArray(classes.sectionId, sectionIds))
+      .where(
+        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
+      )
       .groupBy(classes.sectionId);
 
     const classRecordCountBySectionId = new Map<
@@ -1613,15 +1744,19 @@ export class SectionsService {
       });
     }
 
-    const finalGradeBySectionStudentKey = new Map<string, number>();
+    const finalGradeBySectionStudentKey = new Map<
+      string,
+      { averageFinal: number; finalGradeRecordCount: number }
+    >();
     for (const row of finalGradeRows) {
-      finalGradeBySectionStudentKey.set(
-        `${row.sectionId}:${row.studentId}`,
-        Number(row.avgFinal ?? 0),
-      );
+      finalGradeBySectionStudentKey.set(`${row.sectionId}:${row.studentId}`, {
+        averageFinal: Number(row.avgFinal ?? 0),
+        finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
+      });
     }
 
     const normalizedSearch = filters?.search?.trim().toLowerCase() ?? '';
+    const seenRosterKeys = new Set<string>();
     const studentsBySectionId = new Map<
       string,
       Array<{
@@ -1633,17 +1768,40 @@ export class SectionsService {
         lrn: string | null;
         gradeLevel: string | null;
         finalGrade: number | null;
+        finalGradePercentage: number | null;
+        gradeStatus: AccessStudentGradeStatus;
+        isFinalized: boolean;
+        isPassing: boolean;
         isFailing: boolean;
+        requiredClassRecordCount: number;
+        finalizedClassRecordCount: number;
+        finalGradeRecordCount: number;
+        missingFinalGradeCount: number;
+        finalizationLabel: string;
       }>
     >();
 
     for (const row of rosterRows) {
+      const rosterKey = `${row.sectionId}:${row.studentId}`;
+      if (seenRosterKeys.has(rosterKey)) continue;
+      seenRosterKeys.add(rosterKey);
+
       const finalGradeKey = `${row.sectionId}:${row.studentId}`;
       const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
-      const finalGrade =
-        finalGradeValue === undefined
-          ? null
-          : Math.round(finalGradeValue * 100) / 100;
+      const classRecordCounts = classRecordCountBySectionId.get(
+        row.sectionId,
+      ) ?? {
+        totalRecords: 0,
+        finalizedRecords: 0,
+      };
+      const readiness = this.buildPromotionReadiness({
+        studentId: row.studentId,
+        averageFinal: finalGradeValue?.averageFinal ?? null,
+        requiredClassRecordCount: classRecordCounts.totalRecords,
+        finalizedClassRecordCount: classRecordCounts.finalizedRecords,
+        finalGradeRecordCount: finalGradeValue?.finalGradeRecordCount ?? 0,
+      });
+      const finalGrade = readiness.finalGrade;
       const searchable = [
         row.firstName ?? '',
         row.middleName ?? '',
@@ -1667,7 +1825,16 @@ export class SectionsService {
         lrn: row.lrn,
         gradeLevel: row.gradeLevel ?? null,
         finalGrade,
-        isFailing: finalGrade !== null && finalGrade < 75,
+        finalGradePercentage: readiness.finalGrade,
+        gradeStatus: readiness.gradeStatus,
+        isFinalized: readiness.isFinalized,
+        isPassing: readiness.isPassing,
+        isFailing: readiness.isFailing,
+        requiredClassRecordCount: readiness.requiredClassRecordCount,
+        finalizedClassRecordCount: readiness.finalizedClassRecordCount,
+        finalGradeRecordCount: readiness.finalGradeRecordCount,
+        missingFinalGradeCount: readiness.missingFinalGradeCount,
+        finalizationLabel: readiness.finalizationLabel,
       });
       studentsBySectionId.set(row.sectionId, bucket);
     }
@@ -1699,7 +1866,16 @@ export class SectionsService {
           lrn: string | null;
           gradeLevel: string | null;
           finalGrade: number | null;
+          finalGradePercentage: number | null;
+          gradeStatus: AccessStudentGradeStatus;
+          isFinalized: boolean;
+          isPassing: boolean;
           isFailing: boolean;
+          requiredClassRecordCount: number;
+          finalizedClassRecordCount: number;
+          finalGradeRecordCount: number;
+          missingFinalGradeCount: number;
+          finalizationLabel: string;
         }>;
       }>
     >();
@@ -1809,6 +1985,24 @@ export class SectionsService {
     const targetSchoolYear =
       query.schoolYear ?? this.getNextSchoolYear(fromSection.schoolYear);
 
+    const targetSchoolYearRows = await this.db.query.sections.findMany({
+      where: and(
+        eq(sections.isActive, true),
+        eq(sections.gradeLevel, targetGradeLevel),
+      ),
+      columns: {
+        schoolYear: true,
+      },
+      orderBy: (table, { asc }) => [asc(table.schoolYear)],
+    });
+
+    const availableSchoolYears = Array.from(
+      new Set([
+        targetSchoolYear,
+        ...targetSchoolYearRows.map((section) => section.schoolYear),
+      ]),
+    ).sort((a, b) => a.localeCompare(b));
+
     const targetSections = await this.db.query.sections.findMany({
       where: and(
         eq(sections.isActive, true),
@@ -1831,6 +2025,7 @@ export class SectionsService {
       fromSection,
       targetGradeLevel,
       targetSchoolYear,
+      availableSchoolYears,
       sections: targetSections,
     };
   }
@@ -1955,6 +2150,97 @@ export class SectionsService {
     return uniqueStudentIds.length;
   }
 
+  async finalizeAccessStudentGrades(
+    dto: { sectionId: string; studentIds?: string[] },
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const section = await this.db.query.sections.findFirst({
+      where: eq(sections.id, dto.sectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (!section) {
+      throw new NotFoundException('Section not found');
+    }
+
+    const recordRows = await this.db
+      .select({
+        id: classRecords.id,
+        status: classRecords.status,
+        classId: classes.id,
+        subjectName: classes.subjectName,
+      })
+      .from(classRecords)
+      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .where(
+        and(eq(classes.sectionId, section.id), eq(classes.isActive, true)),
+      );
+
+    if (recordRows.length === 0) {
+      throw new BadRequestException(
+        'This section has no class records to finalize yet.',
+      );
+    }
+
+    const draftRecords = recordRows.filter(
+      (record) => record.status === 'draft',
+    );
+    const finalizedRecords: Array<{
+      classRecordId: string;
+      subjectName: string;
+    }> = [];
+
+    for (const record of draftRecords) {
+      await this.classRecordService.finalizeClassRecord(
+        record.id,
+        actorId ?? 'system',
+        actorRoles,
+      );
+      finalizedRecords.push({
+        classRecordId: record.id,
+        subjectName: record.subjectName,
+      });
+    }
+
+    const selectedStudentIds = [...new Set(dto.studentIds ?? [])];
+    const studentReadiness = selectedStudentIds.length
+      ? Array.from(
+          (
+            await this.getSectionStudentPromotionReadiness(
+              section.id,
+              selectedStudentIds,
+            )
+          ).values(),
+        )
+      : [];
+
+    await this.auditService.log({
+      actorId: actorId ?? 'system',
+      action: 'section.students.grades_finalized',
+      targetType: 'section',
+      targetId: section.id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        finalizedClassRecordCount: finalizedRecords.length,
+        selectedStudentCount: selectedStudentIds.length,
+      },
+    });
+
+    return {
+      section,
+      finalizedClassRecordCount: finalizedRecords.length,
+      alreadyFinalizedClassRecordCount: recordRows.length - draftRecords.length,
+      finalizedRecords,
+      students: studentReadiness,
+    };
+  }
+
   async moveUpStudents(
     dto: {
       fromSectionId: string;
@@ -2022,25 +2308,30 @@ export class SectionsService {
       uniqueStudentIds,
     );
 
-    const finalGradeByStudentId = await this.computeSectionStudentFinalGrades(
+    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
       fromSection.id,
       uniqueStudentIds,
     );
+    const studentReadiness = Array.from(readinessByStudentId.values());
+    const unfinalizedStudents = studentReadiness.filter(
+      (student) => !student.isFinalized,
+    );
 
-    const failingStudents = uniqueStudentIds
-      .map((studentId) => ({
-        studentId,
-        finalGrade: finalGradeByStudentId.get(studentId) ?? null,
-      }))
-      .filter(
-        (student) =>
-          student.finalGrade !== null && Number(student.finalGrade) < 75,
-      );
+    if (unfinalizedStudents.length > 0) {
+      throw new BadRequestException({
+        message: 'Finalize selected student grades before moving students up.',
+        unfinalizedStudents,
+      });
+    }
 
-    if (failingStudents.length > 0 && !dto.allowFailingPromotion) {
+    const failingStudents = studentReadiness.filter(
+      (student) => !student.isPassing,
+    );
+
+    if (failingStudents.length > 0) {
       throw new BadRequestException({
         message:
-          'Some selected students have final grades below 75. Confirm promotion to proceed.',
+          'Only finalized passing students can be moved up. Retain failing students instead.',
         failingStudents,
       });
     }
@@ -2062,7 +2353,7 @@ export class SectionsService {
         fromSectionId: fromSection.id,
         targetSectionId: targetSection.id,
         movedCount,
-        failingStudentsConfirmed: failingStudents.length,
+        finalizedPassingStudents: studentReadiness.length,
       },
     });
 
@@ -2132,6 +2423,34 @@ export class SectionsService {
       uniqueStudentIds,
     );
 
+    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
+      fromSection.id,
+      uniqueStudentIds,
+    );
+    const studentReadiness = Array.from(readinessByStudentId.values());
+    const unfinalizedStudents = studentReadiness.filter(
+      (student) => !student.isFinalized,
+    );
+
+    if (unfinalizedStudents.length > 0) {
+      throw new BadRequestException({
+        message: 'Finalize selected student grades before retaining students.',
+        unfinalizedStudents,
+      });
+    }
+
+    const nonFailingStudents = studentReadiness.filter(
+      (student) => !student.isFailing,
+    );
+
+    if (nonFailingStudents.length > 0) {
+      throw new BadRequestException({
+        message:
+          'Only finalized failing students can be retained. Move passing students up instead.',
+        nonFailingStudents,
+      });
+    }
+
     const retainedCount = await this.transferStudentsBetweenSections({
       fromSectionId: fromSection.id,
       targetSectionId: targetSection.id,
@@ -2149,6 +2468,7 @@ export class SectionsService {
         fromSectionId: fromSection.id,
         targetSectionId: targetSection.id,
         retainedCount,
+        finalizedFailingStudents: studentReadiness.length,
       },
     });
 

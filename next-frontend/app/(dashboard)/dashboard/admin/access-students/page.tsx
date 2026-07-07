@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowUpCircle, Search, UsersRound, XCircle } from 'lucide-react';
+import { ArrowUpCircle, ChevronDown, ClipboardCheck, Search, UsersRound, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AdminEmptyState,
@@ -31,6 +31,12 @@ import {
 
 type TransferMode = 'promote' | 'retain';
 
+function sortSchoolYears(years: string[]) {
+  return Array.from(new Set(years.filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+}
+
 function formatStudentName(student: {
   firstName: string | null;
   middleName: string | null;
@@ -42,8 +48,44 @@ function formatStudentName(student: {
 }
 
 function formatFinalGrade(value: number | null): string {
-  if (value === null || Number.isNaN(value)) return 'N/A';
-  return value.toFixed(2);
+  if (value === null || Number.isNaN(value)) return 'Not finalized';
+  return `${value.toFixed(3)}%`;
+}
+
+function getGradeStatusLabel(student: { gradeStatus?: string; isFinalized?: boolean; isPassing?: boolean; isFailing?: boolean }) {
+  if (!student.isFinalized || student.gradeStatus === 'pending') return 'Needs Finalization';
+  if (student.isPassing || student.gradeStatus === 'passing') return 'Passing';
+  if (student.isFailing || student.gradeStatus === 'failing') return 'Failing';
+  return 'Needs Finalization';
+}
+
+function getGradeStatusClass(student: { gradeStatus?: string; isFinalized?: boolean; isPassing?: boolean; isFailing?: boolean }) {
+  if (!student.isFinalized || student.gradeStatus === 'pending') {
+    return 'admin-status-pill bg-amber-50 text-amber-700 ring-1 ring-amber-200';
+  }
+  if (student.isPassing || student.gradeStatus === 'passing') {
+    return 'admin-status-pill admin-status-pill--active';
+  }
+  return 'admin-status-pill admin-status-pill--suspended';
+}
+
+function getFinalGradeIndicator(student: { gradeStatus?: string; isFinalized?: boolean; isPassing?: boolean; isFailing?: boolean }) {
+  if (!student.isFinalized || student.gradeStatus === 'pending') {
+    return {
+      label: 'Syncing class records',
+      className: 'border-amber-200 bg-amber-50 text-amber-700',
+    };
+  }
+  if (student.isPassing || student.gradeStatus === 'passing') {
+    return {
+      label: 'Passing grade',
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    };
+  }
+  return {
+    label: 'Failing grade',
+    className: 'border-rose-200 bg-rose-50 text-rose-700',
+  };
 }
 
 export default function AdminAccessStudentsPage() {
@@ -65,7 +107,9 @@ export default function AdminAccessStudentsPage() {
   const [dialogMode, setDialogMode] = useState<TransferMode>('promote');
   const [targetLoading, setTargetLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [targetSchoolYear, setTargetSchoolYear] = useState('');
+  const [targetSchoolYearOptions, setTargetSchoolYearOptions] = useState<string[]>([]);
   const [targetSections, setTargetSections] = useState<
     Array<{
       id: string;
@@ -76,7 +120,9 @@ export default function AdminAccessStudentsPage() {
     }>
   >([]);
   const [targetSectionId, setTargetSectionId] = useState('');
-  const [confirmFailingPromotion, setConfirmFailingPromotion] = useState(false);
+  const [expandedGradeLevels, setExpandedGradeLevels] = useState<Set<string>>(
+    new Set(),
+  );
 
   const flatSections = useMemo(
     () => data.flatMap((bucket) => bucket.sections),
@@ -113,14 +159,56 @@ export default function AdminAccessStudentsPage() {
     });
   }, [selectedSection, studentSearch]);
 
-  const failingSelectedCount = useMemo(() => {
-    if (!selectedSection) return 0;
-    return selectedSection.students.filter(
-      (student) => selectedStudentIds.has(student.id) && student.isFailing,
-    ).length;
+  const selectedStudents = useMemo(() => {
+    if (!selectedSection) return [];
+    return selectedSection.students.filter((student) =>
+      selectedStudentIds.has(student.id),
+    );
   }, [selectedSection, selectedStudentIds]);
 
-  const fetchOverview = useCallback(async (mode: 'initial' | 'refresh') => {
+  const unfinalizedSelectedCount = useMemo(
+    () => selectedStudents.filter((student) => !student.isFinalized).length,
+    [selectedStudents],
+  );
+
+  const passingSelectedCount = useMemo(
+    () => selectedStudents.filter((student) => student.isPassing).length,
+    [selectedStudents],
+  );
+
+  const failingSelectedCount = useMemo(
+    () => selectedStudents.filter((student) => student.isFailing).length,
+    [selectedStudents],
+  );
+
+  const canMoveUpSelected =
+    selectedStudents.length > 0 &&
+    unfinalizedSelectedCount === 0 &&
+    passingSelectedCount === selectedStudents.length;
+
+  const canRetainSelected =
+    selectedStudents.length > 0 &&
+    unfinalizedSelectedCount === 0 &&
+    failingSelectedCount === selectedStudents.length;
+
+  const selectedValidationMessage = useMemo(() => {
+    if (selectedStudents.length === 0) return 'Select at least one student to finalize, move up, or retain.';
+    if (unfinalizedSelectedCount > 0) {
+      return `${unfinalizedSelectedCount} selected student(s) need finalized grades before move up or retain is available.`;
+    }
+    if (passingSelectedCount > 0 && failingSelectedCount > 0) {
+      return 'Selected students are mixed passing and failing. Process passing and failing students separately.';
+    }
+    if (passingSelectedCount === selectedStudents.length) {
+      return 'Selected student(s) are finalized and passing, ready to move up.';
+    }
+    if (failingSelectedCount === selectedStudents.length) {
+      return 'Selected student(s) are finalized and failing, ready to retain.';
+    }
+    return 'Finalize grades first, then process students based on passing or failing status.';
+  }, [failingSelectedCount, passingSelectedCount, selectedStudents.length, unfinalizedSelectedCount]);
+
+  const fetchOverview = useCallback(async (mode: 'initial' | 'refresh' | 'sync') => {
     try {
       if (mode === 'initial') setLoading(true);
       if (mode === 'refresh') setRefreshing(true);
@@ -137,10 +225,12 @@ export default function AdminAccessStudentsPage() {
       setTotalSections(response.totalSections ?? 0);
       setTotalStudents(response.totalStudents ?? 0);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load Access Students data'));
-      setData([]);
-      setTotalSections(0);
-      setTotalStudents(0);
+      if (mode !== 'sync') {
+        toast.error(getApiErrorMessage(error, 'Failed to load Access Students data'));
+        setData([]);
+        setTotalSections(0);
+        setTotalStudents(0);
+      }
     } finally {
       if (mode === 'initial') setLoading(false);
       if (mode === 'refresh') setRefreshing(false);
@@ -149,6 +239,14 @@ export default function AdminAccessStudentsPage() {
 
   useEffect(() => {
     void fetchOverview('initial');
+  }, [fetchOverview]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      void fetchOverview('sync');
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
   }, [fetchOverview]);
 
   useEffect(() => {
@@ -165,6 +263,36 @@ export default function AdminAccessStudentsPage() {
     }
   }, [flatSections, selectedSectionId]);
 
+  useEffect(() => {
+    if (data.length === 0) {
+      setExpandedGradeLevels(new Set());
+      return;
+    }
+
+    setExpandedGradeLevels((current) => {
+      if (current.size > 0) return current;
+      return new Set([data[0].gradeLevel]);
+    });
+  }, [data]);
+
+  useEffect(() => {
+    if (!selectedSection) return;
+    setExpandedGradeLevels((current) => {
+      if (current.has(selectedSection.gradeLevel)) return current;
+      const next = new Set(current);
+      next.add(selectedSection.gradeLevel);
+      return next;
+    });
+  }, [selectedSection]);
+
+  const toggleGradeLevel = (gradeLevel: string) => {
+    setExpandedGradeLevels((current) => {
+      const next = new Set(current);
+      if (next.has(gradeLevel)) next.delete(gradeLevel);
+      else next.add(gradeLevel);
+      return next;
+    });
+  };
   const toggleStudent = (studentId: string) => {
     setSelectedStudentIds((current) => {
       const next = new Set(current);
@@ -194,6 +322,39 @@ export default function AdminAccessStudentsPage() {
     });
   };
 
+  const loadTargetSections = async (mode: TransferMode, schoolYear?: string) => {
+    if (!selectedSection) return false;
+
+    setTargetLoading(true);
+    setTargetSectionId('');
+    setTargetSections([]);
+
+    try {
+      const response = await sectionService.getAccessStudentsTargetSections({
+        fromSectionId: selectedSection.id,
+        mode,
+        schoolYear,
+      });
+      const options = response.data.sections ?? [];
+      const selectedYear = response.data.targetSchoolYear ?? schoolYear ?? '';
+      const yearOptions = sortSchoolYears([
+        selectedYear,
+        ...(response.data.availableSchoolYears ?? []),
+      ]);
+
+      setTargetSections(options);
+      setTargetSchoolYear(selectedYear);
+      setTargetSchoolYearOptions(yearOptions);
+      setTargetSectionId(options[0]?.id ?? '');
+      return true;
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load target sections'));
+      return false;
+    } finally {
+      setTargetLoading(false);
+    }
+  };
+
   const openTransferDialog = async (mode: TransferMode) => {
     if (!selectedSection) {
       toast.error('Select a section first.');
@@ -203,30 +364,22 @@ export default function AdminAccessStudentsPage() {
       toast.error('Select at least one student.');
       return;
     }
+    if (mode === 'promote' && !canMoveUpSelected) {
+      toast.error(selectedValidationMessage);
+      return;
+    }
+    if (mode === 'retain' && !canRetainSelected) {
+      toast.error(selectedValidationMessage);
+      return;
+    }
 
     setDialogMode(mode);
     setDialogOpen(true);
-    setTargetLoading(true);
-    setTargetSectionId('');
-    setTargetSections([]);
     setTargetSchoolYear('');
-    setConfirmFailingPromotion(false);
+    setTargetSchoolYearOptions([]);
 
-    try {
-      const response = await sectionService.getAccessStudentsTargetSections({
-        fromSectionId: selectedSection.id,
-        mode,
-      });
-      const options = response.data.sections ?? [];
-      setTargetSections(options);
-      setTargetSchoolYear(response.data.targetSchoolYear ?? '');
-      setTargetSectionId(options[0]?.id ?? '');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load target sections'));
-      setDialogOpen(false);
-    } finally {
-      setTargetLoading(false);
-    }
+    const loaded = await loadTargetSections(mode);
+    if (!loaded) setDialogOpen(false);
   };
 
   const submitTransfer = async () => {
@@ -236,8 +389,12 @@ export default function AdminAccessStudentsPage() {
       return;
     }
 
-    if (dialogMode === 'promote' && failingSelectedCount > 0 && !confirmFailingPromotion) {
-      toast.error('Confirm failing-student promotion before continuing.');
+    if (dialogMode === 'promote' && !canMoveUpSelected) {
+      toast.error(selectedValidationMessage);
+      return;
+    }
+    if (dialogMode === 'retain' && !canRetainSelected) {
+      toast.error(selectedValidationMessage);
       return;
     }
 
@@ -250,7 +407,6 @@ export default function AdminAccessStudentsPage() {
           fromSectionId: selectedSection.id,
           targetSectionId,
           studentIds,
-          allowFailingPromotion: failingSelectedCount > 0,
         });
         toast.success(response.message || 'Students moved up successfully.');
       } else {
@@ -272,6 +428,30 @@ export default function AdminAccessStudentsPage() {
     }
   };
 
+  const finalizeSelectedGrades = async () => {
+    if (!selectedSection) {
+      toast.error('Select a section first.');
+      return;
+    }
+    if (selectedStudentIds.size === 0) {
+      toast.error('Select at least one student to finalize.');
+      return;
+    }
+
+    try {
+      setFinalizing(true);
+      const response = await sectionService.finalizeAccessStudentGrades({
+        sectionId: selectedSection.id,
+        studentIds: Array.from(selectedStudentIds),
+      });
+      toast.success(response.message || 'Selected student grades were finalized.');
+      await fetchOverview('refresh');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to finalize selected grades'));
+    } finally {
+      setFinalizing(false);
+    }
+  };
   const selectedVisibleCount = visibleStudents.filter((student) =>
     selectedStudentIds.has(student.id),
   ).length;
@@ -357,45 +537,76 @@ export default function AdminAccessStudentsPage() {
         ) : (
           <div className="grid gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
             <div className="space-y-3 rounded-2xl border border-[var(--admin-outline)] bg-[var(--admin-surface-soft)] p-3">
-              <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--admin-text-muted)]">
-                Sections
-              </p>
+              <div className="flex items-center justify-between gap-3 px-1">
+                <p className="text-xs font-black uppercase tracking-[0.12em] text-[var(--admin-text-muted)]">
+                  Grade & Section Dropdowns
+                </p>
+                <span className="rounded-full bg-white px-2 py-1 text-[0.65rem] font-black text-[var(--admin-text-muted)] ring-1 ring-[var(--admin-outline)]">
+                  {flatSections.length} sections
+                </span>
+              </div>
               <div className="max-h-[30rem] space-y-2 overflow-auto pr-1">
-                {data.map((bucket) => (
-                  <div key={bucket.gradeLevel} className="space-y-2">
-                    <p className="px-2 text-xs font-black uppercase tracking-[0.1em] text-[var(--admin-text-muted)]">
-                      Grade {bucket.gradeLevel}
-                    </p>
-                    {bucket.sections.map((section) => {
-                      const active = section.id === selectedSectionId;
-                      return (
-                        <button
-                          key={section.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSectionId(section.id);
-                            setSelectedStudentIds(new Set());
-                          }}
-                          className={`w-full rounded-xl border px-3 py-2 text-left transition ${
-                            active
-                              ? 'border-[var(--admin-accent)] bg-white text-[var(--admin-text-strong)]'
-                              : 'border-[var(--admin-outline)] bg-[var(--admin-surface)] text-[var(--admin-text-muted)] hover:border-[var(--admin-accent)]'
-                          }`}
-                        >
-                          <p className="text-sm font-black">
-                            {section.name}
-                          </p>
-                          <p className="text-xs">
-                            SY {section.schoolYear} Â· Room {section.roomNumber ?? 'N/A'}
-                          </p>
-                          <p className="text-xs">
-                            {section.studentCount} students Â· {section.finalizedClassRecordCount}/{section.classRecordCount} finalized records
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
+                {data.map((bucket) => {
+                  const expanded = expandedGradeLevels.has(bucket.gradeLevel);
+                  const studentCount = bucket.sections.reduce(
+                    (total, section) => total + section.studentCount,
+                    0,
+                  );
+
+                  return (
+                    <div key={bucket.gradeLevel} className="overflow-hidden rounded-2xl border border-[var(--admin-outline)] bg-white">
+                      <button
+                        type="button"
+                        onClick={() => toggleGradeLevel(bucket.gradeLevel)}
+                        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-[var(--admin-surface-soft)]"
+                        aria-expanded={expanded}
+                      >
+                        <span>
+                          <span className="block text-sm font-black text-[var(--admin-text-strong)]">
+                            Grade {bucket.gradeLevel}
+                          </span>
+                          <span className="text-xs text-[var(--admin-text-muted)]">
+                            {bucket.sections.length} section(s) - {studentCount} student(s)
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-[var(--admin-text-muted)] transition ${expanded ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {expanded ? (
+                        <div className="space-y-2 border-t border-[var(--admin-outline)] bg-[var(--admin-surface-soft)] p-2">
+                          {bucket.sections.map((section) => {
+                            const active = section.id === selectedSectionId;
+                            return (
+                              <button
+                                key={section.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSectionId(section.id);
+                                  setSelectedStudentIds(new Set());
+                                }}
+                                className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                                  active
+                                    ? 'border-[var(--admin-accent)] bg-white text-[var(--admin-text-strong)] shadow-sm'
+                                    : 'border-[var(--admin-outline)] bg-white/70 text-[var(--admin-text-muted)] hover:border-[var(--admin-accent)] hover:bg-white'
+                                }`}
+                              >
+                                <p className="text-sm font-black">{section.name}</p>
+                                <p className="text-xs">
+                                  SY {section.schoolYear} - Room {section.roomNumber ?? 'N/A'}
+                                </p>
+                                <p className="text-xs">
+                                  {section.studentCount} students - {section.finalizedClassRecordCount}/{section.classRecordCount} finalized records
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -408,7 +619,7 @@ export default function AdminAccessStudentsPage() {
                         Grade {selectedSection.gradeLevel} - {selectedSection.name}
                       </p>
                       <p className="text-xs text-[var(--admin-text-muted)]">
-                        School Year {selectedSection.schoolYear} Â· Room {selectedSection.roomNumber ?? 'N/A'}
+                        School Year {selectedSection.schoolYear} - Room {selectedSection.roomNumber ?? 'N/A'}
                       </p>
                       <p className="text-xs text-[var(--admin-text-muted)]">
                         Adviser: {selectedSection.adviser ? `${selectedSection.adviser.firstName ?? ''} ${selectedSection.adviser.lastName ?? ''}`.trim() || selectedSection.adviser.email : 'Unassigned'}
@@ -426,9 +637,19 @@ export default function AdminAccessStudentsPage() {
                       </Button>
                       <Button
                         type="button"
-                        className="admin-button-solid rounded-xl font-black"
+                        variant="outline"
+                        className="rounded-xl border-emerald-200 bg-emerald-50 font-black text-emerald-700 hover:bg-emerald-100"
+                        onClick={() => void finalizeSelectedGrades()}
+                        disabled={selectedStudentIds.size === 0 || finalizing}
+                      >
+                        <ClipboardCheck className="mr-2 h-4 w-4" />
+                        {finalizing ? 'Finalizing...' : 'Finalize Selected Grades'}
+                      </Button>
+                      <Button
+                        type="button"
+                        className="admin-button-solid rounded-xl font-black disabled:opacity-50"
                         onClick={() => void openTransferDialog('promote')}
-                        disabled={selectedStudentIds.size === 0}
+                        disabled={!canMoveUpSelected}
                       >
                         <ArrowUpCircle className="mr-2 h-4 w-4" />
                         Move Up
@@ -436,13 +657,20 @@ export default function AdminAccessStudentsPage() {
                       <Button
                         type="button"
                         variant="destructive"
-                        className="rounded-xl"
+                        className="rounded-xl disabled:opacity-50"
                         onClick={() => void openTransferDialog('retain')}
-                        disabled={selectedStudentIds.size === 0}
+                        disabled={!canRetainSelected}
                       >
                         <XCircle className="mr-2 h-4 w-4" />
                         Fail / Retain
                       </Button>
+                    </div>
+                    <div className={`mt-3 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                      selectedStudents.length > 0 && unfinalizedSelectedCount === 0
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                        : 'border-amber-200 bg-amber-50 text-amber-800'
+                    }`}>
+                      {selectedValidationMessage}
                     </div>
                   </div>
 
@@ -477,6 +705,7 @@ export default function AdminAccessStudentsPage() {
                         <TableBody>
                           {visibleStudents.map((student) => {
                             const checked = selectedStudentIds.has(student.id);
+                            const finalGradeIndicator = getFinalGradeIndicator(student);
                             return (
                               <TableRow key={student.id} className="border-t border-[var(--admin-outline)]">
                                 <TableCell>
@@ -492,18 +721,22 @@ export default function AdminAccessStudentsPage() {
                                 </TableCell>
                                 <TableCell className="text-[#6f83a3]">{student.email}</TableCell>
                                 <TableCell className="text-[#6f83a3]">{student.lrn ?? 'N/A'}</TableCell>
-                                <TableCell className="text-[#6f83a3]">
-                                  {formatFinalGrade(student.finalGrade)}
+                                <TableCell className="font-black text-[#334b6d]">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>{formatFinalGrade(student.finalGradePercentage ?? student.finalGrade)}</span>
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.08em] ${finalGradeIndicator.className}`}
+                                    >
+                                      {finalGradeIndicator.label}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-[0.68rem] font-semibold text-[#8ea0bc]">
+                                    {student.finalizationLabel}
+                                  </p>
                                 </TableCell>
                                 <TableCell>
-                                  <span
-                                    className={
-                                      student.isFailing
-                                        ? 'admin-status-pill admin-status-pill--suspended'
-                                        : 'admin-status-pill admin-status-pill--active'
-                                    }
-                                  >
-                                    {student.isFailing ? 'Below 75' : 'Passing'}
+                                  <span className={getGradeStatusClass(student)}>
+                                    {getGradeStatusLabel(student)}
                                   </span>
                                 </TableCell>
                               </TableRow>
@@ -544,7 +777,24 @@ export default function AdminAccessStudentsPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="font-black">Target School Year</Label>
-                <Input value={targetSchoolYear} readOnly className="admin-input" />
+                <select
+                  value={targetSchoolYear}
+                  onChange={(event) => {
+                    const nextSchoolYear = event.target.value;
+                    setTargetSchoolYear(nextSchoolYear);
+                    void loadTargetSections(dialogMode, nextSchoolYear);
+                  }}
+                  className="admin-select h-11 w-full rounded-xl px-3 text-sm font-semibold text-[#24364f]"
+                >
+                  {targetSchoolYearOptions.map((schoolYear) => (
+                    <option key={schoolYear} value={schoolYear}>
+                      {schoolYear}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs font-semibold text-[var(--admin-text-muted)]">
+                  Sections below update based on the selected school year.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -565,24 +815,9 @@ export default function AdminAccessStudentsPage() {
                 </select>
               </div>
 
-              {dialogMode === 'promote' && failingSelectedCount > 0 ? (
-                <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  <p>
-                    {failingSelectedCount} selected student(s) have final grades below 75.
-                    Confirm if you still want to move them up.
-                  </p>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={confirmFailingPromotion}
-                      onChange={(event) =>
-                        setConfirmFailingPromotion(event.target.checked)
-                      }
-                    />
-                    <span>I confirm moving up failing students.</span>
-                  </label>
-                </div>
-              ) : null}
+              <div className="rounded-xl border border-[var(--admin-outline)] bg-[var(--admin-surface-soft)] p-3 text-sm text-[var(--admin-text-muted)]">
+                {selectedValidationMessage}
+              </div>
             </div>
           )}
 
@@ -601,9 +836,8 @@ export default function AdminAccessStudentsPage() {
                 targetLoading ||
                 submitting ||
                 !targetSectionId ||
-                (dialogMode === 'promote' &&
-                  failingSelectedCount > 0 &&
-                  !confirmFailingPromotion)
+                (dialogMode === 'promote' && !canMoveUpSelected) ||
+                (dialogMode === 'retain' && !canRetainSelected)
               }
               onClick={() => void submitTransfer()}
             >

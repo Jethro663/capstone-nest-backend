@@ -216,7 +216,7 @@ High-risk and critical answer pack.
 - Concept paper: LMS plus LXP for targeted intervention with below-74% access control.
 - Repo: backend modules for classes, lessons, assessments, performance, LXP, JA, reports, audit, and AI proxy.
 - Repo: next-frontend role dashboards for admin, teacher, and student.
-- Repo: backend, next-frontend, ai-service, and test-mobile all have substantive modules and routes.
+- Repo: backend, next-frontend, ai-service, and mobile all have substantive modules and routes.
 - What not to say: Do not say Nexora fully transforms education or fully replaces existing school systems.
 - Honest fallback if incomplete: The safest honest phrasing is that the system is implemented in prototype scope and demonstrates the intended intervention workflow under controlled school-centered conditions.
 ## Technical Questions
@@ -1300,106 +1300,106 @@ High-risk and critical answer pack.
 ### 1. What mobile roles are strongest today?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 2. Can students authenticate on mobile with OTP and password recovery flows?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 3. Can teachers work on mobile?
 - Safest phrasing: Teacher mobile is materially better than a placeholder because teacher tabs and detail screens exist, but it still should not be described as full web parity unless verified live.
 - Short answer: Teacher mobile exists in code, but it is still safer to treat web as the primary teacher surface.
-- Long answer: The current test-mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
+- Long answer: The current mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
 - Evidence to show:
 - Repo: AppNavigator includes TeacherTabs and TeacherNavigator.
-- Repo: teacher screens exist under test-mobile/src/screens.
+- Repo: teacher screens exist under mobile/src/screens.
 - What not to say: Do not promise full feature parity until you have live proof on the defense device.
 - Honest fallback if incomplete: Use 'teacher mobile workflows are present in prototype scope' if you cannot verify every flow live.
 ### 4. Can administrators work fully on mobile?
 - Safest phrasing: Admin mobile support should be treated as limited. The current mobile codebase includes placeholder-style admin workspace sections rather than full parity.
 - Short answer: Admin mobile is not a defense centerpiece.
-- Long answer: The test-mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
+- Long answer: The mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
+- Repo: mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
 - What not to say: Do not offer to demo admin mobile unless explicitly required and clearly framed as limited.
 - Honest fallback if incomplete: If asked, say administration remains strongest on web in the current scope.
 ### 5. How do web and mobile differ in scope today?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 6. How do you justify claiming both web and mobile accessibility?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 7. What mobile feature should not be overpromised during defense?
 - Safest phrasing: Admin mobile support should be treated as limited. The current mobile codebase includes placeholder-style admin workspace sections rather than full parity.
 - Short answer: Admin mobile is not a defense centerpiece.
-- Long answer: The test-mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
+- Long answer: The mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
+- Repo: mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
 - What not to say: Do not offer to demo admin mobile unless explicitly required and clearly framed as limited.
 - Honest fallback if incomplete: If asked, say administration remains strongest on web in the current scope.
 ### 8. If a panelist asks to switch roles live on mobile, what should you do?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 9. How should you describe teacher mobile if not every action has been live-verified today?
 - Safest phrasing: Teacher mobile is materially better than a placeholder because teacher tabs and detail screens exist, but it still should not be described as full web parity unless verified live.
 - Short answer: Teacher mobile exists in code, but it is still safer to treat web as the primary teacher surface.
-- Long answer: The current test-mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
+- Long answer: The current mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
 - Evidence to show:
 - Repo: AppNavigator includes TeacherTabs and TeacherNavigator.
-- Repo: teacher screens exist under test-mobile/src/screens.
+- Repo: teacher screens exist under mobile/src/screens.
 - What not to say: Do not promise full feature parity until you have live proof on the defense device.
 - Honest fallback if incomplete: Use 'teacher mobile workflows are present in prototype scope' if you cannot verify every flow live.
 ### 10. How should you describe admin mobile if asked directly?
 - Safest phrasing: Admin mobile support should be treated as limited. The current mobile codebase includes placeholder-style admin workspace sections rather than full parity.
 - Short answer: Admin mobile is not a defense centerpiece.
-- Long answer: The test-mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
+- Long answer: The mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
+- Repo: mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
 - What not to say: Do not offer to demo admin mobile unless explicitly required and clearly framed as limited.
 - Honest fallback if incomplete: If asked, say administration remains strongest on web in the current scope.
 ### 11. If the web app works but mobile is unstable, what is the honest defense answer?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ## Demo Attack Questions
@@ -1485,19 +1485,19 @@ High-risk and critical answer pack.
 ### 9. Show me the mobile app for an administrator.
 - Safest phrasing: Admin mobile support should be treated as limited. The current mobile codebase includes placeholder-style admin workspace sections rather than full parity.
 - Short answer: Admin mobile is not a defense centerpiece.
-- Long answer: The test-mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
+- Long answer: The mobile navigator resolves admin roles, but the admin tabs point to a generic RoleWorkspaceScreen rather than full operational admin workflows. That is not a fatal capstone issue because the project is still web-first for administration, but it becomes a problem only if the team overclaims mobile parity.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
+- Repo: mobile/src/navigation/AppNavigator.tsx maps admin tabs to RoleWorkspaceScreen.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx contains placeholder explanatory text.
 - What not to say: Do not offer to demo admin mobile unless explicitly required and clearly framed as limited.
 - Honest fallback if incomplete: If asked, say administration remains strongest on web in the current scope.
 ### 10. Show me the mobile app for a teacher.
 - Safest phrasing: Teacher mobile is materially better than a placeholder because teacher tabs and detail screens exist, but it still should not be described as full web parity unless verified live.
 - Short answer: Teacher mobile exists in code, but it is still safer to treat web as the primary teacher surface.
-- Long answer: The current test-mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
+- Long answer: The current mobile app includes teacher home, classes, assessments, announcements, profile, and detail screens in its navigator. That is a meaningful capability increase over older repo states. Still, without a live teacher walkthrough in this run, the defense-safe position is that teacher workflows exist on mobile in prototype form while the web interface remains the main teacher workspace.
 - Evidence to show:
 - Repo: AppNavigator includes TeacherTabs and TeacherNavigator.
-- Repo: teacher screens exist under test-mobile/src/screens.
+- Repo: teacher screens exist under mobile/src/screens.
 - What not to say: Do not promise full feature parity until you have live proof on the defense device.
 - Honest fallback if incomplete: Use 'teacher mobile workflows are present in prototype scope' if you cannot verify every flow live.
 ### 11. Show me what happens if the AI is down.
@@ -1712,11 +1712,11 @@ High-risk and critical answer pack.
 ### 7. Does mobile fully match the web system?
 - Safest phrasing: The mobile story should be defended carefully: student workflows are the strongest, teacher mobile has meaningful surfaces in the current codebase, and admin mobile is still limited.
 - Short answer: Mobile exists, but parity is not equal across roles.
-- Long answer: The current test-mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
+- Long answer: The current mobile app contains real student flows, auth recovery screens, JA/LXP access, assessments, and profile screens. It also includes teacher navigation and detail screens, while admin routes remain placeholder-level. The safest defense is to present mobile as role-asymmetric rather than claiming full parity with the web system.
 - Evidence to show:
-- Repo: test-mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
-- Repo: test-mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
-- Repo: test-mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
+- Repo: mobile/src/navigation/types.ts includes Login, VerifyEmail, ForgotPassword, ResetPassword, SetInitialPassword.
+- Repo: mobile/src/navigation/AppNavigator.tsx includes teacher tabs and teacher detail screens.
+- Repo: mobile/src/screens/RoleWorkspaceScreen.tsx shows admin mobile placeholder sections.
 - What not to say: Do not say all web features are fully available on mobile.
 - Honest fallback if incomplete: If asked about missing parity, say the capstone prioritized student mobile access first and role expansion remains staged.
 ### 8. Does the system already comply completely with all privacy laws?

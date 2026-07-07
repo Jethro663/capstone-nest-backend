@@ -2,7 +2,7 @@
 
 | Feature | Claimed in Research Paper | Claimed in Concept Paper | Found in Backend | Found in Frontend Web | Found in Mobile | Found in Database | Confirmed Live | Status | Evidence | Required Correction in Paper | Required Correction in System |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Role-based login | Claimed | Claimed | Yes | Yes | Yes | Yes | Yes | Real | backend/src/common/constants/role.constants.ts:10; next-frontend/app/(auth)/login/page.tsx; test-mobile/src/screens/LoginScreen.tsx | None beyond versioned wording. | None |
+| Role-based login | Claimed | Claimed | Yes | Yes | Yes | Yes | Yes | Real | backend/src/common/constants/role.constants.ts:10; next-frontend/app/(auth)/login/page.tsx; mobile/src/screens/LoginScreen.tsx | None beyond versioned wording. | None |
 | OTP verification | Claimed | Claimed | Yes | Yes | Partial | Yes | Unverified end-to-end | Partial | backend/src/modules/otp/otp.controller.ts:16; backend/src/drizzle/schema/otp.schema.ts:22; next-frontend/app/(auth)/verify-email/page.tsx | Avoid claiming fully verified live OTP unless demonstrated. | Optional: verify mobile OTP UX end-to-end |
 | Forgot password | Claimed | Claimed | Yes | Yes | Unclear | Yes | Web only | Partial | backend/src/modules/auth/auth.controller.ts:318,335; next-frontend/app/(auth)/forgot-password/page.tsx | Scope mobile claim carefully. | Clarify mobile parity |
 | Admin dashboard | Claimed | Claimed | Yes | Yes | No | N/A | Yes | Real | next-frontend/app/(dashboard)/dashboard/admin/page.tsx; screenshot admin-dashboard.png | Note web-admin scope. | None |
@@ -41,6 +41,6 @@
 | Announcements | Claimed | Claimed | Yes | Yes | In-app partial | Yes | Web yes | Real | announcements schema/controller; student announcements screenshot | Remove push claim | Optional push implementation |
 | Profile management | Claimed | Claimed | Yes | Yes | Yes | Yes | Static/runtime evidence | Real | profiles module; StudentProfilePage; mobile profile screen | Use accurate lock wording | None |
 | Class record sync/spreadsheet | Claimed | Claimed | Yes | Yes | No | Yes | Static + post-seed smoke | Real | class-record module/schema; post-seed-smoke.js results | None | Optional live route click proof |
-| Mobile app flows | Claimed | Claimed | Yes | N/A | Yes but student-first | N/A | Typecheck/test only | Partial | test-mobile package and screen inventory; teacher unsupported placeholder | Narrow scope | Build missing parity |
+| Mobile app flows | Claimed | Claimed | Yes | N/A | Yes but student-first | N/A | Typecheck/test only | Partial | mobile package and screen inventory; teacher unsupported placeholder | Narrow scope | Build missing parity |
 | Admin AI chatbot | Claimed | Not prominent | Yes | Yes | No | Yes logs/history | Route exists | Real | next-frontend/app/(dashboard)/dashboard/admin/chatbot/page.tsx; ai-service/app/main.py:1690 | None | Optional live interaction demo |
 | AI mentor oversight | Claimed | Claimed in teacher-guided form | Yes | Yes | N/A | Yes | Partial | Partial | teacher intervention jobs; ai logs; admin chat auditing | State oversight boundaries precisely | Optional stronger review UX |

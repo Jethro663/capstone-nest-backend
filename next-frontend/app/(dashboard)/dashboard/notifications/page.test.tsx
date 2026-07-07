@@ -5,10 +5,16 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { notificationService } from '@/services/notification-service';
 
+const pushMock = jest.fn();
+
 jest.mock('framer-motion', () => ({
   motion: {
     div: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   },
+}));
+
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: pushMock }),
 }));
 
 jest.mock('@/providers/AuthProvider', () => ({
@@ -32,6 +38,7 @@ const mockedNotificationService = notificationService as jest.Mocked<typeof noti
 describe('NotificationsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    pushMock.mockReset();
     mockedUseAuth.mockReturnValue({
       role: 'student',
       user: {
