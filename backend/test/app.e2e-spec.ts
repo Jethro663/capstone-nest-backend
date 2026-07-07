@@ -10,6 +10,10 @@ describe('Health routes (e2e)', () => {
 
   const mockHealthService = {
     getReadiness: jest.fn(),
+    getServiceMetadata: jest.fn().mockReturnValue({
+      name: 'backend',
+      version: 'test',
+    }),
   };
 
   beforeEach(async () => {
@@ -35,6 +39,12 @@ describe('Health routes (e2e)', () => {
       .expect(200)
       .expect((response) => {
         expect(response.body.status).toBe('ok');
+        expect(response.body.service).toEqual(
+          expect.objectContaining({
+            name: expect.any(String),
+            version: expect.any(String),
+          }),
+        );
         expect(typeof response.body.timestamp).toBe('string');
       });
   });
