@@ -55,7 +55,7 @@ export class NotificationsService {
           notifications.type,
           notifications.referenceId,
         ],
-        targetWhere: sql`${notifications.referenceId} IS NOT NULL`,
+        where: sql`${notifications.referenceId} IS NOT NULL`,
         set: {
           title: sql`excluded.title`,
           body: sql`excluded.body`,
@@ -97,7 +97,7 @@ export class NotificationsService {
           notifications.type,
           notifications.referenceId,
         ],
-        targetWhere: sql`${notifications.referenceId} IS NOT NULL`,
+        where: sql`${notifications.referenceId} IS NOT NULL`,
       })
       .returning();
 

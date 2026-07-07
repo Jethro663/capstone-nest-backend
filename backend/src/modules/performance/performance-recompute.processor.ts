@@ -41,7 +41,7 @@ export class PerformanceRecomputeProcessor extends WorkerHost {
       );
       await this.performanceService.recomputeStudentsForClass(
         data.classId,
-        data.studentIds,
+        data.studentIds ?? [],
         data.triggerSource,
       );
     }
