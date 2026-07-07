@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_internal_secret(self):
         runtime_mode = (self.ai_runtime_mode or "").strip().lower()
-        if runtime_mode not in {"development", "dev", "test", "testing"} and not (self.ai_service_shared_secret or "").strip():
+        if runtime_mode not in {"development", "dev", "test", "testing", "ci"} and not (self.ai_service_shared_secret or "").strip():
             raise ValueError("AI_SERVICE_SHARED_SECRET must be set outside development runtime")
         return self
 
