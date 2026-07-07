@@ -2,6 +2,7 @@ import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
+import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
@@ -35,6 +36,10 @@ const ADMIN_USER = {
 // ---------------------------------------------------------------------------
 
 const mockProxy = { forward: jest.fn() };
+const mockQueueService = {
+  enqueueLessonPlanJob: jest.fn(),
+  cancelQueuedLessonPlanJob: jest.fn(),
+};
 const mockAudit = { log: jest.fn() };
 const mockAdminAnalyticsChat = {
   chat: jest.fn(),
@@ -66,6 +71,10 @@ describe('AiMentorController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockQueueService.enqueueLessonPlanJob.mockReset();
+    mockQueueService.enqueueLessonPlanJob.mockResolvedValue(undefined);
+    mockQueueService.cancelQueuedLessonPlanJob.mockReset();
+    mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
     mockAudit.log.mockReset();
     mockAudit.log.mockResolvedValue(undefined);
     mockAdminAnalyticsChat.chat.mockReset();
@@ -139,6 +148,10 @@ describe('AiMentorController', () => {
       controllers: [AiMentorController],
       providers: [
         { provide: AiProxyService, useValue: mockProxy },
+        {
+          provide: AiGenerationQueueService,
+          useValue: mockQueueService,
+        },
         {
           provide: AdminAnalyticsChatService,
           useValue: mockAdminAnalyticsChat,
@@ -1206,7 +1219,11 @@ describe('AiMentorController', () => {
         anchorId: 'lesson-1',
         teacherNote: 'Focus on mixed readiness.',
       };
-      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        message: 'Lesson plan generation job queued',
+        data: { jobId: JOB_ID, jobType: 'class_lesson_plan_generation', status: 'pending' },
+      });
 
       const result = await controller.queueLessonPlanJob(
         dto as any,
@@ -1218,6 +1235,10 @@ describe('AiMentorController', () => {
         '/teacher/lesson-plans/jobs',
         TEACHER_USER,
         dto,
+      );
+      expect(mockQueueService.enqueueLessonPlanJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1232,7 +1253,11 @@ describe('AiMentorController', () => {
           }),
         }),
       );
-      expect(result).toEqual({ jobId: JOB_ID, status: 'pending' });
+      expect(result).toEqual({
+        success: true,
+        message: 'Lesson plan generation job queued',
+        data: expect.objectContaining({ jobId: JOB_ID, status: 'pending' }),
+      });
     });
 
     it('should block lesson plan queue when teacher does not own class', async () => {
@@ -1252,6 +1277,7 @@ describe('AiMentorController', () => {
         ),
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
+      expect(mockQueueService.enqueueLessonPlanJob).not.toHaveBeenCalled();
     });
   });
 
@@ -1887,7 +1913,8 @@ describe('AiMentorController', () => {
   });
 
   describe('deleteTeacherJob()', () => {
-    it('should forward DELETE /teacher/jobs/:jobId and audit the cancellation', async () => {
+    it('should remove queued job from BullMQ and return cancelled status when job is waiting', async () => {
+      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(true);
       mockProxy.forward.mockResolvedValue({
         success: true,
         data: { jobId: JOB_ID, status: 'cancelled' },
@@ -1895,6 +1922,9 @@ describe('AiMentorController', () => {
 
       const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
 
+      expect(mockQueueService.cancelQueuedLessonPlanJob).toHaveBeenCalledWith(
+        JOB_ID,
+      );
       expect(mockProxy.forward).toHaveBeenCalledWith(
         'DELETE',
         `/teacher/jobs/${JOB_ID}`,
@@ -1910,8 +1940,23 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
+        message: 'Lesson plan generation cancelled before execution started',
         data: { jobId: JOB_ID, status: 'cancelled' },
       });
+    });
+
+    it('should forward downstream cancellation response when job is not in queue', async () => {
+      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+      const downstreamResponse = {
+        success: true,
+        message: 'Generation cancelled',
+        data: { jobId: JOB_ID, status: 'cancelled' },
+      };
+      mockProxy.forward.mockResolvedValue(downstreamResponse);
+
+      const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
+
+      expect(result).toEqual(downstreamResponse);
     });
 
     it('should block deletion when teacher does not own AI generation job', async () => {
@@ -1926,6 +1971,7 @@ describe('AiMentorController', () => {
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
+
 
   describe('getIndexClassStatus()', () => {
     it('should forward GET /index/classes/:classId/status for owned teacher class', async () => {

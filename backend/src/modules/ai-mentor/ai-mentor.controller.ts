@@ -27,6 +27,7 @@ import {
 } from '@nestjs/swagger';
 
 import { AiProxyService } from './ai-proxy.service';
+import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { ChatRequestDto } from './DTO/chat.dto';
 import { AdminAnalyticsChatRequestDto } from './DTO/admin-chat.dto';
 import { MentorExplainDto } from './DTO/mentor-explain.dto';
@@ -97,6 +98,7 @@ export class AiMentorController {
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
     private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
+    private readonly aiGenerationQueueService: AiGenerationQueueService,
   ) {}
 
   private get db() {
@@ -2328,13 +2330,20 @@ export class AiMentorController {
       user,
       dto,
     );
+    const jobId = this.extractStringField(result, 'jobId');
+    if (jobId) {
+      await this.aiGenerationQueueService.enqueueLessonPlanJob(
+        jobId,
+        user.id,
+      );
+    }
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.lesson_plan.queued',
       targetType: 'class',
       targetId: dto.classId,
       metadata: {
-        jobId: this.extractStringField(result, 'jobId'),
+        jobId,
         anchorType: dto.anchorType,
         anchorId: dto.anchorId,
         noteProvided: Boolean(dto.teacherNote?.trim()),
@@ -2740,18 +2749,23 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherJobAccess(jobId, user);
-    const result = await this.proxy.forward(
-      'DELETE',
-      `/teacher/jobs/${jobId}`,
-      user,
-    );
+    const removedFromQueue =
+      await this.aiGenerationQueueService.cancelQueuedLessonPlanJob(jobId);
+    const downstreamResponse = await this.proxy.forward('DELETE', `/teacher/jobs/${jobId}`, user);
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.generation_job.cancelled',
       targetType: 'ai_generation_job',
       targetId: jobId,
     });
-    return result;
+    if (removedFromQueue) {
+      return {
+        success: true,
+        message: 'Lesson plan generation cancelled before execution started',
+        data: { jobId, status: 'cancelled' },
+      };
+    }
+    return downstreamResponse;
   }
 
   @Get('index/classes/:classId/status')

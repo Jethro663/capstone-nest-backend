@@ -1,4 +1,4 @@
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     )
     ai_runtime_mode: str = Field(
         default="auto",
-        validation_alias="AI_RUNTIME_MODE",
+        validation_alias=AliasChoices("AI_RUNTIME_MODE", "ai_runtime_mode"),
     )
     ai_cloud_fallback_provider: str = Field(
         default="openai",
@@ -113,6 +113,13 @@ class Settings(BaseSettings):
         default="",
         validation_alias="OPENROUTER_X_TITLE",
     )
+
+    @model_validator(mode="after")
+    def validate_internal_secret(self):
+        runtime_mode = (self.ai_runtime_mode or "").strip().lower()
+        if runtime_mode not in {"development", "dev", "test", "testing"} and not (self.ai_service_shared_secret or "").strip():
+            raise ValueError("AI_SERVICE_SHARED_SECRET must be set outside development runtime")
+        return self
 
     model_config = {"env_file": (".env", ".env.local"), "extra": "ignore"}
 
