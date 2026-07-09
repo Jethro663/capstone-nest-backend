@@ -1,23 +1,56 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes, createHash } from 'crypto';
+import Redis from 'ioredis';
 import { DatabaseService } from '../../database/database.service';
 import { refreshTokens } from '../../drizzle/schema';
 import { eq, and, gt } from 'drizzle-orm';
 import { parseExpiryMs } from './utils/parse-expiry.util';
 
 @Injectable()
-export class TokenService {
+export class TokenService implements OnModuleDestroy {
   private readonly logger = new Logger(TokenService.name);
   private readonly rotationGraceCache = new Map<
     string,
     { newRawToken: string; userId: string; rotatedAt: number }
   >();
+  private redisClient?: Redis;
 
   constructor(
     private readonly dbService: DatabaseService,
     private readonly configService: ConfigService,
-  ) {}
+  ) {
+    const redisUrl = this.configService?.get<string>('redis.url');
+    if (redisUrl && process.env.NODE_ENV !== 'test') {
+      try {
+        this.redisClient = new Redis(redisUrl, {
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+          enableOfflineQueue: false,
+        });
+      } catch (e) {
+        this.logger.warn(
+          'Failed to initialize Redis for TokenService rotation grace',
+          e,
+        );
+      }
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (this.redisClient) {
+      try {
+        await this.redisClient.quit();
+      } catch {
+        this.redisClient.disconnect();
+      }
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Private helpers
@@ -92,11 +125,35 @@ export class TokenService {
       return { newRawToken: cached.newRawToken, userId: cached.userId };
     }
 
+    if (this.redisClient) {
+      try {
+        const redisVal = await this.redisClient.get(`auth:grace:${tokenHash}`);
+        if (redisVal) {
+          const parsed = JSON.parse(redisVal);
+          if (parsed && parsed.newRawToken && parsed.userId) {
+            return { newRawToken: parsed.newRawToken, userId: parsed.userId };
+          }
+        }
+      } catch {
+        // ignore redis read errors and fall through to DB
+      }
+    }
+
     return await this.dbService.db.transaction(async (tx) => {
+      const newRawToken = this.generateRawRefreshToken();
+      const newHash = this.hashToken(newRawToken);
+      const expiresAt = new Date(Date.now() + this.refreshTtlMs());
+      const graceExpiresAt = new Date(Date.now() + 45000);
+
       // Atomically revoke only if the token is valid and not yet consumed
       const [consumed] = await tx
         .update(refreshTokens)
-        .set({ revoked: true })
+        .set({
+          revoked: true,
+          rotatedAt: now,
+          graceExpiresAt,
+          replacedByTokenHash: newHash,
+        })
         .where(
           and(
             eq(refreshTokens.tokenHash, tokenHash),
@@ -115,7 +172,20 @@ export class TokenService {
           .limit(1);
 
         if (existing?.revoked) {
-          // Token was already revoked — potential token reuse / theft
+          // Check if within 45-second grace window (benign concurrent refresh race).
+          // Note: Because DB stores one-way SHA-256 hashes (`tokenHash`), plaintext `newRawToken`
+          // cannot be returned from DB when Redis L2 / in-memory cache misses. Instead of revoking
+          // all sessions (reuse attack protection), throw a gentle retry error.
+          if (existing.graceExpiresAt && existing.graceExpiresAt > now) {
+            this.logger.warn(
+              `[SECURITY] Concurrent refresh within grace window for user ${existing.userId}. Benign race detected without cache hit.`,
+            );
+            throw new UnauthorizedException(
+              'Token recently refreshed. Please use your latest active session.',
+            );
+          }
+
+          // Token was already revoked outside grace window — potential token reuse / theft
           this.logger.warn(
             `[SECURITY] Revoked refresh token reuse detected for user ` +
               `${existing.userId} from IP ${ip ?? 'unknown'}. Revoking all active sessions.`,
@@ -138,10 +208,6 @@ export class TokenService {
       }
 
       // Issue a brand-new opaque refresh token in the same transaction
-      const newRawToken = this.generateRawRefreshToken();
-      const newHash = this.hashToken(newRawToken);
-      const expiresAt = new Date(Date.now() + this.refreshTtlMs());
-
       await tx.insert(refreshTokens).values({
         userId: consumed.userId,
         tokenHash: newHash,
@@ -160,6 +226,19 @@ export class TokenService {
         const threshold = Date.now() - 45000;
         for (const [key, val] of this.rotationGraceCache.entries()) {
           if (val.rotatedAt < threshold) this.rotationGraceCache.delete(key);
+        }
+      }
+
+      if (this.redisClient) {
+        try {
+          await this.redisClient.set(
+            `auth:grace:${tokenHash}`,
+            JSON.stringify({ newRawToken, userId: consumed.userId }),
+            'EX',
+            45,
+          );
+        } catch {
+          // ignore redis set error
         }
       }
 

@@ -15,6 +15,13 @@
       "when": 1783387505349,
       "tag": "0001_mixed_morgan_stark",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783431554265,
+      "tag": "0002_small_photon",
+      "breakpoints": true
     }
   ]
 }

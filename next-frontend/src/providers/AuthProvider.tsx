@@ -120,6 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     }
 
+    if (getAccessToken() && latestUserRef.current) {
+      setStatus('authenticated');
+      return;
+    }
+
     setAccessToken(null);
     setUser(null);
     setStatus('unauthenticated');
