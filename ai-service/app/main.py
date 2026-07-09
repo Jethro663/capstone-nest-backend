@@ -988,6 +988,7 @@ async def _run_quiz_generation_job(
                     "preflightReindex": preflight_reindex,
                     "indexing": indexing,
                 },
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
         except asyncio.CancelledError:
             await bg_db.rollback()
@@ -1004,6 +1005,7 @@ async def _run_quiz_generation_job(
                 progressPercent=100,
                 statusMessage="Generation cancelled",
                 errorMessage="Generation cancelled by teacher.",
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
             logger.info("[ai-job] Quiz generation %s cancelled", job_id)
             raise
@@ -1021,6 +1023,7 @@ async def _run_quiz_generation_job(
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
             logger.exception("[ai-job] Quiz generation %s failed", job_id)
         finally:
@@ -1072,7 +1075,27 @@ async def _run_intervention_generation_job(
                     "outputId": result.get("outputId"),
                     "caseId": result.get("caseId"),
                 },
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="cancelled",
+                error_message="Generation cancelled by teacher.",
+                output_status="cancelled",
+            )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                progressPercent=100,
+                statusMessage="Generation cancelled",
+                errorMessage="Generation cancelled by teacher.",
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
+            )
+            logger.info("[ai-job] Intervention generation %s cancelled", job_id)
+            raise
         except Exception as exc:
             await bg_db.rollback()
             await _update_ai_job_status(
@@ -1087,6 +1110,7 @@ async def _run_intervention_generation_job(
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
+                workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
             logger.exception("[ai-job] Intervention generation %s failed", job_id)
         finally:
@@ -4613,18 +4637,9 @@ async def queue_intervention_recommendation_job(
         source_filters={"caseId": case_id, "note": body.note},
     )
 
-    try:
-        loop = asyncio.get_running_loop()
-
-        async def _sem_intervention():
-            async with _TEACHER_BG_SEMAPHORE:
-                await _run_intervention_generation_job(job_id, case_id, body.note, user)
-
-        task = loop.create_task(_sem_intervention())
-        AI_JOB_TASKS[job_id] = task
-    except RuntimeError as exc:
-        logger.exception("[ai-job] Failed to schedule intervention job %s: %s", job_id, exc)
-        raise HTTPException(500, "Failed to schedule intervention generation job") from exc
+    # NOTE: Execution is no longer scheduled in-process via create_task.
+    # The NestJS backend BullMQ worker owns execution orchestration and
+    # will call POST /internal/teacher/interventions/jobs/{job_id}/run.
 
     return {
         "success": True,
@@ -4692,18 +4707,9 @@ async def queue_teacher_quiz_draft_job(
         max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
     )
 
-    try:
-        loop = asyncio.get_running_loop()
-
-        async def _sem_quiz():
-            async with _TEACHER_BG_SEMAPHORE:
-                await _run_quiz_generation_job(job_id, body, user)
-
-        task = loop.create_task(_sem_quiz())
-        AI_JOB_TASKS[job_id] = task
-    except RuntimeError as exc:
-        logger.exception("[ai-job] Failed to schedule quiz job %s: %s", job_id, exc)
-        raise HTTPException(500, "Failed to schedule quiz generation job") from exc
+    # NOTE: Execution is no longer scheduled in-process via create_task.
+    # The NestJS backend BullMQ worker owns execution orchestration and
+    # will call POST /internal/teacher/quizzes/jobs/{job_id}/run.
 
     return {
         "success": True,
@@ -4871,6 +4877,169 @@ async def run_teacher_lesson_plan_job(
     return {
         "success": True,
         "message": "Lesson plan generation completed",
+        "data": {"jobId": job_id},
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /internal/teacher/quizzes/jobs/:id/run  (BullMQ worker entrypoint)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/internal/teacher/quizzes/jobs/{job_id}/run")
+async def run_teacher_quiz_job(
+    job_id: str,
+    meta: dict[str, Any] | None = Body(None),
+    _auth: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    job_row = await db.execute(
+        sa_text(
+            """
+            SELECT id, job_type, class_id, teacher_id, status, source_filters
+            FROM ai_generation_jobs
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
+    job = job_row.mappings().first()
+    if not job:
+        raise HTTPException(404, f"Job {job_id} not found")
+
+    if job["status"] == "completed":
+        return {
+            "success": True,
+            "message": "Quiz draft generation already completed",
+            "data": {"jobId": job_id, "status": "completed"},
+        }
+
+    meta_dict = meta if isinstance(meta, dict) else {}
+    attempt = int(meta_dict.get("attempt", 1))
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
+    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
+    is_stale_processing = bool(
+        worker_started_at
+        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    )
+
+    if job["status"] in ("processing", "running"):
+        if attempt <= 1 or not is_stale_processing:
+            raise HTTPException(409, f"Job {job_id} is already running")
+
+    runtime_patch = {
+        "broker": "bullmq",
+        "attempt": attempt,
+        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
+        "bullmqJobId": meta_dict.get("bullmqJobId"),
+    }
+    _set_ai_job_runtime(job_id, **runtime_patch)
+    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
+
+    source_filters = job["source_filters"] or {}
+    body = GenerateQuizDraftRequest(
+        classId=str(job["class_id"]) if job["class_id"] else "",
+        lessonIds=source_filters.get("lessonIds", []),
+        extractionIds=source_filters.get("extractionIds", []),
+        questionCount=int(source_filters.get("questionCount", 5)),
+        questionType=source_filters.get("questionType", "multiple_choice"),
+        assessmentType=source_filters.get("assessmentType", "quiz"),
+        title=source_filters.get("title"),
+        teacherNote=source_filters.get("teacherNote"),
+        passingScore=source_filters.get("passingScore"),
+        feedbackLevel=source_filters.get("feedbackLevel", "summary"),
+        classRecordCategory=source_filters.get("classRecordCategory"),
+        quarter=source_filters.get("quarter"),
+        sourcePolicy=source_filters.get("sourcePolicy", "strict_lesson"),
+        allowDraftSources=bool(source_filters.get("allowDraftSources", False)),
+        retryOfJobId=source_filters.get("retryOfJobId"),
+    )
+    user = RequestUser(
+        id=str(job["teacher_id"]),
+        email="internal-worker@nexora.local",
+        roles=["teacher"],
+    )
+
+    await _run_quiz_generation_job(job_id, body, user)
+
+    return {
+        "success": True,
+        "message": "Quiz draft generation completed",
+        "data": {"jobId": job_id},
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /internal/teacher/interventions/jobs/:id/run  (BullMQ worker entrypoint)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/internal/teacher/interventions/jobs/{job_id}/run")
+async def run_teacher_intervention_job(
+    job_id: str,
+    meta: dict[str, Any] | None = Body(None),
+    _auth: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    job_row = await db.execute(
+        sa_text(
+            """
+            SELECT id, job_type, class_id, teacher_id, status, source_filters
+            FROM ai_generation_jobs
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
+    job = job_row.mappings().first()
+    if not job:
+        raise HTTPException(404, f"Job {job_id} not found")
+
+    if job["status"] == "completed":
+        return {
+            "success": True,
+            "message": "Intervention recommendation generation already completed",
+            "data": {"jobId": job_id, "status": "completed"},
+        }
+
+    meta_dict = meta if isinstance(meta, dict) else {}
+    attempt = int(meta_dict.get("attempt", 1))
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
+    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
+    is_stale_processing = bool(
+        worker_started_at
+        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    )
+
+    if job["status"] in ("processing", "running"):
+        if attempt <= 1 or not is_stale_processing:
+            raise HTTPException(409, f"Job {job_id} is already running")
+
+    runtime_patch = {
+        "broker": "bullmq",
+        "attempt": attempt,
+        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
+        "bullmqJobId": meta_dict.get("bullmqJobId"),
+    }
+    _set_ai_job_runtime(job_id, **runtime_patch)
+    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
+
+    source_filters = job["source_filters"] or {}
+    case_id = source_filters.get("caseId", "")
+    note = source_filters.get("note")
+    user = RequestUser(
+        id=str(job["teacher_id"]),
+        email="internal-worker@nexora.local",
+        roles=["teacher"],
+    )
+
+    await _run_intervention_generation_job(job_id, case_id, note, user)
+
+    return {
+        "success": True,
+        "message": "Intervention recommendation generation completed",
         "data": {"jobId": job_id},
     }
 

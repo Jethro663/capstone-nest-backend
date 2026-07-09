@@ -38,7 +38,10 @@ const ADMIN_USER = {
 const mockProxy = { forward: jest.fn() };
 const mockQueueService = {
   enqueueLessonPlanJob: jest.fn(),
+  enqueueQuizJob: jest.fn(),
+  enqueueInterventionJob: jest.fn(),
   cancelQueuedLessonPlanJob: jest.fn(),
+  cancelQueuedTeacherAiJob: jest.fn(),
 };
 const mockAudit = { log: jest.fn() };
 const mockAdminAnalyticsChat = {
@@ -73,8 +76,14 @@ describe('AiMentorController', () => {
     jest.clearAllMocks();
     mockQueueService.enqueueLessonPlanJob.mockReset();
     mockQueueService.enqueueLessonPlanJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueQuizJob.mockReset();
+    mockQueueService.enqueueQuizJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueInterventionJob.mockReset();
+    mockQueueService.enqueueInterventionJob.mockResolvedValue(undefined);
     mockQueueService.cancelQueuedLessonPlanJob.mockReset();
     mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+    mockQueueService.cancelQueuedTeacherAiJob.mockReset();
+    mockQueueService.cancelQueuedTeacherAiJob.mockResolvedValue(false);
     mockAudit.log.mockReset();
     mockAudit.log.mockResolvedValue(undefined);
     mockAdminAnalyticsChat.chat.mockReset();
@@ -927,6 +936,10 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         dto,
       );
+      expect(mockQueueService.enqueueInterventionJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
+      );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: TEACHER_USER.id,
@@ -1174,6 +1187,10 @@ describe('AiMentorController', () => {
         '/teacher/quizzes/jobs',
         TEACHER_USER,
         dto,
+      );
+      expect(mockQueueService.enqueueQuizJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1470,6 +1487,10 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         {},
       );
+      expect(mockQueueService.enqueueQuizJob).toHaveBeenCalledWith(
+        'retry-job-1',
+        TEACHER_USER.id,
+      );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: TEACHER_USER.id,
@@ -1498,6 +1519,10 @@ describe('AiMentorController', () => {
         `/teacher/quizzes/jobs/${JOB_ID}/cancel`,
         TEACHER_USER,
         {},
+      );
+      expect(mockQueueService.cancelQueuedTeacherAiJob).toHaveBeenCalledWith(
+        'quiz',
+        JOB_ID,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1914,7 +1939,9 @@ describe('AiMentorController', () => {
 
   describe('deleteTeacherJob()', () => {
     it('should remove queued job from BullMQ and return cancelled status when job is waiting', async () => {
-      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(true);
+      mockQueueService.cancelQueuedTeacherAiJob.mockImplementation((type, id) =>
+        Promise.resolve(type === 'lesson-plan' && id === JOB_ID),
+      );
       mockProxy.forward.mockResolvedValue({
         success: true,
         data: { jobId: JOB_ID, status: 'cancelled' },
@@ -1922,7 +1949,8 @@ describe('AiMentorController', () => {
 
       const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
 
-      expect(mockQueueService.cancelQueuedLessonPlanJob).toHaveBeenCalledWith(
+      expect(mockQueueService.cancelQueuedTeacherAiJob).toHaveBeenCalledWith(
+        'lesson-plan',
         JOB_ID,
       );
       expect(mockProxy.forward).toHaveBeenCalledWith(
@@ -1940,13 +1968,13 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        message: 'Lesson plan generation cancelled before execution started',
+        message: 'AI generation job cancelled before execution started',
         data: { jobId: JOB_ID, status: 'cancelled' },
       });
     });
 
     it('should forward downstream cancellation response when job is not in queue', async () => {
-      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+      mockQueueService.cancelQueuedTeacherAiJob.mockResolvedValue(false);
       const downstreamResponse = {
         success: true,
         message: 'Generation cancelled',

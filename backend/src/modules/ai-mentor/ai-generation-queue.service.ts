@@ -2,6 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
+const SHARED_JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  removeOnComplete: 100,
+  removeOnFail: 200,
+};
+
 /**
  * Enqueues AI generation jobs onto the BullMQ `ai-teacher-generation` queue.
  *
@@ -29,13 +36,10 @@ export class AiGenerationQueueService {
   ): Promise<void> {
     await this.queue.add(
       'lesson-plan-generation',
-      { jobId, requestedByUserId: userId },
+      { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
       {
+        ...SHARED_JOB_OPTIONS,
         jobId: `lesson-plan:${jobId}`,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: 100,
-        removeOnFail: 200,
       },
     );
     this.logger.log(
@@ -44,18 +48,68 @@ export class AiGenerationQueueService {
   }
 
   /**
+   * Enqueue a quiz draft generation job onto the teacher AI queue.
+   */
+  async enqueueQuizJob(jobId: string, userId: string): Promise<void> {
+    await this.queue.add(
+      'quiz-generation',
+      { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
+      {
+        ...SHARED_JOB_OPTIONS,
+        jobId: `quiz:${jobId}`,
+      },
+    );
+    this.logger.log(`Enqueued quiz-generation job ${jobId} for user ${userId}`);
+  }
+
+  /**
+   * Enqueue an intervention recommendation generation job onto the teacher AI queue.
+   */
+  async enqueueInterventionJob(jobId: string, userId: string): Promise<void> {
+    await this.queue.add(
+      'intervention-recommendation-generation',
+      { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
+      {
+        ...SHARED_JOB_OPTIONS,
+        jobId: `intervention:${jobId}`,
+      },
+    );
+    this.logger.log(
+      `Enqueued intervention-recommendation-generation job ${jobId} for user ${userId}`,
+    );
+  }
+
+  /**
    * Cancel a queued lesson-plan job before execution starts.
    * Returns true if the job was waiting/delayed and was successfully removed from BullMQ.
    */
   async cancelQueuedLessonPlanJob(jobId: string): Promise<boolean> {
-    const job = await this.queue.getJob(`lesson-plan:${jobId}`);
+    return this.cancelQueuedTeacherAiJob('lesson-plan', jobId);
+  }
+
+  /**
+   * Cancel any queued teacher AI job before execution starts by kind and jobId.
+   */
+  async cancelQueuedTeacherAiJob(
+    kind: 'lesson-plan' | 'quiz' | 'intervention',
+    jobId: string,
+  ): Promise<boolean> {
+    const prefix =
+      kind === 'lesson-plan'
+        ? 'lesson-plan'
+        : kind === 'quiz'
+          ? 'quiz'
+          : 'intervention';
+    const bullmqJobId = `${prefix}:${jobId}`;
+    const job = await this.queue.getJob(bullmqJobId);
     if (!job) return false;
     const state = await job.getState();
     if (!['waiting', 'delayed', 'prioritized'].includes(state)) {
       return false;
     }
     await job.remove();
-    this.logger.log(`Removed queued job lesson-plan:${jobId} before execution`);
+    this.logger.log(`Removed queued job ${bullmqJobId} before execution`);
     return true;
   }
 }
+
