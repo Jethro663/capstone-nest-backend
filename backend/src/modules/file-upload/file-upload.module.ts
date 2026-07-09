@@ -7,11 +7,13 @@ import { FileUploadService } from './file-upload.service';
 import { AuditModule } from '../audit/audit.module';
 import { LibraryIndexingService } from './library-indexing.service';
 import { LibraryIndexingProcessor } from './processors/library-indexing.processor';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
     DatabaseModule,
     AuditModule,
+    StorageModule,
     BullModule.registerQueue({
       name: 'library-indexing',
     }),
@@ -22,6 +24,6 @@ import { LibraryIndexingProcessor } from './processors/library-indexing.processo
     LibraryIndexingService,
     LibraryIndexingProcessor,
   ],
-  exports: [FileUploadService, LibraryIndexingService],
+  exports: [FileUploadService, LibraryIndexingService, StorageModule],
 })
 export class FileUploadModule {}

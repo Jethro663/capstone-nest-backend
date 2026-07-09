@@ -17,7 +17,10 @@ _upload_client: httpx.AsyncClient | None = None
 def _get_upload_client() -> httpx.AsyncClient:
     global _upload_client
     if _upload_client is None or getattr(_upload_client, "is_closed", False):
-        _upload_client = httpx.AsyncClient(timeout=settings.backend_upload_fetch_timeout_s)
+        _upload_client = httpx.AsyncClient(
+            timeout=settings.backend_upload_fetch_timeout_s,
+            follow_redirects=True,
+        )
     return _upload_client
 
 
@@ -62,9 +65,11 @@ def resolve_local_backend_upload_path(raw_path: str) -> str | None:
 
 
 async def materialize_backend_upload(raw_path: str) -> str | None:
-    local_path = resolve_local_backend_upload_path(raw_path)
-    if local_path:
-        return local_path
+    normalized = (raw_path or "").strip()
+    if not normalized.startswith("s3://"):
+        local_path = resolve_local_backend_upload_path(raw_path)
+        if local_path:
+            return local_path
 
     backend_internal_url = (settings.backend_internal_url or "").strip().rstrip("/")
     normalized = (raw_path or "").strip()
@@ -91,6 +96,7 @@ async def materialize_backend_upload(raw_path: str) -> str | None:
         headers={
             "X-Internal-Service-Token": settings.ai_service_shared_secret or ""
         },
+        follow_redirects=True,
     )
     response.raise_for_status()
     await asyncio.to_thread(cached_path.write_bytes, response.content)

@@ -203,11 +203,6 @@ type AssessmentView = {
 
 type GradingPeriodCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
-// pdf-parse ships CommonJS typings that do not expose a callable default import cleanly.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
-  text: string;
-}>;
 
 @Injectable()
 export class AssessmentsService {
@@ -893,6 +888,8 @@ export class AssessmentsService {
 
     if (extension === 'pdf') {
       const buffer = await fs.readFile(absolutePath);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
       const parsed = await pdfParse(buffer);
       return parsed.text.trim();
     }

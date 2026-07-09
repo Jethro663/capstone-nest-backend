@@ -3,10 +3,15 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
 import {
   MODULE_COVER_MAX_FILE_SIZE_BYTES,
   persistValidatedModuleCover,
 } from './module-cover-upload.util';
+
+if (!global.crypto) {
+  (global as any).crypto = crypto.webcrypto;
+}
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn7sN8AAAAASUVORK5CYII=';

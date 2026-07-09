@@ -18,6 +18,8 @@ export class HealthController {
     return {
       status: 'ok',
       service: this.healthService.getServiceMetadata(),
+      uptime: Math.round(process.uptime()),
+      memoryUsageMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
       timestamp: new Date().toISOString(),
     };
   }
