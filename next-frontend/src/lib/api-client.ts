@@ -82,7 +82,8 @@ export function createApiClient(): AxiosInstance {
             });
         }
 
-        const bootstrappedToken = await (bootstrapPromise || refreshPromise).catch(() => null);
+        const pendingRefresh = bootstrapPromise || refreshPromise;
+        const bootstrappedToken = pendingRefresh ? await pendingRefresh.catch(() => null) : null;
         if (bootstrappedToken) {
           accessToken = bootstrappedToken;
         }
