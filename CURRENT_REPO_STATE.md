@@ -1,6 +1,6 @@
 # Current Repository State
 
-**Document Generated:** 2026-07-06  
+**Document Generated:** 2026-07-07  
 **Repository Name:** `capstone-nest-backend` (Nexora LMS/LXP Monorepo)  
 **Target Organization:** Gat Andres Bonifacio High School  
 
@@ -23,6 +23,9 @@ The project is at a **late-stage prototype / near-production release candidate**
 
 ### Production Readiness vs. Active Development
 The repository is in **active development and verification stabilization** (`docs/state/CURRENT_REPO_STATE 6-17.md:L16-L17`). The core functional requirements for an educational institution are present and tested. Remaining work consists of documentation alignment, resolving legacy ESLint/formatting debt, hardening UI performance smoke scripts against DOM label drift, and preparing for multi-instance cloud deployment (such as Azure or Railway).
+
+### Recent Architectural Changes (2026-07-07)
+Recent repository work hardened the teacher AI lesson-plan execution path into a clearer backend-owned queue architecture. The NestJS backend now deduplicates queued lesson-plan jobs with deterministic BullMQ IDs, removes waiting jobs before execution starts, caps lesson-plan worker concurrency at `2`, and calls the internal FastAPI execution route with a hard 5-minute timeout. The FastAPI `ai-service` now fails closed on missing or invalid `X-Internal-Service-Token`, fails fast at startup when `AI_SERVICE_SHARED_SECRET` is blank outside dev/test-style runtimes, and permits safe BullMQ retry re-entry for stale `processing` rows left behind by crashed workers.
 
 ---
 
@@ -175,13 +178,14 @@ Nexora follows a **layered, modular, microservice-assisted monorepo architecture
 ### Backend Architecture
 *   **Layered Design:** Strictly follows the standard NestJS layered architecture: Controllers handle HTTP request/response validation, Services execute business logic, and Drizzle ORM schemas execute database queries (`backend/src/modules/`).
 *   **System Authority:** The backend is the single source of truth for user identities, role assignments, enrollment records, class rosters, and gradebook computations (`README.md:L42`).
-*   **Asynchronous Processing:** Long-running operations (such as AI lesson plan drafting, quiz generation, discussion thread summarization, and CSV roster parsing) are offloaded to Redis-backed BullMQ queues (`@nestjs/bullmq` in `backend/src/app.module.ts:L45-L55`). Dedicated background processors (`backend/src/modules/notifications/processors/`, `backend/src/modules/discussion-board/discussion-board.processor.ts`) process jobs asynchronously and push status updates via WebSockets.
+*   **Asynchronous Processing:** Long-running operations (such as AI lesson plan drafting, quiz generation, discussion thread summarization, and CSV roster parsing) are offloaded to Redis-backed BullMQ queues (`@nestjs/bullmq` in `backend/src/app.module.ts:L45-L55`). Dedicated background processors (`backend/src/modules/notifications/processors/`, `backend/src/modules/discussion-board/discussion-board.processor.ts`) process jobs asynchronously and push status updates via WebSockets. The teacher lesson-plan path was recently hardened so the backend now owns durable queue orchestration through `backend/src/modules/ai-mentor/ai-generation-queue.service.ts` and `backend/src/modules/ai-mentor/processors/ai-generation.processor.ts`, while `ai-service` is treated as the execution engine rather than the in-process scheduler.
 
 ### AI Proxying & Microservice Boundary
 A critical security and architectural design in Nexora is that **client applications NEVER communicate directly with `ai-service`** (`README.md:L43`, `backend/AI_MENTOR_README.md`).
 *   All client AI requests target backend proxy endpoints (e.g., `POST /api/ai/student/ja/practice/sessions/generate`, `POST /api/teacher/lesson-plans/jobs`).
 *   The NestJS backend authenticates the request, validates RBAC and rate limits, logs audit metadata, and forwards the payload to `http://localhost:8000` (or internal container URL) attaching an internal authentication header (`X-Internal-Service-Token: AI_SERVICE_SHARED_SECRET`).
-*   The FastAPI microservice validates this shared secret, processes the request via OpenRouter or Ollama, and returns structured JSON or writes vector chunks directly to the shared PostgreSQL database.
+*   For lesson-plan execution specifically, the backend now separates **public job creation** from **internal execution**. The public `POST /api/ai/teacher/lesson-plans/jobs` path still returns the existing job envelope immediately, while BullMQ later invokes `POST /internal/teacher/lesson-plans/jobs/{job_id}/run` with retry metadata (`bullmqJobId`, `attempt`) through a backend-owned worker.
+*   The FastAPI microservice validates this shared secret strictly, reconstructs the queued lesson-plan request from `ai_generation_jobs.source_filters`, and returns structured JSON or writes vector chunks directly to the shared PostgreSQL database. Stale `processing` rows are now retriable when BullMQ re-enters with a later attempt and the prior `workerStartedAt` marker is old enough to be considered orphaned.
 
 ### Database & Storage Architecture
 *   **Single Database Instance:** Both `backend` and `ai-service` connect to the exact same PostgreSQL 16 database (`capstone` database defined in `docker-compose.yml:L11-L12`).
@@ -203,7 +207,7 @@ A critical security and architectural design in Nexora is that **client applicat
 | **Class Records & Gradebook** | Automatic grade aggregation, rubric score computation, performance tracking across assessment types, and teacher gradebook export. | `backend/src/modules/class-record/`<br>`next-frontend/app/(dashboard)/dashboard/teacher/class-record/` | Complete | None. Integrates seamlessly with completed student assessment attempts. |
 | **AI Mentor & Student Tutoring** | Context-aware AI NPC tutor for students offering interactive explanations, guided remediation, and teacher-directed intervention recommendations. | `backend/src/modules/ai-mentor/`<br>`ai-service/app/student_tutor_service.py`<br>`next-frontend/src/components/student/ai-mentor/` | Complete | Teacher-controlled AI policy scope works in code but needs stronger surfacing in UX/docs (`README.md:L335`). |
 | **Junior Achievement (JA) Hub** | Specialized workplace readiness training modules: JA Practice (interactive scenarios), JA Ask (career Q&A), and JA Review (knowledge checks). | `backend/src/modules/ja/`<br>`ai-service/app/ja_practice_service.py`<br>`next-frontend/app/(dashboard)/dashboard/student/lxp/` | Complete | Fully integrated into the student Learning Experience Platform (LXP) tab. |
-| **Automated AI Job Generation** | BullMQ background jobs allowing teachers to auto-generate draft lesson plans and quizzes from library documents, with human-in-the-loop draft review before publishing. | `backend/src/modules/ai-mentor/`<br>`ai-service/app/lesson_plan_service.py`<br>`ai-service/app/quiz_generation_service.py` | Complete | Heavy extraction jobs can take several minutes on CPU-only local Ollama setups. |
+| **Automated AI Job Generation** | BullMQ-backed AI job flow allowing teachers to generate draft lesson plans and quizzes from library documents, with human-in-the-loop draft review before publishing. Lesson-plan execution is now explicitly deduplicated (`lesson-plan:{jobId}`), concurrency-capped (`2`), timeout-bounded (`300s`), and recoverable after stale worker crashes. | `backend/src/modules/ai-mentor/`<br>`backend/src/modules/ai-mentor/ai-generation-queue.service.ts`<br>`backend/src/modules/ai-mentor/processors/ai-generation.processor.ts`<br>`ai-service/app/main.py`<br>`ai-service/app/lesson_plan_service.py`<br>`ai-service/app/quiz_generation_service.py` | Complete | Quiz-generation still follows the same broader AI job model but has not yet received the same queue hardening refinements as the lesson-plan path. |
 | **RAG & Library Indexing** | Ingestion of teacher/admin PDF/PPTX curriculum assets, text chunking, embedding generation (nomic-embed-text / OpenRouter), and vector similarity search. | `backend/src/modules/rag/`<br>`ai-service/app/indexing_pipeline.py`<br>`ai-service/app/retrieval_service.py` | Complete | Requires PostgreSQL `pgvector` extension enabled in the target database. |
 | **Discussion Boards & Notifications** | Class discussion threads with AI summarization, real-time Socket.IO notification fan-out, and class announcements. | `backend/src/modules/discussion-board/`<br>`backend/src/modules/notifications/`<br>`next-frontend/src/providers/NotificationProvider.tsx` | Complete | None. Real-time updates verified across web clients. |
 | **Performance Tracking & Remedial LXP** | Threshold-based learning gap detection (e.g., scores `< 74%` trigger remediation), automated intervention case tracking, and remedial AI content delivery. | `backend/src/modules/performance/`<br>`backend/src/modules/lxp/`<br>`ai-service/app/remedial_service.py` | Complete | Aligned with updated school threshold rules (`74%` passing baseline). |
@@ -231,7 +235,8 @@ The NestJS backend registers **33 feature module controllers** (`backend/src/mod
 | `POST` | `/api/assessments/:id/attempts` | Start a student attempt for an assessment (enforces strict mode). | Yes (`student`) | None | `{ attemptId, startTime, questions }` | `backend/src/modules/assessments/assessments.controller.ts:L140` |
 | `POST` | `/api/assessments/attempts/:id/submit` | Submit finalized assessment answers for grading. | Yes (`student`) | `{ answers: Record<string, any> }` | `{ attemptId, score, maxScore, status }` | `backend/src/modules/assessments/assessments.controller.ts:L185` |
 | `GET` | `/api/class-record/classes/:classId` | Retrieve aggregated gradebook and class records for a class. | Yes (`teacher`) | None | `ClassRecordSummaryDTO` | `backend/src/modules/class-record/class-record.controller.ts:L22` |
-| `POST` | `/api/ai/teacher/lesson-plans/jobs` | Trigger async BullMQ AI job to generate a draft lesson plan. | Yes (`teacher`) | `{ classId, topic, prompt, libraryFileIds }` | `{ jobId, status: "queued" }` | `backend/src/modules/ai-mentor/ai-mentor.controller.ts:L84` |
+| `POST` | `/api/ai/teacher/lesson-plans/jobs` | Create a teacher lesson-plan AI job and enqueue backend-owned BullMQ execution without blocking the browser request. | Yes (`teacher`) | `{ classId, anchorType, anchorId, teacherNote, header }` | `{ jobId, jobType, status: "pending", progressPercent, statusMessage }` | `backend/src/modules/ai-mentor/ai-mentor.controller.ts` |
+| `DELETE` | `/api/ai/teacher/jobs/:jobId` | Cancel a teacher AI generation job. Queued lesson-plan jobs are removed from BullMQ before execution; already-running jobs defer to the downstream AI-service cancellation result. | Yes (`teacher`) | None | `{ jobId, status: "cancelled" }` | `backend/src/modules/ai-mentor/ai-mentor.controller.ts` |
 | `POST` | `/api/ai/teacher/quizzes/jobs` | Trigger async BullMQ AI job to generate a draft quiz from docs. | Yes (`teacher`) | `{ classId, numQuestions, difficulty, fileIds }` | `{ jobId, status: "queued" }` | `backend/src/modules/ai-mentor/ai-mentor.controller.ts:L110` |
 | `POST` | `/api/ai/student/tutor/session` | Start an AI NPC mentoring/tutoring session for a student. | Yes (`student`) | `{ lessonId, topic, context }` | `{ sessionId, greeting, aiMessage }` | `backend/src/modules/ai-mentor/ai-mentor.controller.ts:L145` |
 | `POST` | `/api/ai/student/ja/practice/sessions/generate` | Generate interactive Junior Achievement practice scenario. | Yes (`student`) | `{ moduleType, difficulty, background }` | `{ sessionId, scenarioText, options }` | `backend/src/modules/ja/ja.controller.ts:L28` |
@@ -320,7 +325,7 @@ The repository defines configuration requirements across four primary `.env.exam
 ### Configuration Files & Runtime Setup
 *   **Docker Compose Runtime:** Developers copy `.env.compose.example` to an untracked `.env.compose` file (`README.md:L68`). Container-specific environment files (`backend/.env.docker`, `ai-service/.env.docker`) inject internal container DNS hostnames (`postgres`, `redis`, `ai-service`).
 *   **Frontend Configuration:** Next.js uses `next.config.ts`, `postcss.config.mjs`, and `tailwind.config.ts`. API routing resolves dynamically via `src/lib/api-origin.ts`, which prevents internal Docker hostnames (`http://backend:3000`) from leaking into browser client bundles (`next-frontend/src/lib/api-origin.ts:L3-L10`).
-*   **Secrets Audit:** Inspection confirmed that all `.env.example` templates contain safe placeholder strings (`CHANGE_ME_*`). **No live production secrets or private API keys were found committed in tracked files.**
+*   **Secrets Audit:** Inspection confirmed that all `.env.example` templates contain safe placeholder strings (`CHANGE_ME_*`). **No live production secrets or private API keys were found committed in tracked files.** The AI service now also rejects startup outside dev/test-style runtimes when `AI_SERVICE_SHARED_SECRET` is blank, making shared-secret misconfiguration visible before the first internal AI request is attempted.
 
 ---
 
@@ -379,13 +384,14 @@ Nexora implements a dual-mode authentication architecture tailored for web brows
 
 ### NestJS Server Organization (`backend/`)
 *   **Application Bootstrap:** Configured in `backend/src/main.ts`. Configures global CORS origins, attaches Helmet security headers, enables cookie parsing, and sets a global NestJS `ValidationPipe` with `whitelist: true` and `transform: true` (`backend/src/main.ts:L15-L45`).
+*   **Graceful Shutdown:** `backend/src/main.ts` already enables Nest shutdown hooks (`app.enableShutdownHooks()`), which is now an important prerequisite for the queue-owned AI execution model because workers should stop accepting new jobs cleanly during process termination.
 *   **Feature Modules:** The application is cleanly partitioned into **32 domain feature modules** under `backend/src/modules/`:
     `academic-state`, `admin`, `ai-mentor`, `analytics`, `announcements`, `assessments`, `audit`, `auth`, `class-record`, `class-templates`, `classes`, `content-modules`, `discussion-board`, `file-upload`, `health`, `ja`, `lessons`, `lxp`, `mail`, `notifications`, `otp`, `performance`, `profiles`, `rag`, `reports`, `roles`, `roster-import`, `school-events`, `sections`, `teacher`, `teacher-profiles`, and `users`.
 
 ### Services, Business Logic & Orchestration
 *   **Database Access:** Services do not execute raw SQL strings; they interact with database tables via typed Drizzle ORM query builders and repository wrappers (`backend/src/drizzle/`).
 *   **Asynchronous Job Processing (BullMQ):** Heavy background workloads are decoupled from HTTP request threads using BullMQ queues backed by Redis (`@nestjs/bullmq` in `backend/src/app.module.ts:L45`). Dedicated queue processors handle:
-    *   `lesson-plans`: Asynchronous AI drafting of curriculum lesson content (`backend/src/modules/ai-mentor/`).
+    *   `ai-teacher-generation`: Backend-owned teacher AI execution queue. Lesson-plan jobs are deduplicated with deterministic BullMQ job IDs, capped to concurrency `2`, and executed via `AiGenerationProcessor` calling `AiProxyService.runInternalLessonPlanJob(...)` with a hard 5-minute timeout (`backend/src/modules/ai-mentor/`).
     *   `quizzes`: Automated AI question generation from uploaded library documents (`backend/src/modules/ai-mentor/`).
     *   `announcement-fan-out`: Asynchronous delivery of class announcements to hundreds of enrolled student websocket connections (`backend/src/modules/notifications/processors/announcement-fan-out.processor.ts`).
     *   `discussion-threads`: Background AI summarization and analytics of class discussion threads (`backend/src/modules/discussion-board/discussion-board.processor.ts`).
@@ -398,6 +404,7 @@ Nexora implements a dual-mode authentication architecture tailored for web brows
 *   **Centralized Logging:** Utilizes Winston (`winston` v3.19.0) configured with `winston-loki` (`backend/package.json:L69-L70`). Logs automatically include service labels (`service_name=nexora-backend`) and are shipped directly to the Loki container for Grafana querying (`README.md:L130`).
 *   **Distributed Tracing:** Instrumentation is initialized in `backend/src/tracing.ts` using OpenTelemetry (`@opentelemetry/sdk-node`). HTTP requests, Drizzle DB queries, and Redis job spans are exported via OTLP to the Tempo tracing server (`README.md:L96`, `L131`).
 *   **Exception Handling:** Global NestJS exception filters catch unhandled errors, log stack traces to Winston, and return sanitized, consistent JSON error envelopes to client applications.
+*   **Queue-Oriented Logging:** Recent AI worker changes keep observability logs metadata-only (BullMQ job id, attempt number, queue wait timing, and execution timing) while avoiding prompt bodies, lesson content, and personal identifiers in queue-debug logs.
 
 ### Backend Weaknesses & Technical Debt
 *   **Pre-Existing ESLint Debt:** Running `npm run lint` directly on `backend/` fails due to pre-existing code formatting discrepancies and strict TypeScript warnings across historical files (`docs/system-audit/whole-repo-lms-audit-2026-04-24.md:L20`, `L46`). While `npm run build` compiles cleanly, strict linting requires cleanup.
@@ -420,6 +427,7 @@ The repository maintains an active, multi-layered testing suite across all core 
 
 ### Outdated or Incomplete Testing Artifacts
 *   **Performance Smoke Scripts (`next-frontend/scripts/`):** Standalone Node.js verification scripts (`engine-perf-smoke.js` and `discussion-perf-smoke.js`) are used to measure live DOM UI responsiveness. The audit notes that `engine-perf-smoke.js` is currently out of sync with the admin template workspace because button labels changed (e.g., searching for `Export Engine YAML` instead of current controls like `Save Draft` or `Publish`) (`docs/system-audit/whole-repo-lms-audit-2026-04-24.md:L18`). These scripts require DOM selector updates when UI copy evolves.
+*   **Recent Queue Hardening Verification:** The lesson-plan queue hardening changes were recently verified with focused local runs: `npm test src/modules/ai-mentor`, `.venv/bin/python scripts/run_tests.py`, and `npm run build` all passed after adding deterministic BullMQ dedupe, queue-aware cancellation, strict internal shared-secret enforcement, startup secret validation, and stale-processing retry override logic.
 
 ---
 

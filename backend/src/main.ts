@@ -11,6 +11,7 @@ import { WinstonLoggerService } from './common/logger/winston-logger.service';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import express from 'express';
+import { validateEnvironment } from './config/validate-env.js';
 
 function parseOriginList(value?: string): string[] {
   if (!value) return [];
@@ -76,9 +77,17 @@ async function bootstrap() {
   }
 
   // Validate required env vars before accepting traffic
-  if (isProd && !process.env.FRONTEND_URL) {
-    logger.error('FRONTEND_URL must be set in production. Aborting startup.');
-    process.exit(1);
+  if (process.env.NODE_ENV !== 'test') {
+    try {
+      validateEnvironment();
+    } catch (err) {
+      logger.error(
+        err instanceof Error ? err.message : 'Environment validation failed',
+      );
+      if (isProd) {
+        process.exit(1);
+      }
+    }
   }
 
   // Helmet — strict in production; disable CSP in development so Swagger UI

@@ -22,9 +22,28 @@ export const httpRequestErrors = new client.Counter({
   labelNames: ['method', 'route', 'error_type'],
 });
 
+// DB Pool Metrics
+export const dbPoolTotal = new client.Gauge({
+  name: 'db_pool_total_connections',
+  help: 'Total connections in the DB pool',
+});
+
+export const dbPoolIdle = new client.Gauge({
+  name: 'db_pool_idle_connections',
+  help: 'Idle connections in the DB pool',
+});
+
+export const dbPoolWaiting = new client.Gauge({
+  name: 'db_pool_waiting_requests',
+  help: 'Waiting connection requests in the DB pool',
+});
+
 // Export all metrics as an array for registration
 export const allMetrics = [
   httpRequestDuration,
   httpRequestTotal,
   httpRequestErrors,
+  dbPoolTotal,
+  dbPoolIdle,
+  dbPoolWaiting,
 ];

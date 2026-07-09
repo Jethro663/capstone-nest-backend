@@ -1,11 +1,11 @@
 {
   "uid": "nexora-backend",
-  "title": "Nexora Backend",
-  "tags": ["nexora", "backend"],
+  "title": "Nexora Backend & DB Pool",
+  "tags": ["nexora", "backend", "database"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
-  "refresh": "30s",
+  "version": 2,
+  "refresh": "15s",
   "time": {
     "from": "now-6h",
     "to": "now"
@@ -18,7 +18,7 @@
       "title": "Backend Up",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [{ "expr": "up{job=\"backend\"}", "refId": "A" }],
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 }
+      "gridPos": { "h": 8, "w": 4, "x": 0, "y": 0 }
     },
     {
       "id": 2,
@@ -27,37 +27,82 @@
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_total{job=\"backend\"}[5m]))",
+          "expr": "sum(rate(http_requests_total{job=\"backend\"}[5m])) or sum(rate(http_server_requests_total{job=\"backend\"}[5m]))",
+          "legendFormat": "Requests / sec",
           "refId": "A"
         }
       ],
-      "gridPos": { "h": 8, "w": 9, "x": 6, "y": 0 }
+      "gridPos": { "h": 8, "w": 10, "x": 4, "y": 0 }
     },
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Backend Latency",
+      "title": "Backend P95 / P99 Latency (s)",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{job=\"backend\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"backend\"}[5m])) by (le))",
+          "legendFormat": "P95 Latency",
           "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=\"backend\"}[5m])) by (le))",
+          "legendFormat": "P99 Latency",
+          "refId": "B"
         }
       ],
-      "gridPos": { "h": 8, "w": 9, "x": 15, "y": 0 }
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 0 }
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "Backend 5xx",
+      "title": "Backend 5xx Error Rate",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(http_server_requests_total{job=\"backend\",status=~\"5..\"}[5m]))",
+          "expr": "sum(rate(http_request_errors_total{job=\"backend\"}[5m])) or sum(rate(http_server_requests_total{job=\"backend\",status=~\"5..\"}[5m]))",
           "refId": "A"
         }
       ],
-      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 8 }
+      "gridPos": { "h": 8, "w": 4, "x": 0, "y": 8 }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Database Connection Pool Diagnostics",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "db_pool_total_connections",
+          "legendFormat": "Total Connections",
+          "refId": "A"
+        },
+        {
+          "expr": "db_pool_idle_connections",
+          "legendFormat": "Idle Connections",
+          "refId": "B"
+        },
+        {
+          "expr": "db_pool_waiting_requests",
+          "legendFormat": "Waiting Requests (Queue Depth)",
+          "refId": "C"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 10, "x": 4, "y": 8 }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "HTTP Error Spike Breakdown by Route",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (route, error_type) (rate(http_request_errors_total{job=\"backend\"}[1m]))",
+          "legendFormat": "{{route}} - {{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 8 }
     }
   ]
 }

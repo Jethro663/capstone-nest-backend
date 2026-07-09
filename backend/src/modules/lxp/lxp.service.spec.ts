@@ -1679,7 +1679,7 @@ describe('LxpService', () => {
           audienceRole: 'student',
           classId: null,
           startsAt: new Date('2026-05-01T00:00:00.000Z'),
-          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          endsAt: new Date('2030-05-20T00:00:00.000Z'),
           status: 'active',
           class: null,
         },
@@ -1696,7 +1696,7 @@ describe('LxpService', () => {
           audienceRole: 'student',
           classId: null,
           startsAt: new Date('2026-05-01T00:00:00.000Z'),
-          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          endsAt: new Date('2030-05-20T00:00:00.000Z'),
           status: 'active',
           class: null,
         },
@@ -1728,7 +1728,7 @@ describe('LxpService', () => {
         targetModule: 'overall',
         status: 'active',
         startsAt: new Date('2026-05-01T00:00:00.000Z'),
-        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+        endsAt: new Date('2030-05-20T00:00:00.000Z'),
         title: 'System Pulse',
       },
     });
@@ -1786,7 +1786,7 @@ describe('LxpService', () => {
         targetModule: 'overall',
         status: 'active',
         startsAt: new Date('2026-05-01T00:00:00.000Z'),
-        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+        endsAt: new Date('2030-05-20T00:00:00.000Z'),
       },
     });
 
