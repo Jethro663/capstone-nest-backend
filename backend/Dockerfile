@@ -36,7 +36,7 @@ RUN npm ci --omit=dev && \
 COPY --from=builder /app/dist ./dist
 
 # Copy migration/seed scripts and SQL files (needed at runtime)
-COPY run-migrations.js seed-database.js ./
+COPY run-migrations.js migration-error-policy.js seed-database.js ./
 COPY drizzle/ ./drizzle/
 
 # Copy entrypoint script and ensure Linux line endings

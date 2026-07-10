@@ -75,7 +75,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     healthcheck:
-      test: ["CMD-SHELL", "ollama list | grep -q . || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "models=$$(ollama list | awk 'NR > 1 { print $$1 }'); echo \"$$models\" | grep -Fxq \"$$OLLAMA_TEXT_MODEL\" && echo \"$$models\" | grep -Fxq \"$$OLLAMA_VISION_MODEL\" && echo \"$$models\" | grep -Fxq \"$$OLLAMA_EMBED_MODEL\"",
+        ]
       interval: 15s
       timeout: 10s
       retries: 40

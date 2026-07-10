@@ -2,6 +2,7 @@ const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
 const env = require('dotenv');
+const { isHarmlessMigrationError } = require('./migration-error-policy');
 env.config(); // Load .env if present
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -51,6 +52,10 @@ async function recordMigration(filename) {
     'INSERT INTO _applied_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING',
     [filename],
   );
+}
+
+async function ensureVectorExtension() {
+  await client.query('CREATE EXTENSION IF NOT EXISTS vector');
 }
 
 /**
@@ -161,18 +166,6 @@ function containsEnumAddValue(statements) {
   );
 }
 
-function isHarmlessMigrationError(err) {
-  const harmless = [
-    '42710', // duplicate_object  (type/constraint already exists)
-    '42P07', // duplicate_table
-    '42701', // duplicate_column
-    '42704', // undefined_object  (constraint/index already dropped)
-    '42P01', // undefined_table
-    '42703', // undefined_column  (old FK refs removed column)
-  ];
-  return harmless.includes(err.code);
-}
-
 /**
  * Applies a single .sql file.
  *
@@ -239,6 +232,7 @@ async function runMigrations() {
 
     // Create tracking table on first run
     await ensureTrackingTable();
+    await ensureVectorExtension();
 
     // Check what's already been applied
     const applied = await getAppliedMigrations();
@@ -329,4 +323,3 @@ async function runMigrations() {
 }
 
 runMigrations();
-
