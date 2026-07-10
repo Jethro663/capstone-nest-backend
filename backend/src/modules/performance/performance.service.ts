@@ -15,6 +15,7 @@ import {
   assessmentAttempts,
   assessmentResponses,
   classRecords,
+  classRecordScores,
   generatedGuidedAssessmentAttempts,
   classes,
   enrollments,
@@ -284,6 +285,107 @@ export class PerformanceService {
     };
   }
 
+  private async loadPerformanceComponentsForStudents(
+    classId: string,
+    studentIds: string[],
+  ) {
+    const [attempts, records] = await Promise.all([
+      this.db.query.assessmentAttempts.findMany({
+        where: and(
+          inArray(assessmentAttempts.studentId, studentIds),
+          eq(assessmentAttempts.isSubmitted, true),
+        ),
+        columns: {
+          studentId: true,
+          assessmentId: true,
+          score: true,
+          submittedAt: true,
+          attemptNumber: true,
+        },
+        with: {
+          assessment: { columns: { classId: true } },
+        },
+        orderBy: (attempt, { desc: orderDesc }) => [
+          orderDesc(attempt.submittedAt),
+          orderDesc(attempt.attemptNumber),
+        ],
+      }),
+      this.db.query.classRecords.findMany({
+        where: eq(classRecords.classId, classId),
+        with: {
+          items: {
+            columns: { id: true, maxScore: true },
+            with: {
+              scores: {
+                columns: { studentId: true, score: true },
+                where: inArray(classRecordScores.studentId, studentIds),
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const assessmentScores = new Map<string, number[]>();
+    const seenAttempts = new Set<string>();
+    for (const attempt of attempts) {
+      if (attempt.assessment?.classId !== classId) continue;
+      const key = `${attempt.studentId}:${attempt.assessmentId}`;
+      if (seenAttempts.has(key)) continue;
+      seenAttempts.add(key);
+      const scores = assessmentScores.get(attempt.studentId) ?? [];
+      scores.push(attempt.score ?? 0);
+      assessmentScores.set(attempt.studentId, scores);
+    }
+
+    const classRecordTotals = new Map<
+      string,
+      { sampleSize: number; normalizedSum: number }
+    >();
+    for (const studentId of studentIds) {
+      classRecordTotals.set(studentId, { sampleSize: 0, normalizedSum: 0 });
+    }
+    for (const record of records) {
+      for (const item of record.items) {
+        const maxScore = this.toNumber(item.maxScore);
+        if (!maxScore || maxScore <= 0) continue;
+        const scoreByStudent = new Map(
+          item.scores.map((score) => [score.studentId, score.score]),
+        );
+        for (const studentId of studentIds) {
+          const total = classRecordTotals.get(studentId)!;
+          total.sampleSize++;
+          total.normalizedSum +=
+            ((this.toNumber(scoreByStudent.get(studentId)) ?? 0) / maxScore) *
+            100;
+        }
+      }
+    }
+
+    return new Map(
+      studentIds.map((studentId) => {
+        const scores = assessmentScores.get(studentId) ?? [];
+        const recordTotal = classRecordTotals.get(studentId)!;
+        return [
+          studentId,
+          {
+            assessment: {
+              average: this.averageScoreValues(scores),
+              sampleSize: scores.length,
+            },
+            classRecord: {
+              average:
+                recordTotal.sampleSize > 0
+                  ? this.round(recordTotal.normalizedSum / recordTotal.sampleSize)
+                  : null,
+              sampleSize: recordTotal.sampleSize,
+            },
+          },
+        ];
+      }),
+    );
+  }
+
   private buildSnapshotData(
     assessmentAverage: number | null,
     classRecordAverage: number | null,
@@ -532,10 +634,26 @@ export class PerformanceService {
     const CHUNK_SIZE = 5;
     for (let i = 0; i < uniqueStudentIds.length; i += CHUNK_SIZE) {
       const chunk = uniqueStudentIds.slice(i, i + CHUNK_SIZE);
+      const components = await this.loadPerformanceComponentsForStudents(
+        classId,
+        chunk,
+      );
       await Promise.all(
-        chunk.map((studentId) =>
-          this.recomputeStudent(classId, studentId, triggerSource),
-        ),
+        chunk.map((studentId) => {
+          const component = components.get(studentId)!;
+          const snapshotData = this.buildSnapshotData(
+            component.assessment.average,
+            component.classRecord.average,
+            component.assessment.sampleSize,
+            component.classRecord.sampleSize,
+          );
+          return this.upsertSnapshot(
+            classId,
+            studentId,
+            snapshotData,
+            triggerSource,
+          );
+        }),
       );
     }
 

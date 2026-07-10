@@ -27,6 +27,7 @@ import type { Lesson, LessonCompletion } from "../types/lesson";
 import type { SchoolEvent } from "../types/school-event";
 import { studentDarkTheme } from "../theme/studentDark";
 import { shadow } from "../theme/tokens";
+import { refetchWithConcurrency } from "../utils/refetchWithConcurrency";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, "Dashboard">,
@@ -957,8 +958,10 @@ export function DashboardScreen({ navigation }: Props) {
       classesQuery.refetch(),
       profileQuery.refetch(),
       performanceQuery.refetch(),
-      ...(schoolEventsRefresherRef.current ? [schoolEventsRefresherRef.current()] : []),
-      ...Object.values(classRefreshersRef.current).map((refresh) => refresh()),
+      refetchWithConcurrency([
+        schoolEventsRefresherRef.current,
+        ...Object.values(classRefreshersRef.current),
+      ]),
     ]);
   };
 

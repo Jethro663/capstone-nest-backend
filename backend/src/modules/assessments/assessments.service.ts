@@ -123,6 +123,18 @@ type CurrentUserLike = {
   roles?: string[] | null;
 };
 
+type AssessmentVisibilityItem = {
+  isGiven?: boolean | null;
+  isVisible?: boolean | null;
+  section?: {
+    module?: {
+      classId?: string | null;
+      isVisible?: boolean | null;
+      isLocked?: boolean | null;
+    } | null;
+  } | null;
+};
+
 type DecoratedAssessmentOption = {
   id: string;
   text?: string | null;
@@ -1094,11 +1106,11 @@ export class AssessmentsService {
     classId: string;
     isPublished?: boolean | null;
     isCoreTemplateAsset?: boolean | null;
-  }) {
+  }, preloadedItems?: AssessmentVisibilityItem[]) {
     if (!assessment.isPublished) return false;
     if (!assessment.isCoreTemplateAsset) return true;
 
-    const attachedItems = (await this.db.query.moduleItems.findMany({
+    const attachedItems = preloadedItems ?? (await this.db.query.moduleItems.findMany({
       where: and(
         eq(moduleItems.assessmentId, assessment.id),
         eq(moduleItems.itemType, 'assessment'),
@@ -1117,17 +1129,7 @@ export class AssessmentsService {
           },
         },
       },
-    })) as Array<{
-      isGiven?: boolean | null;
-      isVisible?: boolean | null;
-      section?: {
-        module?: {
-          classId?: string | null;
-          isVisible?: boolean | null;
-          isLocked?: boolean | null;
-        } | null;
-      } | null;
-    }>;
+    })) as AssessmentVisibilityItem[];
 
     if (attachedItems.length === 0) {
       return true;
@@ -1483,13 +1485,26 @@ export class AssessmentsService {
             },
           },
         },
+        moduleItems: {
+          where: eq(moduleItems.itemType, 'assessment'),
+          columns: { isGiven: true, isVisible: true },
+          with: {
+            section: {
+              with: {
+                module: {
+                  columns: { classId: true, isVisible: true, isLocked: true },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
 
     const visibleAssessments: typeof assessmentList = [];
     for (const assessment of assessmentList) {
-      if (await this.canStudentAccessAssessment(assessment)) {
+      if (await this.canStudentAccessAssessment(assessment, assessment.moduleItems)) {
         visibleAssessments.push(assessment);
       }
     }
@@ -1543,7 +1558,9 @@ export class AssessmentsService {
     }
 
     const total = assessmentList.length;
-    const paginated = assessmentList.slice(offset, offset + limit);
+    const paginated = assessmentList
+      .slice(offset, offset + limit)
+      .map(({ moduleItems: _moduleItems, ...assessment }) => assessment);
 
     return {
       data: paginated,

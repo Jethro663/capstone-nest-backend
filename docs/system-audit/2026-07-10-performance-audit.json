@@ -1,0 +1,135 @@
+{
+  "runMeta": {
+    "date": "2026-07-10",
+    "repo": "capstone-nest-react-lms",
+    "scope": ["backend", "ai-service", "next-frontend", "mobile"]
+  },
+  "baselineFindings": [
+    "Backend build and Drizzle migration-integrity check passed in approximately 24 seconds.",
+    "Backend non-mutating ESLint check passed.",
+    "Targeted assessment and performance suites passed: 97 tests.",
+    "Frontend ESLint passed, but Next.js build is blocked locally because Node 18.19.1 is below Next.js 16's required Node >=20.9.0.",
+    "Mobile typecheck and Jest suite passed.",
+    "AI-service tests and import check are blocked because the local Python interpreter lacks the dependencies declared in ai-service/requirements.txt."
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "backend",
+      "files": ["backend/src/modules/performance/performance.service.ts"],
+      "title": "Class performance recomputation repeats full data reads for every student",
+      "category": "repeated-queries",
+      "rationale": "A class recompute invokes recomputeStudent once per student; each invocation reads that student's submitted attempts and all class-record items with their scores. The read work grows with both students and record rows, and the same record dataset is repeatedly transferred and searched.",
+      "evidence": "recomputeStudentsForClass batches five recomputeStudent calls; getClassRecordComponent queries class records with all item scores per call; buildClassRows can trigger this synchronous path for missing snapshots.",
+      "expectedImpact": "A set-based batch loader can reduce class-record reads from one per student to one per class and avoid an expensive request-path refresh.",
+      "verificationTarget": "New batch-recompute unit tests plus performance.service.spec.ts, backend build, and a seeded class benchmark.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "backend",
+      "files": ["backend/src/modules/assessments/assessments.service.ts"],
+      "title": "Student assessment listing is an N+1 query path and loads unbounded nested data",
+      "category": "n-plus-one",
+      "rationale": "The student path fetches every class assessment including questions and options, then awaits canStudentAccessAssessment for each assessment. Core-template checks issue another module-items query per assessment before in-memory pagination.",
+      "evidence": "getAssessmentsByClass lines 1473-1517 and canStudentAccessAssessment lines 1092-1138.",
+      "expectedImpact": "One visibility query keyed by assessment IDs, followed by DB pagination and a detail query only for the visible page, will lower query count and response payload size as a class grows.",
+      "verificationTarget": "Assessment visibility/pagination regression specs and endpoint timing with a large seeded class.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "ai-service",
+      "files": ["ai-service/app/indexing_pipeline.py", "ai-service/app/main.py", "ai-service/app/library_indexing_pipeline.py"],
+      "title": "Reindexing repeats chunk construction and uses one SQL round trip per chunk",
+      "category": "redundant-computation-and-writes",
+      "rationale": "reindex_class_content constructs each category of chunks for the combined list, then constructs all three collections again only to count them. It then issues one INSERT ... RETURNING per chunk. Backfill routes invoke full reindexes sequentially on a request-held database session.",
+      "evidence": "indexing_pipeline.py lines 856-970; main.py lines 2800-2820; library_indexing_pipeline.py lines 341-375.",
+      "expectedImpact": "Retaining the first chunk lists and inserting chunks in bounded bulk batches can materially reduce CPU allocation and database round trips; backfills should run through the existing queue boundary rather than a live HTTP request.",
+      "verificationTarget": "indexing pipeline tests, row-count equivalence test, and an index benchmark with representative chunk volume.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "ai-service",
+      "files": ["ai-service/app/main.py"],
+      "title": "One 198 KB FastAPI module owns routes, background execution, runtime state, and extraction workflows",
+      "category": "weak-module-boundary",
+      "rationale": "The single module contains more than 40 route handlers plus job recovery, background task management, metrics, indexing, extraction, and teacher generation orchestration. This makes route-level changes expensive to review and increases regression coupling.",
+      "evidence": "ai-service/app/main.py is about 199 KB and route definitions span chat, tutor, indexing, extraction, and teacher-job families.",
+      "expectedImpact": "Splitting by route family behind APIRouters preserves contracts while isolating dependencies and reducing extension risk. This is structural rather than directly benchmarked.",
+      "verificationTarget": "Route-contract/import tests and backend AI-proxy compatibility checks.",
+      "status": "deferred"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "cross-repo-tooling",
+      "files": ["next-frontend/package.json", "next-frontend/Dockerfile", "ai-service/requirements.txt"],
+      "title": "Local verification is not reproducible from the documented host environment",
+      "category": "toolchain-drift",
+      "rationale": "The frontend Docker image correctly uses Node 20, but the host used for the scan runs Node 18.19.1 and cannot build Next.js 16. The AI test command uses system Python, which has no declared dependencies installed.",
+      "evidence": "next build exits with Next.js's Node >=20.9.0 requirement; AI test imports fail for fastapi, httpx, pydantic, sqlalchemy, and fitz.",
+      "expectedImpact": "Pinning tool versions and providing a bootstrap command or dev container turns a partial health check into a reliable full-repo gate.",
+      "verificationTarget": "Fresh-clone CI or container job running all four baseline commands.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P3",
+      "severity": "medium",
+      "subsystem": "mobile",
+      "files": ["mobile/src/screens/ClassDetailScreen.tsx", "mobile/src/screens/DashboardScreen.tsx"],
+      "title": "Refresh paths fan out to per-class queries",
+      "category": "client-request-fanout",
+      "rationale": "Several screens refresh base queries and then map refetch across every visible class. The shared 30-second cache softens normal navigation, but manual refresh can create request bursts proportional to enrollment count.",
+      "evidence": "ClassDetailScreen and DashboardScreen use Promise.all with mapped class-level refreshers.",
+      "expectedImpact": "Consolidated dashboard/class-summary endpoints or a bounded client concurrency helper would reduce mobile-radio and backend burst load. Requires UX/API decision.",
+      "verificationTarget": "React Query integration test and network trace on accounts with many classes.",
+      "status": "deferred"
+    }
+  ],
+  "plan": {
+    "safeImmediateFixes": [
+      "Add Node 20.9+ version pinning and an AI virtual-environment/bootstrap command so the full baseline runs locally.",
+      "Remove duplicate chunk-list construction in reindex_class_content while preserving output counts.",
+      "Add query-count regression tests for the student assessment list and class performance recompute paths."
+    ],
+    "conditionalRefactors": [
+      "Introduce set-based performance recomputation with grouped attempt and class-record reads, while preserving snapshot/audit semantics.",
+      "Replace per-assessment student visibility checks with a bulk visibility query and page after filtering.",
+      "Batch index chunk inserts with a portable correlation key before bulk embedding insertion."
+    ],
+    "deferredItems": [
+      "Move administrative backfills to the queue with progress reporting and explicit retry policy.",
+      "Split ai-service/app/main.py into APIRouter families and isolated job-runtime modules.",
+      "Choose between aggregate mobile endpoints and bounded client refetch concurrency for dashboard-scale data."
+    ]
+  },
+  "changesMade": [
+    "No production code changed; this run is a read-only audit.",
+    "Created this audit artifact."
+  ],
+  "verification": [
+    "backend: npm run build (passed, approximately 24 seconds)",
+    "backend: npx eslint '{src,apps,libs,test}/**/*.ts' (passed)",
+    "backend: npm test -- performance.service.spec.ts assessments.service.spec.ts --runInBand (97 passed)",
+    "next-frontend: npm run lint (passed)",
+    "next-frontend: npm run build (blocked by host Node 18.19.1; requires >=20.9.0)",
+    "mobile: npm run typecheck (passed)",
+    "mobile: npm run test -- --runInBand (passed)",
+    "ai-service: python3 scripts/run_tests.py (blocked by missing declared dependencies)"
+  ],
+  "comparison": {
+    "improved": ["The audit identified three P1 data-flow hotspots with direct code evidence and a staged remediation path."],
+    "unchanged": ["No runtime benchmark suite or production trace was available, so performance deltas are reasoned rather than measured."],
+    "remainingRisks": ["AI test health and frontend production build cannot be asserted until the local toolchain is aligned."]
+  },
+  "secondPassCleanCheck": [
+    "No code was changed, so existing response envelopes, auth enforcement, and backend-to-AI proxy contracts remain untouched.",
+    "Backend queue use and client caching are present; recommendations avoid speculative caching or official-record writes."
+  ]
+}

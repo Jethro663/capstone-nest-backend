@@ -21,6 +21,7 @@ import type { Assessment, AssessmentAttempt } from "../types/assessment";
 import type { ClassItem } from "../types/class";
 import type { ClassModule } from "../types/module";
 import { studentDarkTheme } from "../theme/studentDark";
+import { refetchWithConcurrency } from "../utils/refetchWithConcurrency";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ClassDetail">;
 type DetailNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -694,8 +695,10 @@ export function StudentClassDetailContent({
       lessonCompletionsQuery.refetch(),
       assessmentsQuery.refetch(),
       announcementsQuery.refetch(),
-      ...(activeTab === "discussion" ? [discussionRefetchRef.current()] : []),
-      ...attemptQueries.map((query) => query.refetch()),
+      refetchWithConcurrency([
+        ...(activeTab === "discussion" ? [discussionRefetchRef.current] : []),
+        ...attemptQueries.map((query) => query.refetch),
+      ]),
     ]);
   };
 
