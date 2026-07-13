@@ -28,7 +28,11 @@ cp .env.example .env.local
 uvicorn app.main:app --reload --port 8000
 ```
 
-`requirements.in` is the human-edited dependency input; `requirements.txt` is the fully pinned generated lock used by CI and Docker builds.
+`requirements.in` is the human-edited dependency input; `requirements.txt` is the fully pinned generated lock used by CI and Docker builds. Regenerate it from this directory with the same target as CI:
+
+```bash
+uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu requirements.in --output-file requirements.txt
+```
 
 For the root Compose stack, `ai-service/.env.docker` uses the internal Ollama service and shared upload volume.
 

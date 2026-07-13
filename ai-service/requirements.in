@@ -1,5 +1,5 @@
-# Direct runtime dependencies. `requirements.txt` is generated with
-# `uv pip compile ai-service/requirements.in -o ai-service/requirements.txt`.
+# Direct runtime dependencies. From `ai-service/`, regenerate the Linux/Python 3.12 lock with:
+# `uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu requirements.in --output-file requirements.txt`.
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 httpx>=0.28.0
