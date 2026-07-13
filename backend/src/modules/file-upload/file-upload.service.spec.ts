@@ -8,6 +8,22 @@ import { FileUploadService } from './file-upload.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { contentChunks } from '../../drizzle/schema';
+import { Logger } from '@nestjs/common';
+import * as fs from 'fs';
+import { storageCleanupFailures } from '../../monitoring/utils/metrics';
+
+jest.mock('fs', () => {
+  const actual = jest.requireActual<typeof import('fs')>('fs');
+  return {
+    ...actual,
+    existsSync: jest.fn(),
+    promises: {
+      ...actual.promises,
+      readFile: jest.fn(),
+      unlink: jest.fn(),
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -157,6 +173,41 @@ describe('FileUploadService', () => {
   // =========================================================================
 
   describe('saveFileRecord', () => {
+    it('reports local cleanup failure without failing a successful S3 migration', async () => {
+      const record = makeFileRecord({
+        storageProvider: 's3',
+        filePath: 's3://pdfs/abc123_1700000000.pdf',
+      });
+      mockDb.insert.mockReturnValue(makeInsertChain([record]));
+      const putObject = jest.fn().mockResolvedValue({ key: 'pdfs/file.pdf' });
+      (service as unknown as { storageService: unknown }).storageService = {
+        driver: 's3',
+        putObject,
+      };
+      jest.mocked(fs.existsSync).mockReturnValue(true);
+      jest.mocked(fs.promises.readFile).mockResolvedValue(Buffer.from('pdf'));
+      jest.mocked(fs.promises.unlink).mockRejectedValue(new Error('disk busy'));
+      const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
+      const increment = jest
+        .spyOn(storageCleanupFailures, 'inc')
+        .mockImplementation(() => undefined);
+
+      await expect(
+        service.saveFileRecord(
+          makeSaveDto({ subjectKey: 'science', gradeLevel: '7' }),
+        ),
+      ).resolves.toEqual(record);
+
+      expect(putObject).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({ event: 'storage_cleanup_failed' }),
+      );
+      expect(increment).toHaveBeenCalledWith({
+        component: 'file-upload-service',
+        operation: 'unlink-after-s3-migration',
+      });
+    });
+
     it('inserts a row and returns the created record', async () => {
       const record = makeFileRecord();
       mockDb.insert.mockReturnValue(makeInsertChain([record]));

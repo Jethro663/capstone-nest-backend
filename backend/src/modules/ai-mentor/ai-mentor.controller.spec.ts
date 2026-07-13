@@ -35,10 +35,18 @@ const ADMIN_USER = {
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockProxy = { forward: jest.fn() };
+const mockProxy = {
+  forward: jest.fn(),
+  markInternalExtractionFailed: jest.fn(),
+};
 const mockQueueService = {
   enqueueLessonPlanJob: jest.fn(),
+  enqueueQuizJob: jest.fn(),
+  enqueueInterventionJob: jest.fn(),
+  enqueueExtractionJob: jest.fn(),
+  cancelQueuedExtractionJob: jest.fn(),
   cancelQueuedLessonPlanJob: jest.fn(),
+  cancelQueuedTeacherAiJob: jest.fn(),
 };
 const mockAudit = { log: jest.fn() };
 const mockAdminAnalyticsChat = {
@@ -73,8 +81,20 @@ describe('AiMentorController', () => {
     jest.clearAllMocks();
     mockQueueService.enqueueLessonPlanJob.mockReset();
     mockQueueService.enqueueLessonPlanJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueQuizJob.mockReset();
+    mockQueueService.enqueueQuizJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueInterventionJob.mockReset();
+    mockQueueService.enqueueInterventionJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueExtractionJob.mockReset();
+    mockQueueService.enqueueExtractionJob.mockResolvedValue(undefined);
+    mockQueueService.cancelQueuedExtractionJob.mockReset();
+    mockQueueService.cancelQueuedExtractionJob.mockResolvedValue(false);
+    mockProxy.markInternalExtractionFailed.mockReset();
+    mockProxy.markInternalExtractionFailed.mockResolvedValue(undefined);
     mockQueueService.cancelQueuedLessonPlanJob.mockReset();
     mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+    mockQueueService.cancelQueuedTeacherAiJob.mockReset();
+    mockQueueService.cancelQueuedTeacherAiJob.mockResolvedValue(false);
     mockAudit.log.mockReset();
     mockAudit.log.mockResolvedValue(undefined);
     mockAdminAnalyticsChat.chat.mockReset();
@@ -331,7 +351,27 @@ describe('AiMentorController', () => {
           }),
         }),
       );
+      expect(mockQueueService.enqueueExtractionJob).toHaveBeenCalledWith(
+        EXTRACTION_ID,
+        TEACHER_USER.id,
+      );
       expect(result).toEqual({ extractionId: EXTRACTION_ID });
+    });
+
+    it('rejects an extraction response that cannot be queued', async () => {
+      mockProxy.forward.mockResolvedValue({ success: true, data: {} });
+
+      await expect(
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI extraction service returned an invalid queue response.',
+      );
+
+      expect(mockQueueService.enqueueExtractionJob).not.toHaveBeenCalled();
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
 
     it('should block teacher extraction for files outside owned classes', async () => {
@@ -363,6 +403,25 @@ describe('AiMentorController', () => {
         ),
       ).rejects.toThrow(
         'AI extraction queue is temporarily unavailable. Please retry shortly.',
+      );
+    });
+
+    it('marks a prepared extraction failed when BullMQ enqueue fails', async () => {
+      mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
+      mockQueueService.enqueueExtractionJob.mockRejectedValue(
+        new Error('redis unavailable'),
+      );
+
+      await expect(
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow('AI extraction queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalExtractionFailed).toHaveBeenCalledWith(
+        EXTRACTION_ID,
+        'BullMQ enqueue failed: redis unavailable',
       );
     });
   });
@@ -829,6 +888,9 @@ describe('AiMentorController', () => {
           targetId: EXTRACTION_ID,
         }),
       );
+      expect(
+        mockQueueService.cancelQueuedExtractionJob,
+      ).toHaveBeenCalledWith(EXTRACTION_ID);
       expect(result).toMatchObject({ success: true });
     });
   });
@@ -866,7 +928,28 @@ describe('AiMentorController', () => {
           }),
         }),
       );
+      expect(mockQueueService.enqueueExtractionJob).toHaveBeenCalledWith(
+        'retry-extraction-1',
+        TEACHER_USER.id,
+      );
       expect(result).toMatchObject({ success: true });
+    });
+
+    it('rejects a retry response that cannot be queued', async () => {
+      mockProxy.forward.mockResolvedValue({ success: true, data: {} });
+
+      await expect(
+        controller.retryExtraction(
+          EXTRACTION_ID,
+          { extractionStyle: 'clean' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI extraction service returned an invalid retry response.',
+      );
+
+      expect(mockQueueService.enqueueExtractionJob).not.toHaveBeenCalled();
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
   });
 
@@ -926,6 +1009,10 @@ describe('AiMentorController', () => {
         `/teacher/interventions/${JOB_ID}/jobs`,
         TEACHER_USER,
         dto,
+      );
+      expect(mockQueueService.enqueueInterventionJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1174,6 +1261,10 @@ describe('AiMentorController', () => {
         '/teacher/quizzes/jobs',
         TEACHER_USER,
         dto,
+      );
+      expect(mockQueueService.enqueueQuizJob).toHaveBeenCalledWith(
+        JOB_ID,
+        TEACHER_USER.id,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1470,6 +1561,10 @@ describe('AiMentorController', () => {
         TEACHER_USER,
         {},
       );
+      expect(mockQueueService.enqueueQuizJob).toHaveBeenCalledWith(
+        'retry-job-1',
+        TEACHER_USER.id,
+      );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: TEACHER_USER.id,
@@ -1498,6 +1593,10 @@ describe('AiMentorController', () => {
         `/teacher/quizzes/jobs/${JOB_ID}/cancel`,
         TEACHER_USER,
         {},
+      );
+      expect(mockQueueService.cancelQueuedTeacherAiJob).toHaveBeenCalledWith(
+        'quiz',
+        JOB_ID,
       );
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1914,7 +2013,9 @@ describe('AiMentorController', () => {
 
   describe('deleteTeacherJob()', () => {
     it('should remove queued job from BullMQ and return cancelled status when job is waiting', async () => {
-      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(true);
+      mockQueueService.cancelQueuedTeacherAiJob.mockImplementation((type, id) =>
+        Promise.resolve(type === 'lesson-plan' && id === JOB_ID),
+      );
       mockProxy.forward.mockResolvedValue({
         success: true,
         data: { jobId: JOB_ID, status: 'cancelled' },
@@ -1922,7 +2023,8 @@ describe('AiMentorController', () => {
 
       const result = await controller.deleteTeacherJob(JOB_ID, TEACHER_USER);
 
-      expect(mockQueueService.cancelQueuedLessonPlanJob).toHaveBeenCalledWith(
+      expect(mockQueueService.cancelQueuedTeacherAiJob).toHaveBeenCalledWith(
+        'lesson-plan',
         JOB_ID,
       );
       expect(mockProxy.forward).toHaveBeenCalledWith(
@@ -1940,13 +2042,13 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
-        message: 'Lesson plan generation cancelled before execution started',
+        message: 'AI generation job cancelled before execution started',
         data: { jobId: JOB_ID, status: 'cancelled' },
       });
     });
 
     it('should forward downstream cancellation response when job is not in queue', async () => {
-      mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
+      mockQueueService.cancelQueuedTeacherAiJob.mockResolvedValue(false);
       const downstreamResponse = {
         success: true,
         message: 'Generation cancelled',

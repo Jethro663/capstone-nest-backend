@@ -6,12 +6,12 @@ import {
 
 describe('PerformanceEventsListener', () => {
   it('should trigger recompute from assessment.submitted', async () => {
-    const performanceService = {
-      recomputeFromAssessmentSubmission: jest.fn().mockResolvedValue(undefined),
-      recomputeStudentsForClass: jest.fn().mockResolvedValue(undefined),
+    const recomputeQueue = {
+      enqueueAssessmentSubmission: jest.fn().mockResolvedValue(undefined),
+      enqueueClassRecordScores: jest.fn().mockResolvedValue(undefined),
     } as any;
 
-    const listener = new PerformanceEventsListener(performanceService);
+    const listener = new PerformanceEventsListener(recomputeQueue);
 
     await listener.handleAssessmentSubmitted(
       new AssessmentSubmittedEvent({
@@ -23,17 +23,17 @@ describe('PerformanceEventsListener', () => {
     );
 
     expect(
-      performanceService.recomputeFromAssessmentSubmission,
+      recomputeQueue.enqueueAssessmentSubmission,
     ).toHaveBeenCalledWith('assessment-1', 'student-1');
   });
 
   it('should trigger recompute from class-record.scores.updated', async () => {
-    const performanceService = {
-      recomputeFromAssessmentSubmission: jest.fn().mockResolvedValue(undefined),
-      recomputeStudentsForClass: jest.fn().mockResolvedValue(undefined),
+    const recomputeQueue = {
+      enqueueAssessmentSubmission: jest.fn().mockResolvedValue(undefined),
+      enqueueClassRecordScores: jest.fn().mockResolvedValue(undefined),
     } as any;
 
-    const listener = new PerformanceEventsListener(performanceService);
+    const listener = new PerformanceEventsListener(recomputeQueue);
 
     await listener.handleClassRecordScoresUpdated(
       new ClassRecordScoresUpdatedEvent({
@@ -43,7 +43,7 @@ describe('PerformanceEventsListener', () => {
       }),
     );
 
-    expect(performanceService.recomputeStudentsForClass).toHaveBeenCalledWith(
+    expect(recomputeQueue.enqueueClassRecordScores).toHaveBeenCalledWith(
       'class-1',
       ['student-1', 'student-2'],
       'manual_bulk',

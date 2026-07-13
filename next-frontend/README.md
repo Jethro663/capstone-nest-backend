@@ -1,53 +1,43 @@
 # Nexora Web Frontend
 
-Next.js 16 App Router web client for Nexora LMS/LXP.
+Next.js 16 App Router and React 19 browser client for Nexora’s student, teacher, and administrator workflows.
 
-## What It Does
+## Responsibilities
 
-This app provides the main browser experience for:
+- Public landing, authentication, profile completion, and guided demo flows.
+- Role-specific dashboards and protected workflows.
+- Backend API integration, session recovery, notifications, and WebSocket-backed updates.
+- Browser-only presentation and interaction; official academic decisions remain backend-owned.
 
-- public landing and guided demo flows
-- auth, profile completion, and session bootstrap
-- admin dashboards for users, classes, sections, reports, audits, templates, and settings
-- teacher dashboards for classes, lessons, modules, assessments, interventions, performance, library, and reports
-- student dashboards for classes, lessons, assessments, JA, LXP, transcript, performance, calendar, and announcements
+The web app calls backend `/api` routes through the configured rewrite. It never calls the Python AI service directly.
 
-The app talks to backend `/api` routes through a local rewrite rather than calling the Python AI service directly.
+## Important paths
 
-## Common Commands
+| Path | Ownership |
+| --- | --- |
+| `app/layout.tsx` | root document/providers |
+| `app/(auth)/` | public authentication routes |
+| `app/(dashboard)/layout.tsx` | protected role shell |
+| `app/(dashboard)/dashboard/{student,teacher,admin}/` | role workspaces |
+| `proxy.ts` | high-level public/protected route gating |
+| `src/providers/AuthProvider.tsx` | in-browser auth state and bootstrap |
+| `src/lib/auth-bootstrap.ts` | bounded current-user bootstrap |
+| `src/lib/session-refresh.ts` | refresh coordination and timer cleanup |
+| `src/lib/api-client.ts` | in-memory access token and API transport |
+| `src/services/` | typed backend domain wrappers |
+
+The teacher class route keeps discussion orchestration in a route-local hook. This is the first seam from the large workspace; further decomposition should remain characterization-first.
+
+## Start locally
 
 ```bash
 npm install
 npm run dev
-npm run dev:smoke
-npm run build
-npm run start
-npm run lint
-npm run test
-npm run test:e2e
 ```
 
-Default local URL: `http://localhost:3001`
+Default URL: `http://localhost:3001`.
 
-## Runtime Notes
-
-- `next.config.ts` rewrites `/api/:path*` to the backend origin.
-- `proxy.ts` performs high-level public/protected route gating.
-- `src/lib/api-client.ts` keeps the access token in memory and relies on backend refresh cookies for web session recovery.
-
-## Important App Paths
-
-- root layout: `app/layout.tsx`
-- protected shell: `app/(dashboard)/layout.tsx`
-- auth routes: `app/(auth)/`
-- admin pages: `app/(dashboard)/dashboard/admin/`
-- teacher pages: `app/(dashboard)/dashboard/teacher/`
-- student pages: `app/(dashboard)/dashboard/student/`
-- service wrappers: `src/services/`
-
-## Environment Inputs
-
-Commonly used values:
+Common environment inputs:
 
 - `NEXT_PUBLIC_API_URL`
 - `BACKEND_INTERNAL_URL`
@@ -55,11 +45,44 @@ Commonly used values:
 - `NEXT_PUBLIC_WS_URL`
 - `PLAYWRIGHT_BASE_URL`
 
-For Docker builds, see `next-frontend/Dockerfile` and root `docker-compose.yml`.
+For Docker builds and ports, use the root Compose files.
 
-## Verification Notes
+## Session model
 
-- `npm run test` runs Jest unit/integration tests
-- `npm run test:e2e` runs Playwright browser tests
-- `npm run dev:smoke` boots the dev server and checks the local health route
-- perf scripts under `scripts/` are targeted operator/debugging tools, not the main development loop
+- The access token is held in memory.
+- The backend refresh token is an HTTP-only cookie.
+- Bootstrap and refresh paths are bounded and clear losing timeout handles.
+- `proxy.ts`, the protected layout, and `AuthProvider` must stay aligned when route/session behavior changes.
+- Client code must not manually write authentication cookies.
+
+## Commands
+
+```bash
+npm run dev
+npm run dev:smoke
+npm run lint
+npm run test -- --runInBand --detectOpenHandles
+npm run build
+npm run test:e2e
+```
+
+Targeted performance smoke commands:
+
+```bash
+npm run perf:auth-smoke
+npm run perf:nav-smoke
+npm run perf:discussion-smoke
+npm run perf:engine-smoke
+```
+
+Generated `playwright-report/` and `test-results/` output is local evidence and must not be committed.
+
+## Verification expectations
+
+- Lint must finish with zero errors and no warning-baseline regression.
+- Jest must exit without open handles.
+- A production build is required after route, config, auth, or broad component changes.
+- Use Playwright for browser-level auth, role routing, and action regressions.
+- Manually verify login, refresh, logout, and one protected route after session changes.
+
+See `AGENTS.md` for ownership rules and the root README for full-stack startup.

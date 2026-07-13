@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import sys
 import unittest
 
 
+def configure_test_environment() -> None:
+    os.environ.setdefault("AI_RUNTIME_MODE", "test")
+
+
 def main() -> int:
+    configure_test_environment()
     project_root = pathlib.Path(__file__).resolve().parents[1]
     sys.path.insert(0, str(project_root))
 

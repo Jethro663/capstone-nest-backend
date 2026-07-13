@@ -19,7 +19,7 @@ Scope: `next-frontend/` only.
 - E2E: `npm run test:e2e`
 - Root layout: `app/layout.tsx`
 - Protected shell: `app/(dashboard)/layout.tsx`
-- Middleware: `middleware.ts`
+- Route gate: `proxy.ts`
 - API rewrite: `next.config.ts`
 
 ## Owning Paths
@@ -27,7 +27,7 @@ Scope: `next-frontend/` only.
 - `app/*`: App Router pages, layouts, route groups
 - `app/globals.css`: theme tokens and role-shell styling truth
 - `src/providers/*`: auth, theme, notifications
-- `src/lib/*`: API client, auth helpers, theme metadata
+- `src/lib/*`: API client, auth bootstrap/refresh helpers, theme metadata
 - `src/services/*`: typed domain service wrappers over `api`
 - `src/types/*`: runtime-facing contracts
 - `src/schemas/*`: form and request validation
@@ -38,7 +38,7 @@ Scope: `next-frontend/` only.
 - Respect `RESP-1`: pages and components should consume the backend envelope as-is unless the task explicitly changes the contract.
 - Prefer `src/services/*` wrappers over raw axios in pages and components.
 - Web auth uses refresh-token cookies plus an in-memory access token in `src/lib/api-client.ts`; never manually write cookies.
-- Keep route and auth gating aligned across `middleware.ts`, `app/(dashboard)/layout.tsx`, and `src/providers/AuthProvider.tsx`.
+- Keep route and auth gating aligned across `proxy.ts`, `app/(dashboard)/layout.tsx`, `src/providers/AuthProvider.tsx`, `src/lib/auth-bootstrap.ts`, and `src/lib/session-refresh.ts`.
 - Preserve role route conventions under `/dashboard/student`, `/dashboard/teacher`, `/dashboard/admin`.
 - Use Serena first for route discovery, ownership lookup, and symbol-aware inspection before broad file dumping.
 - Use Playwright for browser reproduction, auth flow checks, and UI evidence when the task depends on runtime web behavior.
@@ -48,7 +48,7 @@ Scope: `next-frontend/` only.
 1. Start at the owning page, layout, or component.
 2. If data shape changes, update `src/types/*` and the matching `src/services/*` wrapper first.
 3. If the change is form-driven, align `src/schemas/*`, component props, and submit payload together.
-4. If auth or session behavior changes, trace `src/providers/AuthProvider.tsx`, `src/lib/auth-actions.ts`, `src/lib/auth-service.ts`, and `src/lib/api-client.ts`.
+4. If auth or session behavior changes, trace `src/providers/AuthProvider.tsx`, `src/lib/auth-actions.ts`, `src/lib/auth-service.ts`, `src/lib/auth-bootstrap.ts`, `src/lib/session-refresh.ts`, and `src/lib/api-client.ts`.
 5. If route gating changes, check both middleware and the protected layout.
 6. If the frontend contract or dashboard behavior changes, pick the smallest repo-native smoke or perf script that exercises the affected path before broadening verification.
 
@@ -59,6 +59,8 @@ Scope: `next-frontend/` only.
 - `app/globals.css` is the authoritative theme surface; do not scatter a second competing color system.
 - Student routes rely on the theme switcher; teacher and admin shells have distinct styling conventions.
 - This app talks to backend `/api` routes, not directly to `ai-service`.
+- Generated `playwright-report/` and `test-results/` output is local evidence and must not be committed.
+- Preserve the route-local teacher discussion hook boundary; expand it one characterized responsibility at a time.
 
 ## Verification
 

@@ -29,6 +29,8 @@ Scope: `backend/` only.
 - `drizzle/*`: migrations and snapshots
 - `src/common/*`: filters, logger, constants, shared utilities
 - `src/config/*`: typed config for DB, JWT, Redis, Ollama
+- `src/monitoring/*` and `src/tracing.ts`: health, metrics, logging, and optional OTLP tracing
+- `docker-entrypoint.sh`: migration/seed bootstrap and upload-volume ownership handoff
 
 ## Working Rules
 
@@ -54,8 +56,11 @@ Scope: `backend/` only.
 - Global guards and filter: `GlobalExceptionFilter`, `JwtAuthGuard`, `ThrottlerGuard` in `src/app.module.ts`
 - Global `/api` prefix, validation, cookie parser, CORS, Swagger gating: `src/main.ts`
 - AI proxy boundary: `src/modules/ai-mentor/ai-proxy.service.ts`
+- Durable AI queue/worker boundary: `src/modules/ai-mentor/ai-generation-queue.service.ts` and `src/modules/ai-mentor/processors/ai-generation.processor.ts`
 - LXP and performance eligibility logic: `src/modules/lxp`, `src/modules/performance`
+- First extracted seams: `performance-snapshot-read.service.ts`, `assessment-access.service.ts`, and `system-evaluation.service.ts`
 - Audit logging: `src/modules/audit`
+- Optional tracing: blank/whitespace `OTEL_EXPORTER_OTLP_ENDPOINT` disables tracing; a valid base URL enables it
 
 ## Do Not Break
 
@@ -64,6 +69,8 @@ Scope: `backend/` only.
 - `INT-1` and `INT-2`: intervention activation remains approved and history remains append-only.
 - `REC-1`: reviewed assessment scores are not casually mutable.
 - `DATA-1` and `DATA-2`: do not introduce stale stored totals or stale eligibility flags.
+- Do not replace BullMQ extraction execution with in-process background tasks.
+- Do not remove the Docker privilege drop: the entrypoint may repair `/app/uploads` as root, but migrations and the app execute as `node`.
 
 ## Verification
 

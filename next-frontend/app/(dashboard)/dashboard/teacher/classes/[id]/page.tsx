@@ -47,7 +47,6 @@ import {
   Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useDiscussionRealtimeRefresh } from '@/hooks/use-discussion-realtime-refresh';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { announcementService } from '@/services/announcement-service';
@@ -103,6 +102,10 @@ import type { Extraction, ExtractionStyle } from '@/types/extraction';
 import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
 import type { ClassModule } from '@/types/module';
 import './workspace.css';
+import {
+  sortDiscussionThreads,
+  useTeacherDiscussionWorkspace,
+} from './use-teacher-discussion-workspace';
 
 const RichTextEditor = dynamic(
   () =>
@@ -949,15 +952,6 @@ function getApiErrorMessage(error: unknown, fallback: string) {
   );
 }
 
-function sortDiscussionThreads(threads: DiscussionThreadSummary[]) {
-  return [...threads].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-    const aTs = new Date(a.publishedAt || a.createdAt || 0).getTime();
-    const bTs = new Date(b.publishedAt || b.createdAt || 0).getTime();
-    return bTs - aTs;
-  });
-}
-
 function getDiscussionAttachmentHref(
   attachment:
     | DiscussionThreadSummary['attachments'][number]
@@ -1209,9 +1203,21 @@ export default function TeacherClassDetailPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [discussionThreads, setDiscussionThreads] = useState<DiscussionThreadSummary[]>([]);
-  const [selectedDiscussionThreadId, setSelectedDiscussionThreadId] = useState<string | null>(null);
-  const [selectedDiscussionThread, setSelectedDiscussionThread] = useState<DiscussionThreadDetail | null>(null);
+  const {
+    discussionThreads,
+    setDiscussionThreads,
+    selectedDiscussionThreadId,
+    setSelectedDiscussionThreadId,
+    selectedDiscussionThread,
+    setSelectedDiscussionThread,
+    loadDiscussionThreads,
+    loadDiscussionThreadDetail,
+    resetDiscussionWorkspace,
+  } = useTeacherDiscussionWorkspace({
+    classId,
+    classIdValid: isClassIdValid,
+    enabled: activeTab === 'discussion',
+  });
   const [finalGradeByStudentId, setFinalGradeByStudentId] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
@@ -1290,9 +1296,7 @@ export default function TeacherClassDetailPage() {
       setAssessments([]);
       setExtractions([]);
       setAnnouncements([]);
-      setDiscussionThreads([]);
-      setSelectedDiscussionThreadId(null);
-      setSelectedDiscussionThread(null);
+      resetDiscussionWorkspace();
       setFinalGradeByStudentId({});
       setLoading(false);
       return;
@@ -1389,70 +1393,16 @@ export default function TeacherClassDetailPage() {
       setAssessments([]);
       setExtractions([]);
       setAnnouncements([]);
-      setDiscussionThreads([]);
-      setSelectedDiscussionThreadId(null);
-      setSelectedDiscussionThread(null);
+      resetDiscussionWorkspace();
       setFinalGradeByStudentId({});
     } finally {
       setLoading(false);
     }
-  }, [activeTab, classId, isClassIdValid]);
+  }, [activeTab, classId, isClassIdValid, resetDiscussionWorkspace]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
-
-  const loadDiscussionThreads = useCallback(async () => {
-    if (!isClassIdValid) {
-      setDiscussionThreads([]);
-      setSelectedDiscussionThreadId(null);
-      setSelectedDiscussionThread(null);
-      return;
-    }
-
-    try {
-      const response = await discussionBoardService.listThreads(classId, { limit: 50 });
-      setDiscussionThreads(sortDiscussionThreads(response.data.items || []));
-    } catch (error) {
-      setDiscussionThreads([]);
-      setSelectedDiscussionThreadId(null);
-      setSelectedDiscussionThread(null);
-      toast.error(getApiErrorMessage(error, 'Failed to load discussion threads'));
-    }
-  }, [classId, isClassIdValid]);
-
-  useEffect(() => {
-    if (activeTab !== 'discussion') return;
-    void loadDiscussionThreads();
-  }, [activeTab, loadDiscussionThreads]);
-
-  const loadDiscussionThreadDetail = useCallback(
-    async (threadId: string) => {
-      try {
-        const response = await discussionBoardService.getThread(classId, threadId);
-        setSelectedDiscussionThread(response.data);
-      } catch (error) {
-        setSelectedDiscussionThread(null);
-        toast.error(getApiErrorMessage(error, 'Failed to load discussion thread'));
-      }
-    },
-    [classId],
-  );
-
-  useEffect(() => {
-    if (!selectedDiscussionThreadId) {
-      setSelectedDiscussionThread(null);
-      return;
-    }
-    void loadDiscussionThreadDetail(selectedDiscussionThreadId);
-  }, [loadDiscussionThreadDetail, selectedDiscussionThreadId]);
-
-  useDiscussionRealtimeRefresh({
-    enabled: activeTab === 'discussion',
-    selectedThreadId: selectedDiscussionThreadId,
-    refreshThreads: loadDiscussionThreads,
-    refreshThread: loadDiscussionThreadDetail,
-  });
 
   const refreshAiDraftJobs = useCallback(async () => {
     if (!isClassIdValid) {

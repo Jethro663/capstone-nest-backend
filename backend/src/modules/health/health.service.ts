@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { DatabaseService } from '../../database/database.service';
+import { StorageService } from '../file-upload/storage/storage.service';
 
 type DependencyStatus = {
   ok: boolean;
@@ -26,6 +27,7 @@ type ReadinessStatus = {
       embeddingRuntime?: unknown;
       uploadMaterialization?: unknown;
     };
+    storage?: DependencyStatus & { driver?: string };
   };
   timestamp: string;
 };
@@ -40,6 +42,7 @@ export class HealthService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly configService: ConfigService,
+    @Optional() private readonly storageService?: StorageService,
   ) {}
 
   getServiceMetadata(): ServiceMetadata {
@@ -235,6 +238,25 @@ export class HealthService {
     }
   }
 
+  private async checkStorage(): Promise<
+    (DependencyStatus & { driver?: string }) | null
+  > {
+    if (!this.storageService) {
+      return null;
+    }
+    try {
+      return await this.storageService.checkHealth();
+    } catch (error) {
+      return {
+        ok: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Storage health check failed',
+      };
+    }
+  }
+
   async getReadiness() {
     const now = Date.now();
     if (this.readinessCache && this.readinessCache.expiresAt > now) {
@@ -243,19 +265,22 @@ export class HealthService {
 
     if (!this.readinessPromise) {
       this.readinessPromise = (async () => {
-        const [database, redis, aiService] = await Promise.all([
+        const [database, redis, aiService, storage] = await Promise.all([
           this.checkDatabase(),
           this.checkRedis(),
           this.checkAiService(),
+          this.checkStorage(),
         ]);
 
+        const storageOk = storage ? storage.ok : true;
         const value: ReadinessStatus = {
-          ready: database.ok && redis.ok && aiService.ok,
+          ready: database.ok && redis.ok && aiService.ok && storageOk,
           service: this.getServiceMetadata(),
           dependencies: {
             database,
             redis,
             aiService,
+            ...(storage ? { storage } : {}),
           },
           timestamp: new Date().toISOString(),
         };

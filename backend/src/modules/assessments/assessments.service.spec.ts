@@ -12,6 +12,7 @@ import { FeedbackService } from './feedback.service';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
+import { AssessmentAccessService } from './assessment-access.service';
 
 // ─── Fixture IDs ─────────────────────────────────────────────────────────────
 
@@ -225,6 +226,7 @@ describe('AssessmentsService', () => {
       providers: [
         AssessmentsService,
         { provide: DatabaseService, useValue: { db } },
+        AssessmentAccessService,
         { provide: EventEmitter2, useValue: eventEmitter },
         {
           provide: FeedbackService,

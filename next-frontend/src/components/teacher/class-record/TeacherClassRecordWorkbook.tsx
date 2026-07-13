@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   BookOpenCheck,
@@ -217,18 +217,13 @@ export function TeacherClassRecordWorkbook({
       .slice(0, 4);
   }, [spreadsheet]);
 
-  useEffect(() => {
-    if (!syncableItems.length) {
-      setSelectedSyncItemId('');
-      return;
-    }
-
-    if (!selectedSyncItemId || !syncableItems.some((item) => item.id === selectedSyncItemId)) {
-      setSelectedSyncItemId(syncableItems[0].id);
-    }
-  }, [selectedSyncItemId, syncableItems]);
-
-  const selectedSyncItem = syncableItems.find((item) => item.id === selectedSyncItemId) || null;
+  const effectiveSelectedSyncItemId = syncableItems.some(
+    (item) => item.id === selectedSyncItemId,
+  )
+    ? selectedSyncItemId
+    : (syncableItems[0]?.id ?? '');
+  const selectedSyncItem =
+    syncableItems.find((item) => item.id === effectiveSelectedSyncItemId) || null;
   const syncingItem = syncingItemId ? syncableItems.find((item) => item.id === syncingItemId) : null;
   const syncDisabled =
     syncingItemId !== null || !selectedRecord || selectedRecord.status !== 'draft' || !selectedSyncItem;
@@ -1030,7 +1025,7 @@ export function TeacherClassRecordWorkbook({
                     </label>
                     <select
                       id="class-record-sync-item"
-                      value={selectedSyncItemId}
+                      value={effectiveSelectedSyncItemId}
                       onChange={(event) => setSelectedSyncItemId(event.target.value)}
                       disabled={syncDisabled}
                       className="h-8 min-w-48 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm"

@@ -1,0 +1,303 @@
+{
+  "runMeta": {
+    "date": "2026-07-13",
+    "repo": "capstone-nest-react-lms",
+    "backendRoot": "backend",
+    "aiRoot": "ai-service",
+    "scope": [
+      "backend",
+      "ai-service",
+      "next-frontend",
+      "mobile",
+      "infrastructure"
+    ],
+    "mode": "read-only evidence-first audit"
+  },
+  "baselineFindings": [
+    "Backend build passed in approximately 28 seconds; migration integrity passed with 4 linear active migrations.",
+    "Backend unit suite passed: 76 suites and 1003 tests in approximately 26 seconds.",
+    "Backend lint failed with 3 errors and 5225 warnings; the three errors are isolated to file-upload cleanup and one regex escape.",
+    "AI service imports successfully with AI_RUNTIME_MODE=test, but scripts/run_tests.py does not declare that required test runtime itself.",
+    "AI full suite was stopped after more than five minutes after asyncio reported that executor threads did not finish joining within 300 seconds.",
+    "The isolated tests.test_backend_uploads module passes both tests but does not terminate within a 10-second timeout when both tests run in one process.",
+    "Next.js production build was stopped after several minutes with no progress beyond optimized build creation.",
+    "Frontend unit suite passed: 124 suites and 506 tests, but Jest reported open asynchronous handles and exited only after approximately 90 seconds.",
+    "Frontend lint failed with 66 errors and 5 warnings, including two react-hooks/set-state-in-effect performance errors.",
+    "Mobile typecheck passed in approximately 12 seconds and 25 suites / 160 tests passed in approximately 24 seconds.",
+    "docker compose config --quiet passed. No services or stateful runtime were started."
+  ],
+  "findings": [
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "backend/performance",
+      "files": [
+        "backend/src/modules/performance/performance.service.ts:603",
+        "backend/src/modules/performance/performance.service.ts:1956"
+      ],
+      "title": "Student performance GET path recomputes and writes every class snapshot",
+      "category": "read-path-write-amplification",
+      "rationale": "A student opening the summary causes per-class recomputation instead of reading the already-persisted snapshots. Cost and write contention scale with enrollment count, and the GET path can emit domain events and logs.",
+      "evidence": "getStudentOwnSummary maps every active enrollment through recomputeStudent. Each recomputation performs two component reads sequentially, reads the existing snapshot, updates or inserts it, and may read intervention state and write a performance log.",
+      "expectedImpact": "Make the common read path predictable and reduce database reads, writes, lock pressure, duplicate events, and latency fan-out.",
+      "verificationTarget": "Add a query-count regression test for getStudentOwnSummary and prove the common path is read-only; preserve event-driven snapshot refresh tests.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "ai-service/orchestration",
+      "files": [
+        "ai-service/app/main.py:3390",
+        "ai-service/app/main.py:4390",
+        "ai-service/app/backend_uploads.py:66",
+        "ai-service/tests/test_backend_uploads.py:8"
+      ],
+      "title": "AI process lifecycle owns untracked background work and leaks during tests",
+      "category": "async-lifecycle",
+      "rationale": "Untracked create_task extraction work is lost on restart and is not awaited or cancelled at shutdown. The test process also reproduces a stuck executor teardown, making failures expensive and CI unreliable.",
+      "evidence": "Two extraction routes schedule _run() with create_task while newer intervention, quiz, and lesson-plan flows explicitly delegate execution to BullMQ. Full tests emitted an executor thread join warning after 300 seconds; tests.test_backend_uploads passed assertions but did not terminate within 10 seconds when run as a module.",
+      "expectedImpact": "Reliable shutdown, bounded concurrency, restart-safe extraction jobs, faster tests, and one consistent backend-owned queue model.",
+      "verificationTarget": "A targeted extraction queue contract test, shutdown test with no pending tasks/threads, and an AI suite timeout below a documented threshold.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P1",
+      "severity": "high",
+      "subsystem": "ci/frontend/ai-service",
+      "files": [
+        ".github/workflows/ci.yml:25",
+        ".github/workflows/ci.yml:92",
+        ".github/workflows/ci.yml:132",
+        "next-frontend/package.json:14",
+        "ai-service/scripts/run_tests.py"
+      ],
+      "title": "Critical CI workloads have no timeout despite reproducible hangs",
+      "category": "verification-reliability",
+      "rationale": "A hanging build or test can consume a runner until the platform default timeout, delaying feedback and hiding the actual failing subsystem.",
+      "evidence": "Frontend build remained at optimized build creation for several minutes; frontend Jest reported open handles; AI tests exceeded five minutes. The corresponding CI jobs have no timeout-minutes guard.",
+      "expectedImpact": "Fail-fast feedback, bounded machine usage, and clearer separation of code failures from lifecycle failures.",
+      "verificationTarget": "CI jobs terminate at explicit subsystem budgets and upload the last diagnostic output on timeout.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P1",
+      "severity": "medium",
+      "subsystem": "backend/class-record",
+      "files": [
+        "backend/src/modules/class-record/class-record.service.ts:768",
+        "backend/src/modules/class-record/class-record.service.ts:1084"
+      ],
+      "title": "Class-record writes and section reads fan out per row or class",
+      "category": "database-fan-out",
+      "rationale": "Bulk score updates launch one upsert per student without a concurrency bound, while adviser-section results issue one query per class. Larger sections multiply database round trips and pool pressure.",
+      "evidence": "bulkRecordScores uses Promise.all over dto.scores with an individual insert/on-conflict query; listAdviserSection uses Promise.all over class IDs with an individual classRecords query.",
+      "expectedImpact": "Fewer round trips, bounded pool usage, and more atomic bulk updates.",
+      "verificationTarget": "Existing class-record performance specs plus query-count assertions for representative section sizes and atomicity tests.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "backend/academic-state",
+      "files": [
+        "backend/src/modules/academic-state/academic-state.service.ts:494"
+      ],
+      "title": "Academic rollover clones nested assets through long serial insert loops",
+      "category": "long-transaction-serialization",
+      "rationale": "The rare workflow is allowed to be slower than requests, but nested assessment, question, lesson, module, and section inserts can create a very long transaction and hold locks as content volume grows.",
+      "evidence": "cloneClassLearningAssets contains nested for/await insert sequences for assessments/questions/options and lessons/blocks, plus serial module and section inserts. The module has no nearby spec in the inventory.",
+      "expectedImpact": "Shorter rollover transactions and a clear scaling ceiling without changing academic semantics.",
+      "verificationTarget": "Fixture-based rollover benchmark at small/medium/large content volumes, rollback test, and exact cloned-count assertions.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "next-frontend",
+      "files": [
+        "next-frontend/src/components/layout/SystemInfoButton.tsx:49",
+        "next-frontend/src/components/teacher/class-record/TeacherClassRecordWorkbook.tsx:219",
+        "next-frontend/src/providers/AuthProvider.tsx:69",
+        "next-frontend/src/lib/session-refresh.ts:10"
+      ],
+      "title": "Frontend effects and timeout races create avoidable render and handle pressure",
+      "category": "client-lifecycle",
+      "rationale": "State derived synchronously inside effects causes extra render passes, while Promise.race timers are not cancelled when the primary request wins. This is consistent with the open-handle warning from Jest.",
+      "evidence": "ESLint flags synchronous setState in SystemInfoButton and TeacherClassRecordWorkbook. AuthProvider creates an uncancelled timeout for every current-user race; the frontend suite reports asynchronous operations left open.",
+      "expectedImpact": "Cleaner render scheduling, fewer stale timers, faster test shutdown, and lower risk of state updates after navigation/unmount.",
+      "verificationTarget": "Targeted component/provider tests under fake timers, eslint clean for production files, and Jest exits without the open-handle warning.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "cross-repo architecture",
+      "files": [
+        "backend/src/modules/lxp/lxp.service.ts",
+        "backend/src/modules/assessments/assessments.service.ts",
+        "backend/src/modules/ai-mentor/ai-mentor.controller.ts",
+        "ai-service/app/main.py",
+        "next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx"
+      ],
+      "title": "Several subsystem boundaries have collapsed into multi-thousand-line owners",
+      "category": "extension-risk",
+      "rationale": "Adding one feature requires editing giant orchestration owners with many unrelated responsibilities, which magnifies merge conflicts and the chance that a local edit changes distant behavior.",
+      "evidence": "Largest owners include lxp.service.ts at 6352 lines, assessments.service.ts at 5350, ai-mentor.controller.ts at 2844, AI main.py at 5420 with more than 50 route decorators, and the teacher class page at 4453 with 15 effect callbacks.",
+      "expectedImpact": "Smaller blast radii, clearer ownership, targeted tests, and safer incremental extension.",
+      "verificationTarget": "Characterization tests around extracted boundaries; no route, DTO, response-envelope, or authorization changes during decomposition.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "quality-gates",
+      "files": [
+        "backend/eslint.config.mjs",
+        "next-frontend/eslint.config.mjs",
+        ".github/workflows/ci.yml:25"
+      ],
+      "title": "Large lint baselines obscure new correctness and performance signals",
+      "category": "signal-to-noise",
+      "rationale": "Thousands of existing warnings and advisory lint jobs make it difficult to distinguish a newly introduced unsafe access, empty cleanup path, or React performance error from historical debt.",
+      "evidence": "Backend lint reports 5228 findings and frontend lint reports 71. CI intentionally continues on lint error for both subsystems.",
+      "expectedImpact": "Prevent new debt immediately while paying down old debt in bounded waves rather than attempting a destabilizing all-at-once cleanup.",
+      "verificationTarget": "Diff-aware lint gate or frozen baseline count, then per-module cleanup with build/tests after each wave.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "backend/file-upload",
+      "files": [
+        "backend/src/modules/file-upload/file-upload.service.ts:383",
+        "backend/src/modules/file-upload/storage/storage.service.ts:112"
+      ],
+      "title": "Storage cleanup failures are silently discarded",
+      "category": "resource-leak-observability",
+      "rationale": "S3 migration/upload succeeds even if the local file cannot be deleted, but the failure is invisible and can accumulate disk usage over time.",
+      "evidence": "Both saveFileRecord and saveUploadedFile use empty catch blocks around fs.promises.unlink; these are two of the three backend lint errors.",
+      "expectedImpact": "Detectable cleanup failures and bounded local disk growth without failing an otherwise successful remote upload.",
+      "verificationTarget": "Mock unlink failure, assert a structured warning/metric, and preserve successful upload response semantics.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "mobile/repo-guidance",
+      "files": [
+        "mobile/AGENTS.md:1",
+        "mobile/src/navigation/AppNavigator.tsx",
+        "mobile/src/navigation/teacher-route-manifest.ts",
+        "mobile/src/navigation/role-resolver.ts"
+      ],
+      "title": "Mobile scope documentation contradicts the implemented role architecture",
+      "category": "instruction-drift",
+      "rationale": "Future agents are instructed to preserve a student-only app even though teacher/admin role resolution and teacher navigation are live. That can cause valid code to be removed or audits to miss half the app.",
+      "evidence": "mobile/AGENTS.md states the app is student-scoped; AppNavigator exposes TeacherNavigator/TeacherTabs and resolveMobileRole returns admin, teacher, or student.",
+      "expectedImpact": "Correct routing of future maintenance work and explicit ownership for role-specific mobile surfaces.",
+      "verificationTarget": "Update the product/slice contract after a user decision and keep role-resolution plus navigation manifest tests green.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P3",
+      "severity": "low",
+      "subsystem": "dependency-lifecycle",
+      "files": [
+        "backend/src/common/logger/winston.config.ts",
+        "ai-service/requirements.in",
+        "ai-service/requirements.txt"
+      ],
+      "title": "Runtime dependencies emit deprecation warnings in verified test paths",
+      "category": "dependency-drift",
+      "rationale": "Warnings are not current failures, but leaving them unresolved increases upgrade risk and hides more useful diagnostics.",
+      "evidence": "Backend tests report a legacy Winston transport warning for LokiTransport; AI tests report Starlette TestClient deprecation for the installed httpx integration.",
+      "expectedImpact": "Cleaner diagnostics and less disruptive future upgrades.",
+      "verificationTarget": "Isolated dependency compatibility branches with full affected-subsystem suites; do not mix these upgrades into performance fixes.",
+      "status": "candidate"
+    },
+    {
+      "priority": "P2",
+      "severity": "medium",
+      "subsystem": "test-coverage",
+      "files": [
+        "backend/src/modules/academic-state",
+        "backend/src/modules/analytics",
+        "backend/src/modules/audit",
+        "backend/src/modules/rag",
+        "backend/src/modules/teacher"
+      ],
+      "title": "High-consequence modules lack nearby characterization specs",
+      "category": "cascade-risk",
+      "rationale": "The safest way to reduce giant services and batch database work is to lock behavior first; missing module-local specs make even small refactors harder to prove.",
+      "evidence": "The inventory reports zero specs for academic-state, analytics, audit, rag, teacher, and additional small modules despite rollover, reporting, and AI boundary responsibilities.",
+      "expectedImpact": "Safer staged refactors and lower probability that a one-line change cascades through academic or AI flows.",
+      "verificationTarget": "Characterization tests for public service methods and contract-focused tests before refactoring each uncovered module.",
+      "status": "candidate"
+    }
+  ],
+  "plan": {
+    "safeImmediateFixes": [
+      "Make the AI test entrypoint declare AI_RUNTIME_MODE=test and add explicit shutdown checks for clients, tasks, and default-executor work.",
+      "Add explicit CI timeout-minutes budgets to frontend and AI jobs and preserve diagnostic output on timeout.",
+      "Replace empty unlink catches with structured warnings/metrics while preserving successful upload semantics.",
+      "Fix the two production React set-state-in-effect findings and cancel AuthProvider timeout races after the winning branch completes.",
+      "Fix the three backend lint errors and establish a no-new-errors gate without attempting to clear 5225 warnings in one change.",
+      "Document the current mobile role scope once the product owner confirms teacher/admin mobile support is intentional."
+    ],
+    "conditionalRefactors": [
+      "Change student performance summary to read existing snapshots and queue/recompute only missing or explicitly stale entries; keep the existing response envelope and event semantics.",
+      "Batch class-record score upserts and adviser-section reads, protected by query-count, atomicity, and existing performance specs.",
+      "Move extraction and retry execution from FastAPI create_task into the existing backend BullMQ orchestration pattern used by lesson-plan, quiz, and intervention jobs.",
+      "Add an academic rollover scale fixture and then batch only independent inserts while preserving foreign-key order and transaction rollback.",
+      "Decompose giant owners behind compatibility facades: backend read/query services, FastAPI routers plus job services, and frontend route-local hooks/components. Keep each extraction behavior-neutral."
+    ],
+    "deferredItems": [
+      "A shared generated API contract package across backend, web, and mobile; this needs an explicit contract-change proposal and consumer migration plan.",
+      "Any new cache or persisted derived-data policy; measure query latency and staleness tolerance before introducing it.",
+      "Major Starlette/httpx or Winston/Loki transport upgrades; isolate them from performance remediation.",
+      "A decision on whether mobile is student-only or a multi-role product; documentation and architecture should follow that product decision."
+    ]
+  },
+  "changesMade": [
+    "No application, configuration, workflow, or test code was changed.",
+    "Only dated audit artifacts were added under docs/system-audit/."
+  ],
+  "verification": [
+    "python3 .agents/skills/backend-ai-performance-remediator/scripts/discover_targets.py",
+    "backend: npm run build (passed)",
+    "backend: npx --no-install eslint \"{src,apps,libs,test}/**/*.ts\" (failed: 3 errors, 5225 warnings)",
+    "backend: npm test -- --runInBand (passed: 76 suites, 1003 tests)",
+    "ai-service: env AI_RUNTIME_MODE=test .venv/bin/python -c \"from app.main import app; print(app.title)\" (passed)",
+    "ai-service: env AI_RUNTIME_MODE=test .venv/bin/python scripts/run_tests.py (stopped after executor shutdown warning and more than five minutes)",
+    "ai-service: timeout 10s env AI_RUNTIME_MODE=test .venv/bin/python -m unittest tests.test_backend_uploads -v (assertions passed, process timed out during teardown)",
+    "next-frontend: npm run build (stopped after several minutes without progress)",
+    "next-frontend: npm run lint (failed: 66 errors, 5 warnings)",
+    "next-frontend: npm test -- --runInBand (passed: 124 suites, 506 tests; open-handle warning)",
+    "mobile: npm run typecheck (passed)",
+    "mobile: npm test -- --runInBand (passed: 25 suites, 160 tests)",
+    "docker compose config --quiet (passed)"
+  ],
+  "comparison": {
+    "improved": [
+      "No runtime behavior was changed during this evidence-only audit."
+    ],
+    "unchanged": [
+      "Backend build, backend tests, frontend tests, mobile typecheck/tests, and Compose configuration remain green.",
+      "The pre-existing dirty worktree was preserved."
+    ],
+    "remainingRisks": [
+      "Student performance reads still write and fan out per class.",
+      "AI and frontend lifecycle checks can hang without explicit process budgets.",
+      "Database bulk paths remain row-oriented or class-oriented.",
+      "Large architectural owners and uncovered modules keep change blast radius high.",
+      "Lint debt and mobile instruction drift remain unresolved."
+    ]
+  },
+  "secondPassCleanCheck": [
+    "No application source was edited, so backend/API envelopes, auth behavior, and AI proxy contracts were not changed.",
+    "Findings distinguish reproduced failures from reasoned structural risk.",
+    "Recommendations are staged: characterization and measurement first, bounded local changes second, contract or architecture migrations only with explicit gates.",
+    "No service stack, database mutation, queue job, package install, or dependency upgrade was performed."
+  ]
+}

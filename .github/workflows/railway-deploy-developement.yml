@@ -1,117 +1,123 @@
 name: Railway Deploy (developement)
 
 on:
-  push:
-    branches:
-      - developement
-    paths:
-      - "backend/**"
-      - "next-frontend/**"
-      - "ai-service/**"
-      - ".github/workflows/railway-deploy-developement.yml"
-      - ".github/workflows/ci.yml"
+  workflow_run:
+    workflows: [CI]
+    branches: [developement]
+    types: [completed]
 
 concurrency:
-  group: railway-deploy-developement
-  cancel-in-progress: true
+  group: railway-deploy-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  detect_changes:
-    name: Detect changed services
-    runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      ai_service: ${{ steps.filter.outputs.ai_service }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Detect paths
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/railway-deploy-developement.yml'
-            frontend:
-              - 'next-frontend/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/railway-deploy-developement.yml'
-            ai_service:
-              - 'ai-service/**'
-              - '.github/workflows/ci.yml'
-              - '.github/workflows/railway-deploy-developement.yml'
-
   deploy_backend:
     name: Deploy backend
-    needs: detect_changes
-    if: needs.detect_changes.outputs.backend == 'true'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'developement' &&
+      github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
+    environment:
+      name: production
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
       RAILWAY_ENVIRONMENT_NAME: production
       RAILWAY_SERVICE_NAME: capstone-backend-v2
+      TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Checkout
+      - name: Checkout CI-tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TESTED_SHA }}
+          persist-credentials: false
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install --global @railway/cli
 
-      - name: Deploy backend to Railway
+      - name: Deploy CI-tested backend
         working-directory: backend
-        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
-        shell: pwsh
+        run: railway up . --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+
+      - name: Record deployment provenance
+        run: |
+          echo "tested_sha=$TESTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "ci_run=${{ github.event.workflow_run.html_url }}" >> "$GITHUB_STEP_SUMMARY"
 
   deploy_frontend:
     name: Deploy frontend
-    needs: detect_changes
-    if: needs.detect_changes.outputs.frontend == 'true'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'developement' &&
+      github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
+    environment:
+      name: production
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
       RAILWAY_ENVIRONMENT_NAME: production
       RAILWAY_SERVICE_NAME: next-frontend-v2
+      TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Checkout
+      - name: Checkout CI-tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TESTED_SHA }}
+          persist-credentials: false
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install --global @railway/cli
 
-      - name: Deploy frontend to Railway
+      - name: Deploy CI-tested frontend
         working-directory: next-frontend
-        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
-        shell: pwsh
+        run: railway up . --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+
+      - name: Record deployment provenance
+        run: |
+          echo "tested_sha=$TESTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "ci_run=${{ github.event.workflow_run.html_url }}" >> "$GITHUB_STEP_SUMMARY"
 
   deploy_ai_service:
-    name: Deploy ai-service
-    needs: detect_changes
-    if: needs.detect_changes.outputs.ai_service == 'true'
+    name: Deploy AI service
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'developement' &&
+      github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
+    environment:
+      name: production
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_PROJECT_ID: 00b7dfa6-d938-4029-8119-0194a04b5795
       RAILWAY_ENVIRONMENT_NAME: production
       RAILWAY_SERVICE_NAME: ai-service
+      TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
     steps:
-      - name: Checkout
+      - name: Checkout CI-tested revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TESTED_SHA }}
+          persist-credentials: false
 
       - name: Install Railway CLI
-        run: npm install -g @railway/cli
+        run: npm install --global @railway/cli
 
-      - name: Deploy ai-service to Railway
+      - name: Deploy CI-tested AI service
         working-directory: ai-service
-        run: railway up . --path-as-root --ci --project "$env:RAILWAY_PROJECT_ID" --environment "$env:RAILWAY_ENVIRONMENT_NAME" --service "$env:RAILWAY_SERVICE_NAME"
-        shell: pwsh
+        run: railway up . --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+
+      - name: Record deployment provenance
+        run: |
+          echo "tested_sha=$TESTED_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "ci_run=${{ github.event.workflow_run.html_url }}" >> "$GITHUB_STEP_SUMMARY"

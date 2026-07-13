@@ -916,12 +916,12 @@ export class AiMentorController {
     return typeof state.classId === 'string' ? state.classId : undefined;
   }
 
-  // â”€â”€â”€ JAKIPIR Chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // JAKIPIR Chat
 
   /**
    * POST /api/ai/chat
    * Multi-turn AI Mentor chat with JAKIPIR ("Ja").
-   * Students only â€” Ja is a personalized learning detective.
+   * Students only - Ja is a personalized learning detective.
    *
    * First message:   { "message": "Hi Ja!" }
    * Follow-up:       { "message": "Tell me more", "sessionId": "<from-prev>" }
@@ -1365,7 +1365,7 @@ export class AiMentorController {
     };
   }
 
-  // â”€â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Health check
 
   /**
    * GET /api/ai/health
@@ -1543,11 +1543,11 @@ export class AiMentorController {
     };
   }
 
-  // â”€â”€â”€ Module Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Module extraction
 
   /**
    * POST /api/ai/extract-module
-   * Queues a PDF â†’ structured lesson extraction job.
+   * Queues a PDF to structured lesson extraction job.
    * Returns immediately with extractionId for polling.
    */
   @Post('extract-module')
@@ -1559,7 +1559,7 @@ export class AiMentorController {
   })
   @ApiResponse({
     status: 202,
-    description: 'Extraction queued â€” poll for status',
+    description: 'Extraction queued - poll for status',
   })
   async extractModule(
     @Body() dto: ExtractModuleDto,
@@ -1568,13 +1568,45 @@ export class AiMentorController {
     await this.assertTeacherFileAccess(dto.fileId, user);
     try {
       const result = await this.proxy.forward('POST', '/extract', user, dto);
+      const extractionId = this.extractStringField(result, 'extractionId');
+      if (!extractionId) {
+        throw new ServiceUnavailableException(
+          'AI extraction service returned an invalid queue response.',
+        );
+      }
+      try {
+        await this.aiGenerationQueueService.enqueueExtractionJob(
+          extractionId,
+          user.id,
+        );
+      } catch (queueError) {
+        const reason =
+          queueError instanceof Error ? queueError.message : String(queueError);
+        try {
+          await this.proxy.markInternalExtractionFailed(
+            extractionId,
+            `BullMQ enqueue failed: ${reason}`,
+          );
+        } catch (compensationError) {
+          this.logger.error(
+            `Failed to compensate extraction ${extractionId}: ${
+              compensationError instanceof Error
+                ? compensationError.message
+                : String(compensationError)
+            }`,
+          );
+        }
+        throw new ServiceUnavailableException(
+          'AI extraction queue is temporarily unavailable. Please retry shortly.',
+        );
+      }
       await this.logAuditSafe({
         actorId: user.id,
         action: 'ai.extraction.queued',
         targetType: 'uploaded_file',
         targetId: dto.fileId,
         metadata: {
-          extractionId: this.extractStringField(result, 'extractionId'),
+          extractionId,
           extractionStyle: dto.extractionStyle ?? 'clean',
         },
       });
@@ -1596,7 +1628,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ Extraction status (polling) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Extraction status (polling)
 
   /**
    * GET /api/ai/extractions/:id/status
@@ -1659,7 +1691,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ List extractions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // List extractions
 
   /**
    * GET /api/ai/extractions?classId=...
@@ -1727,7 +1759,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ Get single extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Get single extraction
 
   /**
    * GET /api/ai/extractions/:id
@@ -1797,7 +1829,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ Update extraction (edit before applying) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Update extraction (edit before applying)
 
   /**
    * PATCH /api/ai/extractions/:id
@@ -1854,7 +1886,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ Apply extraction â†’ create lessons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Apply extraction to create lessons
 
   @Post('extractions/:id/apply/preview')
   @Roles(RoleName.Teacher, RoleName.Admin)
@@ -2011,6 +2043,15 @@ export class AiMentorController {
         user,
         {},
       );
+      try {
+        await this.aiGenerationQueueService.cancelQueuedExtractionJob(id);
+      } catch (queueError) {
+        this.logger.warn(
+          `Extraction ${id} was cancelled in AI storage but its BullMQ cleanup failed: ${
+            queueError instanceof Error ? queueError.message : String(queueError)
+          }`,
+        );
+      }
       await this.logAuditSafe({
         actorId: user.id,
         action: 'ai.extraction.cancelled',
@@ -2050,13 +2091,48 @@ export class AiMentorController {
         user,
         dto,
       );
+      const retryExtractionId = this.extractStringField(
+        result,
+        'extractionId',
+      );
+      if (!retryExtractionId) {
+        throw new ServiceUnavailableException(
+          'AI extraction service returned an invalid retry response.',
+        );
+      }
+      try {
+        await this.aiGenerationQueueService.enqueueExtractionJob(
+          retryExtractionId,
+          user.id,
+        );
+      } catch (queueError) {
+        const reason =
+          queueError instanceof Error ? queueError.message : String(queueError);
+        try {
+          await this.proxy.markInternalExtractionFailed(
+            retryExtractionId,
+            `BullMQ enqueue failed: ${reason}`,
+          );
+        } catch (compensationError) {
+          this.logger.error(
+            `Failed to compensate extraction retry ${retryExtractionId}: ${
+              compensationError instanceof Error
+                ? compensationError.message
+                : String(compensationError)
+            }`,
+          );
+        }
+        throw new ServiceUnavailableException(
+          'AI extraction queue is temporarily unavailable. Please retry shortly.',
+        );
+      }
       await this.logAuditSafe({
         actorId: user.id,
         action: 'ai.extraction.retry_queued',
         targetType: 'extraction',
         targetId: id,
         metadata: {
-          retryExtractionId: this.extractStringField(result, 'extractionId'),
+          retryExtractionId,
           extractionStyle: dto.extractionStyle ?? null,
         },
       });
@@ -2076,7 +2152,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ Delete extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Delete extraction
 
   /**
    * DELETE /api/ai/extractions/:id
@@ -2120,7 +2196,7 @@ export class AiMentorController {
     }
   }
 
-  // â”€â”€â”€ AI interaction history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // AI interaction history
 
   /**
    * GET /api/ai/history
@@ -2232,13 +2308,20 @@ export class AiMentorController {
       user,
       dto,
     );
+    const jobId = this.extractStringField(result, 'jobId');
+    if (jobId) {
+      await this.aiGenerationQueueService.enqueueInterventionJob(
+        jobId,
+        user.id,
+      );
+    }
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.intervention_recommendation.queued',
       targetType: 'intervention_case',
       targetId: caseId,
       metadata: {
-        jobId: this.extractStringField(result, 'jobId'),
+        jobId,
         noteProvided: Boolean(dto.note?.trim()),
       },
     });
@@ -2296,13 +2379,17 @@ export class AiMentorController {
       user,
       dto,
     );
+    const jobId = this.extractStringField(result, 'jobId');
+    if (jobId) {
+      await this.aiGenerationQueueService.enqueueQuizJob(jobId, user.id);
+    }
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.quiz_draft.queued',
       targetType: 'class',
       targetId: dto.classId,
       metadata: {
-        jobId: this.extractStringField(result, 'jobId'),
+        jobId,
         questionCount: dto.questionCount,
         questionType: dto.questionType,
         assessmentType: dto.assessmentType,
@@ -2479,12 +2566,10 @@ export class AiMentorController {
       user,
       {},
     );
-    const retryJobId = this.extractStringField(
-      result && typeof result === 'object' && 'data' in result
-        ? (result as { data?: Record<string, unknown> }).data
-        : result,
-      'jobId',
-    );
+    const retryJobId = this.extractStringField(result, 'jobId');
+    if (retryJobId) {
+      await this.aiGenerationQueueService.enqueueQuizJob(retryJobId, user.id);
+    }
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.quiz_draft.retried',
@@ -2503,6 +2588,11 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherJobAccess(jobId, user);
+    const removedFromQueue =
+      await this.aiGenerationQueueService.cancelQueuedTeacherAiJob(
+        'quiz',
+        jobId,
+      );
     const result = await this.proxy.forward(
       'POST',
       `/teacher/quizzes/jobs/${jobId}/cancel`,
@@ -2515,6 +2605,13 @@ export class AiMentorController {
       targetType: 'ai_generation_job',
       targetId: jobId,
     });
+    if (removedFromQueue) {
+      return {
+        success: true,
+        message: 'AI quiz generation cancelled before execution started',
+        data: { jobId, status: 'cancelled' },
+      };
+    }
     return result;
   }
 
@@ -2750,8 +2847,23 @@ export class AiMentorController {
   ) {
     await this.assertTeacherJobAccess(jobId, user);
     const removedFromQueue =
-      await this.aiGenerationQueueService.cancelQueuedLessonPlanJob(jobId);
-    const downstreamResponse = await this.proxy.forward('DELETE', `/teacher/jobs/${jobId}`, user);
+      (await this.aiGenerationQueueService.cancelQueuedTeacherAiJob(
+        'lesson-plan',
+        jobId,
+      )) ||
+      (await this.aiGenerationQueueService.cancelQueuedTeacherAiJob(
+        'quiz',
+        jobId,
+      )) ||
+      (await this.aiGenerationQueueService.cancelQueuedTeacherAiJob(
+        'intervention',
+        jobId,
+      ));
+    const downstreamResponse = await this.proxy.forward(
+      'DELETE',
+      `/teacher/jobs/${jobId}`,
+      user,
+    );
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.generation_job.cancelled',
@@ -2761,7 +2873,7 @@ export class AiMentorController {
     if (removedFromQueue) {
       return {
         success: true,
-        message: 'Lesson plan generation cancelled before execution started',
+        message: 'AI generation job cancelled before execution started',
         data: { jobId, status: 'cancelled' },
       };
     }

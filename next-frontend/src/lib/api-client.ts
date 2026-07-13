@@ -67,9 +67,14 @@ export function createApiClient(): AxiosInstance {
     async (config: InternalAxiosRequestConfig) => {
       const requestUrl = typeof config.url === 'string' ? config.url : '';
       const isAuthRefreshRequest = requestUrl.includes('/auth/refresh');
+      const customConfig = config as ApiRequestConfig;
 
-      if (!accessToken && !isAuthRefreshRequest) {
-        if (!bootstrapPromise) {
+      if (
+        !accessToken &&
+        !isAuthRefreshRequest &&
+        !customConfig.skipAuthRefresh
+      ) {
+        if (!bootstrapPromise && !refreshPromise) {
           bootstrapPromise = refreshSessionAccessToken()
             .catch(() => null)
             .finally(() => {
@@ -77,7 +82,8 @@ export function createApiClient(): AxiosInstance {
             });
         }
 
-        const bootstrappedToken = await bootstrapPromise;
+        const pendingRefresh = bootstrapPromise || refreshPromise;
+        const bootstrappedToken = pendingRefresh ? await pendingRefresh.catch(() => null) : null;
         if (bootstrappedToken) {
           accessToken = bootstrappedToken;
         }
@@ -121,20 +127,27 @@ export function createApiClient(): AxiosInstance {
         !originalRequest.skipAuthRefresh
       ) {
         originalRequest._retry = true;
+        const failedToken = accessToken;
 
         // Prevent multiple refresh attempts
-        if (!refreshPromise) {
-          refreshPromise = refreshSessionAccessToken();
+        if (!refreshPromise && !bootstrapPromise) {
+          refreshPromise = refreshSessionAccessToken().finally(() => {
+            refreshPromise = null;
+          });
         }
 
         try {
-          const newToken = await refreshPromise;
-          refreshPromise = null;
+          const newToken = await (refreshPromise || bootstrapPromise);
 
           if (newToken) {
             accessToken = newToken;
             originalRequest.headers = originalRequest.headers ?? {};
             originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return api(originalRequest);
+          } else if (accessToken && accessToken !== failedToken) {
+            // Another concurrent refresh or login set a new valid access token
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
             return api(originalRequest);
           } else {
             // Refresh returned no usable token, so force re-login.
@@ -142,7 +155,11 @@ export function createApiClient(): AxiosInstance {
             return Promise.reject(error);
           }
         } catch (refreshError) {
-          refreshPromise = null;
+          if (accessToken && accessToken !== failedToken) {
+            originalRequest.headers = originalRequest.headers ?? {};
+            originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+            return api(originalRequest);
+          }
           expireClientSession(!originalRequest.skipSessionExpiredRedirect);
           return Promise.reject(refreshError);
         }

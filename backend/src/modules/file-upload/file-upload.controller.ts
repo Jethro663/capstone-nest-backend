@@ -14,6 +14,7 @@ import {
   ParseUUIDPipe,
   Param,
   Body,
+  Optional,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
@@ -25,6 +26,7 @@ import { createHash } from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { FileUploadService } from './file-upload.service';
+import { StorageService } from './storage/storage.service';
 import {
   getLibraryFileKind,
   LibraryFileValidationPipe,
@@ -78,7 +80,11 @@ const multerOptions = {
 @Controller('files')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class FileUploadController {
-  constructor(private readonly fileUploadService: FileUploadService) {}
+  constructor(
+    private readonly fileUploadService: FileUploadService,
+    @Optional()
+    private readonly storageService?: StorageService,
+  ) {}
 
   private normalizeUser(user: any) {
     return {
@@ -292,19 +298,21 @@ export class FileUploadController {
       id,
       this.normalizeUser(user),
     );
-    const filePath = record.filePath;
-    const absolutePath = path.resolve(filePath);
-    const uploadsRoot = path.resolve(UPLOAD_ROOT);
-
-    if (!absolutePath.startsWith(uploadsRoot)) {
-      res.status(403).json({
-        success: false,
-        statusCode: 403,
-        message: 'Access denied',
-      });
+    res.setHeader('Content-Type', record.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${record.originalName.replace(/"/g, '')}"`,
+    );
+    if (this.storageService) {
+      await this.storageService.serveOrRedirect(
+        res,
+        record,
+        record.originalName.replace(/"/g, ''),
+      );
       return;
     }
 
+    const absolutePath = path.resolve(record.filePath);
     if (!fs.existsSync(absolutePath)) {
       res.status(404).json({
         success: false,
@@ -313,13 +321,18 @@ export class FileUploadController {
       });
       return;
     }
-
-    res.setHeader('Content-Type', record.mimeType);
-    res.setHeader(
-      'Content-Disposition',
-      `inline; filename="${record.originalName.replace(/"/g, '')}"`,
-    );
     res.sendFile(absolutePath);
+  }
+
+  @Post('admin/backfill-storage')
+  @Roles(RoleName.Admin)
+  async backfillStorage() {
+    const result = await this.fileUploadService.migrateLocalFilesToStorage();
+    return {
+      success: true,
+      message: 'Storage backfill completed',
+      data: result,
+    };
   }
 
   @Post(':id/index/retry')

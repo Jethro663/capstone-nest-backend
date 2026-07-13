@@ -44,6 +44,7 @@ import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
+import { AssessmentAccessService } from './assessment-access.service';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -121,6 +122,18 @@ type CurrentUserLike = {
   userId?: string | null;
   id?: string | null;
   roles?: string[] | null;
+};
+
+type AssessmentVisibilityItem = {
+  isGiven?: boolean | null;
+  isVisible?: boolean | null;
+  section?: {
+    module?: {
+      classId?: string | null;
+      isVisible?: boolean | null;
+      isLocked?: boolean | null;
+    } | null;
+  } | null;
 };
 
 type DecoratedAssessmentOption = {
@@ -203,11 +216,6 @@ type AssessmentView = {
 
 type GradingPeriodCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
-// pdf-parse ships CommonJS typings that do not expose a callable default import cleanly.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{
-  text: string;
-}>;
 
 @Injectable()
 export class AssessmentsService {
@@ -220,6 +228,7 @@ export class AssessmentsService {
     private readonly auditService: AuditService,
     private readonly ragIndexingService: RagIndexingService,
     private readonly assessmentNotificationDispatch: AssessmentNotificationDispatchService,
+    private readonly assessmentAccessService: AssessmentAccessService,
   ) {}
 
   private get db() {
@@ -893,6 +902,8 @@ export class AssessmentsService {
 
     if (extension === 'pdf') {
       const buffer = await fs.readFile(absolutePath);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
       const parsed = await pdfParse(buffer);
       return parsed.text.trim();
     }
@@ -1012,19 +1023,15 @@ export class AssessmentsService {
   }
 
   private getUserId(currentUser: any) {
-    const normalized = currentUser as CurrentUserLike | undefined;
-    return normalized?.userId ?? normalized?.id;
+    return this.assessmentAccessService.resolveActor(
+      currentUser as CurrentUserLike | undefined,
+    ).userId;
   }
 
   private getUserRole(currentUser: any): 'admin' | 'teacher' | 'student' {
-    const normalized = currentUser as CurrentUserLike | undefined;
-    const roles: string[] = Array.isArray(normalized?.roles)
-      ? normalized.roles
-      : [];
-
-    if (roles.includes('admin')) return 'admin';
-    if (roles.includes('teacher')) return 'teacher';
-    return 'student';
+    return this.assessmentAccessService.resolveActor(
+      currentUser as CurrentUserLike | undefined,
+    ).role;
   }
 
   private ensureAssessmentNotCoreTemplateAsset(
@@ -1097,11 +1104,11 @@ export class AssessmentsService {
     classId: string;
     isPublished?: boolean | null;
     isCoreTemplateAsset?: boolean | null;
-  }) {
+  }, preloadedItems?: AssessmentVisibilityItem[]) {
     if (!assessment.isPublished) return false;
     if (!assessment.isCoreTemplateAsset) return true;
 
-    const attachedItems = (await this.db.query.moduleItems.findMany({
+    const attachedItems = preloadedItems ?? (await this.db.query.moduleItems.findMany({
       where: and(
         eq(moduleItems.assessmentId, assessment.id),
         eq(moduleItems.itemType, 'assessment'),
@@ -1120,17 +1127,7 @@ export class AssessmentsService {
           },
         },
       },
-    })) as Array<{
-      isGiven?: boolean | null;
-      isVisible?: boolean | null;
-      section?: {
-        module?: {
-          classId?: string | null;
-          isVisible?: boolean | null;
-          isLocked?: boolean | null;
-        } | null;
-      } | null;
-    }>;
+    })) as AssessmentVisibilityItem[];
 
     if (attachedItems.length === 0) {
       return true;
@@ -1153,34 +1150,18 @@ export class AssessmentsService {
     currentUser: any,
     message: string,
   ) {
-    const userId = this.getUserId(currentUser);
-    const role = this.getUserRole(currentUser);
-
-    if (!userId) {
-      throw new ForbiddenException('Invalid user context');
-    }
-
-    if (role === 'teacher' && classTeacherId && classTeacherId !== userId) {
-      throw new ForbiddenException(message);
-    }
-
-    return { userId, role };
+    return this.assessmentAccessService.assertTeacherClassOwnership(
+      classTeacherId,
+      currentUser as CurrentUserLike | undefined,
+      message,
+    );
   }
 
   private async ensureStudentEnrolled(classId: string, studentId: string) {
-    const enrollment = await this.db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.classId, classId),
-        eq(enrollments.studentId, studentId),
-      ),
-      columns: { classId: true, studentId: true },
-    });
-
-    if (!enrollment) {
-      throw new ForbiddenException(
-        'You are not enrolled in this class for this assessment',
-      );
-    }
+    await this.assessmentAccessService.ensureStudentEnrolled(
+      classId,
+      studentId,
+    );
   }
 
   private fileExtensionFromName(fileName: string) {
@@ -1486,13 +1467,26 @@ export class AssessmentsService {
             },
           },
         },
+        moduleItems: {
+          where: eq(moduleItems.itemType, 'assessment'),
+          columns: { isGiven: true, isVisible: true },
+          with: {
+            section: {
+              with: {
+                module: {
+                  columns: { classId: true, isVisible: true, isLocked: true },
+                },
+              },
+            },
+          },
+        },
       },
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
 
     const visibleAssessments: typeof assessmentList = [];
     for (const assessment of assessmentList) {
-      if (await this.canStudentAccessAssessment(assessment)) {
+      if (await this.canStudentAccessAssessment(assessment, assessment.moduleItems)) {
         visibleAssessments.push(assessment);
       }
     }
@@ -1546,7 +1540,9 @@ export class AssessmentsService {
     }
 
     const total = assessmentList.length;
-    const paginated = assessmentList.slice(offset, offset + limit);
+    const paginated = assessmentList
+      .slice(offset, offset + limit)
+      .map(({ moduleItems: _moduleItems, ...assessment }) => assessment);
 
     return {
       data: paginated,

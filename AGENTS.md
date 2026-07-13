@@ -5,9 +5,16 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 
 ## Identity
 - Repo: Nexora LMS/LXP for Gat Andres Bonifacio High School.
-- Stack: NestJS 11 + Drizzle + PostgreSQL, Next.js App Router + React + Tailwind, Expo mobile, FastAPI + Ollama, BullMQ + Redis, JWT + refresh tokens.
+- Stack: NestJS 11 + Drizzle + PostgreSQL/pgvector, Next.js 16 App Router + React 19 + Tailwind, Expo 54 mobile, FastAPI with Ollama or an OpenAI-compatible cloud runtime, BullMQ + Redis, JWT + rotating refresh tokens.
 - Default mobile target for generic `mobile` work: `mobile/`.
 - Priority order: correctness, security, maintainability, performance, then speed.
+
+## Architecture Invariants
+- Backend owns public auth/RBAC, API contracts, official academic state, audit history, and durable job orchestration.
+- Web and mobile consume backend `/api` contracts and never call `ai-service` directly.
+- AI remains assistive for official records; shared-secret-protected internal execution does not make it an auth authority.
+- Core Compose must remain usable without the `observability` profile or `docker-compose.debug.yml`.
+- Long-running AI extraction/generation work must stay restart-safe through backend-owned BullMQ contracts.
 
 ## Router Contract
 - Before substantive work, emit:
@@ -15,6 +22,7 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 - Load the kernel first.
 - Route to a specialized workflow skill before generic subsystem routing when the prompt is about contract drift, auth/session failures, dev-stack health, smoke verification, mobile flow auditing, or queue/AI pipeline auditing.
 - Otherwise select exactly one primary slice by default.
+- Workflow-tools-first policy: for every substantive task, first attempt to use the available Serena, OpenSpec, and Superpowers integrations whenever they fit the work. Activate Serena at the start of the session and use it for source discovery, symbol/reference tracing, and focused code understanding before broad shell search or full-file reads. Use OpenSpec to explore/propose non-trivial or ambiguous implementation work, and use the relevant Superpowers workflow for planning, debugging, testing, verification, review, or other matching work. Keep successfully activated tools available throughout the working session. If Serena, OpenSpec, or Superpowers are not exposed by the current client session, first attempt the supported activation, initialization, or discovery path for that integration; state any failure once. Use normal Codex tools and procedures only after those attempts fail or no integration is applicable—never silently skip an applicable integration.
 - Prefer available MCP tools when they fit the job: Serena for code discovery and symbol-aware edits, Playwright for browser execution and UI evidence, shell for scripts, git, installs, and service/runtime commands.
 - When shell output is likely large and `rtk` is installed, prefer RTK-filtered shell paths without replacing more precise MCP or file tools.
 - Prefer the smallest sufficient context: inspect targeted files and outputs before broad scans, and load detailed references only when the task triggers them.

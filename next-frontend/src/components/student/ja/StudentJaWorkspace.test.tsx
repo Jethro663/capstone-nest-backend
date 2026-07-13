@@ -319,7 +319,7 @@ describe('StudentJaWorkspace refactored shell', () => {
             id: 'item-1',
             orderIndex: 0,
             itemType: 'multiple_choice',
-            prompt: '<p>If A = {1, 2} and B = {2, 3}, what is A âˆ© B?</p>\n\nJA Coach: You missed this before. Watch the overlap.',
+            prompt: '<p>If A = {1, 2} and B = {2, 3}, what is A ∩ B?</p>\n\nJA Coach: You missed this before. Watch the overlap.',
             options: [
               { id: 'a', text: '<p>{1}</p>', order: 0 },
               { id: 'b', text: '<p>{2}</p>', order: 1 },

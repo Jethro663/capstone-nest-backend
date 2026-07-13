@@ -249,3 +249,20 @@ groups:
         for: 10m
         noDataState: NoData
         execErrState: Alerting
+      - uid: db-pool-starvation
+        title: DB Pool Connection Starvation
+        condition: A
+        data:
+          - refId: A
+            datasourceUid: Prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              refId: A
+              expr: db_pool_waiting_requests > 5
+              intervalMs: 5000
+              maxDataPoints: 43200
+        for: 2m
+        noDataState: NoData
+        execErrState: Alerting

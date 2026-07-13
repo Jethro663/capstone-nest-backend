@@ -18,6 +18,9 @@ export class AiProxyService {
   private readonly chatTimeoutMs: number;
   private readonly quizTimeoutMs: number;
   private readonly extractionTimeoutMs: number;
+  private readonly lessonPlanTimeoutMs: number;
+  private readonly internalQuizTimeoutMs: number;
+  private readonly internalInterventionTimeoutMs: number;
   private readonly sharedSecret: string;
   private readonly breaker: CircuitBreaker;
 
@@ -34,6 +37,19 @@ export class AiProxyService {
     );
     this.extractionTimeoutMs = parseInt(
       this.config.get<string>('AI_SERVICE_TIMEOUT_EXTRACTION_MS') || '300000',
+      10,
+    );
+    this.lessonPlanTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_LESSON_PLAN_MS') || '300000',
+      10,
+    );
+    this.internalQuizTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_QUIZ_MS') || '180000',
+      10,
+    );
+    this.internalInterventionTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_INTERVENTION_MS') ||
+        '180000',
       10,
     );
     this.sharedSecret =
@@ -209,39 +225,35 @@ export class AiProxyService {
   }
 
   /**
-   * Internal worker call: trigger lesson-plan execution on ai-service.
-   *
-   * This bypasses the circuit breaker because BullMQ owns retry/backoff.
-   * Uses a dedicated 5-minute AbortController timeout so hung inference
-   * is detected and the job can be retried by BullMQ.
+   * Reusable helper for internal worker calls to ai-service.
+   * Bypasses the circuit breaker because BullMQ owns retry/backoff.
    */
-  async runInternalLessonPlanJob(
-    jobId: string,
-    meta?: { bullmqJobId: string; attempt: number },
+  private async runInternalTeacherJob(
+    path: string,
+    meta: Record<string, unknown> | undefined,
+    timeoutMs: number,
+    jobLabel: string,
   ): Promise<unknown> {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 300_000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const response = await fetch(
-        `${this.baseUrl}/internal/teacher/lesson-plans/jobs/${jobId}/run`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.sharedSecret
-              ? { 'X-Internal-Service-Token': this.sharedSecret }
-              : {}),
-          },
-          body: JSON.stringify(meta ?? {}),
-          signal: controller.signal,
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(this.sharedSecret
+            ? { 'X-Internal-Service-Token': this.sharedSecret }
+            : {}),
         },
-      );
+        body: JSON.stringify(meta ?? {}),
+        signal: controller.signal,
+      });
 
       if (!response.ok) {
         const text = await response.text();
         this.logger.error(
-          `Internal lesson-plan execution failed (${response.status}): ${text}`,
+          `Internal ${jobLabel} execution failed (${response.status}): ${text}`,
         );
         throw new Error(
           `ai-service internal execution returned ${response.status}: ${text}`,
@@ -252,15 +264,84 @@ export class AiProxyService {
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         this.logger.error(
-          `Internal lesson-plan execution timed out for job ${jobId}`,
+          `Internal ${jobLabel} execution timed out after ${timeoutMs}ms`,
         );
         throw new Error(
-          `ai-service internal execution timed out after 300s for job ${jobId}`,
+          `ai-service internal execution timed out after ${timeoutMs}ms for ${jobLabel}`,
         );
       }
       throw err;
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  /**
+   * Internal worker call: trigger lesson-plan execution on ai-service.
+   */
+  async runInternalLessonPlanJob(
+    jobId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/teacher/lesson-plans/jobs/${jobId}/run`,
+      meta,
+      this.lessonPlanTimeoutMs,
+      `lesson-plan job ${jobId}`,
+    );
+  }
+
+  /**
+   * Internal worker call: trigger quiz draft execution on ai-service.
+   */
+  async runInternalQuizJob(
+    jobId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/teacher/quizzes/jobs/${jobId}/run`,
+      meta,
+      this.internalQuizTimeoutMs,
+      `quiz job ${jobId}`,
+    );
+  }
+
+  /**
+   * Internal worker call: trigger intervention recommendation execution on ai-service.
+   */
+  async runInternalInterventionJob(
+    jobId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/teacher/interventions/jobs/${jobId}/run`,
+      meta,
+      this.internalInterventionTimeoutMs,
+      `intervention job ${jobId}`,
+    );
+  }
+
+  async runInternalExtractionJob(
+    extractionId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/extractions/${extractionId}/run`,
+      meta,
+      this.extractionTimeoutMs,
+      `module extraction ${extractionId}`,
+    );
+  }
+
+  async markInternalExtractionFailed(
+    extractionId: string,
+    reason: string,
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/extractions/${extractionId}/fail`,
+      { reason },
+      this.chatTimeoutMs,
+      `module extraction compensation ${extractionId}`,
+    );
   }
 }

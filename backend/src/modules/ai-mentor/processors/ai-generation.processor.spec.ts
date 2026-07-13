@@ -10,6 +10,7 @@ describe('AiGenerationProcessor', () => {
   beforeEach(async () => {
     const mockProxy = {
       runInternalLessonPlanJob: jest.fn(),
+      runInternalExtractionJob: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -55,5 +56,27 @@ describe('AiGenerationProcessor', () => {
 
     await processor.process(mockJob);
     expect(proxy.runInternalLessonPlanJob).not.toHaveBeenCalled();
+  });
+
+  it('runs module extraction jobs through the internal extraction endpoint', async () => {
+    const mockJob = {
+      name: 'module-extraction',
+      id: 'extraction-extraction-123',
+      attemptsMade: 1,
+      data: {
+        extractionId: 'extraction-123',
+        requestedByUserId: 'teacher-1',
+      },
+    } as unknown as Job<{
+      extractionId: string;
+      requestedByUserId: string;
+    }>;
+
+    await processor.process(mockJob);
+
+    expect(proxy.runInternalExtractionJob).toHaveBeenCalledWith(
+      'extraction-123',
+      { bullmqJobId: 'extraction-extraction-123', attempt: 2 },
+    );
   });
 });

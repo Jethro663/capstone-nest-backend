@@ -67,4 +67,27 @@ describe('InternalUploadsController', () => {
       ),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it('redirects s3:// URLs to signed download URL without corrupting key', async () => {
+    const mockStorageService = {
+      driver: 's3' as const,
+      getSignedDownloadUrl: jest.fn().mockResolvedValue('https://s3.signed/url'),
+    };
+    const s3Controller = new InternalUploadsController(
+      config,
+      mockStorageService as any,
+    );
+    const mockRes = { redirect: jest.fn() };
+
+    await s3Controller.readUpload(
+      's3://library/science/file.pdf',
+      'shared-secret',
+      mockRes as any,
+    );
+
+    expect(mockStorageService.getSignedDownloadUrl).toHaveBeenCalledWith(
+      'library/science/file.pdf',
+    );
+    expect(mockRes.redirect).toHaveBeenCalledWith(302, 'https://s3.signed/url');
+  });
 });

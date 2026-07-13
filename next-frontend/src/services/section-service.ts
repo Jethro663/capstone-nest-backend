@@ -329,7 +329,7 @@ export const sectionService = {
     return data;
   },
 
-  /** PATCH /sections/:id/presentation â€” Teacher, Admin */
+  /** PATCH /sections/:id/presentation - Teacher, Admin */
   async updatePresentation(
     id: string,
     dto: { cardBannerUrl?: string | null },
@@ -338,7 +338,7 @@ export const sectionService = {
     return data;
   },
 
-  /** POST /sections/:id/banner â€” Teacher, Admin */
+  /** POST /sections/:id/banner - Teacher, Admin */
   async uploadBanner(
     id: string,
     file: File,

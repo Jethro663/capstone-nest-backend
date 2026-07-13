@@ -858,15 +858,14 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
     extraction_rows = await _fetch_extraction_rows(db, class_id)
     question_rows = await _fetch_question_rows(db, class_id)
 
-    chunks = (
-        build_lesson_chunks(lesson_rows)
-        + build_extraction_chunks(extraction_rows)
-        + build_question_chunks(question_rows)
-    )
+    lesson_chunks = build_lesson_chunks(lesson_rows)
+    extraction_chunks = build_extraction_chunks(extraction_rows)
+    question_chunks = build_question_chunks(question_rows)
+    chunks = lesson_chunks + extraction_chunks + question_chunks
 
-    lesson_chunk_count = len(build_lesson_chunks(lesson_rows))
-    extraction_chunk_count = len(build_extraction_chunks(extraction_rows))
-    question_chunk_count = len(build_question_chunks(question_rows))
+    lesson_chunk_count = len(lesson_chunks)
+    extraction_chunk_count = len(extraction_chunks)
+    question_chunk_count = len(question_chunks)
 
     if not chunks:
         await db.execute(

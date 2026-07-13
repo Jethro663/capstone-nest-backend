@@ -5,6 +5,7 @@ import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
+import { SystemEvaluationService } from './system-evaluation.service';
 
 describe('LxpService', () => {
   let service: LxpService;
@@ -71,6 +72,7 @@ describe('LxpService', () => {
       providers: [
         LxpService,
         { provide: DatabaseService, useValue: { db: mockDb } },
+        SystemEvaluationService,
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: NotificationsGateway, useValue: mockNotificationsGateway },
         { provide: AuditService, useValue: mockAuditService },
@@ -1679,7 +1681,7 @@ describe('LxpService', () => {
           audienceRole: 'student',
           classId: null,
           startsAt: new Date('2026-05-01T00:00:00.000Z'),
-          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          endsAt: new Date('2030-05-20T00:00:00.000Z'),
           status: 'active',
           class: null,
         },
@@ -1696,7 +1698,7 @@ describe('LxpService', () => {
           audienceRole: 'student',
           classId: null,
           startsAt: new Date('2026-05-01T00:00:00.000Z'),
-          endsAt: new Date('2026-05-20T00:00:00.000Z'),
+          endsAt: new Date('2030-05-20T00:00:00.000Z'),
           status: 'active',
           class: null,
         },
@@ -1728,7 +1730,7 @@ describe('LxpService', () => {
         targetModule: 'overall',
         status: 'active',
         startsAt: new Date('2026-05-01T00:00:00.000Z'),
-        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+        endsAt: new Date('2030-05-20T00:00:00.000Z'),
         title: 'System Pulse',
       },
     });
@@ -1786,7 +1788,7 @@ describe('LxpService', () => {
         targetModule: 'overall',
         status: 'active',
         startsAt: new Date('2026-05-01T00:00:00.000Z'),
-        endsAt: new Date('2026-05-20T00:00:00.000Z'),
+        endsAt: new Date('2030-05-20T00:00:00.000Z'),
       },
     });
 

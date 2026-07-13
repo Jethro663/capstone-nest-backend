@@ -1,5 +1,5 @@
 ﻿"""
-Content Sanitizer â€“ Multi-layer protection against prompt injection
+Content Sanitizer - multi-layer protection against prompt injection
 and malicious content in uploaded PDFs.
 
 Layer 1: Rule-based text sanitization (runs before any AI processing)
@@ -100,12 +100,12 @@ def sanitize_extracted_text(raw_text: str) -> SanitizationResult:
         if ratio > 0.4:
             warnings.append(
                 f"High non-alphanumeric ratio ({ratio * 100:.1f}%) "
-                "â€” may contain encoded/obfuscated content"
+                "- may contain encoded/obfuscated content"
             )
 
     # 5. Flag very short content
     if total < 50:
-        warnings.append("Very short text content â€” PDF may be image-based or mostly empty")
+        warnings.append("Very short text content - PDF may be image-based or mostly empty")
 
     return SanitizationResult(
         cleaned_text=text.strip(),
@@ -126,7 +126,7 @@ def build_classification_prompt(text_sample: str) -> dict[str, str]:
         "used by a Philippine high school (Grades 7-10, DepEd curriculum).\n\n"
         "Your job is to analyze text extracted from uploaded PDF documents and determine "
         "if the content is safe for AI-powered lesson extraction.\n\n"
-        "You MUST respond with ONLY a valid JSON object â€” no markdown, no explanation, no other text.\n\n"
+        "You MUST respond with ONLY a valid JSON object - no markdown, no explanation, no other text.\n\n"
         "Response format:\n"
         '{\n  "safe": true/false,\n  "reason": "Short explanation",\n'
         '  "category": "safe" | "prompt_injection" | "harmful" | "non_educational" | "suspicious",\n'
@@ -172,7 +172,7 @@ def parse_classification_response(raw: str) -> ContentClassification:
     except Exception:
         return ContentClassification(
             safe=True,
-            reason="Classification response could not be parsed â€” proceeding with caution",
+            reason="Classification response could not be parsed - proceeding with caution",
             category="suspicious",
             confidence=0.3,
         )

@@ -4,7 +4,12 @@ import {
   ForbiddenException,
   BadRequestException,
   Optional,
+  Logger,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
+import { StorageService } from './storage/storage.service';
+import { UPLOAD_ROOT } from './constants/file-upload.constants';
 import {
   and,
   count,
@@ -36,6 +41,7 @@ import {
   UpdateLibraryFolderDto,
 } from './dto/file-upload.dto';
 import { LibraryIndexingService } from './library-indexing.service';
+import { storageCleanupFailures } from '../../monitoring/utils/metrics';
 
 interface SaveFileRecordDto {
   teacherId: string;
@@ -48,6 +54,9 @@ interface SaveFileRecordDto {
   mimeType: string;
   sizeBytes: number;
   filePath: string;
+  storageKey?: string | null;
+  storageProvider?: string | null;
+  storageBucket?: string | null;
   subjectKey?: LibrarySubjectKeyDto;
   gradeLevel?: GradeLevelDto;
   teacherVisible?: boolean;
@@ -69,11 +78,15 @@ interface RequestUser {
 
 @Injectable()
 export class FileUploadService {
+  private readonly logger = new Logger(FileUploadService.name);
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
     @Optional()
     private readonly libraryIndexingService?: LibraryIndexingService,
+    @Optional()
+    private readonly storageService?: StorageService,
   ) {}
 
   private get db() {
@@ -438,6 +451,54 @@ export class FileUploadService {
       }
     }
 
+    let storageKey = dto.storageKey ?? null;
+    let storageProvider = dto.storageProvider ?? 'local';
+    let storageBucket = dto.storageBucket ?? null;
+    let filePath = dto.filePath;
+
+    if (!storageKey && filePath) {
+      storageKey = filePath
+        .replace(/^(\.\/)?uploads\//, '')
+        .replace(/^\.\//, '');
+    }
+
+    if (
+      this.storageService &&
+      this.storageService.driver === 's3' &&
+      storageProvider !== 's3'
+    ) {
+      const localAbsPath = path.resolve(filePath);
+      if (fs.existsSync(localAbsPath)) {
+        const buffer = await fs.promises.readFile(localAbsPath);
+        await this.storageService.putObject({
+          key: storageKey!,
+          body: buffer,
+          contentType: dto.mimeType,
+        });
+        try {
+          await fs.promises.unlink(localAbsPath);
+        } catch (error: unknown) {
+          storageCleanupFailures.inc({
+            component: 'file-upload-service',
+            operation: 'unlink-after-s3-migration',
+          });
+          this.logger.warn({
+            event: 'storage_cleanup_failed',
+            component: 'file-upload-service',
+            operation: 'unlink-after-s3-migration',
+            filePath: localAbsPath,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        storageProvider = 's3';
+        storageBucket =
+          process.env.STORAGE_BUCKET ||
+          process.env.AWS_S3_BUCKET ||
+          'nexora-uploads';
+        filePath = `s3://${storageKey}`;
+      }
+    }
+
     const [record] = await this.db
       .insert(uploadedFiles)
       .values({
@@ -450,7 +511,10 @@ export class FileUploadService {
         storedName: dto.storedName,
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
-        filePath: dto.filePath,
+        filePath,
+        storageKey,
+        storageProvider,
+        storageBucket,
         subjectKey: resolvedSubjectKey,
         gradeLevel: resolvedGradeLevel,
         teacherVisible: dto.teacherVisible ?? true,
@@ -1020,5 +1084,85 @@ export class FileUploadService {
       totalMB: parseFloat((totalBytes / 1_048_576).toFixed(2)),
       totalGB: parseFloat((totalBytes / 1_073_741_824).toFixed(4)),
     };
+  }
+
+  async migrateLocalFilesToStorage(): Promise<{
+    migrated: number;
+    errors: number;
+  }> {
+    const records = await this.db
+      .select()
+      .from(uploadedFiles)
+      .where(
+        or(
+          isNull(uploadedFiles.storageProvider),
+          eq(uploadedFiles.storageProvider, 'local'),
+        ),
+      );
+
+    let migrated = 0;
+    let errors = 0;
+
+    for (const record of records) {
+      try {
+        let storageKey = record.storageKey;
+        if (!storageKey && record.filePath) {
+          storageKey = record.filePath
+            .replace(/^(\.\/)?uploads\//, '')
+            .replace(/^\.\//, '');
+        }
+        if (!storageKey) continue;
+
+        const localAbsPath = path.resolve(record.filePath);
+        let existsOnDisk = fs.existsSync(localAbsPath);
+        let finalPath = localAbsPath;
+        if (!existsOnDisk) {
+          const fallbackPath = path.resolve(UPLOAD_ROOT, storageKey);
+          if (fs.existsSync(fallbackPath)) {
+            existsOnDisk = true;
+            finalPath = fallbackPath;
+          }
+        }
+
+        if (this.storageService && this.storageService.driver === 's3') {
+          if (!existsOnDisk) continue;
+          const buffer = await fs.promises.readFile(finalPath);
+          await this.storageService.putObject({
+            key: storageKey,
+            body: buffer,
+            contentType: record.mimeType,
+          });
+          const storageBucket =
+            process.env.STORAGE_BUCKET ||
+            process.env.AWS_S3_BUCKET ||
+            'nexora-uploads';
+          await this.db
+            .update(uploadedFiles)
+            .set({
+              storageKey,
+              storageProvider: 's3',
+              storageBucket,
+              filePath: `s3://${storageKey}`,
+            })
+            .where(eq(uploadedFiles.id, record.id));
+          migrated++;
+        } else {
+          if (!record.storageKey || !record.storageProvider) {
+            await this.db
+              .update(uploadedFiles)
+              .set({
+                storageKey,
+                storageProvider: 'local',
+              })
+              .where(eq(uploadedFiles.id, record.id));
+            migrated++;
+          }
+        }
+      } catch (err) {
+        errors++;
+      }
+    }
+
+    return { migrated, errors };
   }
 }

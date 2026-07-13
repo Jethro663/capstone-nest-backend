@@ -69,20 +69,31 @@ function createApiClient(): AxiosInstance {
         !String(originalRequest.url ?? "").includes("/auth/mobile/refresh")
       ) {
         originalRequest._retry = true;
+        const failedToken = accessToken;
 
         if (!refreshPromise) {
-          refreshPromise = refreshSession();
+          refreshPromise = refreshSession().finally(() => {
+            refreshPromise = null;
+          });
         }
 
-        const nextTokens = await refreshPromise;
-        refreshPromise = null;
+        try {
+          const nextTokens = await refreshPromise;
 
-        if (nextTokens?.accessToken) {
-          originalRequest.headers.Authorization = `Bearer ${nextTokens.accessToken}`;
-          return client(originalRequest);
+          if (nextTokens?.accessToken) {
+            originalRequest.headers.Authorization = `Bearer ${nextTokens.accessToken}`;
+            return client(originalRequest);
+          }
+
+          // Only clear if no concurrent refresh set a newer token
+          if (!accessToken || accessToken === failedToken) {
+            await clearAuthSession();
+          }
+        } catch {
+          if (!accessToken || accessToken === failedToken) {
+            await clearAuthSession();
+          }
         }
-
-        await clearAuthSession();
       }
 
       return Promise.reject(error);
@@ -106,7 +117,6 @@ export async function refreshSession() {
     const nextRefreshToken = response.data?.data?.refreshToken ?? null;
 
     if (!nextAccessToken || !nextRefreshToken) {
-      await clearAuthSession();
       return null;
     }
 
@@ -119,8 +129,11 @@ export async function refreshSession() {
       accessToken: nextAccessToken,
       refreshToken: nextRefreshToken,
     };
-  } catch {
-    await clearAuthSession();
+  } catch (err: any) {
+    // Only wipe session on definitive auth rejection, not transient errors
+    if (err?.response?.status === 401 || err?.response?.status === 403) {
+      await clearAuthSession();
+    }
     return null;
   }
 }

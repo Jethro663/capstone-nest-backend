@@ -3,7 +3,6 @@ import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-n
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
-import { extractionsApi } from "../api/services/extractions";
 import { fileUploadApi } from "../api/services/file-upload";
 import { modulesApi } from "../api/services/modules";
 import { lessonsApi } from "../api/services/lessons";
@@ -13,7 +12,6 @@ import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import type { StudentMasterlistItem, TeacherClassStudentOverview } from "../types/class";
-import type { Extraction, ExtractionSection } from "../types/extraction";
 import type { Assessment } from "../types/assessment";
 import type {
   AiGenerationJob,
@@ -47,15 +45,16 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
+export { TeacherAiDraftScreen } from "./TeacherAiDraftScreen";
+export { TeacherExtractionDetailScreen } from "./TeacherExtractionDetailScreen";
+
 type AssessmentAttemptProps = NativeStackScreenProps<RootStackParamList, "TeacherAssessmentAttemptResult">;
 type ClassAddStudentsProps = NativeStackScreenProps<RootStackParamList, "TeacherClassAddStudents">;
 type ClassStudentOverviewProps = NativeStackScreenProps<RootStackParamList, "TeacherClassStudentOverview">;
 type SectionAddStudentsProps = NativeStackScreenProps<RootStackParamList, "TeacherSectionAddStudents">;
 type SectionStudentProfileProps = NativeStackScreenProps<RootStackParamList, "TeacherSectionStudentProfile">;
-type ExtractionDetailProps = NativeStackScreenProps<RootStackParamList, "TeacherExtractionDetail">;
 type ModuleFileDetailProps = NativeStackScreenProps<RootStackParamList, "TeacherModuleFileDetail">;
 type LessonEditorProps = NativeStackScreenProps<RootStackParamList, "TeacherLessonEditor">;
-type AiDraftProps = NativeStackScreenProps<RootStackParamList, "TeacherAiDraft">;
 type InterventionDetailProps = NativeStackScreenProps<RootStackParamList, "TeacherInterventionDetail">;
 type InterventionWorkspaceContentProps = {
   navigation: NativeStackNavigationProp<RootStackParamList>;
@@ -516,121 +515,6 @@ export function TeacherSectionStudentProfileScreen({ navigation, route }: Sectio
   );
 }
 
-export function TeacherExtractionDetailScreen({ navigation, route }: ExtractionDetailProps) {
-  const { extractionId, classId } = route.params;
-  const [extraction, setExtraction] = useState<Extraction | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await extractionsApi.getById(extractionId);
-      setExtraction(data);
-      setTitle(data.structuredContent?.title || data.originalName || "Extraction");
-      setDescription(data.structuredContent?.description || "");
-    } catch (error) {
-      Alert.alert("Unable to load extraction", getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [extractionId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const save = async () => {
-    if (!extraction?.structuredContent) return;
-    try {
-      setSaving(true);
-      await extractionsApi.update(extraction.id, {
-        title,
-        description,
-        sections: extraction.structuredContent.sections,
-        mediaAssets: extraction.structuredContent.mediaAssets,
-      });
-      await load();
-    } catch (error) {
-      Alert.alert("Unable to save extraction", getErrorMessage(error));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const applyExtraction = async () => {
-    if (!extraction) return;
-    try {
-      await extractionsApi.apply(extraction.id);
-      Alert.alert("Extraction applied", "Generated lessons and assessments were applied.");
-      if (classId || extraction.classId) {
-        navigation.navigate("TeacherClassDetail", { classId: classId || extraction.classId, initialTab: "modules" });
-      }
-    } catch (error) {
-      Alert.alert("Unable to apply extraction", getErrorMessage(error));
-    }
-  };
-
-  const deleteExtraction = async () => {
-    if (!extraction) return;
-    try {
-      await extractionsApi.delete(extraction.id);
-      Alert.alert("Extraction deleted", "The extraction record was deleted.");
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert("Unable to delete extraction", getErrorMessage(error));
-    }
-  };
-
-  const sections = extraction?.structuredContent?.sections ?? [];
-
-  return (
-    <TeacherScreen
-      title={title || "Extraction detail"}
-      subtitle={`${stringifyStatus(extraction?.extractionStatus)} | ${extraction?.progressPercent ?? 0}%`}
-      icon="file-document-edit-outline"
-      showBackButton
-      onBackPress={() => navigation.goBack()}
-      refreshing={loading}
-      onRefresh={() => void load()}
-    >
-      <TeacherStats
-        items={[
-          { label: "Sections", value: sections.length, tone: "blue" },
-          { label: "Progress", value: `${extraction?.progressPercent ?? 0}%`, tone: "amber" },
-          { label: "Applied", value: extraction?.isApplied ? "Yes" : "No", tone: extraction?.isApplied ? "green" : "red" },
-        ]}
-      />
-      <TeacherPanel title="Review fields" subtitle="Edit extraction title and summary before applying generated content.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Title" value={title} onChangeText={setTitle} />
-          <TeacherInlineField label="Description" value={description} onChangeText={setDescription} multiline />
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <TeacherActionButton label={saving ? "Saving..." : "Save"} icon="content-save-outline" tone="blue" disabled={saving || !extraction?.structuredContent} onPress={() => void save()} />
-            <TeacherActionButton label="Apply extraction" icon="check-decagram-outline" tone="green" disabled={!extraction || extraction.qualityGate === "fail"} onPress={() => void applyExtraction()} />
-            <TeacherActionButton label="Delete" icon="trash-can-outline" tone="red" disabled={!extraction} onPress={() => void deleteExtraction()} />
-          </View>
-        </View>
-      </TeacherPanel>
-      <TeacherPanel title="Generated sections" subtitle="The mobile view keeps text-first review of generated lesson sections and assessment drafts.">
-        {sections.length ? (
-          sections.map((section: ExtractionSection, index) => (
-            <TeacherRow
-              key={`${section.title}-${index}`}
-              title={section.title || `Section ${index + 1}`}
-              subtitle={`${section.lessonBlocks?.length ?? 0} block(s) | ${section.assessmentDraft?.questions?.length ?? 0} question(s) | confidence ${section.confidence ?? "N/A"}`}
-            />
-          ))
-        ) : (
-          <TeacherEmpty title="No generated content" subtitle="Refresh after extraction processing completes." icon="file-search-outline" />
-        )}
-      </TeacherPanel>
-    </TeacherScreen>
-  );
-}
-
 export function TeacherModuleFileDetailScreen({ navigation, route }: ModuleFileDetailProps) {
   const { classId, moduleId, fileId, itemId } = route.params;
   const [fileName, setFileName] = useState("");
@@ -871,136 +755,6 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
         ) : (
           <TeacherEmpty title="No content blocks" subtitle="Add a text block to start mobile authoring." />
         )}
-      </TeacherPanel>
-    </TeacherScreen>
-  );
-}
-
-export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
-  const { classId } = route.params;
-  const [indexStatus, setIndexStatus] = useState<Awaited<ReturnType<typeof aiApi.getClassIndexStatus>> | null>(null);
-  const [job, setJob] = useState<Awaited<ReturnType<typeof aiApi.createQuizDraftJob>> | null>(null);
-  const [result, setResult] = useState<Awaited<ReturnType<typeof aiApi.getQuizDraftJobResult>> | null>(null);
-  const [title, setTitle] = useState("AI Draft Assessment");
-  const [questionCount, setQuestionCount] = useState("10");
-  const [teacherNote, setTeacherNote] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const loadStatus = useCallback(async () => {
-    try {
-      setLoading(true);
-      setIndexStatus(await aiApi.getClassIndexStatus(classId));
-    } catch (error) {
-      Alert.alert("Unable to load AI readiness", getErrorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [classId]);
-
-  useEffect(() => {
-    void loadStatus();
-  }, [loadStatus]);
-
-  const refreshJob = async () => {
-    if (!job?.id) return;
-    try {
-      const nextJob = await aiApi.getTeacherJobStatus(job.id);
-      setJob(nextJob);
-      if (nextJob.status === "completed") {
-        setResult(await aiApi.getQuizDraftJobResult(nextJob.id));
-      }
-    } catch (error) {
-      Alert.alert("Unable to refresh job", getErrorMessage(error));
-    }
-  };
-
-  const createJob = async () => {
-    try {
-      const created = await aiApi.createQuizDraftJob({
-        classId,
-        title: title.trim() || "AI Draft Assessment",
-        questionCount: Number.parseInt(questionCount, 10) || 10,
-        teacherNote: teacherNote.trim() || undefined,
-        useAllReadySources: true,
-      });
-      setJob(created);
-      setResult(null);
-    } catch (error) {
-      Alert.alert("Unable to create AI draft", getErrorMessage(error));
-    }
-  };
-
-  const deleteJob = async () => {
-    if (!job?.id) return;
-    try {
-      await aiApi.deleteTeacherJob(job.id);
-      setJob(null);
-      setResult(null);
-    } catch (error) {
-      Alert.alert("Unable to delete job", getErrorMessage(error));
-    }
-  };
-
-  const outputId = job?.outputId || result?.result?.outputId;
-  const questionTotal = result?.result?.structuredOutput?.questions?.length ?? 0;
-
-  return (
-    <TeacherScreen
-      title="AI Draft"
-      subtitle="Mobile source readiness, class reindexing, AI quiz draft jobs, and generated assessment handoff."
-      icon="robot-outline"
-      showBackButton
-      onBackPress={() => navigation.goBack()}
-      refreshing={loading}
-      onRefresh={() => void loadStatus()}
-    >
-      <TeacherStats
-        items={[
-          { label: "Ready lessons", value: indexStatus?.sourceSummary?.lessons?.ready ?? 0, tone: "green" },
-          { label: "Ready extracts", value: indexStatus?.sourceSummary?.extractions?.ready ?? 0, tone: "blue" },
-          { label: "Job", value: job?.status || "None", tone: job?.status === "failed" ? "red" : "amber" },
-          { label: "Questions", value: questionTotal, tone: "purple" },
-        ]}
-      />
-      <TeacherPanel title="Sources" subtitle="Readiness uses the same class index status and reindex endpoint as the web AI draft page.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <TeacherActionButton label="Refresh status" icon="refresh" tone="blue" onPress={() => void loadStatus()} />
-          <TeacherActionButton label="Reindex class" icon="database-refresh-outline" tone="amber" onPress={() => void aiApi.reindexClass(classId).then(loadStatus).catch((error) => Alert.alert("Unable to reindex", getErrorMessage(error)))} />
-        </View>
-      </TeacherPanel>
-      <TeacherPanel title="Generate quiz draft" subtitle="Creates a teacher AI quiz draft job from ready class sources.">
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Title" value={title} onChangeText={setTitle} />
-          <TeacherInlineField label="Question count" value={questionCount} onChangeText={setQuestionCount} />
-          <TeacherInlineField label="Teacher note" value={teacherNote} onChangeText={setTeacherNote} multiline />
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            <TeacherActionButton label="Generate" icon="auto-fix" tone="green" onPress={() => void createJob()} />
-            <TeacherActionButton label="Refresh job" icon="refresh" tone="blue" disabled={!job} onPress={() => void refreshJob()} />
-            <TeacherActionButton label="Delete job" icon="trash-can-outline" tone="red" disabled={!job} onPress={() => void deleteJob()} />
-          </View>
-        </View>
-      </TeacherPanel>
-      <TeacherPanel title="Generated result" subtitle={job?.message || job?.errorMessage || "Refresh after the job completes."}>
-        {result?.result?.structuredOutput ? (
-          <>
-            <TeacherRow title={result.result.structuredOutput.title || "AI draft"} subtitle={stripRichText(result.result.structuredOutput.description || "Generated quiz draft")} />
-            {(result.result.structuredOutput.questions ?? []).slice(0, 8).map((question, index) => (
-              <TeacherRow key={`${question.content}-${index}`} title={`Question ${index + 1}`} subtitle={stripRichText(question.content || "No question text")} />
-            ))}
-          </>
-        ) : (
-          <TeacherEmpty title="No result loaded" subtitle="Generate a job, then refresh until a result is available." icon="robot-confused-outline" />
-        )}
-        {outputId ? (
-          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-            <TeacherActionButton
-              label="Open generated assessment"
-              icon="clipboard-edit-outline"
-              tone="green"
-              onPress={() => navigation.navigate("TeacherAssessmentEditor", { assessmentId: outputId, classId })}
-            />
-          </View>
-        ) : null}
       </TeacherPanel>
     </TeacherScreen>
   );
