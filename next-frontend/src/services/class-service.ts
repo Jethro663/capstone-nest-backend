@@ -149,7 +149,7 @@ export const classService = {
     return data;
   },
 
-  /** PATCH /classes/:id/presentation â€” Teacher, Admin */
+  /** PATCH /classes/:id/presentation - Teacher, Admin */
   async updatePresentation(
     id: string,
     dto: Pick<UpdateClassDto, 'cardPreset' | 'cardBannerUrl'>,
@@ -158,7 +158,7 @@ export const classService = {
     return data;
   },
 
-  /** POST /classes/:id/banner â€” Teacher, Admin */
+  /** POST /classes/:id/banner - Teacher, Admin */
   async uploadBanner(
     id: string,
     file: File,

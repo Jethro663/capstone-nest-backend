@@ -65,7 +65,7 @@ export class RosterImportService {
     return trimmed.charAt(0).toUpperCase();
   }
 
-  // â”€â”€â”€ parseAndPreview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // parseAndPreview
 
   /**
    * Accepts a temporarily uploaded file (CSV or XLSX), parses it, validates each
@@ -365,7 +365,7 @@ export class RosterImportService {
     };
   }
 
-  // commitRoster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // commitRoster
 
   /**
    * Commits the approved roster:
@@ -377,7 +377,7 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
-    // â”€â”€ 1. Verify section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // 1. Verify section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
     });
@@ -398,7 +398,7 @@ export class RosterImportService {
       );
     }
 
-    // â”€â”€ 2. Validate dto.sectionId matches route param â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // 2. Validate dto.sectionId matches route param
     if (dto.sectionId !== sectionId) {
       throw new BadRequestException(
         `Payload sectionId "${dto.sectionId}" does not match route parameter "${sectionId}"`,
@@ -411,7 +411,7 @@ export class RosterImportService {
     const importHistoryRows: Array<typeof pendingRoster.$inferInsert> = [];
 
     await this.db.transaction(async (tx) => {
-      // â”€â”€ 3. Enroll registered students â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // 3. Enroll registered students
       if (dto.enrolledRows.length > 0) {
         const toEnrollIds = dto.enrolledRows.map((r) => r.userId);
 
@@ -506,7 +506,7 @@ export class RosterImportService {
         );
       }
 
-      // â”€â”€ 4. Auto-create accounts from pending rows and enroll them â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // 4. Auto-create accounts from pending rows and enroll them
       if (dto.pendingRows.length > 0) {
         const [cap] = await tx
           .select({ count: countDistinct(enrollments.studentId) })
@@ -692,7 +692,7 @@ export class RosterImportService {
     };
   }
 
-  // â”€â”€â”€ getPendingRoster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // getPendingRoster
 
   /**
    * Returns recent roster import history rows for a given section.
@@ -736,7 +736,7 @@ export class RosterImportService {
     }));
   }
 
-  // â”€â”€â”€ resolvePendingRow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // resolvePendingRow
 
   /**
    * Marks a pending roster row as resolved by linking it to a registered user.
@@ -757,7 +757,7 @@ export class RosterImportService {
         `Pending roster row "${pendingRowId}" not found`,
       );
 
-    // Access check â€” load section
+    // Access check - load section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, row.sectionId),
     });
@@ -804,7 +804,7 @@ export class RosterImportService {
     };
   }
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Helpers
 
   private async cleanupFile(filePath: string): Promise<void> {
     try {

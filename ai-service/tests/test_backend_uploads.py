@@ -1,4 +1,6 @@
+import asyncio
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -7,6 +9,21 @@ from app import backend_uploads
 
 
 class BackendUploadsTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncTearDown(self) -> None:
+        current_task = asyncio.current_task()
+        pending_tasks = [
+            task
+            for task in asyncio.all_tasks()
+            if task is not current_task and not task.done()
+        ]
+        non_main_threads = [
+            thread
+            for thread in threading.enumerate()
+            if thread is not threading.main_thread() and thread.is_alive()
+        ]
+        self.assertEqual([], pending_tasks, f"Pending asyncio tasks: {pending_tasks}")
+        self.assertEqual([], non_main_threads, f"Live worker threads: {non_main_threads}")
+
     async def test_materialize_backend_upload_resolves_uploads_prefixes_under_upload_dir(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             upload_root = Path(temp_dir)

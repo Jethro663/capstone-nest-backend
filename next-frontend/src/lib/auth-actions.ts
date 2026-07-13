@@ -20,10 +20,10 @@ type ActionErrorResult = {
   status?: number;
 };
 
-type ActionSuccessResult<T extends object = {}> = {
+type ActionSuccessResult = {
   success: true;
   message?: string;
-} & T;
+};
 
 function toActionError(
   error: unknown,

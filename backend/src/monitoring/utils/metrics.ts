@@ -22,6 +22,12 @@ export const httpRequestErrors = new client.Counter({
   labelNames: ['method', 'route', 'error_type'],
 });
 
+export const storageCleanupFailures = new client.Counter({
+  name: 'storage_cleanup_failures_total',
+  help: 'Local storage cleanup failures after a successful remote operation',
+  labelNames: ['component', 'operation'],
+});
+
 // DB Pool Metrics
 export const dbPoolTotal = new client.Gauge({
   name: 'db_pool_total_connections',

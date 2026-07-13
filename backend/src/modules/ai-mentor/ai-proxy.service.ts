@@ -230,7 +230,7 @@ export class AiProxyService {
    */
   private async runInternalTeacherJob(
     path: string,
-    meta: { bullmqJobId: string; attempt: number } | undefined,
+    meta: Record<string, unknown> | undefined,
     timeoutMs: number,
     jobLabel: string,
   ): Promise<unknown> {
@@ -318,6 +318,30 @@ export class AiProxyService {
       meta,
       this.internalInterventionTimeoutMs,
       `intervention job ${jobId}`,
+    );
+  }
+
+  async runInternalExtractionJob(
+    extractionId: string,
+    meta?: { bullmqJobId: string; attempt: number },
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/extractions/${extractionId}/run`,
+      meta,
+      this.extractionTimeoutMs,
+      `module extraction ${extractionId}`,
+    );
+  }
+
+  async markInternalExtractionFailed(
+    extractionId: string,
+    reason: string,
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/extractions/${extractionId}/fail`,
+      { reason },
+      this.chatTimeoutMs,
+      `module extraction compensation ${extractionId}`,
     );
   }
 }

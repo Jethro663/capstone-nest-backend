@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import os
 import tempfile
@@ -9,6 +8,7 @@ from urllib.parse import urlencode
 
 import httpx
 
+from .async_utils import run_in_managed_thread
 from .config import settings
 
 _upload_client: httpx.AsyncClient | None = None
@@ -22,6 +22,11 @@ def _get_upload_client() -> httpx.AsyncClient:
             follow_redirects=True,
         )
     return _upload_client
+
+
+async def _write_bytes_off_loop(path: Path, content: bytes) -> None:
+    """Write cached content off-loop and close the worker before returning."""
+    await run_in_managed_thread(path.write_bytes, content)
 
 
 def _candidate_paths(raw_path: str) -> list[str]:
@@ -99,6 +104,6 @@ async def materialize_backend_upload(raw_path: str) -> str | None:
         follow_redirects=True,
     )
     response.raise_for_status()
-    await asyncio.to_thread(cached_path.write_bytes, response.content)
+    await _write_bytes_off_loop(cached_path, response.content)
 
     return str(cached_path)

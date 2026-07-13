@@ -413,7 +413,7 @@ describe('FileUploadController', () => {
   });
 
   // =========================================================================
-  // retryIndex â€” POST /files/:id/index/retry
+  // retryIndex - POST /files/:id/index/retry
   // =========================================================================
 
   describe('retryIndex', () => {

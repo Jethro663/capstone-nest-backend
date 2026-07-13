@@ -7,6 +7,6 @@ contactPoints:
       - uid: nexora-email-01
         type: email
         settings:
-          addresses: ${GRAFANA_ALERT_EMAIL:-ops@localhost}
+          addresses: ${GRAFANA_ALERT_EMAIL}
           singleAddress: false
         disableResolveMessage: false

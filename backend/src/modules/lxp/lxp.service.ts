@@ -69,6 +69,7 @@ import {
   UpdateSystemEvaluationCampaignStatusDto,
 } from './dto/lxp.dto';
 import { AuditService } from '../audit/audit.service';
+import { SystemEvaluationService } from './system-evaluation.service';
 
 const INTERVENTION_THRESHOLD = 74;
 const PATH_REGENERATION_SCORE_THRESHOLD = 60;
@@ -256,6 +257,7 @@ export class LxpService {
     private readonly notificationsService: NotificationsService,
     private readonly notificationsGateway: NotificationsGateway,
     private readonly auditService: AuditService,
+    private readonly systemEvaluationService: SystemEvaluationService,
   ) {}
 
   private get db() {
@@ -272,20 +274,6 @@ export class LxpService {
       throw new BadRequestException('Unsupported evaluation form type.');
     }
     return definition;
-  }
-
-  private normalizeDateRange(startsAt: string, endsAt: string) {
-    const start = new Date(startsAt);
-    const end = new Date(endsAt);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      throw new BadRequestException('Campaign dates must be valid ISO dates.');
-    }
-    if (start >= end) {
-      throw new BadRequestException(
-        'Campaign end date must be after start date.',
-      );
-    }
-    return { start, end };
   }
 
   private normalizeSystemEvaluationQuestionRatings(
@@ -405,93 +393,6 @@ export class LxpService {
       submittedAt: row.submittedAt ?? null,
       questions: definition.questions,
     };
-  }
-
-  private async resolveSystemEvaluationRespondents(input: {
-    audienceRole: SystemEvaluationAudienceRole;
-    classId?: string | null;
-  }) {
-    if (input.classId) {
-      if (input.audienceRole === 'teacher') {
-        const cls = await this.db.query.classes.findFirst({
-          where: eq(classes.id, input.classId),
-          columns: { teacherId: true },
-        });
-        return cls?.teacherId ? [cls.teacherId] : [];
-      }
-
-      const enrollmentRows = await this.db.query.enrollments.findMany({
-        where: and(
-          eq(enrollments.classId, input.classId),
-          eq(enrollments.status, 'enrolled'),
-        ),
-        columns: { studentId: true },
-      });
-      return enrollmentRows.map((row) => row.studentId);
-    }
-
-    const roleRows = await this.db
-      .select({ userId: users.id })
-      .from(users)
-      .innerJoin(userRoles, eq(users.id, userRoles.userId))
-      .innerJoin(roles, eq(userRoles.roleId, roles.id))
-      .where(
-        and(eq(roles.name, input.audienceRole), eq(users.status, 'ACTIVE')),
-      );
-
-    return roleRows.map((row) => row.userId);
-  }
-
-  private async createAssignmentsForSystemCampaign(campaign: {
-    id: string;
-    audienceRole: SystemEvaluationAudienceRole;
-    classId?: string | null;
-  }) {
-    const respondentIds = Array.from(
-      new Set(
-        await this.resolveSystemEvaluationRespondents({
-          audienceRole: campaign.audienceRole,
-          classId: campaign.classId,
-        }),
-      ),
-    );
-
-    if (respondentIds.length === 0) return 0;
-
-    await this.db
-      .insert(systemEvaluationAssignments)
-      .values(
-        respondentIds.map((respondentId) => ({
-          campaignId: campaign.id,
-          respondentId,
-          respondentRole: campaign.audienceRole,
-          status: 'pending' as const,
-          updatedAt: new Date(),
-        })),
-      )
-      .onConflictDoNothing();
-
-    return respondentIds.length;
-  }
-
-  private async assertSystemEvaluationCampaignAccess(
-    campaign: {
-      createdBy: string;
-      classId?: string | null;
-    },
-    user: UserContext,
-  ) {
-    if (this.isAdmin(user.roles)) return;
-    if (!this.isTeacher(user.roles)) {
-      throw new ForbiddenException(
-        'Only teachers and admins can manage evaluation campaigns.',
-      );
-    }
-    if (campaign.createdBy === user.userId) return;
-    if (!campaign.classId) {
-      throw new ForbiddenException('You can only manage your own campaigns.');
-    }
-    await this.assertTeacherClassAccess(campaign.classId, user);
   }
 
   private getDefaultSchoolYear() {
@@ -5965,189 +5866,25 @@ export class LxpService {
     user: UserContext,
     dto: CreateSystemEvaluationCampaignDto,
   ) {
-    if (!this.isAdmin(user.roles) && !this.isTeacher(user.roles)) {
-      throw new ForbiddenException(
-        'Only teachers and admins can create evaluation campaigns.',
-      );
-    }
-
-    const definition = this.getSystemEvaluationDefinition(dto.formType);
-    if (!definition.audienceRoles.includes(dto.audienceRole)) {
-      throw new BadRequestException(
-        `${dto.formType} evaluations cannot target ${dto.audienceRole} respondents.`,
-      );
-    }
-    const { start, end } = this.normalizeDateRange(dto.startsAt, dto.endsAt);
-    const status = dto.status ?? 'draft';
-
-    if (!this.isAdmin(user.roles)) {
-      if (dto.audienceRole !== 'student' || !dto.classId) {
-        throw new ForbiddenException(
-          'Teachers can only launch class-scoped student campaigns.',
-        );
-      }
-      await this.assertTeacherClassAccess(dto.classId, user);
-    }
-
-    const [created] = await this.db
-      .insert(systemEvaluationCampaigns)
-      .values({
-        createdBy: user.userId,
-        formType: dto.formType,
-        targetModule: definition.targetModule,
-        audienceRole: dto.audienceRole,
-        classId: dto.classId ?? null,
-        title: dto.title.trim(),
-        startsAt: start,
-        endsAt: end,
-        status,
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    const assignmentCount =
-      status === 'active'
-        ? await this.createAssignmentsForSystemCampaign(created)
-        : 0;
-
-    await this.auditService.log({
-      actorId: user.userId,
-      action: 'lxp.system_evaluation_campaign.created',
-      targetType: 'system_evaluation_campaign',
-      targetId: created.id,
-      metadata: {
-        formType: created.formType,
-        audienceRole: created.audienceRole,
-        classId: created.classId,
-        status: created.status,
-        assignmentCount,
-      },
-    });
-
-    return { ...created, assignmentCount };
+    return this.systemEvaluationService.createCampaign(user, dto);
   }
-
   async listSystemEvaluationCampaigns(
     user: UserContext,
     query: ListSystemEvaluationCampaignsQueryDto = {},
   ) {
-    if (!this.isAdmin(user.roles) && !this.isTeacher(user.roles)) {
-      throw new ForbiddenException(
-        'Only teachers and admins can view evaluation campaigns.',
-      );
-    }
-
-    const conditions: SQL[] = [];
-    if (query.formType) {
-      conditions.push(eq(systemEvaluationCampaigns.formType, query.formType));
-    }
-    if (query.audienceRole) {
-      conditions.push(
-        eq(systemEvaluationCampaigns.audienceRole, query.audienceRole),
-      );
-    }
-    if (query.status) {
-      conditions.push(eq(systemEvaluationCampaigns.status, query.status));
-    }
-    if (query.classId) {
-      conditions.push(eq(systemEvaluationCampaigns.classId, query.classId));
-    }
-    if (!this.isAdmin(user.roles)) {
-      const teacherClasses = await this.db.query.classes.findMany({
-        where: eq(classes.teacherId, user.userId),
-        columns: { id: true },
-      });
-      const teacherClassIds = teacherClasses.map((cls) => cls.id);
-      conditions.push(
-        teacherClassIds.length > 0
-          ? or(
-              eq(systemEvaluationCampaigns.createdBy, user.userId),
-              inArray(systemEvaluationCampaigns.classId, teacherClassIds),
-            )!
-          : eq(systemEvaluationCampaigns.createdBy, user.userId),
-      );
-    }
-
-    const campaigns = await this.db.query.systemEvaluationCampaigns.findMany({
-      where: conditions.length > 0 ? and(...conditions) : undefined,
-      with: {
-        class: {
-          columns: { id: true, subjectName: true, subjectCode: true },
-          with: {
-            section: { columns: { id: true, name: true, gradeLevel: true } },
-          },
-        },
-        assignments: {
-          columns: { id: true, status: true },
-        },
-      },
-      orderBy: [desc(systemEvaluationCampaigns.createdAt)],
-    });
-
-    const mapped = campaigns.map((campaign) => ({
-      id: campaign.id,
-      formType: campaign.formType,
-      targetModule: campaign.targetModule,
-      audienceRole: campaign.audienceRole,
-      classId: campaign.classId,
-      class: campaign.class ?? null,
-      title: campaign.title,
-      startsAt: campaign.startsAt,
-      endsAt: campaign.endsAt,
-      status: campaign.status,
-      createdAt: campaign.createdAt,
-      updatedAt: campaign.updatedAt,
-      assignmentCount: campaign.assignments?.length ?? 0,
-      submittedCount:
-        campaign.assignments?.filter((item) => item.status === 'submitted')
-          .length ?? 0,
-    }));
-
-    return { campaigns: mapped, count: mapped.length };
+    return this.systemEvaluationService.listCampaigns(user, query);
   }
-
   async updateSystemEvaluationCampaignStatus(
     campaignId: string,
     user: UserContext,
     dto: UpdateSystemEvaluationCampaignStatusDto,
   ) {
-    const campaign = await this.db.query.systemEvaluationCampaigns.findFirst({
-      where: eq(systemEvaluationCampaigns.id, campaignId),
-      columns: {
-        id: true,
-        createdBy: true,
-        classId: true,
-        audienceRole: true,
-        status: true,
-      },
-    });
-    if (!campaign) {
-      throw new NotFoundException('System evaluation campaign not found.');
-    }
-    await this.assertSystemEvaluationCampaignAccess(campaign, user);
-
-    const [updated] = await this.db
-      .update(systemEvaluationCampaigns)
-      .set({ status: dto.status, updatedAt: new Date() })
-      .where(eq(systemEvaluationCampaigns.id, campaignId))
-      .returning();
-
-    const assignmentCount =
-      dto.status === 'active'
-        ? await this.createAssignmentsForSystemCampaign(updated)
-        : 0;
-
-    await this.auditService.log({
-      actorId: user.userId,
-      action: 'lxp.system_evaluation_campaign.status_updated',
-      targetType: 'system_evaluation_campaign',
-      targetId: campaignId,
-      metadata: { status: dto.status, assignmentCount },
-    });
-
-    return { ...updated, assignmentCount };
+    return this.systemEvaluationService.updateCampaignStatus(
+      campaignId,
+      user,
+      dto,
+    );
   }
-
   async submitSystemEvaluation(
     user: UserContext,
     dto: SubmitSystemEvaluationDto,

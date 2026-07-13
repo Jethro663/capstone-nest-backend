@@ -44,6 +44,7 @@ import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
+import { AssessmentAccessService } from './assessment-access.service';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -227,6 +228,7 @@ export class AssessmentsService {
     private readonly auditService: AuditService,
     private readonly ragIndexingService: RagIndexingService,
     private readonly assessmentNotificationDispatch: AssessmentNotificationDispatchService,
+    private readonly assessmentAccessService: AssessmentAccessService,
   ) {}
 
   private get db() {
@@ -1021,19 +1023,15 @@ export class AssessmentsService {
   }
 
   private getUserId(currentUser: any) {
-    const normalized = currentUser as CurrentUserLike | undefined;
-    return normalized?.userId ?? normalized?.id;
+    return this.assessmentAccessService.resolveActor(
+      currentUser as CurrentUserLike | undefined,
+    ).userId;
   }
 
   private getUserRole(currentUser: any): 'admin' | 'teacher' | 'student' {
-    const normalized = currentUser as CurrentUserLike | undefined;
-    const roles: string[] = Array.isArray(normalized?.roles)
-      ? normalized.roles
-      : [];
-
-    if (roles.includes('admin')) return 'admin';
-    if (roles.includes('teacher')) return 'teacher';
-    return 'student';
+    return this.assessmentAccessService.resolveActor(
+      currentUser as CurrentUserLike | undefined,
+    ).role;
   }
 
   private ensureAssessmentNotCoreTemplateAsset(
@@ -1152,34 +1150,18 @@ export class AssessmentsService {
     currentUser: any,
     message: string,
   ) {
-    const userId = this.getUserId(currentUser);
-    const role = this.getUserRole(currentUser);
-
-    if (!userId) {
-      throw new ForbiddenException('Invalid user context');
-    }
-
-    if (role === 'teacher' && classTeacherId && classTeacherId !== userId) {
-      throw new ForbiddenException(message);
-    }
-
-    return { userId, role };
+    return this.assessmentAccessService.assertTeacherClassOwnership(
+      classTeacherId,
+      currentUser as CurrentUserLike | undefined,
+      message,
+    );
   }
 
   private async ensureStudentEnrolled(classId: string, studentId: string) {
-    const enrollment = await this.db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.classId, classId),
-        eq(enrollments.studentId, studentId),
-      ),
-      columns: { classId: true, studentId: true },
-    });
-
-    if (!enrollment) {
-      throw new ForbiddenException(
-        'You are not enrolled in this class for this assessment',
-      );
-    }
+    await this.assessmentAccessService.ensureStudentEnrolled(
+      classId,
+      studentId,
+    );
   }
 
   private fileExtensionFromName(fileName: string) {

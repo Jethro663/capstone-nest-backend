@@ -35,11 +35,16 @@ const ADMIN_USER = {
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockProxy = { forward: jest.fn() };
+const mockProxy = {
+  forward: jest.fn(),
+  markInternalExtractionFailed: jest.fn(),
+};
 const mockQueueService = {
   enqueueLessonPlanJob: jest.fn(),
   enqueueQuizJob: jest.fn(),
   enqueueInterventionJob: jest.fn(),
+  enqueueExtractionJob: jest.fn(),
+  cancelQueuedExtractionJob: jest.fn(),
   cancelQueuedLessonPlanJob: jest.fn(),
   cancelQueuedTeacherAiJob: jest.fn(),
 };
@@ -80,6 +85,12 @@ describe('AiMentorController', () => {
     mockQueueService.enqueueQuizJob.mockResolvedValue(undefined);
     mockQueueService.enqueueInterventionJob.mockReset();
     mockQueueService.enqueueInterventionJob.mockResolvedValue(undefined);
+    mockQueueService.enqueueExtractionJob.mockReset();
+    mockQueueService.enqueueExtractionJob.mockResolvedValue(undefined);
+    mockQueueService.cancelQueuedExtractionJob.mockReset();
+    mockQueueService.cancelQueuedExtractionJob.mockResolvedValue(false);
+    mockProxy.markInternalExtractionFailed.mockReset();
+    mockProxy.markInternalExtractionFailed.mockResolvedValue(undefined);
     mockQueueService.cancelQueuedLessonPlanJob.mockReset();
     mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
     mockQueueService.cancelQueuedTeacherAiJob.mockReset();
@@ -340,7 +351,27 @@ describe('AiMentorController', () => {
           }),
         }),
       );
+      expect(mockQueueService.enqueueExtractionJob).toHaveBeenCalledWith(
+        EXTRACTION_ID,
+        TEACHER_USER.id,
+      );
       expect(result).toEqual({ extractionId: EXTRACTION_ID });
+    });
+
+    it('rejects an extraction response that cannot be queued', async () => {
+      mockProxy.forward.mockResolvedValue({ success: true, data: {} });
+
+      await expect(
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI extraction service returned an invalid queue response.',
+      );
+
+      expect(mockQueueService.enqueueExtractionJob).not.toHaveBeenCalled();
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
 
     it('should block teacher extraction for files outside owned classes', async () => {
@@ -372,6 +403,25 @@ describe('AiMentorController', () => {
         ),
       ).rejects.toThrow(
         'AI extraction queue is temporarily unavailable. Please retry shortly.',
+      );
+    });
+
+    it('marks a prepared extraction failed when BullMQ enqueue fails', async () => {
+      mockProxy.forward.mockResolvedValue({ extractionId: EXTRACTION_ID });
+      mockQueueService.enqueueExtractionJob.mockRejectedValue(
+        new Error('redis unavailable'),
+      );
+
+      await expect(
+        controller.extractModule(
+          { fileId: 'file-uuid-1' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow('AI extraction queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalExtractionFailed).toHaveBeenCalledWith(
+        EXTRACTION_ID,
+        'BullMQ enqueue failed: redis unavailable',
       );
     });
   });
@@ -838,6 +888,9 @@ describe('AiMentorController', () => {
           targetId: EXTRACTION_ID,
         }),
       );
+      expect(
+        mockQueueService.cancelQueuedExtractionJob,
+      ).toHaveBeenCalledWith(EXTRACTION_ID);
       expect(result).toMatchObject({ success: true });
     });
   });
@@ -875,7 +928,28 @@ describe('AiMentorController', () => {
           }),
         }),
       );
+      expect(mockQueueService.enqueueExtractionJob).toHaveBeenCalledWith(
+        'retry-extraction-1',
+        TEACHER_USER.id,
+      );
       expect(result).toMatchObject({ success: true });
+    });
+
+    it('rejects a retry response that cannot be queued', async () => {
+      mockProxy.forward.mockResolvedValue({ success: true, data: {} });
+
+      await expect(
+        controller.retryExtraction(
+          EXTRACTION_ID,
+          { extractionStyle: 'clean' } as any,
+          TEACHER_USER,
+        ),
+      ).rejects.toThrow(
+        'AI extraction service returned an invalid retry response.',
+      );
+
+      expect(mockQueueService.enqueueExtractionJob).not.toHaveBeenCalled();
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
   });
 

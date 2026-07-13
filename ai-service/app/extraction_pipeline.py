@@ -22,6 +22,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .async_utils import run_in_managed_thread
 from .backend_uploads import materialize_backend_upload
 from .config import settings
 from .content_sanitizer import (
@@ -2036,6 +2037,7 @@ async def run_extraction(
     *,
     target_section_count: int = 4,
     extraction_style: str = "clean",
+    raise_on_failure: bool = False,
 ) -> None:
     extraction_style = _normalize_extraction_style(extraction_style)
     try:
@@ -2074,7 +2076,7 @@ async def run_extraction(
                 raise ValueError(
                     "Scanned PDF detected, but vision extraction is unavailable. Upload a text-based PDF or start the vision model."
                 )
-            vision_images = await asyncio.to_thread(_render_pdf_pages_to_images, doc)
+            vision_images = await run_in_managed_thread(_render_pdf_pages_to_images, doc)
             doc.close()
             if not vision_images:
                 raise ValueError("Scanned PDF detected, but no renderable pages were available for vision extraction.")
@@ -2379,3 +2381,5 @@ async def run_extraction(
                 "progress_percent": 0,
             },
         )
+        if raise_on_failure:
+            raise

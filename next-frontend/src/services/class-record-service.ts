@@ -99,7 +99,7 @@ export const classRecordService = {
     return data;
   },
 
-  /** POST /class-record/:id/reopen â€” Teacher, Admin */
+  /** POST /class-record/:id/reopen - Teacher, Admin */
   async reopen(id: string): Promise<{ success: boolean; data: ClassRecord }> {
     const { data } = await api.post(`/class-record/${id}/reopen`);
     return data;

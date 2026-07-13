@@ -8,6 +8,7 @@ import { PerformanceEventsListener } from './listeners/performance-events.listen
 import { PerformanceRecomputeQueueService } from './performance-recompute-queue.service';
 import { PerformanceRecomputeProcessor } from './performance-recompute.processor';
 import { AuditModule } from '../audit/audit.module';
+import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 
 @Module({
   imports: [
@@ -21,10 +22,15 @@ import { AuditModule } from '../audit/audit.module';
   controllers: [PerformanceController],
   providers: [
     PerformanceService,
+    PerformanceSnapshotReadService,
     PerformanceEventsListener,
     PerformanceRecomputeQueueService,
     PerformanceRecomputeProcessor,
   ],
-  exports: [PerformanceService, PerformanceRecomputeQueueService],
+  exports: [
+    PerformanceService,
+    PerformanceSnapshotReadService,
+    PerformanceRecomputeQueueService,
+  ],
 })
 export class PerformanceModule {}

@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   classRecords,
@@ -798,30 +798,28 @@ export class ClassRecordService {
       }
     }
 
-    const results = await Promise.all(
-      dto.scores.map(async (entry) => {
-        const [score] = await this.db
-          .insert(classRecordScores)
-          .values({
-            classRecordItemId: itemId,
-            studentId: entry.studentId,
-            score: entry.score.toString(),
-            updatedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: [
-              classRecordScores.classRecordItemId,
-              classRecordScores.studentId,
-            ],
-            set: {
-              score: entry.score.toString(),
-              updatedAt: new Date(),
-            },
-          })
-          .returning();
-        return score;
-      }),
-    );
+    const updatedAt = new Date();
+    const results = await this.db
+      .insert(classRecordScores)
+      .values(
+        dto.scores.map((entry) => ({
+          classRecordItemId: itemId,
+          studentId: entry.studentId,
+          score: entry.score.toString(),
+          updatedAt,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          classRecordScores.classRecordItemId,
+          classRecordScores.studentId,
+        ],
+        set: {
+          score: sql`excluded.score`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      })
+      .returning();
 
     this.eventEmitter.emit(
       ClassRecordScoresUpdatedEvent.eventName,
@@ -1110,16 +1108,21 @@ export class ClassRecordService {
 
     const classIds = sectionClasses.map((c) => c.id);
 
-    const results = await Promise.all(
-      classIds.map(async (classId) => {
-        const records = await this.db.query.classRecords.findMany({
-          where: eq(classRecords.classId, classId),
-          with: { finalGrades: true },
-          orderBy: (g, { asc }) => [asc(g.gradingPeriod)],
-        });
-        return { classId, classRecords: records };
-      }),
+    const records = await this.db.query.classRecords.findMany({
+      where: inArray(classRecords.classId, classIds),
+      with: { finalGrades: true },
+      orderBy: (g, { asc }) => [asc(g.gradingPeriod)],
+    });
+    const recordsByClassId = new Map(
+      classIds.map((classId) => [classId, [] as typeof records]),
     );
+    for (const record of records) {
+      recordsByClassId.get(record.classId)?.push(record);
+    }
+    const results = classIds.map((classId) => ({
+      classId,
+      classRecords: recordsByClassId.get(classId) ?? [],
+    }));
 
     return {
       sectionId,

@@ -1,6 +1,22 @@
 #!/bin/sh
 set -e
 
+# Docker named volumes retain their original ownership and can mask the
+# node-owned directory baked into the image. Repair a mismatched volume once,
+# then run every database and application process as the unprivileged user.
+if [ "$(id -u)" = "0" ]; then
+  if [ -d /app/uploads ]; then
+    node_owner="$(id -u node):$(id -g node)"
+    uploads_owner="$(stat -c '%u:%g' /app/uploads)"
+    if [ "$uploads_owner" != "$node_owner" ]; then
+      echo "==> Reconciling upload volume ownership for the node user..."
+      chown -R node:node /app/uploads
+    fi
+  fi
+
+  exec su-exec node "$0" "$@"
+fi
+
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "ERROR: DATABASE_URL is not set. Aborting startup."
   exit 1

@@ -1,5 +1,5 @@
 services:
-  # â”€â”€ PostgreSQL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # PostgreSQL
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -9,8 +9,6 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set it in --env-file .env.compose)}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${POSTGRES_HOST_PORT:-55432}:5432" # Exposed for local debugging; defaults to 55432 to avoid host Postgres conflicts
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d capstone"]
       interval: 5s
@@ -20,12 +18,10 @@ services:
     networks:
       - lms-network
 
-  # â”€â”€ Redis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Redis
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "${REDIS_HOST_PORT:-6379}:6379" # Exposed for local backend development
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -35,9 +31,10 @@ services:
     networks:
       - lms-network
 
-  # â”€â”€ Ollama (AI Service) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Ollama (AI runtime)
   ollama:
-    image: ollama/ollama:latest
+    # Pinned after validating the configured model-pull/readiness contract.
+    image: ollama/ollama:0.31.1
     restart: unless-stopped
     entrypoint:
       - /bin/sh
@@ -78,7 +75,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "models=$$(ollama list | awk 'NR > 1 { print $$1 }'); echo \"$$models\" | grep -Fxq \"$$OLLAMA_TEXT_MODEL\" && echo \"$$models\" | grep -Fxq \"$$OLLAMA_VISION_MODEL\" && echo \"$$models\" | grep -Fxq \"$$OLLAMA_EMBED_MODEL\"",
+          "ollama show \"$$OLLAMA_TEXT_MODEL\" >/dev/null && ollama show \"$$OLLAMA_VISION_MODEL\" >/dev/null && ollama show \"$$OLLAMA_EMBED_MODEL\" >/dev/null",
         ]
       interval: 15s
       timeout: 10s
@@ -87,7 +84,7 @@ services:
     networks:
       - lms-network
 
-  # â”€â”€ NestJS Backend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # NestJS backend
   backend:
     build:
       context: ./backend
@@ -103,9 +100,9 @@ services:
       JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required (set it in --env-file .env.compose)}"
       OTP_PEPPER: "${OTP_PEPPER:?OTP_PEPPER is required (set it in --env-file .env.compose)}"
       AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in --env-file .env.compose)}"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
       OTEL_SERVICE_NAME: "nexora-backend"
-      LOKI_HOST: "http://loki:3100"
+      LOKI_HOST: "${LOKI_HOST:-}"
       RUN_DB_MIGRATIONS: ${RUN_DB_MIGRATIONS:-true}
       RUN_DB_SEED: ${RUN_DB_SEED:-false}
     volumes:
@@ -128,7 +125,7 @@ services:
     networks:
       - lms-network
 
-  # â”€â”€ Python AI Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Python AI service
   ai-service:
     build:
       context: ./ai-service
@@ -140,8 +137,6 @@ services:
       DATABASE_URL: "${AI_DATABASE_URL:?AI_DATABASE_URL is required (set it in --env-file .env.compose)}"
       AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in --env-file .env.compose)}"
       BACKEND_INTERNAL_URL: "http://backend:3000"
-    ports:
-      - "${AI_SERVICE_PORT:-8000}:8000"
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
@@ -162,7 +157,7 @@ services:
     networks:
       - lms-network
 
-  # â”€â”€ Next.js Frontend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Next.js frontend
   frontend:
     build:
       context: ./next-frontend
@@ -182,8 +177,9 @@ services:
     networks:
       - lms-network
 
-  # Ã¢â€â‚¬Ã¢â€â‚¬ Monitoring Stack Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  # Observability stack (opt-in profile)
   prometheus:
+    profiles: [observability]
     image: prom/prometheus:v2.54.1
     restart: unless-stopped
     command:
@@ -204,16 +200,23 @@ services:
       - lms-network
 
   blackbox-exporter:
+    profiles: [observability]
     image: prom/blackbox-exporter:v0.25.0
     restart: unless-stopped
     command:
       - --config.file=/etc/blackbox_exporter/config.yml
     volumes:
       - ./monitoring/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9115/-/healthy"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
     networks:
       - lms-network
 
   loki:
+    profiles: [observability]
     image: grafana/loki:3.2.1
     restart: unless-stopped
     command: ["-config.file=/etc/loki/local-config.yaml"]
@@ -222,10 +225,17 @@ services:
       - loki_data:/loki
     ports:
       - "${LOKI_PORT:-3100}:3100"
+    healthcheck:
+      test: ["CMD", "/busybox/wget", "-qO-", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
     networks:
       - lms-network
 
   tempo:
+    profiles: [observability]
     image: grafana/tempo:2.6.1
     restart: unless-stopped
     user: "0"
@@ -236,38 +246,56 @@ services:
     ports:
       - "${TEMPO_PORT:-3200}:3200"
       - "${TEMPO_OTLP_HTTP_PORT:-4318}:4318"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
     networks:
       - lms-network
 
   grafana:
-    image: grafana/grafana:11.2.2
+    profiles: [observability]
+    image: grafana/grafana:11.6.16
     restart: unless-stopped
     environment:
-      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-admin12345}"
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required for the observability profile}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required for the observability profile}"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      # Alert rules are provisioned with the stack, but delivery is opt-in so a
+      # local environment without SMTP does not continuously emit failed sends.
+      GF_UNIFIED_ALERTING_ENABLED: "${GRAFANA_ALERTING_ENABLED:-false}"
       GF_SMTP_ENABLED: "${GF_SMTP_ENABLED:-false}"
       GF_SMTP_HOST: "${GF_SMTP_HOST:-}"
       GF_SMTP_USER: "${GF_SMTP_USER:-}"
       GF_SMTP_PASSWORD: "${GF_SMTP_PASSWORD:-}"
       GF_SMTP_FROM_ADDRESS: "${GF_SMTP_FROM_ADDRESS:-alerts@nexora.local}"
+      GRAFANA_ALERT_EMAIL: "${GRAFANA_ALERT_EMAIL:-ops@example.invalid}"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     ports:
       - "${GRAFANA_PORT:-3002}:3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 20s
     depends_on:
       prometheus:
-        condition: service_started
+        condition: service_healthy
       loki:
-        condition: service_started
+        condition: service_healthy
       tempo:
-        condition: service_started
+        condition: service_healthy
     networks:
       - lms-network
 
   promtail:
+    profiles: [observability]
     image: grafana/promtail:3.2.1
     restart: unless-stopped
     command: ["-config.file=/etc/promtail/config.yml"]
@@ -276,33 +304,49 @@ services:
       - promtail_positions:/run/promtail
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9080/ready"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
     depends_on:
       loki:
-        condition: service_started
+        condition: service_healthy
     networks:
       - lms-network
 
   node-exporter:
+    profiles: [observability]
     image: prom/node-exporter:v1.8.2
     restart: unless-stopped
     command:
       - --path.procfs=/host/proc
       - --path.sysfs=/host/sys
       - --path.rootfs=/rootfs
-      - --collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/rootfs:ro
+      - /run/udev/data:/run/udev/data:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9100/metrics"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
     networks:
       - lms-network
 
   cadvisor:
-    image: ghcr.io/google/cadvisor:v0.53.0
+    profiles: [observability]
+    image: ghcr.io/google/cadvisor:v0.60.5
     restart: unless-stopped
     command:
       - --docker_only=true
       - --housekeeping_interval=10s
+    devices:
+      - /dev/kmsg:/dev/kmsg
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro

@@ -5,6 +5,7 @@ import { DatabaseService } from '../../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { AuditService } from '../audit/audit.service';
+import { SystemEvaluationService } from './system-evaluation.service';
 
 describe('LxpService', () => {
   let service: LxpService;
@@ -71,6 +72,7 @@ describe('LxpService', () => {
       providers: [
         LxpService,
         { provide: DatabaseService, useValue: { db: mockDb } },
+        SystemEvaluationService,
         { provide: NotificationsService, useValue: mockNotificationsService },
         { provide: NotificationsGateway, useValue: mockNotificationsGateway },
         { provide: AuditService, useValue: mockAuditService },

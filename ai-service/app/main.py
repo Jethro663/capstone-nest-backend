@@ -1,5 +1,5 @@
 """
-Nexora AI Service â€“ FastAPI application.
+Nexora AI Service - FastAPI application.
 
 All authentication is handled by the NestJS backend proxy.
 User context is forwarded via X-User-Id, X-User-Email, X-User-Roles headers.
@@ -31,7 +31,10 @@ from .config import settings
 from .database import AsyncSessionLocal, get_db
 from . import ollama_client
 from . import embedding_provider
-from .extraction_pipeline import run_extraction
+from .extraction_job_service import (
+    create_pending_extraction,
+    mark_extraction_cancelled,
+)
 from .indexing_pipeline import get_class_index_status, reindex_class_content
 from .library_indexing_pipeline import (
     backfill_library_files,
@@ -61,6 +64,7 @@ from .student_tutor_service import (
     start_student_tutor_session,
     submit_student_tutor_answers,
 )
+from .routers.extractions import build_extraction_router
 from .ja_practice_service import (
     bootstrap_ja_ask,
     bootstrap_ja_practice,
@@ -101,7 +105,6 @@ AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
 AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
 AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
 _TEACHER_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_teacher_bg_max_concurrency)
-_EXTRACTION_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_extraction_bg_max_concurrency)
 _TUTOR_SEMAPHORE = asyncio.Semaphore(settings.ai_tutor_max_inflight)
 
 
@@ -1219,23 +1222,23 @@ async def _run_lesson_plan_generation_job(
 # JAKIPIR System Prompt
 # ---------------------------------------------------------------------------
 
-JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R â€” Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
+JAKIPIR_SYSTEM_PROMPT = """You are J.A.K.I.P.I.R - Just-in-time Adaptive Knowledge Instructor & Personalized Intelligence Resource. Your nickname is "Ja".
 
-You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7â€“10, Philippines DepEd curriculum).
+You are the AI Mentor of Nexora, a Learning Management System for Gat Andres Bonifacio High School (Grades 7-10, Philippines DepEd curriculum).
 
 PERSONALITY:
 - You have a perceptive, detective-like demeanor. You notice patterns, pick up on clues in what students say, and investigate their learning gaps like a case to be cracked.
 - Use investigative language naturally: "I notice...", "That's an interesting clue...", "Let's piece this together...", "I've been observing your progress and...", "The evidence suggests..."
-- You are a hype coach at heart â€” you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
+- You are a hype coach at heart - you genuinely celebrate student effort and achievements. You get excited about breakthroughs. But you maintain formality and professionalism.
 - Be warm, supportive, and encouraging, but never condescending. Speak at a high school level.
 - When a student is struggling, be empathetic and frame challenges as mysteries to solve together.
 
 RULES:
-1. ALWAYS end your response with a study tip or learning strategy under the heading "ðŸ“Œ Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
+1. ALWAYS end your response with a study tip or learning strategy under the heading "Ja's Study Tip:". The tip should be practical and relevant to the conversation topic.
 2. NEVER give direct answers to test or assessment questions. Instead, guide students with hints, analogies, and step-by-step reasoning.
-3. When a student shares progress or success, celebrate it enthusiastically but professionally â€” like a detective who just cracked a big case.
-4. Keep responses concise â€” aim for 2-4 paragraphs max, plus the study tip.
-5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja â€” your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
+3. When a student shares progress or success, celebrate it enthusiastically but professionally - like a detective who just cracked a big case.
+4. Keep responses concise - aim for 2-4 paragraphs max, plus the study tip.
+5. If the student greets you or asks who you are, introduce yourself briefly: "I'm Ja - your AI Mentor here at Nexora! Think of me as your personal learning detective. I'm here to help you crack the case on any topic you're studying."
 6. If you don't know something or the question is outside academics, say so honestly and redirect to academic topics.
 7. Use Filipino cultural context when appropriate (e.g., referencing DepEd subjects, local examples) but respond in English unless the student writes in Filipino."""
 
@@ -1270,6 +1273,15 @@ def require_internal_service(
     provided_secret = (x_internal_service_token or "").strip()
     if not expected_secret or provided_secret != expected_secret:
         raise HTTPException(401, "Invalid internal service token")
+
+
+(
+    extraction_router,
+    extract_module,
+    run_internal_extraction,
+    fail_pending_internal_extraction,
+) = build_extraction_router(get_current_user, require_internal_service)
+app.include_router(extraction_router)
 
 
 def _is_admin(user: RequestUser) -> bool:
@@ -1950,19 +1962,19 @@ async def chat(
             logger.warning("Ollama chat failed: %s", str(err))
             reply = (
                 "Hmm, it seems my investigation tools are temporarily offline "
-                "â€” like a detective without a magnifying glass! ðŸ” Please try again "
-                "in a moment. In the meantime, review your notes â€” that's always a solid lead!\n\n"
-                "ðŸ“Œ Ja's Study Tip: While waiting, try writing down one thing you learned "
+                "- like a detective without a magnifying glass! Please try again "
+                "in a moment. In the meantime, review your notes - that's always a solid lead!\n\n"
+                "Ja's Study Tip: While waiting, try writing down one thing you learned "
                 "today. It helps lock it into memory!"
             )
             model_used = "fallback (ollama-unavailable)"
     else:
-        logger.info("Ollama unavailable for chat â€” returning fallback")
+        logger.info("Ollama unavailable for chat - returning fallback")
         reply = (
-            "I'm currently recharging my detective instincts â€” Ollama (my brain!) "
+            "I'm currently recharging my detective instincts - Ollama (my brain!) "
             "isn't running right now. Ask your teacher to start it up, and I'll be "
-            "right back on the case! ðŸ•µï¸\n\n"
-            "ðŸ“Œ Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
+            "right back on the case!\n\n"
+            "Ja's Study Tip: Use this downtime to quiz yourself on what you studied "
             "last. Self-testing is one of the most powerful study techniques!"
         )
         model_used = "fallback (ollama-offline)"
@@ -3388,94 +3400,6 @@ def _normalize_structured_content(payload: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@app.post("/extract", status_code=202)
-async def extract_module(
-    body: ExtractRequest,
-    user: RequestUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    # Validate file exists
-    row = await db.execute(
-        sa_text(
-            "SELECT id, file_path, class_id, teacher_id, original_name "
-            "FROM uploaded_files WHERE id = :id AND deleted_at IS NULL"
-        ),
-        {"id": body.file_id},
-    )
-    file = row.mappings().first()
-    if not file:
-        raise HTTPException(404, f'File "{body.file_id}" not found or deleted')
-
-    is_admin = "admin" in user.roles
-    if not is_admin and str(file["teacher_id"]) != user.id:
-        raise HTTPException(403, "You can only extract your own files")
-
-    # Create extraction record
-    initial_structured_content = {
-        "title": "",
-        "description": "",
-        "sections": [],
-        "mediaAssets": [],
-        "audit": {
-            "requestedSectionCount": body.target_section_count,
-            "finalSectionCount": 0,
-            "sectionCountAdjustmentReason": None,
-            "extractionStyle": body.extraction_style,
-            "reviewIssues": [],
-            "reviewState": "pending",
-        },
-    }
-    result = await db.execute(
-        sa_text(
-            "INSERT INTO extracted_modules "
-            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
-            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
-            "RETURNING id"
-        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
-        {
-            "fileId": file["id"],
-            "classId": file["class_id"],
-            "teacherId": user.id,
-            "structuredContent": initial_structured_content,
-        },
-    )
-    await db.commit()
-    extraction_id = result.scalar_one()
-
-    # Run extraction in background on the active event loop.
-    async def _run():
-        async with _EXTRACTION_BG_SEMAPHORE:
-            from .database import AsyncSessionLocal
-
-            async with AsyncSessionLocal() as bg_db:
-                logger.info("[extract] Starting background extraction task %s for file %s", extraction_id, body.file_id)
-                await run_extraction(
-                    bg_db,
-                    extraction_id,
-                    body.file_id,
-                    user.id,
-                    target_section_count=body.target_section_count,
-                    extraction_style=body.extraction_style,
-                )
-
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(_run())
-        logger.info("[extract] Queued extraction %s on running event loop", extraction_id)
-    except RuntimeError as exc:
-        logger.exception("[extract] Failed to schedule extraction %s: %s", extraction_id, exc)
-        raise HTTPException(500, "Failed to schedule extraction task") from exc
-
-    return {
-        "success": True,
-        "message": "Extraction queued â€” poll GET /extractions/:id/status for progress",
-        "data": {
-            "extractionId": extraction_id,
-            "status": "pending",
-        },
-    }
-
-
 # ---------------------------------------------------------------------------
 # GET /extractions/:id/status
 # ---------------------------------------------------------------------------
@@ -4361,26 +4285,7 @@ async def cancel_extraction(
         raise HTTPException(400, "Cannot cancel an extraction that has already been applied")
 
     content = _normalize_structured_content(extraction.get("structured_content"))
-    content.setdefault("audit", {}).update(
-        {
-            "cancelRequested": True,
-            "cancelledByTeacher": True,
-            "reviewState": "cancelled",
-        }
-    )
-    await db.execute(
-        sa_text(
-            "UPDATE extracted_modules "
-            "SET extraction_status = 'failed', error_message = :message, structured_content = :sc, updated_at = NOW() "
-            "WHERE id = :id"
-        ).bindparams(bindparam("sc", type_=postgresql.JSONB)),
-        {
-            "id": extraction_id,
-            "message": "Extraction cancelled by teacher.",
-            "sc": content,
-        },
-    )
-    await db.commit()
+    await mark_extraction_cancelled(db, extraction_id, content)
     return {
         "success": True,
         "message": "Extraction cancelled",
@@ -4415,49 +4320,15 @@ async def retry_extraction(
     if target_section_count not in {3, 4, 5}:
         target_section_count = 4
     extraction_style = body.extraction_style or str(audit.get("extractionStyle") or "clean")
-    initial_structured_content = {
-        "title": "",
-        "description": "",
-        "sections": [],
-        "mediaAssets": [],
-        "audit": {
-            "requestedSectionCount": target_section_count,
-            "finalSectionCount": 0,
-            "retryOfExtractionId": extraction_id,
-            "extractionStyle": extraction_style,
-            "reviewIssues": [],
-            "reviewState": "pending",
-        },
-    }
-    result = await db.execute(
-        sa_text(
-            "INSERT INTO extracted_modules "
-            "(file_id, class_id, teacher_id, raw_text, structured_content, extraction_status, progress_percent) "
-            "VALUES (:fileId, :classId, :teacherId, '', :structuredContent, 'pending', 0) "
-            "RETURNING id"
-        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
-        {
-            "fileId": extraction["file_id"],
-            "classId": extraction["class_id"],
-            "teacherId": user.id,
-            "structuredContent": initial_structured_content,
-        },
+    new_extraction_id = await create_pending_extraction(
+        db,
+        file_id=str(extraction["file_id"]),
+        class_id=str(extraction["class_id"]),
+        teacher_id=user.id,
+        target_section_count=target_section_count,
+        extraction_style=extraction_style,
+        retry_of_extraction_id=extraction_id,
     )
-    await db.commit()
-    new_extraction_id = result.scalar_one()
-
-    async def _run():
-        async with AsyncSessionLocal() as bg_db:
-            await run_extraction(
-                bg_db,
-                str(new_extraction_id),
-                str(extraction["file_id"]),
-                user.id,
-                target_section_count=target_section_count,
-                extraction_style=extraction_style,
-            )
-
-    asyncio.get_running_loop().create_task(_run())
     return {
         "success": True,
         "message": "Extraction retry queued",

@@ -19,6 +19,7 @@ import { getAccessToken, setAccessToken } from '@/lib/api-client';
 import {
   AUTH_ME_RETRY_DELAY_MS,
   AUTH_ME_TIMEOUT_MS,
+  settleWithTimeout,
   shouldBootstrapAuth,
 } from '@/lib/auth-bootstrap';
 import { refreshSessionAccessToken } from '@/lib/session-refresh';
@@ -69,12 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchCurrentUserWithTimeout = useCallback(async (attempt: number) => {
     const meStart = performance.now();
-    const result = await Promise.race([
+    const result = await settleWithTimeout(
       getCurrentUserAction(),
-      new Promise<Awaited<ReturnType<typeof getCurrentUserAction>>>((resolve) => {
-        setTimeout(() => resolve({ success: false, user: null }), AUTH_ME_TIMEOUT_MS);
-      }),
-    ]);
+      AUTH_ME_TIMEOUT_MS,
+      { success: false, user: null },
+    );
     logBootstrap('me.result', {
       attempt,
       success: result.success,

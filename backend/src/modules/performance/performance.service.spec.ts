@@ -6,6 +6,7 @@ import { PerformanceService } from './performance.service';
 import { DatabaseService } from '../../database/database.service';
 import { PerformanceStatusChangedEvent } from '../../common/events';
 import { AuditService } from '../audit/audit.service';
+import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 
 function buildMockDb() {
   const subqueryWhere = jest.fn((condition: any) => {
@@ -91,11 +92,15 @@ describe('PerformanceService', () => {
   let db: any;
   let eventEmitter: EventEmitter2;
   let auditService: { log: jest.Mock };
+  let snapshotReadService: { findForStudentClasses: jest.Mock };
 
   beforeEach(async () => {
     db = buildMockDb();
     eventEmitter = { emit: jest.fn() } as any;
     auditService = { log: jest.fn().mockResolvedValue(undefined) };
+    snapshotReadService = {
+      findForStudentClasses: jest.fn().mockResolvedValue(new Map()),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -103,6 +108,10 @@ describe('PerformanceService', () => {
         { provide: DatabaseService, useValue: { db } },
         { provide: EventEmitter2, useValue: eventEmitter },
         { provide: AuditService, useValue: auditService },
+        {
+          provide: PerformanceSnapshotReadService,
+          useValue: snapshotReadService,
+        },
       ],
     }).compile();
 
@@ -176,6 +185,45 @@ describe('PerformanceService', () => {
     expect(result.isAtRisk).toBe(true);
     expect(result.thresholdApplied).toBe(74);
     expect(db.insert).toHaveBeenCalledTimes(1);
+  });
+
+  it('recomputeStudent starts independent component reads in parallel', async () => {
+    let resolveAssessment!: (value: { average: number; sampleSize: number }) => void;
+    let resolveClassRecord!: (value: { average: number; sampleSize: number }) => void;
+    const assessmentPromise = new Promise<{
+      average: number;
+      sampleSize: number;
+    }>((resolve) => {
+      resolveAssessment = resolve;
+    });
+    const classRecordPromise = new Promise<{
+      average: number;
+      sampleSize: number;
+    }>((resolve) => {
+      resolveClassRecord = resolve;
+    });
+    const assessmentRead = jest
+      .spyOn(service as any, 'getAssessmentComponent')
+      .mockReturnValue(assessmentPromise);
+    const classRecordRead = jest
+      .spyOn(service as any, 'getClassRecordComponent')
+      .mockReturnValue(classRecordPromise);
+    jest.spyOn(service as any, 'upsertSnapshot').mockResolvedValue({
+      studentId: 'student-1',
+      classId: 'class-1',
+    });
+
+    const recompute = service.recomputeStudent('class-1', 'student-1');
+    await Promise.resolve();
+    const bothReadsStarted =
+      assessmentRead.mock.calls.length === 1 &&
+      classRecordRead.mock.calls.length === 1;
+
+    resolveAssessment({ average: 80, sampleSize: 2 });
+    resolveClassRecord({ average: 70, sampleSize: 3 });
+    await recompute;
+
+    expect(bothReadsStarted).toBe(true);
   });
 
   it('recomputeStudent should emit performance.status.changed when status flips', async () => {
@@ -748,9 +796,9 @@ describe('PerformanceService', () => {
       },
     ]);
 
-    jest
-      .spyOn(service, 'recomputeStudent')
-      .mockResolvedValueOnce({
+    snapshotReadService.findForStudentClasses.mockResolvedValue(
+      new Map([
+        ['class-1', {
         id: 's1',
         studentId: 'student-1',
         classId: 'class-1',
@@ -763,8 +811,8 @@ describe('PerformanceService', () => {
         isAtRisk: false,
         thresholdApplied: 74,
         lastComputedAt: new Date(),
-      } as any)
-      .mockResolvedValueOnce({
+      }],
+        ['class-2', {
         id: 's2',
         studentId: 'student-1',
         classId: 'class-2',
@@ -777,13 +825,82 @@ describe('PerformanceService', () => {
         isAtRisk: true,
         thresholdApplied: 74,
         lastComputedAt: new Date(),
-      } as any);
+      }],
+      ]),
+    );
+    const recomputeStudent = jest.spyOn(service, 'recomputeStudent');
 
     const result = await service.getStudentOwnSummary('student-1');
 
+    expect(snapshotReadService.findForStudentClasses).toHaveBeenCalledWith(
+      'student-1',
+      ['class-1', 'class-2'],
+    );
+    expect(recomputeStudent).not.toHaveBeenCalled();
     expect(result.classes).toHaveLength(2);
     expect(result.overall.atRiskClasses).toBe(1);
     expect(result.overall.averageBlendedScore).toBe(71.5);
+  });
+
+  it('getStudentOwnSummary recomputes only missing snapshots', async () => {
+    db.query.users.findFirst.mockResolvedValue({
+      id: 'student-1',
+      firstName: 'Alice',
+      lastName: 'Lee',
+      email: 'alice@test.com',
+    });
+    db.query.enrollments.findMany.mockResolvedValue([
+      { classId: 'class-1', class: null },
+      { classId: 'class-2', class: null },
+    ]);
+    snapshotReadService.findForStudentClasses.mockResolvedValue(
+      new Map([
+        [
+          'class-1',
+          {
+            id: 's1',
+            studentId: 'student-1',
+            classId: 'class-1',
+            assessmentAverage: 80,
+            classRecordAverage: 80,
+            blendedScore: 80,
+            assessmentSampleSize: 1,
+            classRecordSampleSize: 1,
+            hasData: true,
+            isAtRisk: false,
+            thresholdApplied: 74,
+            lastComputedAt: new Date(),
+          },
+        ],
+      ]),
+    );
+    const recomputeStudent = jest.spyOn(service, 'recomputeStudent').mockResolvedValue({
+      id: 's2',
+      studentId: 'student-1',
+      classId: 'class-2',
+      assessmentAverage: 60,
+      classRecordAverage: 60,
+      blendedScore: 60,
+      assessmentSampleSize: 1,
+      classRecordSampleSize: 1,
+      hasData: true,
+      isAtRisk: true,
+      thresholdApplied: 74,
+      lastComputedAt: new Date(),
+    });
+
+    const result = await service.getStudentOwnSummary('student-1');
+
+    expect(recomputeStudent).toHaveBeenCalledTimes(1);
+    expect(recomputeStudent).toHaveBeenCalledWith(
+      'class-2',
+      'student-1',
+      'view_refresh',
+    );
+    expect(result.classes.map((entry) => entry.classId)).toEqual([
+      'class-1',
+      'class-2',
+    ]);
   });
 
   it('getAdminAnalytics should return analytics datasets and log audit with uuid target', async () => {

@@ -52,7 +52,7 @@ export class InternalUploadsController {
     const normalizedSlashes = normalized.replace(/\\/g, '/');
     const uploadRelativePath = normalizedSlashes
       .replace(/^\.\//, '')
-      .replace(new RegExp(`^${rootDirName}\/`), '')
+      .replace(new RegExp(`^${rootDirName}/`), '')
       .replace(/^uploads\//, '');
     const absolutePath = path.isAbsolute(normalized)
       ? path.resolve(normalized)

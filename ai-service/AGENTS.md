@@ -20,13 +20,16 @@ Scope: `ai-service/` only.
 
 ## Owning Paths
 
-- `app/main.py`: FastAPI routes and readiness endpoints
+- `app/main.py`: stable ASGI entrypoint, shared lifecycle, most legacy routes, and readiness endpoints
+- `app/routers/*`: extracted route owners; queue-bound extraction routes live in `app/routers/extractions.py`
 - `app/config.py`: env-backed settings, URLs, models, timeouts, secrets
 - `app/ollama_client.py`: model/task routing
 - `app/mentor_service.py`, `app/student_tutor_service.py`: tutoring flows
 - `app/quiz_generation_service.py`, `app/remedial_service.py`: teacher AI generation flows
 - `app/retrieval_service.py`, `app/indexing_pipeline.py`, `app/embedding_provider.py`: retrieval/indexing
-- `app/extraction_pipeline.py` and related helpers: extraction flow
+- `app/extraction_job_service.py`: pending/failure/cancellation extraction state transitions
+- `app/extraction_pipeline.py` and related helpers: extraction execution
+- `app/async_utils.py`: managed off-loop work and shutdown-safe executor ownership
 
 ## Working Rules
 
@@ -37,11 +40,12 @@ Scope: `ai-service/` only.
 - Respect `RESP-1`: preserve the backend-compatible envelope.
 - Header contract with backend proxy is part of the API: `X-User-Id`, `X-User-Email`, `X-User-Roles`, optional `X-Internal-Service-Token`.
 - Use Serena first for symbol-aware service, route, and reference discovery before broad file reads.
+- `requirements.in` is the dependency input and `requirements.txt` is the generated, fully pinned runtime lock.
 
 ## Change Workflow
 
 1. Start in the owning service module.
-2. Wire route or schema changes through `app/main.py` and `app/schemas.py`.
+2. Wire route or schema changes through the owning `app/routers/*` module (or `app/main.py` for an unextracted route) and `app/schemas.py`.
 3. Keep backend proxy compatibility first: paths, headers, timeouts, and envelope shape.
 4. If DB reads or writes change, verify the backend schema contract before assuming new tables or columns exist.
 5. Keep task-specific model routing in `app/ollama_client.py`, not scattered across handlers.
@@ -52,6 +56,8 @@ Scope: `ai-service/` only.
 - Extraction apply flows and AI content generation must stay compatible with retrieval reindexing.
 - Shared-secret validation must stay compatible with `backend/src/modules/ai-mentor/ai-proxy.service.ts`.
 - `next-frontend` and `mobile` reach AI through backend routes, not directly.
+- Extraction preparation must not schedule untracked `asyncio.create_task` work; NestJS BullMQ owns execution/retry/cancellation.
+- Keep `app.main:app` as the stable ASGI import even when extracting routers.
 
 ## Verification
 

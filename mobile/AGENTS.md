@@ -32,9 +32,17 @@ This is the default mobile target for generic Nexora mobile work.
 - `src/types/*`: request/response/domain types
 - `src/theme/*` and `global.css`: visual tokens and utilities
 
+## Role Ownership
+
+- `student`: `StudentNavigator` owns the learner dashboard, coursework, assessment, notification, and profile flows.
+- `teacher`: `TeacherNavigator`, `teacher-route-manifest.ts`, and teacher screens own class, assessment, content, intervention, report, and profile flows.
+- `admin`: `RoleTabs` owns the current admin workspace tabs. Admin remains a supported mobile role even where its UX intentionally reuses shared role-workspace screens.
+- `resolveMobileRole` is the single role-precedence contract: admin, then teacher, then the student fallback.
+- `TeacherAiDraftScreen.tsx` and `TeacherExtractionDetailScreen.tsx` own the extracted teacher AI/extraction flows; `TeacherDeepParityScreens.tsx` preserves their compatibility exports.
+
 ## Working Rules
 
-- Auth gating lives in `AppNavigator`; preserve the student-focused flow.
+- Auth gating lives in `AppNavigator`; preserve student, teacher, and admin role resolution and their owned navigation flows.
 - Use `apiClient` for authenticated requests and `publicClient` for unauthenticated flows.
 - Tokens live in secure storage; do not assume web cookie behavior here.
 - Keep `src/types/*`, `src/api/services/*`, and screen expectations aligned with backend contracts.
@@ -43,11 +51,12 @@ This is the default mobile target for generic Nexora mobile work.
 
 ## Do Not Break
 
-- This app is currently student-scoped, not teacher/admin UX.
+- This is a multi-role app. Do not remove teacher/admin navigation merely because `mobile/` is the default generic mobile target.
 - Refresh depends on backend mobile auth endpoints.
 - `API_BASE_URL` fallback assumes backend port `3000` with `/api`.
 - Query invalidation must stay aligned with mutations or screens will stale.
 - The app reaches AI through backend contracts, not directly to `ai-service`.
+- Display-only XP, achievement, readiness, and duration projections must remain derived from real backend data and must not masquerade as official stored records.
 
 ## Verification
 
@@ -55,5 +64,5 @@ This is the default mobile target for generic Nexora mobile work.
 - Run `npm run test` for touched React Native logic and screen behavior that already has Jest coverage.
 - Run Expo after navigation, auth bootstrap, or API-config changes.
 - Prefer `npm run android:emulator` for Android-specific auth, storage, or deep-link issues; use `npm run android:emulator:clean` when port `8081` is wedged.
-- Verify login, refresh, logout, and one data-backed student flow after auth or API edits.
+- Verify login, refresh, logout, and one data-backed flow for every role affected by auth, API, or navigation edits.
 - Recheck route params and query invalidation after screen or mutation changes.

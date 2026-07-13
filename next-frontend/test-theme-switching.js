@@ -7,10 +7,10 @@
  * across all UI components in the Next.js frontend application.
  */
 
-console.log('ðŸ§ª Theme Consistency Test Guide\n');
+console.log('[Test] Theme Consistency Test Guide\n');
 console.log('--------------------------------\n');
 
-console.log('ðŸ“‹ Components Updated for Theme Awareness:\n');
+console.log('[Components] Updated for Theme Awareness:\n');
 
 const updatedComponents = [
   { name: 'Button', variants: ['student', 'studentOutline'], description: 'Primary and outline variants use theme variables' },
@@ -28,7 +28,7 @@ updatedComponents.forEach((component, index) => {
   console.log(`   Description: ${component.description}\n`);
 });
 
-console.log('ðŸŽ¯ Testing Instructions:\n');
+console.log('[Target] Testing Instructions:\n');
 
 console.log('1. Start the development server:');
 console.log('   npm run dev   OR   pnpm dev\n');
@@ -45,15 +45,15 @@ console.log('   - /dashboard/theme-test (if accessible)\n');
 console.log('4. Test each theme by clicking the theme switcher and observing:\n');
 
 const testPoints = [
-  'âœ… All buttons change color and hover states appropriately',
-  'âœ… Input fields adapt border and background colors',
-  'âœ… Cards show proper elevation and border changes',
-  'âœ… Select dropdowns match theme colors',
-  'âœ… Dialogs and popovers use theme-aware styling',
-  'âœ… Text areas match input field styling',
-  'âœ… Hover effects work consistently across themes',
-  'âœ… Focus states are theme-appropriate',
-  'âœ… Disabled states maintain theme consistency'
+  '[OK] All buttons change color and hover states appropriately',
+  '[OK] Input fields adapt border and background colors',
+  '[OK] Cards show proper elevation and border changes',
+  '[OK] Select dropdowns match theme colors',
+  '[OK] Dialogs and popovers use theme-aware styling',
+  '[OK] Text areas match input field styling',
+  '[OK] Hover effects work consistently across themes',
+  '[OK] Focus states are theme-appropriate',
+  '[OK] Disabled states maintain theme consistency'
 ];
 
 testPoints.forEach((point, index) => {
@@ -123,31 +123,31 @@ themes.forEach((theme, index) => {
   console.log(`   Expected: ${theme.expected}\n`);
 });
 
-console.log('ðŸ”§ Technical Implementation Details:\n');
+console.log('[Tools] Technical Implementation Details:\n');
 
-console.log('â€¢ Theme variables are defined in globals.css for each data-theme attribute');
-console.log('â€¢ Student components use CSS classes like .student-card, .student-input, etc.');
-console.log('â€¢ Radix UI components extended with variant props for theme awareness');
-console.log('â€¢ Theme provider sets data-theme on document.documentElement');
-console.log('â€¢ CSS-in-JS components use cn() utility for conditional class application\n');
+console.log('- Theme variables are defined in globals.css for each data-theme attribute');
+console.log('- Student components use CSS classes like .student-card, .student-input, etc.');
+console.log('- Radix UI components extended with variant props for theme awareness');
+console.log('- Theme provider sets data-theme on document.documentElement');
+console.log('- CSS-in-JS components use cn() utility for conditional class application\n');
 
-console.log('ðŸ“Š Expected Results:\n');
+console.log('[Results] Expected Results:\n');
 
 console.log('All components should respond to theme changes by:');
-console.log('â€¢ Updating background colors to match theme palette');
-console.log('â€¢ Changing border colors for proper contrast');
-console.log('â€¢ Adapting text colors for readability');
-console.log('â€¢ Maintaining consistent hover and focus states');
-console.log('â€¢ Preserving accessibility and contrast ratios\n');
+console.log('- Updating background colors to match theme palette');
+console.log('- Changing border colors for proper contrast');
+console.log('- Adapting text colors for readability');
+console.log('- Maintaining consistent hover and focus states');
+console.log('- Preserving accessibility and contrast ratios\n');
 
-console.log('âš ï¸  Known Limitations:\n');
+console.log('WARNING: Known Limitations:\n');
 
-console.log('â€¢ Badge component uses hardcoded colors for design consistency');
-console.log('â€¢ Some page components may still have hardcoded colors');
-console.log('â€¢ Third-party components may not support theme switching');
-console.log('â€¢ Custom CSS may need manual updates for full theme support\n');
+console.log('- Badge component uses hardcoded colors for design consistency');
+console.log('- Some page components may still have hardcoded colors');
+console.log('- Third-party components may not support theme switching');
+console.log('- Custom CSS may need manual updates for full theme support\n');
 
-console.log('ðŸš€ Next Steps:\n');
+console.log('[Next] Next Steps:\n');
 
 console.log('1. Test all components across different themes');
 console.log('2. Report any inconsistencies found');
@@ -155,5 +155,4 @@ console.log('3. Update remaining hardcoded colors in page components');
 console.log('4. Consider extending theme support to additional components');
 console.log('5. Add automated theme testing if needed\n');
 
-console.log('âœ¨ Happy Testing! âœ¨\n');
-
+console.log('Happy Testing!\n');

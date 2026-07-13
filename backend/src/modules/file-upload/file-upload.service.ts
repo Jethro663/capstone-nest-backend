@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
   Optional,
+  Logger,
 } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -40,6 +41,7 @@ import {
   UpdateLibraryFolderDto,
 } from './dto/file-upload.dto';
 import { LibraryIndexingService } from './library-indexing.service';
+import { storageCleanupFailures } from '../../monitoring/utils/metrics';
 
 interface SaveFileRecordDto {
   teacherId: string;
@@ -76,6 +78,8 @@ interface RequestUser {
 
 @Injectable()
 export class FileUploadService {
+  private readonly logger = new Logger(FileUploadService.name);
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
@@ -473,7 +477,19 @@ export class FileUploadService {
         });
         try {
           await fs.promises.unlink(localAbsPath);
-        } catch {}
+        } catch (error: unknown) {
+          storageCleanupFailures.inc({
+            component: 'file-upload-service',
+            operation: 'unlink-after-s3-migration',
+          });
+          this.logger.warn({
+            event: 'storage_cleanup_failed',
+            component: 'file-upload-service',
+            operation: 'unlink-after-s3-migration',
+            filePath: localAbsPath,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         storageProvider = 's3';
         storageBucket =
           process.env.STORAGE_BUCKET ||

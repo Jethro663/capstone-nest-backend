@@ -5,6 +5,17 @@ interface RefreshSessionOptions {
   timeout?: number;
 }
 
+function getHttpStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('response' in error)) {
+    return undefined;
+  }
+  const response = error.response;
+  if (!response || typeof response !== 'object' || !('status' in response)) {
+    return undefined;
+  }
+  return typeof response.status === 'number' ? response.status : undefined;
+}
+
 let sharedRefreshPromise: Promise<string | null> | null = null;
 
 export async function refreshSessionAccessToken(
@@ -31,11 +42,9 @@ export async function refreshSessionAccessToken(
         response.data?.accessToken ??
         null
       );
-    } catch (err: any) {
-      if (
-        err.response &&
-        (err.response.status === 401 || err.response.status === 403)
-      ) {
+    } catch (err: unknown) {
+      const status = getHttpStatus(err);
+      if (status === 401 || status === 403) {
         return null;
       }
       await new Promise((resolve) => setTimeout(resolve, 300));

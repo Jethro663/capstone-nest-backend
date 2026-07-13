@@ -16,6 +16,16 @@ const eslintConfig = defineConfig([
     "scripts/**",
     "test-theme-switching.js",
   ]),
+  {
+    files: [
+      "**/*.test.{js,jsx,ts,tsx}",
+      "**/*.spec.{js,jsx,ts,tsx}",
+      "tests/e2e/**/*.{js,jsx,ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

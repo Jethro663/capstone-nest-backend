@@ -6,6 +6,7 @@ import { LxpController } from './lxp.controller';
 import { LxpService } from './lxp.service';
 import { LxpPerformanceListener } from './listeners/lxp-performance.listener';
 import { AuditModule } from '../audit/audit.module';
+import { SystemEvaluationService } from './system-evaluation.service';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { AuditModule } from '../audit/audit.module';
     AuditModule,
   ],
   controllers: [LxpController],
-  providers: [LxpService, LxpPerformanceListener],
-  exports: [LxpService],
+  providers: [LxpService, SystemEvaluationService, LxpPerformanceListener],
+  exports: [LxpService, SystemEvaluationService],
 })
 export class LxpModule {}

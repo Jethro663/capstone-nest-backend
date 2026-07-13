@@ -1,341 +1,191 @@
-# Nexora LMS/LXP Monorepo
+# Nexora LMS/LXP
 
-Nexora is a learning management and learning experience platform for Gat Andres Bonifacio High School.
+Nexora is the multi-role learning management and learning experience platform for Gat Andres Bonifacio High School. This monorepo contains the authoritative backend, browser client, mobile client, internal AI service, local infrastructure, and observability configuration.
 
-This repository contains the full platform stack:
-- Backend API (NestJS + Drizzle + PostgreSQL)
-- Web app (Next.js App Router)
-- AI service (FastAPI with OpenRouter-primary production runtime and optional Ollama local fallback)
-- Mobile app target (Expo in `mobile/`)
+## Current status
 
-## Current Project Status (April 2026)
+As of July 13, 2026, the full Docker Compose topology has been rebuilt and verified with PostgreSQL, Redis, Ollama, the backend, the AI service, the frontend, and the complete observability profile running together. The current implementation and verification record is in [CURRENT_REPO_STATE.md](CURRENT_REPO_STATE.md).
 
-Based on the latest repo audit (`docs/NEXORA_AUDIT_2026-03-27.md`):
+The repository is an active release candidate, not a finished security certification. Known dependency and lint baselines are recorded explicitly so they can be reduced without unsafe major-version jumps.
 
-- Core LMS and LXP product surfaces are implemented (not placeholders).
-- Cross-platform verification is green on the main checks:
-  - `next-frontend`: lint passes (warnings only), tests pass, build passes
-  - `backend`: build passes
-  - `ai-service`: tests pass via `python scripts/run_tests.py`
-  - `mobile`: typecheck passes
-- Remaining work is mostly polish and alignment:
-  - lesson versioning depth
-  - stronger teacher-facing AI policy/UX surfacing
-  - some docs cleanup and frontend warnings
+## Architecture
 
-## Monorepo Structure
+```text
+Next.js web client ─┐
+                    ├──> NestJS API ──> PostgreSQL + pgvector
+Expo mobile client ─┘          │       Redis + BullMQ
+                               │
+                               └──> internal FastAPI AI service
+                                         │
+                                         ├──> Ollama (local Compose runtime)
+                                         └──> OpenAI-compatible cloud runtime (deployment option)
+```
 
-Top-level apps and services:
+The service boundaries are intentional:
 
-- `backend/` - NestJS 11 API, auth/RBAC, LMS domains, reporting, AI proxy, BullMQ orchestration
-- `next-frontend/` - Next.js 16 web client (App Router), role-based dashboards and workflows
-- `ai-service/` - FastAPI microservice for AI mentor, extraction, retrieval/indexing flows
-- `mobile/` - default Expo mobile target (student-scoped app)
+- `backend/` is the system authority for authentication, RBAC, API contracts, academic state, official records, audit events, and asynchronous job ownership.
+- `next-frontend/` and `mobile/` call backend `/api` contracts. They never call the AI service directly.
+- `ai-service/` performs tutoring, retrieval, extraction, and generation. It cannot act as the public authentication authority or directly mutate official grades.
+- Redis/BullMQ owns durable AI job orchestration. Long-running extraction work is not left as an untracked in-process task.
+- PostgreSQL is the shared persistence layer; pgvector supports retrieval/indexing data.
 
-Other notable folders:
+## Repository map
 
-- `docs/` - architecture, audits, deployment notes, testing references
-- `monitoring/` - Prometheus/Tempo config
+| Path | Responsibility |
+| --- | --- |
+| `backend/` | NestJS 11 API, Drizzle schema/migrations, BullMQ workers, WebSocket events |
+| `next-frontend/` | Next.js 16 and React 19 web app for student, teacher, and administrator roles |
+| `mobile/` | Expo 54 and React Native multi-role client |
+| `ai-service/` | Internal FastAPI AI runtime, extraction, retrieval, tutoring, and generation |
+| `monitoring/` | Prometheus, Grafana, Loki, Tempo, Promtail, and exporter configuration |
+| `load-tests/` | Explicit load-test tooling; never part of normal startup |
+| `docs/` | Current operating docs plus dated design, audit, and research records |
+| `.agents/` | Repo-owned Codex routing and workflow skills |
+| `openspec/` | OpenSpec change artifacts |
 
-## Architecture At A Glance
-
-- Backend is the system authority for auth, RBAC, academic records, and API contracts.
-- AI service is internal and accessed through backend-facing contracts.
-- LXP and AI flows are assistive and separated from official record mutation paths.
-- Mobile currently focuses on student experience and uses backend APIs.
+Each active application has a local `README.md` and `AGENTS.md`. The root `AGENTS.md` is the routing kernel for automated work.
 
 ## Prerequisites
 
-Install the following tools:
-
-- Node.js 20+ (recommended for current Next.js and workspace tooling)
-- npm 10+
-- Python 3.11+
-- Docker Desktop (for full-stack container run)
+- Docker Engine with Docker Compose v2+
+- Node.js 20.9+ and npm 10+
+- Python 3.12 for the supported AI-service test/runtime baseline
 - Git
 
-Optional for local non-Docker infra:
+PostgreSQL, Redis, and Ollama do not need host installations when Compose is used.
 
-- PostgreSQL 16+ (pgvector compatible)
-- Redis 7+
-- Ollama
+## Start the core stack
 
-## Quick Start (Docker Compose, Full Stack)
-
-From repository root:
+Create a local Compose environment and replace every `CHANGE_ME` value:
 
 ```bash
 cp .env.compose.example .env.compose
-docker compose --env-file .env.compose up --build
+docker compose --env-file .env.compose config --quiet
+docker compose --env-file .env.compose up -d --build --wait
 ```
 
-Services started by compose:
+The first start can take several minutes because Ollama downloads the configured text, vision, and embedding models. Subsequent starts reuse the named model volume.
 
-- PostgreSQL (`5432`)
-- Redis
-- Ollama (`11434`) with startup model pulls
-- AI service (internal, health on `/ready`)
-- Backend (`http://localhost:3000`)
-- Frontend (`http://localhost:3001`)
+Default host endpoints:
+
+| Surface | URL |
+| --- | --- |
+| Backend readiness | `http://localhost:3000/api/health/ready` |
+| Backend Swagger | `http://localhost:3000/api/docs` |
+| Frontend | `http://localhost:3001` |
+
+PostgreSQL, Redis, Ollama, and the AI service remain internal in the default topology.
 
 Useful checks:
 
 ```bash
-docker compose ps
-docker compose logs -f backend
-docker compose logs -f ai-service
-docker compose logs -f ollama
+docker compose --env-file .env.compose ps
+docker compose --env-file .env.compose logs --since 5m backend ai-service ollama
+curl --fail http://localhost:3000/api/health/ready
+curl --fail http://localhost:3001
 ```
 
-## Observability Stack
+## Start observability
 
-The root `docker compose` setup also provisions the monitoring stack under `monitoring/`:
+Set unique Grafana credentials in `.env.compose`. To export backend traces directly to Tempo, also set:
 
-- Prometheus for scrape and probe coverage
-- Loki for log storage
-- Tempo for traces
-- Grafana for dashboards, alerting, and the main operator entry point
-- Promtail for Docker log shipping
-- `node-exporter` and `cadvisor` for host/container metrics
-- `blackbox-exporter` for HTTP/TCP probes of services that are not scraped directly
-
-Primary entry point for operators:
-
-1. Copy the template env file: `cp .env.compose.example .env.compose`
-2. Start the stack: `docker compose --env-file .env.compose up -d --build`
-3. Open Grafana at `http://localhost:3002`
-4. Log in with the values from `.env.compose`:
-   - `GRAFANA_ADMIN_USER` = `admin`
-   - `GRAFANA_ADMIN_PASSWORD` = `admin12345`
-
-Relevant compose env variables:
-
-- `GRAFANA_PORT` - Grafana host port, default `3002`
-- `PROMETHEUS_PORT` - Prometheus host port, default `9090`
-- `LOKI_PORT` - Loki host port, default `3100`
-- `TEMPO_PORT` - Tempo host port, default `3200`
-- `TEMPO_OTLP_HTTP_PORT` - Tempo OTLP HTTP ingest port, default `4318`
-- `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` - Grafana login credentials
-- `FRONTEND_PORT` - frontend host port, default `3001`
-
-The full-stack verification on this worktree used a temporary `FRONTEND_PORT=3003` override because local port `3001` was already occupied. The repository default remains `3001`.
-
-Healthy startup looks like:
-
-- `docker compose --env-file .env.compose ps` shows backend and AI service healthy, Grafana running on `3002`, Prometheus on `9090`, Loki on `3100`, Tempo on `3200` and `4318`, and the infrastructure exporters up.
-- `http://localhost:9090/api/v1/targets` reports the critical jobs `up`, including `backend`, `ai-service`, `frontend`, `postgres`, `redis`, `ollama`, `prometheus`, `loki`, `cadvisor`, and `node-exporter`.
-- `http://localhost:3002` opens Grafana without provisioning errors in the logs.
-- `http://localhost:3000/api/metrics` returns backend metrics.
-- `docker compose exec ai-service curl -s http://localhost:8000/metrics` returns AI service metrics; the compose stack does not publish host port `8000`.
-- Loki queries return logs with `service_name=nexora-backend` labels.
-- Tempo `/ready` returns `200` after the initial warm-up period.
-
-### Compose Notes
-
-- Root compose env template: `.env.compose.example`
-- Runtime compose env file (local, untracked): `.env.compose`
-- Backend compose env file: `backend/.env.docker`
-- AI service compose env file: `ai-service/.env.docker`
-- Required vars are fail-fast (`docker compose config` errors if missing):
-  - `POSTGRES_PASSWORD`
-  - `BACKEND_DATABASE_URL`
-  - `AI_DATABASE_URL`
-  - `JWT_SECRET`
-  - `JWT_REFRESH_SECRET`
-  - `OTP_PEPPER`
-  - `AI_SERVICE_SHARED_SECRET`
-- `BACKEND_DATABASE_URL` and `AI_DATABASE_URL` should use URL-encoded passwords.
-- Ollama pulls configured models at startup:
-  - text: `qwen2.5:3b`
-  - vision: `gemma3:4b`
-  - embedding: `nomic-embed-text`
-- Backend no longer waits for `ai-service` health before starting; DB and Redis gate backend readiness.
-
-## Docker First Run and Reset Run
-
-### First Run (portable, deterministic)
-
-```bash
-cp .env.compose.example .env.compose
-# edit .env.compose and set strong secrets + aligned DB URLs
-docker compose --env-file .env.compose config
-docker compose --env-file .env.compose up --build
+```env
+OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+LOKI_HOST=http://loki:3100
 ```
 
-### Safe Reset When DB Password Changes
-
-If PostgreSQL was already initialized and you changed `POSTGRES_PASSWORD`, the old password remains in the `postgres_data` volume. Reset intentionally:
+Then start the opt-in profile:
 
 ```bash
-docker compose down
-docker volume rm capstone-nest-react-lms_postgres_data
-docker compose --env-file .env.compose up --build
+docker compose --env-file .env.compose --profile observability up -d --build --wait
 ```
 
-### Troubleshooting Matrix
+Operator endpoints:
 
-| Symptom | Likely Cause | Fix |
-|---|---|---|
-| Grafana loads but dashboards or alerting look empty | Provisioning files are missing, the stack is using an outdated `.env.compose`, or Grafana has not finished booting | Re-run `docker compose --env-file .env.compose up -d grafana` and check `docker compose --env-file .env.compose logs --since 5m grafana` for provisioning errors. |
-| Promtail starts but logs do not appear in Loki | Docker socket access, container metadata discovery, or Loki connectivity is failing | Check `docker compose --env-file .env.compose logs --since 5m promtail`, confirm the Docker socket mount is present, and verify Loki is reachable on `http://localhost:3100`. |
-| Tempo is slow to report ready | Tempo is still warming up or the temp storage directory is not writable | Wait a short period and re-check `http://localhost:3200/ready`; if it never turns green, inspect `docker compose --env-file .env.compose logs --since 5m tempo`. |
-| Prometheus targets are `down` | A scrape or probe job is failing, or the target service is not healthy yet | Open `http://localhost:9090/api/v1/targets`, identify the failing job, and inspect the corresponding service logs. |
-| `password authentication failed for user "postgres"` in backend logs | `POSTGRES_PASSWORD` and DB URL credentials are out of sync, or `postgres_data` volume was initialized with an older password | Verify `POSTGRES_PASSWORD`, `BACKEND_DATABASE_URL`, `AI_DATABASE_URL` all match. If password was changed after first run, reset `postgres_data` using the commands above. |
-| Backend healthy but `ai-service` unhealthy | Ollama/model pull delay, missing model, or AI-only failure | Backend should still serve core LMS APIs. Check `docker compose logs -f ollama` and `docker compose logs -f ai-service`; AI endpoints recover once Ollama/model pulls are ready. |
-| Stack appears stuck while starting | Ollama is pulling models on first run, which can take several minutes | Wait for Ollama pull completion in logs. You can still verify backend independently via `http://localhost:3000/api/health/ready`. |
+| Service | URL |
+| --- | --- |
+| Grafana | `http://localhost:3002` |
+| Prometheus | `http://localhost:9090` |
+| Loki readiness | `http://localhost:3100/ready` |
+| Tempo readiness | `http://localhost:3200/ready` |
 
-## Local Development (Service-by-Service)
+Grafana alert evaluation and email delivery are disabled by default. To enable them, set `GRAFANA_ALERTING_ENABLED=true`, `GF_SMTP_ENABLED=true`, and valid `GF_SMTP_*` values. This prevents a normal local stack from repeatedly attempting impossible email deliveries.
 
-### 1. Backend
+See [monitoring/README.md](monitoring/README.md) for target checks, collector privileges, and host-specific notes.
+
+## Expose diagnostic ports
+
+The debug override publishes PostgreSQL, Redis, and the AI service only when explicitly requested:
 
 ```bash
+docker compose \
+  --env-file .env.compose \
+  -f docker-compose.yml \
+  -f docker-compose.debug.yml \
+  up -d --build --wait
+```
+
+Do not use the debug override as a production topology.
+
+## Data and reset safety
+
+Named volumes preserve the database, uploads, Ollama models, and observability state. Changing `POSTGRES_PASSWORD` does not rewrite an already initialized database volume.
+
+Only for a disposable local environment, remove all project volumes with:
+
+```bash
+docker compose --env-file .env.compose down --volumes
+```
+
+That command permanently removes local database and upload data. A normal restart should use `docker compose down` or `docker compose stop` without `--volumes`.
+
+## Local application workflows
+
+- Backend: [backend/README.md](backend/README.md)
+- Web: [next-frontend/README.md](next-frontend/README.md)
+- AI service: [ai-service/README.md](ai-service/README.md)
+- Mobile: [mobile/README.md](mobile/README.md)
+
+## Verification matrix
+
+```bash
+# Backend
 cd backend
-npm install
-
-# Configure environment
-cp .env.example .env
-
-# Generate/apply schema changes when needed
-npx drizzle-kit generate:pg
-npx drizzle-kit push:pg
-
-# Optional seed
-node seed-database.js
-
-# Start dev server
-npm run start:dev
-```
-
-Backend docs:
-
-- Swagger: `http://localhost:3000/api/docs`
-- Readiness: `http://localhost:3000/api/health/ready`
-
-### 2. Web Frontend (Next.js)
-
-```bash
-cd next-frontend
-npm install
-npm run dev
-```
-
-Default dev URL: `http://localhost:3001`
-
-### 3. AI Service
-
-```bash
-cd ai-service
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# Linux/macOS
-# source .venv/bin/activate
-
-pip install -r requirements.txt
-cp .env.example .env.local
-
-# Optional for local Ollama development only
-ollama pull nomic-embed-text
-
-uvicorn app.main:app --reload --port 8000
-```
-
-AI readiness endpoint: `http://localhost:8000/ready`
-
-Production note:
-
-- Railway/production should treat OpenRouter as the primary AI runtime.
-- Local Ollama is optional and mainly for non-cloud development.
-- Backend and ai-service must share the same `AI_SERVICE_SHARED_SECRET`.
-
-### 4. Mobile (Default Target)
-
-```bash
-cd mobile
-npm install
-npm run start
-```
-
-Other commands:
-
-```bash
-npm run android
-npm run ios
-npm run web
-npm run typecheck
-```
-
-## Quality And Verification Commands
-
-From each app folder:
-
-### Backend
-
-```bash
-npm run build
-npm run test
-npm run test:e2e
-```
-
-### Next Frontend
-
-```bash
 npm run lint
-npm run test
 npm run build
-```
+npm run test -- --runInBand
+npm run test:e2e -- --runInBand
 
-### AI Service
+# Web
+cd ../next-frontend
+npm run lint
+npm run test -- --runInBand --detectOpenHandles
+npm run build
 
-```bash
-python scripts/run_tests.py
-./.venv/bin/python -m unittest tests.test_config tests.test_cloud_fallback
-./.venv/bin/python -c "from app.main import app; print(app.title)"
-```
+# AI service
+cd ../ai-service
+.venv/bin/python scripts/run_tests.py
 
-For startup-path verification, run `uvicorn app.main:app --reload --port 8000` and check `GET /ready` rather than relying on import success alone.
-
-### Mobile
-
-```bash
+# Mobile
+cd ../mobile
 npm run typecheck
+npm run test -- --runInBand
+
+# Compose definitions
+cd ..
+docker compose --env-file .env.compose config --quiet
+docker compose --env-file .env.compose --profile observability config --quiet
+docker compose --env-file .env.compose -f docker-compose.yml -f docker-compose.debug.yml config --quiet
 ```
 
-## Environment Files
+CI runs these surfaces independently with explicit time budgets. Railway deployment is triggered only from a successful CI run on `developement` and checks out the CI-tested SHA.
 
-Primary templates:
+## Documentation policy
 
-- `.env.compose.example`
-- `backend/.env.example`
-- `ai-service/.env.example`
-- `mobile/.env.example`
+Start at [docs/README.md](docs/README.md). Dated audits and completed implementation plans are retained as evidence, but they are snapshots and must not override the root README, the current state document, code, migrations, or subsystem guidance.
 
-Container-specific env files used by compose:
-
-- `backend/.env.docker`
-- `ai-service/.env.docker`
-
-Important: never commit real secrets or production credentials.
-
-## Product And Progress References
-
-- Project kernel and routing rules: `AGENTS.md`
-- Backend setup detail: `backend/BACKEND_SETUP.md`
-- Frontend auth milestone summary: `next-frontend/PHASE_1_COMPLETE.md`
-- Latest implementation audit: `docs/NEXORA_AUDIT_2026-03-27.md`
-- Architecture and deployment docs: `docs/`
-
-## Known Gaps / Next Improvements
-
-Current high-value follow-ups from the latest audit:
-
-1. Strengthen lesson versioning surface.
-2. Make teacher-controlled AI scope more explicit in product UX/docs.
-3. Resolve remaining frontend lint warnings.
-4. Continue doc alignment with current implementation terminology.
+Never commit real secrets, production credentials, local `.env` files, generated test reports, or downloaded runtime data.
 
 ## License
 
-UNLICENSED (see repository and package metadata).
+UNLICENSED. See the package metadata and repository owner policy.

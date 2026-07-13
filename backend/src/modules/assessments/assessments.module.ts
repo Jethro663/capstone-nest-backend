@@ -7,6 +7,7 @@ import { FeedbackService } from './feedback.service';
 import { DatabaseModule } from '../../database/database.module';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AssessmentAccessService } from './assessment-access.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [AssessmentsController, AssessmentsPublicController],
-  providers: [AssessmentsService, FeedbackService],
-  exports: [AssessmentsService],
+  providers: [AssessmentsService, AssessmentAccessService, FeedbackService],
+  exports: [AssessmentsService, AssessmentAccessService],
 })
 export class AssessmentsModule {}

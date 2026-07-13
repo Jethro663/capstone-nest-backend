@@ -3865,7 +3865,7 @@ describe("mobile rendered screen flows", () => {
         subject: subject.name,
         dueDate: "Tomorrow",
         status: attempts.some((attempt) => attempt.isSubmitted) ? "completed" : "pending",
-        emoji: subject.emoji || "ðŸ“",
+        emoji: subject.emoji || "Note",
         totalScore: 100,
         attempts,
       }),

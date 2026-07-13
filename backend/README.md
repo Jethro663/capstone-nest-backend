@@ -1,74 +1,97 @@
 # Nexora Backend
 
-NestJS 11 backend for the Nexora LMS/LXP platform.
+NestJS 11 API and system-of-record service for Nexora.
 
-## What It Does
+## Responsibilities
 
-This service is the system of record for:
+- JWT access tokens, rotating refresh sessions, OTP verification, and role-based access.
+- Users, profiles, sections, classes, content, assessments, class records, announcements, and notifications.
+- Academic state, audit history, analytics, reporting, performance snapshots, LXP, and interventions.
+- Backend-facing contracts for both web and mobile clients.
+- AI proxy authorization plus BullMQ orchestration for extraction and generation jobs.
+- WebSocket events, health/readiness, Prometheus metrics, structured logs, and optional OTLP tracing.
 
-- authentication, refresh-token rotation, OTP verification, and role-based access
-- users, sections, classes, teacher and student profiles
-- lessons, modules, assessments, class records, announcements, and notifications
-- reports, analytics, performance snapshots, and intervention workflows
-- AI proxying to `../ai-service` for tutor, extraction, quiz drafting, lesson-plan drafting, and related jobs
+The backend owns official academic records. LXP and AI features may assist or recommend, but must not bypass review/audit rules or write official grades through the AI service.
 
-Main entry points:
+## Key paths
 
-- boot: `src/main.ts`
-- module graph root: `src/app.module.ts`
-- schema source of truth: `src/drizzle/schema/`
-- migrations: `drizzle/`
+| Path | Ownership |
+| --- | --- |
+| `src/main.ts` | HTTP bootstrap, validation, CORS, cookies, Swagger, global prefix |
+| `src/app.module.ts` | top-level module graph and global guards/filter |
+| `src/tracing.ts` | optional OTLP tracing bootstrap; blank endpoint disables tracing |
+| `src/modules/` | domain controllers, services, workers, DTOs, and tests |
+| `src/drizzle/schema/` | schema source of truth |
+| `drizzle/` | ordered SQL migrations and snapshots |
+| `src/monitoring/` | metrics and health integration |
+| `docker-entrypoint.sh` | migration/seed bootstrap and upload-volume ownership repair |
 
-## Common Commands
+Important extracted seams include performance snapshot reads, assessment access, LXP system evaluation, storage cleanup metrics, and AI generation/extraction queue workers. Existing public controllers and response envelopes remain the compatibility facade.
+
+## Local development
 
 ```bash
 npm install
+cp .env.example .env
 npm run start:dev
+```
+
+The default development command can coordinate the local AI service. Use `npm run start:dev:core` when only the Nest process should be started.
+
+Common endpoints:
+
+- API prefix: `http://localhost:3000/api`
+- Swagger: `http://localhost:3000/api/docs`
+- Readiness: `http://localhost:3000/api/health/ready`
+- Metrics: `http://localhost:3000/api/metrics`
+
+## Environment boundaries
+
+Start from `.env.example`; never commit a populated `.env`.
+
+Required production inputs include:
+
+- `DATABASE_URL`
+- `REDIS_URL`
+- `JWT_SECRET`
+- `JWT_REFRESH_SECRET`
+- `OTP_PEPPER`
+- `AI_SERVICE_URL`
+- `AI_SERVICE_SHARED_SECRET`
+
+`AI_SERVICE_SHARED_SECRET` must exactly match the AI service. Browser and mobile clients do not receive this value.
+
+Email is disabled when `EMAIL_SERVICE` is blank. Set `EMAIL_SERVICE=gmail` or `EMAIL_SERVICE=resend` only with valid provider credentials. The committed Docker template intentionally leaves delivery disabled.
+
+Optional telemetry:
+
+- Blank `OTEL_EXPORTER_OTLP_ENDPOINT` disables tracing safely.
+- `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` enables Compose OTLP export.
+- `LOKI_HOST=http://loki:3100` enables the direct Loki transport; Promtail also discovers container logs in the observability profile.
+
+## Docker runtime
+
+Use the root Compose workflow. The backend image runs migrations and the application as the unprivileged `node` user. The entrypoint begins as root only long enough to repair an older root-owned `/app/uploads` named volume, then drops privileges with `su-exec`.
+
+Do not remove that bootstrap boundary without testing both a new volume and an existing root-owned volume.
+
+## Verification
+
+```bash
+npm run lint
 npm run build
-npm run test
-npm run test:e2e
+npm run test -- --runInBand
+npm run test:e2e -- --runInBand
+```
+
+Additional safety checks:
+
+```bash
+npm run check:src-clean
+npm run check:migrations
 npm run seed:smoke
 ```
 
-## Environment
+`npm run lint` is non-mutating. `npm run lint:fix` is the explicit local rewrite command. The warning ceiling is a ratchet for legacy debt; new errors are not accepted.
 
-Start from `backend/.env.example`.
-
-Key variables:
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - BullMQ / Redis connection
-- `JWT_SECRET` - access-token signing secret
-- `JWT_REFRESH_SECRET` - refresh-token signing secret
-- `OTP_PEPPER` - OTP hashing pepper
-- `FRONTEND_URL`, `NEXT_FRONTEND_URL`, `MOBILE_URL` - CORS/session origin inputs
-- `AI_SERVICE_URL` - backend-to-ai-service base URL; use the internal Railway/private service URL in production
-- `AI_SERVICE_SHARED_SECRET` - shared secret forwarded to `ai-service` as `X-Internal-Service-Token`; it must exactly match the ai-service value
-- `AI_DEGRADED_ALLOWED` - keep this aligned with ai-service so backend readiness and ai-service readiness agree on degraded runtime policy
-
-Production AI notes:
-
-- Backend proxies AI traffic to ai-service; web and mobile do not talk to ai-service directly.
-- Railway/production should treat OpenRouter-backed cloud mode as the primary AI runtime.
-- Backend readiness now depends on ai-service readiness semantics, not just ai-service reachability.
-
-## API Shape
-
-- global prefix: `/api`
-- global auth guard is enabled by default; public routes use `@Public()`
-- most responses follow the backend envelope style: `success`, `message`, `data`
-
-## Related Files
-
-- setup guide: `BACKEND_SETUP.md`
-- AI architecture notes: `AI_MENTOR_README.md`
-- compose runtime env: `../.env.compose.example`
-- root product overview: `../README.md`
-
-## Verification Notes
-
-- `npm run build` checks backend compilation
-- `npm run test` runs unit specs under `src/`
-- `npm run test:e2e` runs e2e specs under `test/`
-- `npm run seed:smoke` validates seeded LMS/LXP data assumptions
-- `npm run test -- --runInBand src/modules/health/health.service.spec.ts` verifies backend readiness handling for ai-service
+See `AGENTS.md` for change ownership and contract rules, `BACKEND_SETUP.md` for detailed setup, and the root README for Compose operations.

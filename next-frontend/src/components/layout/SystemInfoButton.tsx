@@ -60,7 +60,6 @@ export function SystemInfoButton({
     if (!open) return;
 
     let ignore = false;
-    setLoading(true);
 
     void Promise.allSettled([
       healthService.getLiveness(),
@@ -108,12 +107,17 @@ export function SystemInfoButton({
   const lastChecked =
     aiHealth?.timestamp ?? liveness?.timestamp ?? readiness?.timestamp ?? null;
 
+  const handleOpen = () => {
+    setLoading(true);
+    setOpen(true);
+  };
+
   return (
     <>
       <button
         type="button"
         className={buttonClassName}
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         aria-label="Open system info"
         title="Open system info"
       >

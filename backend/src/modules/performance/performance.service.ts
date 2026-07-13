@@ -29,6 +29,7 @@ import { PerformanceStatusChangedEvent } from '../../common/events';
 import { QueryPerformanceLogsDto } from './DTO/query-performance-logs.dto';
 import { AuditService } from '../audit/audit.service';
 import { CreatePerformanceAnalysisJobDto } from './DTO/create-performance-analysis-job.dto';
+import { PerformanceSnapshotReadService } from './performance-snapshot-read.service';
 
 const PERFORMANCE_RISK_THRESHOLD = 74;
 
@@ -125,6 +126,7 @@ export class PerformanceService {
     private readonly databaseService: DatabaseService,
     private readonly eventEmitter: EventEmitter2,
     private readonly auditService: AuditService,
+    private readonly snapshotReadService: PerformanceSnapshotReadService,
   ) {}
 
   private get db() {
@@ -605,14 +607,10 @@ export class PerformanceService {
     studentId: string,
     triggerSource = 'manual_recompute',
   ) {
-    const assessmentComponent = await this.getAssessmentComponent(
-      classId,
-      studentId,
-    );
-    const classRecordComponent = await this.getClassRecordComponent(
-      classId,
-      studentId,
-    );
+    const [assessmentComponent, classRecordComponent] = await Promise.all([
+      this.getAssessmentComponent(classId, studentId),
+      this.getClassRecordComponent(classId, studentId),
+    ]);
     const snapshotData = this.buildSnapshotData(
       assessmentComponent.average,
       classRecordComponent.average,
@@ -1994,13 +1992,20 @@ export class PerformanceService {
         enrollment.classId !== null,
     );
 
+    const snapshots = await this.snapshotReadService.findForStudentClasses(
+      studentId,
+      activeClassEnrollments.map((enrollment) => enrollment.classId),
+    );
+
     const classSummaries = await Promise.all(
       activeClassEnrollments.map(async (enrollment) => {
-        const snapshot = await this.recomputeStudent(
-          enrollment.classId,
-          studentId,
-          'view_refresh',
-        );
+        const snapshot =
+          snapshots.get(enrollment.classId) ??
+          (await this.recomputeStudent(
+            enrollment.classId,
+            studentId,
+            'view_refresh',
+          ));
 
         return {
           classId: enrollment.classId,

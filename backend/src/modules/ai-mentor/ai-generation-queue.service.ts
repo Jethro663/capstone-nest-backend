@@ -79,12 +79,37 @@ export class AiGenerationQueueService {
     );
   }
 
+  async enqueueExtractionJob(
+    extractionId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.queue.add(
+      'module-extraction',
+      {
+        extractionId,
+        requestedByUserId: userId,
+        queuedAt: new Date().toISOString(),
+      },
+      {
+        ...SHARED_JOB_OPTIONS,
+        jobId: `extraction-${extractionId}`,
+      },
+    );
+    this.logger.log(
+      `Enqueued module-extraction job ${extractionId} for user ${userId}`,
+    );
+  }
+
   /**
    * Cancel a queued lesson-plan job before execution starts.
    * Returns true if the job was waiting/delayed and was successfully removed from BullMQ.
    */
   async cancelQueuedLessonPlanJob(jobId: string): Promise<boolean> {
     return this.cancelQueuedTeacherAiJob('lesson-plan', jobId);
+  }
+
+  async cancelQueuedExtractionJob(extractionId: string): Promise<boolean> {
+    return this.removeWaitingJob(`extraction-${extractionId}`);
   }
 
   /**
@@ -101,6 +126,10 @@ export class AiGenerationQueueService {
           ? 'quiz'
           : 'intervention';
     const bullmqJobId = `${prefix}:${jobId}`;
+    return this.removeWaitingJob(bullmqJobId);
+  }
+
+  private async removeWaitingJob(bullmqJobId: string): Promise<boolean> {
     const job = await this.queue.getJob(bullmqJobId);
     if (!job) return false;
     const state = await job.getState();
@@ -112,4 +141,3 @@ export class AiGenerationQueueService {
     return true;
   }
 }
-

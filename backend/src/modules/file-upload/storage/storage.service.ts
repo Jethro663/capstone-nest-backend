@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as fs from 'fs';
@@ -15,9 +16,12 @@ import type {
   StoredObjectDescriptor,
 } from './storage.provider';
 import { UPLOAD_ROOT } from '../constants/file-upload.constants';
+import { storageCleanupFailures } from '../../../monitoring/utils/metrics';
 
 @Injectable()
 export class StorageService implements StorageProviderInterface {
+  private readonly logger = new Logger(StorageService.name);
+
   constructor(
     @Inject(STORAGE_PROVIDER_TOKEN)
     private readonly provider: StorageProviderInterface,
@@ -148,7 +152,19 @@ export class StorageService implements StorageProviderInterface {
     if (file.path && fs.existsSync(file.path) && this.driver === 's3') {
       try {
         await fs.promises.unlink(file.path);
-      } catch {}
+      } catch (error: unknown) {
+        storageCleanupFailures.inc({
+          component: 'storage-service',
+          operation: 'unlink-after-s3-upload',
+        });
+        this.logger.warn({
+          event: 'storage_cleanup_failed',
+          component: 'storage-service',
+          operation: 'unlink-after-s3-upload',
+          filePath: file.path,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
 
     const filePath =

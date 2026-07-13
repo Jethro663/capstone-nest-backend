@@ -1,7 +1,7 @@
 import { Module, Global } from '@nestjs/common';
 import * as client from 'prom-client';
 import { MetricsController } from './metrics.controller';
-import { allMetrics } from './utils/metrics';
+import { allMetrics, storageCleanupFailures } from './utils/metrics';
 
 // DI token used to inject the shared Registry
 export const PROM_CLIENT_REGISTRY = 'PROM_CLIENT_REGISTRY';
@@ -14,6 +14,7 @@ client.collectDefaultMetrics({ register });
 allMetrics.forEach((metric) => {
   register.registerMetric(metric);
 });
+register.registerMetric(storageCleanupFailures);
 
 @Global()
 @Module({

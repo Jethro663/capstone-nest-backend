@@ -55,6 +55,23 @@ describe('AiGenerationQueueService', () => {
     );
   });
 
+  it('enqueues extraction execution with deterministic BullMQ job id and retry policy', async () => {
+    await service.enqueueExtractionJob('extraction-123', 'teacher-1');
+
+    expect(mockQueue.add).toHaveBeenCalledWith(
+      'module-extraction',
+      expect.objectContaining({
+        extractionId: 'extraction-123',
+        requestedByUserId: 'teacher-1',
+      }),
+      expect.objectContaining({
+        jobId: 'extraction-extraction-123',
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }),
+    );
+  });
+
   it('removes waiting lesson-plan jobs before execution starts', async () => {
     const remove = jest.fn().mockResolvedValue(undefined);
     mockQueue.getJob.mockResolvedValue({
@@ -81,5 +98,21 @@ describe('AiGenerationQueueService', () => {
     expect(mockQueue.getJob).toHaveBeenCalledWith('quiz:job-123');
     expect(remove).toHaveBeenCalled();
     expect(result).toBe(true);
+  });
+
+  it('removes a waiting extraction job before cooperative cancellation', async () => {
+    const remove = jest.fn().mockResolvedValue(undefined);
+    mockQueue.getJob.mockResolvedValue({
+      getState: jest.fn().mockResolvedValue('waiting'),
+      remove,
+    });
+
+    await expect(
+      service.cancelQueuedExtractionJob('extraction-123'),
+    ).resolves.toBe(true);
+    expect(mockQueue.getJob).toHaveBeenCalledWith(
+      'extraction-extraction-123',
+    );
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });

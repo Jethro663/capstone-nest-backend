@@ -59,6 +59,28 @@ describe('AiProxyService', () => {
     ).toBe(300000);
   });
 
+  it('runs extraction jobs through the shared-secret internal endpoint', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: true }), { status: 200 }),
+    );
+
+    await service.runInternalExtractionJob('extraction-123', {
+      bullmqJobId: 'extraction-extraction-123',
+      attempt: 2,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/internal/extractions/extraction-123/run',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          bullmqJobId: 'extraction-extraction-123',
+          attempt: 2,
+        }),
+      }),
+    );
+  });
+
   it('converts AI service connection failures into a clear 503', async () => {
     jest
       .spyOn(globalThis, 'fetch')
