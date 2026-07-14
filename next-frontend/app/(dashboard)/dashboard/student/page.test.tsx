@@ -82,7 +82,7 @@ describe('StudentDashboardPage', () => {
           schedules: [
             {
               id: 'sched-1',
-              days: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+              days: ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'],
               startTime: '08:00',
               endTime: '09:00',
             },
@@ -103,6 +103,11 @@ describe('StudentDashboardPage', () => {
           isDraft: false,
         },
       ],
+      count: 1,
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -118,6 +123,11 @@ describe('StudentDashboardPage', () => {
           dueDate: '2026-06-18T00:00:00.000Z',
         },
       ],
+      count: 1,
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
     });
     mockedAssessmentService.getStudentAttempts.mockResolvedValue({
       success: true,
@@ -219,6 +229,7 @@ describe('StudentDashboardPage', () => {
         {
           id: 'class-1',
           subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
           sectionId: 'section-1',
           teacherId: 'teacher-1',
           schoolYear: '2025-2026',
@@ -234,6 +245,11 @@ describe('StudentDashboardPage', () => {
       success: true,
       message: 'ok',
       data: [],
+      count: 0,
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      totalPages: 0,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -257,6 +273,11 @@ describe('StudentDashboardPage', () => {
           maxAttempts: 2,
         },
       ],
+      count: 2,
+      total: 2,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
     });
 
     mockedAssessmentService.getStudentAttempts.mockImplementation(async (assessmentId: string) => ({
@@ -297,6 +318,96 @@ describe('StudentDashboardPage', () => {
     expect(screen.getByText('You have 1 pending task today')).toBeInTheDocument();
   });
 
+  it('shows a safe retryable class-owner error instead of empty dashboard feeds', async () => {
+    mockedClassService.getByStudent
+      .mockRejectedValueOnce(new Error('dashboard sql detail'))
+      .mockResolvedValueOnce({ success: true, message: 'ok', data: [] });
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    render(<StudentDashboardPage />);
+
+    expect(
+      await screen.findByText("Dashboard couldn't be loaded"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("You're all caught up right now.")).not.toBeInTheDocument();
+    expect(screen.queryByText('No recent lessons yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('dashboard sql detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Your Learning Hub' }),
+    ).toBeInTheDocument();
+    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps fulfilled dashboard regions visible during an independent feed outage', async () => {
+    mockedClassService.getByStudent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          schedules: [],
+        },
+      ],
+    });
+    mockedLessonService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'lesson-1',
+          classId: 'class-1',
+          title: 'Linear Equations',
+          order: 1,
+          isDraft: false,
+        },
+      ],
+      count: 1,
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    });
+    mockedAssessmentService.getByClass.mockRejectedValueOnce(
+      new Error('assessment feed detail'),
+    );
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    render(<StudentDashboardPage />);
+
+    expect(
+      await screen.findByText("Some dashboard items couldn't be loaded"),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Linear Equations')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Day Schedule' })).toBeInTheDocument();
+    expect(screen.queryByText("You're all caught up right now.")).not.toBeInTheDocument();
+    expect(screen.queryByText('assessment feed detail')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /retry dashboard feeds/i }),
+    ).toBeInTheDocument();
+  });
+
   it('opens the main dashboard guide, covers every page, and closes it', async () => {
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
@@ -315,7 +426,7 @@ describe('StudentDashboardPage', () => {
           schedules: [
             {
               id: 'sched-1',
-              days: ['MON', 'TUE', 'WED', 'THU', 'FRI'],
+              days: ['M', 'T', 'W', 'Th', 'F'],
               startTime: '08:00',
               endTime: '09:00',
             },
@@ -336,6 +447,11 @@ describe('StudentDashboardPage', () => {
           isDraft: false,
         },
       ],
+      count: 1,
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -351,6 +467,11 @@ describe('StudentDashboardPage', () => {
           dueDate: '2026-06-18T00:00:00.000Z',
         },
       ],
+      count: 1,
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
     });
 
     mockedAssessmentService.getStudentAttempts.mockResolvedValue({

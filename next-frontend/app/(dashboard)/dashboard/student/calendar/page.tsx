@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
@@ -9,6 +9,7 @@ import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
@@ -31,6 +32,14 @@ import type { StudentEventTag } from '@/components/student/my-classes/types';
 import { cn } from '@/utils/cn';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const SCHOOL_EVENTS_FEED_KEY = 'school-events';
+
+type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
+
+type CalendarFeedPayload =
+  | { kind: 'assessment'; classId: string; data: Assessment[] }
+  | { kind: 'announcement'; classId: string; data: Announcement[] }
+  | { kind: 'school-events'; data: SchoolEvent[] };
 
 const DETAIL_KIND_ACCENT: Record<CalendarFeedKind, string> = {
   assessment: 'border-[#fecdd3] bg-[#fff1f2] text-[#be123c]',
@@ -118,8 +127,9 @@ function getSupportingCopy(item: CalendarFeedItem) {
 export default function StudentCalendarPage() {
   const { user } = useAuth();
 
-  const [loadingClasses, setLoadingClasses] = useState(true);
-  const [loadingFeed, setLoadingFeed] = useState(true);
+  const [classStatus, setClassStatus] = useState<StudentPageStatus>('loading');
+  const [feedStatus, setFeedStatus] = useState<StudentPageStatus>('loading');
+  const [failedFeedKeys, setFailedFeedKeys] = useState<string[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [assessmentsByClass, setAssessmentsByClass] = useState<Record<string, Assessment[]>>({});
@@ -133,32 +143,36 @@ export default function StudentCalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+  const classRequestIdRef = useRef(0);
+  const feedRequestIdRef = useRef(0);
+  const feedHasFulfilledSourceRef = useRef(false);
+
+  const fetchClasses = useCallback(async () => {
+    if (!user?.id) {
+      setClassStatus('error');
+      return;
+    }
+
+    const requestId = ++classRequestIdRef.current;
+    setClassStatus('loading');
+
+    try {
+      const response = await classService.getByStudent(user.id);
+      if (requestId !== classRequestIdRef.current) return;
+      setClasses(response.data || []);
+      setClassStatus('ready');
+    } catch {
+      if (requestId !== classRequestIdRef.current) return;
+      setClassStatus('error');
+    }
+  }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
-
-    let isActive = true;
-
-    const fetchClasses = async () => {
-      try {
-        setLoadingClasses(true);
-        const response = await classService.getByStudent(user.id);
-        if (!isActive) return;
-        setClasses(response.data || []);
-      } catch {
-        if (!isActive) return;
-        setClasses([]);
-      } finally {
-        if (isActive) setLoadingClasses(false);
-      }
-    };
-
     void fetchClasses();
-
     return () => {
-      isActive = false;
+      classRequestIdRef.current += 1;
     };
-  }, [user?.id]);
+  }, [fetchClasses]);
 
   useEffect(() => {
     const nextOptions = buildSchoolYearList(classes, schoolEvents);
@@ -175,78 +189,129 @@ export default function StudentCalendarPage() {
     setSelectedClassId('all');
   }, [classes, selectedClassId, selectedSchoolYear]);
 
-  useEffect(() => {
-    if (!selectedSchoolYear) {
-      setLoadingFeed(false);
-      setAssessmentsByClass({});
-      setAnnouncementsByClass({});
-      setSchoolEvents([]);
-      return;
-    }
+  const loadCalendarFeed = useCallback(
+    async (retryKeys?: string[]) => {
+      if (classStatus !== 'ready') {
+        return;
+      }
 
-    let isActive = true;
-
-    const fetchFeed = async () => {
-      try {
-        setLoadingFeed(true);
-        const scopedClasses = classes.filter(
-          (classItem) => classItem.schoolYear === selectedSchoolYear,
-        );
-
-        const [assessmentPairs, announcementPairs, schoolEventsResponse] = await Promise.all([
-          Promise.all(
-            scopedClasses.map(async (classItem) => {
-              try {
-                const response = await assessmentService.getByClass(classItem.id, {
-                  status: 'all',
-                  limit: 120,
-                });
-                return [classItem.id, response.data || []] as const;
-              } catch {
-                return [classItem.id, []] as const;
-              }
-            }),
-          ),
-          Promise.all(
-            scopedClasses.map(async (classItem) => {
-              try {
-                const response = await announcementService.getByClass(classItem.id, {
-                  limit: 60,
-                });
-                return [classItem.id, response.data || []] as const;
-              } catch {
-                return [classItem.id, []] as const;
-              }
-            }),
-          ),
-          schoolEventService.getAll({ schoolYear: selectedSchoolYear }).catch(() => ({
-            success: true,
-            message: '',
-            data: [] as SchoolEvent[],
-          })),
-        ]);
-
-        if (!isActive) return;
-
-        setAssessmentsByClass(Object.fromEntries(assessmentPairs));
-        setAnnouncementsByClass(Object.fromEntries(announcementPairs));
-        setSchoolEvents(schoolEventsResponse.data || []);
-      } catch {
-        if (!isActive) return;
+      if (!selectedSchoolYear) {
         setAssessmentsByClass({});
         setAnnouncementsByClass({});
         setSchoolEvents([]);
-      } finally {
-        if (isActive) setLoadingFeed(false);
+        setFailedFeedKeys([]);
+        setFeedStatus('ready');
+        return;
       }
-    };
 
-    void fetchFeed();
+      const isRetry = Array.isArray(retryKeys);
+      const scopedClasses = classes.filter(
+        (classItem) => classItem.schoolYear === selectedSchoolYear,
+      );
+      const allFeedKeys = [
+        ...scopedClasses.map((classItem) => `assessment:${classItem.id}`),
+        ...scopedClasses.map((classItem) => `announcement:${classItem.id}`),
+        SCHOOL_EVENTS_FEED_KEY,
+      ];
+      const targetKeys = retryKeys ?? allFeedKeys;
+      const requestId = ++feedRequestIdRef.current;
 
+      if (!isRetry) {
+        feedHasFulfilledSourceRef.current = false;
+      }
+      setFeedStatus('loading');
+
+      const results = await Promise.allSettled(
+        targetKeys.map(async (key): Promise<CalendarFeedPayload> => {
+          if (key === SCHOOL_EVENTS_FEED_KEY) {
+            const response = await schoolEventService.getAll({
+              schoolYear: selectedSchoolYear,
+            });
+            return { kind: 'school-events', data: response.data || [] };
+          }
+
+          const [kind, classId] = key.split(':');
+          if (kind === 'assessment') {
+            const response = await assessmentService.getByClass(classId, {
+              status: 'all',
+              limit: 120,
+            });
+            return { kind, classId, data: response.data || [] };
+          }
+
+          const response = await announcementService.getByClass(classId, {
+            limit: 60,
+          });
+          return { kind: 'announcement', classId, data: response.data || [] };
+        }),
+      );
+
+      if (requestId !== feedRequestIdRef.current) return;
+
+      const failedKeys = targetKeys.filter(
+        (_, index) => results[index]?.status === 'rejected',
+      );
+      const fulfilledPayloads = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+
+      if (isRetry) {
+        for (const payload of fulfilledPayloads) {
+          if (payload.kind === 'assessment') {
+            setAssessmentsByClass((current) => ({
+              ...current,
+              [payload.classId]: payload.data,
+            }));
+          } else if (payload.kind === 'announcement') {
+            setAnnouncementsByClass((current) => ({
+              ...current,
+              [payload.classId]: payload.data,
+            }));
+          } else {
+            setSchoolEvents(payload.data);
+          }
+        }
+      } else {
+        const nextAssessments: Record<string, Assessment[]> = {};
+        const nextAnnouncements: Record<string, Announcement[]> = {};
+        let nextSchoolEvents: SchoolEvent[] = [];
+
+        for (const payload of fulfilledPayloads) {
+          if (payload.kind === 'assessment') {
+            nextAssessments[payload.classId] = payload.data;
+          } else if (payload.kind === 'announcement') {
+            nextAnnouncements[payload.classId] = payload.data;
+          } else {
+            nextSchoolEvents = payload.data;
+          }
+        }
+
+        setAssessmentsByClass(nextAssessments);
+        setAnnouncementsByClass(nextAnnouncements);
+        setSchoolEvents(nextSchoolEvents);
+      }
+
+      if (fulfilledPayloads.length > 0) {
+        feedHasFulfilledSourceRef.current = true;
+      }
+      setFailedFeedKeys(failedKeys);
+      setFeedStatus(
+        failedKeys.length === 0
+          ? 'ready'
+          : feedHasFulfilledSourceRef.current
+            ? 'partial'
+            : 'error',
+      );
+    },
+    [classes, classStatus, selectedSchoolYear],
+  );
+
+  useEffect(() => {
+    void loadCalendarFeed();
     return () => {
-      isActive = false;
+      feedRequestIdRef.current += 1;
     };
-  }, [classes, selectedSchoolYear]);
+  }, [loadCalendarFeed]);
 
   const schoolYearOptions = useMemo(
     () => buildSchoolYearList(classes, schoolEvents),
@@ -302,7 +367,7 @@ export default function StudentCalendarPage() {
     return map;
   }, [dayIndex]);
 
-  if (loadingClasses && classes.length === 0) {
+  if (classStatus === 'loading' && classes.length === 0) {
     return (
       <div className="flex min-h-[24rem] flex-col gap-4 rounded-[1.5rem] p-2 md:p-3">
         <Skeleton className="h-28 rounded-[1.2rem]" />
@@ -311,6 +376,17 @@ export default function StudentCalendarPage() {
           <Skeleton className="h-full rounded-[1.4rem]" />
         </div>
       </div>
+    );
+  }
+
+  if (classStatus === 'error' && classes.length === 0) {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title="Calendar couldn't be loaded"
+        description="Your enrolled classes are temporarily unavailable. Try loading the calendar again."
+        primaryAction={{ label: 'Try again', onClick: () => void fetchClasses() }}
+      />
     );
   }
 
@@ -382,6 +458,37 @@ export default function StudentCalendarPage() {
           </div>
         </div>
       </header>
+
+      {classStatus === 'error' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Class list refresh failed"
+          description="The last loaded class list remains available while you retry."
+          primaryAction={{ label: 'Retry classes', onClick: () => void fetchClasses() }}
+        />
+      ) : null}
+
+      {feedStatus === 'partial' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Some calendar items couldn't be loaded"
+          description="Available schedules and events remain visible while you retry the missing sources."
+          primaryAction={{
+            label: 'Retry calendar items',
+            onClick: () => void loadCalendarFeed(failedFeedKeys),
+          }}
+        />
+      ) : feedStatus === 'error' ? (
+        <DashboardStatePanel
+          kind="error"
+          title="Calendar items couldn't be loaded"
+          description="Scheduled class meetings remain visible, but calendar feeds are unavailable."
+          primaryAction={{
+            label: 'Retry calendar items',
+            onClick: () => void loadCalendarFeed(failedFeedKeys),
+          }}
+        />
+      ) : null}
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_22.5rem]">
         <section className="flex flex-col rounded-[1.2rem] border border-[#dde3ef] bg-[linear-gradient(180deg,#ffffff_0%,#f4f6fb_100%)] p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.38)] md:p-3">
@@ -514,13 +621,13 @@ export default function StudentCalendarPage() {
           </div>
 
           <div className="mt-2.5 min-h-0 space-y-2.5 overflow-y-auto pr-1">
-            {loadingFeed ? (
+            {feedStatus === 'loading' ? (
               <>
                 <Skeleton className="h-28 rounded-[1.35rem]" />
                 <Skeleton className="h-28 rounded-[1.35rem]" />
                 <Skeleton className="h-28 rounded-[1.35rem]" />
               </>
-            ) : selectedDayItems.length === 0 ? (
+            ) : feedStatus === 'ready' && selectedDayItems.length === 0 ? (
               <div className="rounded-[1rem] border border-dashed border-[#d8e1ef] bg-[#f8fafc] px-4 py-8 text-center">
                 <p className="text-sm font-semibold text-[var(--student-text-strong)]">
                   No events yet.
@@ -529,7 +636,7 @@ export default function StudentCalendarPage() {
                   Pick another date to view class schedules, assessments, announcements, and school events.
                 </p>
               </div>
-            ) : (
+            ) : selectedDayItems.length > 0 ? (
               selectedDayItems.map((item) => {
                 const href = getFeedItemHref(item);
 
@@ -589,7 +696,7 @@ export default function StudentCalendarPage() {
                   </article>
                 );
               })
-            )}
+            ) : null}
           </div>
         </aside>
       </div>

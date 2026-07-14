@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentPerformancePage from './page';
 import { performanceService } from '@/services/performance-service';
 import type { StudentOwnPerformanceSummary } from '@/types/performance';
@@ -181,14 +181,25 @@ describe('StudentPerformancePage', () => {
     expect(screen.getByText('No performance data yet')).toBeInTheDocument();
   });
 
-  it('renders fallback surface when summary loading fails', async () => {
-    mockedPerformanceService.getStudentOwnSummary.mockRejectedValue(new Error('network error'));
+  it('renders a safe retryable error instead of empty score states', async () => {
+    mockedPerformanceService.getStudentOwnSummary
+      .mockRejectedValueOnce(new Error('500 body'))
+      .mockResolvedValueOnce({ data: buildSummary() });
 
     render(<StudentPerformancePage />);
 
     expect(
-      await screen.findByText("We couldn't load your performance summary"),
+      await screen.findByText("Performance couldn't be loaded"),
     ).toBeInTheDocument();
-    expect(screen.getByText('Try refreshing this page in a moment.')).toBeInTheDocument();
+    expect(screen.queryByText(/no subject scores/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('No performance data yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('500 body')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Subject Breakdown' }),
+    ).toBeInTheDocument();
+    expect(mockedPerformanceService.getStudentOwnSummary).toHaveBeenCalledTimes(2);
   });
 });
