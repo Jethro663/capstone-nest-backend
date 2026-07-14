@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import StudentLxpExperience from './StudentLxpExperience';
 import { lxpService } from '@/services/lxp-service';
 import { healthService } from '@/services/health-service';
@@ -155,12 +155,13 @@ describe('StudentLxpExperience path list', () => {
     expect(
       await screen.findByPlaceholderText('Search path, section, or subject code'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'My Paths' })).toBeInTheDocument();
     expect(
-      screen.getByText(/opens only for remediation-eligible learners below the support threshold/i),
-    ).toBeInTheDocument();
+      screen.queryByText(/opens only for remediation-eligible learners below the support threshold/i),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText(/each support path helps you review guided steps and assessment retries/i),
-    ).toBeInTheDocument();
+      screen.queryByText(/each support path helps you review guided steps and assessment retries/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'All Paths' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'In Progress' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Completed' })).toBeInTheDocument();
@@ -171,6 +172,57 @@ describe('StudentLxpExperience path list', () => {
     expect(screen.getAllByText('Pending')).toHaveLength(2);
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(screen.queryByText('JA Hub')).not.toBeInTheDocument();
+
+    const counts = screen.getByLabelText('Path counts');
+    expect(within(counts).getByText('Total')).toBeInTheDocument();
+    expect(within(counts).getByText('In progress')).toBeInTheDocument();
+    expect(within(counts).getByText('Completed')).toBeInTheDocument();
+    expect(counts.querySelectorAll('dt')).toHaveLength(3);
+    expect(counts.querySelectorAll('dd')).toHaveLength(3);
+  });
+
+  it('shows a safe retryable error without exposing the service failure', async () => {
+    mockedLxpService.getEligibility.mockRejectedValueOnce(
+      new Error('relation intervention_cases_internal does not exist'),
+    );
+
+    render(<StudentLxpExperience />);
+
+    expect(
+      await screen.findByText("Learners Paths couldn't be loaded"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('relation intervention_cases_internal does not exist'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Mathematics 7')).toBeInTheDocument();
+    expect(mockedLxpService.getEligibility).toHaveBeenCalledTimes(2);
+  });
+
+  it('distinguishes an empty source collection from an empty filter result', async () => {
+    mockedLxpService.getEligibility.mockResolvedValueOnce({
+      data: { paths: [], eligibleClasses: [] },
+    } as never);
+
+    render(<StudentLxpExperience />);
+
+    expect(await screen.findByText('No Learners Paths yet')).toBeInTheDocument();
+    expect(screen.queryByText('No paths match these filters')).not.toBeInTheDocument();
+  });
+
+  it('shows filter-empty copy and resets the active filters without refetching', async () => {
+    render(<StudentLxpExperience />);
+
+    const search = await screen.findByPlaceholderText('Search path, section, or subject code');
+    fireEvent.change(search, { target: { value: 'unmatched subject' } });
+
+    expect(await screen.findByText('No paths match these filters')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+    expect(screen.getByText('Mathematics 7')).toBeInTheDocument();
+    expect(mockedLxpService.getEligibility).toHaveBeenCalledTimes(1);
   });
 
   it('filters completed paths by checkpoint progress', async () => {
@@ -187,6 +239,10 @@ describe('StudentLxpExperience path list', () => {
     render(<StudentLxpExperience />);
 
     await screen.findByText('Mathematics 7');
+    expect(screen.getAllByRole('link', { name: 'View Steps' })[0]).toHaveAttribute(
+      'href',
+      '/dashboard/student/lxp/class-active?tab=steps',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Continue Path' }));
 
     expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-active');
