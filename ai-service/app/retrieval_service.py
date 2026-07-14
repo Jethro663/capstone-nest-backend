@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -11,7 +13,22 @@ from typing import Any
 from sqlalchemy import bindparam, text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .embedding_provider import embed_texts, embedding_to_vector_literal
+from .embedding_provider import (
+    embed_texts,
+    embedding_to_vector_literal,
+    get_embedding_model_label,
+    require_semantic_embeddings,
+)
+
+logger = logging.getLogger(__name__)
+
+# One request may fan out into as many as four query variants. Keep their
+# embedding and database work inside one deadline so a slow provider cannot
+# multiply its own timeout by the number of variants.
+RETRIEVAL_AGGREGATE_TIMEOUT_SECONDS = max(
+    0.1,
+    float(os.getenv("RETRIEVAL_AGGREGATE_TIMEOUT_SECONDS", "20")),
+)
 
 STOPWORDS = {
     "the",
@@ -197,11 +214,22 @@ async def _vector_search(
     assessment_ids: list[str] | None = None,
     source_types: list[str] | None = None,
     only_published: bool = False,
+    query_embedding: list[float] | None = None,
+    query_embedding_model: str | None = None,
 ) -> list[dict[str, Any]]:
-    embedding = (await embed_texts([query_text]))[0]
+    embedding = query_embedding
+    if embedding is None:
+        embedding_batch = require_semantic_embeddings(
+            await embed_texts([query_text]),
+            expected_count=1,
+        )
+        embedding = embedding_batch[0]
+        query_embedding_model = get_embedding_model_label(embedding_batch)
+    embedding_model = query_embedding_model or get_embedding_model_label()
     params: dict[str, Any] = {
         "classId": class_id,
         "embedding": embedding_to_vector_literal(embedding),
+        "embeddingModel": embedding_model,
         "topK": limit,
     }
     class_filters = ["c.class_id = :classId"]
@@ -258,7 +286,8 @@ async def _vector_search(
           (e.embedding <=> CAST(:embedding AS vector)) AS distance
         FROM content_chunks c
         INNER JOIN content_chunk_embeddings e ON e.chunk_id = c.id
-        WHERE __FILTERS__
+        WHERE e.embedding_model = :embeddingModel
+          AND (__FILTERS__)
         ORDER BY e.embedding <=> CAST(:embedding AS vector) ASC
         LIMIT :topK
         """
@@ -524,10 +553,17 @@ async def similarity_search(
 
     candidate_pool: dict[str, dict[str, Any]] = {}
 
-    async def _search_variant(variant_index: int, variant: str) -> list[tuple[str, dict[str, Any]]]:
+    async def _search_variant(
+        variant_index: int,
+        variant: str,
+        query_embedding: list[float],
+        query_embedding_model: str,
+    ) -> list[tuple[str, dict[str, Any]]]:
         results = await _vector_search(
             db,
             query_text=variant,
+            query_embedding=query_embedding,
+            query_embedding_model=query_embedding_model,
             class_id=class_id,
             teacher_id=teacher_id,
             subject_key=subject_key,
@@ -551,18 +587,79 @@ async def similarity_search(
             for item in results
         ]
 
-    variant_results = await asyncio.gather(
-        *[_search_variant(i, v) for i, v in enumerate(query_variants)],
-        return_exceptions=True,
-    )
+    # Embed all variants in one provider request, then keep the stateful
+    # AsyncSession work serial. The outer deadline bounds both phases while
+    # retaining candidates from variants that completed before it expired.
+    failed_variants = 0
+    completed_variants = 0
+    try:
+        async with asyncio.timeout(RETRIEVAL_AGGREGATE_TIMEOUT_SECONDS):
+            embeddings = require_semantic_embeddings(
+                await embed_texts(query_variants),
+                expected_count=len(query_variants),
+            )
+            embedding_model = get_embedding_model_label(embeddings)
 
-    for variant_index, result in enumerate(variant_results):
-        if isinstance(result, Exception):
-            continue
-        for item_id, item in result:
-            current = candidate_pool.get(item_id)
-            if current is None or float(item.get("distance") or math.inf) < float(current.get("distance") or math.inf):
-                candidate_pool[item_id] = item
+            for variant_index, (variant, query_embedding) in enumerate(
+                zip(query_variants, embeddings, strict=True)
+            ):
+                try:
+                    result = await _search_variant(
+                        variant_index,
+                        variant,
+                        query_embedding,
+                        embedding_model,
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    failed_variants += 1
+                    completed_variants += 1
+                    logger.warning(
+                        "Retrieval query variant %d/%d failed for class %s: %s: %s",
+                        variant_index + 1,
+                        len(query_variants),
+                        class_id,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    continue
+
+                completed_variants += 1
+                for item_id, item in result:
+                    current = candidate_pool.get(item_id)
+                    if current is None or float(item.get("distance") or math.inf) < float(
+                        current.get("distance") or math.inf
+                    ):
+                        candidate_pool[item_id] = item
+    except asyncio.CancelledError:
+        raise
+    except TimeoutError:
+        timed_out_variants = len(query_variants) - completed_variants
+        failed_variants += timed_out_variants
+        logger.warning(
+            "Retrieval aggregate deadline of %.2fs expired for class %s after %d/%d variants; "
+            "returning completed context",
+            RETRIEVAL_AGGREGATE_TIMEOUT_SECONDS,
+            class_id,
+            completed_variants,
+            len(query_variants),
+        )
+    except Exception as exc:
+        failed_variants += len(query_variants) - completed_variants
+        logger.warning(
+            "Retrieval query preparation failed for class %s: %s: %s",
+            class_id,
+            type(exc).__name__,
+            exc,
+        )
+
+    if query_variants and failed_variants == len(query_variants):
+        logger.warning(
+            "All %d retrieval query variants failed for class %s; returning no context",
+            failed_variants,
+            class_id,
+        )
 
     ranked = rerank_chunks(
         query_text,

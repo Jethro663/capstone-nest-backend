@@ -101,6 +101,10 @@ class ExtractionCancelled(RuntimeError):
     pass
 
 
+class ExtractionExecutionSuperseded(RuntimeError):
+    """The extraction was cancelled or reclaimed by a newer worker lease."""
+
+
 def _normalize_extraction_style(value: str | None) -> str:
     normalized = str(value or "clean").strip().lower()
     return normalized if normalized in VALID_EXTRACTION_STYLES else "clean"
@@ -1990,14 +1994,40 @@ def _evaluate_extraction_against_golden(output: dict[str, Any], expected: dict[s
     }
 
 
-async def _update_extraction(db: AsyncSession, extraction_id: str, data: dict[str, Any]) -> None:
+async def _update_extraction(
+    db: AsyncSession,
+    extraction_id: str,
+    data: dict[str, Any],
+    *,
+    execution_lease_id: str | None = None,
+) -> None:
     sets = ", ".join(f"{key} = :{key}" for key in data)
     sets += ", updated_at = NOW()"
-    await db.execute(sa_text(f"UPDATE extracted_modules SET {sets} WHERE id = :id"), {**data, "id": extraction_id})
+    where = "WHERE id = :id"
+    params = {**data, "id": extraction_id}
+    if execution_lease_id:
+        where += (
+            " AND extraction_status = 'processing'"
+            " AND structured_content -> 'audit' ->> 'workerLeaseId' = :leaseId"
+        )
+        params["leaseId"] = execution_lease_id
+    result = await db.execute(
+        sa_text(f"UPDATE extracted_modules SET {sets} {where} RETURNING id"),
+        params,
+    )
+    if execution_lease_id and result.mappings().first() is None:
+        await db.rollback()
+        raise ExtractionExecutionSuperseded(
+            f"Extraction {extraction_id} lost its worker lease"
+        )
     await db.commit()
 
 
-async def _raise_if_cancelled(db: AsyncSession, extraction_id: str) -> None:
+async def _raise_if_cancelled(
+    db: AsyncSession,
+    extraction_id: str,
+    execution_lease_id: str | None = None,
+) -> None:
     row = await db.execute(
         sa_text("SELECT structured_content FROM extracted_modules WHERE id = :id"),
         {"id": extraction_id},
@@ -2012,6 +2042,52 @@ async def _raise_if_cancelled(db: AsyncSession, extraction_id: str) -> None:
     audit = content.get("audit") if isinstance(content, dict) and isinstance(content.get("audit"), dict) else {}
     if bool(audit.get("cancelRequested")):
         raise ExtractionCancelled("Extraction was cancelled by the teacher.")
+    if execution_lease_id and str(audit.get("workerLeaseId") or "") != execution_lease_id:
+        raise ExtractionExecutionSuperseded(
+            f"Extraction {extraction_id} is owned by a newer worker lease"
+        )
+
+
+async def _complete_extraction(
+    db: AsyncSession,
+    extraction_id: str,
+    *,
+    structured_content: dict[str, Any],
+    model_used: str,
+    execution_lease_id: str | None,
+) -> None:
+    where = "WHERE id = :id"
+    params: dict[str, Any] = {
+        "id": extraction_id,
+        "structuredContent": structured_content,
+        "modelUsed": model_used,
+    }
+    if execution_lease_id:
+        where += (
+            " AND extraction_status = 'processing'"
+            " AND structured_content -> 'audit' ->> 'workerLeaseId' = :leaseId"
+        )
+        params["leaseId"] = execution_lease_id
+    result = await db.execute(
+        sa_text(
+            f"""
+            UPDATE extracted_modules
+            SET extraction_status = 'completed',
+                model_used = :modelUsed,
+                progress_percent = 100,
+                structured_content = :structuredContent,
+                updated_at = NOW()
+            {where}
+            RETURNING id
+            """
+        ).bindparams(bindparam("structuredContent", type_=postgresql.JSONB)),
+        params,
+    )
+    if execution_lease_id and result.mappings().first() is None:
+        await db.rollback()
+        raise ExtractionExecutionSuperseded(
+            f"Extraction {extraction_id} completion lost its worker lease"
+        )
 
 
 async def _classify_content(text: str) -> ContentClassification:
@@ -2037,6 +2113,7 @@ async def run_extraction(
     *,
     target_section_count: int = 4,
     extraction_style: str = "clean",
+    execution_lease_id: str | None = None,
     raise_on_failure: bool = False,
 ) -> None:
     extraction_style = _normalize_extraction_style(extraction_style)
@@ -2045,6 +2122,7 @@ async def run_extraction(
             db,
             extraction_id,
             {"extraction_status": "processing", "progress_percent": 5},
+            execution_lease_id=execution_lease_id,
         )
 
         row = await db.execute(
@@ -2060,7 +2138,12 @@ async def run_extraction(
         if not file_path or not os.path.exists(file_path):
             raise FileNotFoundError(f"Physical file not found: {file_path}")
 
-        await _update_extraction(db, extraction_id, {"progress_percent": 10})
+        await _update_extraction(
+            db,
+            extraction_id,
+            {"progress_percent": 10},
+            execution_lease_id=execution_lease_id,
+        )
         doc = fitz.open(file_path)
         pages = _extract_pdf_pages(doc)
         raw_text = "\f".join(page["text"] for page in pages if page["text"])
@@ -2068,7 +2151,12 @@ async def run_extraction(
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
 
-        await _update_extraction(db, extraction_id, {"raw_text": raw_text, "progress_percent": 15})
+        await _update_extraction(
+            db,
+            extraction_id,
+            {"raw_text": raw_text, "progress_percent": 15},
+            execution_lease_id=execution_lease_id,
+        )
         if len(raw_text.strip()) < 20:
             health = await ollama_client.is_available()
             if not health["available"]:
@@ -2081,7 +2169,7 @@ async def run_extraction(
             if not vision_images:
                 raise ValueError("Scanned PDF detected, but no renderable pages were available for vision extraction.")
             start_time = time.time()
-            await _raise_if_cancelled(db, extraction_id)
+            await _raise_if_cancelled(db, extraction_id, execution_lease_id)
             raw = await ollama_client.generate(
                 _build_vision_extraction_prompt(original_name),
                 EXTRACTION_SYSTEM_PROMPT,
@@ -2141,23 +2229,14 @@ async def run_extraction(
             final_result = validation.sanitized_output or final_result
             response_time_ms = int((time.time() - start_time) * 1000)
             model_used = ollama_client.get_task_model_name("vision_extraction")
-            await _raise_if_cancelled(db, extraction_id)
-            await _update_extraction(
+            await _raise_if_cancelled(db, extraction_id, execution_lease_id)
+            await _complete_extraction(
                 db,
                 extraction_id,
-                {
-                    "extraction_status": "completed",
-                    "model_used": model_used,
-                    "progress_percent": 100,
-                },
+                structured_content=final_result,
+                model_used=model_used,
+                execution_lease_id=execution_lease_id,
             )
-            await db.execute(
-                sa_text("UPDATE extracted_modules SET structured_content = :sc, updated_at = NOW() WHERE id = :id").bindparams(
-                    bindparam("sc", type_=postgresql.JSONB)
-                ),
-                {"sc": final_result, "id": extraction_id},
-            )
-            await db.commit()
             await db.execute(
                 sa_text(
                     "INSERT INTO ai_interaction_logs "
@@ -2181,13 +2260,18 @@ async def run_extraction(
             await db.commit()
             return
         doc.close()
-        await _raise_if_cancelled(db, extraction_id)
+        await _raise_if_cancelled(db, extraction_id, execution_lease_id)
         start_time = time.time()
         health = await ollama_client.is_available()
 
         sanitization = sanitize_extracted_text(raw_text)
         cleaned_text = sanitization.cleaned_text
-        await _update_extraction(db, extraction_id, {"progress_percent": 20})
+        await _update_extraction(
+            db,
+            extraction_id,
+            {"progress_percent": 20},
+            execution_lease_id=execution_lease_id,
+        )
 
         classification = await _classify_content(cleaned_text) if health["available"] else ContentClassification(
             safe=True,
@@ -2198,7 +2282,12 @@ async def run_extraction(
         if not classification.safe:
             raise ValueError(f"Content safety check failed: {classification.reason} (category: {classification.category})")
 
-        await _update_extraction(db, extraction_id, {"progress_percent": 30})
+        await _update_extraction(
+            db,
+            extraction_id,
+            {"progress_percent": 30},
+            execution_lease_id=execution_lease_id,
+        )
         chunks = chunk_text(cleaned_text, document_title=original_name, max_chunk_size=8000)
         await _update_extraction(
             db,
@@ -2208,6 +2297,7 @@ async def run_extraction(
                 "processed_chunks": 0,
                 "progress_percent": 35,
             },
+            execution_lease_id=execution_lease_id,
         )
 
         structured_chunks: list[dict[str, Any]] = []
@@ -2215,7 +2305,7 @@ async def run_extraction(
         progress_per_chunk = 45 / max(len(chunks), 1)
 
         for index, chunk in enumerate(chunks, start=1):
-            await _raise_if_cancelled(db, extraction_id)
+            await _raise_if_cancelled(db, extraction_id, execution_lease_id)
             try:
                 structured = (
                     await _detect_structure_with_ai(
@@ -2250,9 +2340,15 @@ async def run_extraction(
                     "processed_chunks": index,
                     "progress_percent": round(35 + progress_per_chunk * index),
                 },
+                execution_lease_id=execution_lease_id,
             )
 
-        await _update_extraction(db, extraction_id, {"progress_percent": 85})
+        await _update_extraction(
+            db,
+            extraction_id,
+            {"progress_percent": 85},
+            execution_lease_id=execution_lease_id,
+        )
         final_result = _merge_structured_chunks(
             structured_chunks,
             target_section_count=target_section_count,
@@ -2317,23 +2413,14 @@ async def run_extraction(
         response_time_ms = int((time.time() - start_time) * 1000)
         model_used = ollama_client.get_task_model_name("text_extraction") if health["available"] else "rule-based"
 
-        await _raise_if_cancelled(db, extraction_id)
-        await _update_extraction(
+        await _raise_if_cancelled(db, extraction_id, execution_lease_id)
+        await _complete_extraction(
             db,
             extraction_id,
-            {
-                "extraction_status": "completed",
-                "model_used": model_used,
-                "progress_percent": 100,
-            },
+            structured_content=final_result,
+            model_used=model_used,
+            execution_lease_id=execution_lease_id,
         )
-        await db.execute(
-            sa_text("UPDATE extracted_modules SET structured_content = :sc, updated_at = NOW() WHERE id = :id").bindparams(
-                bindparam("sc", type_=postgresql.JSONB)
-            ),
-            {"sc": final_result, "id": extraction_id},
-        )
-        await db.commit()
         await db.execute(
             sa_text(
                 "INSERT INTO ai_interaction_logs "
@@ -2359,19 +2446,45 @@ async def run_extraction(
             },
         )
         await db.commit()
+    except asyncio.CancelledError:
+        logger.warning("[extraction] Task cancelled for extraction %s", extraction_id)
+        await db.rollback()
+        try:
+            await _update_extraction(
+                db,
+                extraction_id,
+                {
+                    "extraction_status": "failed",
+                    "error_message": "Extraction execution was cancelled before completion.",
+                    "progress_percent": 0,
+                },
+                execution_lease_id=execution_lease_id,
+            )
+        except ExtractionExecutionSuperseded:
+            pass
+        raise
     except ExtractionCancelled as exc:
         logger.info("[extraction] Cancelled extraction %s: %s", extraction_id, exc)
-        await _update_extraction(
-            db,
-            extraction_id,
-            {
-                "extraction_status": "failed",
-                "error_message": str(exc),
-                "progress_percent": 0,
-            },
-        )
+        await db.rollback()
+        if not execution_lease_id:
+            await _update_extraction(
+                db,
+                extraction_id,
+                {
+                    "extraction_status": "failed",
+                    "error_message": str(exc),
+                    "progress_percent": 0,
+                },
+            )
+        if raise_on_failure:
+            raise
+    except ExtractionExecutionSuperseded:
+        await db.rollback()
+        logger.info("[extraction] Extraction %s lost its durable lease", extraction_id)
+        raise
     except Exception as exc:
         logger.error("[extraction] Failed for extraction %s: %s", extraction_id, exc)
+        await db.rollback()
         await _update_extraction(
             db,
             extraction_id,
@@ -2380,6 +2493,7 @@ async def run_extraction(
                 "error_message": str(exc),
                 "progress_percent": 0,
             },
+            execution_lease_id=execution_lease_id,
         )
         if raise_on_failure:
             raise

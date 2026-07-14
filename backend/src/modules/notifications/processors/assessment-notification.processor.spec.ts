@@ -58,6 +58,13 @@ describe('AssessmentNotificationProcessor', () => {
     processor = module.get(AssessmentNotificationProcessor);
   });
 
+  it('rejects unsupported queue contracts without side effects', async () => {
+    await expect(processor.process(makeJob('unknown-job'))).rejects.toThrow(
+      'Unsupported notifications job: unknown-job',
+    );
+    expect(mockDb.query.classes.findFirst).not.toHaveBeenCalled();
+  });
+
   it('sends an assessment_assigned notification to every enrolled student', async () => {
     mockDb.query.enrollments.findMany.mockResolvedValue([
       { studentId: 'student-1' },

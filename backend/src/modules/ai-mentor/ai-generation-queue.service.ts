@@ -30,16 +30,13 @@ export class AiGenerationQueueService {
    * already created the `ai_generation_jobs` DB row and returned `jobId`.
    * This method schedules the actual LLM execution via the BullMQ worker.
    */
-  async enqueueLessonPlanJob(
-    jobId: string,
-    userId: string,
-  ): Promise<void> {
+  async enqueueLessonPlanJob(jobId: string, userId: string): Promise<void> {
     await this.queue.add(
       'lesson-plan-generation',
       { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
       {
         ...SHARED_JOB_OPTIONS,
-        jobId: `lesson-plan:${jobId}`,
+        jobId: `lesson-plan-${jobId}`,
       },
     );
     this.logger.log(
@@ -56,7 +53,7 @@ export class AiGenerationQueueService {
       { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
       {
         ...SHARED_JOB_OPTIONS,
-        jobId: `quiz:${jobId}`,
+        jobId: `quiz-${jobId}`,
       },
     );
     this.logger.log(`Enqueued quiz-generation job ${jobId} for user ${userId}`);
@@ -71,7 +68,7 @@ export class AiGenerationQueueService {
       { jobId, requestedByUserId: userId, queuedAt: new Date().toISOString() },
       {
         ...SHARED_JOB_OPTIONS,
-        jobId: `intervention:${jobId}`,
+        jobId: `intervention-${jobId}`,
       },
     );
     this.logger.log(
@@ -125,7 +122,7 @@ export class AiGenerationQueueService {
         : kind === 'quiz'
           ? 'quiz'
           : 'intervention';
-    const bullmqJobId = `${prefix}:${jobId}`;
+    const bullmqJobId = `${prefix}-${jobId}`;
     return this.removeWaitingJob(bullmqJobId);
   }
 

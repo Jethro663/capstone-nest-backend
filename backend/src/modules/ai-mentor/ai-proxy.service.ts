@@ -16,11 +16,13 @@ export class AiProxyService {
   private readonly logger = new Logger(AiProxyService.name);
   private readonly baseUrl: string;
   private readonly chatTimeoutMs: number;
+  private readonly tutorStartTimeoutMs: number;
   private readonly quizTimeoutMs: number;
   private readonly extractionTimeoutMs: number;
   private readonly lessonPlanTimeoutMs: number;
   private readonly internalQuizTimeoutMs: number;
   private readonly internalInterventionTimeoutMs: number;
+  private readonly internalExtractionTimeoutMs: number;
   private readonly sharedSecret: string;
   private readonly breaker: CircuitBreaker;
 
@@ -28,11 +30,15 @@ export class AiProxyService {
     this.baseUrl =
       this.config.get<string>('AI_SERVICE_URL') || 'http://localhost:8000';
     this.chatTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '25000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_CHAT_MS') || '70000',
+      10,
+    );
+    this.tutorStartTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_TUTOR_START_MS') || '150000',
       10,
     );
     this.quizTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_QUIZ_MS') || '180000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_QUIZ_MS') || '360000',
       10,
     );
     this.extractionTimeoutMs = parseInt(
@@ -40,16 +46,22 @@ export class AiProxyService {
       10,
     );
     this.lessonPlanTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_LESSON_PLAN_MS') || '300000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_LESSON_PLAN_MS') || '900000',
       10,
     );
     this.internalQuizTimeoutMs = parseInt(
-      this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_QUIZ_MS') || '180000',
+      this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_QUIZ_MS') ||
+        '900000',
       10,
     );
     this.internalInterventionTimeoutMs = parseInt(
       this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_INTERVENTION_MS') ||
-        '180000',
+        '900000',
+      10,
+    );
+    this.internalExtractionTimeoutMs = parseInt(
+      this.config.get<string>('AI_SERVICE_TIMEOUT_INTERNAL_EXTRACTION_MS') ||
+        '900000',
       10,
     );
     this.sharedSecret =
@@ -75,7 +87,7 @@ export class AiProxyService {
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
     if (!this.sharedSecret) {
       this.logger.warn(
-        'AI_SERVICE_SHARED_SECRET is empty. If ai-service expects a shared secret, proxied AI requests will fail with 401.',
+        'AI_SERVICE_SHARED_SECRET is empty. AI proxy requests will fail closed with 503 until it is configured.',
       );
     }
   }
@@ -93,6 +105,9 @@ export class AiProxyService {
   }
 
   private resolveTimeoutMs(path: string): number {
+    if (path === '/student/tutor/session') {
+      return this.tutorStartTimeoutMs;
+    }
     if (
       path === '/chat' ||
       path.startsWith('/mentor/') ||
@@ -121,6 +136,16 @@ export class AiProxyService {
     user: { id?: string; userId?: string; email?: string; roles?: string[] },
     body?: unknown,
   ): Promise<unknown> {
+    if (!this.sharedSecret) {
+      throw new HttpException(
+        {
+          message:
+            'AI service boundary is unavailable because its shared secret is not configured.',
+        },
+        503,
+      );
+    }
+
     if (!this.breaker.allowRequest()) {
       const remaining = Math.ceil(this.breaker.getCooldownRemainingMs() / 1000);
       this.logger.warn(
@@ -142,9 +167,7 @@ export class AiProxyService {
       'X-User-Email': user.email ?? '',
       'X-User-Roles': (user.roles ?? []).join(','),
     };
-    if (this.sharedSecret) {
-      headers['X-Internal-Service-Token'] = this.sharedSecret;
-    }
+    headers['X-Internal-Service-Token'] = this.sharedSecret;
 
     const controller = new AbortController();
     const timer = setTimeout(
@@ -159,7 +182,6 @@ export class AiProxyService {
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });
-      clearTimeout(timer);
 
       const rawText = await res.text();
       let payload: any = null;
@@ -192,7 +214,6 @@ export class AiProxyService {
       this.breaker.recordSuccess();
       return payload;
     } catch (err) {
-      clearTimeout(timer);
       if (err instanceof HttpException) {
         throw err;
       }
@@ -221,6 +242,8 @@ export class AiProxyService {
         },
         503,
       );
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -234,6 +257,12 @@ export class AiProxyService {
     timeoutMs: number,
     jobLabel: string,
   ): Promise<unknown> {
+    if (!this.sharedSecret) {
+      throw new Error(
+        `AI_SERVICE_SHARED_SECRET is required for internal ${jobLabel} execution`,
+      );
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -242,9 +271,7 @@ export class AiProxyService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(this.sharedSecret
-            ? { 'X-Internal-Service-Token': this.sharedSecret }
-            : {}),
+          'X-Internal-Service-Token': this.sharedSecret,
         },
         body: JSON.stringify(meta ?? {}),
         signal: controller.signal,
@@ -260,7 +287,7 @@ export class AiProxyService {
         );
       }
 
-      return response.json();
+      return await response.json();
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         this.logger.error(
@@ -328,7 +355,7 @@ export class AiProxyService {
     return this.runInternalTeacherJob(
       `/internal/extractions/${extractionId}/run`,
       meta,
-      this.extractionTimeoutMs,
+      this.internalExtractionTimeoutMs,
       `module extraction ${extractionId}`,
     );
   }
@@ -342,6 +369,18 @@ export class AiProxyService {
       { reason },
       this.chatTimeoutMs,
       `module extraction compensation ${extractionId}`,
+    );
+  }
+
+  async markInternalTeacherJobFailed(
+    jobId: string,
+    reason: string,
+  ): Promise<unknown> {
+    return this.runInternalTeacherJob(
+      `/internal/teacher/jobs/${jobId}/fail`,
+      { reason, expectedStatus: 'pending' },
+      this.chatTimeoutMs,
+      `teacher AI job compensation ${jobId}`,
     );
   }
 }

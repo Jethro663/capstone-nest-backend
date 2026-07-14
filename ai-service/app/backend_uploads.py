@@ -4,7 +4,7 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 
@@ -12,6 +12,7 @@ from .async_utils import run_in_managed_thread
 from .config import settings
 
 _upload_client: httpx.AsyncClient | None = None
+_REDIRECT_STATUS_CODES = frozenset({301, 302, 303, 307, 308})
 
 
 def _get_upload_client() -> httpx.AsyncClient:
@@ -27,6 +28,14 @@ def _get_upload_client() -> httpx.AsyncClient:
 async def _write_bytes_off_loop(path: Path, content: bytes) -> None:
     """Write cached content off-loop and close the worker before returning."""
     await run_in_managed_thread(path.write_bytes, content)
+
+
+def _resolve_http_redirect_url(request_url: str, location: str) -> str:
+    redirect_url = urljoin(request_url, location.strip())
+    parsed = urlsplit(redirect_url)
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Backend upload redirect must target an HTTP(S) URL")
+    return redirect_url
 
 
 def _candidate_paths(raw_path: str) -> list[str]:
@@ -101,8 +110,16 @@ async def materialize_backend_upload(raw_path: str) -> str | None:
         headers={
             "X-Internal-Service-Token": settings.ai_service_shared_secret or ""
         },
-        follow_redirects=True,
+        follow_redirects=False,
     )
+    if response.status_code in _REDIRECT_STATUS_CODES:
+        location = response.headers.get("location") or response.headers.get("Location")
+        if not location:
+            raise ValueError("Backend upload redirect is missing a Location header")
+
+        redirect_url = _resolve_http_redirect_url(url, location)
+        response = await client.get(redirect_url, follow_redirects=True)
+
     response.raise_for_status()
     await _write_bytes_off_loop(cached_path, response.content)
 

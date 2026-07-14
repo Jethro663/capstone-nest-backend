@@ -1,7 +1,7 @@
 import { RagIndexingService } from './rag-indexing.service';
 
 describe('RagIndexingService', () => {
-  it('queues a deterministic, retryable class reindex job', async () => {
+  it('queues a retryable class reindex with active-job deduplication', async () => {
     const queue = { add: jest.fn().mockResolvedValue(undefined) };
     const service = new RagIndexingService(queue as never);
 
@@ -14,21 +14,16 @@ describe('RagIndexingService', () => {
       'reindex-class',
       expect.objectContaining({ classId: 'class-1', actorId: 'teacher-1' }),
       expect.objectContaining({
-        jobId: 'reindex:class-1',
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
+        deduplication: {
+          id: 'reindex:class-1',
+          keepLastIfActive: true,
+        },
       }),
     );
-  });
 
-  it('treats an already-waiting job as an idempotent success', async () => {
-    const queue = {
-      add: jest.fn().mockRejectedValue(new Error('Job is already waiting')),
-    };
-    const service = new RagIndexingService(queue as never);
-
-    await expect(
-      service.queueClassReindex('class-1', { reason: 'duplicate' }),
-    ).resolves.toBeUndefined();
+    const options = queue.add.mock.calls[0][2];
+    expect(options).not.toHaveProperty('jobId');
   });
 });

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
+import { createHash } from 'crypto';
 
 @Injectable()
 export class PerformanceRecomputeQueueService {
@@ -38,11 +39,19 @@ export class PerformanceRecomputeQueueService {
     triggerSource?: string,
   ): Promise<void> {
     try {
+      const studentScope = createHash('sha256')
+        .update(
+          studentIds?.length
+            ? [...new Set(studentIds)].sort().join('\u0000')
+            : 'no-students',
+        )
+        .digest('hex')
+        .slice(0, 16);
       await this.queue.add(
         'recompute-class-scores',
         { classId, studentIds, triggerSource },
         {
-          jobId: `class-${classId}-${Math.floor(Date.now() / 15000)}`,
+          jobId: `class-${classId}-${studentScope}-${Math.floor(Date.now() / 15000)}`,
           removeOnComplete: true,
           removeOnFail: { age: 86400, count: 50 },
         },

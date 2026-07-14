@@ -10,6 +10,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .job_lifecycle import prepare_fenced_output_commit
 from .schemas import GenerateLessonPlanRequest, RequestUser
 
 LESSON_PLAN_SYSTEM_PROMPT = """You generate grounded, teacher-facing daily lesson plans for a school LMS.
@@ -686,6 +687,7 @@ async def generate_class_lesson_plan(
     body: GenerateLessonPlanRequest,
     *,
     existing_job_id: str | None = None,
+    execution_lease_id: str | None = None,
     progress_callback: Callable[[str, int], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     class_info = await _load_class_context(db, class_id=body.class_id, user=user)
@@ -769,27 +771,13 @@ Return only JSON. Keep procedures practical and classroom-ready.
     }
 
     if existing_job_id:
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'processing',
-                  error_message = NULL,
-                  updated_at = NOW(),
-                  source_filters = :sourceFilters
-                WHERE id = :jobId
-                """
-            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
-            {
-                "jobId": existing_job_id,
-                "sourceFilters": {
-                    "anchorType": body.anchor_type,
-                    "anchorId": body.anchor_id,
-                    "teacherNote": body.teacher_note,
-                    "header": body.header.model_dump(by_alias=True) if body.header else {},
-                },
-            },
+        await prepare_fenced_output_commit(
+            db,
+            job_id=existing_job_id,
+            execution_lease_id=execution_lease_id,
+            progress_callback=progress_callback,
+            status_message="Saving lesson plan",
+            progress_percent=88,
         )
         job_id = existing_job_id
     else:
@@ -826,7 +814,7 @@ Return only JSON. Keep procedures practical and classroom-ready.
         )
         job_id = job_row.scalar_one()
 
-    if progress_callback:
+    if progress_callback and not existing_job_id:
         await progress_callback("Saving lesson plan", 88)
 
     output_row = await db.execute(
@@ -869,19 +857,20 @@ Return only JSON. Keep procedures practical and classroom-ready.
     )
     output_id = output_row.scalar_one()
 
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET
-              status = 'completed',
-              error_message = NULL,
-              updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ),
-        {"jobId": job_id},
-    )
+    if not existing_job_id:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'completed',
+                  error_message = NULL,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {"jobId": job_id},
+        )
     await db.commit()
 
     return {

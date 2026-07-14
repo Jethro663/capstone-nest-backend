@@ -15,8 +15,6 @@ export class RagIndexingService {
   constructor(@InjectQueue('rag-indexing') private readonly queue: Queue) {}
 
   async queueClassReindex(classId: string, options: QueueReindexOptions) {
-    const jobId = `reindex:${classId}`;
-
     try {
       await this.queue.add(
         'reindex-class',
@@ -28,7 +26,6 @@ export class RagIndexingService {
           queuedAt: new Date().toISOString(),
         },
         {
-          jobId,
           removeOnComplete: 100,
           removeOnFail: 200,
           attempts: 3,
@@ -36,19 +33,13 @@ export class RagIndexingService {
             type: 'exponential',
             delay: 5000,
           },
+          deduplication: {
+            id: `reindex:${classId}`,
+            keepLastIfActive: true,
+          },
         },
       );
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes('Job is already waiting')
-      ) {
-        this.logger.debug(
-          `RAG reindex job already queued for class ${classId}`,
-        );
-        return;
-      }
-
       this.logger.error(
         `Failed to queue RAG reindex for class ${classId}`,
         error instanceof Error ? error.stack : String(error),

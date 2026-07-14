@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import logging
@@ -18,6 +17,7 @@ from .embedding_provider import (
     embedding_to_vector_literal,
     get_embedding_model_label,
     get_embedding_provider,
+    require_semantic_embeddings,
 )
 
 logger = logging.getLogger(__name__)
@@ -563,22 +563,25 @@ async def _fetch_assessment_status_rows(db: AsyncSession, class_id: str) -> list
 
 
 async def _fetch_chunk_status_rows(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
+    embedding_model = get_embedding_model_label()
     rows = await db.execute(
         sa_text(
             """
             SELECT
-              source_type,
-              lesson_id,
-              extraction_id,
-              assessment_id,
+              c.source_type,
+              c.lesson_id,
+              c.extraction_id,
+              c.assessment_id,
               COUNT(*) AS chunk_count,
-              MAX(COALESCE(updated_at, created_at)) AS last_indexed_at
-            FROM content_chunks
-            WHERE class_id = :classId
-            GROUP BY source_type, lesson_id, extraction_id, assessment_id
+              MAX(COALESCE(c.updated_at, c.created_at)) AS last_indexed_at
+            FROM content_chunks c
+            INNER JOIN content_chunk_embeddings e ON e.chunk_id = c.id
+            WHERE c.class_id = :classId
+              AND e.embedding_model = :embeddingModel
+            GROUP BY c.source_type, c.lesson_id, c.extraction_id, c.assessment_id
             """
         ),
-        {"classId": class_id},
+        {"classId": class_id, "embeddingModel": embedding_model},
     )
     return [dict(row) for row in rows.mappings()]
 
@@ -838,12 +841,11 @@ def build_class_index_status(
 
 
 async def get_class_index_status(db: AsyncSession, class_id: str) -> dict[str, Any]:
-    lesson_rows, extraction_rows, assessment_rows, chunk_rows = await asyncio.gather(
-        _fetch_lesson_status_rows(db, class_id),
-        _fetch_extraction_status_rows(db, class_id),
-        _fetch_assessment_status_rows(db, class_id),
-        _fetch_chunk_status_rows(db, class_id),
-    )
+    # AsyncSession is stateful and cannot safely serve concurrent tasks.
+    lesson_rows = await _fetch_lesson_status_rows(db, class_id)
+    extraction_rows = await _fetch_extraction_status_rows(db, class_id)
+    assessment_rows = await _fetch_assessment_status_rows(db, class_id)
+    chunk_rows = await _fetch_chunk_status_rows(db, class_id)
     return build_class_index_status(
         class_id,
         lesson_rows=lesson_rows,
@@ -854,6 +856,20 @@ async def get_class_index_status(db: AsyncSession, class_id: str) -> dict[str, A
 
 
 async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, Any]:
+    # A transaction-scoped, per-class lock makes delete-and-replace atomic with
+    # respect to another reindex of the same class. Acquire it before reading
+    # sources so a waiter cannot later publish a snapshot captured out of order.
+    await db.execute(
+        sa_text(
+            """
+            SELECT pg_advisory_xact_lock(
+              hashtext('class_content_reindex'),
+              hashtext(:classId)
+            )
+            """
+        ),
+        {"classId": class_id},
+    )
     lesson_rows = await _fetch_lesson_rows(db, class_id)
     extraction_rows = await _fetch_extraction_rows(db, class_id)
     question_rows = await _fetch_question_rows(db, class_id)
@@ -886,7 +902,17 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
             "embeddingModel": get_embedding_model_label(),
         }
 
-    embeddings = await embed_texts([chunk.chunk_text for chunk in chunks])
+    try:
+        embeddings = require_semantic_embeddings(
+            await embed_texts([chunk.chunk_text for chunk in chunks]),
+            expected_count=len(chunks),
+        )
+    except Exception:
+        # The advisory lock and source reads share this transaction. Release it
+        # promptly without touching the prior committed class index so BullMQ
+        # can retry once the provider recovers.
+        await db.rollback()
+        raise
     embedding_model = get_embedding_model_label(embeddings)
     embedding_provider = get_embedding_provider(embeddings)
     embedding_degraded = bool(getattr(embeddings, "degraded", False))
@@ -974,6 +1000,7 @@ async def reindex_class_content(db: AsyncSession, class_id: str) -> dict[str, An
         )
 
     created = len(chunk_values)
+    await db.commit()
     logger.info("[index] Reindexed class %s with %d content chunk(s)", class_id, created)
     return {
         "classId": class_id,

@@ -73,3 +73,27 @@ While running the k6 tests, monitor Grafana and Prometheus using the dashboards 
 - **Database Pool Health**: Check `db_pool_total_connections`, `db_pool_idle_connections`, and `db_pool_waiting_requests` (exposed via `/metrics` on the NestJS backend). If `waiting_requests` spikes above 0, consider tuning `DB_POOL_MAX` in `backend/.env`.
 - **Redis Queue Depth**: Check `bullmq_waiting_jobs` and `bullmq_active_jobs` for `ai-teacher-generation`.
 - **Head-of-Line Blocking**: Verify that fast quiz generation jobs are not blocked by long-running lesson plan jobs.
+
+---
+
+## 5. Deterministic AI/BullMQ Resilience Smoke
+
+Run the local, dependency-mocked regression smoke after changing AI extraction,
+retrieval, indexing, degraded-mode behavior, queue producers/workers, or the
+backend-to-AI shared-secret boundary:
+
+```bash
+./load-tests/run-ai-pipeline-resilience-smoke.sh
+```
+
+The smoke deliberately exercises timeout and dependency-failure paths without
+calling a live Ollama runtime or mutating a deployed environment. It verifies:
+
+- extraction cancellation, persisted lease fencing, redelivery, and apply flow;
+- vector provider failure, exact dimensions, current-model filtering, aggregate timeout, and serialized reindex behavior;
+- tutor and JA grounded fallback responses plus non-blocking tutor concurrency;
+- BullMQ job identifiers, active-job deduplication, retry propagation, and pending-only enqueue compensation;
+- fail-closed shared-secret checks, secret-free storage redirects, and backend proxy deadlines through response-body parsing.
+
+Set `AI_TEST_PYTHON` if the AI virtual environment lives somewhere other than
+`ai-service/.venv/bin/python`.

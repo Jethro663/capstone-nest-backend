@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app import library_indexing_pipeline
 from app.config import settings
+from app.embedding_provider import EmbeddingBatch, EmbeddingProviderUnavailable
 
 
 class LibraryIndexingPathResolutionTests(unittest.TestCase):
@@ -103,6 +104,153 @@ class LibraryIndexingTeacherPrivateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(insert_params["metadataJson"]["classId"], "class-1")
         self.assertEqual(insert_params["metadataJson"]["scope"], "private")
         self.assertTrue(insert_params["metadataJson"]["aiEnabled"])
+
+
+class LibraryIndexingFailureTests(unittest.IsolatedAsyncioTestCase):
+    async def test_embedding_failure_preserves_existing_chunks(self) -> None:
+        file_row = {
+            "id": "file-1",
+            "file_path": "uploads/library/teacher-notes.pdf",
+            "original_name": "Teacher Notes.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 2048,
+            "subject_key": "science",
+            "grade_level": "7",
+            "teacher_visible": False,
+            "file_kind": "pdf",
+            "content_hash": "hash-1",
+            "teacher_id": "teacher-1",
+            "class_id": "class-1",
+            "scope": "private",
+            "ai_enabled": True,
+        }
+        row_result = MagicMock()
+        row_result.mappings.return_value.first.return_value = file_row
+        db = AsyncMock()
+
+        async def execute_side_effect(statement, *_args, **_kwargs):
+            if "FROM uploaded_files" in str(statement):
+                return row_result
+            return MagicMock()
+
+        db.execute = AsyncMock(side_effect=execute_side_effect)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resolved_path = Path(temp_dir) / "teacher-notes.pdf"
+            resolved_path.write_text("placeholder", encoding="utf-8")
+            with (
+                patch.object(
+                    library_indexing_pipeline,
+                    "materialize_backend_upload",
+                    AsyncMock(return_value=str(resolved_path)),
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "_extract_text",
+                    return_value="Cells use energy from food.",
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "sanitize_extracted_text",
+                    return_value=MagicMock(
+                        cleaned_text="Cells use energy from food.", warnings=[]
+                    ),
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "chunk_text_for_indexing",
+                    return_value=["Cells use energy from food."],
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "embed_texts",
+                    AsyncMock(side_effect=TimeoutError("embedding timed out")),
+                ),
+            ):
+                with self.assertRaisesRegex(TimeoutError, "embedding timed out"):
+                    await library_indexing_pipeline.index_library_file(db, "file-1")
+
+        executed_sql = [str(call.args[0]) for call in db.execute.await_args_list]
+        self.assertFalse(
+            any("DELETE FROM content_chunks" in statement for statement in executed_sql)
+        )
+        db.rollback.assert_awaited_once()
+
+    async def test_degraded_embedding_batch_preserves_existing_chunks(self) -> None:
+        file_row = {
+            "id": "file-1",
+            "file_path": "uploads/library/teacher-notes.pdf",
+            "original_name": "Teacher Notes.pdf",
+            "mime_type": "application/pdf",
+            "size_bytes": 2048,
+            "subject_key": "science",
+            "grade_level": "7",
+            "teacher_visible": False,
+            "file_kind": "pdf",
+            "content_hash": "hash-1",
+            "teacher_id": "teacher-1",
+            "class_id": "class-1",
+            "scope": "private",
+            "ai_enabled": True,
+        }
+        row_result = MagicMock()
+        row_result.mappings.return_value.first.return_value = file_row
+        db = AsyncMock()
+
+        async def execute_side_effect(statement, *_args, **_kwargs):
+            if "FROM uploaded_files" in str(statement):
+                return row_result
+            return MagicMock()
+
+        db.execute = AsyncMock(side_effect=execute_side_effect)
+        degraded = EmbeddingBatch(
+            [[0.1, 0.2]],
+            provider="degraded",
+            model="degraded:hash-embedding-v1",
+            degraded=True,
+            warnings=["provider unavailable"],
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            resolved_path = Path(temp_dir) / "teacher-notes.pdf"
+            resolved_path.write_text("placeholder", encoding="utf-8")
+            with (
+                patch.object(
+                    library_indexing_pipeline,
+                    "materialize_backend_upload",
+                    AsyncMock(return_value=str(resolved_path)),
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "_extract_text",
+                    return_value="Cells use energy from food.",
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "sanitize_extracted_text",
+                    return_value=MagicMock(
+                        cleaned_text="Cells use energy from food.", warnings=[]
+                    ),
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "chunk_text_for_indexing",
+                    return_value=["Cells use energy from food."],
+                ),
+                patch.object(
+                    library_indexing_pipeline,
+                    "embed_texts",
+                    AsyncMock(return_value=degraded),
+                ),
+            ):
+                with self.assertRaisesRegex(EmbeddingProviderUnavailable, "Semantic"):
+                    await library_indexing_pipeline.index_library_file(db, "file-1")
+
+        executed_sql = [str(call.args[0]) for call in db.execute.await_args_list]
+        self.assertFalse(
+            any("DELETE FROM content_chunks" in statement for statement in executed_sql)
+        )
+        db.rollback.assert_awaited_once()
 
 
 if __name__ == "__main__":

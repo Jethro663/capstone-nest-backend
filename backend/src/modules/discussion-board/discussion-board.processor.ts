@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { enrollments } from '../../drizzle/schema';
@@ -59,8 +59,8 @@ export class DiscussionBoardProcessor extends WorkerHost {
       return;
     }
 
-    this.logger.warn(
-      `[processor] Unknown discussion-board job "${job.name}" ignored.`,
+    throw new UnrecoverableError(
+      `Unsupported discussion-board job: ${job.name}`,
     );
   }
 

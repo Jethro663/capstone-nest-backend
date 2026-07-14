@@ -25,6 +25,13 @@ describe('DiscussionBoardProcessor', () => {
     jest.clearAllMocks();
   });
 
+  it('rejects unsupported queue contracts without side effects', async () => {
+    await expect(
+      processor.process({ name: 'unknown-job', data: {} } as any),
+    ).rejects.toThrow('Unsupported discussion-board job: unknown-job');
+    expect(mockDb.query.enrollments.findMany).not.toHaveBeenCalled();
+  });
+
   it('fans out published-thread notifications to enrolled students', async () => {
     mockDb.query.enrollments.findMany.mockResolvedValue([
       { studentId: 'student-1' },

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -12,6 +13,8 @@ from . import ollama_client
 from .retrieval_service import similarity_search
 from .schemas import RequestUser, TutorRecommendationDto
 from .student_tutor_service import bootstrap_student_tutor
+
+logger = logging.getLogger(__name__)
 
 OBJECTIVE_TYPES = ("multiple_choice", "multiple_select", "true_false", "dropdown")
 GUARDRAIL_PATTERNS = (
@@ -901,7 +904,38 @@ async def generate_ja_ask_response(
         f"Recent conversation:\n{history_context or 'n/a'}\n\n"
         f"Grounding sources:\n{source_context}\n"
     )
-    reply = await ollama_client.generate(prompt=prompt, task="chat")
+    try:
+        reply = await ollama_client.generate(prompt=prompt, task="chat")
+    except Exception as exc:
+        logger.warning(
+            "JA Ask generation failed; returning cited lesson fallback",
+            exc_info=exc,
+        )
+        return {
+            "blocked": False,
+            "reason": "ai_runtime_unavailable",
+            "reply": _build_study_coach_reply(
+                main_idea=(
+                    "The AI model is temporarily unavailable, so I will keep this "
+                    "response grounded in your selected lesson."
+                ),
+                breakdown=[
+                    str(chunk.get("chunkText") or "").strip()[:240]
+                    for chunk in chunks[:2]
+                    if str(chunk.get("chunkText") or "").strip()
+                ],
+                try_now=[
+                    "Review the cited lesson passage and identify its key term.",
+                    "Try asking one narrower question about that cited passage.",
+                ],
+                watch_out=[
+                    "JA is not generating new claims while the AI model is unavailable."
+                ],
+            ),
+            "citations": citations,
+            "insufficientEvidence": False,
+            "degraded": True,
+        }
     return {
         "blocked": False,
         "reason": None,
@@ -913,6 +947,7 @@ async def generate_ja_ask_response(
         ),
         "citations": citations,
         "insufficientEvidence": False,
+        "degraded": False,
     }
 
 

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
 from .indexing_pipeline import get_class_index_status, reindex_class_content
+from .job_lifecycle import lock_active_job_execution
 from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser
 
@@ -609,6 +610,7 @@ async def recommend_intervention_case(
     case_id: str,
     note: str | None = None,
     existing_job_id: str | None = None,
+    execution_lease_id: str | None = None,
 ) -> dict[str, Any]:
     case_row = await db.execute(
         sa_text(
@@ -916,25 +918,10 @@ Recommended lesson evidence:
         )
 
     if existing_job_id:
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'processing',
-                  error_message = NULL,
-                  source_filters = :sourceFilters,
-                  updated_at = NOW()
-                WHERE id = :jobId
-                """
-            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
-            {
-                "jobId": existing_job_id,
-                "sourceFilters": {
-                    "caseId": case_id,
-                    "weakConcepts": weak_concepts,
-                },
-            },
+        await lock_active_job_execution(
+            db,
+            job_id=existing_job_id,
+            execution_lease_id=execution_lease_id,
         )
         job_id = existing_job_id
     else:
@@ -1052,19 +1039,20 @@ Recommended lesson evidence:
         },
     )
     output_id = output_row.scalar_one()
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET
-              status = 'completed',
-              error_message = NULL,
-              updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ),
-        {"jobId": job_id},
-    )
+    if not existing_job_id:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'completed',
+                  error_message = NULL,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {"jobId": job_id},
+        )
     await db.commit()
 
     return {

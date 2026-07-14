@@ -13,6 +13,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import ollama_client
+from .job_lifecycle import prepare_fenced_output_commit
 from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import GenerateQuizDraftRequest, RequestUser
 
@@ -872,6 +873,7 @@ async def generate_quiz_draft(
     body: GenerateQuizDraftRequest,
     *,
     existing_job_id: str | None = None,
+    execution_lease_id: str | None = None,
     progress_callback: Callable[[str, int], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     class_row = await db.execute(
@@ -1018,20 +1020,13 @@ Source material:
         raise HTTPException(400, "Generated questions were duplicates of existing content. Try a narrower source selection.")
 
     if existing_job_id:
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'processing',
-                  error_message = NULL,
-                  updated_at = NOW()
-                WHERE id = :jobId
-                """
-            ),
-            {
-                "jobId": existing_job_id,
-            },
+        await prepare_fenced_output_commit(
+            db,
+            job_id=existing_job_id,
+            execution_lease_id=execution_lease_id,
+            progress_callback=progress_callback,
+            status_message="Saving draft",
+            progress_percent=88,
         )
         job_id = existing_job_id
     else:
@@ -1063,7 +1058,7 @@ Source material:
         )
         job_id = job_row.scalar_one()
 
-    if progress_callback:
+    if progress_callback and not existing_job_id:
         await progress_callback("Saving draft", 88)
 
     structured_output = {
@@ -1119,19 +1114,20 @@ Source material:
     )
     output_id = output_row.scalar_one()
 
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET
-              status = 'completed',
-              error_message = NULL,
-              updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ),
-        {"jobId": job_id},
-    )
+    if not existing_job_id:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = 'completed',
+                  error_message = NULL,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {"jobId": job_id},
+        )
     await db.commit()
 
     return {

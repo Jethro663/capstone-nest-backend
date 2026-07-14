@@ -56,6 +56,34 @@ describe('InternalUploadsController', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('rejects a wrong internal service token before reading the file', async () => {
+    await expect(
+      controller.readUpload(
+        'uploads/pdfs/lesson.pdf',
+        'wrong-secret',
+        response as any,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(fs.existsSync).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the internal shared secret is not configured', async () => {
+    const unconfigured = new InternalUploadsController({
+      get: jest.fn().mockReturnValue(undefined),
+    } as unknown as ConfigService);
+
+    await expect(
+      unconfigured.readUpload(
+        'uploads/pdfs/lesson.pdf',
+        undefined,
+        response as any,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(fs.existsSync).not.toHaveBeenCalled();
+  });
+
   it('returns not found when the upload is missing on disk', async () => {
     jest.spyOn(fs, 'existsSync').mockReturnValue(false);
 
@@ -71,7 +99,9 @@ describe('InternalUploadsController', () => {
   it('redirects s3:// URLs to signed download URL without corrupting key', async () => {
     const mockStorageService = {
       driver: 's3' as const,
-      getSignedDownloadUrl: jest.fn().mockResolvedValue('https://s3.signed/url'),
+      getSignedDownloadUrl: jest
+        .fn()
+        .mockResolvedValue('https://s3.signed/url'),
     };
     const s3Controller = new InternalUploadsController(
       config,

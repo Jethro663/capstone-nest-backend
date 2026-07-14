@@ -24,13 +24,16 @@ export class LibraryIndexingService {
           queuedAt: new Date().toISOString(),
         },
         {
-          jobId: `library-file:${fileId}:${Date.now()}`,
           removeOnComplete: 100,
           removeOnFail: 200,
           attempts: 3,
           backoff: {
             type: 'exponential',
             delay: 5000,
+          },
+          deduplication: {
+            id: `library-file:${fileId}`,
+            keepLastIfActive: true,
           },
         },
       );

@@ -1,0 +1,512 @@
+{
+  "runMeta": {
+    "date": "2026-07-14",
+    "repo": "capstone-nest-react-lms"
+  },
+  "baseline": [
+    "Initial AI baseline passed 117/117 tests before remediation.",
+    "Initial targeted backend queue/proxy baseline passed before remediation.",
+    "All core Compose services were healthy before runtime probes.",
+    "A real isolated Redis/BullMQ reproduction confirmed that a retained deterministic RAG job ID discarded a later request payload.",
+    "Live bidirectional shared-secret probes rejected missing and wrong tokens before resource lookup.",
+    "Independent review reproduced eight additional release blockers across lease retry timing, output fencing, redirect-secret handling, compensation ambiguity, embedding integrity, ambiguous commits, route typing, and model transitions; all were fixed and re-reviewed."
+  ],
+  "scenarios": [
+    {
+      "feature": "BullMQ processor contracts",
+      "scenario": "Inventory and execute all seven processor classes and their 13 accepted job names",
+      "loadStyle": "repeated contract mutation",
+      "expectedResult": "Known jobs retry transient failures; unknown names fail once as unrecoverable.",
+      "failureSignal": "Silent acknowledgement or repeated retries of an unsupported job.",
+      "observabilityEvidence": "Processor unit tests plus full backend suite.",
+      "confidence": "high"
+    },
+    {
+      "feature": "RAG and library indexing",
+      "scenario": "Queue a replacement request while the same resource is actively indexing",
+      "loadStyle": "concurrent repeated request",
+      "expectedResult": "One active job and one trailing latest job both execute.",
+      "failureSignal": "The later payload is suppressed by a retained job ID.",
+      "observabilityEvidence": "Isolated live Redis/BullMQ run produced execution order [1, 2].",
+      "confidence": "high"
+    },
+    {
+      "feature": "Teacher AI durable jobs",
+      "scenario": "Two workers attempt to claim one pending lesson, quiz, intervention, or extraction job",
+      "loadStyle": "concurrent worker pressure",
+      "expectedResult": "Exactly one conditional UPDATE succeeds; the loser receives 409.",
+      "failureSignal": "Both workers invoke the model or extraction pipeline.",
+      "observabilityEvidence": "Concurrent route tests assert one runner invocation and one conflict.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Teacher AI durable lifecycle",
+      "scenario": "A request is cancelled, a stale worker is reclaimed, or BullMQ redelivers after generated output committed but post-processing failed",
+      "loadStyle": "lease takeover, cancellation, and partial-commit failure injection",
+      "expectedResult": "Only the current persisted worker lease may write; a newer attempt of the same BullMQ job can supersede a timed-out request; committed output is resumed without a second model call.",
+      "failureSignal": "Retries exhaust on 409, a stale worker completes a cancelled job, a poll mutates state, or the model is invoked twice for one durable output.",
+      "observabilityEvidence": "Lease supersession/fencing, read-only polling, durable cancellation, output-lock ordering, and ambiguous-commit regression tests.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Document extraction",
+      "scenario": "Malformed attempts, stale retries, teacher cancellation, task cancellation, and already-applied records",
+      "loadStyle": "failure injection and repeated execution",
+      "expectedResult": "400 for malformed metadata, atomic retry claims, terminal idempotency, and no false completion.",
+      "failureSignal": "500 conversion errors, duplicate work, stranded processing, or completed response after cancellation.",
+      "observabilityEvidence": "Extraction queueing and pipeline regression tests.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Vector retrieval",
+      "scenario": "One or all query variants fail, the provider changes model, or a malformed vector is returned",
+      "loadStyle": "partial dependency failure",
+      "expectedResult": "One strict finite embedding batch, current-model-only vector search, serial DB use, partial results preserved, and a 20-second aggregate deadline.",
+      "failureSignal": "Cross-model comparison, padded vectors, concurrent-session errors, multiplied provider timeouts, or silent empty context.",
+      "observabilityEvidence": "Dimension/finite checks, model-filter SQL, current-model freshness, one-batch embedding, aggregate timeout, partial, and total-failure tests.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Embedding and library indexing",
+      "scenario": "Embedding provider times out during a replacement index",
+      "loadStyle": "slow dependency and transaction failure",
+      "expectedResult": "No placeholder vector is stored or queried; the prior usable index survives and BullMQ retries.",
+      "failureSignal": "Hash vectors replace semantic vectors, incompatible models are compared, or a failed replacement empties the index.",
+      "observabilityEvidence": "Provider/degraded-batch rollback, no-DELETE, current-model filtering, and preservation tests.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Tutor and JA Ask",
+      "scenario": "Ollama times out after grounded citations have been retrieved",
+      "loadStyle": "slow model response",
+      "expectedResult": "A visibly degraded, cited, lesson-grounded response is returned.",
+      "failureSignal": "Unhandled timeout or unsupported generated claims.",
+      "observabilityEvidence": "Tutor and JA timeout regression tests.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Tutor state",
+      "scenario": "Concurrent messages or answer submissions target one session",
+      "loadStyle": "concurrent state mutation",
+      "expectedResult": "A non-blocking PostgreSQL transaction advisory lock serializes turns before state load or returns 409.",
+      "failureSignal": "Lost round increment, stale latest-state overwrite, or a request blocked beyond its deadline waiting for the lock.",
+      "observabilityEvidence": "Try-lock-before-load unit test and live PostgreSQL advisory-lock SQL probe.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Backend to AI boundary",
+      "scenario": "Missing, wrong, matching, and unconfigured shared-secret cases in both directions",
+      "loadStyle": "header mismatch pressure",
+      "expectedResult": "Missing/wrong/unconfigured fail before resource access; matching token reaches lookup; signed-storage redirects omit the secret.",
+      "failureSignal": "Forwarded identity is accepted without the secret or a redirect receives the internal token.",
+      "observabilityEvidence": "Boundary tests, cross-origin redirect capture, and live status probes: AI 401/401/404, backend upload 403/403/404.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Queue handoff",
+      "scenario": "AI creates a durable teacher job but Redis enqueue fails",
+      "loadStyle": "partial dependency failure",
+      "expectedResult": "Backend atomically marks a still-pending job queueCompensated and returns 503; an ambiguously accepted queue item cannot execute it later.",
+      "failureSignal": "A compensated job is reclaimed after the caller was told queueing failed.",
+      "observabilityEvidence": "Teacher/extraction compensation marker and terminal-run tests plus controller coverage.",
+      "confidence": "high"
+    },
+    {
+      "feature": "Timeout envelopes",
+      "scenario": "Ollama, embeddings, or response-body streaming approaches route and worker deadlines",
+      "loadStyle": "slow dependency",
+      "expectedResult": "Chat, tutor start, public generation, and internal workers have explicit tiered deadlines covering headers and body reads; indexing fetches abort.",
+      "failureSignal": "Backend aborts too early, a delayed body escapes the timer, or a worker hangs indefinitely.",
+      "observabilityEvidence": "Proxy and processor delayed-body timeout tests plus abort-signal tests.",
+      "confidence": "high"
+    }
+  ],
+  "findings": [
+    {
+      "title": "Retained deterministic indexing IDs suppressed later requests",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "backend/src/modules/rag/rag-indexing.service.ts",
+        "backend/src/modules/file-upload/library-indexing.service.ts"
+      ],
+      "evidence": "Reproduced against real BullMQ; active-only dedup with keepLastIfActive passed a live two-run verification."
+    },
+    {
+      "title": "Teacher and notification custom job IDs used BullMQ-forbidden colons",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "queue contract",
+      "files": [
+        "backend/src/modules/ai-mentor/ai-generation-queue.service.ts",
+        "backend/src/modules/notifications/assessment-notification-dispatch.service.ts"
+      ],
+      "evidence": "IDs now use hyphens and are asserted by producer tests."
+    },
+    {
+      "title": "Teacher AI and extraction jobs could be claimed by concurrent workers",
+      "priority": "P0",
+      "severity": "critical",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/routers/extractions.py"
+      ],
+      "evidence": "Conditional UPDATE RETURNING claims persist a unique workerLeaseId, permit one runner, and return 409 to the loser."
+    },
+    {
+      "title": "Process-local startup recovery and polling competed with BullMQ ownership",
+      "priority": "P0",
+      "severity": "critical",
+      "status": "fixed",
+      "category": "durable orchestration",
+      "files": [
+        "ai-service/app/main.py"
+      ],
+      "evidence": "Removed process-local task recovery and poll-time status mutation; startup only preloads models, polling is read-only, and BullMQ remains the sole retry owner."
+    },
+    {
+      "title": "Worker lease expiry was shorter than the request budget and writes were not fenced",
+      "priority": "P0",
+      "severity": "critical",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "ai-service/app/job_lifecycle.py",
+        "ai-service/app/main.py",
+        "ai-service/app/routers/extractions.py",
+        "ai-service/app/extraction_pipeline.py"
+      ],
+      "evidence": "Persisted 16-minute leases fence every write; a newer attempt of the same BullMQ job can atomically supersede the prior lease immediately after the 15-minute HTTP timeout instead of exhausting on 409."
+    },
+    {
+      "title": "BullMQ redelivery after output commit could invoke the model twice",
+      "priority": "P0",
+      "severity": "critical",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/lesson_plan_service.py",
+        "ai-service/app/quiz_generation_service.py",
+        "ai-service/app/remedial_service.py"
+      ],
+      "evidence": "Output commits are lease-guarded and separated from final post-processing; BullMQ redelivery detects and resumes committed output without another generation call."
+    },
+    {
+      "title": "Progress persistence released the final output fence before INSERT",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "cancellation race",
+      "files": [
+        "ai-service/app/job_lifecycle.py",
+        "ai-service/app/lesson_plan_service.py",
+        "ai-service/app/quiz_generation_service.py"
+      ],
+      "evidence": "Progress now commits before the final FOR UPDATE; the lease/cancellation lock remains held continuously through output INSERT and commit."
+    },
+    {
+      "title": "Inner generation retries could duplicate output after an ambiguous commit",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "ai-service/app/main.py"
+      ],
+      "evidence": "A durable HTTP execution attempts output generation once; BullMQ owns retry and each redelivery checks for committed output before invoking the generator."
+    },
+    {
+      "title": "Internal teacher runners did not validate durable job type",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "queue contract",
+      "files": [
+        "ai-service/app/main.py"
+      ],
+      "evidence": "Lesson, quiz, and intervention routes reject a valid UUID whose persisted job_type does not match the route before any claim or model call."
+    },
+    {
+      "title": "Teacher AI helper failures were swallowed before BullMQ retry",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "retry",
+      "files": [
+        "ai-service/app/main.py"
+      ],
+      "evidence": "All generation helpers persist failure metadata and rethrow; focused tests cover lesson, quiz, and intervention."
+    },
+    {
+      "title": "Successful durable job creation could be orphaned by Redis enqueue failure",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "orchestration",
+      "files": [
+        "backend/src/modules/ai-mentor/ai-mentor.controller.ts",
+        "backend/src/modules/ai-mentor/ai-proxy.service.ts",
+        "ai-service/app/main.py"
+      ],
+      "evidence": "Pending-only compensation avoids overwriting a claimed job, lesson/quiz/intervention handoffs all compensate enqueue failure, and backend returns 503."
+    },
+    {
+      "title": "Ambiguously accepted queue jobs could execute after compensation returned 503",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "orchestration",
+      "files": [
+        "ai-service/app/main.py",
+        "ai-service/app/extraction_job_service.py",
+        "ai-service/app/routers/extractions.py"
+      ],
+      "evidence": "Compensation atomically persists queueCompensated on a still-pending teacher/extraction job, and internal runners treat the marker as terminal."
+    },
+    {
+      "title": "Shared-secret checks were optional on proxied user-context routes",
+      "priority": "P0",
+      "severity": "critical",
+      "status": "fixed",
+      "category": "boundary auth",
+      "files": [
+        "ai-service/app/main.py",
+        "backend/src/modules/ai-mentor/ai-proxy.service.ts",
+        "backend/src/modules/file-upload/internal-uploads.controller.ts"
+      ],
+      "evidence": "Both services now fail closed; AI uses constant-time comparison; live bidirectional probes pass."
+    },
+    {
+      "title": "Backend upload redirects forwarded the internal shared secret to storage",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "boundary auth",
+      "files": [
+        "ai-service/app/backend_uploads.py"
+      ],
+      "evidence": "The authenticated first hop disables redirects; validated HTTP(S) storage redirects are fetched without X-Internal-Service-Token, including subsequent redirects."
+    },
+    {
+      "title": "Indexing workers had no HTTP deadline",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "timeout",
+      "files": [
+        "backend/src/modules/rag/processors/rag-indexing.processor.ts",
+        "backend/src/modules/file-upload/processors/library-indexing.processor.ts"
+      ],
+      "evidence": "AbortController deadlines remain active through response-body parsing, normalize timeout errors, and rethrow for exponential retry."
+    },
+    {
+      "title": "Class and library indexing transaction boundaries could lose usable vectors",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "data integrity",
+      "files": [
+        "ai-service/app/indexing_pipeline.py",
+        "ai-service/app/library_indexing_pipeline.py"
+      ],
+      "evidence": "Class reindex takes a per-class transaction advisory lock and commits; library replacement embeds before atomic delete/insert and rolls back on failure."
+    },
+    {
+      "title": "Retrieval and index-status code shared AsyncSession across concurrent tasks",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "concurrency",
+      "files": [
+        "ai-service/app/retrieval_service.py",
+        "ai-service/app/indexing_pipeline.py"
+      ],
+      "evidence": "Variants embed in one batch, DB operations are serial under a 20-second aggregate deadline, and partial degradation remains observable."
+    },
+    {
+      "title": "Placeholder and cross-model vectors could silently corrupt semantic retrieval",
+      "priority": "P0",
+      "severity": "high",
+      "status": "fixed",
+      "category": "semantic integrity",
+      "files": [
+        "ai-service/app/embedding_provider.py",
+        "ai-service/app/indexing_pipeline.py",
+        "ai-service/app/library_indexing_pipeline.py",
+        "ai-service/app/retrieval_service.py"
+      ],
+      "evidence": "Hash fallback was removed; vector count, exact dimension, and finite values are enforced; failed indexing preserves the old index; retrieval and class freshness use only the current embedding_model."
+    },
+    {
+      "title": "Tutor and JA grounded calls propagated Ollama timeouts",
+      "priority": "P1",
+      "severity": "medium",
+      "status": "fixed",
+      "category": "graceful degradation",
+      "files": [
+        "ai-service/app/student_tutor_service.py",
+        "ai-service/app/ja_practice_service.py"
+      ],
+      "evidence": "Both return explicit degraded responses that preserve citations and avoid new unsupported claims."
+    },
+    {
+      "title": "Concurrent tutor turns could overwrite latest session state",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "ai-service/app/student_tutor_service.py"
+      ],
+      "evidence": "Per-user/session PostgreSQL transaction try-lock is acquired before loading mutable state; overlap fails promptly with 409."
+    },
+    {
+      "title": "Performance recompute coalesced different student subsets",
+      "priority": "P1",
+      "severity": "high",
+      "status": "fixed",
+      "category": "idempotency",
+      "files": [
+        "backend/src/modules/performance/performance-recompute-queue.service.ts"
+      ],
+      "evidence": "Stable hash of the sorted unique student set is now part of the time-window job ID."
+    },
+    {
+      "title": "Unknown BullMQ job names were acknowledged as successful",
+      "priority": "P1",
+      "severity": "medium",
+      "status": "fixed",
+      "category": "queue contract",
+      "files": [
+        "backend/src/modules/ai-mentor/processors/ai-generation.processor.ts",
+        "backend/src/modules/discussion-board/discussion-board.processor.ts",
+        "backend/src/modules/notifications/processors/assessment-notification.processor.ts",
+        "backend/src/modules/performance/performance-recompute.processor.ts"
+      ],
+      "evidence": "All seven processor classes now reject unsupported contracts with UnrecoverableError."
+    },
+    {
+      "title": "Queue handoff after non-AI domain commits lacks a transactional outbox",
+      "priority": "P2",
+      "severity": "medium",
+      "status": "deferred",
+      "category": "orchestration",
+      "files": [
+        "backend/src/modules/announcements/announcements.service.ts",
+        "backend/src/modules/discussion-board/discussion-board.service.ts",
+        "backend/src/modules/rag/rag-indexing.service.ts",
+        "backend/src/modules/file-upload/library-indexing.service.ts"
+      ],
+      "evidence": "A crash or Redis outage between domain persistence and queue insertion can still require reconciliation; a shared outbox is a schema-level redesign."
+    },
+    {
+      "title": "Runtime payload schemas are duplicated across backend and AI service",
+      "priority": "P2",
+      "severity": "medium",
+      "status": "deferred",
+      "category": "contract fragility",
+      "files": [
+        "backend/src/modules/ai-mentor/ai-proxy.service.ts",
+        "ai-service/app/schemas.py"
+      ],
+      "evidence": "Current tests cover exercised envelopes, but generated cross-service contract fixtures are not yet present."
+    },
+    {
+      "title": "Production-scale Ollama saturation and long-document memory pressure remain unmeasured",
+      "priority": "P2",
+      "severity": "medium",
+      "status": "deferred",
+      "category": "capacity",
+      "files": [
+        "load-tests/"
+      ],
+      "evidence": "Failure paths are deterministic and verified locally; a staging soak with production models and representative PDFs is still required."
+    }
+  ],
+  "changesMade": [
+    "Hardened all seven BullMQ processor classes, job IDs, retry propagation, active-only deduplication, and unsupported-contract handling.",
+    "Made BullMQ the sole durable execution owner; removed process-local recovery and poll-time state mutation.",
+    "Added persisted worker leases, same-BullMQ newer-attempt supersession, and fenced claims, progress, output, completion, failure, and cancellation writes.",
+    "Made committed generation output resumable on redelivery, kept the final output lock through commit, and removed inner retries around ambiguous output commits.",
+    "Added strict worker metadata/job-type validation, durable cancellation, terminal queue-compensation markers, and quiz retry compensation.",
+    "Added tiered backend-to-AI deadlines that include response-body reads plus abortable indexing calls with exponential BullMQ retries.",
+    "Made the shared-secret boundary fail closed and stripped the internal token before following signed-storage redirects.",
+    "Made class/library index replacement transaction-safe and removed unsafe placeholder embeddings; retrieval enforces exact finite dimensions, current-model vector filtering, one batch, serial DB work, and an aggregate deadline.",
+    "Added grounded tutor and JA fallbacks plus non-blocking per-session concurrency serialization.",
+    "Added load-tests/run-ai-pipeline-resilience-smoke.sh and focused regression coverage."
+  ],
+  "verification": [
+    "AI_RUNTIME_MODE=test ai-service/.venv/bin/python -m unittest discover -s ai-service/tests -p test_*.py: 169 tests passed.",
+    "npm --prefix backend test -- --runInBand: 91 suites, 1063 tests passed.",
+    "./load-tests/run-ai-pipeline-resilience-smoke.sh: 138 AI and 151 backend tests passed.",
+    "npm --prefix backend run build: passed, including migration integrity and source cleanliness.",
+    "npm --prefix backend run lint: zero errors and 2204 baseline warnings.",
+    "AI import smoke printed Nexora AI Service.",
+    "Live Redis/BullMQ active-plus-trailing dedup run executed versions [1, 2].",
+    "Live shared-secret probes returned AI 401/401/404 and backend upload 403/403/404.",
+    "Live PostgreSQL advisory-lock statement completed inside a rolled-back transaction.",
+    "Independent review found eight release blockers across two passes; every blocker was regression-tested, remediated, and closed by final read-only re-review."
+  ],
+  "comparison": {
+    "improved": [
+      "Duplicate and stale worker execution is prevented by persisted lease claims and fenced writes.",
+      "Cancellation and output commits survive process restart and BullMQ redelivery.",
+      "Slow requests terminate through body parsing and retry instead of hanging.",
+      "Model timeouts return grounded fallbacks where safe; embedding outages preserve the prior index and return no incompatible context.",
+      "The service boundary no longer accepts forwarded identity without the shared secret or leaks it to storage redirects.",
+      "Replacement indexing preserves the previous usable vector set on failure and serializes same-class replacement."
+    ],
+    "unchanged": [
+      "Backend remains the public auth/RBAC and durable orchestration owner.",
+      "AI service remains assistive and does not mutate official grades or enrollment.",
+      "Existing public response envelopes remain compatible; degraded fields are additive."
+    ],
+    "remainingRisks": [
+      "Non-AI queue handoffs still need a transactional outbox or periodic reconciliation for crash consistency.",
+      "Staging load against the deployed Ollama model and representative large documents is not part of deterministic CI.",
+      "Cross-service runtime schemas remain manually synchronized.",
+      "An embedding-model change safely hides old library vectors, but operators must run library backfill to restore that context."
+    ]
+  },
+  "readiness": {
+    "lxp": "high confidence for verified local failure paths",
+    "aiFeatures": "high confidence for deterministic resilience; staging capacity verification pending",
+    "notes": [
+      "No official academic-state ownership moved into the AI service.",
+      "Claims are bounded to direct execution, automated tests, and isolated local infrastructure probes.",
+      "No production-readiness claim is made without a representative staging soak."
+    ]
+  },
+  "secondPassVerification": [
+    "Full AI and backend test suites passed after the lease, output, redirect, compensation, and semantic-integrity fixes.",
+    "The consolidated smoke passed after lifecycle, retrieval/model-transition, timeout, queue, and boundary-auth hardening were added.",
+    "Backend compilation, migration integrity, source-clean checks, lint, Python compilation, and JSON validation completed successfully.",
+    "Independent review found and then closed eight release blockers; the last model-transition review returned a non-blocking approval."
+  ],
+  "plan": {
+    "safeImmediateFixes": [
+      "Keep BullMQ as the sole durable retry owner and keep lease supersession, fenced writes, terminal compensation, route-type checks, and output-resume guards.",
+      "Keep active-only BullMQ deduplication with one trailing replacement for indexing.",
+      "Keep fail-closed shared-secret checks and tiered deadlines.",
+      "Keep deterministic degraded generation responses only where grounded evidence remains available; never synthesize semantic vectors.",
+      "Keep strict finite current-model embeddings, one-batch retrieval, aggregate deadlines, and non-blocking advisory locks."
+    ],
+    "conditionalRefactors": [
+      "Generate shared runtime contract fixtures from one schema source.",
+      "Add queue-lag and compensation counters to the existing metrics surface.",
+      "Add periodic reconciliation for failed or missed RAG/library enqueue operations.",
+      "Trigger or require a library backfill whenever the configured embedding model changes."
+    ],
+    "deferredItems": [
+      "Adopt a transactional outbox for all domain-write-to-queue handoffs; this needs schema and rollout design.",
+      "Run a staging soak with representative PDFs, concurrent classrooms, and the production Ollama/embedding model.",
+      "Set capacity thresholds only after measuring deployment hardware and model latency distributions."
+    ]
+  }
+}
