@@ -193,25 +193,30 @@ describe('AssessmentEditorPage', () => {
     mockedAssessmentService.reviewRubric.mockResolvedValue({
       success: true,
       message: 'saved',
-      data: {
-        rubricCriteria: [],
-      },
+      data: buildAssessment({ rubricCriteria: [] }),
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
     mockedAcademicStateService.getCurrent.mockResolvedValue(buildAcademicStateResponse());
     mockedClassRecordService.getSlotOverview.mockResolvedValue({
       success: true,
-      message: 'ok',
       data: {
+        classRecordId: 'class-record-1',
+        gradingPeriod: 'Q1',
+        status: 'draft',
         categories: [
           {
+            id: 'category-1',
             key: 'written_work',
             label: 'Written Work',
             slots: [
               {
                 itemId: 'slot-1',
                 title: 'Written Work 1',
+                order: 1,
                 maxScore: 20,
-                status: 'available',
+                assessmentId: null,
+                assessmentTitle: null,
+                scoreCount: 0,
+                status: 'empty',
                 isSelectable: true,
               },
             ],
@@ -232,6 +237,41 @@ describe('AssessmentEditorPage', () => {
       writable: true,
       value: jest.fn(),
     });
+  });
+
+  it('renders a direct, compact workbar before question content and advanced panels', async () => {
+    render(<AssessmentEditorPage />);
+
+    expect(await screen.findByDisplayValue('Fractions Checkpoint')).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Assessment title')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Back to assessments' })).toBeInTheDocument();
+    expect(screen.queryByText('Assessment name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Editable')).not.toBeInTheDocument();
+
+    const publishControls = screen.getByRole('group', {
+      name: 'Assessment publishing controls',
+    });
+    expect(within(publishControls).getByRole('button', { name: 'Preview' })).toBeInTheDocument();
+    expect(within(publishControls).getByRole('button', { name: 'Draft' })).toBeInTheDocument();
+    expect(
+      within(publishControls).getByRole('button', { name: 'Ready to give' }),
+    ).toBeInTheDocument();
+    expect(within(publishControls).getByRole('button', { name: 'Save now' })).toBeInTheDocument();
+
+    const workbarMeta = screen.getByLabelText('Assessment status');
+    expect(workbarMeta).toHaveTextContent(/saved|unsaved|saving|retry needed/i);
+    expect(workbarMeta).not.toHaveClass('rounded-full');
+    expect(screen.getByLabelText('Assessment context')).toHaveTextContent('Quarter Q1');
+
+    const warningButton = screen.getByRole('button', { name: /view .* setup issues?/i });
+    expect(within(warningButton).getByText(/setup issues?/i)).toBeVisible();
+
+    const firstQuestion = screen.getByTestId('question-editor-question-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    const advancedField = (await screen.findAllByText('Time Limit (minutes)'))[0];
+    expect(
+      firstQuestion.compareDocumentPosition(advancedField) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('opens the helper guide from the question mark button', async () => {
