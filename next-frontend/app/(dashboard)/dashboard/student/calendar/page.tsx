@@ -126,6 +126,7 @@ function getSupportingCopy(item: CalendarFeedItem) {
 
 export default function StudentCalendarPage() {
   const { user } = useAuth();
+  const userId = user?.id;
 
   const [classStatus, setClassStatus] = useState<StudentPageStatus>('loading');
   const [feedStatus, setFeedStatus] = useState<StudentPageStatus>('loading');
@@ -147,25 +148,29 @@ export default function StudentCalendarPage() {
   const feedRequestIdRef = useRef(0);
   const feedHasFulfilledSourceRef = useRef(false);
 
-  const fetchClasses = useCallback(async () => {
-    if (!user?.id) {
-      setClassStatus('error');
+  const fetchClasses = useCallback(() => {
+    if (!userId) {
+      void Promise.resolve().then(() => setClassStatus('error'));
       return;
     }
 
     const requestId = ++classRequestIdRef.current;
-    setClassStatus('loading');
+    const request = classService.getByStudent(userId);
 
-    try {
-      const response = await classService.getByStudent(user.id);
-      if (requestId !== classRequestIdRef.current) return;
-      setClasses(response.data || []);
-      setClassStatus('ready');
-    } catch {
-      if (requestId !== classRequestIdRef.current) return;
-      setClassStatus('error');
-    }
-  }, [user?.id]);
+    void Promise.resolve().then(() => {
+      if (requestId === classRequestIdRef.current) setClassStatus('loading');
+    });
+    void request
+      .then((response) => {
+        if (requestId !== classRequestIdRef.current) return;
+        setClasses(response.data || []);
+        setClassStatus('ready');
+      })
+      .catch(() => {
+        if (requestId !== classRequestIdRef.current) return;
+        setClassStatus('error');
+      });
+  }, [userId]);
 
   useEffect(() => {
     void fetchClasses();
@@ -177,30 +182,46 @@ export default function StudentCalendarPage() {
   useEffect(() => {
     const nextOptions = buildSchoolYearList(classes, schoolEvents);
     if (selectedSchoolYear && nextOptions.includes(selectedSchoolYear)) return;
-    setSelectedSchoolYear(
-      classes[0]?.schoolYear || nextOptions[0] || getCurrentSchoolYearReference(),
-    );
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setSelectedSchoolYear(
+          classes[0]?.schoolYear || nextOptions[0] || getCurrentSchoolYearReference(),
+        );
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [classes, schoolEvents, selectedSchoolYear]);
 
   useEffect(() => {
     const selectedClass = classes.find((classItem) => classItem.id === selectedClassId);
     if (!selectedClass) return;
     if (selectedClass.schoolYear === selectedSchoolYear) return;
-    setSelectedClassId('all');
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSelectedClassId('all');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [classes, selectedClassId, selectedSchoolYear]);
 
   const loadCalendarFeed = useCallback(
-    async (retryKeys?: string[]) => {
+    (retryKeys?: string[]) => {
       if (classStatus !== 'ready') {
         return;
       }
 
       if (!selectedSchoolYear) {
-        setAssessmentsByClass({});
-        setAnnouncementsByClass({});
-        setSchoolEvents([]);
-        setFailedFeedKeys([]);
-        setFeedStatus('ready');
+        void Promise.resolve().then(() => {
+          setAssessmentsByClass({});
+          setAnnouncementsByClass({});
+          setSchoolEvents([]);
+          setFailedFeedKeys([]);
+          setFeedStatus('ready');
+        });
         return;
       }
 
@@ -219,9 +240,11 @@ export default function StudentCalendarPage() {
       if (!isRetry) {
         feedHasFulfilledSourceRef.current = false;
       }
-      setFeedStatus('loading');
+      void Promise.resolve().then(() => {
+        if (requestId === feedRequestIdRef.current) setFeedStatus('loading');
+      });
 
-      const results = await Promise.allSettled(
+      void Promise.allSettled(
         targetKeys.map(async (key): Promise<CalendarFeedPayload> => {
           if (key === SCHOOL_EVENTS_FEED_KEY) {
             const response = await schoolEventService.getAll({
@@ -244,64 +267,64 @@ export default function StudentCalendarPage() {
           });
           return { kind: 'announcement', classId, data: response.data || [] };
         }),
-      );
+      ).then((results) => {
+        if (requestId !== feedRequestIdRef.current) return;
 
-      if (requestId !== feedRequestIdRef.current) return;
+        const failedKeys = targetKeys.filter(
+          (_, index) => results[index]?.status === 'rejected',
+        );
+        const fulfilledPayloads = results.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        );
 
-      const failedKeys = targetKeys.filter(
-        (_, index) => results[index]?.status === 'rejected',
-      );
-      const fulfilledPayloads = results.flatMap((result) =>
-        result.status === 'fulfilled' ? [result.value] : [],
-      );
-
-      if (isRetry) {
-        for (const payload of fulfilledPayloads) {
-          if (payload.kind === 'assessment') {
-            setAssessmentsByClass((current) => ({
-              ...current,
-              [payload.classId]: payload.data,
-            }));
-          } else if (payload.kind === 'announcement') {
-            setAnnouncementsByClass((current) => ({
-              ...current,
-              [payload.classId]: payload.data,
-            }));
-          } else {
-            setSchoolEvents(payload.data);
+        if (isRetry) {
+          for (const payload of fulfilledPayloads) {
+            if (payload.kind === 'assessment') {
+              setAssessmentsByClass((current) => ({
+                ...current,
+                [payload.classId]: payload.data,
+              }));
+            } else if (payload.kind === 'announcement') {
+              setAnnouncementsByClass((current) => ({
+                ...current,
+                [payload.classId]: payload.data,
+              }));
+            } else {
+              setSchoolEvents(payload.data);
+            }
           }
-        }
-      } else {
-        const nextAssessments: Record<string, Assessment[]> = {};
-        const nextAnnouncements: Record<string, Announcement[]> = {};
-        let nextSchoolEvents: SchoolEvent[] = [];
+        } else {
+          const nextAssessments: Record<string, Assessment[]> = {};
+          const nextAnnouncements: Record<string, Announcement[]> = {};
+          let nextSchoolEvents: SchoolEvent[] = [];
 
-        for (const payload of fulfilledPayloads) {
-          if (payload.kind === 'assessment') {
-            nextAssessments[payload.classId] = payload.data;
-          } else if (payload.kind === 'announcement') {
-            nextAnnouncements[payload.classId] = payload.data;
-          } else {
-            nextSchoolEvents = payload.data;
+          for (const payload of fulfilledPayloads) {
+            if (payload.kind === 'assessment') {
+              nextAssessments[payload.classId] = payload.data;
+            } else if (payload.kind === 'announcement') {
+              nextAnnouncements[payload.classId] = payload.data;
+            } else {
+              nextSchoolEvents = payload.data;
+            }
           }
+
+          setAssessmentsByClass(nextAssessments);
+          setAnnouncementsByClass(nextAnnouncements);
+          setSchoolEvents(nextSchoolEvents);
         }
 
-        setAssessmentsByClass(nextAssessments);
-        setAnnouncementsByClass(nextAnnouncements);
-        setSchoolEvents(nextSchoolEvents);
-      }
-
-      if (fulfilledPayloads.length > 0) {
-        feedHasFulfilledSourceRef.current = true;
-      }
-      setFailedFeedKeys(failedKeys);
-      setFeedStatus(
-        failedKeys.length === 0
-          ? 'ready'
-          : feedHasFulfilledSourceRef.current
-            ? 'partial'
-            : 'error',
-      );
+        if (fulfilledPayloads.length > 0) {
+          feedHasFulfilledSourceRef.current = true;
+        }
+        setFailedFeedKeys(failedKeys);
+        setFeedStatus(
+          failedKeys.length === 0
+            ? 'ready'
+            : feedHasFulfilledSourceRef.current
+              ? 'partial'
+              : 'error',
+        );
+      });
     },
     [classes, classStatus, selectedSchoolYear],
   );

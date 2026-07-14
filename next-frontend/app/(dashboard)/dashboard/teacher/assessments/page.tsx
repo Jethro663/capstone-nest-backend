@@ -45,6 +45,7 @@ function formatAssessmentType(type: string) {
 
 export default function TeacherAssessmentsPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const hasSuccessfulCollectionRef = useRef(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [assessments, setAssessments] = useState<AssessmentWithClass[]>([]);
@@ -53,74 +54,77 @@ export default function TeacherAssessmentsPage() {
   const [selectedClassId, setSelectedClassId] = useState('all');
   const [search, setSearch] = useState('');
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchData = useCallback(() => {
+    if (!userId) return;
 
-    try {
-      if (!hasSuccessfulCollectionRef.current) {
-        setCollectionState('loading');
-      }
-      const classesRes = await classService.getByTeacher(user.id, 'active');
-      const activeClasses = classesRes.data || [];
-      setClasses(activeClasses);
+    const request = classService.getByTeacher(userId, 'active');
+    if (!hasSuccessfulCollectionRef.current) {
+      void Promise.resolve().then(() => setCollectionState('loading'));
+    }
 
-      if (activeClasses.length === 0) {
-        setAssessments([]);
-        hasSuccessfulCollectionRef.current = true;
-        setCollectionState('ready');
-        return;
-      }
+    void request
+      .then(async (classesRes) => {
+        const activeClasses = classesRes.data || [];
+        setClasses(activeClasses);
 
-      const assessmentResponses = await Promise.allSettled(
-        activeClasses.map(async (course) => {
-          const response = await assessmentService.getByClass(course.id, {
-            page: 1,
-            limit: 100,
-            status: 'all',
+        if (activeClasses.length === 0) {
+          setAssessments([]);
+          hasSuccessfulCollectionRef.current = true;
+          setCollectionState('ready');
+          return;
+        }
+
+        const assessmentResponses = await Promise.allSettled(
+          activeClasses.map(async (course) => {
+            const response = await assessmentService.getByClass(course.id, {
+              page: 1,
+              limit: 100,
+              status: 'all',
+            });
+
+            const classLabel = `${course.subjectCode} - ${course.subjectName}`;
+            return (response.data || []).map((assessment) => ({
+              ...assessment,
+              classLabel,
+            }));
+          }),
+        );
+
+        const fulfilledResponses = assessmentResponses.filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<AssessmentWithClass[]> =>
+            result.status === 'fulfilled',
+        );
+        const hasRejectedResponse = assessmentResponses.some(
+          (result) => result.status === 'rejected',
+        );
+
+        if (fulfilledResponses.length === 0) {
+          setCollectionState(
+            hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+          );
+          return;
+        }
+
+        const merged = fulfilledResponses
+          .flatMap((result) => result.value)
+          .sort((left, right) => {
+            const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+            const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+            return rightTime - leftTime;
           });
 
-          const classLabel = `${course.subjectCode} - ${course.subjectName}`;
-          return (response.data || []).map((assessment) => ({
-            ...assessment,
-            classLabel,
-          }));
-        }),
-      );
-
-      const fulfilledResponses = assessmentResponses.filter(
-        (
-          result,
-        ): result is PromiseFulfilledResult<AssessmentWithClass[]> =>
-          result.status === 'fulfilled',
-      );
-      const hasRejectedResponse = assessmentResponses.some(
-        (result) => result.status === 'rejected',
-      );
-
-      if (fulfilledResponses.length === 0) {
+        setAssessments(merged);
+        hasSuccessfulCollectionRef.current = true;
+        setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
+      })
+      .catch(() => {
         setCollectionState(
           hasSuccessfulCollectionRef.current ? 'partial' : 'error',
         );
-        return;
-      }
-
-      const merged = fulfilledResponses
-        .flatMap((result) => result.value)
-        .sort((left, right) => {
-          const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
-          const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
-          return rightTime - leftTime;
-        });
-
-      setAssessments(merged);
-      hasSuccessfulCollectionRef.current = true;
-      setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
-    } catch {
-      setCollectionState(
-        hasSuccessfulCollectionRef.current ? 'partial' : 'error',
-      );
-    }
-  }, [user?.id]);
+      });
+  }, [userId]);
 
   useEffect(() => {
     void fetchData();

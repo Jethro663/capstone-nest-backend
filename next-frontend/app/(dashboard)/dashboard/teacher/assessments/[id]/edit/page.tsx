@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   CircleHelp,

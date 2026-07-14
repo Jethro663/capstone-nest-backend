@@ -50,60 +50,62 @@ function summarizeAnnouncement(content: string) {
 
 export default function StudentAnnouncementsPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const [announcements, setAnnouncements] = useState<AnnouncementWithClass[]>([]);
   const [status, setStatus] = useState<StudentPageStatus>('loading');
   const [viewFilter, setViewFilter] = useState<AnnouncementViewFilter>('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) {
-      setStatus('error');
+  const fetchData = useCallback(() => {
+    if (!userId) {
+      void Promise.resolve().then(() => setStatus('error'));
       return;
     }
 
-    try {
-      setStatus('loading');
-      const classesRes = await classService.getByStudent(user.id);
-      const classes: ClassItem[] = classesRes.data || [];
+    const request = classService.getByStudent(userId);
+    void Promise.resolve().then(() => setStatus('loading'));
 
-      const results = await Promise.allSettled(
-        classes.map(async (cls) => {
-          const res = await announcementService.getByClass(cls.id);
-          const items: Announcement[] = Array.isArray(res.data) ? res.data : [];
-          return items.map((ann) => ({
-            ...ann,
-            className: cls.subjectName,
-            subjectCode: cls.subjectCode,
-          }));
-        }),
-      );
+    void request
+      .then(async (classesRes) => {
+        const classes: ClassItem[] = classesRes.data || [];
 
-      const fulfilledResults = results.filter(
-        (result): result is PromiseFulfilledResult<AnnouncementWithClass[]> =>
-          result.status === 'fulfilled',
-      );
-      const failedCount = results.length - fulfilledResults.length;
+        const results = await Promise.allSettled(
+          classes.map(async (cls) => {
+            const res = await announcementService.getByClass(cls.id);
+            const items: Announcement[] = Array.isArray(res.data) ? res.data : [];
+            return items.map((ann) => ({
+              ...ann,
+              className: cls.subjectName,
+              subjectCode: cls.subjectCode,
+            }));
+          }),
+        );
 
-      if (results.length > 0 && fulfilledResults.length === 0) {
-        setStatus('error');
-        return;
-      }
+        const fulfilledResults = results.filter(
+          (result): result is PromiseFulfilledResult<AnnouncementWithClass[]> =>
+            result.status === 'fulfilled',
+        );
+        const failedCount = results.length - fulfilledResults.length;
 
-      const all: AnnouncementWithClass[] = fulfilledResults
-        .flatMap((result) => result.value)
-        .sort((a, b) => {
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        const dateA = new Date(a.createdAt ?? 0).getTime();
-        const dateB = new Date(b.createdAt ?? 0).getTime();
-        return dateB - dateA;
-      });
+        if (results.length > 0 && fulfilledResults.length === 0) {
+          setStatus('error');
+          return;
+        }
 
-      setAnnouncements(all);
-      setStatus(failedCount > 0 ? 'partial' : 'ready');
-    } catch {
-      setStatus('error');
-    }
-  }, [user?.id]);
+        const all: AnnouncementWithClass[] = fulfilledResults
+          .flatMap((result) => result.value)
+          .sort((a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            const dateA = new Date(a.createdAt ?? 0).getTime();
+            const dateB = new Date(b.createdAt ?? 0).getTime();
+            return dateB - dateA;
+          });
+
+        setAnnouncements(all);
+        setStatus(failedCount > 0 ? 'partial' : 'ready');
+      })
+      .catch(() => setStatus('error'));
+  }, [userId]);
 
   useEffect(() => {
     void fetchData();
@@ -130,7 +132,13 @@ export default function StudentAnnouncementsPage() {
   useEffect(() => {
     if (subjectFilter === 'all') return;
     if (subjectFilters.some((entry) => entry.code === subjectFilter)) return;
-    setSubjectFilter('all');
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSubjectFilter('all');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [subjectFilter, subjectFilters]);
 
   const filteredAnnouncements = useMemo(

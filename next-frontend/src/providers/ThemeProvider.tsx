@@ -6,7 +6,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -30,6 +29,28 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const THEME_STORE_EVENT = 'nexora-theme-change';
+
+function subscribeToThemeStore(onStoreChange: () => void) {
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key === THEME_STORAGE_KEY) onStoreChange();
+  };
+
+  window.addEventListener('storage', handleStorage);
+  window.addEventListener(THEME_STORE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener('storage', handleStorage);
+    window.removeEventListener(THEME_STORE_EVENT, onStoreChange);
+  };
+}
+
+function getThemeSnapshot(): ThemeId {
+  return normalizeThemeId(window.localStorage.getItem(THEME_STORAGE_KEY)) ?? DEFAULT_THEME;
+}
+
+function getServerThemeSnapshot(): ThemeId {
+  return DEFAULT_THEME;
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -39,14 +60,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => false,
   );
   const isStudentRoute = pathname.startsWith('/dashboard/student');
-  const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
-
-  useEffect(() => {
-    if (!isHydrated) return;
-    setThemeState(
-      normalizeThemeId(window.localStorage.getItem(THEME_STORAGE_KEY)) ?? DEFAULT_THEME,
-    );
-  }, [isHydrated]);
+  const theme = useSyncExternalStore(
+    subscribeToThemeStore,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
 
   useEffect(() => {
     const root = document.documentElement;
@@ -59,7 +77,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [isHydrated, isStudentRoute, theme]);
 
   const setTheme = useCallback((nextTheme: ThemeId) => {
-    setThemeState(nextTheme);
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    window.dispatchEvent(new Event(THEME_STORE_EVENT));
   }, []);
 
   const value = useMemo<ThemeContextValue>(

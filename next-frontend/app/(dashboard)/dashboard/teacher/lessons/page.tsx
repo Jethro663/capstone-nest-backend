@@ -41,6 +41,7 @@ function formatDate(value?: string) {
 
 export default function TeacherLessonsPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const hasSuccessfulCollectionRef = useRef(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [lessons, setLessons] = useState<LessonWithClass[]>([]);
@@ -49,72 +50,75 @@ export default function TeacherLessonsPage() {
   const [selectedClassId, setSelectedClassId] = useState('all');
   const [search, setSearch] = useState('');
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchData = useCallback(() => {
+    if (!userId) return;
 
-    try {
-      if (!hasSuccessfulCollectionRef.current) {
-        setCollectionState('loading');
-      }
-      const classesRes = await classService.getByTeacher(user.id, 'active');
-      const activeClasses = classesRes.data || [];
-      setClasses(activeClasses);
+    const request = classService.getByTeacher(userId, 'active');
+    if (!hasSuccessfulCollectionRef.current) {
+      void Promise.resolve().then(() => setCollectionState('loading'));
+    }
 
-      if (activeClasses.length === 0) {
-        setLessons([]);
-        hasSuccessfulCollectionRef.current = true;
-        setCollectionState('ready');
-        return;
-      }
+    void request
+      .then(async (classesRes) => {
+        const activeClasses = classesRes.data || [];
+        setClasses(activeClasses);
 
-      const lessonResponses = await Promise.allSettled(
-        activeClasses.map(async (course) => {
-          const response = await lessonService.getByClass(course.id, {
-            order: 'desc',
+        if (activeClasses.length === 0) {
+          setLessons([]);
+          hasSuccessfulCollectionRef.current = true;
+          setCollectionState('ready');
+          return;
+        }
+
+        const lessonResponses = await Promise.allSettled(
+          activeClasses.map(async (course) => {
+            const response = await lessonService.getByClass(course.id, {
+              order: 'desc',
+            });
+
+            const classLabel = `${course.subjectCode} - ${course.subjectName}`;
+            return (response.data || []).map((lesson) => ({
+              ...lesson,
+              classLabel,
+            }));
+          }),
+        );
+
+        const fulfilledResponses = lessonResponses.filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<LessonWithClass[]> =>
+            result.status === 'fulfilled',
+        );
+        const hasRejectedResponse = lessonResponses.some(
+          (result) => result.status === 'rejected',
+        );
+
+        if (fulfilledResponses.length === 0) {
+          setCollectionState(
+            hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+          );
+          return;
+        }
+
+        const merged = fulfilledResponses
+          .flatMap((result) => result.value)
+          .sort((left, right) => {
+            const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+            const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+            return rightTime - leftTime;
           });
 
-          const classLabel = `${course.subjectCode} - ${course.subjectName}`;
-          return (response.data || []).map((lesson) => ({
-            ...lesson,
-            classLabel,
-          }));
-        }),
-      );
-
-      const fulfilledResponses = lessonResponses.filter(
-        (
-          result,
-        ): result is PromiseFulfilledResult<LessonWithClass[]> =>
-          result.status === 'fulfilled',
-      );
-      const hasRejectedResponse = lessonResponses.some(
-        (result) => result.status === 'rejected',
-      );
-
-      if (fulfilledResponses.length === 0) {
+        setLessons(merged);
+        hasSuccessfulCollectionRef.current = true;
+        setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
+      })
+      .catch(() => {
         setCollectionState(
           hasSuccessfulCollectionRef.current ? 'partial' : 'error',
         );
-        return;
-      }
-
-      const merged = fulfilledResponses
-        .flatMap((result) => result.value)
-        .sort((left, right) => {
-          const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
-          const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
-          return rightTime - leftTime;
-        });
-
-      setLessons(merged);
-      hasSuccessfulCollectionRef.current = true;
-      setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
-    } catch {
-      setCollectionState(
-        hasSuccessfulCollectionRef.current ? 'partial' : 'error',
-      );
-    }
-  }, [user?.id]);
+      });
+  }, [userId]);
 
   useEffect(() => {
     void fetchData();

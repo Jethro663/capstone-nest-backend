@@ -54,20 +54,20 @@ export default function ClassRecordPage() {
     ? `${selectedRecord.status[0].toUpperCase()}${selectedRecord.status.slice(1)}`
     : 'Waiting';
 
-  const fetchClasses = useCallback(async () => {
-    setClassListStatus('loading');
+  const fetchClasses = useCallback(() => {
+    const request = dashboardService.getTeacherClasses();
+    void Promise.resolve().then(() => setClassListStatus('loading'));
 
-    try {
-      const response = await dashboardService.getTeacherClasses();
-      const nextClasses = response.data || [];
-      setClasses(nextClasses);
-      setSelectedClassId((current) =>
-        current || preselectedClassId || nextClasses[0]?.id || '',
-      );
-      setClassListStatus('ready');
-    } catch {
-      setClassListStatus('error');
-    }
+    void request
+      .then((response) => {
+        const nextClasses = response.data || [];
+        setClasses(nextClasses);
+        setSelectedClassId((current) =>
+          current || preselectedClassId || nextClasses[0]?.id || '',
+        );
+        setClassListStatus('ready');
+      })
+      .catch(() => setClassListStatus('error'));
   }, [preselectedClassId]);
 
   useEffect(() => {

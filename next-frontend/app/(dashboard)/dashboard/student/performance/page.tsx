@@ -390,15 +390,16 @@ export default function StudentPerformancePage() {
   const [summary, setSummary] = useState<StudentOwnPerformanceSummary | null>(null);
   const [status, setStatus] = useState<StudentPageStatus>('loading');
 
-  const fetchSummary = useCallback(async () => {
-    try {
-      setStatus('loading');
-      const response = await performanceService.getStudentOwnSummary();
-      setSummary(response.data);
-      setStatus('ready');
-    } catch {
-      setStatus('error');
-    }
+  const fetchSummary = useCallback(() => {
+    const request = performanceService.getStudentOwnSummary();
+    void Promise.resolve().then(() => setStatus('loading'));
+
+    void request
+      .then((response) => {
+        setSummary(response.data);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
   }, []);
 
   useEffect(() => {
