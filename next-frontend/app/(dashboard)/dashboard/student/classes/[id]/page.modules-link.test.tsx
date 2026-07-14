@@ -307,6 +307,91 @@ describe('StudentClassDetailPage module links', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('renders safe fixed copy when the required class request fails', async () => {
+    mockedClassService.getById.mockRejectedValueOnce({
+      response: {
+        status: 500,
+        data: { message: 'relation classes_internal does not exist' },
+      },
+    });
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText("Class couldn't be loaded")).toBeInTheDocument();
+    expect(
+      screen.queryByText('relation classes_internal does not exist'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to courses/i })).toHaveAttribute(
+      'href',
+      '/dashboard/student/courses',
+    );
+  });
+
+  it('renders safe forbidden copy without the server response body', async () => {
+    mockedClassService.getById.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { message: 'student enrollment join detail' },
+      },
+    });
+
+    render(<StudentClassDetailPage />);
+
+    expect(
+      await screen.findByText("You don't have access to this class"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('student enrollment join detail')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /back to courses/i })).toBeInTheDocument();
+  });
+
+  it('shows a true empty modules state after the module request succeeds', async () => {
+    mockedModuleService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      count: 0,
+      data: [],
+    } as Awaited<ReturnType<typeof moduleService.getByClass>>);
+
+    render(<StudentClassDetailPage />);
+
+    expect(await screen.findByText('0 modules available')).toBeInTheDocument();
+    expect(screen.getByText('No modules available yet.')).toBeInTheDocument();
+  });
+
+  it('keeps the class workspace visible when one secondary region fails', async () => {
+    mockedModuleService.getByClass.mockRejectedValueOnce(
+      new Error('module sql detail'),
+    );
+
+    render(<StudentClassDetailPage />);
+
+    expect(
+      await screen.findByText('Class content is partially unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mathematics' })).toBeInTheDocument();
+    expect(screen.queryByText('0 modules available')).not.toBeInTheDocument();
+    expect(screen.queryByText('No modules available yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('module sql detail')).not.toBeInTheDocument();
+  });
+
+  it('retries only failed secondary regions without refetching the class owner', async () => {
+    mockedModuleService.getByClass.mockRejectedValueOnce(
+      new Error('module unavailable'),
+    );
+
+    render(<StudentClassDetailPage />);
+
+    await screen.findByText('Class content is partially unavailable');
+    fireEvent.click(screen.getByRole('button', { name: /retry failed content/i }));
+
+    expect(await screen.findByRole('link', { name: 'Open' })).toBeInTheDocument();
+    expect(mockedModuleService.getByClass).toHaveBeenCalledTimes(2);
+    expect(mockedClassService.getById).toHaveBeenCalledTimes(1);
+    expect(mockedAssessmentService.getByClass).toHaveBeenCalledTimes(1);
+    expect(mockedAnnouncementService.getByClass).toHaveBeenCalledTimes(1);
+    expect(mockedSchoolEventService.getAll).toHaveBeenCalledTimes(1);
+  });
+
   it('renders manual and backend-gated copied template assignments returned by the API', async () => {
     currentView = 'assignments';
     mockedAssessmentService.getByClass.mockResolvedValue({

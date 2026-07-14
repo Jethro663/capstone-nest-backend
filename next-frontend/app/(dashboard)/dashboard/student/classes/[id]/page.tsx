@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -51,6 +51,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -89,6 +90,14 @@ type GradeCategory =
   | 'discussion';
 type CalendarKind = 'assessment' | 'event' | 'holiday';
 type ModuleCardView = 'card' | 'wide';
+type ClassRegion =
+  | 'modules'
+  | 'assessments'
+  | 'announcements'
+  | 'calendar'
+  | 'attempts';
+type ClassPageStatus = 'loading' | 'ready' | 'error' | 'forbidden';
+type ClassOwnerErrorKind = 'not-found' | 'general';
 type StudentClassGuideScreen =
   | 'overview'
   | 'modules'
@@ -1180,7 +1189,10 @@ export default function StudentClassDetailPage() {
     ? (searchParams.get('view') as StudentClassTab)
     : 'modules';
 
-  const [loading, setLoading] = useState(true);
+  const [pageStatus, setPageStatus] = useState<ClassPageStatus>('loading');
+  const [ownerErrorKind, setOwnerErrorKind] =
+    useState<ClassOwnerErrorKind>('general');
+  const [failedRegions, setFailedRegions] = useState<ClassRegion[]>([]);
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [modules, setModules] = useState<ClassModule[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -1191,51 +1203,39 @@ export default function StudentClassDetailPage() {
   const [discussionCommentBody, setDiscussionCommentBody] = useState('');
   const [discussionCommentImages, setDiscussionCommentImages] = useState<File[]>([]);
   const [discussionSubmitting, setDiscussionSubmitting] = useState(false);
-  const [forbiddenMessage, setForbiddenMessage] = useState<string | null>(null);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [attemptsByAssessment, setAttemptsByAssessment] = useState<Record<string, AssessmentAttempt[]>>({});
   const [assignmentFilter, setAssignmentFilter] = useState<AssignmentCategory>('upcoming');
   const [moduleCardView, setModuleCardView] = useState<ModuleCardView>('wide');
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
+  const dataClassIdRef = useRef<string | null>(null);
 
   const fetchPageData = useCallback(async () => {
     if (!classId) {
+      dataClassIdRef.current = null;
       setClassItem(null);
-      setForbiddenMessage(null);
-      setLoading(false);
+      setFailedRegions([]);
+      setOwnerErrorKind('not-found');
+      setPageStatus('error');
       return;
     }
 
-    try {
-      setLoading(true);
-      setForbiddenMessage(null);
-      const shouldLoadFullClassData = currentTab !== 'discussion';
+    setPageStatus('loading');
 
+    try {
       const classResponse = await classService.getById(classId);
       const classData = classResponse.data;
+      const isNewClass = dataClassIdRef.current !== classData.id;
 
-      const [modulesResponse, assessmentsResponse, announcementsResponse, schoolEventsResponse] =
-        await Promise.all([
-          shouldLoadFullClassData
-            ? moduleService.getByClass(classId).catch(() => ({ data: [] as ClassModule[] }))
-            : Promise.resolve({ data: [] as ClassModule[] }),
-          shouldLoadFullClassData
-            ? assessmentService
-                .getByClass(classId, { page: 1, limit: 100, status: 'all' })
-                .catch(() => ({ data: [] as Assessment[] }))
-            : Promise.resolve({ data: [] as Assessment[] }),
-          shouldLoadFullClassData
-            ? announcementService
-                .getByClass(classId, { limit: 50 })
-                .catch(() => ({ data: [] as Announcement[] }))
-            : Promise.resolve({ data: [] as Announcement[] }),
-          shouldLoadFullClassData
-            ? schoolEventService
-                .getAll({ schoolYear: classData.schoolYear })
-                .catch(() => ({ data: [] as SchoolEvent[] }))
-            : Promise.resolve({ data: [] as SchoolEvent[] }),
-        ]);
+      if (isNewClass) {
+        dataClassIdRef.current = classData.id;
+        setModules([]);
+        setAssessments([]);
+        setAnnouncements([]);
+        setSchoolEvents([]);
+        setAttemptsByAssessment({});
+      }
 
       let enrichedClass: ClassItem = classData;
       if ((!classData.enrollments || classData.enrollments.length === 0) && user?.id) {
@@ -1248,42 +1248,98 @@ export default function StudentClassDetailPage() {
         }
       }
 
-      const publishedAssessments = shouldLoadFullClassData
-        ? (assessmentsResponse.data || []).filter((entry) => entry.isPublished)
-        : [];
-      const attemptsEntries = shouldLoadFullClassData
-        ? await Promise.all(
-            publishedAssessments.map(async (entry) => {
-              const response = await assessmentService
-                .getStudentAttempts(entry.id)
-                .catch(() => ({ data: [] as AssessmentAttempt[] }));
-              return [entry.id, response.data || []] as const;
-            }),
-          )
-        : [];
-
       setClassItem(enrichedClass);
-      setModules(sortByDateAsc(modulesResponse.data || [], () => null).sort((a, b) => a.order - b.order));
-      setAssessments(publishedAssessments);
-      setAnnouncements(
-        [...(announcementsResponse.data || [])].sort((left, right) => {
-          if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
-          const leftTs = new Date(left.createdAt || 0).getTime();
-          const rightTs = new Date(right.createdAt || 0).getTime();
-          return rightTs - leftTs;
-        }),
-      );
-      setSchoolEvents(schoolEventsResponse.data || []);
-      setAttemptsByAssessment(Object.fromEntries(attemptsEntries));
+
+      if (currentTab === 'discussion') {
+        setFailedRegions([]);
+        setPageStatus('ready');
+        return;
+      }
+
+      const [modulesResult, assessmentsResult, announcementsResult, calendarResult] =
+        await Promise.allSettled([
+          moduleService.getByClass(classId),
+          assessmentService.getByClass(classId, {
+            page: 1,
+            limit: 100,
+            status: 'all',
+          }),
+          announcementService.getByClass(classId, { limit: 50 }),
+          schoolEventService.getAll({ schoolYear: classData.schoolYear }),
+        ]);
+      const failures = new Set<ClassRegion>();
+
+      if (modulesResult.status === 'fulfilled') {
+        setModules(
+          sortByDateAsc(modulesResult.value.data || [], () => null).sort(
+            (a, b) => a.order - b.order,
+          ),
+        );
+      } else {
+        failures.add('modules');
+      }
+
+      let publishedAssessments: Assessment[] | null = null;
+      if (assessmentsResult.status === 'fulfilled') {
+        publishedAssessments = (assessmentsResult.value.data || []).filter(
+          (entry) => entry.isPublished,
+        );
+        setAssessments(publishedAssessments);
+      } else {
+        failures.add('assessments');
+        failures.add('attempts');
+      }
+
+      if (announcementsResult.status === 'fulfilled') {
+        setAnnouncements(
+          [...(announcementsResult.value.data || [])].sort((left, right) => {
+            if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+            const leftTs = new Date(left.createdAt || 0).getTime();
+            const rightTs = new Date(right.createdAt || 0).getTime();
+            return rightTs - leftTs;
+          }),
+        );
+      } else {
+        failures.add('announcements');
+      }
+
+      if (calendarResult.status === 'fulfilled') {
+        setSchoolEvents(calendarResult.value.data || []);
+      } else {
+        failures.add('calendar');
+      }
+
+      if (publishedAssessments !== null) {
+        const attemptResults = await Promise.allSettled(
+          publishedAssessments.map(async (entry) => {
+            const response = await assessmentService.getStudentAttempts(entry.id);
+            return [entry.id, response.data || []] as const;
+          }),
+        );
+        const successfulAttempts = attemptResults.flatMap((result) =>
+          result.status === 'fulfilled' ? [result.value] : [],
+        );
+
+        if (attemptResults.some((result) => result.status === 'rejected')) {
+          failures.add('attempts');
+          setAttemptsByAssessment((current) => ({
+            ...current,
+            ...Object.fromEntries(successfulAttempts),
+          }));
+        } else {
+          setAttemptsByAssessment(Object.fromEntries(successfulAttempts));
+        }
+      }
+
+      setFailedRegions([...failures]);
+      setPageStatus('ready');
     } catch (error) {
       const status = (error as { response?: { status?: number } })?.response?.status ?? null;
-      const message =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-        null;
-      if (status === 403) {
-        setForbiddenMessage(message || 'You do not have access to this class.');
-      }
+      dataClassIdRef.current = null;
       setClassItem(null);
+      setFailedRegions([]);
+      setOwnerErrorKind(status === 404 ? 'not-found' : 'general');
+      setPageStatus(status === 403 ? 'forbidden' : 'error');
       setModules([]);
       setAssessments([]);
       setAnnouncements([]);
@@ -1292,10 +1348,95 @@ export default function StudentClassDetailPage() {
       setSelectedDiscussionThread(null);
       setSchoolEvents([]);
       setAttemptsByAssessment({});
-    } finally {
-      setLoading(false);
     }
   }, [classId, currentTab, user?.id]);
+
+  const retryFailedRegions = useCallback(async () => {
+    if (!classId || !classItem || failedRegions.length === 0) return;
+
+    const remaining = new Set(failedRegions);
+    let assessmentSource: Assessment[] | null = null;
+
+    if (remaining.has('modules')) {
+      try {
+        const response = await moduleService.getByClass(classId);
+        setModules(
+          sortByDateAsc(response.data || [], () => null).sort(
+            (a, b) => a.order - b.order,
+          ),
+        );
+        remaining.delete('modules');
+      } catch {
+        // Keep the failed region marked for the next targeted retry.
+      }
+    }
+
+    if (remaining.has('assessments')) {
+      try {
+        const response = await assessmentService.getByClass(classId, {
+          page: 1,
+          limit: 100,
+          status: 'all',
+        });
+        assessmentSource = (response.data || []).filter((entry) => entry.isPublished);
+        setAssessments(assessmentSource);
+        remaining.delete('assessments');
+      } catch {
+        // Attempts depend on a successful assessment collection.
+      }
+    }
+
+    if (remaining.has('announcements')) {
+      try {
+        const response = await announcementService.getByClass(classId, { limit: 50 });
+        setAnnouncements(
+          [...(response.data || [])].sort((left, right) => {
+            if (left.isPinned !== right.isPinned) return left.isPinned ? -1 : 1;
+            const leftTs = new Date(left.createdAt || 0).getTime();
+            const rightTs = new Date(right.createdAt || 0).getTime();
+            return rightTs - leftTs;
+          }),
+        );
+        remaining.delete('announcements');
+      } catch {
+        // Keep the failed region marked for the next targeted retry.
+      }
+    }
+
+    if (remaining.has('calendar')) {
+      try {
+        const response = await schoolEventService.getAll({
+          schoolYear: classItem.schoolYear,
+        });
+        setSchoolEvents(response.data || []);
+        remaining.delete('calendar');
+      } catch {
+        // Keep the failed region marked for the next targeted retry.
+      }
+    }
+
+    if (remaining.has('attempts') && !remaining.has('assessments')) {
+      const attemptResults = await Promise.allSettled(
+        (assessmentSource || assessments).map(async (entry) => {
+          const response = await assessmentService.getStudentAttempts(entry.id);
+          return [entry.id, response.data || []] as const;
+        }),
+      );
+      const successfulAttempts = attemptResults.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+
+      setAttemptsByAssessment((current) => ({
+        ...current,
+        ...Object.fromEntries(successfulAttempts),
+      }));
+      if (!attemptResults.some((result) => result.status === 'rejected')) {
+        remaining.delete('attempts');
+      }
+    }
+
+    setFailedRegions([...remaining]);
+  }, [assessments, classId, classItem, failedRegions]);
 
   useEffect(() => {
     void fetchPageData();
@@ -1649,8 +1790,15 @@ export default function StudentClassDetailPage() {
   );
   const scheduleLabel = useMemo(() => formatScheduleLabel(classItem), [classItem]);
   const activeGuidePage = studentClassGuidePages[helpPage] ?? studentClassGuidePages[0];
+  const modulesUnavailable = failedRegions.includes('modules');
+  const assignmentsUnavailable =
+    failedRegions.includes('assessments') || failedRegions.includes('attempts');
+  const announcementsUnavailable = failedRegions.includes('announcements');
+  const gradesUnavailable = assignmentsUnavailable;
+  const calendarUnavailable =
+    failedRegions.includes('assessments') || failedRegions.includes('calendar');
 
-  if (loading) {
+  if (pageStatus === 'loading') {
     return (
       <div className="student-class-workspace-loading">
         <Skeleton className="h-44 rounded-xl" />
@@ -1662,12 +1810,36 @@ export default function StudentClassDetailPage() {
     );
   }
 
-  if (!classItem) {
+  if (pageStatus === 'forbidden') {
     return (
-      <section className="teacher-class-workspace__not-found">
-        <p>{forbiddenMessage || 'Class not found.'}</p>
-        <Link href="/dashboard/student/courses">Back to Courses</Link>
-      </section>
+      <DashboardStatePanel
+        kind="error"
+        title="You don't have access to this class"
+        description="This class is not available to your account."
+        primaryAction={{
+          label: 'Back to Courses',
+          href: '/dashboard/student/courses',
+        }}
+      />
+    );
+  }
+
+  if (pageStatus === 'error' || !classItem) {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title={ownerErrorKind === 'not-found' ? 'Class not found' : "Class couldn't be loaded"}
+        description={
+          ownerErrorKind === 'not-found'
+            ? 'The class may have been removed or is no longer available.'
+            : 'Class data is temporarily unavailable. Try again shortly.'
+        }
+        primaryAction={{ label: 'Try again', onClick: () => void fetchPageData() }}
+        secondaryAction={{
+          label: 'Back to Courses',
+          href: '/dashboard/student/courses',
+        }}
+      />
     );
   }
 
@@ -1699,7 +1871,9 @@ export default function StudentClassDetailPage() {
           {
             key: 'modules',
             icon: <FolderOpen className="h-3.5 w-3.5" />,
-            label: `${modules.length} module${modules.length === 1 ? '' : 's'}`,
+            label: modulesUnavailable
+              ? 'Modules unavailable'
+              : `${modules.length} module${modules.length === 1 ? '' : 's'}`,
           },
         ]}
         tabs={workspaceTabs}
@@ -1718,6 +1892,18 @@ export default function StudentClassDetailPage() {
           </Button>
         }
       >
+      {failedRegions.length > 0 ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Class content is partially unavailable"
+          description="Some class content could not be loaded. Available content remains visible."
+          primaryAction={{
+            label: 'Retry failed content',
+            onClick: () => void retryFailedRegions(),
+          }}
+        />
+      ) : null}
+
       {currentTab === 'modules' ? (
         <motion.section
           className="student-class-panel"
@@ -1728,7 +1914,11 @@ export default function StudentClassDetailPage() {
           <header className="student-class-panel__head student-class-panel__head--modules">
             <div>
               <h2>Course Modules</h2>
-              <p>{modules.length} modules available</p>
+              <p>
+                {modulesUnavailable
+                  ? 'Modules temporarily unavailable'
+                  : `${modules.length} modules available`}
+              </p>
             </div>
             <div className="teacher-home-view-toggle" role="group" aria-label="Module view style">
               <button
@@ -1752,7 +1942,11 @@ export default function StudentClassDetailPage() {
             </div>
           </header>
 
-          {modules.length === 0 ? (
+          {modulesUnavailable ? (
+            <div className="teacher-class-workspace__empty">
+              Module content is temporarily unavailable.
+            </div>
+          ) : modules.length === 0 ? (
             <div className="teacher-class-workspace__empty">No modules available yet.</div>
           ) : (
             <div className="student-class-modules-grid" data-view={moduleCardView}>
@@ -1862,7 +2056,11 @@ export default function StudentClassDetailPage() {
         >
           <header className="student-class-panel__head">
             <h2>Assignments</h2>
-            <p>{assignmentRows.length} assignments</p>
+            <p>
+              {assignmentsUnavailable
+                ? 'Assignment data temporarily unavailable'
+                : `${assignmentRows.length} assignments`}
+            </p>
           </header>
 
           <div className="student-class-filters">
@@ -1878,7 +2076,11 @@ export default function StudentClassDetailPage() {
             ))}
           </div>
 
-          {assignmentRows.length === 0 ? (
+          {assignmentsUnavailable ? (
+            <div className="teacher-class-workspace__empty">
+              Assignment data is temporarily unavailable.
+            </div>
+          ) : assignmentRows.length === 0 ? (
             <div className="teacher-class-workspace__empty">No assignments for this filter.</div>
           ) : (
             <div key={assignmentFilter} className="student-class-stack">
@@ -1920,7 +2122,11 @@ export default function StudentClassDetailPage() {
             <h2>Announcements</h2>
           </header>
 
-          {announcements.length === 0 ? (
+          {announcementsUnavailable ? (
+            <div className="teacher-class-workspace__empty">
+              Announcements are temporarily unavailable.
+            </div>
+          ) : announcements.length === 0 ? (
             <div className="teacher-class-workspace__empty">No announcements yet.</div>
           ) : (
             <div className="student-class-stack">
@@ -2287,11 +2493,15 @@ export default function StudentClassDetailPage() {
           <header className="student-gradebook__head">
             <div>
               <h2>Gradebook</h2>
-              <p>{gradeRows.length} graded items and submissions for {classItem.subjectName}</p>
+              <p>
+                {gradesUnavailable
+                  ? 'Grade data temporarily unavailable'
+                  : `${gradeRows.length} graded items and submissions for ${classItem.subjectName}`}
+              </p>
             </div>
             <div className="student-gradebook__overall" data-tone={gradeSummary.tone}>
               <span>Overall</span>
-              <strong>{gradeSummary.percent}%</strong>
+              <strong>{gradesUnavailable ? '--' : `${gradeSummary.percent}%`}</strong>
             </div>
           </header>
 
@@ -2299,7 +2509,11 @@ export default function StudentClassDetailPage() {
             <div className="student-gradebook__rule" aria-hidden="true" />
             <div className="student-class-table-wrap student-class-table-wrap--gradebook">
 
-              {gradeRows.length === 0 ? (
+              {gradesUnavailable ? (
+                <div className="teacher-class-workspace__empty">
+                  Grade data is temporarily unavailable.
+                </div>
+              ) : gradeRows.length === 0 ? (
                 <div className="teacher-class-workspace__empty">No grade records yet.</div>
               ) : (
                 <table className="student-class-table student-class-table--gradebook">
@@ -2371,7 +2585,11 @@ export default function StudentClassDetailPage() {
               <p>Upcoming events and due dates for {classItem.subjectName}</p>
             </header>
 
-            {calendarRows.length === 0 ? (
+            {calendarUnavailable ? (
+              <div className="teacher-class-workspace__empty">
+                Calendar data is temporarily unavailable.
+              </div>
+            ) : calendarRows.length === 0 ? (
               <div className="teacher-class-workspace__empty">No upcoming events.</div>
             ) : (
               <div className="student-class-stack">
