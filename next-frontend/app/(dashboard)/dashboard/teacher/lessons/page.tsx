@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { BookOpen, CalendarDays, Search, Sparkles } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
@@ -16,12 +16,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { ClassItem } from '@/types/class';
 import type { Lesson } from '@/types/lesson';
 
 type LessonWithClass = Lesson & {
   classLabel: string;
 };
+
+type TeacherCollectionState = 'loading' | 'ready' | 'error' | 'partial';
 
 function formatDate(value?: string) {
   if (!value) return 'No date';
@@ -38,9 +41,11 @@ function formatDate(value?: string) {
 
 export default function TeacherLessonsPage() {
   const { user } = useAuth();
+  const hasSuccessfulCollectionRef = useRef(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [lessons, setLessons] = useState<LessonWithClass[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [collectionState, setCollectionState] =
+    useState<TeacherCollectionState>('loading');
   const [selectedClassId, setSelectedClassId] = useState('all');
   const [search, setSearch] = useState('');
 
@@ -48,17 +53,21 @@ export default function TeacherLessonsPage() {
     if (!user?.id) return;
 
     try {
-      setLoading(true);
+      if (!hasSuccessfulCollectionRef.current) {
+        setCollectionState('loading');
+      }
       const classesRes = await classService.getByTeacher(user.id, 'active');
       const activeClasses = classesRes.data || [];
       setClasses(activeClasses);
 
       if (activeClasses.length === 0) {
         setLessons([]);
+        hasSuccessfulCollectionRef.current = true;
+        setCollectionState('ready');
         return;
       }
 
-      const lessonResponses = await Promise.all(
+      const lessonResponses = await Promise.allSettled(
         activeClasses.map(async (course) => {
           const response = await lessonService.getByClass(course.id, {
             order: 'desc',
@@ -72,8 +81,25 @@ export default function TeacherLessonsPage() {
         }),
       );
 
-      const merged = lessonResponses
-        .flat()
+      const fulfilledResponses = lessonResponses.filter(
+        (
+          result,
+        ): result is PromiseFulfilledResult<LessonWithClass[]> =>
+          result.status === 'fulfilled',
+      );
+      const hasRejectedResponse = lessonResponses.some(
+        (result) => result.status === 'rejected',
+      );
+
+      if (fulfilledResponses.length === 0) {
+        setCollectionState(
+          hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+        );
+        return;
+      }
+
+      const merged = fulfilledResponses
+        .flatMap((result) => result.value)
         .sort((left, right) => {
           const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
           const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
@@ -81,11 +107,12 @@ export default function TeacherLessonsPage() {
         });
 
       setLessons(merged);
+      hasSuccessfulCollectionRef.current = true;
+      setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
     } catch {
-      setClasses([]);
-      setLessons([]);
-    } finally {
-      setLoading(false);
+      setCollectionState(
+        hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+      );
     }
   }, [user?.id]);
 
@@ -107,7 +134,7 @@ export default function TeacherLessonsPage() {
     });
   }, [lessons, search, selectedClassId]);
 
-  if (loading) {
+  if (collectionState === 'loading') {
     return (
       <div className="space-y-6">
         <Skeleton className="h-56 rounded-[1.9rem]" />
@@ -204,12 +231,35 @@ export default function TeacherLessonsPage() {
         title="Lesson Index"
         description="Open a lesson editor directly from the lesson list."
       >
-        {classes.length === 0 ? (
+        {collectionState === 'error' ? (
+          <DashboardStatePanel
+            kind="error"
+            title="Lessons couldn't be loaded"
+            description="Try again to load your active classes and their lessons."
+            primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+          />
+        ) : (
+          <>
+        {collectionState === 'partial' ? (
+          <DashboardStatePanel
+            kind="unavailable"
+            title="Some lessons are temporarily unavailable"
+            description="Available class lessons are still shown below."
+            primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+            className="mb-4"
+          />
+        ) : null}
+        {classes.length === 0 && collectionState === 'ready' ? (
           <TeacherEmptyState
             title="No classes assigned yet"
             description="Lessons are class-scoped, so they will appear here once at least one active class is assigned to your teacher account."
           />
-        ) : filteredLessons.length === 0 ? (
+        ) : lessons.length === 0 && collectionState === 'ready' ? (
+          <TeacherEmptyState
+            title="No lessons yet"
+            description="Create a lesson from a class workspace and it will appear here."
+          />
+        ) : lessons.length > 0 && filteredLessons.length === 0 ? (
           <TeacherEmptyState
             title="No lessons match this view"
             description="Try a different class filter or search term, or create lessons from a class workspace first."
@@ -241,6 +291,8 @@ export default function TeacherLessonsPage() {
               </div>
             ))}
           </div>
+        )}
+          </>
         )}
       </TeacherSectionCard>
     </TeacherPageShell>
