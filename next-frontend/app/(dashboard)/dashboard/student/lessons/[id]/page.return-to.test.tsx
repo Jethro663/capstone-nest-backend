@@ -143,4 +143,18 @@ describe('StudentLessonViewPage LXP returnTo routing', () => {
       expect(push).toHaveBeenCalledWith('/dashboard/student/lxp/class-1');
     });
   });
+
+  it('keeps the provided LXP return path available when lesson loading fails', async () => {
+    mockedLessonService.getById.mockRejectedValueOnce(new Error('upstream database unavailable'));
+
+    render(<StudentLessonViewPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: "Lesson couldn't be loaded" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Path' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/lxp/class-1',
+    );
+  });
 });

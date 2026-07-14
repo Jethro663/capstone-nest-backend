@@ -1,7 +1,6 @@
 'use client';
 
-import { ArrowLeft, BookOpen, ClipboardCheck, ScrollText } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,41 +85,54 @@ export function StudentLessonReaderPanel({
   onCheckpointAnswer,
   onDownloadAttachment,
 }: StudentLessonReaderPanelProps) {
-  const lessonCount = module?.sections.flatMap((section) => section.items).filter((item) => item.itemType === 'lesson').length ?? 0;
-  const assessmentCount = module?.sections.flatMap((section) => section.items).filter((item) => item.itemType === 'assessment').length ?? 0;
-  const pillLabel = module ? `M${module.order}` : 'Lesson';
   const title = lesson?.title || module?.title || 'Lesson';
-  const heroCopy: ReactNode = <p>{formatClassLine(classItem)}</p>;
+  const classContext = classItem
+    ? `${classItem.subjectName} · ${formatClassLine(classItem)}`
+    : null;
+  const hasRequiredProgress =
+    typeof module?.requiredCompletedCount === 'number' &&
+    typeof module.requiredVisibleCount === 'number';
+  const hasOverallProgress = typeof module?.progressPercent === 'number';
 
   return (
-    <div className="student-module-view">
+    <div className="student-module-view student-module-view--lesson">
       <header className="student-module-view__hero">
         <Link href={backHref} className="student-module-view__back">
           <ArrowLeft className="h-4 w-4" />
           {backLabel}
         </Link>
 
-        <div className="student-module-view__hero-row">
-          <span className="student-module-view__pill">{pillLabel}</span>
-          <div className="student-module-view__hero-copy">
-            <h1>{title}</h1>
-            {heroCopy}
-            <div className="student-module-view__meta">
-              <span>
-                <BookOpen className="h-3.5 w-3.5" />
-                {lessonCount} lessons
-              </span>
-              <span>
-                <ScrollText className="h-3.5 w-3.5" />
-                {assessmentCount} assessments
-              </span>
-              <span>
-                <ClipboardCheck className="h-3.5 w-3.5" />
-                {module?.requiredCompletedCount ?? 0}/{module?.requiredVisibleCount ?? 0} required
-              </span>
-              <span>{module?.progressPercent ?? 0}% progress</span>
-            </div>
-          </div>
+        <div className="student-module-view__hero-copy">
+          <h1>{title}</h1>
+          {classContext ? <p>{classContext}</p> : null}
+          <dl className="student-module-view__lesson-details" aria-label="Lesson details">
+            {module?.title ? (
+              <div>
+                <dt>Module</dt>
+                <dd>{module.title}</dd>
+              </div>
+            ) : null}
+            {lesson ? (
+              <div>
+                <dt>Availability</dt>
+                <dd>{lesson.isDraft ? 'Draft' : 'Available'}</dd>
+              </div>
+            ) : null}
+            {hasRequiredProgress ? (
+              <div>
+                <dt>Required progress</dt>
+                <dd>
+                  {module?.requiredCompletedCount} of {module?.requiredVisibleCount} complete
+                </dd>
+              </div>
+            ) : null}
+            {hasOverallProgress ? (
+              <div>
+                <dt>Overall progress</dt>
+                <dd>{module?.progressPercent}%</dd>
+              </div>
+            ) : null}
+          </dl>
         </div>
       </header>
 
@@ -128,8 +140,8 @@ export function StudentLessonReaderPanel({
         <div className="student-module-view__lesson">
           {lessonLoading ? (
             <>
-              <Skeleton className="h-44 rounded-2xl" />
-              <Skeleton className="h-44 rounded-2xl" />
+              <Skeleton className="student-module-view__reader-skeleton" />
+              <Skeleton className="student-module-view__reader-skeleton" />
             </>
           ) : (
             <>
@@ -137,7 +149,7 @@ export function StudentLessonReaderPanel({
                 variant="ghost"
                 size="sm"
                 onClick={onInlineBack}
-                className="student-module-view__back-inline w-fit text-[var(--student-accent)] hover:bg-[var(--student-accent-soft)]"
+                className="student-module-view__back-inline"
               >
                 <ArrowLeft className="mr-1 h-4 w-4" />
                 {inlineBackLabel}
@@ -151,7 +163,7 @@ export function StudentLessonReaderPanel({
                   />
                 ) : null}
                 {lessonBlocks.length === 0 && !lesson?.description ? (
-                  <p className="text-sm text-[var(--student-text-muted)]">No lesson content available.</p>
+                  <p className="student-module-view__empty-copy">No lesson content available.</p>
                 ) : lessonBlocks.length > 0 ? (
                   <div className="space-y-6">
                     {lessonBlocks.map((block) => (
@@ -169,14 +181,14 @@ export function StudentLessonReaderPanel({
 
               {lessonAttachments.length > 0 ? (
                 <article className="student-module-view__attachments">
-                  <h2 className="text-lg font-semibold text-[var(--student-text-strong)]">Attachments</h2>
+                  <h2>Attachments</h2>
                   {lessonAttachments.map((item) => (
                     <div key={item.id} className="student-module-view__attachment-row">
                       <div>
-                        <p className="font-medium text-[var(--student-text-strong)]">
+                        <p className="student-module-view__attachment-name">
                           {item.file?.originalName || 'Attachment'}
                         </p>
-                        <p className="text-xs text-[var(--student-text-muted)]">
+                        <p className="student-module-view__attachment-type">
                           {item.file?.mimeType || 'File'}
                         </p>
                       </div>

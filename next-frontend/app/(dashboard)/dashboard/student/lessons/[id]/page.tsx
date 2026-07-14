@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   LESSON_COMPLETE_WAIT_SECONDS,
@@ -20,6 +21,8 @@ import {
   type LessonCheckpointSelections,
 } from '@/features/lesson-blocks/LessonBlockStudentRenderer';
 import '../../classes/[id]/modules/[moduleId]/student-module-detail.css';
+
+type LessonLoadStatus = 'loading' | 'ready' | 'not-found' | 'error';
 
 function resolveModuleContext(modules: ClassModule[], lessonId: string) {
   for (const classModule of modules) {
@@ -59,7 +62,7 @@ export default function StudentLessonViewPage() {
   const queryModuleId = searchParams.get('moduleId');
   const returnTo = resolveReturnToPath(searchParams.get('returnTo'));
 
-  const [loading, setLoading] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<LessonLoadStatus>('loading');
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [blocks, setBlocks] = useState<ContentBlock[]>([]);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -99,13 +102,19 @@ export default function StudentLessonViewPage() {
     if (!lessonId || (queryClassId && queryModuleId)) return;
 
     try {
-      setLoading(true);
+      setLoadStatus('loading');
       const [lessonRes, statusRes] = await Promise.all([
         lessonService.getById(lessonId),
         lessonService.getCompletionStatus(lessonId).catch(() => ({ data: { completed: false } })),
       ]);
 
       const lessonData = lessonRes.data;
+      if (!lessonData) {
+        setLesson(null);
+        setBlocks([]);
+        setLoadStatus('not-found');
+        return;
+      }
       setLesson(lessonData);
       setBlocks(
         [...(lessonData.contentBlocks || [])]
@@ -126,10 +135,16 @@ export default function StudentLessonViewPage() {
         setLessonItem(null);
         setLessonAttachments([]);
       }
-    } catch {
-      toast.error('Failed to load lesson');
-    } finally {
-      setLoading(false);
+      setLoadStatus('ready');
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status ?? null;
+      setLesson(null);
+      setBlocks([]);
+      setClassItem(null);
+      setLessonModule(null);
+      setLessonItem(null);
+      setLessonAttachments([]);
+      setLoadStatus(status === 404 ? 'not-found' : 'error');
     }
   }, [fetchModuleContext, lessonId, queryClassId, queryModuleId]);
 
@@ -138,7 +153,7 @@ export default function StudentLessonViewPage() {
   }, [fetchData]);
 
   useEffect(() => {
-    if (loading || isCompleted || !checkpointGate.ready) {
+    if (loadStatus !== 'ready' || isCompleted || !checkpointGate.ready) {
       setBottomReachedAt(null);
       return undefined;
     }
@@ -154,7 +169,7 @@ export default function StudentLessonViewPage() {
     window.addEventListener('scroll', onScroll);
     onScroll();
     return () => window.removeEventListener('scroll', onScroll);
-  }, [bottomReachedAt, checkpointGate.ready, isCompleted, loading]);
+  }, [bottomReachedAt, checkpointGate.ready, isCompleted, loadStatus]);
 
   useEffect(() => {
     if (bottomReachedAt === null || isCompleted || !checkpointGate.ready) {
@@ -271,18 +286,40 @@ export default function StudentLessonViewPage() {
     router.back();
   }, [lesson, lessonModule?.id, returnTo, router]);
 
-  if (loading) {
+  const stateBackHref = returnTo || '/dashboard/student/courses';
+  const stateBackLabel = returnTo ? 'Back to Path' : 'Back to Courses';
+
+  if (loadStatus === 'loading') {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-44 rounded-2xl" />
-        <Skeleton className="h-20 rounded-2xl" />
-        <Skeleton className="h-20 rounded-2xl" />
+      <div className="student-module-view__loading" aria-label="Loading lesson">
+        <Skeleton />
+        <Skeleton />
+        <Skeleton />
       </div>
     );
   }
 
-  if (!lesson) {
-    return <p className="text-sm text-slate-500">Lesson not found.</p>;
+  if (loadStatus === 'error') {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title="Lesson couldn't be loaded"
+        description="Try again to load this lesson."
+        primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+        secondaryAction={{ label: stateBackLabel, href: stateBackHref }}
+      />
+    );
+  }
+
+  if (loadStatus === 'not-found' || !lesson) {
+    return (
+      <DashboardStatePanel
+        kind="empty"
+        title="Lesson not found"
+        description="This lesson may have been removed or is no longer available."
+        primaryAction={{ label: stateBackLabel, href: stateBackHref }}
+      />
+    );
   }
 
   return (
