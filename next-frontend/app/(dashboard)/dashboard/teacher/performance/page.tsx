@@ -28,6 +28,7 @@ import {
   TeacherSectionCard,
 } from '@/components/teacher/TeacherPageShell';
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { richTextToPlainText } from '@/lib/rich-text';
 import { downloadLessonPlanPdf } from '@/utils/lesson-plan-pdf';
@@ -49,6 +50,7 @@ import type {
 } from '@/types/performance';
 
 type PerformanceWorkspaceView = 'performance' | 'heatmap' | 'lesson-plan' | 'data';
+type DiagnosticsStatus = 'idle' | 'loading' | 'ready' | 'error';
 type LessonPlanProcedureKey = keyof LessonPlanStructuredOutput['procedures'];
 type LessonPlanDifferentiationKey = keyof LessonPlanStructuredOutput['differentiation'];
 type LessonPlanEditorMode = 'preview' | 'edit';
@@ -307,6 +309,8 @@ export default function TeacherPerformancePage() {
   const [selectedComparisonFilterId, setSelectedComparisonFilterId] = useState('all');
   const [logs, setLogs] = useState<ClassPerformanceLogsResponse | null>(null);
   const [diagnostics, setDiagnostics] = useState<ClassDiagnosticsResponse | null>(null);
+  const [diagnosticsStatus, setDiagnosticsStatus] =
+    useState<DiagnosticsStatus>('idle');
   const [analysisJob, setAnalysisJob] = useState<PerformanceAnalysisJob | null>(null);
   const [analysisResult, setAnalysisResult] = useState<PerformanceAnalysisStructuredOutput | null>(null);
   const [analysisTargetStudentId, setAnalysisTargetStudentId] = useState<string | null>(null);
@@ -503,11 +507,13 @@ export default function TeacherPerformancePage() {
       setInterventionComparisons(null);
       setLogs(null);
       setDiagnostics(null);
+      setDiagnosticsStatus('idle');
       return;
     }
 
     try {
       setLoadingData(true);
+      setDiagnosticsStatus('loading');
       const [summaryRes, atRiskRes, comparisonRes, logsRes, diagnosticsRes] =
         await Promise.allSettled([
         performanceService.getClassSummary(selectedClassId),
@@ -538,8 +544,10 @@ export default function TeacherPerformancePage() {
       }
       if (diagnosticsRes.status === 'fulfilled') {
         setDiagnostics(diagnosticsRes.value.data);
+        setDiagnosticsStatus('ready');
       } else {
         setDiagnostics(null);
+        setDiagnosticsStatus('error');
       }
       if (
         summaryRes.status === 'rejected' &&
@@ -560,6 +568,25 @@ export default function TeacherPerformancePage() {
       }
     } finally {
       setLoadingData(false);
+    }
+  }, [selectedClassId]);
+
+  const retryDiagnostics = useCallback(async () => {
+    if (!selectedClassId) {
+      setDiagnostics(null);
+      setDiagnosticsStatus('idle');
+      return;
+    }
+
+    try {
+      setDiagnosticsStatus('loading');
+      const response = await performanceService.getClassDiagnostics(selectedClassId);
+      setDiagnostics(response.data);
+      setDiagnosticsStatus('ready');
+    } catch {
+      setDiagnostics(null);
+      setDiagnosticsStatus('error');
+      toast.warning('Diagnostics are still temporarily unavailable.');
     }
   }, [selectedClassId]);
 
@@ -1061,6 +1088,18 @@ export default function TeacherPerformancePage() {
             </button>
           </div>
 
+          {diagnosticsStatus === 'error' ? (
+            <DashboardStatePanel
+              kind="unavailable"
+              title="Diagnostics temporarily unavailable"
+              description="Priority learners and class summaries remain available while diagnostics recover."
+              primaryAction={{
+                label: 'Retry diagnostics',
+                onClick: () => void retryDiagnostics(),
+              }}
+            />
+          ) : null}
+
           {workspaceView === 'performance' ? (
             <>
               <TeacherSectionCard
@@ -1354,7 +1393,9 @@ export default function TeacherPerformancePage() {
                 description="Read the colors first, then use the table to decide what to reteach."
                 className="teacher-figma-stagger"
               >
-                {conceptHeatmapRows.length === 0 ? (
+                {diagnosticsStatus === 'loading' ? (
+                  <Skeleton className="h-64 rounded-xl" />
+                ) : diagnosticsStatus === 'error' ? null : conceptHeatmapRows.length === 0 ? (
                   <TeacherEmptyState
                     title="No concept focus areas yet"
                     description="Run assessments and recompute this class to surface concept-level mastery signals."
@@ -2168,7 +2209,8 @@ export default function TeacherPerformancePage() {
                   <div className="space-y-3 text-sm">
                     <div>
                       <p className="font-semibold text-[var(--teacher-text-strong)]">Lowest-Scoring Assessments</p>
-                      {(diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
+                      {diagnosticsStatus === 'ready' &&
+                      (diagnostics?.lowestAssessments.length ?? 0) === 0 ? (
                         <p className="text-[var(--teacher-text-muted)]">No assessment signals yet.</p>
                       ) : (
                         <div className="mt-2 space-y-2">
@@ -2197,7 +2239,7 @@ export default function TeacherPerformancePage() {
                           {conceptHeatmapRows.length} concept{conceptHeatmapRows.length === 1 ? '' : 's'}
                         </Badge>
                       </div>
-                      {conceptHeatmapRows.length === 0 ? (
+                      {diagnosticsStatus === 'ready' && conceptHeatmapRows.length === 0 ? (
                         <p className="mt-3 text-[var(--teacher-text-muted)]">No concept focus areas yet.</p>
                       ) : (
                         <div className="mt-3 flex flex-wrap gap-2">
