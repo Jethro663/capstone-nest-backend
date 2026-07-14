@@ -959,7 +959,6 @@ export default function TeacherPerformancePage() {
 
   return (
     <TeacherPageShell
-      badge="Performance"
       title="Performance Insights"
       description={
         threshold !== null

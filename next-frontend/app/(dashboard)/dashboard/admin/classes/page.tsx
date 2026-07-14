@@ -290,10 +290,8 @@ export default function ClassManagementPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Classes"
       title="Classes"
       description="Manage all classes across grades"
-      icon={BookOpen}
       actions={(
         <div className="flex flex-wrap items-center gap-2">
           <Button

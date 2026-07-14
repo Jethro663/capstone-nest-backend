@@ -444,10 +444,8 @@ export default function UserManagementPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Users"
       title="Users"
       description="Manage all platform accounts"
-      icon={UserPlus}
       actions={(
         <Button
           className="admin-button-solid rounded-[1rem] px-4 font-bold"

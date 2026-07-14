@@ -324,10 +324,8 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Dashboard"
       title="Admin Dashboard"
       description="Monitor your platform at a glance"
-      icon={Activity}
       actions={(
         <div className="admin-controls">
           <label className="inline-flex items-center gap-3 text-base font-semibold text-white">

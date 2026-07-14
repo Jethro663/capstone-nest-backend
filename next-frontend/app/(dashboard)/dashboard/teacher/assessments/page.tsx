@@ -156,7 +156,6 @@ export default function TeacherAssessmentsPage() {
 
   return (
     <TeacherPageShell
-      badge="Teacher Assessments"
       title="Assessments Across Your Active Classes"
       description="Review published and draft assessments from one teacher index, then jump into review or editing without relying on broken dashboard shortcuts."
       actions={(

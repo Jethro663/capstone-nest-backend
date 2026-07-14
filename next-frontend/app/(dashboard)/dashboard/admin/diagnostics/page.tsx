@@ -174,10 +174,8 @@ export default function AdminDiagnosticsPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Diagnostics"
       title="Diagnostics"
       description="Platform health and system status"
-      icon={Activity}
       actions={(
         <Button className="rounded-[1rem] border-0 bg-[#364152] px-4 font-bold text-white shadow-none hover:bg-[#465164]" onClick={fetchDiagnostics}>
           <RefreshCcw className="h-4 w-4" />

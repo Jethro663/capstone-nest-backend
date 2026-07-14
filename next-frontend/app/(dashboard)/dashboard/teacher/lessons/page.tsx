@@ -150,7 +150,6 @@ export default function TeacherLessonsPage() {
 
   return (
     <TeacherPageShell
-      badge="Teacher Lessons"
       title="Lessons Across Your Teaching Space"
       description="Review recent lesson work from every active class in one place, then jump straight into editing the lesson that needs attention."
       actions={(

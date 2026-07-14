@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, CalendarClock, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
@@ -160,10 +160,8 @@ export default function AdminSystemSettingsPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Settings"
       title="System Settings"
       description="Set the active school year for the whole LMS with a guarded transition flow."
-      icon={ShieldCheck}
       stats={(
         <>
           <AdminStatCard
