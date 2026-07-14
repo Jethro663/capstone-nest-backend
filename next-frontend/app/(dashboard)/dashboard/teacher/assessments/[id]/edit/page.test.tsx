@@ -134,6 +134,28 @@ function buildAssessment(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function buildAcademicStateResponse() {
+  return {
+    success: true,
+    message: 'ok',
+    data: {
+      schoolYear: '2025-2026',
+      quarter: 'Q1' as const,
+      updatedAt: '2026-05-05T00:00:00.000Z',
+      transitionConfirmationText: 'Advance quarter',
+    },
+  } as Awaited<ReturnType<typeof academicStateService.getCurrent>>;
+}
+
+function getQuarterSelect() {
+  const select = screen.getAllByRole('combobox').find((element) =>
+    element.querySelector('option[value="Q1"]'),
+  );
+
+  if (!select) throw new Error('Quarter select was not rendered');
+  return select as HTMLSelectElement;
+}
+
 describe('AssessmentEditorPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -175,16 +197,7 @@ describe('AssessmentEditorPage', () => {
         rubricCriteria: [],
       },
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
-    mockedAcademicStateService.getCurrent.mockResolvedValue({
-      success: true,
-      message: 'ok',
-      data: {
-        schoolYear: '2025-2026',
-        quarter: 'Q1',
-        updatedAt: '2026-05-05T00:00:00.000Z',
-        transitionConfirmationText: 'Advance quarter',
-      },
-    });
+    mockedAcademicStateService.getCurrent.mockResolvedValue(buildAcademicStateResponse());
     mockedClassRecordService.getSlotOverview.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -393,13 +406,107 @@ describe('AssessmentEditorPage', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
-    const quarterSelect = screen.getAllByRole('combobox').find((element) =>
-      element.querySelector('option[value="Q1"]'),
-    ) as HTMLSelectElement | undefined;
-
-    expect(quarterSelect).toBeDefined();
+    const quarterSelect = getQuarterSelect();
     expect(quarterSelect).toHaveValue('Q1');
     expect(quarterSelect).toBeDisabled();
+  });
+
+  it('keeps quarter and publish controls unavailable until the system quarter is verified', async () => {
+    let resolveQuarter!: (
+      value: Awaited<ReturnType<typeof academicStateService.getCurrent>>,
+    ) => void;
+    mockedAcademicStateService.getCurrent.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveQuarter = resolve;
+      }),
+    );
+
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+
+    expect(getQuarterSelect()).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeDisabled();
+
+    resolveQuarter(buildAcademicStateResponse());
+
+    await waitFor(() => {
+      expect(getQuarterSelect()).toHaveValue('Q1');
+    });
+    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeEnabled();
+  });
+
+  it('shows safe retryable quarter verification failure without exposing the error', async () => {
+    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(
+      new Error('forbidden quarter detail'),
+    );
+
+    render(<AssessmentEditorPage />);
+
+    expect(
+      await screen.findByText('Current quarter could not be verified'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('forbidden quarter detail')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeDisabled();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+    expect(getQuarterSelect()).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /retry quarter check/i }));
+
+    await waitFor(() => {
+      expect(mockedAcademicStateService.getCurrent).toHaveBeenCalledTimes(2);
+      expect(getQuarterSelect()).toHaveValue('Q1');
+    });
+    expect(
+      screen.queryByText('Current quarter could not be verified'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('allows a persisted draft to save when quarter verification is unavailable', async () => {
+    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(new Error('network detail'));
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({ quarter: 'Q3' }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
+
+    render(<AssessmentEditorPage />);
+
+    expect(
+      await screen.findByText('Current quarter could not be verified'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /save now/i }));
+
+    await waitFor(() => {
+      expect(mockedAssessmentService.update).toHaveBeenCalledTimes(1);
+    });
+    expect(mockedAssessmentService.update.mock.calls[0]?.[1]).toMatchObject({
+      quarter: 'Q3',
+      isPublished: false,
+    });
+  });
+
+  it('blocks release requests when quarter verification is unavailable', async () => {
+    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(new Error('network detail'));
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({
+        isPublished: true,
+        quarter: 'Q3',
+      }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
+
+    render(<AssessmentEditorPage />);
+
+    expect(
+      await screen.findByText('Current quarter could not be verified'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save now/i })).toBeDisabled();
+    expect(mockedAssessmentService.update).not.toHaveBeenCalled();
+    expect(mockedAssessmentService.releaseCore).not.toHaveBeenCalled();
   });
 
   it('swaps the setup rules for file upload mode', async () => {

@@ -71,6 +71,7 @@ import './assessment-editor.css';
 
 type RightTab = 'settings' | 'advanced' | 'rubric' | 'analytics';
 type Availability = 'given' | 'draft';
+type AcademicQuarterStatus = 'loading' | 'ready' | 'error';
 type ResultReleaseMode =
   | 'score_immediately'
   | 'full_after_delay'
@@ -892,6 +893,7 @@ export default function AssessmentEditorPage() {
   const latestSerializedDraftRef = useRef('');
   const latestTitleRef = useRef('');
   const titleAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const academicQuarterRequestRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -925,6 +927,8 @@ export default function AssessmentEditorPage() {
   const [category, setCategory] = useState<ClassRecordCategory>('written_work');
   const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
   const [lockedSystemQuarter, setLockedSystemQuarter] = useState<GradingPeriod | null>(null);
+  const [quarterStatus, setQuarterStatus] =
+    useState<AcademicQuarterStatus>('loading');
   const [placementMode, setPlacementMode] = useState<AssessmentPlacementMode>('automatic');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [slotOverview, setSlotOverview] = useState<ClassRecordSlotOverview | null>(null);
@@ -1156,32 +1160,39 @@ export default function AssessmentEditorPage() {
     void fetchAssessment();
   }, [fetchAssessment]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadCurrentAcademicQuarter = useCallback(async () => {
+    const requestId = academicQuarterRequestRef.current + 1;
+    academicQuarterRequestRef.current = requestId;
+    setQuarterStatus('loading');
 
-    const loadCurrentAcademicQuarter = async () => {
-      try {
-        const response = await academicStateService.getCurrent();
-        if (cancelled) return;
-        const currentQuarter = response.data.quarter as GradingPeriod;
-        setLockedSystemQuarter(currentQuarter);
-      } catch {
-        if (cancelled) return;
-        setLockedSystemQuarter(null);
-      }
-    };
+    try {
+      const response = await academicStateService.getCurrent();
+      if (academicQuarterRequestRef.current !== requestId) return;
 
-    void loadCurrentAcademicQuarter();
+      const currentQuarter = response.data.quarter as GradingPeriod;
+      setLockedSystemQuarter(currentQuarter);
+      setQuarter(currentQuarter);
+      setQuarterStatus('ready');
+    } catch {
+      if (academicQuarterRequestRef.current !== requestId) return;
 
-    return () => {
-      cancelled = true;
-    };
+      setLockedSystemQuarter(null);
+      setQuarterStatus('error');
+    }
   }, []);
 
   useEffect(() => {
-    if (!lockedSystemQuarter) return;
+    void loadCurrentAcademicQuarter();
+
+    return () => {
+      academicQuarterRequestRef.current += 1;
+    };
+  }, [loadCurrentAcademicQuarter]);
+
+  useEffect(() => {
+    if (quarterStatus !== 'ready' || !lockedSystemQuarter) return;
     setQuarter((currentQuarter) => (currentQuarter === lockedSystemQuarter ? currentQuarter : lockedSystemQuarter));
-  }, [lockedSystemQuarter]);
+  }, [lockedSystemQuarter, quarter, quarterStatus]);
 
   useEffect(() => {
     if (rightTab !== 'analytics' || !assessmentId) return;
@@ -2081,6 +2092,11 @@ export default function AssessmentEditorPage() {
   const handleSave = async () => {
     if (!assessment || saving || isReadOnlyMode) return;
 
+    if (availability === 'given' && quarterStatus !== 'ready') {
+      toast.error('Verify the current quarter before publishing this assessment');
+      return;
+    }
+
     if (publishBlocked) {
       toast.error('Complete class record setup before publishing this assessment');
       setWarningOpen(true);
@@ -2609,9 +2625,14 @@ export default function AssessmentEditorPage() {
             <div className="assessment-editor__field">
               <label>Quarter</label>
               <select
+                aria-label="Quarter"
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                disabled={
+                  isReadOnlyMode ||
+                  quarterStatus !== 'ready' ||
+                  Boolean(lockedSystemQuarter)
+                }
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -2887,9 +2908,14 @@ export default function AssessmentEditorPage() {
             <div className="assessment-editor__field">
               <label>Quarter</label>
               <select
+                aria-label="Quarter"
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                disabled={
+                  isReadOnlyMode ||
+                  quarterStatus !== 'ready' ||
+                  Boolean(lockedSystemQuarter)
+                }
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -3479,7 +3505,7 @@ export default function AssessmentEditorPage() {
                 type="button"
                 data-active={availability === 'given'}
                 onClick={() => setAvailability('given')}
-                disabled={isReadOnlyMode}
+                disabled={isReadOnlyMode || quarterStatus !== 'ready'}
               >
                 Ready to give
               </button>
@@ -3488,7 +3514,11 @@ export default function AssessmentEditorPage() {
               type="button"
               className="assessment-editor__save-btn"
               onClick={() => void handleSave()}
-              disabled={saving || isReadOnlyMode}
+              disabled={
+                saving ||
+                isReadOnlyMode ||
+                (availability === 'given' && quarterStatus !== 'ready')
+              }
             >
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save now
@@ -3496,6 +3526,28 @@ export default function AssessmentEditorPage() {
           </div>
         </div>
       </header>
+      {quarterStatus === 'error' ? (
+        <section
+          className="mx-1 mt-3 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          aria-live="polite"
+        >
+          <div>
+            <p className="text-sm font-semibold">Current quarter could not be verified</p>
+            <p className="mt-1 text-sm text-amber-800">
+              Drafts can still be saved, but publishing stays unavailable until the check succeeds.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 border-amber-300 bg-white"
+            onClick={() => void loadCurrentAcademicQuarter()}
+          >
+            Retry quarter check
+          </Button>
+        </section>
+      ) : null}
       {false ? (
         <div className="assessment-editor__flattened-layout">
         <aside className="assessment-editor__progress-rail" aria-label="Setup progress">
@@ -3571,7 +3623,7 @@ export default function AssessmentEditorPage() {
                     type="button"
                     data-active={availability === 'given'}
                     onClick={() => setAvailability('given')}
-                    disabled={isReadOnlyMode}
+                    disabled={isReadOnlyMode || quarterStatus !== 'ready'}
                   >
                     Ready to give
                   </button>
@@ -3806,9 +3858,14 @@ export default function AssessmentEditorPage() {
                 <div className="assessment-editor__field">
                   <label>Quarter</label>
                 <select
+                  aria-label="Quarter"
                   value={quarter}
                   onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                  disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                  disabled={
+                    isReadOnlyMode ||
+                    quarterStatus !== 'ready' ||
+                    Boolean(lockedSystemQuarter)
+                  }
                 >
                   <option value="">Select quarter</option>
                   <option value="Q1">Q1</option>
