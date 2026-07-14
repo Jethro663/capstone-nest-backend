@@ -660,6 +660,187 @@ body {
   display: none;
 }
 
+.teacher-class-record-header,
+.teacher-class-record-toolbar,
+.teacher-class-record-workbook {
+  border: 1px solid var(--teacher-outline);
+  background: var(--teacher-surface);
+  color: var(--teacher-text-strong);
+}
+
+.teacher-class-record-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-radius: 1rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--teacher-shadow);
+}
+
+.teacher-class-record-header h1 {
+  font-size: clamp(1.5rem, 2.5vw, 2rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.teacher-class-record-header p,
+.teacher-class-record-summary p {
+  margin-top: 0.35rem;
+  color: var(--teacher-text-muted);
+  font-size: 0.9rem;
+}
+
+.teacher-class-record-toolbar {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1fr) auto auto;
+  align-items: end;
+  gap: 0.9rem;
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+}
+
+.teacher-class-record-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.teacher-class-record-field > span {
+  color: var(--teacher-text-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.teacher-class-record-select {
+  min-height: 2.5rem;
+  width: 100%;
+  border: 1px solid var(--teacher-outline-strong);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--teacher-surface) 88%, white);
+  color: var(--teacher-text-strong);
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.teacher-class-record-select:focus-visible,
+.teacher-class-record-quarter:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--teacher-accent) 30%, transparent);
+  outline-offset: 2px;
+}
+
+.teacher-class-record-quarters {
+  display: inline-flex;
+  min-height: 2.5rem;
+  align-items: center;
+  gap: 0.2rem;
+  border: 1px solid var(--teacher-outline);
+  border-radius: 0.75rem;
+  background: var(--teacher-surface-soft);
+  padding: 0.2rem;
+}
+
+.teacher-class-record-quarter {
+  min-width: 2.6rem;
+  border-radius: 0.55rem;
+  padding: 0.45rem 0.65rem;
+  color: var(--teacher-text-muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+  transition:
+    background-color var(--teacher-motion-fast) ease,
+    color var(--teacher-motion-fast) ease;
+}
+
+.teacher-class-record-quarter:hover:not(:disabled) {
+  color: var(--teacher-text-strong);
+}
+
+.teacher-class-record-quarter[aria-pressed='true'] {
+  background: var(--teacher-accent);
+  color: white;
+}
+
+.teacher-class-record-quarter:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.teacher-class-record-refresh {
+  min-height: 2.5rem;
+}
+
+.teacher-class-record-workbook {
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--teacher-shadow);
+}
+
+.teacher-class-record-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.teacher-class-record-summary h2 {
+  font-size: 1.2rem;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.teacher-class-record-summary dl {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.65rem 1rem;
+}
+
+.teacher-class-record-summary dl > div {
+  min-width: 4rem;
+  border-left: 1px solid var(--teacher-outline);
+  padding-left: 0.75rem;
+}
+
+.teacher-class-record-summary dt {
+  color: var(--teacher-text-muted);
+  font-size: 0.65rem;
+  font-weight: 750;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.teacher-class-record-summary dd {
+  margin-top: 0.15rem;
+  color: var(--teacher-text-strong);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .teacher-class-record-header,
+  .teacher-class-record-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .teacher-class-record-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-class-record-quarters {
+    justify-content: space-between;
+  }
+
+  .teacher-class-record-summary dl {
+    justify-content: flex-start;
+  }
+}
+
 .teacher-select,
 .teacher-input {
   border: 1px solid var(--teacher-outline-strong);
