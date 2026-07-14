@@ -1,10 +1,12 @@
 'use client';
 
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react';
@@ -12,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import {
   DEFAULT_THEME,
   getThemeDefinition,
+  normalizeThemeId,
   THEME_OPTIONS,
   THEME_STORAGE_KEY,
   type ThemeDefinition,
@@ -36,28 +39,38 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     () => false,
   );
   const isStudentRoute = pathname.startsWith('/dashboard/student');
+  const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    setThemeState(
+      normalizeThemeId(window.localStorage.getItem(THEME_STORAGE_KEY)) ?? DEFAULT_THEME,
+    );
+  }, [isHydrated]);
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = DEFAULT_THEME;
+    root.dataset.theme = theme;
     root.dataset.studentRoute = String(isStudentRoute);
 
     if (isHydrated) {
-      window.localStorage.setItem(THEME_STORAGE_KEY, DEFAULT_THEME);
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
     }
-  }, [isHydrated, isStudentRoute]);
+  }, [isHydrated, isStudentRoute, theme]);
 
-  const setTheme: ThemeContextValue['setTheme'] = () => undefined;
+  const setTheme = useCallback((nextTheme: ThemeId) => {
+    setThemeState(nextTheme);
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      theme: DEFAULT_THEME,
-      resolvedTheme: getThemeDefinition(DEFAULT_THEME),
-      themes: THEME_OPTIONS.filter((themeOption) => themeOption.id === DEFAULT_THEME),
+      theme,
+      resolvedTheme: getThemeDefinition(theme),
+      themes: THEME_OPTIONS,
       isHydrated,
       setTheme,
     }),
-    [isHydrated],
+    [isHydrated, setTheme, theme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
