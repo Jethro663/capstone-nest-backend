@@ -1233,6 +1233,20 @@ export default function AssessmentEditorPage() {
       try {
         setSlotOverviewLoading(true);
         setSlotOverviewError(null);
+        const recordsResponse = await classRecordService.getByClass(assessment.classId);
+        if (cancelled) return;
+
+        const quarterWorkbookExists = recordsResponse.data.some(
+          (record) => record.gradingPeriod === quarter,
+        );
+        if (!quarterWorkbookExists) {
+          setSlotOverview(null);
+          setSlotOverviewError(
+            `Create the ${quarter} class record workbook before choosing a slot.`,
+          );
+          return;
+        }
+
         const response = await classRecordService.getSlotOverview(
           assessment.classId,
           quarter,

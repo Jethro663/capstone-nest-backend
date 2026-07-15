@@ -71,6 +71,7 @@ jest.mock('@/services/assessment-service', () => ({
 
 jest.mock('@/services/class-record-service', () => ({
   classRecordService: {
+    getByClass: jest.fn(),
     getSlotOverview: jest.fn(),
   },
 }));
@@ -196,6 +197,18 @@ describe('AssessmentEditorPage', () => {
       data: buildAssessment({ rubricCriteria: [] }),
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
     mockedAcademicStateService.getCurrent.mockResolvedValue(buildAcademicStateResponse());
+    mockedClassRecordService.getByClass.mockResolvedValue({
+      success: true,
+      data: [
+        {
+          id: 'class-record-1',
+          classId: 'class-1',
+          gradingPeriod: 'Q1',
+          status: 'draft',
+          categories: [],
+        },
+      ],
+    } as Awaited<ReturnType<typeof classRecordService.getByClass>>);
     mockedClassRecordService.getSlotOverview.mockResolvedValue({
       success: true,
       data: {
@@ -449,6 +462,23 @@ describe('AssessmentEditorPage', () => {
     const quarterSelect = getQuarterSelect();
     expect(quarterSelect).toHaveValue('Q1');
     expect(quarterSelect).toBeDisabled();
+  });
+
+  it('treats a missing quarter workbook as setup guidance without requesting its slot resource', async () => {
+    mockedClassRecordService.getByClass.mockResolvedValueOnce({
+      success: true,
+      data: [],
+    });
+
+    render(<AssessmentEditorPage />);
+
+    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
+
+    expect(
+      await screen.findByText('Create the Q1 class record workbook before choosing a slot.'),
+    ).toBeInTheDocument();
+    expect(mockedClassRecordService.getSlotOverview).not.toHaveBeenCalled();
   });
 
   it('keeps quarter and publish controls unavailable until the system quarter is verified', async () => {
