@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAs, missingRoleCredentials } from './helpers/auth';
+import { loginAs, missingRoleCredentials, persistSession } from './helpers/auth';
 import { resolveTeacherAssessmentEditUrl } from './helpers/seeded-routes';
 
 test('opens the teacher assessment editor and captures the composer surface', async ({ page }) => {
@@ -12,11 +12,13 @@ test('opens the teacher assessment editor and captures the composer surface', as
   await loginAs(page, 'teacher');
   await page.goto(assessmentEditorUrl!);
 
-  await expect(page.getByText(/questions/i)).toBeVisible();
-  await expect(page.getByRole('button', { name: /save/i })).toBeVisible();
+  await expect(page.locator('.assessment-editor')).toBeVisible();
+  await expect(page.getByRole('button', { name: /question details/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save now' })).toBeVisible();
 
   await page.screenshot({
     path: test.info().outputPath('teacher-assessment-editor.png'),
     fullPage: true,
   });
+  await persistSession(page, 'teacher');
 });

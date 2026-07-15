@@ -39,6 +39,11 @@ function sessionPath(role: RoleKey) {
   return path.join(SESSION_DIR, `${role}.json`);
 }
 
+export async function persistSession(page: Page, role: RoleKey) {
+  ensureSessionDir();
+  await page.context().storageState({ path: sessionPath(role) });
+}
+
 async function waitForRoutePrefix(
   page: Page,
   routePrefix: string,
@@ -114,8 +119,25 @@ async function tryRestoreSession(page: Page, role: RoleKey) {
     if (Array.isArray(parsed.cookies) && parsed.cookies.length > 0) {
       await page.context().addCookies(parsed.cookies as any);
     }
+    const refreshResponsePromise = page
+      .waitForResponse(
+        (response) =>
+          response.url().includes('/api/auth/refresh') &&
+          response.request().method() === 'POST',
+        { timeout: 15_000 },
+      )
+      .catch(() => null);
     await page.goto('/dashboard');
+    const refreshResponse = await refreshResponsePromise;
+    if (!refreshResponse?.ok()) {
+      throw new Error('Stored browser session could not be refreshed.');
+    }
     await waitForRoutePrefix(page, ROLE_DASHBOARD_PREFIX[role], 15_000);
+    await page.getByRole('button', { name: 'Logout' }).waitFor({
+      state: 'visible',
+      timeout: 15_000,
+    });
+    await persistSession(page, role);
     return true;
   } catch {
     return false;
@@ -157,6 +179,6 @@ export async function loginAs(page: Page, role: RoleKey) {
   }
 
   await page.waitForLoadState('load');
-  await page.context().storageState({ path: sessionPath(role) });
+  await persistSession(page, role);
   await expect(page).toHaveURL(/dashboard/i);
 }
