@@ -169,10 +169,10 @@ All services join the bridge network `lms-network`. Core data stores and AI exec
 
 | Mode | Command shape | Services | Use |
 | --- | --- | --- | --- |
-| Core | docker compose --env-file .env.compose up --build | postgres, redis, ollama, backend, ai-service, frontend | Normal local or server topology. |
-| Core plus observability | docker compose --env-file .env.compose --profile observability up --build | Core plus nine telemetry services | Operational dashboards, alerts, logs, probes, and traces. |
-| Core plus debug ports | docker compose -f docker-compose.yml -f docker-compose.debug.yml --env-file .env.compose up --build | Core with host access to PostgreSQL, Redis, and FastAPI | Explicit local diagnostics and direct client tools. |
-| Core plus both | docker compose -f docker-compose.yml -f docker-compose.debug.yml --env-file .env.compose --profile observability up --build | Core, debug mappings, and telemetry profile | Full local engineering laboratory. |
+| Core | docker compose up --build | postgres, redis, ollama, backend, ai-service, frontend | Normal local or server topology; Compose reads root `.env`. |
+| Core plus observability | docker compose --profile observability up --build | Core plus eight telemetry services | Operational dashboards, alerts, logs, probes, and traces. |
+| Core plus debug ports | docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build | Core with host access to PostgreSQL, Redis, and FastAPI | Explicit local diagnostics and direct client tools. |
+| Core plus both | docker compose -f docker-compose.yml -f docker-compose.debug.yml --profile observability up --build | Core, debug mappings, and telemetry profile | Full local engineering laboratory. |
 
 ## Startup and readiness chain
 

@@ -5,7 +5,7 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 
 ## Identity
 - Repo: Nexora LMS/LXP for Gat Andres Bonifacio High School.
-- Stack: NestJS 11 + Drizzle + PostgreSQL/pgvector, Next.js 16 App Router + React 19 + Tailwind, Expo 54 mobile, FastAPI with Ollama or an OpenAI-compatible cloud runtime, BullMQ + Redis, JWT + rotating refresh tokens.
+- Stack: NestJS 11 + Drizzle + PostgreSQL/pgvector, Next.js 16 App Router + React 19 + Tailwind 4, Expo 54 + React Native 0.81 mobile, FastAPI with Ollama or an OpenAI-compatible cloud runtime, BullMQ + Redis, JWT + rotating refresh tokens.
 - Default mobile target for generic `mobile` work: `mobile/`.
 - Priority order: correctness, security, maintainability, performance, then speed.
 
@@ -14,6 +14,7 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 - Web and mobile consume backend `/api` contracts and never call `ai-service` directly.
 - AI remains assistive for official records; shared-secret-protected internal execution does not make it an auth authority.
 - Core Compose must remain usable without the `observability` profile or `docker-compose.debug.yml`.
+- Core Compose services are `ollama`, `postgres`, `ai-service`, `redis`, `backend`, and `frontend`; root `.env` is the runtime input and `.env.compose.example` is its onboarding template.
 - Long-running AI extraction/generation work must stay restart-safe through backend-owned BullMQ contracts.
 
 ## Router Contract
@@ -48,9 +49,6 @@ The authoritative router lives here and in `.agents/skills/nexora-context-router
 - `next-frontend/AGENTS.md`
 - `ai-service/AGENTS.md`
 - `mobile/AGENTS.md`
-
-## Legacy Exclusions
-- If archived mobile folders are restored for reference, do not route generic mobile work there unless the prompt names the folder explicitly.
 
 ## References
 - Router skill: `.agents/skills/nexora-context-router/SKILL.md`

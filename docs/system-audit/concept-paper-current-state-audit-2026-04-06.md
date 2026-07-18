@@ -1,8 +1,10 @@
 # Nexora Current State Audit vs Concept Paper
 
+> Historical snapshot from April 6, 2026. Mobile is now multi-role and current operating truth is maintained in [`../../CURRENT_REPO_STATE.md`](../../CURRENT_REPO_STATE.md).
+
 Date: 2026-04-06  
 Scope: Whole repo (backend, next-frontend, ai-service, mobile)
-Source baseline: [Concept paper.txt](../../Concept%20paper.txt)
+Source baseline: [Concept paper.txt](../school-files/Concept%20paper.txt)
 
 ## 1) Audit Rubric Used (Strict)
 

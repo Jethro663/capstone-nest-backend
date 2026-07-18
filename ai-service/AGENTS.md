@@ -17,6 +17,7 @@ Scope: `ai-service/` only.
 - App entry: `app/main.py`
 - Config: `app/config.py`
 - Schemas: `app/schemas.py`
+- Compose service/port: internal-only `ai-service:8000`
 
 ## Owning Paths
 
@@ -56,6 +57,7 @@ Scope: `ai-service/` only.
 - Extraction apply flows and AI content generation must stay compatible with retrieval reindexing.
 - Shared-secret validation must stay compatible with `backend/src/modules/ai-mentor/ai-proxy.service.ts`.
 - `next-frontend` and `mobile` reach AI through backend routes, not directly.
+- Keep `/live` process-only and `/ready` dependency-aware so Compose and backend health checks preserve their current meaning.
 - Extraction preparation must not schedule untracked `asyncio.create_task` work; NestJS BullMQ owns execution/retry/cancellation.
 - Keep `app.main:app` as the stable ASGI import even when extracting routers.
 

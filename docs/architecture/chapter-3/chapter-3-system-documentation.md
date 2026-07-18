@@ -1,6 +1,6 @@
 # Chapter 3 System Documentation Pack
 
-Prepared from the current Nexora codebase and deployment topology as of March 22, 2026.
+Prepared from the Nexora codebase and reconciled with the live Compose topology on July 18, 2026.
 
 ## Table 1. Software Requirements
 
@@ -11,15 +11,15 @@ Prepared from the current Nexora codebase and deployment topology as of March 22
 | Web Browser | A modern Chromium-based browser such as Google Chrome or Microsoft Edge, or the latest Mozilla Firefox release, is required for accessing the web application, testing responsive behavior, opening the Swagger API documentation, and validating the generated system architecture output. |
 | Visual Studio Code / JetBrains WebStorm | A modern TypeScript-capable integrated development environment is required for maintaining the NestJS backend, Next.js frontend, and Expo mobile application. Visual Studio Code and JetBrains WebStorm are both suitable because they support TypeScript, ESLint, terminal integration, and debugging. |
 | Git | Git is required for source code version control, branch management, and collaborative development of the Nexora repository. Any current Git for Windows release is sufficient. |
-| Node.js | Node.js version 18 or higher is required to run the backend and frontend toolchains. The current codebase uses NestJS, Next.js 16, React 19, Tailwind CSS, testing tools, and build scripts that depend on an up-to-date Node.js runtime. |
+| Node.js | Node.js 20.9 or newer is required for the current Next.js 16 toolchain and is the supported shared host baseline for the backend and frontend. |
 | npm | npm is required as the package manager for installing and running the JavaScript and TypeScript dependencies of the backend, frontend, and mobile workspaces. A version bundled with modern Node.js releases is sufficient. |
-| Python | Python 3.11 or higher is recommended for the FastAPI-based AI service. It is used for AI mentor chat orchestration, PDF extraction, retrieval and indexing workflows, and related dependency management through `pip`. |
+| Python | Python 3.12 is the supported AI-service and CI baseline. It is used for AI mentor orchestration, extraction, retrieval/indexing, and evaluation tooling. |
 | Docker Desktop | Docker Desktop is recommended for running the integrated local stack defined in `docker-compose.yml`, including the frontend, backend, PostgreSQL with pgvector, Redis, Ollama, and the Python AI service. It is also useful for school or pre-production deployment rehearsal. |
 | pgAdmin 4 | pgAdmin 4 is recommended for database inspection, query execution, schema verification, and monitoring the PostgreSQL database used by Nexora. It is suitable for validating tables, intervention data, assessment records, and AI-related vectorized content. |
 | Android Studio | Android Studio is recommended for Android emulator-based testing of the mobile application, especially when validating student-facing screens, authentication, assessments, lessons, LXP access, and profile workflows. |
 | Expo Go / Expo CLI | Expo tooling is required for running and testing the mobile application built with Expo SDK 54 and React Native. It supports rapid testing on physical Android devices and simplifies the execution of the mobile student module. |
-| Swagger UI | Swagger UI is included in the NestJS backend for API documentation and endpoint verification. It is required for inspecting authentication, class, lesson, assessment, intervention, analytics, and reporting endpoints during testing and technical validation. |
-| Next.js | Next.js 16.1.6 is the primary web application framework for Nexora. It is used to build the administrator, teacher, and student web dashboards, authentication pages, responsive UI routing, and browser-delivered views. |
+| Swagger UI | Swagger UI is generated at `/api/docs` only outside production. The default production-mode Compose backend intentionally returns 404 for that route. |
+| Next.js | Next.js 16.2.10 is the declared web framework baseline. It builds the administrator, teacher, and student dashboards, authentication pages, routing, and browser-delivered views. |
 | React | React 19 powers the component-based user interface of the web application and also supports the mobile application through React Native. It is required for rendering dashboards, forms, class views, notifications, reports, and AI-related user interactions. |
 | Tailwind CSS | Tailwind CSS is used in the web frontend for utility-based styling, layout control, responsive behavior, and consistent interface presentation across the dashboard pages. |
 | NestJS | NestJS 11 is the primary backend framework of Nexora. It manages REST APIs, authentication, role enforcement, class and lesson workflows, assessments, LXP logic, reporting, notifications, audit logging, and system integration with AI services. |
@@ -47,9 +47,9 @@ Prepared from the current Nexora codebase and deployment topology as of March 22
 
 ## Figure 1. System Architecture
 
-The Nexora system follows a multi-tier web and mobile client-server architecture. The web layer is implemented through a Next.js 16 and React 19 frontend that serves administrator, teacher, and student dashboards. The mobile layer is implemented through an Expo and React Native student-facing application that currently includes authentication, dashboard, class, lesson, assessment, LXP, performance, announcement, and profile views.
+The Nexora system follows a multi-tier web and mobile client-server architecture. The web layer is implemented through a Next.js 16 and React 19 frontend that serves administrator, teacher, and student dashboards. The mobile layer is an Expo 54 and React Native 0.81 multi-role application with student, teacher, and supported administrator workspaces.
 
-Both client layers communicate with a NestJS 11 backend through authenticated HTTP-based API requests. The backend centralizes authentication, role and profile control, sections and class management, lessons, assessments, class records, announcements, notifications, reports, analytics, audit logging, teacher-facing intervention tools, and LMS to LXP coordination. The backend also exposes Swagger-based technical documentation and uses Socket IO for real-time notifications.
+Both client layers communicate with a NestJS 11 backend through authenticated HTTP-based API requests. The backend centralizes authentication, role and profile control, sections and class management, lessons, assessments, class records, announcements, notifications, reports, analytics, audit logging, teacher-facing intervention tools, and LMS to LXP coordination. It exposes development-only Swagger documentation and uses Socket.IO for real-time notifications.
 
 The backend stores operational data in PostgreSQL and relies on Redis with BullMQ for queued and asynchronous work. An event-driven application layer connects assessment submission, performance analysis, class-record synchronization, notification dispatch, and LXP intervention triggering. For AI-supported functions, the backend integrates with a separate FastAPI microservice responsible for JAKIPIR mentor chat, PDF extraction, indexing, retrieval, remedial support generation, and related inference workflows. That AI service uses Ollama-hosted text, vision, and embedding models, and stores relational or vector-supporting records through the shared PostgreSQL environment.
 

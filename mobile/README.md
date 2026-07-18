@@ -45,6 +45,8 @@ npm run typecheck
 npm run test -- --runInBand
 ```
 
+`android:emulator` and `android:emulator:clean` are Windows command-shell helpers. On Linux or macOS, set `EXPO_PUBLIC_API_URL` explicitly and use `npm run start` or `npm run android`.
+
 ## Data presentation
 
 Some presentation values are intentionally derived when the backend has no native field:

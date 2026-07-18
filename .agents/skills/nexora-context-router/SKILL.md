@@ -52,7 +52,6 @@ This skill is a selector, not a planner swarm and not a second architecture laye
 - Frontend page, route, component, auth shell, web client bug -> `next-frontend/AGENTS.md`
 - AI mentor, proxy, extraction, retrieval, Ollama, FastAPI -> `ai-service/AGENTS.md`
 - Generic mobile or Expo task -> `mobile/AGENTS.md`
-- Prompt explicitly names an archived mobile folder -> load that folder's `AGENTS.md` notice and only proceed there if the request stays explicit
 
 ## Workflow Skill Dispatch
 

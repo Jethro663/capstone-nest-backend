@@ -13,7 +13,7 @@ Create route-specific tutorial helpers that explain how to use a page through a 
    Emit `ROUTER_TRACE` and include `next-frontend` plus `testing`. Add other slices only if the target route crosses backend/mobile/AI contracts.
 
 2. Locate the exact route.
-   Use `rg`/`rg --files` to find the App Router `page.tsx`, route tests, and route-specific CSS in `next-frontend/app/globals.css` or nearby modules. Do not drift to a similar page.
+   Use Serena first for App Router ownership and symbol/reference discovery. Use `rg`/`rg --files` only to fill filename or non-code gaps such as route tests and route-specific CSS in `next-frontend/app/globals.css` or nearby modules. Do not drift to a similar page.
 
 3. Inspect before editing.
    Read the page header/action area, any existing dialog/sheet components, existing tests, and visual classes. Prefer local patterns already used by the route.

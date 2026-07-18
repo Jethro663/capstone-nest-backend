@@ -21,6 +21,7 @@ Scope: `next-frontend/` only.
 - Protected shell: `app/(dashboard)/layout.tsx`
 - Route gate: `proxy.ts`
 - API rewrite: `next.config.ts`
+- Compose service/port: `frontend` on `3001`
 
 ## Owning Paths
 
@@ -59,6 +60,7 @@ Scope: `next-frontend/` only.
 - `app/globals.css` is the authoritative theme surface; do not scatter a second competing color system.
 - Student routes rely on the theme switcher; teacher and admin shells have distinct styling conventions.
 - This app talks to backend `/api` routes, not directly to `ai-service`.
+- The default Compose build runs the production server on `0.0.0.0:3001`; local `npm run dev` uses the same port.
 - Generated `playwright-report/` and `test-results/` output is local evidence and must not be committed.
 - Preserve the route-local teacher discussion hook boundary; expand it one characterized responsibility at a time.
 

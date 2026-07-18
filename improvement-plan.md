@@ -141,7 +141,7 @@ Current evidence and residual risk are summarized in [CURRENT_REPO_STATE.md](CUR
 
 **Acceptance criteria**
 
-- `docker compose --env-file .env.compose config` validates using the documented variables.
+- `docker compose config` validates using root `.env`, created from `.env.compose.example`.
 - Default startup excludes privileged observability collectors and optional debugging exposure.
 - Grafana cannot start with sample credentials; required credentials are documented.
 - Retained root or host-access exceptions are explicit, minimal, and reviewed.

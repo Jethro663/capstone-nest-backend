@@ -50,7 +50,7 @@ flowchart LR
 | Security headers | Helmet; content-security-policy disabled only in development for Swagger compatibility. |
 | CORS | Credentialed allowlist from frontend, Next frontend, mobile, and explicit origin environment values; localhost additions only outside production. |
 | Proxy trust | TRUST_PROXY_HOPS; production default one hop, development default zero. |
-| Swagger | Generated at /api only outside production. |
+| Swagger | Generated at `/api/docs` only outside production. |
 | Sockets | Socket.IO adapter supports backend-owned real-time notifications. |
 | Shutdown | Nest shutdown hooks enabled so in-flight work can drain during controlled termination. |
 

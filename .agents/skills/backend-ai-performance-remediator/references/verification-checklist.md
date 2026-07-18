@@ -97,10 +97,10 @@ Confirm:
 
 ## Important Note
 
-`backend/package.json` defines `npm run lint` as `eslint ... --fix`.
+`backend/package.json` defines `npm run lint` as read-only ESLint and `npm run lint:fix` as the mutating variant.
 
 That means:
 
-- do not use `npm run lint` for pre-edit baseline capture
-- use direct `npx eslint "{src,apps,libs,test}/**/*.ts"` when you need a non-mutating lint signal
-- reserve mutating lint/format runs for deliberate post-edit cleanup only
+- use `npm run lint` for pre-edit baseline capture
+- use direct `npx eslint "{src,apps,libs,test}/**/*.ts"` only when a narrower lint target is useful
+- reserve `npm run lint:fix` and other mutating format runs for deliberate post-edit cleanup only

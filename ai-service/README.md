@@ -4,6 +4,8 @@ Internal FastAPI service for tutoring, retrieval/indexing, module extraction, qu
 
 Web and mobile clients do not call this service directly. NestJS proxies public AI routes, forwards user context, validates roles, and owns durable BullMQ orchestration.
 
+Core Compose keeps port `8000` internal. Publish it only with the explicit debug override.
+
 ## Runtime architecture
 
 - `app/main.py` remains the stable ASGI entrypoint and owns shared lifecycle/readiness wiring.

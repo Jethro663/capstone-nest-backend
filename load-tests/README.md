@@ -17,7 +17,6 @@ You can customize the target environment, credentials, and entity UUIDs by setti
 | Variable | Default Value | Description |
 |---|---|---|
 | `BASE_URL` | `http://localhost:3000` | Backend API base URL |
-| `AI_SERVICE_URL` | `http://localhost:8000` | FastAPI AI service base URL |
 | `TEST_STUDENT_EMAIL` | `student1@nexora.test` | Seeded student email |
 | `TEST_STUDENT_PASSWORD` | `Password123!` | Seeded student password |
 | `TEST_TEACHER_EMAIL` | `teacher1@nexora.test` | Seeded teacher email |
@@ -28,6 +27,8 @@ You can customize the target environment, credentials, and entity UUIDs by setti
 | `TEST_QUESTION_ID` | `44444444-...` | Sample question UUID inside assessment |
 | `TEST_LESSON_ID` | `55555555-...` | Anchor lesson UUID for AI lesson plan & quiz generation |
 | `TEST_INTERVENTION_CASE_ID` | `66666666-...` | Target intervention case UUID |
+
+The suite drives public NestJS contracts only. It does not require or authorize direct access to the internal FastAPI port.
 
 ---
 
@@ -70,7 +71,7 @@ The suite runs four concurrent workflows:
 ## 4. Result Interpretation & Diagnostics
 
 While running the k6 tests, monitor Grafana and Prometheus using the dashboards in `monitoring/grafana/dashboards/`:
-- **Database Pool Health**: Check `db_pool_total_connections`, `db_pool_idle_connections`, and `db_pool_waiting_requests` (exposed via `/metrics` on the NestJS backend). If `waiting_requests` spikes above 0, consider tuning `DB_POOL_MAX` in `backend/.env`.
+- **Database Pool Health**: Check `db_pool_total_connections`, `db_pool_idle_connections`, and `db_pool_waiting_requests` (exposed via `/api/metrics` on the NestJS backend). If `waiting_requests` spikes above 0, investigate query/pool pressure before changing `DB_POOL_MAX`.
 - **Redis Queue Depth**: Check `bullmq_waiting_jobs` and `bullmq_active_jobs` for `ai-teacher-generation`.
 - **Head-of-Line Blocking**: Verify that fast quiz generation jobs are not blocked by long-running lesson plan jobs.
 

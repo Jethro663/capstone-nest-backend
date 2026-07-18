@@ -2,12 +2,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
+const { resolveDevComposeBootstrap } = require('./dev-compose-config.cjs');
 
 const backendDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(backendDir, '..');
 const aiServiceDir = path.join(repoRoot, 'ai-service');
 const composeFilePath = path.join(repoRoot, 'docker-compose.yml');
-const composeEnvPath = path.join(repoRoot, '.env.compose');
+const composeBootstrap = resolveDevComposeBootstrap(repoRoot);
 
 const AI_READY_TIMEOUT_MS = Number(process.env.AI_BOOTSTRAP_READY_TIMEOUT_MS || 150000);
 const AI_READY_POLL_MS = Number(process.env.AI_BOOTSTRAP_READY_POLL_MS || 3000);
@@ -73,8 +74,8 @@ function tryDockerBootstrap() {
     return false;
   }
 
-  if (!fs.existsSync(composeEnvPath)) {
-    log('Skipped Docker bootstrap: .env.compose is missing at repo root.');
+  if (!fs.existsSync(composeBootstrap.envPath)) {
+    log('Skipped Docker bootstrap: root .env is missing (copy .env.compose.example to .env).');
     return false;
   }
 
@@ -93,7 +94,7 @@ function tryDockerBootstrap() {
   log('Starting backend dependencies via Docker Compose (postgres + redis + ollama + ai-service)...');
   const result = spawnSync(
     'docker',
-    ['compose', '--env-file', '.env.compose', 'up', '-d', 'postgres', 'redis', 'ollama', 'ai-service'],
+    composeBootstrap.args,
     {
       cwd: repoRoot,
       stdio: 'inherit',
