@@ -12,11 +12,11 @@ import { AcademicStateService } from './academic-state.service';
 @ApiBearerAuth('token')
 @Controller('academic-state')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(RoleName.Admin)
 export class AcademicStateController {
   constructor(private readonly academicStateService: AcademicStateService) {}
 
   @Get('current')
+  @Roles(RoleName.Admin, RoleName.Teacher)
   async getCurrent() {
     const data = await this.academicStateService.getCurrentState();
     return {
@@ -27,6 +27,7 @@ export class AcademicStateController {
   }
 
   @Get('impact-preview')
+  @Roles(RoleName.Admin)
   async getImpactPreview(@Query() query: ImpactPreviewQueryDto) {
     const data = await this.academicStateService.getImpactPreview(
       query.schoolYear,
@@ -39,6 +40,7 @@ export class AcademicStateController {
   }
 
   @Post('transition')
+  @Roles(RoleName.Admin)
   async transition(
     @Body() dto: TransitionAcademicStateDto,
     @CurrentUser() user: any,

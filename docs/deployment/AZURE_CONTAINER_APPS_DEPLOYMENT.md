@@ -32,7 +32,7 @@ Before creating any Azure resources:
 
 ### Frontend proxy behavior
 
-[`next-frontend/next.config.ts`](../next-frontend/next.config.ts) rewrites `/api/:path*` to `NEXT_PUBLIC_API_URL + /api/:path*`.
+[`next-frontend/next.config.ts`](../../next-frontend/next.config.ts) rewrites `/api/:path*` to `NEXT_PUBLIC_API_URL + /api/:path*`.
 
 Use:
 
@@ -59,13 +59,13 @@ NEXT_PUBLIC_API_URL=https://your-backend-fqdn/api
 - AI service must stay internal-only
 - Backend forwards `X-Internal-Service-Token`
 - `AI_SERVICE_SHARED_SECRET` must match on backend and ai-service
-- Phase 1 should keep `AI_DEGRADED_ALLOWED=true`
+- Keep `AI_DEGRADED_ALLOWED=false` for normal service readiness; enable degraded mode only as an explicit availability tradeoff
 
 ## Required Environment Variables
 
 ### Backend
 
-Use [`backend/.env.example`](../backend/.env.example) as the template.
+Use [`backend/.env.example`](../../backend/.env.example) as the template.
 
 ```env
 DATABASE_URL=postgresql://postgres:<password>@<postgres-host>:5432/capstone
@@ -78,7 +78,7 @@ JWT_REFRESH_SECRET=<32+ chars>
 OTP_PEPPER=<long random secret>
 AI_SERVICE_URL=http://ai-service
 AI_SERVICE_SHARED_SECRET=<same secret as ai-service>
-AI_DEGRADED_ALLOWED=true
+AI_DEGRADED_ALLOWED=false
 TRUST_PROXY_HOPS=1
 RUN_DB_MIGRATIONS=true
 RUN_DB_SEED=false
@@ -96,13 +96,13 @@ COOKIE_DOMAIN=
 
 ### AI service
 
-Use [`ai-service/.env.example`](../ai-service/.env.example) as the template.
+Use [`ai-service/.env.example`](../../ai-service/.env.example) as the template.
 
 ```env
 DATABASE_URL=postgresql+asyncpg://postgres:<password>@<postgres-host>:5432/capstone
 UPLOAD_DIR=/app/uploads
 AI_SERVICE_SHARED_SECRET=<same secret as backend>
-AI_DEGRADED_ALLOWED=true
+AI_DEGRADED_ALLOWED=false
 AI_RUNTIME_MODE=cloud
 AI_CLOUD_FALLBACK_PROVIDER=openrouter
 AI_CLOUD_FALLBACK_ENABLED=true
@@ -125,7 +125,7 @@ OLLAMA_BASE_URL=http://ollama:11434
 
 ### Vercel
 
-Use [`next-frontend/.env.local.example`](../next-frontend/.env.local.example) as the template.
+Configure these Vercel variables directly; the frontend does not currently ship a `.env.local.example` file.
 
 ```env
 NEXT_PUBLIC_API_URL=https://<backend-fqdn>
@@ -134,7 +134,7 @@ NEXT_PUBLIC_WS_URL=https://<backend-fqdn>
 
 ### Mobile
 
-Use [`mobile/.env.example`](../mobile/.env.example) or [`mobile/.env.example`](../mobile/.env.example).
+Use [`mobile/.env.example`](../../mobile/.env.example).
 
 ```env
 EXPO_PUBLIC_API_URL=https://<backend-fqdn>/api

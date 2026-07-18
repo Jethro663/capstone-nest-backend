@@ -14,6 +14,7 @@ Scope: `backend/` only.
 - Dev: `npm run start:dev`
 - Build: `npm run build`
 - Lint: `npm run lint`
+- Migrations: `node run-migrations.js`
 - Seed smoke: `npm run seed:smoke`
 - Unit tests: `npm run test`
 - E2E: `npm run test:e2e`
@@ -29,7 +30,8 @@ Scope: `backend/` only.
 - `drizzle/*`: migrations and snapshots
 - `src/common/*`: filters, logger, constants, shared utilities
 - `src/config/*`: typed config for DB, JWT, Redis, Ollama
-- `src/monitoring/*` and `src/tracing.ts`: health, metrics, logging, and optional OTLP tracing
+- `src/modules/health/*`: liveness and dependency readiness
+- `src/monitoring/*` and `src/tracing.ts`: metrics, logging, and optional OTLP tracing
 - `docker-entrypoint.sh`: migration/seed bootstrap and upload-volume ownership handoff
 
 ## Working Rules
@@ -77,5 +79,5 @@ Scope: `backend/` only.
 - Prefer targeted specs under `src/modules/**/**/*.spec.ts`.
 - Run `npm run seed:smoke` after touching seeded auth, enrollment, grading, or other high-signal API flows that benefit from a fast sanity pass.
 - Run `npm run build` after structural backend edits.
-- Run `npm run lint` after TypeScript refactors.
+- Run the read-only `npm run lint` after TypeScript refactors; use `npm run lint:fix` only when mutation is intentional.
 - Run `npm run test` and `npm run test:e2e` when behavior changes are broad or high risk.

@@ -20,6 +20,10 @@ describe('AiProxyService', () => {
               if (key === 'AI_SERVICE_TIMEOUT_CHAT_MS') return '70000';
               if (key === 'AI_SERVICE_TIMEOUT_QUIZ_MS') return '180000';
               if (key === 'AI_SERVICE_TIMEOUT_EXTRACTION_MS') return '300000';
+              if (key === 'AI_SERVICE_TIMEOUT_INTERNAL_EXTRACTION_MS')
+                return '100';
+              if (key === 'AI_SERVICE_SHARED_SECRET')
+                return 'test-shared-secret';
               return undefined;
             }),
           },
@@ -43,6 +47,12 @@ describe('AiProxyService', () => {
     ).toBe(70000);
   });
 
+  it('uses a larger aggregate deadline for tutor start', () => {
+    expect((service as any).resolveTimeoutMs('/student/tutor/session')).toBe(
+      150000,
+    );
+  });
+
   it('uses the quiz timeout for teacher quiz paths', () => {
     expect(
       (service as any).resolveTimeoutMs('/teacher/quizzes/generate-draft'),
@@ -60,9 +70,11 @@ describe('AiProxyService', () => {
   });
 
   it('runs extraction jobs through the shared-secret internal endpoint', async () => {
-    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ success: true }), { status: 200 }),
-    );
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
 
     await service.runInternalExtractionJob('extraction-123', {
       bullmqJobId: 'extraction-extraction-123',
@@ -73,12 +85,189 @@ describe('AiProxyService', () => {
       'http://localhost:8000/internal/extractions/extraction-123/run',
       expect.objectContaining({
         method: 'POST',
+        headers: expect.objectContaining({
+          'X-Internal-Service-Token': 'test-shared-secret',
+        }),
         body: JSON.stringify({
           bullmqJobId: 'extraction-extraction-123',
           attempt: 2,
         }),
       }),
     );
+  });
+
+  it('marks a stranded teacher AI job failed through the internal boundary', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
+
+    await service.markInternalTeacherJobFailed(
+      'job-123',
+      'BullMQ enqueue failed: Redis unavailable',
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/internal/teacher/jobs/job-123/fail',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'X-Internal-Service-Token': 'test-shared-secret',
+        }),
+        body: JSON.stringify({
+          reason: 'BullMQ enqueue failed: Redis unavailable',
+          expectedStatus: 'pending',
+        }),
+      }),
+    );
+  });
+
+  it('fails closed before an internal AI job when the shared secret is absent', async () => {
+    const unconfigured = new AiProxyService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVICE_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService);
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
+
+    await expect(
+      unconfigured.runInternalExtractionJob('extraction-123', {}),
+    ).rejects.toThrow('AI_SERVICE_SHARED_SECRET');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before forwarding user context when the secret is absent', async () => {
+    const unconfigured = new AiProxyService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVICE_URL' ? 'http://localhost:8000' : undefined,
+      ),
+    } as unknown as ConfigService);
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ success: true }), { status: 200 }),
+      );
+
+    await expect(
+      unconfigured.forward('POST', '/chat', {
+        id: 'student-1',
+        email: 'student@example.com',
+        roles: ['student'],
+      }),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses a 70 second chat deadline when no override is configured', () => {
+    const defaultConfig = new AiProxyService({
+      get: jest.fn((key: string) =>
+        key === 'AI_SERVICE_SHARED_SECRET' ? 'test-shared-secret' : undefined,
+      ),
+    } as unknown as ConfigService);
+
+    expect((defaultConfig as any).resolveTimeoutMs('/chat')).toBe(70000);
+    expect((defaultConfig as any).lessonPlanTimeoutMs).toBe(900000);
+    expect((defaultConfig as any).internalQuizTimeoutMs).toBe(900000);
+    expect((defaultConfig as any).internalInterventionTimeoutMs).toBe(900000);
+    expect((defaultConfig as any).internalExtractionTimeoutMs).toBe(900000);
+  });
+
+  it('converts an exhausted chat deadline into a clear 504', async () => {
+    jest.useFakeTimers();
+    jest.spyOn(globalThis, 'fetch').mockImplementation((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) {
+          reject(new Error('missing abort signal'));
+          return;
+        }
+        signal.addEventListener('abort', () => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    });
+
+    const request = service.forward('POST', '/chat', {
+      id: 'student-1',
+      roles: ['student'],
+    });
+    const assertion = expect(request).rejects.toMatchObject({ status: 504 });
+
+    await jest.advanceTimersByTimeAsync(70000);
+    await assertion;
+  });
+
+  it('keeps the chat deadline active while consuming a delayed response body', async () => {
+    jest.useFakeTimers();
+    let requestSignal: AbortSignal | null = null;
+
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      requestSignal = init?.signal ?? null;
+      return {
+        ok: true,
+        status: 200,
+        text: () =>
+          new Promise<string>((_resolve, reject) => {
+            requestSignal?.addEventListener('abort', () => {
+              const error = new Error('aborted during body read');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      } as Response;
+    });
+
+    const request = service.forward('POST', '/chat', {
+      id: 'student-1',
+      roles: ['student'],
+    });
+    const assertion = expect(request).rejects.toMatchObject({ status: 504 });
+
+    await jest.advanceTimersByTimeAsync(70000);
+    await assertion;
+    expect(requestSignal).not.toBeNull();
+    expect(requestSignal!.aborted).toBe(true);
+  });
+
+  it('keeps the internal job deadline active while consuming a delayed response body', async () => {
+    jest.useFakeTimers();
+    let requestSignal: AbortSignal | null = null;
+
+    jest.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
+      requestSignal = init?.signal ?? null;
+      return {
+        ok: true,
+        status: 200,
+        json: () =>
+          new Promise<unknown>((_resolve, reject) => {
+            requestSignal?.addEventListener('abort', () => {
+              const error = new Error('aborted during body read');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }),
+      } as Response;
+    });
+
+    const request = service.runInternalExtractionJob('extraction-123', {
+      bullmqJobId: 'extraction-extraction-123',
+      attempt: 1,
+    });
+    const assertion = expect(request).rejects.toThrow(
+      'ai-service internal execution timed out after 100ms for module extraction extraction-123',
+    );
+
+    await jest.advanceTimersByTimeAsync(100);
+    await assertion;
+    expect(requestSignal).not.toBeNull();
+    expect(requestSignal!.aborted).toBe(true);
   });
 
   it('converts AI service connection failures into a clear 503', async () => {

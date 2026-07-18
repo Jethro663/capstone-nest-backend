@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, UnrecoverableError } from 'bullmq';
 import { and, eq, inArray } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
 import {
@@ -52,7 +52,7 @@ export class AssessmentNotificationProcessor extends WorkerHost {
       return;
     }
 
-    this.logger.warn(`[assessment-notifications] Unknown job ${job.name}`);
+    throw new UnrecoverableError(`Unsupported notifications job: ${job.name}`);
   }
 
   private async notifyAssessmentAssigned(

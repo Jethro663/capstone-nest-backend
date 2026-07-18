@@ -46,7 +46,7 @@ describe('AiGenerationProcessor', () => {
     });
   });
 
-  it('ignores unknown job names without calling proxy', async () => {
+  it('rejects unknown job names without calling proxy', async () => {
     const mockJob = {
       name: 'unknown-job',
       id: 'bullmq-999',
@@ -54,7 +54,9 @@ describe('AiGenerationProcessor', () => {
       data: { jobId: 'job-999', requestedByUserId: 'teacher-1' },
     } as unknown as Job<{ jobId: string; requestedByUserId: string }>;
 
-    await processor.process(mockJob);
+    await expect(processor.process(mockJob)).rejects.toThrow(
+      'Unsupported ai-teacher-generation job: unknown-job',
+    );
     expect(proxy.runInternalLessonPlanJob).not.toHaveBeenCalled();
   });
 

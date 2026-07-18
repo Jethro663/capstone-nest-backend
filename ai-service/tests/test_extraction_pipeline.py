@@ -1,13 +1,17 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.extraction_pipeline import (
+    ExtractionCancelled,
+    ExtractionExecutionSuperseded,
     _build_structure_prompt,
     _cleanup_text_first_sections,
     _derive_section_assessment_draft,
     _detect_structure_with_rules,
     _evaluate_extraction_against_golden,
     _merge_structured_chunks,
+    _update_extraction,
     run_extraction,
 )
 from app.pdf_chunker import TextChunk
@@ -295,6 +299,24 @@ class ExtractionPipelineTests(unittest.TestCase):
 
 
 class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fenced_progress_update_rejects_superseded_worker(self) -> None:
+        rows = MagicMock()
+        rows.mappings.return_value.first.return_value = None
+        db = AsyncMock()
+        db.execute = AsyncMock(return_value=rows)
+
+        with self.assertRaises(ExtractionExecutionSuperseded):
+            await _update_extraction(
+                db,
+                "extract-1",
+                {"progress_percent": 30},
+                execution_lease_id="lease-old",
+            )
+
+        query = str(db.execute.await_args.args[0])
+        self.assertIn("workerLeaseId", query)
+        db.rollback.assert_awaited_once()
+
     async def test_run_extraction_skips_page_rendering_for_text_rich_pdf(self) -> None:
         db = MagicMock()
         upload_row = MagicMock()
@@ -304,6 +326,7 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         }
         db.execute = AsyncMock(return_value=upload_row)
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
 
         doc = MagicMock()
 
@@ -351,6 +374,7 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         }
         db.execute = AsyncMock(return_value=upload_row)
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
 
         doc = MagicMock()
 
@@ -394,6 +418,7 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         }
         db.execute = AsyncMock(return_value=upload_row)
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
 
         doc = MagicMock()
 
@@ -433,6 +458,7 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
         }
         db.execute = AsyncMock(side_effect=[upload_row, cancel_row])
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
 
         doc = MagicMock()
 
@@ -449,7 +475,45 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 return_value=[{"pageNumber": 1, "text": "Enough selectable text for extraction.", "charCount": 38}],
             ),
         ):
-            await run_extraction(db, "extract-1", "file-1", "user-1")
+            with self.assertRaises(ExtractionCancelled):
+                await run_extraction(
+                    db,
+                    "extract-1",
+                    "file-1",
+                    "user-1",
+                    raise_on_failure=True,
+                )
+
+        final_update = update_extraction.await_args_list[-1].args[2]
+        self.assertEqual(final_update["extraction_status"], "failed")
+        self.assertIn("cancelled", final_update["error_message"].lower())
+
+    async def test_task_cancellation_marks_processing_extraction_failed(self) -> None:
+        db = MagicMock()
+        upload_row = MagicMock()
+        upload_row.mappings.return_value.first.return_value = {
+            "file_path": "uploads/test.pdf",
+            "original_name": "Biology.pdf",
+        }
+        db.execute = AsyncMock(return_value=upload_row)
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+
+        with (
+            patch("app.extraction_pipeline._update_extraction", new=AsyncMock()) as update_extraction,
+            patch(
+                "app.extraction_pipeline.materialize_backend_upload",
+                new=AsyncMock(side_effect=asyncio.CancelledError()),
+            ),
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await run_extraction(
+                    db,
+                    "extract-1",
+                    "file-1",
+                    "user-1",
+                    raise_on_failure=True,
+                )
 
         final_update = update_extraction.await_args_list[-1].args[2]
         self.assertEqual(final_update["extraction_status"], "failed")

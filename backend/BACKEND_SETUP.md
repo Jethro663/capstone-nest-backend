@@ -1,614 +1,293 @@
-# Backend Setup & Configuration Guide
+# Nexora Backend Setup
 
-## 📋 Table of Contents
+This guide covers the current NestJS 11 backend. For the fastest whole-project start, use the root [README](../README.md). For exact live routes, use the [July 18 route inventory](../docs/system-audit/2026-07-18-live-stack-and-route-inventory.md).
 
-1. [Prerequisites](#prerequisites)
-2. [Initial Setup](#initial-setup)
-3. [Database Setup](#database-setup)
-4. [Environment Configuration](#environment-configuration)
-5. [Running the Backend](#running-the-backend)
-6. [Database Seeding](#database-seeding)
-7. [Project Structure](#project-structure)
-8. [API Documentation](#api-documentation)
-9. [Troubleshooting](#troubleshooting)
+## What the backend owns
 
----
+The backend is Nexora's system authority for:
+
+- login, rotating refresh sessions, OTP, roles, and guards
+- public `/api` contracts for web and mobile
+- users, profiles, sections, classes, lessons, modules, assessments, and class records
+- official academic state, audit history, analytics, reports, LXP, and interventions
+- PostgreSQL/Drizzle access and schema migrations
+- Redis/BullMQ queues and restart-safe asynchronous work
+- authorization and proxying for the internal FastAPI service
+- health, metrics, WebSocket events, structured logs, and optional tracing
+
+The AI service is assistive. It does not become the public auth authority and does not directly write official grades.
 
 ## Prerequisites
 
-Before you begin, ensure you have the following installed on your machine:
+Recommended full-stack workflow:
 
-- **Node.js** (v18 or higher) - [Download](https://nodejs.org/)
-- **npm** or **yarn** - Comes with Node.js
-- **PostgreSQL** (v12 or higher) - [Download](https://www.postgresql.org/download/)
-- **Git** - [Download](https://git-scm.com/)
+- Docker Engine and Docker Compose v2
+- Git
 
-### Verify Installation
+Host-side backend development:
 
-```bash
-node --version    # Should be v18+
-npm --version     # Should be v9+
-psql --version    # Should be PostgreSQL 12+
-```
+- Node.js 20.9 or newer
+- npm 10
+- reachable PostgreSQL 16 with pgvector
+- reachable Redis 7
+- a ready AI service, or `AI_DEGRADED_ALLOWED=true` for a deliberately degraded local workflow
 
----
+## Recommended: run through Compose
 
-## Initial Setup
-
-### Step 1: Clone the Repository
+From the repository root:
 
 ```bash
-git clone <your-repo-url>
-cd capstone-nest-react-lms
-cd backend
+cp .env.compose.example .env
+# Replace every CHANGE_ME value.
+docker compose config --quiet
+docker compose up -d
+curl --fail http://localhost:3000/api/health/ready
 ```
 
-### Step 2: Install Dependencies
+Compose reads root `.env`. The backend container additionally loads non-secret defaults from `backend/.env.docker`. Migrations run at startup by default; seed data does not.
+
+Inspect the backend:
+
+```bash
+docker compose ps backend postgres redis ai-service
+docker compose logs --tail=100 backend
+curl --fail http://localhost:3000/api/health/live
+curl --fail http://localhost:3000/api/health/ready
+```
+
+## Host-side development
+
+From `backend/`:
 
 ```bash
 npm install
+cp .env.example .env
+# Fill the required values.
+npm run start:dev
 ```
 
-This will install all required packages listed in `package.json`, including:
-- **NestJS**: The application framework
-- **Drizzle ORM**: Database ORM and migrations
-- **PostgreSQL Driver**: Database connectivity
-- **JWT**: Authentication tokens
-- **Bcrypt**: Password hashing
+`npm run start:dev` runs Nest in watch mode and tries to ensure `postgres`, `redis`, `ollama`, and `ai-service` are available through root Compose. It uses root `.env` for that Docker bootstrap. Use this when you want the normal integrated development experience.
 
-### Step 3: Verify Installation
+To start only Nest and manage dependencies yourself:
 
 ```bash
-npm list    # Shows the installed dependency tree
+npm run start:dev:core
 ```
 
----
-
-## Database Setup
-
-### Step 1: Create PostgreSQL Database
-
-Open your PostgreSQL terminal and create a new database:
+Other modes:
 
 ```bash
-# Using psql command line
-psql -U postgres
-
-# Inside psql
-CREATE DATABASE capstone;
-\q
+npm run start:debug
+npm run build
+npm run start:prod
 ```
 
-Or, using a GUI tool like **pgAdmin** or **DBeaver**:
-- Create a new database named `capstone`
-- Make sure the server is running on `localhost:5432`
-- Use your own local PostgreSQL user/password; do not rely on shared or copied defaults.
+## Environment contract
 
-### Step 2: Verify Connection
+Never commit a populated `.env`.
 
-Test your PostgreSQL connection:
+Required backend production inputs:
+
+| Variable | Meaning |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL connection URL |
+| `REDIS_URL` | Redis connection URL |
+| `JWT_SECRET` | Access-token signing secret |
+| `JWT_REFRESH_SECRET` | Refresh-token signing secret |
+| `OTP_PEPPER` | Server-side OTP hash pepper |
+| `AI_SERVICE_URL` | Internal FastAPI base URL |
+| `AI_SERVICE_SHARED_SECRET` | Internal backend-to-AI credential |
+
+Important optional inputs:
+
+| Variable | Meaning |
+| --- | --- |
+| `NODE_ENV` / `PORT` | Runtime mode and HTTP port |
+| `CORS_ALLOWED_ORIGINS` | Allowed browser/mobile origins |
+| `AI_DEGRADED_ALLOWED` | Permit readiness without a usable AI dependency only when explicitly desired |
+| `AI_SERVICE_TIMEOUT_*` | Per-flow backend proxy budgets |
+| `EMAIL_SERVICE` and provider credentials | OTP/notification email; blank disables delivery |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Blank disables direct trace export |
+| `LOKI_HOST` | Blank disables direct Loki transport |
+| `RUN_DB_MIGRATIONS` | Container entrypoint migration toggle |
+| `RUN_DB_SEED` | Container entrypoint seed toggle; default false |
+
+`AI_SERVICE_SHARED_SECRET` must match the AI service and must never reach `NEXT_PUBLIC_*` or `EXPO_PUBLIC_*` variables.
+
+## Database and migrations
+
+The schema source is `backend/src/drizzle/schema/`. Applied SQL lives in `backend/drizzle/` and is ordered by `backend/drizzle/meta/_journal.json`.
+
+Current migrations:
+
+1. `0000_baseline_nexora.sql`
+2. `0001_mixed_morgan_stark.sql`
+3. `0002_small_photon.sql`
+4. `0003_enable_pgvector.sql`
+
+From the repository root:
 
 ```bash
-psql -U postgres -h localhost -d capstone
+npm --prefix backend run check:migrations
+node backend/run-migrations.js
 ```
 
-If successful, you should see the `capstone=#` prompt. Exit with `\q`.
-
-### Step 3: Run Drizzle Migrations
-
-The database schema is defined strictly in `src/drizzle/schema/` using Drizzle ORM.
-We use a **linear forward-only baseline migration architecture**. All legacy migrations have been squashed into a single active baseline (`drizzle/0000_baseline_nexora.sql`).
-
-To verify migration integrity and apply active migrations locally:
+From `backend/`:
 
 ```bash
 npm run check:migrations
 node run-migrations.js
 ```
 
-**What this does:**
-- `check:migrations`: Verifies that all `.sql` files in `drizzle/` are linearly sequenced and registered in `meta/_journal.json`.
-- `run-migrations.js`: Applies journal-listed migrations inside safe savepoint transactions and records them in `_applied_migrations`.
+The runner creates/reads `_applied_migrations` and applies only journal-listed files. It also ensures the `vector` extension exists. Do not delete migration history, manually run old SQL files, or use `drizzle-kit push` on shared/deployed databases.
 
-> [!IMPORTANT]
-> **Railway & Live Environment Cutovers:** When deploying to an existing populated database that already has legacy tables, you can run the runner in explicit stamp mode by setting `MIGRATION_BASELINE_STAMP_ONLY=true`. This stamps `0000_baseline_nexora.sql` into `_applied_migrations` without replaying table creation commands. Note that `run-migrations.js` also includes an automatic failsafe that detects existing legacy databases and stamps the baseline seamlessly. Do NOT use `drizzle-kit push` on shared or deployed environments.
+`MIGRATION_BASELINE_STAMP_ONLY=true` is a deployment cutover tool for an existing legacy database. Do not use it for a fresh local database.
 
----
+## Seed data
 
-## Environment Configuration
-
-### Step 1: Create `.env` File
-
-Create a `.env` file in the `backend/` directory with project-specific secrets. Start from placeholders like these and replace every `CHANGE_ME_*` value before running the app:
-
-```env
-# ===== DATABASE =====
-DATABASE_URL=postgresql://postgres:CHANGE_ME_DB_PASSWORD@localhost:5432/capstone
-
-# ===== JWT SECRETS =====
-JWT_SECRET=CHANGE_ME_JWT_SECRET
-JWT_REFRESH_SECRET=CHANGE_ME_JWT_REFRESH_SECRET
-
-# ===== SERVER =====
-PORT=3000
-NODE_ENV=production
-
-# ===== EMAIL SERVICE =====
-EMAIL_SERVICE=gmail
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-EMAIL_FROM=Nexora LMS <your-email@gmail.com>
-```
-
-### Step 2: Customize Variables
-
-Replace the following with your actual values. Treat every value here as a placeholder and URL-encode special characters in database passwords:
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:URL_ENCODED_PASSWORD@host:port/dbname` |
-| `JWT_SECRET` | Secret for signing JWT tokens | Generate with: `openssl rand -hex 32` |
-| `JWT_REFRESH_SECRET` | Secret for refresh tokens | Generate with: `openssl rand -hex 32` |
-| `PORT` | Server port | `3000` |
-| `NODE_ENV` | Environment mode | `development` or `production` |
-| `EMAIL_USER` | Gmail address for sending emails | `your-email@gmail.com` |
-| `EMAIL_PASSWORD` | Gmail app-specific password | Generated in Gmail settings |
-
-### Step 3: Get Gmail App Password
-
-If using Gmail for emails:
-
-1. Enable 2-Factor Authentication on your Google Account
-2. Go to [Google Account App Passwords](https://myaccount.google.com/apppasswords)
-3. Select "Mail" and "Windows Computer"
-4. Copy the generated password
-5. Paste it in `.env` as `EMAIL_PASSWORD`
-
----
-
-## Running the Backend
-
-### Option 1: Development Mode (Recommended for Development)
-
-Runs with hot reload - changes to code are reflected automatically:
+Seeding is an explicit operation:
 
 ```bash
-npm run start:dev
-```
-
-**Expected Output:**
-```
-[Nest] 12345 - 02/11/2026, 10:30:15 AM     LOG [NestFactory] Starting Nest application...
-[Nest] 12345 - 02/11/2026, 10:30:16 AM     LOG [InstanceLoader] DatabaseModule dependencies...
-[Nest] 12345 - 02/11/2026, 10:30:16 AM     LOG [InstanceLoader] AuthModule dependencies...
-[Nest] 12345 - 02/11/2026, 10:30:16 AM     LOG [NestApplication] Nest application successfully started
-Server running on: http://localhost:3000
-```
-
-### Option 2: Production Mode
-
-Builds and runs the optimized version:
-
-```bash
-npm run build
-npm run start:prod
-```
-
-### Option 3: Debug Mode
-
-Runs with Node debugger enabled (for VSCode debugging):
-
-```bash
-npm run start:debug
-```
-
-### Stopping the Server
-
-- Press `Ctrl + C` in the terminal
-
----
-
-## Database Seeding
-
-After the database schema is created, populate it with initial data using the seeding script.
-
-### Step 1: Run Seed Script
-
-```bash
+cd backend
 node seed-database.js
+npm run seed:smoke
 ```
 
-### Step 2: What Gets Created
+`RUN_DB_SEED=false` is the default Compose behavior. Never treat development seed credentials as production accounts, and do not paste them into general documentation.
 
-The seed script automatically creates local demo data for development:
+## Project map
 
-**Roles:**
-- ✅ Admin role
-- ✅ Teacher role
-- ✅ Student role
+| Path | Ownership |
+| --- | --- |
+| `src/main.ts` | HTTP bootstrap, global validation, CORS, cookie parsing, Swagger gate, `/api` prefix |
+| `src/app.module.ts` | Top-level modules, global guards, filters, BullMQ connection |
+| `src/modules/` | Domain controllers, services, DTOs, workers, and tests |
+| `src/modules/auth/` | Login, refresh, logout, OTP, guards, sessions |
+| `src/modules/class-record/` | Components, scores, formulas, finalization, reports/imports |
+| `src/modules/assessments/` | Assessment lifecycle, attempts, grading/review, analytics |
+| `src/modules/lxp/` | Lessons, mastery, interventions, access/readiness |
+| `src/modules/performance/` | Derived performance snapshots and recomputation |
+| `src/modules/ai-mentor/` | Authenticated AI proxy and generation/extraction queues |
+| `src/modules/health/` | Liveness and dependency readiness |
+| `src/database/` | Database service/provider |
+| `src/drizzle/schema/` | Drizzle table and relation definitions |
+| `drizzle/` | Ordered forward SQL |
+| `src/monitoring/` / `src/tracing.ts` | Prometheus, logs, optional OTLP |
+| `docker-entrypoint.sh` | Migration/seed bootstrap and upload ownership handoff |
 
-**Users:**
-- ✅ Demo admin user
-- ✅ Demo teacher user
-- ✅ Demo student user
+Controllers validate, authorize, delegate, and shape responses. Services own business logic. Database access goes through `DatabaseService` and `this.db`.
 
-Inspect `seed-database.js` or the seed script output for the current local-only demo credentials instead of copying credentials from documentation.
+## API and Swagger
 
-**Academic Structure:**
-- ✅ Section: "Grade 7 - Section A"
-  - Grade Level: 7
-  - School Year: 2024-2025
-  - Adviser: Teacher user
+- Base prefix: `http://localhost:3000/api`
+- Liveness: `GET /api/health/live`
+- Readiness: `GET /api/health/ready`
+- Metrics: `GET /api/metrics`
+- Development Swagger UI: `http://localhost:3000/api/docs`
 
-- ✅ Class: "Mathematics" (MATH-7)
-  - Subject: Mathematics
-  - Section: Grade 7 - Section A
-  - Teacher: Teacher user
-  - Schedule: MWF 9:00 AM - 10:00 AM
+Swagger is intentionally disabled when `NODE_ENV=production`, including the default Compose backend. A 404 from `/api/docs` in Compose is expected.
 
-**Enrollment:**
-- ✅ Student enrolled in Mathematics class
+The startup log mapped 385 routes on July 18, 2026. Do not copy a small endpoint table and assume it is complete; use Swagger in development or the checked [route catalog](../docs/system-audit/2026-07-18-live-stack-and-route-inventory.md).
 
-### Step 3: Expected Output
+Most non-public endpoints require:
 
-```
-ℹ️  [10:30:15] Connected to database
-ℹ️  [10:30:15] Creating roles...
-✅ [10:30:15]   ✓ Role 'admin' created
-✅ [10:30:15]   ✓ Role 'teacher' created
-✅ [10:30:15]   ✓ Role 'student' created
-ℹ️  [10:30:15] Creating users...
-✅ [10:30:16]   ✓ Demo admin user created
-✅ [10:30:16]   ✓ Demo teacher user created
-✅ [10:30:16]   ✓ Demo student user created
-ℹ️  [10:30:16] Assigning roles to users...
-✅ [10:30:16]   ✓ Admin role assigned
-✅ [10:30:16]   ✓ Teacher role assigned
-✅ [10:30:16]   ✓ Student role assigned
-ℹ️  [10:30:16] Creating section...
-✅ [10:30:16]   ✓ Section created: Grade 7 - Section A
-ℹ️  [10:30:16] Creating class...
-✅ [10:30:16]   ✓ Class created: Mathematics (MATH-7)
-ℹ️  [10:30:16] Creating student enrollment...
-✅ [10:30:16]   ✓ Student enrolled in class
-
-============================================================
-DATABASE SEEDING COMPLETED SUCCESSFULLY!
-============================================================
+```http
+Authorization: Bearer <access-token>
 ```
 
-### Step 4: Customize Seed Data
+Responses normally preserve the `success` / `message` / `data` envelope. Contract changes must be traced through web, mobile, and FastAPI consumers as applicable.
 
-Edit `seed-database.js` to change local demo users, passwords, or section/class data:
+## BullMQ
 
-```javascript
-// Line ~20-50: Customize these objects
-const ADMIN_USER = {
-  email: 'change-me-admin@lms.local',
-  password: 'CHANGE_ME_ADMIN_PASSWORD',
-  firstName: 'System',
-  lastName: 'Admin',
-};
+The checked backend owns seven queues:
 
-const TEACHER_USER = {
-  email: 'change-me-teacher@lms.local',
-  password: 'CHANGE_ME_TEACHER_PASSWORD',
-  firstName: 'John',
-  lastName: 'Doe',
-};
+- `ai-teacher-generation`
+- `library-indexing`
+- `rag-indexing`
+- `performance-recompute`
+- `announcements`
+- `notifications`
+- `discussion-board`
 
-// ... etc
-```
+Long-running extraction, generation, indexing, and recompute work must remain queue-owned and retry/cancellation aware. Do not replace durable jobs with untracked `setTimeout`, detached promises, or FastAPI `asyncio.create_task` execution.
 
----
+## Verification
 
-## Project Structure
-
-```
-backend/
-├── src/
-│   ├── main.ts                          # Application entry point
-│   ├── app.module.ts                    # Root module
-│   ├── config/
-│   │   ├── database.config.ts           # Database configuration
-│   │   └── jwt.config.ts                # JWT configuration
-│   ├── database/
-│   │   ├── database.module.ts           # Database module
-│   │   └── database.service.ts          # Database service
-│   ├── drizzle/
-│   │   ├── drizzle.module.ts            # Drizzle module
-│   │   └── schema/
-│   │       ├── base.schema.ts           # Main database schema
-│   │       ├── otp.schema.ts            # OTP verification schema
-│   │       └── index.ts                 # Schema exports
-│   └── modules/                         # Feature modules
-│       ├── admin/                       # Admin management
-│       ├── assessments/                 # Assessments & quizzes
-│       ├── auth/                        # Authentication
-│       ├── classes/                     # Class management
-│       ├── lessons/                     # Lesson management
-│       ├── enrollments/                 # Enrollment management
-│       └── ... more modules
-├── test/
-│   ├── app.e2e-spec.ts                  # End-to-end tests
-│   └── jest-e2e.json                    # Jest E2E configuration
-├── drizzle/                             # Migration files (auto-generated)
-│   ├── meta/                            # Migration metadata
-│   └── *.sql                            # Migration SQL files
-├── .env                                 # Environment variables
-├── .env.example                         # Environment template
-├── .gitignore                           # Git ignore rules
-├── package.json                         # Dependencies
-├── tsconfig.json                        # TypeScript configuration
-├── drizzle.config.ts                    # Drizzle ORM configuration
-├── nest-cli.json                        # NestJS CLI configuration
-└── README.md                            # Original project README
-```
-
-### Key Directories Explained
-
-**`src/modules/`** - Feature modules organized by domain:
-- Each module is self-contained with controllers, services, and DTOs
-- Use `nest g resource module-name` to generate new modules
-
-**`src/drizzle/schema/`** - Database schema definitions:
-- `base.schema.ts`: Core entities (users, roles, classes, etc.)
-- `otp.schema.ts`: One-time password verification
-- Auto-migrated with Drizzle Kit
-
-**`drizzle/`** - Migration files:
-- Auto-generated by Drizzle Kit
-- Do NOT manually edit
-- Track changes to schema over time
-
----
-
-## API Documentation
-
-### Accessing Swagger UI
-
-Once the server is running, access the interactive API documentation:
-
-```
-http://localhost:3000/api
-```
-
-This provides:
-- All available endpoints
-- Request/response schema
-- Try-it-out functionality
-- Authentication setup
-
-### Base URL
-
-```
-http://localhost:3000/api
-```
-
-### Authentication
-
-Most endpoints require a JWT token in the `Authorization` header:
-
-```
-Authorization: Bearer <your-jwt-token>
-```
-
-### Example: Login and Get Token
+Use the smallest checks that cover the change:
 
 ```bash
-curl -X POST http://localhost:3000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "<seeded-admin-email>",
-    "password": "<seeded-admin-password>"
-  }'
+npm run check:src-clean
+npm run check:migrations
+npm run lint
+npm run build
+npm run test -- --runInBand
+npm run test:e2e -- --runInBand
 ```
 
-**Response:**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "123e4567-e89b-12d3-a456-426614174000",
-    "email": "admin@lms.local",
-    "firstName": "System",
-    "lastName": "Admin"
-  }
-}
+`npm run lint` is read-only. `npm run lint:fix` intentionally rewrites files.
+
+After schema, seed, auth, or broad academic-state changes:
+
+```bash
+node run-migrations.js
+npm run seed:smoke
 ```
 
-### Key API Endpoints
+After readiness/Compose changes:
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/auth/register` | Register a new user |
-| POST | `/auth/login` | User login |
-| POST | `/auth/refresh` | Refresh access token |
-| GET | `/users` | List all users (Admin only) |
-| GET | `/users/:id` | Get user by ID |
-| PUT | `/users/:id` | Update user |
-| GET | `/classes` | List classes |
-| POST | `/classes` | Create class (Teacher) |
-| GET | `/classes/:id` | Get class details |
-| GET | `/enrollments` | List enrollments |
-| POST | `/enrollments` | Enroll student in class |
-| GET | `/lessons/:classId` | Get lessons for a class |
-| POST | `/assessments` | Create assessment |
-| POST | `/assessments/:id/submit` | Submit assessment |
-
-Full documentation available at `/api` when server is running.
-
----
+```bash
+cd ..
+docker compose config --quiet
+docker compose up -d
+curl --fail http://localhost:3000/api/health/ready
+```
 
 ## Troubleshooting
 
-### Issue 1: "Cannot connect to database"
-
-**Problem:** Error message about PostgreSQL connection failure
-
-**Solutions:**
-```bash
-# Check PostgreSQL is running
-# Windows: Services UI or
-pg_isrunning
-
-# Test connection
-psql -U postgres -h localhost -d capstone
-
-# Verify DATABASE_URL in .env
-# Format: postgresql://user:password@host:port/database
-```
-
-### Issue 2: "Role does not exist"
-
-**Problem:** `error: role "postgres" does not exist`
-
-**Solutions:**
-```bash
-# Create the postgres superuser if missing
-createuser -s -e postgres
-
-# Or use a different user
-# Edit DATABASE_URL with existing user credentials
-```
-
-### Issue 3: "Port 3000 already in use"
-
-**Problem:** Server fails to start, port 3000 is occupied
-
-**Solutions:**
-```bash
-# Find process using port 3000
-# Windows:
-netstat -ano | findstr :3000
-
-# Kill the process
-taskkill /PID <PID> /F
-
-# Or use a different port
-PORT=3001 npm run start:dev
-```
-
-### Issue 4: "Migrations not applied"
-
-**Problem:** Schema tables don't exist after `drizzle-kit push`
-
-**Solutions:**
-```bash
-# Regenerate migration files
-npx drizzle-kit generate:pg
-
-# Clear and retry
-npx drizzle-kit push:pg --force
-
-# Verify database directly
-psql -U postgres -d capstone -c "\dt"
-```
-
-### Issue 5: "Module not found"
-
-**Problem:** `Cannot find module '@nestjs/...'`
-
-**Solutions:**
-```bash
-# Reinstall dependencies
-rm -rf node_modules package-lock.json
-npm install
-
-# Clear npm cache
-npm cache clean --force
-npm install
-```
-
-### Issue 6: "Seed script fails"
-
-**Problem:** `seed-database.js` exits with error
-
-**Solutions:**
-```bash
-# Verify database connection string in .env
-# Must match the connection string format
-
-# Check database exists
-psql -U postgres -l  # Lists all databases
-
-# Create database if missing
-createdb -U postgres capstone
-```
-
----
-
-## Common Commands Reference
+### Backend is running but not ready
 
 ```bash
-# Start development server with hot reload
-npm run start:dev
-
-# Start production server
-npm run build && npm run start:prod
-
-# Generate and apply migrations
-npx drizzle-kit generate:pg
-npx drizzle-kit push:pg
-
-# Seed database with initial data
-node seed-database.js
-
-# Run tests
-npm test
-
-# Run E2E tests
-npm run test:e2e
-
-# Format code
-npm run format
-
-# Lint code
-npm run lint
-
-# Check project structure
-npm list
-
-# View all npm scripts
-npm run
+docker compose logs --tail=100 backend postgres redis ai-service ollama
+curl -i http://localhost:3000/api/health/ready
 ```
 
----
+Readiness is dependency-aware. Fix the failing dependency instead of weakening the check.
 
-## Next Steps
+### Database connection fails
 
-1. ✅ Install Node.js and PostgreSQL
-2. ✅ Create database and configure `.env`
-3. ✅ Install dependencies: `npm install`
-4. ✅ Run migrations: `npx drizzle-kit push:pg`
-5. ✅ Seed database: `node seed-database.js`
-6. ✅ Start server: `npm run start:dev`
-7. ✅ Test API at `http://localhost:3000/api`
+Confirm the URL points to the correct network:
 
----
+- from a host process: published debug port or a host PostgreSQL URL
+- from Compose: hostname `postgres`, not `localhost`
 
-## Additional Resources
+`localhost` inside a container means that same container.
 
-- [NestJS Documentation](https://docs.nestjs.com/)
-- [Drizzle ORM Docs](https://orm.drizzle.team/)
-- [PostgreSQL Docs](https://www.postgresql.org/docs/)
-- [JWT Explanation](https://jwt.io/)
-- [Postman for API Testing](https://www.postman.com/)
+### Migration is missing or unregistered
 
----
+```bash
+npm run check:migrations
+```
 
-## Support
+Register every forward SQL file in `drizzle/meta/_journal.json`. Do not bypass the integrity check.
 
-For issues or questions:
+### Port 3000 is already used
 
-1. Check the [Troubleshooting](#troubleshooting) section
-2. Review error messages carefully (they usually indicate the problem)
-3. Check that all prerequisites are installed
-4. Verify `.env` configuration
-5. Ensure PostgreSQL is running
+```bash
+ss -ltnp | rg ':3000'
+```
 
----
+Stop the owning local process or change the host-side development port. Keep Compose/service contract changes deliberate.
 
-**Last Updated:** February 11, 2026
-**Version:** 1.0.0
+### AI routes fail while core routes work
+
+```bash
+docker compose logs --tail=100 backend ai-service ollama
+curl --fail http://localhost:3000/api/health/ready
+docker compose exec -T ai-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
+```
+
+Check `AI_SERVICE_URL`, shared-secret equality, model readiness, and per-flow timeouts. Do not expose FastAPI publicly to work around proxy failures.
+
+### Optional email or S3 warnings
+
+The current local stack can run with provider credentials absent. Configure those providers only when the feature is intentionally being exercised.

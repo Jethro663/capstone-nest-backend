@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: capstone
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set it in --env-file .env.compose)}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required (set it in root .env)}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -95,11 +95,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "${BACKEND_DATABASE_URL:?BACKEND_DATABASE_URL is required (set it in --env-file .env.compose)}"
-      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required (set it in --env-file .env.compose)}"
-      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required (set it in --env-file .env.compose)}"
-      OTP_PEPPER: "${OTP_PEPPER:?OTP_PEPPER is required (set it in --env-file .env.compose)}"
-      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in --env-file .env.compose)}"
+      DATABASE_URL: "${BACKEND_DATABASE_URL:?BACKEND_DATABASE_URL is required (set it in root .env)}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET is required (set it in root .env)}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required (set it in root .env)}"
+      OTP_PEPPER: "${OTP_PEPPER:?OTP_PEPPER is required (set it in root .env)}"
+      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in root .env)}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
       OTEL_SERVICE_NAME: "nexora-backend"
       LOKI_HOST: "${LOKI_HOST:-}"
@@ -134,8 +134,8 @@ services:
     env_file:
       - ./ai-service/.env.docker
     environment:
-      DATABASE_URL: "${AI_DATABASE_URL:?AI_DATABASE_URL is required (set it in --env-file .env.compose)}"
-      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in --env-file .env.compose)}"
+      DATABASE_URL: "${AI_DATABASE_URL:?AI_DATABASE_URL is required (set it in root .env)}"
+      AI_SERVICE_SHARED_SECRET: "${AI_SERVICE_SHARED_SECRET:?AI_SERVICE_SHARED_SECRET is required (set it in root .env)}"
       BACKEND_INTERNAL_URL: "http://backend:3000"
     volumes:
       - backend_uploads:/app/uploads

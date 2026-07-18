@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Calendar, Hash, Inbox, Megaphone, Pin, User2 } from 'lucide-react';
+import { BookOpen, Calendar, Hash, Megaphone, Pin, User2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import { normalizeRichText } from '@/lib/rich-text';
 import { classService } from '@/services/class-service';
 import { announcementService } from '@/services/announcement-service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
 
@@ -17,6 +18,7 @@ interface AnnouncementWithClass extends Announcement {
 }
 
 type AnnouncementViewFilter = 'all' | 'pinned';
+type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
 
 const ANNOUNCEMENT_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
@@ -48,22 +50,27 @@ function summarizeAnnouncement(content: string) {
 
 export default function StudentAnnouncementsPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const [announcements, setAnnouncements] = useState<AnnouncementWithClass[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<StudentPageStatus>('loading');
   const [viewFilter, setViewFilter] = useState<AnnouncementViewFilter>('all');
   const [subjectFilter, setSubjectFilter] = useState('all');
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchData = useCallback(() => {
+    if (!userId) {
+      void Promise.resolve().then(() => setStatus('error'));
+      return;
+    }
 
-    try {
-      setLoading(true);
-      const classesRes = await classService.getByStudent(user.id);
-      const classes: ClassItem[] = classesRes.data || [];
+    const request = classService.getByStudent(userId);
+    void Promise.resolve().then(() => setStatus('loading'));
 
-      const results = await Promise.all(
-        classes.map(async (cls) => {
-          try {
+    void request
+      .then(async (classesRes) => {
+        const classes: ClassItem[] = classesRes.data || [];
+
+        const results = await Promise.allSettled(
+          classes.map(async (cls) => {
             const res = await announcementService.getByClass(cls.id);
             const items: Announcement[] = Array.isArray(res.data) ? res.data : [];
             return items.map((ann) => ({
@@ -71,26 +78,34 @@ export default function StudentAnnouncementsPage() {
               className: cls.subjectName,
               subjectCode: cls.subjectCode,
             }));
-          } catch {
-            return [];
-          }
-        }),
-      );
+          }),
+        );
 
-      const all: AnnouncementWithClass[] = results.flat().sort((a, b) => {
-        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        const dateA = new Date(a.createdAt ?? 0).getTime();
-        const dateB = new Date(b.createdAt ?? 0).getTime();
-        return dateB - dateA;
-      });
+        const fulfilledResults = results.filter(
+          (result): result is PromiseFulfilledResult<AnnouncementWithClass[]> =>
+            result.status === 'fulfilled',
+        );
+        const failedCount = results.length - fulfilledResults.length;
 
-      setAnnouncements(all);
-    } catch {
-      setAnnouncements([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
+        if (results.length > 0 && fulfilledResults.length === 0) {
+          setStatus('error');
+          return;
+        }
+
+        const all: AnnouncementWithClass[] = fulfilledResults
+          .flatMap((result) => result.value)
+          .sort((a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            const dateA = new Date(a.createdAt ?? 0).getTime();
+            const dateB = new Date(b.createdAt ?? 0).getTime();
+            return dateB - dateA;
+          });
+
+        setAnnouncements(all);
+        setStatus(failedCount > 0 ? 'partial' : 'ready');
+      })
+      .catch(() => setStatus('error'));
+  }, [userId]);
 
   useEffect(() => {
     void fetchData();
@@ -117,7 +132,13 @@ export default function StudentAnnouncementsPage() {
   useEffect(() => {
     if (subjectFilter === 'all') return;
     if (subjectFilters.some((entry) => entry.code === subjectFilter)) return;
-    setSubjectFilter('all');
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSubjectFilter('all');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [subjectFilter, subjectFilters]);
 
   const filteredAnnouncements = useMemo(
@@ -136,9 +157,11 @@ export default function StudentAnnouncementsPage() {
   const latestAnnouncement = announcements[0];
   const latestAnnouncementDate = latestAnnouncement
     ? formatAnnouncementDate(latestAnnouncement.createdAt)
-    : 'No posts yet';
+    : status === 'ready'
+      ? 'No posts yet'
+      : 'Unavailable';
 
-  if (loading) {
+  if (status === 'loading' && announcements.length === 0) {
     return (
       <div className="student-announcements-page">
         <Skeleton className="h-44 rounded-[1rem]" />
@@ -149,6 +172,17 @@ export default function StudentAnnouncementsPage() {
           ))}
         </div>
       </div>
+    );
+  }
+
+  if (status === 'error' && announcements.length === 0) {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title="Announcements couldn't be loaded"
+        description="Your class announcements are temporarily unavailable. Try loading them again."
+        primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+      />
     );
   }
 
@@ -185,6 +219,28 @@ export default function StudentAnnouncementsPage() {
       </section>
 
       <section className="student-announcements-body">
+        {status === 'partial' ? (
+          <DashboardStatePanel
+            kind="unavailable"
+            title="Some announcements couldn't be loaded"
+            description="Announcements from available classes remain visible while you retry the missing feeds."
+            primaryAction={{
+              label: 'Retry announcements',
+              onClick: () => void fetchData(),
+            }}
+          />
+        ) : status === 'error' ? (
+          <DashboardStatePanel
+            kind="unavailable"
+            title="Announcement refresh failed"
+            description="Your last complete announcement list remains visible while you retry."
+            primaryAction={{
+              label: 'Retry announcements',
+              onClick: () => void fetchData(),
+            }}
+          />
+        ) : null}
+
         <div className="student-announcements-toolbar">
           <p>
             Showing <strong>{filteredAnnouncements.length}</strong> of{' '}
@@ -232,29 +288,31 @@ export default function StudentAnnouncementsPage() {
           </div>
         </div>
 
-        {filteredAnnouncements.length === 0 ? (
-          <div className="student-announcements-empty">
-            <div className="space-y-3">
-              <Inbox className="mx-auto h-8 w-8 text-[var(--student-text-muted)]" />
-              <p>
-                {announcements.length === 0
-                  ? 'No announcements have been posted for your classes yet.'
-                  : 'No announcements match your selected filters.'}
-              </p>
-              {hasActiveFilters ? (
-                <button
-                  type="button"
-                  className="student-announcements-empty__reset"
-                  onClick={() => {
-                    setViewFilter('all');
-                    setSubjectFilter('all');
-                  }}
-                >
-                  Reset filters
-                </button>
-              ) : null}
-            </div>
-          </div>
+        {status === 'ready' && filteredAnnouncements.length === 0 ? (
+          <DashboardStatePanel
+            kind="empty"
+            title={
+              announcements.length === 0
+                ? 'No posts yet'
+                : 'No announcements match these filters'
+            }
+            description={
+              announcements.length === 0
+                ? 'Announcements from your teachers will appear here.'
+                : 'Reset the filters to see every available announcement.'
+            }
+            primaryAction={
+              hasActiveFilters
+                ? {
+                    label: 'Reset filters',
+                    onClick: () => {
+                      setViewFilter('all');
+                      setSubjectFilter('all');
+                    },
+                  }
+                : undefined
+            }
+          />
         ) : (
           <div className="student-announcements-list">
             {filteredAnnouncements.map((ann) => (

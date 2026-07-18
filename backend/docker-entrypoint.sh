@@ -100,7 +100,7 @@ if [ -n "$LAST_DB_ERROR" ]; then
   echo "    3) If password changed, reset DB volume intentionally:"
   echo "       docker compose down"
   echo "       docker volume rm capstone-nest-react-lms_postgres_data"
-  echo "       docker compose --env-file .env.compose up --build"
+  echo "       docker compose up --build"
   exit 1
 fi
 

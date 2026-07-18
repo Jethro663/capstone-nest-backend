@@ -6,6 +6,7 @@ const usePathnameMock = jest.fn();
 const useAuthMock = jest.fn();
 const logoutActionMock = jest.fn();
 const notificationProviderMock = jest.fn();
+const toastInfoMock = jest.fn();
 
 jest.mock('next/navigation', () => ({
   usePathname: () => usePathnameMock(),
@@ -20,6 +21,12 @@ jest.mock('@/providers/AuthProvider', () => ({
 
 jest.mock('@/lib/auth-actions', () => ({
   logoutAction: () => logoutActionMock(),
+}));
+
+jest.mock('sonner', () => ({
+  toast: {
+    info: (...args: unknown[]) => toastInfoMock(...args),
+  },
 }));
 
 jest.mock('@/components/layout/Sidebar', () => ({
@@ -54,6 +61,7 @@ jest.mock('@/providers/NotificationProvider', () => ({
 describe('DashboardLayout loading behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.sessionStorage.clear();
     useAuthMock.mockReturnValue({
       loading: true,
       isAuthenticated: false,
@@ -91,20 +99,43 @@ describe('DashboardLayout role-path enforcement', () => {
     });
   });
 
-  it('forces logout when a student enters teacher routes', async () => {
+  it('redirects a student away from teacher routes without ending the session', async () => {
     usePathnameMock.mockReturnValue('/dashboard/teacher/classes');
 
-    render(<DashboardLayout><div>content</div></DashboardLayout>);
+    const { rerender } = render(
+      <DashboardLayout><div>foreign content</div></DashboardLayout>,
+    );
 
     expect(screen.getByTestId('app-orbit-loader')).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByText('foreign content')).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(logoutActionMock).toHaveBeenCalledTimes(1);
+      expect(replaceMock).toHaveBeenCalledWith('/dashboard/student');
     });
+
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem('nexora.dashboard.roleMismatchNotice')).toBe(
+      'pending',
+    );
+    expect(logoutActionMock).not.toHaveBeenCalled();
+
+    usePathnameMock.mockReturnValue('/dashboard/student');
+    rerender(<DashboardLayout><div>student content</div></DashboardLayout>);
+
+    expect(screen.getByText('student content')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(toastInfoMock).toHaveBeenCalledWith(
+        'That page is not available for your account.',
+      );
+    });
+    expect(toastInfoMock).toHaveBeenCalledTimes(1);
+    expect(
+      window.sessionStorage.getItem('nexora.dashboard.roleMismatchNotice'),
+    ).toBeNull();
   });
 
-  it('forces logout when a teacher enters student routes', async () => {
+  it('redirects a teacher away from student routes without ending the session', async () => {
     useAuthMock.mockReturnValue({
       loading: false,
       isAuthenticated: true,
@@ -113,14 +144,20 @@ describe('DashboardLayout role-path enforcement', () => {
     });
     usePathnameMock.mockReturnValue('/dashboard/student/courses');
 
-    render(<DashboardLayout><div>content</div></DashboardLayout>);
+    render(<DashboardLayout><div>foreign content</div></DashboardLayout>);
 
     expect(screen.getByTestId('app-orbit-loader')).toBeInTheDocument();
     expect(screen.queryByTestId('sidebar')).not.toBeInTheDocument();
+    expect(screen.queryByText('foreign content')).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(logoutActionMock).toHaveBeenCalledTimes(1);
+      expect(replaceMock).toHaveBeenCalledWith('/dashboard/teacher/classes');
     });
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(window.sessionStorage.getItem('nexora.dashboard.roleMismatchNotice')).toBe(
+      'pending',
+    );
+    expect(logoutActionMock).not.toHaveBeenCalled();
   });
 
   it('does not logout on matching role-scoped routes', () => {

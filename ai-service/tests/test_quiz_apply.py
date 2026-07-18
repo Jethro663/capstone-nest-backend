@@ -93,6 +93,16 @@ class QuizApplyTests(unittest.IsolatedAsyncioTestCase):
                 )
             if "SELECT q.content" in sql:
                 return _Rows([])
+            if "FROM ai_generation_jobs" in sql and "FOR UPDATE" in sql:
+                return _Rows(
+                    [
+                        {
+                            "id": "job-1",
+                            "status": "processing",
+                            "source_filters": {},
+                        }
+                    ]
+                )
             if "INSERT INTO ai_generation_outputs" in sql:
                 return _Rows(scalar="output-1")
             if "UPDATE ai_generation_jobs" in sql:

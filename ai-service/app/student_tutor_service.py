@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import uuid
 from typing import Any
@@ -16,6 +17,8 @@ from .media_utils import normalize_attachment_images
 from .objective_grading import ObjectiveVerdict, evaluate_objective_answer
 from .retrieval_service import normalize_library_subject_key, similarity_search
 from .schemas import RequestUser, TutorRecommendationDto
+
+logger = logging.getLogger(__name__)
 
 TUTOR_SESSION_KIND = "student_tutor"
 
@@ -457,6 +460,7 @@ async def continue_student_tutor_session(
     message: str,
     attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    await _acquire_tutor_session_lock(db, user.id, session_id)
     state, history = await _load_tutor_state(db, user.id, session_id)
     prepared_images = await normalize_attachment_images(attachments)
     context_bundle = await _build_context_bundle(
@@ -516,12 +520,35 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
 """
     start = time.time()
     task_name = "vision_explanation" if prepared_images else "chat"
-    reply = await ollama_client.generate(
-        prompt,
-        TUTOR_SYSTEM_PROMPT,
-        task=task_name,
-        images=prepared_images,
-    )
+    degraded = False
+    try:
+        reply = await ollama_client.generate(
+            prompt,
+            TUTOR_SYSTEM_PROMPT,
+            task=task_name,
+            images=prepared_images,
+        )
+        model_used = ollama_client.get_task_model_name(
+            task_name, images=prepared_images
+        )
+    except Exception as exc:
+        logger.warning(
+            "Student tutor follow-up generation failed; returning grounded fallback",
+            exc_info=exc,
+        )
+        degraded = True
+        reply = (
+            "The AI model is temporarily unavailable, but your lesson context is "
+            f"still available. Review the {state['recommendation']['title']} summary "
+            "above and tell me which step or term is unclear; I can guide you from "
+            "the cited lesson without giving away the answer."
+        )
+        is_timeout = (
+            isinstance(exc, TimeoutError)
+            or "timeout" in type(exc).__name__.lower()
+            or "timed out" in str(exc).lower()
+        )
+        model_used = "fallback (timeout)" if is_timeout else "fallback (unavailable)"
     response_time_ms = int((time.time() - start) * 1000)
     next_state = {
         **state,
@@ -530,7 +557,6 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
         "messageType": "follow_up",
         "attachmentCount": len(prepared_images),
     }
-    model_used = ollama_client.get_task_model_name(task_name, images=prepared_images)
     await _log_tutor_turn(
         db,
         user_id=user.id,
@@ -549,6 +575,7 @@ Respond as Ja with a concise tutoring reply. If the student asks for the direct 
         "questions": next_state.get("questions") or [],
         "citations": context_bundle["citations"],
         "groundingStatus": next_state["groundingStatus"],
+        "degraded": degraded,
     }
 
 
@@ -560,6 +587,7 @@ async def submit_student_tutor_answers(
     answers: list[str],
     attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    await _acquire_tutor_session_lock(db, user.id, session_id)
     state, _history = await _load_tutor_state(db, user.id, session_id)
     questions = state.get("questions") or []
     if not questions:
@@ -1278,6 +1306,28 @@ async def _load_tutor_state(
     if latest_state is None:
         raise HTTPException(404, "Tutor session not found")
     return latest_state, "\n".join(history_lines[-12:])
+
+
+async def _acquire_tutor_session_lock(
+    db: AsyncSession, user_id: str, session_id: str
+) -> None:
+    """Reject overlapping state-changing turns without waiting on model latency."""
+    result = await db.execute(
+        sa_text(
+            """
+            SELECT pg_try_advisory_xact_lock(
+              hashtext('student_tutor_session'),
+              hashtext(:sessionKey)
+            )
+            """
+        ),
+        {"sessionKey": f"{user_id}:{session_id}"},
+    )
+    if not bool(result.scalar_one()):
+        raise HTTPException(
+            status_code=409,
+            detail="Another tutor turn is already in progress for this session",
+        )
 
 
 async def _ensure_student_class_access(

@@ -698,6 +698,31 @@ export class AiMentorController {
     );
   }
 
+  private async failStrandedTeacherAiJob(
+    jobId: string,
+    queueError: unknown,
+  ): Promise<never> {
+    const reason =
+      queueError instanceof Error ? queueError.message : String(queueError);
+    try {
+      await this.proxy.markInternalTeacherJobFailed(
+        jobId,
+        `BullMQ enqueue failed: ${reason}`,
+      );
+    } catch (compensationError) {
+      this.logger.error(
+        `Failed to compensate teacher AI job ${jobId}: ${
+          compensationError instanceof Error
+            ? compensationError.message
+            : String(compensationError)
+        }`,
+      );
+    }
+    throw new ServiceUnavailableException(
+      'AI generation queue is temporarily unavailable. Please retry shortly.',
+    );
+  }
+
   private extractNumberField(payload: unknown, key: string): number | null {
     const unwrapped = this.unwrapEnvelope(payload);
     return (
@@ -2048,7 +2073,9 @@ export class AiMentorController {
       } catch (queueError) {
         this.logger.warn(
           `Extraction ${id} was cancelled in AI storage but its BullMQ cleanup failed: ${
-            queueError instanceof Error ? queueError.message : String(queueError)
+            queueError instanceof Error
+              ? queueError.message
+              : String(queueError)
           }`,
         );
       }
@@ -2091,10 +2118,7 @@ export class AiMentorController {
         user,
         dto,
       );
-      const retryExtractionId = this.extractStringField(
-        result,
-        'extractionId',
-      );
+      const retryExtractionId = this.extractStringField(result, 'extractionId');
       if (!retryExtractionId) {
         throw new ServiceUnavailableException(
           'AI extraction service returned an invalid retry response.',
@@ -2309,11 +2333,18 @@ export class AiMentorController {
       dto,
     );
     const jobId = this.extractStringField(result, 'jobId');
-    if (jobId) {
+    if (!jobId) {
+      throw new ServiceUnavailableException(
+        'AI service returned an invalid intervention job response.',
+      );
+    }
+    try {
       await this.aiGenerationQueueService.enqueueInterventionJob(
         jobId,
         user.id,
       );
+    } catch (queueError) {
+      await this.failStrandedTeacherAiJob(jobId, queueError);
     }
     await this.logAuditSafe({
       actorId: user.id,
@@ -2380,8 +2411,15 @@ export class AiMentorController {
       dto,
     );
     const jobId = this.extractStringField(result, 'jobId');
-    if (jobId) {
+    if (!jobId) {
+      throw new ServiceUnavailableException(
+        'AI service returned an invalid quiz job response.',
+      );
+    }
+    try {
       await this.aiGenerationQueueService.enqueueQuizJob(jobId, user.id);
+    } catch (queueError) {
+      await this.failStrandedTeacherAiJob(jobId, queueError);
     }
     await this.logAuditSafe({
       actorId: user.id,
@@ -2418,11 +2456,15 @@ export class AiMentorController {
       dto,
     );
     const jobId = this.extractStringField(result, 'jobId');
-    if (jobId) {
-      await this.aiGenerationQueueService.enqueueLessonPlanJob(
-        jobId,
-        user.id,
+    if (!jobId) {
+      throw new ServiceUnavailableException(
+        'AI service returned an invalid lesson-plan job response.',
       );
+    }
+    try {
+      await this.aiGenerationQueueService.enqueueLessonPlanJob(jobId, user.id);
+    } catch (queueError) {
+      await this.failStrandedTeacherAiJob(jobId, queueError);
     }
     await this.logAuditSafe({
       actorId: user.id,
@@ -2567,8 +2609,15 @@ export class AiMentorController {
       {},
     );
     const retryJobId = this.extractStringField(result, 'jobId');
-    if (retryJobId) {
+    if (!retryJobId) {
+      throw new ServiceUnavailableException(
+        'AI service returned an invalid quiz retry response.',
+      );
+    }
+    try {
       await this.aiGenerationQueueService.enqueueQuizJob(retryJobId, user.id);
+    } catch (queueError) {
+      await this.failStrandedTeacherAiJob(retryJobId, queueError);
     }
     await this.logAuditSafe({
       actorId: user.id,

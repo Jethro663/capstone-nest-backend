@@ -327,6 +327,8 @@ export interface TeacherClassRecordState {
   classRecords: ClassRecord[];
   selectedRecord: ClassRecord | null;
   spreadsheet: SpreadsheetData | null;
+  recordsStatus: ClassRecordLoadStatus;
+  spreadsheetStatus: ClassRecordLoadStatus;
   quarters: GradingPeriod[];
   generating: boolean;
   finalizing: boolean;
@@ -365,10 +367,17 @@ export interface TeacherClassRecordState {
   exportSpreadsheet: () => Promise<void>;
 }
 
+export type ClassRecordLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 export function useTeacherClassRecord(classId?: string): TeacherClassRecordState {
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
+  const [recordsStatus, setRecordsStatus] =
+    useState<ClassRecordLoadStatus>('idle');
+  const [spreadsheetStatus, setSpreadsheetStatus] =
+    useState<ClassRecordLoadStatus>('idle');
+  const [spreadsheetRefreshVersion, setSpreadsheetRefreshVersion] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -379,6 +388,10 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
   const [hpsValue, setHpsValue] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
   const hpsEditRef = useRef<HTMLInputElement>(null);
+  const recordsClassIdRef = useRef<string | undefined>(undefined);
+  const hasRecordsResultRef = useRef(false);
+  const spreadsheetRecordIdRef = useRef<string | null>(null);
+  const hasSpreadsheetResultRef = useRef(false);
 
   const selectedRecord = useMemo(
     () => classRecords.find((record) => record.id === selectedRecordId) ?? null,
@@ -387,15 +400,37 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
 
   const refresh = useCallback(async () => {
     if (!classId) {
+      recordsClassIdRef.current = undefined;
+      hasRecordsResultRef.current = false;
+      spreadsheetRecordIdRef.current = null;
+      hasSpreadsheetResultRef.current = false;
       setClassRecords([]);
       setSelectedRecordId(null);
       setSpreadsheet(null);
+      setRecordsStatus('idle');
+      setSpreadsheetStatus('idle');
       return;
+    }
+
+    if (recordsClassIdRef.current !== classId) {
+      recordsClassIdRef.current = classId;
+      hasRecordsResultRef.current = false;
+      spreadsheetRecordIdRef.current = null;
+      hasSpreadsheetResultRef.current = false;
+      setClassRecords([]);
+      setSelectedRecordId(null);
+      setSpreadsheet(null);
+      setSpreadsheetStatus('idle');
+    }
+
+    if (!hasRecordsResultRef.current) {
+      setRecordsStatus('loading');
     }
 
     try {
       const res = await classRecordService.getByClass(classId);
       const records = Array.isArray(res.data) ? res.data : [];
+      hasRecordsResultRef.current = true;
       setClassRecords(records);
       setSelectedRecordId((current) => {
         if (records.length === 0) return null;
@@ -404,9 +439,16 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
           : records[0].id;
       });
       if (records.length === 0) {
+        spreadsheetRecordIdRef.current = null;
+        hasSpreadsheetResultRef.current = false;
         setSpreadsheet(null);
+        setSpreadsheetStatus('idle');
+      } else {
+        setSpreadsheetRefreshVersion((version) => version + 1);
       }
+      setRecordsStatus('ready');
     } catch {
+      setRecordsStatus('error');
       toast.error('Failed to load class records');
     }
   }, [classId]);
@@ -421,22 +463,37 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
 
   const reloadSelectedSpreadsheet = useCallback(async () => {
     if (!selectedRecordId) {
+      spreadsheetRecordIdRef.current = null;
+      hasSpreadsheetResultRef.current = false;
       setSpreadsheet(null);
+      setSpreadsheetStatus('idle');
       return;
+    }
+
+    if (spreadsheetRecordIdRef.current !== selectedRecordId) {
+      spreadsheetRecordIdRef.current = selectedRecordId;
+      hasSpreadsheetResultRef.current = false;
+      setSpreadsheet(null);
+    }
+
+    if (!hasSpreadsheetResultRef.current) {
+      setSpreadsheetStatus('loading');
     }
 
     try {
       const res = await classRecordService.getSpreadsheet(selectedRecordId);
+      hasSpreadsheetResultRef.current = true;
       setSpreadsheet(res.data);
+      setSpreadsheetStatus('ready');
     } catch {
       toast.error('Failed to load spreadsheet');
-      setSpreadsheet(null);
+      setSpreadsheetStatus('error');
     }
   }, [selectedRecordId]);
 
   useEffect(() => {
     void reloadSelectedSpreadsheet();
-  }, [reloadSelectedSpreadsheet]);
+  }, [reloadSelectedSpreadsheet, spreadsheetRefreshVersion]);
 
   const generateQuarter = useCallback(
     async (quarter: GradingPeriod) => {
@@ -653,6 +710,8 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     classRecords,
     selectedRecord,
     spreadsheet,
+    recordsStatus,
+    spreadsheetStatus,
     quarters: QUARTERS,
     generating,
     finalizing,

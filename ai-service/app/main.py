@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+import hmac
 import json
 import re
 import logging
@@ -36,6 +37,7 @@ from .extraction_job_service import (
     mark_extraction_cancelled,
 )
 from .indexing_pipeline import get_class_index_status, reindex_class_content
+from .job_lifecycle import JobExecutionSuperseded
 from .library_indexing_pipeline import (
     backfill_library_files,
     delete_library_file_chunks,
@@ -102,8 +104,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Nexora AI Service", version="1.0.0")
 _EMBEDDING_RUNTIME_CACHE: dict[str, Any] = {"expires_at": 0.0, "status": None}
 AI_JOB_RUNTIME: dict[str, dict[str, Any]] = {}
-AI_JOB_TASKS: dict[str, asyncio.Task[Any]] = {}
-AI_JOB_STALE_TIMEOUT_SECONDS = 10 * 60
+AI_JOB_EXECUTION_LEASE_SECONDS = 16 * 60
 _TEACHER_BG_SEMAPHORE = asyncio.Semaphore(settings.ai_teacher_bg_max_concurrency)
 _TUTOR_SEMAPHORE = asyncio.Semaphore(settings.ai_tutor_max_inflight)
 
@@ -121,9 +122,6 @@ async def acquire_tutor_capacity():
         yield
     finally:
         _TUTOR_SEMAPHORE.release()
-AI_JOB_STALE_FAILURE_MESSAGE = (
-    "AI generation timed out before completion. Please retry this job."
-)
 QUIZ_JOB_MAX_ATTEMPTS = 2
 ADMIN_ANALYTICS_SESSION_TYPE = "admin_analytics_chat"
 AI_HTTP_REQUESTS = Counter(
@@ -283,15 +281,6 @@ APPROVED_ADMIN_SOURCE_IDS = {
 
 @app.on_event("startup")
 async def preload_ollama_models() -> None:
-    AI_JOB_TASKS.clear()
-    try:
-        await _cleanup_stale_ai_jobs()
-    except Exception as err:
-        logger.warning("Failed to cleanup stale AI jobs at startup: %s", err)
-    try:
-        await _recover_orphaned_jobs()
-    except Exception as err:
-        logger.warning("Failed to recover orphaned AI jobs at startup: %s", err)
     try:
         await ollama_client.preload_model("chat")
     except Exception as err:
@@ -321,6 +310,7 @@ async def _persist_ai_job_runtime(
     *,
     job_id: str,
     runtime_patch: dict[str, Any],
+    execution_lease_id: str | None = None,
 ) -> dict[str, Any]:
     row = await db.execute(
         sa_text("SELECT source_filters FROM ai_generation_jobs WHERE id = :jobId"),
@@ -332,19 +322,43 @@ async def _persist_ai_job_runtime(
     runtime.update(runtime_patch)
     runtime["updatedAt"] = datetime.now(timezone.utc).isoformat()
     source_filters["runtime"] = runtime
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET source_filters = :sourceFilters, updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
-        {
-            "jobId": job_id,
-            "sourceFilters": source_filters,
-        },
-    )
+    if execution_lease_id:
+        update = await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET source_filters = :sourceFilters, updated_at = NOW()
+                WHERE id = :jobId
+                  AND status = 'processing'
+                  AND source_filters -> 'runtime' ->> 'workerLeaseId' = :leaseId
+                RETURNING id
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "jobId": job_id,
+                "sourceFilters": source_filters,
+                "leaseId": execution_lease_id,
+            },
+        )
+        if update.mappings().first() is None:
+            await db.rollback()
+            raise JobExecutionSuperseded(
+                f"AI job {job_id} runtime belongs to a newer worker lease"
+            )
+    else:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET source_filters = :sourceFilters, updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+            {
+                "jobId": job_id,
+                "sourceFilters": source_filters,
+            },
+        )
     await db.commit()
     return runtime
 
@@ -356,25 +370,51 @@ async def _update_ai_job_status(
     status: str,
     error_message: str | None = None,
     output_status: str | None = None,
-) -> None:
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET
-              status = :status,
-              error_message = :errorMessage,
-              updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ),
-        {
-            "jobId": job_id,
-            "status": status,
-            "errorMessage": error_message,
-        },
-    )
-    if output_status:
+    execution_lease_id: str | None = None,
+) -> bool:
+    if execution_lease_id:
+        updated = await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = :status,
+                  error_message = :errorMessage,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                  AND status = 'processing'
+                  AND source_filters -> 'runtime' ->> 'workerLeaseId' = :leaseId
+                RETURNING id
+                """
+            ),
+            {
+                "jobId": job_id,
+                "status": status,
+                "errorMessage": error_message,
+                "leaseId": execution_lease_id,
+            },
+        )
+        changed = updated.mappings().first() is not None
+    else:
+        await db.execute(
+            sa_text(
+                """
+                UPDATE ai_generation_jobs
+                SET
+                  status = :status,
+                  error_message = :errorMessage,
+                  updated_at = NOW()
+                WHERE id = :jobId
+                """
+            ),
+            {
+                "jobId": job_id,
+                "status": status,
+                "errorMessage": error_message,
+            },
+        )
+        changed = True
+    if output_status and changed:
         await db.execute(
             sa_text(
                 """
@@ -391,91 +431,7 @@ async def _update_ai_job_status(
             },
         )
     await db.commit()
-
-
-async def _cleanup_stale_ai_jobs() -> None:
-    # ai_generation_jobs.updated_at is stored as a naive timestamp in Postgres,
-    # so the cutoff must be naive as well to avoid asyncpg timezone comparison errors.
-    cutoff = (
-        datetime.now(timezone.utc).replace(tzinfo=None)
-        - timedelta(seconds=AI_JOB_STALE_TIMEOUT_SECONDS)
-    )
-    async with AsyncSessionLocal() as db:
-        rows = await db.execute(
-            sa_text(
-                """
-                SELECT id
-                FROM ai_generation_jobs
-                WHERE status IN ('pending', 'processing')
-                  AND updated_at < :cutoff
-                """
-            ),
-            {"cutoff": cutoff},
-        )
-        stale_ids = [str(row["id"]) for row in rows.mappings()]
-        if not stale_ids:
-            return
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'failed',
-                  error_message = :errorMessage,
-                  updated_at = NOW()
-                WHERE id IN :jobIds
-                """
-            ).bindparams(bindparam("jobIds", expanding=True)),
-            {
-                "jobIds": stale_ids,
-                "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
-            },
-        )
-        await db.commit()
-        for job_id in stale_ids:
-            await _persist_ai_job_runtime(
-                db,
-                job_id=job_id,
-                runtime_patch={
-                    "progressPercent": 100,
-                    "statusMessage": "Generation timed out",
-                    "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
-                    "staleTimeoutAt": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-
-
-async def _recover_orphaned_jobs() -> None:
-    async with AsyncSessionLocal() as db:
-        rows = await db.execute(
-            sa_text(
-                """
-                SELECT id, job_type
-                FROM ai_generation_jobs
-                WHERE status IN ('pending', 'processing')
-                """
-            )
-        )
-        orphan_ids = [(str(row["id"]), str(row["job_type"])) for row in rows.mappings()]
-        if not orphan_ids:
-            return
-        for job_id, job_type in orphan_ids:
-            if job_id in AI_JOB_TASKS:
-                continue
-            logger.info("[ai-job] Marking orphaned %s job %s as failed after restart", job_type, job_id)
-            await _update_ai_job_status(
-                db,
-                job_id=job_id,
-                status="failed",
-                error_message="Job was interrupted by a service restart. Please retry.",
-            )
-            await _record_ai_job_runtime(
-                db,
-                job_id=job_id,
-                progressPercent=100,
-                statusMessage="Job interrupted by restart",
-                errorMessage="Job was interrupted by a service restart. Please retry.",
-            )
+    return changed
 
 
 def _request_path_label(request) -> str:
@@ -519,10 +475,16 @@ async def _record_ai_job_runtime(
     db: AsyncSession,
     *,
     job_id: str,
+    execution_lease_id: str | None = None,
     **values: Any,
 ) -> None:
-    _set_ai_job_runtime(job_id, **values)
-    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=values)
+    runtime = await _persist_ai_job_runtime(
+        db,
+        job_id=job_id,
+        runtime_patch=values,
+        execution_lease_id=execution_lease_id,
+    )
+    AI_JOB_RUNTIME[job_id] = dict(runtime)
 
 
 async def _run_with_retries(
@@ -535,6 +497,8 @@ async def _run_with_retries(
     for attempt in range(1, max_attempts + 1):
         try:
             return await operation(attempt)
+        except JobExecutionSuperseded:
+            raise
         except Exception as err:  # pragma: no cover - controlled by callers
             last_error = err
             if attempt >= max_attempts:
@@ -584,27 +548,126 @@ def _parse_iso_utc(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _should_mark_job_stale(
-    *,
-    status: str,
-    updated_at: Any,
-    runtime: dict[str, Any] | None,
-    stale_after_seconds: int = AI_JOB_STALE_TIMEOUT_SECONDS,
-) -> bool:
-    if status not in {"pending", "processing"}:
-        return False
+def _parse_worker_attempt(meta: dict[str, Any]) -> int:
+    raw_attempt = meta.get("attempt", 1)
+    if isinstance(raw_attempt, bool):
+        raise HTTPException(400, "Worker metadata attempt must be a positive integer")
+    try:
+        attempt = int(raw_attempt)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            400,
+            "Worker metadata attempt must be a positive integer",
+        ) from exc
+    if attempt < 1:
+        raise HTTPException(400, "Worker metadata attempt must be a positive integer")
+    return attempt
 
-    now = datetime.now(timezone.utc)
-    runtime_updated_at = _parse_iso_utc((runtime or {}).get("updatedAt"))
-    db_updated_at = (
-        updated_at.astimezone(timezone.utc)
-        if isinstance(updated_at, datetime)
-        else _parse_iso_utc(updated_at)
+
+def _worker_lease_expired(source_filters: Any) -> bool:
+    filters = source_filters if isinstance(source_filters, dict) else {}
+    runtime = filters.get("runtime") if isinstance(filters.get("runtime"), dict) else {}
+    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
+    return bool(
+        worker_started_at
+        and datetime.now(timezone.utc) - worker_started_at
+        > timedelta(seconds=AI_JOB_EXECUTION_LEASE_SECONDS)
     )
-    freshest = runtime_updated_at or db_updated_at
-    if freshest is None:
-        return False
-    return now - freshest > timedelta(seconds=stale_after_seconds)
+
+
+def _worker_runtime_patch(meta: dict[str, Any], attempt: int) -> dict[str, Any]:
+    return {
+        "broker": "bullmq",
+        "attempt": attempt,
+        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
+        "bullmqJobId": meta.get("bullmqJobId"),
+        "workerLeaseId": str(uuid.uuid4()),
+    }
+
+
+def _superseding_bullmq_retry(
+    source_filters: Any,
+    meta: dict[str, Any],
+    attempt: int,
+) -> tuple[bool, str | None]:
+    """Allow a newer attempt of the same broker job to replace a timed-out lease."""
+    filters = source_filters if isinstance(source_filters, dict) else {}
+    runtime = filters.get("runtime") if isinstance(filters.get("runtime"), dict) else {}
+    current_job_id = str(runtime.get("bullmqJobId") or "")
+    requested_job_id = str(meta.get("bullmqJobId") or "")
+    try:
+        current_attempt = int(runtime.get("attempt") or 0)
+    except (TypeError, ValueError):
+        current_attempt = 0
+    previous_lease_id = str(runtime.get("workerLeaseId") or "") or None
+    allowed = bool(
+        requested_job_id
+        and current_job_id == requested_job_id
+        and attempt > current_attempt
+        and previous_lease_id
+    )
+    return allowed, previous_lease_id
+
+
+def _queue_compensated(source_filters: Any) -> bool:
+    filters = source_filters if isinstance(source_filters, dict) else {}
+    runtime = filters.get("runtime") if isinstance(filters.get("runtime"), dict) else {}
+    return runtime.get("queueCompensated") is True
+
+
+async def _claim_ai_job_execution(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    allow_stale_processing: bool,
+    allow_superseding_retry: bool,
+    previous_lease_id: str | None,
+    source_filters: dict[str, Any],
+    runtime_patch: dict[str, Any],
+) -> bool:
+    """Atomically claim a durable AI job and persist its fencing lease."""
+    claimed_filters = dict(source_filters or {})
+    runtime = dict(claimed_filters.get("runtime") or {})
+    runtime.update(runtime_patch)
+    runtime["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    claimed_filters["runtime"] = runtime
+    result = await db.execute(
+        sa_text(
+            f"""
+            UPDATE ai_generation_jobs
+            SET
+              status = 'processing',
+              error_message = NULL,
+              source_filters = :sourceFilters,
+              updated_at = NOW()
+            WHERE id = :jobId
+              AND (
+                status IN ('pending', 'failed')
+                OR (
+                  :allowStaleProcessing = TRUE
+                  AND status IN ('processing', 'running')
+                  AND updated_at < NOW() - INTERVAL '{AI_JOB_EXECUTION_LEASE_SECONDS} seconds'
+                )
+                OR (
+                  :allowSupersedingRetry = TRUE
+                  AND status IN ('processing', 'running')
+                  AND source_filters -> 'runtime' ->> 'workerLeaseId' = :previousLeaseId
+                )
+              )
+            RETURNING id
+            """
+        ).bindparams(bindparam("sourceFilters", type_=postgresql.JSONB)),
+        {
+            "jobId": job_id,
+            "allowStaleProcessing": allow_stale_processing,
+            "allowSupersedingRetry": allow_superseding_retry,
+            "previousLeaseId": previous_lease_id,
+            "sourceFilters": claimed_filters,
+        },
+    )
+    claimed = result.mappings().first() is not None
+    await db.commit()
+    return claimed
 
 
 def _normalize_intervention_structured_output(
@@ -775,46 +838,32 @@ async def _load_ai_job_context(
     merged_runtime = {**db_runtime, **memory_runtime} if (db_runtime or memory_runtime) else None
     normalized_record = dict(record)
 
-    if _should_mark_job_stale(
-        status=str(normalized_record.get("status") or ""),
-        updated_at=normalized_record.get("updated_at"),
-        runtime=merged_runtime,
-    ):
-        now = datetime.now(timezone.utc)
-        stale_runtime_patch = {
-            "progressPercent": 100,
-            "statusMessage": "Generation timed out",
-            "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
-            "staleTimeoutAt": now.isoformat(),
-        }
-        _set_ai_job_runtime(job_id, **stale_runtime_patch)
-        merged_runtime = await _persist_ai_job_runtime(
-            db,
-            job_id=job_id,
-            runtime_patch=stale_runtime_patch,
-        )
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'failed',
-                  error_message = :errorMessage,
-                  updated_at = NOW()
-                WHERE id = :jobId
-                """
-            ),
-            {
-                "jobId": job_id,
-                "errorMessage": AI_JOB_STALE_FAILURE_MESSAGE,
-            },
-        )
-        await db.commit()
-        normalized_record["status"] = "failed"
-        normalized_record["error_message"] = AI_JOB_STALE_FAILURE_MESSAGE
-        normalized_record["updated_at"] = now
-
     return normalized_record, merged_runtime, assessment_id
+
+
+async def _load_existing_generation_result(
+    db: AsyncSession,
+    *,
+    job_id: str,
+    output_type: str,
+) -> dict[str, Any] | None:
+    """Return a previously committed phase result so BullMQ retries can resume."""
+    result = await db.execute(
+        sa_text(
+            """
+            SELECT id, output_type, structured_output
+            FROM ai_generation_outputs
+            WHERE job_id = :jobId
+              AND output_type = :outputType
+              AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"jobId": job_id, "outputType": output_type},
+    )
+    row = result.mappings().first()
+    return dict(row) if row else None
 
 
 async def _ensure_quiz_sources_ready(
@@ -825,11 +874,13 @@ async def _ensure_quiz_sources_ready(
     lesson_ids: list[str] | None = None,
     extraction_ids: list[str] | None = None,
     allow_draft_sources: bool = False,
+    execution_lease_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     if job_id:
         await _record_ai_job_runtime(
             db,
             job_id=job_id,
+            execution_lease_id=execution_lease_id,
             progressPercent=12,
             statusMessage="Checking sources",
         )
@@ -842,6 +893,7 @@ async def _ensure_quiz_sources_ready(
             await _record_ai_job_runtime(
                 db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=24,
                 statusMessage="Reindexing sources",
             )
@@ -923,18 +975,15 @@ async def _run_quiz_generation_job(
     job_id: str,
     body: GenerateQuizDraftRequest,
     user: RequestUser,
+    *,
+    execution_lease_id: str | None = None,
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
-            await _update_ai_job_status(
-                bg_db,
-                job_id=job_id,
-                status="processing",
-                error_message=None,
-            )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=10,
                 statusMessage="Checking sources",
                 retryState={"attempt": 0, "maxAttempts": QUIZ_JOB_MAX_ATTEMPTS},
@@ -946,6 +995,7 @@ async def _run_quiz_generation_job(
                 lesson_ids=body.lesson_ids,
                 extraction_ids=body.extraction_ids,
                 allow_draft_sources=body.allow_draft_sources,
+                execution_lease_id=execution_lease_id,
             )
 
             async def _operation(attempt: int) -> dict[str, Any]:
@@ -953,6 +1003,7 @@ async def _run_quiz_generation_job(
                 await _record_ai_job_runtime(
                     bg_db,
                     job_id=job_id,
+                    execution_lease_id=execution_lease_id,
                     retryState={"attempt": attempt, "maxAttempts": QUIZ_JOB_MAX_ATTEMPTS},
                 )
                 return await generate_quiz_draft(
@@ -960,9 +1011,11 @@ async def _run_quiz_generation_job(
                     user,
                     body,
                     existing_job_id=job_id,
+                    execution_lease_id=execution_lease_id,
                     progress_callback=lambda status_message, progress_percent: _record_ai_job_runtime(
                         bg_db,
                         job_id=job_id,
+                        execution_lease_id=execution_lease_id,
                         statusMessage=status_message,
                         progressPercent=progress_percent,
                         retryState={
@@ -972,15 +1025,48 @@ async def _run_quiz_generation_job(
                     ),
                 )
 
-            result = await _run_with_retries(
-                _operation,
-                max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
-                delay_seconds=1.0,
+            persisted = (
+                await _load_existing_generation_result(
+                    bg_db,
+                    job_id=job_id,
+                    output_type="assessment_draft",
+                )
+                if execution_lease_id
+                else None
+            )
+            if persisted:
+                structured_output = persisted.get("structured_output") or {}
+                result = {
+                    "outputId": str(persisted["id"]),
+                    "assessmentId": None,
+                    "blueprintSource": structured_output.get("blueprintSource"),
+                }
+            else:
+                # Durable HTTP executions get exactly one output-commit attempt.
+                # BullMQ owns retries and re-enters through the persisted-output
+                # check above, which is safe after an ambiguous DB commit.
+                result = (
+                    await _operation(1)
+                    if execution_lease_id
+                    else await _run_with_retries(
+                        _operation,
+                        max_attempts=QUIZ_JOB_MAX_ATTEMPTS,
+                        delay_seconds=1.0,
+                    )
+                )
+            await _record_ai_job_runtime(
+                bg_db,
+                job_id=job_id,
+                execution_lease_id=execution_lease_id,
+                progressPercent=92,
+                statusMessage="Draft saved; refreshing retrieval index",
+                resultSummary={"outputId": result.get("outputId")},
             )
             indexing = await reindex_class_content(bg_db, body.class_id)
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Draft ready",
                 resultSummary={
@@ -993,44 +1079,61 @@ async def _run_quiz_generation_job(
                 },
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
-        except asyncio.CancelledError:
-            await bg_db.rollback()
-            await _update_ai_job_status(
+            completed = await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
-                status="cancelled",
-                error_message="Generation cancelled by teacher.",
-                output_status="cancelled",
+                status="completed",
+                error_message=None,
+                execution_lease_id=execution_lease_id,
             )
+            if execution_lease_id and not completed:
+                raise JobExecutionSuperseded(
+                    f"AI job {job_id} completion lost its worker lease"
+                )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
-                statusMessage="Generation cancelled",
-                errorMessage="Generation cancelled by teacher.",
+                statusMessage="Worker interrupted",
+                errorMessage="Generation worker was interrupted before completion.",
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
-            logger.info("[ai-job] Quiz generation %s cancelled", job_id)
-            raise
-        except Exception as exc:
-            await bg_db.rollback()
             await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
                 status="failed",
-                error_message=str(exc),
+                error_message="Generation worker was interrupted before completion.",
+                execution_lease_id=execution_lease_id,
             )
+            logger.info("[ai-job] Quiz generation %s interrupted", job_id)
+            raise
+        except JobExecutionSuperseded:
+            await bg_db.rollback()
+            logger.info("[ai-job] Quiz generation %s lost its durable lease", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+                execution_lease_id=execution_lease_id,
+            )
             logger.exception("[ai-job] Quiz generation %s failed", job_id)
-        finally:
-            AI_JOB_TASKS.pop(job_id, None)
+            raise
 
 
 async def _run_intervention_generation_job(
@@ -1038,12 +1141,15 @@ async def _run_intervention_generation_job(
     case_id: str,
     note: str | None,
     user: RequestUser,
+    *,
+    execution_lease_id: str | None = None,
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=20,
                 statusMessage="Collecting intervention evidence",
                 retryState={"attempt": 1, "maxAttempts": 3},
@@ -1053,6 +1159,7 @@ async def _run_intervention_generation_job(
                 await _record_ai_job_runtime(
                     bg_db,
                     job_id=job_id,
+                    execution_lease_id=execution_lease_id,
                     retryState={"attempt": attempt, "maxAttempts": 3},
                     statusMessage=f"Generating intervention recommendation (attempt {attempt}/3)",
                 )
@@ -1063,15 +1170,41 @@ async def _run_intervention_generation_job(
                         case_id=case_id,
                         note=note,
                         existing_job_id=job_id,
+                        execution_lease_id=execution_lease_id,
                     )
                 except Exception:
                     await bg_db.rollback()
                     raise
 
-            result = await _run_with_retries(_operation, max_attempts=3, delay_seconds=1.5)
+            persisted = (
+                await _load_existing_generation_result(
+                    bg_db,
+                    job_id=job_id,
+                    output_type="intervention_recommendation",
+                )
+                if execution_lease_id
+                else None
+            )
+            if persisted:
+                structured_output = persisted.get("structured_output") or {}
+                result = {
+                    "outputId": str(persisted["id"]),
+                    "caseId": structured_output.get("caseId") or case_id,
+                }
+            else:
+                result = (
+                    await _operation(1)
+                    if execution_lease_id
+                    else await _run_with_retries(
+                        _operation,
+                        max_attempts=3,
+                        delay_seconds=1.5,
+                    )
+                )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Recommendation ready for teacher review",
                 resultSummary={
@@ -1080,62 +1213,76 @@ async def _run_intervention_generation_job(
                 },
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
-        except asyncio.CancelledError:
-            await bg_db.rollback()
-            await _update_ai_job_status(
+            completed = await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
-                status="cancelled",
-                error_message="Generation cancelled by teacher.",
-                output_status="cancelled",
+                status="completed",
+                error_message=None,
+                execution_lease_id=execution_lease_id,
             )
+            if execution_lease_id and not completed:
+                raise JobExecutionSuperseded(
+                    f"AI job {job_id} completion lost its worker lease"
+                )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
-                statusMessage="Generation cancelled",
-                errorMessage="Generation cancelled by teacher.",
+                statusMessage="Worker interrupted",
+                errorMessage="Generation worker was interrupted before completion.",
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
-            logger.info("[ai-job] Intervention generation %s cancelled", job_id)
-            raise
-        except Exception as exc:
-            await bg_db.rollback()
             await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
                 status="failed",
-                error_message=str(exc),
+                error_message="Generation worker was interrupted before completion.",
+                execution_lease_id=execution_lease_id,
             )
+            logger.info("[ai-job] Intervention generation %s interrupted", job_id)
+            raise
+        except JobExecutionSuperseded:
+            await bg_db.rollback()
+            logger.info("[ai-job] Intervention generation %s lost its durable lease", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+                execution_lease_id=execution_lease_id,
+            )
             logger.exception("[ai-job] Intervention generation %s failed", job_id)
-        finally:
-            AI_JOB_TASKS.pop(job_id, None)
+            raise
 
 
 async def _run_lesson_plan_generation_job(
     job_id: str,
     body: GenerateLessonPlanRequest,
     user: RequestUser,
+    *,
+    execution_lease_id: str | None = None,
 ) -> None:
     async with AsyncSessionLocal() as bg_db:
         try:
-            await _update_ai_job_status(
-                bg_db,
-                job_id=job_id,
-                status="processing",
-                error_message=None,
-            )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=12,
                 statusMessage="Reviewing class context",
                 retryState={"attempt": 0, "maxAttempts": 2},
@@ -1146,6 +1293,7 @@ async def _run_lesson_plan_generation_job(
                 await _record_ai_job_runtime(
                     bg_db,
                     job_id=job_id,
+                    execution_lease_id=execution_lease_id,
                     retryState={"attempt": attempt, "maxAttempts": 2},
                 )
                 return await generate_class_lesson_plan(
@@ -1153,23 +1301,47 @@ async def _run_lesson_plan_generation_job(
                     user,
                     body,
                     existing_job_id=job_id,
+                    execution_lease_id=execution_lease_id,
                     progress_callback=lambda status_message, progress_percent: _record_ai_job_runtime(
                         bg_db,
                         job_id=job_id,
+                        execution_lease_id=execution_lease_id,
                         statusMessage=status_message,
                         progressPercent=progress_percent,
                         retryState={"attempt": attempt, "maxAttempts": 2},
                     ),
                 )
 
-            result = await _run_with_retries(
-                _operation,
-                max_attempts=2,
-                delay_seconds=1.0,
+            persisted = (
+                await _load_existing_generation_result(
+                    bg_db,
+                    job_id=job_id,
+                    output_type="class_lesson_plan",
+                )
+                if execution_lease_id
+                else None
             )
+            if persisted:
+                structured_output = persisted.get("structured_output") or {}
+                result = {
+                    "outputId": str(persisted["id"]),
+                    "classProfile": structured_output.get("classProfile"),
+                    "header": structured_output.get("header"),
+                }
+            else:
+                result = (
+                    await _operation(1)
+                    if execution_lease_id
+                    else await _run_with_retries(
+                        _operation,
+                        max_attempts=2,
+                        delay_seconds=1.0,
+                    )
+                )
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Lesson plan ready",
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
@@ -1179,44 +1351,61 @@ async def _run_lesson_plan_generation_job(
                     "header": result.get("header"),
                 },
             )
-        except asyncio.CancelledError:
-            await bg_db.rollback()
-            await _update_ai_job_status(
+            completed = await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
-                status="cancelled",
-                error_message="Generation cancelled by teacher.",
-                output_status="cancelled",
+                status="completed",
+                error_message=None,
+                execution_lease_id=execution_lease_id,
             )
+            if execution_lease_id and not completed:
+                raise JobExecutionSuperseded(
+                    f"AI job {job_id} completion lost its worker lease"
+                )
+        except asyncio.CancelledError:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
-                statusMessage="Generation cancelled",
-                errorMessage="Generation cancelled by teacher.",
+                statusMessage="Worker interrupted",
+                errorMessage="Generation worker was interrupted before completion.",
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
-            logger.info("[ai-job] Lesson plan generation %s cancelled", job_id)
-            raise
-        except Exception as exc:
-            await bg_db.rollback()
             await _update_ai_job_status(
                 bg_db,
                 job_id=job_id,
                 status="failed",
-                error_message=str(exc),
+                error_message="Generation worker was interrupted before completion.",
+                execution_lease_id=execution_lease_id,
             )
+            logger.info("[ai-job] Lesson plan generation %s interrupted", job_id)
+            raise
+        except JobExecutionSuperseded:
+            await bg_db.rollback()
+            logger.info("[ai-job] Lesson plan generation %s lost its durable lease", job_id)
+            raise
+        except Exception as exc:
+            await bg_db.rollback()
             await _record_ai_job_runtime(
                 bg_db,
                 job_id=job_id,
+                execution_lease_id=execution_lease_id,
                 progressPercent=100,
                 statusMessage="Generation failed",
                 errorMessage=str(exc),
                 workerFinishedAt=datetime.now(timezone.utc).isoformat(),
             )
+            await _update_ai_job_status(
+                bg_db,
+                job_id=job_id,
+                status="failed",
+                error_message=str(exc),
+                execution_lease_id=execution_lease_id,
+            )
             logger.exception("[ai-job] Lesson plan generation %s failed", job_id)
-        finally:
-            AI_JOB_TASKS.pop(job_id, None)
+            raise
 
 # ---------------------------------------------------------------------------
 # JAKIPIR System Prompt
@@ -1256,9 +1445,10 @@ def get_current_user(
 ) -> RequestUser:
     expected_secret = (settings.ai_service_shared_secret or "").strip()
     provided_secret = (x_internal_service_token or "").strip()
-    if expected_secret:
-        if provided_secret != expected_secret:
-            raise HTTPException(401, "Invalid internal service token")
+    if not expected_secret or not hmac.compare_digest(
+        provided_secret, expected_secret
+    ):
+        raise HTTPException(401, "Invalid internal service token")
     return RequestUser(
         id=x_user_id,
         email=x_user_email,
@@ -1271,7 +1461,9 @@ def require_internal_service(
 ) -> None:
     expected_secret = (settings.ai_service_shared_secret or "").strip()
     provided_secret = (x_internal_service_token or "").strip()
-    if not expected_secret or provided_secret != expected_secret:
+    if not expected_secret or not hmac.compare_digest(
+        provided_secret, expected_secret
+    ):
         raise HTTPException(401, "Invalid internal service token")
 
 
@@ -4660,9 +4852,77 @@ async def queue_teacher_lesson_plan_job(
 # ---------------------------------------------------------------------------
 
 
+@app.post("/internal/teacher/jobs/{job_id}/fail")
+async def fail_internal_teacher_ai_job(
+    job_id: uuid.UUID,
+    payload: dict[str, Any] | None = Body(None),
+    _auth: None = Depends(require_internal_service),
+    db: AsyncSession = Depends(get_db),
+):
+    job_id = str(job_id)
+    payload_dict = payload if isinstance(payload, dict) else {}
+    expected_status = str(payload_dict.get("expectedStatus") or "pending")
+    if expected_status != "pending":
+        raise HTTPException(400, "Queue compensation only supports pending jobs")
+    reason = str(
+        payload_dict.get("reason") or "BullMQ queueing failed before execution"
+    )[:1000]
+    finished_at = datetime.now(timezone.utc).isoformat()
+    update = await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              status = 'failed',
+              error_message = :reason,
+              source_filters = jsonb_set(
+                COALESCE(source_filters, '{}'::jsonb),
+                '{runtime}',
+                COALESCE(source_filters -> 'runtime', '{}'::jsonb)
+                  || jsonb_build_object(
+                    'queueCompensated', TRUE,
+                    'progressPercent', 100,
+                    'statusMessage', 'Queueing failed',
+                    'errorMessage', :reason,
+                    'workerFinishedAt', :finishedAt,
+                    'updatedAt', :finishedAt
+                  ),
+                TRUE
+              ),
+              updated_at = NOW()
+            WHERE id = :jobId AND status = 'pending'
+            RETURNING id
+            """
+        ),
+        {"jobId": job_id, "reason": reason, "finishedAt": finished_at},
+    )
+    changed = update.mappings().first() is not None
+    await db.commit()
+    if not changed:
+        current = await db.execute(
+            sa_text("SELECT status FROM ai_generation_jobs WHERE id = :jobId"),
+            {"jobId": job_id},
+        )
+        current_job = current.mappings().first()
+        if not current_job:
+            raise HTTPException(404, f"Job {job_id} not found")
+        current_status = str(current_job["status"])
+        return {
+            "success": True,
+            "message": f"Queue compensation skipped; AI generation job is {current_status}",
+            "data": {"jobId": job_id, "status": current_status},
+        }
+
+    return {
+        "success": True,
+        "message": "AI generation job marked failed",
+        "data": {"jobId": job_id, "status": "failed"},
+    }
+
+
 @app.post("/internal/teacher/lesson-plans/jobs/{job_id}/run")
 async def run_teacher_lesson_plan_job(
-    job_id: str,
+    job_id: uuid.UUID,
     meta: dict[str, Any] | None = Body(None),
     _auth: None = Depends(require_internal_service),
     db: AsyncSession = Depends(get_db),
@@ -4674,6 +4934,7 @@ async def run_teacher_lesson_plan_job(
     LLM-backed lesson plan generation for a job that was already created
     by the public POST /teacher/lesson-plans/jobs route.
     """
+    job_id = str(job_id)
     # Fetch the job row and its source_filters (which contain the original request body)
     job_row = await db.execute(
         sa_text(
@@ -4688,44 +4949,58 @@ async def run_teacher_lesson_plan_job(
     job = job_row.mappings().first()
     if not job:
         raise HTTPException(404, f"Job {job_id} not found")
+    if str(job["job_type"]) != "class_lesson_plan_generation":
+        raise HTTPException(409, f"Job {job_id} is not a lesson plan generation job")
 
-    # Idempotency guard: don't re-run completed or already-running jobs
-    if job["status"] == "completed":
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    # Idempotency guard: don't re-run terminal or queue-compensated jobs.
+    if job["status"] in {"completed", "approved", "cancelled"}:
+        terminal_status = str(job["status"])
         return {
             "success": True,
-            "message": "Lesson plan generation already completed",
-            "data": {"jobId": job_id, "status": "completed"},
+            "message": f"Lesson plan generation already {terminal_status}",
+            "data": {"jobId": job_id, "status": terminal_status},
+        }
+    if job["status"] == "failed" and _queue_compensated(source_filters_dict):
+        return {
+            "success": True,
+            "message": "Lesson plan generation was not queued",
+            "data": {"jobId": job_id, "status": "failed"},
         }
 
     meta_dict = meta if isinstance(meta, dict) else {}
-    attempt = int(meta_dict.get("attempt", 1))
-    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
-    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
-    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
-    is_stale_processing = bool(
-        worker_started_at
-        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    attempt = _parse_worker_attempt(meta_dict)
+    is_stale_processing = _worker_lease_expired(source_filters_dict)
+    allow_superseding_retry, previous_lease_id = _superseding_bullmq_retry(
+        source_filters_dict,
+        meta_dict,
+        attempt,
     )
 
     # Distributed Deadlock & Execution Lifecycle Contract:
     # 1. workerStartedAt is written below at the start of each worker execution attempt.
     # 2. When an attempt completes, cancels, or fails, workerFinishedAt is recorded in runtime and terminal status supersedes stale markers.
     # 3. If a worker process crashes abruptly without writing workerFinishedAt, the DB row remains in "processing".
-    # 4. When BullMQ retries the job (attempt > 1), if workerStartedAt is older than 6 minutes (stale), we override the conflict check
-    #    and allow re-entry. The new attempt immediately overwrites workerStartedAt with a fresh timestamp below.
+    # 4. Reclaim is delayed beyond the backend's full 15-minute request budget.
+    # 5. Every write is fenced by workerLeaseId, so a superseded request cannot commit.
     if job["status"] in ("processing", "running"):
-        if attempt <= 1 or not is_stale_processing:
+        if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
             raise HTTPException(409, f"Job {job_id} is already running")
 
-    # Record durable worker execution metadata
-    runtime_patch = {
-        "broker": "bullmq",
-        "attempt": attempt,
-        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
-        "bullmqJobId": meta_dict.get("bullmqJobId"),
-    }
+    runtime_patch = _worker_runtime_patch(meta_dict, attempt)
+    claimed = await _claim_ai_job_execution(
+        db,
+        job_id=job_id,
+        allow_stale_processing=attempt > 1 and is_stale_processing,
+        allow_superseding_retry=allow_superseding_retry,
+        previous_lease_id=previous_lease_id,
+        source_filters=source_filters_dict,
+        runtime_patch=runtime_patch,
+    )
+    if not claimed:
+        raise HTTPException(409, f"Job {job_id} was claimed by another worker")
+
     _set_ai_job_runtime(job_id, **runtime_patch)
-    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
 
     # Reconstruct the request body from source_filters
     source_filters = job["source_filters"] or {}
@@ -4743,7 +5018,12 @@ async def run_teacher_lesson_plan_job(
     )
 
     # Run the actual generation (this is the long-running LLM call)
-    await _run_lesson_plan_generation_job(job_id, body, user)
+    await _run_lesson_plan_generation_job(
+        job_id,
+        body,
+        user,
+        execution_lease_id=str(runtime_patch["workerLeaseId"]),
+    )
 
     return {
         "success": True,
@@ -4759,11 +5039,12 @@ async def run_teacher_lesson_plan_job(
 
 @app.post("/internal/teacher/quizzes/jobs/{job_id}/run")
 async def run_teacher_quiz_job(
-    job_id: str,
+    job_id: uuid.UUID,
     meta: dict[str, Any] | None = Body(None),
     _auth: None = Depends(require_internal_service),
     db: AsyncSession = Depends(get_db),
 ):
+    job_id = str(job_id)
     job_row = await db.execute(
         sa_text(
             """
@@ -4777,36 +5058,51 @@ async def run_teacher_quiz_job(
     job = job_row.mappings().first()
     if not job:
         raise HTTPException(404, f"Job {job_id} not found")
+    if str(job["job_type"]) != "quiz_generation":
+        raise HTTPException(409, f"Job {job_id} is not a quiz generation job")
 
-    if job["status"] == "completed":
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    if job["status"] in {"completed", "approved", "cancelled"}:
+        terminal_status = str(job["status"])
         return {
             "success": True,
-            "message": "Quiz draft generation already completed",
-            "data": {"jobId": job_id, "status": "completed"},
+            "message": f"Quiz draft generation already {terminal_status}",
+            "data": {"jobId": job_id, "status": terminal_status},
+        }
+    if job["status"] == "failed" and _queue_compensated(source_filters_dict):
+        return {
+            "success": True,
+            "message": "Quiz draft generation was not queued",
+            "data": {"jobId": job_id, "status": "failed"},
         }
 
     meta_dict = meta if isinstance(meta, dict) else {}
-    attempt = int(meta_dict.get("attempt", 1))
-    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
-    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
-    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
-    is_stale_processing = bool(
-        worker_started_at
-        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    attempt = _parse_worker_attempt(meta_dict)
+    is_stale_processing = _worker_lease_expired(source_filters_dict)
+    allow_superseding_retry, previous_lease_id = _superseding_bullmq_retry(
+        source_filters_dict,
+        meta_dict,
+        attempt,
     )
 
     if job["status"] in ("processing", "running"):
-        if attempt <= 1 or not is_stale_processing:
+        if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
             raise HTTPException(409, f"Job {job_id} is already running")
 
-    runtime_patch = {
-        "broker": "bullmq",
-        "attempt": attempt,
-        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
-        "bullmqJobId": meta_dict.get("bullmqJobId"),
-    }
+    runtime_patch = _worker_runtime_patch(meta_dict, attempt)
+    claimed = await _claim_ai_job_execution(
+        db,
+        job_id=job_id,
+        allow_stale_processing=attempt > 1 and is_stale_processing,
+        allow_superseding_retry=allow_superseding_retry,
+        previous_lease_id=previous_lease_id,
+        source_filters=source_filters_dict,
+        runtime_patch=runtime_patch,
+    )
+    if not claimed:
+        raise HTTPException(409, f"Job {job_id} was claimed by another worker")
+
     _set_ai_job_runtime(job_id, **runtime_patch)
-    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
 
     source_filters = job["source_filters"] or {}
     body = GenerateQuizDraftRequest(
@@ -4832,7 +5128,12 @@ async def run_teacher_quiz_job(
         roles=["teacher"],
     )
 
-    await _run_quiz_generation_job(job_id, body, user)
+    await _run_quiz_generation_job(
+        job_id,
+        body,
+        user,
+        execution_lease_id=str(runtime_patch["workerLeaseId"]),
+    )
 
     return {
         "success": True,
@@ -4848,11 +5149,12 @@ async def run_teacher_quiz_job(
 
 @app.post("/internal/teacher/interventions/jobs/{job_id}/run")
 async def run_teacher_intervention_job(
-    job_id: str,
+    job_id: uuid.UUID,
     meta: dict[str, Any] | None = Body(None),
     _auth: None = Depends(require_internal_service),
     db: AsyncSession = Depends(get_db),
 ):
+    job_id = str(job_id)
     job_row = await db.execute(
         sa_text(
             """
@@ -4866,36 +5168,51 @@ async def run_teacher_intervention_job(
     job = job_row.mappings().first()
     if not job:
         raise HTTPException(404, f"Job {job_id} not found")
+    if str(job["job_type"]) != "remedial_plan_generation":
+        raise HTTPException(409, f"Job {job_id} is not an intervention generation job")
 
-    if job["status"] == "completed":
+    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
+    if job["status"] in {"completed", "approved", "cancelled"}:
+        terminal_status = str(job["status"])
         return {
             "success": True,
-            "message": "Intervention recommendation generation already completed",
-            "data": {"jobId": job_id, "status": "completed"},
+            "message": f"Intervention recommendation generation already {terminal_status}",
+            "data": {"jobId": job_id, "status": terminal_status},
+        }
+    if job["status"] == "failed" and _queue_compensated(source_filters_dict):
+        return {
+            "success": True,
+            "message": "Intervention recommendation was not queued",
+            "data": {"jobId": job_id, "status": "failed"},
         }
 
     meta_dict = meta if isinstance(meta, dict) else {}
-    attempt = int(meta_dict.get("attempt", 1))
-    source_filters_dict = job["source_filters"] if isinstance(job["source_filters"], dict) else {}
-    runtime = source_filters_dict.get("runtime") if isinstance(source_filters_dict.get("runtime"), dict) else {}
-    worker_started_at = _parse_iso_utc(runtime.get("workerStartedAt"))
-    is_stale_processing = bool(
-        worker_started_at
-        and datetime.now(timezone.utc) - worker_started_at > timedelta(minutes=6)
+    attempt = _parse_worker_attempt(meta_dict)
+    is_stale_processing = _worker_lease_expired(source_filters_dict)
+    allow_superseding_retry, previous_lease_id = _superseding_bullmq_retry(
+        source_filters_dict,
+        meta_dict,
+        attempt,
     )
 
     if job["status"] in ("processing", "running"):
-        if attempt <= 1 or not is_stale_processing:
+        if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
             raise HTTPException(409, f"Job {job_id} is already running")
 
-    runtime_patch = {
-        "broker": "bullmq",
-        "attempt": attempt,
-        "workerStartedAt": datetime.now(timezone.utc).isoformat(),
-        "bullmqJobId": meta_dict.get("bullmqJobId"),
-    }
+    runtime_patch = _worker_runtime_patch(meta_dict, attempt)
+    claimed = await _claim_ai_job_execution(
+        db,
+        job_id=job_id,
+        allow_stale_processing=attempt > 1 and is_stale_processing,
+        allow_superseding_retry=allow_superseding_retry,
+        previous_lease_id=previous_lease_id,
+        source_filters=source_filters_dict,
+        runtime_patch=runtime_patch,
+    )
+    if not claimed:
+        raise HTTPException(409, f"Job {job_id} was claimed by another worker")
+
     _set_ai_job_runtime(job_id, **runtime_patch)
-    await _persist_ai_job_runtime(db, job_id=job_id, runtime_patch=runtime_patch)
 
     source_filters = job["source_filters"] or {}
     case_id = source_filters.get("caseId", "")
@@ -4906,7 +5223,13 @@ async def run_teacher_intervention_job(
         roles=["teacher"],
     )
 
-    await _run_intervention_generation_job(job_id, case_id, note, user)
+    await _run_intervention_generation_job(
+        job_id,
+        case_id,
+        note,
+        user,
+        execution_lease_id=str(runtime_patch["workerLeaseId"]),
+    )
 
     return {
         "success": True,
@@ -5188,19 +5511,6 @@ async def delete_teacher_ai_job(
     db: AsyncSession = Depends(get_db),
 ):
     job, _runtime, assessment_id = await _load_ai_job_context(db, job_id, user)
-    task = AI_JOB_TASKS.get(job_id)
-    if task and not task.done():
-        task.cancel()
-        try:
-            await asyncio.wait_for(task, timeout=2)
-        except asyncio.CancelledError:
-            pass
-        except asyncio.TimeoutError:
-            logger.warning("[ai-job] Timed out waiting for cancellation of %s", job_id)
-        except Exception as err:
-            logger.warning("[ai-job] Cancellation wait for %s ended with %s", job_id, err)
-    AI_JOB_TASKS.pop(job_id, None)
-
     status_message = (
         "Draft removed"
         if job.get("output_id") or assessment_id

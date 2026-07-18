@@ -36,7 +36,7 @@ export class AssessmentNotificationDispatchService {
       ASSESSMENT_ASSIGNED_JOB,
       this.toJobData(assessment),
       {
-        jobId: `${ASSESSMENT_ASSIGNED_JOB}:${assessment.id}`,
+        jobId: `${ASSESSMENT_ASSIGNED_JOB}-${assessment.id}`,
         attempts: 3,
         backoff: { type: 'exponential', delay: 5_000 },
         removeOnComplete: true,
@@ -64,7 +64,7 @@ export class AssessmentNotificationDispatchService {
       ASSESSMENT_DUE_REMINDER_JOB,
       this.toJobData(assessment),
       {
-        jobId: `${ASSESSMENT_DUE_REMINDER_JOB}:${assessment.id}`,
+        jobId: `${ASSESSMENT_DUE_REMINDER_JOB}-${assessment.id}`,
         delay,
         attempts: 3,
         backoff: { type: 'exponential', delay: 5_000 },
@@ -76,7 +76,7 @@ export class AssessmentNotificationDispatchService {
 
   async removeAssessmentDueReminder(assessmentId: string): Promise<void> {
     const existingJob = await this.notificationsQueue.getJob(
-      `${ASSESSMENT_DUE_REMINDER_JOB}:${assessmentId}`,
+      `${ASSESSMENT_DUE_REMINDER_JOB}-${assessmentId}`,
     );
     await existingJob?.remove();
   }

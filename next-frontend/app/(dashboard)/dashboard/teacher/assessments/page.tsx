@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ClipboardCheck, Clock3, Search, Sparkles } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
@@ -16,12 +16,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
 
 type AssessmentWithClass = Assessment & {
   classLabel: string;
 };
+
+type TeacherCollectionState = 'loading' | 'ready' | 'error' | 'partial';
 
 function formatDate(value?: string) {
   if (!value) return 'No due date';
@@ -42,58 +45,86 @@ function formatAssessmentType(type: string) {
 
 export default function TeacherAssessmentsPage() {
   const { user } = useAuth();
+  const userId = user?.id;
+  const hasSuccessfulCollectionRef = useRef(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [assessments, setAssessments] = useState<AssessmentWithClass[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [collectionState, setCollectionState] =
+    useState<TeacherCollectionState>('loading');
   const [selectedClassId, setSelectedClassId] = useState('all');
   const [search, setSearch] = useState('');
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+  const fetchData = useCallback(() => {
+    if (!userId) return;
 
-    try {
-      setLoading(true);
-      const classesRes = await classService.getByTeacher(user.id, 'active');
-      const activeClasses = classesRes.data || [];
-      setClasses(activeClasses);
+    const request = classService.getByTeacher(userId, 'active');
+    if (!hasSuccessfulCollectionRef.current) {
+      void Promise.resolve().then(() => setCollectionState('loading'));
+    }
 
-      if (activeClasses.length === 0) {
-        setAssessments([]);
-        return;
-      }
+    void request
+      .then(async (classesRes) => {
+        const activeClasses = classesRes.data || [];
+        setClasses(activeClasses);
 
-      const assessmentResponses = await Promise.all(
-        activeClasses.map(async (course) => {
-          const response = await assessmentService.getByClass(course.id, {
-            page: 1,
-            limit: 100,
-            status: 'all',
+        if (activeClasses.length === 0) {
+          setAssessments([]);
+          hasSuccessfulCollectionRef.current = true;
+          setCollectionState('ready');
+          return;
+        }
+
+        const assessmentResponses = await Promise.allSettled(
+          activeClasses.map(async (course) => {
+            const response = await assessmentService.getByClass(course.id, {
+              page: 1,
+              limit: 100,
+              status: 'all',
+            });
+
+            const classLabel = `${course.subjectCode} - ${course.subjectName}`;
+            return (response.data || []).map((assessment) => ({
+              ...assessment,
+              classLabel,
+            }));
+          }),
+        );
+
+        const fulfilledResponses = assessmentResponses.filter(
+          (
+            result,
+          ): result is PromiseFulfilledResult<AssessmentWithClass[]> =>
+            result.status === 'fulfilled',
+        );
+        const hasRejectedResponse = assessmentResponses.some(
+          (result) => result.status === 'rejected',
+        );
+
+        if (fulfilledResponses.length === 0) {
+          setCollectionState(
+            hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+          );
+          return;
+        }
+
+        const merged = fulfilledResponses
+          .flatMap((result) => result.value)
+          .sort((left, right) => {
+            const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
+            const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
+            return rightTime - leftTime;
           });
 
-          const classLabel = `${course.subjectCode} - ${course.subjectName}`;
-          return (response.data || []).map((assessment) => ({
-            ...assessment,
-            classLabel,
-          }));
-        }),
-      );
-
-      const merged = assessmentResponses
-        .flat()
-        .sort((left, right) => {
-          const leftTime = new Date(left.updatedAt || left.createdAt || 0).getTime();
-          const rightTime = new Date(right.updatedAt || right.createdAt || 0).getTime();
-          return rightTime - leftTime;
-        });
-
-      setAssessments(merged);
-    } catch {
-      setClasses([]);
-      setAssessments([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
+        setAssessments(merged);
+        hasSuccessfulCollectionRef.current = true;
+        setCollectionState(hasRejectedResponse ? 'partial' : 'ready');
+      })
+      .catch(() => {
+        setCollectionState(
+          hasSuccessfulCollectionRef.current ? 'partial' : 'error',
+        );
+      });
+  }, [userId]);
 
   useEffect(() => {
     void fetchData();
@@ -113,7 +144,7 @@ export default function TeacherAssessmentsPage() {
     });
   }, [assessments, search, selectedClassId]);
 
-  if (loading) {
+  if (collectionState === 'loading') {
     return (
       <div className="space-y-6">
         <Skeleton className="h-56 rounded-[1.9rem]" />
@@ -129,7 +160,6 @@ export default function TeacherAssessmentsPage() {
 
   return (
     <TeacherPageShell
-      badge="Teacher Assessments"
       title="Assessments Across Your Active Classes"
       description="Review published and draft assessments from one teacher index, then jump into review or editing without relying on broken dashboard shortcuts."
       actions={(
@@ -210,12 +240,35 @@ export default function TeacherAssessmentsPage() {
         title="Assessment Index"
         description="Open an assessment for review or jump straight into editing."
       >
-        {classes.length === 0 ? (
+        {collectionState === 'error' ? (
+          <DashboardStatePanel
+            kind="error"
+            title="Assessments couldn't be loaded"
+            description="Try again to load your active classes and their assessments."
+            primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+          />
+        ) : (
+          <>
+        {collectionState === 'partial' ? (
+          <DashboardStatePanel
+            kind="unavailable"
+            title="Some assessments are temporarily unavailable"
+            description="Available class assessments are still shown below."
+            primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+            className="mb-4"
+          />
+        ) : null}
+        {classes.length === 0 && collectionState === 'ready' ? (
           <TeacherEmptyState
             title="No classes assigned yet"
             description="Assessments are class-scoped, so they will appear here once at least one active class is assigned to your teacher account."
           />
-        ) : filteredAssessments.length === 0 ? (
+        ) : assessments.length === 0 && collectionState === 'ready' ? (
+          <TeacherEmptyState
+            title="No assessments yet"
+            description="Create an assessment from a class workspace and it will appear here."
+          />
+        ) : assessments.length > 0 && filteredAssessments.length === 0 ? (
           <TeacherEmptyState
             title="No assessments match this view"
             description="Try a different class filter or search term, or create assessments from a class workspace first."
@@ -254,6 +307,8 @@ export default function TeacherAssessmentsPage() {
               </div>
             ))}
           </div>
+        )}
+          </>
         )}
       </TeacherSectionCard>
     </TeacherPageShell>

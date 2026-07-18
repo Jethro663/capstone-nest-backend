@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
-  BookTemplate,
   ChevronDown,
   Eye,
   FileCheck2,
@@ -467,10 +466,8 @@ export default function ClassTemplatesPage() {
 
   return (
     <AdminPageShell
-      badge="Admin Templates"
       title="Class Templates"
       description="Manage reusable subject templates before turning them into live classes."
-      icon={BookTemplate}
       actions={(
         <Button
           variant="outline"

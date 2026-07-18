@@ -6,6 +6,8 @@ This index separates current operating guidance from dated evidence. A date in a
 
 - Repository overview and startup: [`../README.md`](../README.md)
 - Current verified state and bounded debt: [`../CURRENT_REPO_STATE.md`](../CURRENT_REPO_STATE.md)
+- Beginner groupmate guide: [`HOW_THE_PROJECT_WORKS_GROUPMATE_GUIDE.md`](HOW_THE_PROJECT_WORKS_GROUPMATE_GUIDE.md) and [`How_The_Project_Works_Groupmate_Guide.pdf`](How_The_Project_Works_Groupmate_Guide.pdf)
+- July 18 live stack and route inventory: [`system-audit/2026-07-18-live-stack-and-route-inventory.md`](system-audit/2026-07-18-live-stack-and-route-inventory.md)
 - Agent routing kernel: [`../AGENTS.md`](../AGENTS.md)
 - Performance/architecture implementation record: [`../implementation-fix.md`](../implementation-fix.md)
 - Improvement roadmap and decision record: [`../improvement-plan.md`](../improvement-plan.md)
@@ -50,6 +52,6 @@ Do not silently rewrite dated evidence to look current. Add a new dated audit or
 
 ## Cleanup policy
 
-The repository does not track generated Playwright HTML reports, videos, screenshots, PDFs, spreadsheets, or `test-results` output. Regenerate those locally when needed. Real architectural decisions, audit inputs, and reproducible source artifacts remain tracked.
+The repository does not track generated Playwright HTML reports, videos, ad-hoc screenshots, spreadsheets, or `test-results` output. Curated deliverables such as the master manual and groupmate onboarding PDF are explicit exceptions and must keep their Markdown sources and reproducible compile instructions. Real architectural decisions, audit inputs, and reproducible source artifacts remain tracked.
 
 The obsolete June state dump, the early frontend Phase 1 completion memo, and the mobile placeholder memo were removed after their current information was folded into the root and subsystem READMEs.

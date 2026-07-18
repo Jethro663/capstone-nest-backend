@@ -14,7 +14,7 @@ The monitoring stack is an opt-in Docker Compose profile. It is not required for
 
 ## Start
 
-Set unique Grafana credentials and telemetry endpoints in `.env.compose`:
+Set unique Grafana credentials and telemetry endpoints in root `.env` (created from `.env.compose.example`):
 
 ```env
 GRAFANA_ADMIN_USER=operator
@@ -24,13 +24,13 @@ LOKI_HOST=http://loki:3100
 ```
 
 ```bash
-docker compose --env-file .env.compose --profile observability up -d --build --wait
+docker compose --profile observability up -d --build --wait
 ```
 
 Validate the stack:
 
 ```bash
-docker compose --env-file .env.compose --profile observability ps
+docker compose --profile observability ps
 curl --fail http://localhost:9090/-/ready
 curl --fail http://localhost:3100/ready
 curl --fail http://localhost:3200/ready

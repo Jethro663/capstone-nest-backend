@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAs, missingRoleCredentials } from './helpers/auth';
+import { loginAs, missingRoleCredentials, persistSession } from './helpers/auth';
 import { resolveStudentLessonUrl } from './helpers/seeded-routes';
 
 test('opens the student lesson reader and captures the structured reading view', async ({ page }) => {
@@ -13,13 +13,14 @@ test('opens the student lesson reader and captures the structured reading view',
   await page.goto(lessonReaderUrl!);
 
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByRole('button', { name: /back to class/i })).toBeVisible();
-  await expect(
-    page.getByText(/lesson outline|no content available for this lesson/i),
-  ).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Back', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /back to (module|path)/i })).toBeVisible();
+  await expect(page.getByLabel('Lesson details')).toBeVisible();
+  await expect(page.locator('.student-module-view__reader')).toBeVisible();
 
   await page.screenshot({
     path: test.info().outputPath('student-lesson-reader.png'),
     fullPage: true,
   });
+  await persistSession(page, 'student');
 });

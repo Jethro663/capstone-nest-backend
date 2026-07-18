@@ -13,7 +13,7 @@
 | `JWT_SECRET` | ✅ | Min 32 characters. Access token signing key |
 | `JWT_REFRESH_SECRET` | ✅ | Min 32 characters. Refresh token signing key |
 | `REDIS_URL` | ✅ | Redis connection. Used by BullMQ and rotation grace cache |
-| `AI_SERVICE_URL` | Recommended | FastAPI AI service URL. Defaults to `http://localhost:8000` |
+| `AI_SERVICE_URL` | Recommended | FastAPI AI service URL; Compose uses `http://ai-service:8000` |
 | `FRONTEND_URL` | Recommended | Next.js frontend origin for CORS |
 | `STORAGE_DRIVER` | Optional | `local` (default) or `s3`/`r2` for cloud storage |
 | `AWS_ACCESS_KEY_ID` | If S3 | Required when `STORAGE_DRIVER=s3` |
@@ -72,8 +72,8 @@ curl -s http://localhost:3000/api/health/ready | jq '.data.dependencies.database
 # Via readiness endpoint
 curl -s http://localhost:3000/api/health/ready | jq '.data.dependencies.redis'
 
-# Direct Redis check
-redis-cli -u "$REDIS_URL" ping
+# Direct Redis check inside core Compose
+docker compose exec -T redis redis-cli ping
 ```
 
 ### 3.3 AI Service Availability
@@ -82,13 +82,12 @@ redis-cli -u "$REDIS_URL" ping
 # Via readiness endpoint
 curl -s http://localhost:3000/api/health/ready | jq '.data.dependencies.aiService'
 
-# Direct AI service check
-curl -s "${AI_SERVICE_URL:-http://localhost:8000}/ready" | jq .
+# Direct AI service check inside core Compose
+docker compose exec -T ai-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
 ```
 
 > [!NOTE]
-> The AI service may report `degraded: true` if the Ollama runtime is unavailable.
-> Set `AI_DEGRADED_ALLOWED=true` to allow the backend to accept traffic in degraded mode.
+> The AI service may report `degraded: true` if the model runtime is unavailable. Set `AI_DEGRADED_ALLOWED=true` only for an intentional degraded environment; normal classroom readiness requires the full dependency chain.
 
 ### 3.4 Storage Health
 
@@ -151,18 +150,15 @@ If students are still being logged out, check:
 ### 5.3 AI Jobs Stuck in Queue
 
 ```bash
-# Check queue depth via Redis
-redis-cli -u "$REDIS_URL" LLEN "bull:ai-teacher-generation:wait"
-redis-cli -u "$REDIS_URL" LLEN "bull:ai-teacher-generation:active"
-
-# Check for failed jobs
-redis-cli -u "$REDIS_URL" ZCARD "bull:ai-teacher-generation:failed"
+# Confirm queue metadata and inspect worker logs
+docker compose exec -T redis redis-cli --scan --pattern 'bull:ai-teacher-generation:*'
+docker compose logs --tail=200 backend ai-service redis
 ```
 
-**Recovery**: Jobs auto-retry 3 times with exponential backoff. If stuck:
+**Recovery**: Jobs use bounded retry/backoff. If stuck:
 1. Check AI service health.
-2. Clear failed jobs: `redis-cli -u "$REDIS_URL" DEL "bull:ai-teacher-generation:failed"`
-3. Restart the backend to re-register processors.
+2. Read the job/worker failure and verify whether retry or cancellation is safe.
+3. Restart the backend only when the worker itself is unhealthy. Do not delete BullMQ keys manually; that can orphan job state.
 
 ### 5.4 File Uploads Failing
 

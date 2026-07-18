@@ -1,100 +1,128 @@
-# Teacher Web QA Confirmation Audit
+# Teacher Frontend Audit
 
-## Scope
+## Shipped Status
 
-- Source checklist: `C:\Users\jethr\Downloads\Nexora_QA_Web_Teacher.pdf`
-- Runtime: `http://127.0.0.1:3001`
-- Backend API: `http://127.0.0.1:3000/api`
-- Seeded accounts used:
-  - `teacher1@lms.local / Teacher123!` (`Ana Reyes`)
-  - `teacher2@lms.local / Teacher123!` (`Ben Santos`)
-- Tools used:
-  - Serena route/symbol discovery for teacher navigation and route surfaces.
-  - Playwright browser runs with seeded teacher logins.
-  - Playwright MCP for live route snapshot/console checks.
+The approved Teacher tighten and bounded academic-state authorization change are implemented and verified on `developement`. Evidence was collected on 2026-07-15 from the current source running in a disposable seeded Compose project.
 
-## Confirmed Current Issues
+- Role: `teacher`
+- Frontend root: `next-frontend`
+- Seed source: `backend/seed-database.js`
+- Browser URL: `http://localhost:3301`
+- Backend URL: `http://localhost:3300`
+- Source routes inventoried: `32`
+- Core live routes: `6`
+- Additional post-change spot checks: `2`
+- Current findings: `1` backend-owned residual with a verified frontend containment state
 
-### Reports export still uses an unauthenticated popup
+## Live Route Evidence
 
-- PDF item: Teacher Reports export is not working.
-- Runtime evidence: `/dashboard/teacher/reports` loads Q1 report data, but clicking `Export` opens a popup instead of producing an authenticated blob download.
-- Source evidence: `next-frontend/src/components/teacher/TeacherReportsFigmaPage.tsx` calls `window.open(...)` in `handleExport`.
-- Risk: the export path can open an unauthenticated tab and fail like the admin export did before the authenticated blob-download fix.
+The original six-route Teacher audit was replayed through the authenticated shell:
 
-### Compact module view does not make cards smaller
+1. `/dashboard/teacher/classes` — `My Classes`
+2. `/dashboard/teacher/class-record` — `Class Record`
+3. seeded `/dashboard/teacher/assessments/[id]/edit` — assessment editor work surface
+4. `/dashboard/teacher/interventions` — `Interventions`
+5. `/dashboard/teacher/performance` — `Performance Insights`
+6. `/dashboard/teacher/lessons` — `Lessons Across Your Teaching Space`
 
-- PDF item: compact view does not make the card smaller.
-- Runtime evidence: on `/dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1`, the measured module card was `1127.625 x 182.140625` before and after switching to compact view.
-- Source evidence: compact CSS changes grid columns and alignment only; it does not reduce card internal spacing or height.
+Post-change spot checks also covered `/dashboard/teacher/assessments` and `/dashboard/teacher/calendar`. The legacy assessment-editor capture spec passed against the seeded dynamic editor.
 
-### AI Draft generation is unavailable when AI indexing is down
+## Access Contract Evidence
 
-- PDF item: Generate Draft fails.
-- Runtime evidence: `/dashboard/teacher/classes/f71bebea-e122-4cd4-9d01-10d543ff1bf1/ai-draft` shows `Index required` and `AI service is unavailable`; requests to `/api/ai/index/classes/.../status` return `503`.
-- Clarification: the PDF note that fields are not visible is stale; the source filters, optional title, question count, question type, guidance, and source sections are visible.
+- Teacher `GET /api/academic-state/current`: HTTP `200`.
+- Student `GET /api/academic-state/current`: HTTP `403`.
+- Admin-only impact preview and transition metadata remain Admin-only.
+- Focused backend authorization coverage passed `2/2` tests.
+- Opening `/dashboard/admin` as Teacher disclosed no Admin content, redirected to `/dashboard/teacher/classes`, displayed one access notice, and preserved the Teacher session.
 
-### Extraction Review unavailable state hides the Back action
+## Baseline Findings Reconciled
 
-- PDF item: Extraction Review back button is not visible.
-- Runtime evidence: the seeded extraction list contains cached failed extraction `807401d3-0d0b-4323-9923-b63575b0ea7f`. Opening `/dashboard/teacher/extractions/807401d3-0d0b-4323-9923-b63575b0ea7f` shows `Extraction unavailable` because `/api/ai/extractions/:id` returns `503`; the `Back` action is not visible in this unavailable state.
-- Source evidence: the loaded review view has a `Back` button, but the unavailable/error path does not expose the same navigation escape.
+### Assessment editor could not read the system academic quarter — resolved
 
-### Class workspace announcement and discussion empty-submit feedback is weak
+- Before: the editor received HTTP `403` from a controller-wide Admin role restriction.
+- After: only `GET current` permits Admin and Teacher; impact preview and transition remain Admin-only. The editor models quarter verification explicitly and keeps quarter/publish controls locked until verified.
+- Evidence: live Teacher `200`/Student `403`, focused backend tests, editor unit coverage, and the integrated browser gate.
 
-- PDF item: empty title/content blocks create or do not show a specific error.
-- Runtime evidence:
-  - Class announcements form exposes `Post Announcement` with blank fields and gives no specific inline validation feedback when clicked.
-  - Class discussion form exposes blank publish/draft controls without a visible specific validation message.
-- Scope: global teacher announcements behave better by disabling the create action until class and required fields are selected, but the class workspace forms still need clearer validation.
+### Missing quarter workbook caused a noisy slot-resource 404 — resolved
 
-### Assessment Advanced Settings is hard to reach
+- Before: the editor requested slot overview even when the selected quarter had no class-record workbook.
+- After: the editor checks `getByClass` first, skips the invalid slot request, and shows `Create the Q1 class record workbook before choosing a slot.`
+- Evidence: a focused red/green unit test verifies the guidance and that `getSlotOverview` is not called; the seeded editor then loaded without that HTTP error.
 
-- PDF item: quarter selection in Advanced Settings is hard to navigate.
-- Runtime evidence: on `/dashboard/teacher/assessments/f20de397-7c4d-43ae-8891-f9b062c1460f/edit`, a normal Playwright click on `Open Advanced Settings` timed out because the control was outside the usable viewport after scrolling; a forced click opened the dialog and the quarter select existed.
-- Root issue: the settings action placement/scroll behavior is fragile, not the quarter field itself.
+### Teacher collections treated failures as successful emptiness — resolved
 
-### Teacher profile phone and password UX gaps remain
+- Before: Assessments, Calendar, Class Record, and Lessons reused empty copy after rejected requests.
+- After: each owner distinguishes loading, failed, empty, and content states; retry remains scoped to the failed request and truthful existing content is retained where available.
+- Evidence: focused rejected-request tests passed within the full frontend Jest gate, and all four route families rendered in the live sweep.
 
-- PDF items: no show-password control; mobile number should stop at 11 digits while typing; password error is not specific enough.
-- Runtime evidence:
-  - `/dashboard/teacher/profile` has three password inputs and zero show/hide password buttons.
-  - The teacher phone input has no `maxLength`; entering `091712345678999` preserves all 15 characters.
-  - Empty password update shows `All password fields are required`; wrong current password falls back to a generic failure.
+### Performance diagnostics looked empty when the request failed — frontend resolved, backend residual remains
 
-### Library upload class filtering is code-confirmed but seed-blocked
+- Before: the diagnostics HTTP `500` could be interpreted as zero signals.
+- After: healthy Performance panels stay visible while the diagnostics region persistently shows `Diagnostics temporarily unavailable` and `Retry diagnostics`.
+- Evidence: the browser gate permits only the exact seeded diagnostics `500` and its matching resource-console error; every other HTTP or console failure fails the scenario.
 
-- PDF item: teacher can choose a different class subject during class-specific upload.
-- Runtime evidence: current seeded teachers do not reproduce the exact mismatch because `teacher1` only owns Mathematics classes and `teacher2` only owns Science.
-- Source evidence: `LibraryWorkspaceView` renders upload class options from all `classes.map(...)` entries instead of filtering by selected upload subject and grade.
-- Classification: confirmed implementation weakness, but not reproduced with current seed data.
+### Sparse/unsafe error-boundary coverage — resolved
 
-### Class Record default state is confusing, but data and refresh work
+- Before: the dashboard lacked a shared boundary and the local Add Students boundary could print `error.message`.
+- After: shared safe recovery and the local boundary use safe copy without internal exception detail.
 
-- PDF items: Q1 spreadsheet not showing; refresh not refreshing.
-- Runtime evidence:
-  - `/dashboard/teacher/class-record` initially shows `Class record not created yet` and asks the teacher to choose a class.
-  - After selecting `Mathematics 7 - Grade 7 - Section A`, backend calls to `/api/class-record/by-class/...` and `/api/class-record/:id/spreadsheet` return `200` and the class-record shell renders.
-  - Clicking `Refresh` triggers fresh class-record API requests.
-- Classification: the “no Q1 spreadsheet at all” and “refresh does nothing” defects are not reproduced; the remaining issue is default-selection/empty-state UX.
+### Class Record and Assessment Editor carried excessive ornamental hierarchy — resolved
 
-## Stale Or Not Reproduced From The PDF
+- Before: hero framing, pill clusters, nested cards, and large action chrome delayed the workbook and first question.
+- After: Class Record uses a compact title/filter/action sequence around one principal workbook, while the editor uses a direct workbar with quiet quarter/publication metadata and reachable save/preview controls.
+- Evidence: 390 px, 768 px, and 1280 px overflow checks passed for both surfaces; keyboard focus checks covered filters, segmented controls, save/retry, and help paths.
 
-- Class workspace spreadsheet load error: not reproduced. The class route loaded without a spreadsheet failure toast, and class-record spreadsheet APIs returned `200`.
-- Add Module DTO error for `isVisible` / `isLocked`: not reproduced. The current backend accepted a throwaway module payload with those fields, and the throwaway module was deleted afterward.
-- Rich-text H1/H2/H3 failures: not reproduced on teacher class announcements, class discussion, global announcements, or assessment editor. Toolbar controls are present and global heading CSS exists.
-- Reports load/Q1 error: not reproduced. Teacher Reports loaded Q1 data without failed report responses on page load.
-- AI Draft fields missing: not reproduced. Fields are visible; the current blocker is AI service/index readiness.
-- Class Record Q1 data missing: not reproduced after class selection.
-- Class Record refresh not refreshing: not reproduced; refresh triggers API requests.
+## Current Finding
 
-## Not Fully Exercised
+### Seeded class diagnostics endpoint returns HTTP 500
 
-- End-to-end library upload was not performed because the exact cross-subject seed condition is absent.
-- Extraction `Apply Sections` accuracy could not be evaluated because the seeded extraction detail endpoint is returning `503`.
-- Destructive actions such as permanent deletes, archive purges, and production-like publish flows were not replayed beyond safe UI checks.
+- Severity: `high` backend correctness; controlled frontend degradation
+- Route: `/dashboard/teacher/performance`
+- Action: load class diagnostics
+- Owner: `backend-performance`
+- Source: `backend/src/modules/performance/performance.service.ts`
+- Symptom: the Drizzle/PostgreSQL conflict-update expression produces an invalid reference while updating concept mastery.
+- User-facing containment: the diagnostics region is unavailable/retryable while unrelated summary, risk, comparison, and log regions remain usable.
+- Required closure: correct the backend expression, add a regression test, prove the seeded endpoint returns `200`, then remove the exact diagnostics exception from the Playwright runtime allowlist.
 
-## Performance Notes
+## Route Inventory
 
-- No 4-digit warm-route compile/render regression was identified from this confirmation pass.
-- Touched/problem routes should still get before/after timings during implementation: teacher reports, class workspace, assessment editor, library, extraction review, class record, AI draft, and profile.
+- `/dashboard/teacher`
+- `/dashboard/teacher/announcements`
+- `/dashboard/teacher/assessments`
+- `/dashboard/teacher/assessments/[id]`
+- `/dashboard/teacher/assessments/[id]/edit`
+- `/dashboard/teacher/assessments/[id]/results/[attemptId]`
+- `/dashboard/teacher/calendar`
+- `/dashboard/teacher/class-record`
+- `/dashboard/teacher/classes`
+- `/dashboard/teacher/classes/[id]`
+- `/dashboard/teacher/classes/[id]/ai-draft`
+- `/dashboard/teacher/classes/[id]/modules/[moduleId]`
+- `/dashboard/teacher/classes/[id]/modules/[moduleId]/files/[fileId]`
+- `/dashboard/teacher/classes/[id]/students/[studentId]`
+- `/dashboard/teacher/classes/[id]/students/add`
+- `/dashboard/teacher/evaluations`
+- `/dashboard/teacher/extractions/[id]`
+- `/dashboard/teacher/interventions`
+- `/dashboard/teacher/interventions/[caseId]`
+- `/dashboard/teacher/lessons`
+- `/dashboard/teacher/lessons/[id]/edit`
+- `/dashboard/teacher/lessons/[id]/view`
+- `/dashboard/teacher/library`
+- `/dashboard/teacher/modules`
+- `/dashboard/teacher/performance`
+- `/dashboard/teacher/profile`
+- `/dashboard/teacher/reports`
+- `/dashboard/teacher/sections`
+- `/dashboard/teacher/sections/[id]/roster`
+- `/dashboard/teacher/sections/[id]/students/[studentId]`
+- `/dashboard/teacher/sections/[id]/students/add`
+- `/dashboard/notifications`
+
+## Not Exercised
+
+- Assessment saves, publishing, deletion, grading, and submission state changes were not performed.
+- Class-record creation or score writes, roster changes, uploads, and announcement mutations were not submitted.
+- AI draft, extraction, intervention, and other queue-producing actions were not triggered.
+- Dynamic routes outside the named core/spot-check paths were source-inventoried but not all opened with seeded fixtures.

@@ -6,6 +6,57 @@ from app.schemas import RequestUser
 
 
 class JaPracticeServiceAskTests(unittest.IsolatedAsyncioTestCase):
+    async def test_grounded_ask_timeout_returns_cited_degraded_reply(self) -> None:
+        chunk = {
+            "chunkText": "Equivalent fractions represent the same value.",
+            "lessonId": "lesson-2",
+            "assessmentId": None,
+            "questionId": None,
+            "sourceType": "lesson_block",
+            "metadataJson": {"lessonTitle": "Equivalent Fractions"},
+            "distance": 0.1,
+            "scoreBreakdown": {"lexical": 0.8, "final": 4.2},
+        }
+        with (
+            patch.object(
+                ja_practice_service,
+                "_assert_student_class_access",
+                AsyncMock(return_value=None),
+            ),
+            patch.object(
+                ja_practice_service,
+                "similarity_search",
+                AsyncMock(return_value=[chunk]),
+            ),
+            patch.object(
+                ja_practice_service.ollama_client,
+                "generate",
+                AsyncMock(side_effect=TimeoutError("Ollama timed out")),
+            ),
+        ):
+            result = await ja_practice_service.generate_ja_ask_response(
+                db=AsyncMock(),
+                user=RequestUser(
+                    id="student-1",
+                    email="student@example.com",
+                    roles=["student"],
+                ),
+                class_id="class-1",
+                thread_id="thread-1",
+                message="Explain equivalent fractions.",
+                quick_action=None,
+                lesson_id="lesson-2",
+                lesson_title="Equivalent Fractions",
+                history=[],
+                allowed_lesson_ids=["lesson-2"],
+                allowed_assessment_ids=[],
+            )
+
+        self.assertTrue(result["degraded"])
+        self.assertFalse(result["insufficientEvidence"])
+        self.assertEqual(result["citations"][0]["lessonId"], "lesson-2")
+        self.assertIn("temporarily", result["reply"].lower())
+
     async def test_helper_prompt_without_chunks_returns_guidance_instead_of_insufficient_evidence(self) -> None:
         with (
             patch.object(

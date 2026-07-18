@@ -10,8 +10,9 @@ import { UnfinishedAttemptNotifier } from '@/components/student/UnfinishedAttemp
 import { AppOrbitLoader } from '@/components/shared/AppOrbitLoader';
 import { NotificationProvider } from '@/providers/NotificationProvider';
 import { resolveLoaderVariant } from '@/utils/loader-variant';
-import { logoutAction } from '@/lib/auth-actions';
+import { toast } from 'sonner';
 import {
+  getDefaultDashboardRouteForRole,
   isDashboardRolePathAllowed,
   normalizeDashboardRole,
 } from '@/lib/dashboard-route-access';
@@ -19,17 +20,19 @@ import {
 const ADMIN_SIDEBAR_STORAGE_KEY = 'nexora.adminSidebarCollapsed';
 const TEACHER_SIDEBAR_STORAGE_KEY = 'nexora.teacherSidebarCollapsed';
 const STUDENT_SIDEBAR_STORAGE_KEY = 'nexora.studentSidebarCollapsed';
+const ROLE_MISMATCH_NOTICE_KEY = 'nexora.dashboard.roleMismatchNotice';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [adminSidebarCollapsed, setAdminSidebarCollapsed] = useState(false);
   const [teacherSidebarCollapsed, setTeacherSidebarCollapsed] = useState(false);
   const [studentSidebarCollapsed, setStudentSidebarCollapsed] = useState(false);
-  const hasTriggeredMismatchLogoutRef = useRef(false);
+  const hasTriggeredMismatchRedirectRef = useRef(false);
   const { loading, isAuthenticated, isProfileIncomplete, role } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const normalizedRole = normalizeDashboardRole(role);
+  const mismatchTarget = getDefaultDashboardRouteForRole(normalizedRole);
   const shouldRedirect = !loading && (!isAuthenticated || isProfileIncomplete);
   const shouldHandleRoleMismatch =
     !loading &&
@@ -64,11 +67,30 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!shouldHandleRoleMismatch) return;
-    if (hasTriggeredMismatchLogoutRef.current) return;
+    if (hasTriggeredMismatchRedirectRef.current) return;
 
-    hasTriggeredMismatchLogoutRef.current = true;
-    void logoutAction('role-mismatch');
-  }, [shouldHandleRoleMismatch]);
+    hasTriggeredMismatchRedirectRef.current = true;
+    window.sessionStorage.setItem(ROLE_MISMATCH_NOTICE_KEY, 'pending');
+    router.replace(mismatchTarget);
+
+    const fallback = window.setTimeout(() => {
+      if (!isDashboardRolePathAllowed(window.location.pathname, normalizedRole)) {
+        window.location.assign(mismatchTarget);
+      }
+    }, 750);
+
+    return () => window.clearTimeout(fallback);
+  }, [mismatchTarget, normalizedRole, router, shouldHandleRoleMismatch]);
+
+  useEffect(() => {
+    if (loading || shouldRedirect || shouldHandleRoleMismatch) return;
+
+    hasTriggeredMismatchRedirectRef.current = false;
+    if (window.sessionStorage.getItem(ROLE_MISMATCH_NOTICE_KEY) !== 'pending') return;
+
+    window.sessionStorage.removeItem(ROLE_MISMATCH_NOTICE_KEY);
+    toast.info('That page is not available for your account.');
+  }, [loading, shouldHandleRoleMismatch, shouldRedirect]);
 
   useEffect(() => {
     const savedState = window.localStorage.getItem(ADMIN_SIDEBAR_STORAGE_KEY);

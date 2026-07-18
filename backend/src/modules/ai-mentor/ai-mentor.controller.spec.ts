@@ -38,6 +38,7 @@ const ADMIN_USER = {
 const mockProxy = {
   forward: jest.fn(),
   markInternalExtractionFailed: jest.fn(),
+  markInternalTeacherJobFailed: jest.fn(),
 };
 const mockQueueService = {
   enqueueLessonPlanJob: jest.fn(),
@@ -91,6 +92,8 @@ describe('AiMentorController', () => {
     mockQueueService.cancelQueuedExtractionJob.mockResolvedValue(false);
     mockProxy.markInternalExtractionFailed.mockReset();
     mockProxy.markInternalExtractionFailed.mockResolvedValue(undefined);
+    mockProxy.markInternalTeacherJobFailed.mockReset();
+    mockProxy.markInternalTeacherJobFailed.mockResolvedValue(undefined);
     mockQueueService.cancelQueuedLessonPlanJob.mockReset();
     mockQueueService.cancelQueuedLessonPlanJob.mockResolvedValue(false);
     mockQueueService.cancelQueuedTeacherAiJob.mockReset();
@@ -888,9 +891,9 @@ describe('AiMentorController', () => {
           targetId: EXTRACTION_ID,
         }),
       );
-      expect(
-        mockQueueService.cancelQueuedExtractionJob,
-      ).toHaveBeenCalledWith(EXTRACTION_ID);
+      expect(mockQueueService.cancelQueuedExtractionJob).toHaveBeenCalledWith(
+        EXTRACTION_ID,
+      );
       expect(result).toMatchObject({ success: true });
     });
   });
@@ -1039,6 +1042,24 @@ describe('AiMentorController', () => {
       await expect(
         controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
       ).rejects.toThrow(HttpException);
+    });
+
+    it('marks the durable job failed when intervention enqueue rejects', async () => {
+      const dto = { note: 'Focus on fractions' };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+      mockQueueService.enqueueInterventionJob.mockRejectedValue(
+        new Error('Redis unavailable'),
+      );
+
+      await expect(
+        controller.queueInterventionRecommendation(JOB_ID, dto, TEACHER_USER),
+      ).rejects.toThrow('AI generation queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalTeacherJobFailed).toHaveBeenCalledWith(
+        JOB_ID,
+        expect.stringContaining('Redis unavailable'),
+      );
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
 
     it('should block queue when teacher does not own intervention case class', async () => {
@@ -1300,6 +1321,31 @@ describe('AiMentorController', () => {
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
+
+    it('marks the durable job failed when quiz enqueue rejects', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        questionCount: 5,
+        questionType: 'multiple_choice',
+        assessmentType: 'quiz',
+        passingScore: 60,
+        feedbackLevel: 'standard',
+      };
+      mockProxy.forward.mockResolvedValue({ jobId: JOB_ID, status: 'pending' });
+      mockQueueService.enqueueQuizJob.mockRejectedValue(
+        new Error('Redis unavailable'),
+      );
+
+      await expect(
+        controller.queueQuizDraftJob(dto as any, TEACHER_USER),
+      ).rejects.toThrow('AI generation queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalTeacherJobFailed).toHaveBeenCalledWith(
+        JOB_ID,
+        expect.stringContaining('Redis unavailable'),
+      );
+      expect(mockAudit.log).not.toHaveBeenCalled();
+    });
   });
 
   describe('queueLessonPlanJob()', () => {
@@ -1313,7 +1359,11 @@ describe('AiMentorController', () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
         message: 'Lesson plan generation job queued',
-        data: { jobId: JOB_ID, jobType: 'class_lesson_plan_generation', status: 'pending' },
+        data: {
+          jobId: JOB_ID,
+          jobType: 'class_lesson_plan_generation',
+          status: 'pending',
+        },
       });
 
       const result = await controller.queueLessonPlanJob(
@@ -1580,6 +1630,26 @@ describe('AiMentorController', () => {
       });
     });
 
+    it('compensates a prepared quiz retry when BullMQ enqueue rejects', async () => {
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: 'retry-job-1', retryOfJobId: JOB_ID },
+      });
+      mockQueueService.enqueueQuizJob.mockRejectedValue(
+        new Error('Redis unavailable after retry preparation'),
+      );
+
+      await expect(
+        controller.retryQuizDraftJob(JOB_ID, TEACHER_USER),
+      ).rejects.toThrow('AI generation queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalTeacherJobFailed).toHaveBeenCalledWith(
+        'retry-job-1',
+        expect.stringContaining('Redis unavailable after retry preparation'),
+      );
+      expect(mockAudit.log).not.toHaveBeenCalled();
+    });
+
     it('should forward POST /teacher/quizzes/jobs/:jobId/cancel and audit the cancellation', async () => {
       mockProxy.forward.mockResolvedValue({
         success: true,
@@ -1676,6 +1746,31 @@ describe('AiMentorController', () => {
         controller.generateQuizDraft(dto as any, TEACHER_USER),
       ).rejects.toThrow('You do not have access to this class.');
       expect(mockProxy.forward).not.toHaveBeenCalled();
+    });
+
+    it('marks the durable job failed when lesson-plan enqueue rejects', async () => {
+      const dto = {
+        classId: CLASS_ID,
+        anchorType: 'lesson',
+        anchorId: 'lesson-1',
+      };
+      mockProxy.forward.mockResolvedValue({
+        success: true,
+        data: { jobId: JOB_ID, status: 'pending' },
+      });
+      mockQueueService.enqueueLessonPlanJob.mockRejectedValue(
+        new Error('Redis unavailable'),
+      );
+
+      await expect(
+        controller.queueLessonPlanJob(dto as any, TEACHER_USER),
+      ).rejects.toThrow('AI generation queue is temporarily unavailable');
+
+      expect(mockProxy.markInternalTeacherJobFailed).toHaveBeenCalledWith(
+        JOB_ID,
+        expect.stringContaining('Redis unavailable'),
+      );
+      expect(mockAudit.log).not.toHaveBeenCalled();
     });
   });
 
@@ -2073,7 +2168,6 @@ describe('AiMentorController', () => {
       expect(mockProxy.forward).not.toHaveBeenCalled();
     });
   });
-
 
   describe('getIndexClassStatus()', () => {
     it('should forward GET /index/classes/:classId/status for owned teacher class', async () => {

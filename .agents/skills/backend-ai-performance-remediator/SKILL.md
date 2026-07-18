@@ -259,8 +259,8 @@ python .agents/skills/backend-ai-performance-remediator/scripts/render_audit_rep
 ## Common Mistakes
 
 - Treating `backend` and `ai-service` as separate tasks instead of one audited boundary.
-- Running `backend` lint with `npm run lint` during the pre-edit baseline.
-  - That script uses `--fix` and mutates files.
+- Running `npm run lint:fix` during a read-only baseline.
+  - The current `npm run lint` is read-only; `lint:fix` is the explicit mutating variant.
 - Optimizing for speed first and breaking correctness, auth, DTO validation, or response contracts.
 - Claiming performance wins without any evidence.
 - Refactoring large files broadly because they are ugly.

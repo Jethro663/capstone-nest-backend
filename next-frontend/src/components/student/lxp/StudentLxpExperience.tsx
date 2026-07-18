@@ -14,18 +14,14 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowRight,
-  BookOpen,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
   CircleHelp,
   RefreshCcw,
   Search,
-  SlidersHorizontal,
-  Sparkles,
-  Target,
 } from 'lucide-react';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -47,6 +43,7 @@ import { lxpService } from '@/services/lxp-service';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { EligibleClass, LxpPathSummary } from '@/types/lxp';
 import { cn } from '@/utils/cn';
+import './StudentLxpExperience.css';
 
 type PrimaryTab = 'all' | 'in_progress' | 'completed';
 type LxpGuideScreen = 'overview' | 'filters' | 'card' | 'actions' | 'support';
@@ -92,7 +89,7 @@ const lxpGuidePages: Array<{
       },
       {
         action: 'Check',
-        body: 'Look at the total, in progress, and completed count chips for a quick summary of your paths.',
+        body: 'Look at the Total, In progress, and Completed summary for a quick count of your paths.',
       },
       {
         action: 'Open',
@@ -258,10 +255,10 @@ function PathStatusChip({ path }: { path: LxpPathSummary }) {
   return (
     <span
       className={cn(
-        'inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.09em]',
+        'student-lxp-card__status',
         completed
-          ? 'border-[#bde9d3] bg-[#effcf4] text-[#047857]'
-          : 'border-[#fdd5e1] bg-[#fff1f6] text-[#be123c]',
+          ? 'student-lxp-card__status--completed'
+          : 'student-lxp-card__status--active',
       )}
     >
       {label}
@@ -300,29 +297,18 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
 
   return (
     <article
-      className={cn(
-        'group overflow-hidden rounded-[1.55rem] border border-[#e2dfeb] bg-white shadow-[0_22px_38px_-30px_rgba(17,25,47,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] transition',
-        'hover:-translate-y-1 hover:border-[#d2cddf] hover:shadow-[0_28px_42px_-30px_rgba(17,25,47,0.55)]',
-      )}
+      className="student-lxp-card"
+      style={{ '--student-lxp-button-tint': buttonTint } as CSSProperties}
     >
-      <div className="relative min-h-[8.65rem] overflow-hidden px-5 pb-5 pt-4" style={heroStyle}>
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.16)_1px,transparent_0)] [background-size:16px_16px]" />
-        <div className="relative flex items-start justify-between gap-3">
+      <div className="student-lxp-card__hero" style={heroStyle}>
+        <div className="student-lxp-card__status-row">
           <PathStatusChip path={path} />
-          <span
-            className="grid h-8 w-8 place-items-center rounded-full border border-white/30 text-white"
-            style={{ background: buttonTint }}
-          >
-            <Target className="h-4 w-4" />
-          </span>
         </div>
 
-        <div className="relative mt-5 text-white">
-          <h3 className="line-clamp-2 text-[2rem] font-semibold leading-[1.05] tracking-tight">
-            {subjectName}
-          </h3>
-          <p className="mt-2 text-[0.92rem] font-medium text-white/92">{sectionLabel}</p>
-          <p className="mt-0.5 text-sm text-white/80">{path.class.subjectCode}</p>
+        <div className="student-lxp-card__course">
+          <h3>{subjectName}</h3>
+          <p>{sectionLabel}</p>
+          <span>{path.class.subjectCode}</span>
         </div>
       </div>
 
@@ -332,45 +318,35 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
         aria-label={`Open ${subjectName}`}
         onClick={handleBodyClick}
         onKeyDown={handleBodyKeyDown}
-        className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-inset"
+        className="student-lxp-card__body"
       >
-        <div className="grid grid-cols-3 gap-2">
+        <dl className="student-lxp-card__stats" aria-label={`${subjectName} path summary`}>
           <PathStat value={path.counts.steps} label="Guided Review" />
           <PathStat value={path.counts.replays} label="Assessment Retry" />
           <PathStat value={path.counts.pending} label="Pending" />
-        </div>
+        </dl>
 
-        <div className="rounded-2xl border border-[#e9e4ef] bg-[#fbf9fd] px-3 py-2.5">
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold">
-            <span className="inline-flex items-center gap-1.5 text-[#55617d]">
-              <Sparkles className="h-3.5 w-3.5 text-[#d81b50]" />
-              Path progress
-            </span>
-            <span className="text-[#d81b50]">{progress}%</span>
+        <div className="student-lxp-card__progress">
+          <div className="student-lxp-card__progress-label">
+            <span>Path progress</span>
+            <strong>{progress}%</strong>
           </div>
           <Progress
             value={progress}
-            className="h-2.5 bg-[#f2d7e1]"
-            indicatorClassName="bg-gradient-to-r from-[#d81b50] to-[#ef476f]"
+            className="student-lxp-card__progress-track"
+            indicatorClassName="student-lxp-card__progress-indicator"
           />
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#f2f0f8] px-2.5 py-1 text-xs font-semibold text-[#4b5875]">
-            <BookOpen className="h-3.5 w-3.5" />
-            {path.counts.total} tasks
-          </div>
-
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-xs font-semibold text-[#31518a]">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {completed ? 'Read-only history' : sectionLabel}
-          </div>
+        <div className="student-lxp-card__meta">
+          <span>{path.counts.total} tasks</span>
+          <span>{completed ? 'Read-only history' : sectionLabel}</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="student-lxp-card__actions">
           <Link
             href={stepsHref}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d9d6e7] bg-[#f2f0f9] text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#ebe8f5]"
+            className="student-lxp-card__secondary-action"
           >
             <ClipboardCheck className="h-4 w-4" />
             View Steps
@@ -379,7 +355,7 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
           <button
             type="button"
             onClick={openPath}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white shadow-[0_14px_26px_-20px_rgba(216,27,80,0.95)] transition hover:bg-[#c51647]"
+            className="student-lxp-card__primary-action"
           >
             {completed ? 'Review Path' : 'Continue Path'}
             <ArrowRight className="h-4 w-4" />
@@ -392,22 +368,45 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
 
 function PathStat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
-      <p className="text-2xl font-semibold leading-none text-[#11192f]">{value}</p>
-      <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#727d97]">
-        {label}
-      </p>
+    <div className="student-lxp-card__stat">
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
 
 function PathListSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="student-lxp-grid" aria-label="Loading Learners Paths">
       {[0, 1, 2, 3].map((item) => (
-        <Skeleton key={item} className="h-[25rem] rounded-[1.55rem]" />
+        <Skeleton key={item} className="student-lxp-card-skeleton" />
       ))}
     </div>
+  );
+}
+
+function PathGrid({
+  paths,
+  onOpenPath,
+}: {
+  paths: LxpPathSummary[];
+  onOpenPath: (classId: string) => void;
+}) {
+  return (
+    <section className="student-lxp-grid">
+      {paths.map((path, index) => {
+        const choice = resolveStudentCoursePresentation(undefined, undefined, index);
+        return (
+          <PathCard
+            key={`${path.classId}-${path.interventionCaseId ?? 'path'}`}
+            path={path}
+            heroStyle={toStudentHeroStyle(choice)}
+            buttonTint={choice.buttonTint}
+            onOpenPath={onOpenPath}
+          />
+        );
+      })}
+    </section>
   );
 }
 
@@ -418,7 +417,7 @@ export default function StudentLxpExperience() {
   const aiUnavailable = aiAvailability.status === 'degraded';
   const [paths, setPaths] = useState<LxpPathSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
   const [tab, setTab] = useState<PrimaryTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
@@ -454,16 +453,15 @@ export default function StudentLxpExperience() {
   const fetchPaths = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
+      setError(false);
       const response = await lxpService.getEligibility();
       const nextPaths =
         response.data.paths?.length
           ? response.data.paths
           : response.data.eligibleClasses.map(toFallbackPath);
       setPaths(nextPaths);
-    } catch (err) {
-      console.error('Failed to load Learners Paths', err);
-      setError('Learners Paths could not be loaded right now.');
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -497,6 +495,11 @@ export default function StudentLxpExperience() {
   const totalCompleted = paths.filter(isCompletedPath).length;
   const totalInProgress = paths.length - totalCompleted;
 
+  const resetFilters = useCallback(() => {
+    setSearchQuery('');
+    setTab('all');
+  }, []);
+
   const openPath = useCallback(
     (classId: string) => {
       router.push(`/dashboard/student/lxp/${encode(classId)}`);
@@ -505,173 +508,125 @@ export default function StudentLxpExperience() {
   );
 
   return (
-    <main className="space-y-5 bg-[var(--student-elevated)] p-4 md:p-6">
-      <section className="rounded-[1.35rem] border border-[#e1ddec] bg-white p-4 shadow-[0_18px_38px_-34px_rgba(17,25,47,0.45)]">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#d81b50]">
-              Learners Path
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#11192f] md:text-4xl">
-              My Paths
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm font-medium text-[#6d7891]">
-              Continue targeted intervention support through guided review, assessment retry, and completed review history.
-            </p>
+    <main className="student-lxp">
+      <header className="student-lxp__header">
+        <div className="student-lxp__title">
+          <h1>My Paths</h1>
+          <p>
+            Continue targeted support through guided review, assessment retries, and completed
+            history.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="student-lxp__controls" aria-label="Loading path controls">
+            <Skeleton className="student-lxp__search-skeleton" />
+            <Skeleton className="student-lxp__tabs-skeleton" />
+            <Skeleton className="student-lxp__button-skeleton" />
           </div>
+        ) : (
+          <div className="student-lxp__controls">
+            <label className="student-lxp__search">
+              <span className="sr-only">Search Learners Paths</span>
+              <Search aria-hidden="true" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search path, section, or subject code"
+              />
+            </label>
 
-          {loading ? (
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-              <Skeleton className="h-10 w-full rounded-xl lg:w-[21rem]" />
-              <Skeleton className="h-10 w-64 rounded-2xl" />
-              <Skeleton className="h-10 w-28 rounded-xl" />
+            <div
+              className="student-lxp__tabs"
+              role="group"
+              aria-label="Filter paths by status"
+            >
+              {PRIMARY_TABS.map((entry) => (
+                <button
+                  key={entry.value}
+                  type="button"
+                  data-active={tab === entry.value}
+                  onClick={() => setTab(entry.value)}
+                >
+                  {entry.label}
+                </button>
+              ))}
             </div>
-          ) : (
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center xl:justify-end">
-              <label className="relative block min-w-0 lg:w-[21rem]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a859c]" />
-                <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search path, section, or subject code"
-                  className="h-10 rounded-xl border-[#ded9e9] bg-[#fbf9fd] pl-9 text-sm font-medium"
-                />
-              </label>
 
-              <div className="inline-flex rounded-2xl border border-[#ded9e9] bg-[#f1eef8] p-1">
-                {PRIMARY_TABS.map((entry) => (
-                  <button
-                    key={entry.value}
-                    type="button"
-                    data-active={tab === entry.value}
-                    className={cn(
-                      'rounded-xl px-3 py-2 text-xs font-semibold text-[#5e6880] transition',
-                      tab === entry.value && 'bg-white text-[#11192f] shadow-sm',
-                    )}
-                    onClick={() => setTab(entry.value)}
-                  >
-                    {entry.label}
-                  </button>
-                ))}
-              </div>
-
+            <div className="student-lxp__header-actions">
               <Button
                 type="button"
-                className="h-10 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
+                className="student-lxp__refresh"
                 onClick={() => void fetchPaths()}
               >
-                <RefreshCcw className="mr-2 h-4 w-4" />
+                <RefreshCcw aria-hidden="true" />
                 Refresh
               </Button>
 
               <Button
                 type="button"
                 variant="outline"
-                className="student-lxp-help-button"
+                className="student-lxp-help-button student-lxp__help"
                 aria-label="Learners Path help"
                 onClick={() => {
                   setHelpPage(0);
                   setHelpOpen(true);
                 }}
               >
-                <CircleHelp className="h-4 w-4" />
+                <CircleHelp aria-hidden="true" />
               </Button>
             </div>
-          )}
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#59657d]">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-3 py-1.5">
-            <Target className="h-3.5 w-3.5" />
-            {paths.length} total paths
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#fff1f6] px-3 py-1.5 text-[#be123c]">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            {totalInProgress} in progress
-          </span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#effcf4] px-3 py-1.5 text-[#047857]">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            {totalCompleted} completed
-          </span>
-        </div>
-
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <div className="rounded-2xl border border-[#e6dfea] bg-[#fcf8fb] px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#d81b50]">
-              Remedial entry
-            </p>
-            <p className="mt-1 text-sm font-medium text-[#4f5d78]">
-              Learners Path opens only for remediation-eligible learners below the support threshold.
-            </p>
           </div>
-          <div className="rounded-2xl border border-[#dce7f7] bg-[#f7fbff] px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#31518a]">
-              Guided recovery
-            </p>
-            <p className="mt-1 text-sm font-medium text-[#4f5d78]">
-              Each support path helps you review guided steps and assessment retries to close specific weaknesses.
-            </p>
+        )}
+
+        <dl className="student-lxp__counts" aria-label="Path counts">
+          <div>
+            <dt>Total</dt>
+            <dd>{paths.length}</dd>
           </div>
-        </div>
-      </section>
+          <div>
+            <dt>In progress</dt>
+            <dd>{totalInProgress}</dd>
+          </div>
+          <div>
+            <dt>Completed</dt>
+            <dd>{totalCompleted}</dd>
+          </div>
+        </dl>
+      </header>
 
       {aiUnavailable ? (
         <AiOutageNotice
           mode="lxp"
           message={aiAvailability.message}
-          className="border-[#f4d192] bg-[#fff8e8]"
+          className="student-lxp__ai-notice"
         />
       ) : null}
 
       {error ? (
-        <section className="rounded-[1.25rem] border border-[#f5c8d6] bg-[#fff1f6] p-4">
-          <p className="text-sm font-semibold text-[#9f1c44]">{error}</p>
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-3 border-[#e9a9be] text-[#9f1c44] hover:bg-[#ffe8ef]"
-            onClick={() => void fetchPaths()}
-          >
-            Try Again
-          </Button>
-        </section>
+        <DashboardStatePanel
+          kind="error"
+          title="Learners Paths couldn't be loaded"
+          description="Try again to load your current support paths."
+          primaryAction={{ label: 'Try again', onClick: () => void fetchPaths() }}
+        />
       ) : loading ? (
         <PathListSkeleton />
+      ) : paths.length === 0 ? (
+        <DashboardStatePanel
+          kind="empty"
+          title="No Learners Paths yet"
+          description="Your support paths will appear here when they become available."
+        />
       ) : filteredPaths.length === 0 ? (
-        <div className="grid min-h-[18rem] place-items-center rounded-[1.45rem] border border-dashed border-[#d5d1e2] bg-white p-6 text-center">
-          <div>
-            <p className="text-xl font-semibold text-[#1e2944]">No paths match this filter.</p>
-            <p className="mt-1 text-sm text-[#667390]">
-              Try another search term or switch to a different path status.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-4 border-[#ddd8e8] bg-[#faf8fd] text-[#3b4865] hover:bg-[#f4f0fa]"
-              onClick={() => {
-                setSearchQuery('');
-                setTab('all');
-              }}
-            >
-              Reset Filters
-            </Button>
-          </div>
-        </div>
+        <DashboardStatePanel
+          kind="empty"
+          title="No paths match these filters"
+          description="Clear the search or choose another path status."
+          primaryAction={{ label: 'Reset filters', onClick: resetFilters }}
+        />
       ) : (
-        <section className="grid gap-4 sm:grid-cols-2">
-          {filteredPaths.map((path, index) => {
-            const choice = resolveStudentCoursePresentation(undefined, undefined, index);
-            return (
-              <PathCard
-                key={`${path.classId}-${path.interventionCaseId ?? 'path'}`}
-                path={path}
-                heroStyle={toStudentHeroStyle(choice)}
-                buttonTint={choice.buttonTint}
-                onOpenPath={openPath}
-              />
-            );
-          })}
-        </section>
+        <PathGrid paths={filteredPaths} onOpenPath={openPath} />
       )}
 
       <Dialog

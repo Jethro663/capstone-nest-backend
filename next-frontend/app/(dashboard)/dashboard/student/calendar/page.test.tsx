@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentCalendarPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -152,5 +152,98 @@ describe('StudentCalendarPage', () => {
     });
 
     expect(screen.getByDisplayValue('Mathematics 7')).toBeInTheDocument();
+  });
+
+  it('shows a safe class-list error and retries only the class owner request', async () => {
+    mockedClassService.getByStudent.mockRejectedValueOnce(
+      new Error('class relation detail'),
+    );
+
+    render(<StudentCalendarPage />);
+
+    expect(
+      await screen.findByText("Calendar couldn't be loaded"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No events yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('class relation detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
+    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps fulfilled calendar sources visible and retries only a failed feed', async () => {
+    mockedAssessmentService.getByClass.mockRejectedValueOnce(
+      new Error('assessment feed detail'),
+    );
+
+    render(<StudentCalendarPage />);
+
+    expect(
+      await screen.findByText("Some calendar items couldn't be loaded"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Quiz room update').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Foundation Day Program').length).toBeGreaterThan(0);
+    expect(screen.queryByText('No events yet.')).not.toBeInTheDocument();
+    expect(screen.queryByText('assessment feed detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /retry calendar items/i }));
+
+    expect((await screen.findAllByText('Fractions Quiz')).length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(mockedAssessmentService.getByClass).toHaveBeenCalledTimes(2);
+      expect(
+        screen.queryByText("Some calendar items couldn't be loaded"),
+      ).not.toBeInTheDocument();
+    });
+    expect(mockedAnnouncementService.getByClass).toHaveBeenCalledTimes(1);
+    expect(mockedSchoolEventService.getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a true no-events state only after every feed succeeds', async () => {
+    mockedClassService.getByStudent.mockResolvedValueOnce({
+      success: true,
+      message: '',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics 7',
+          subjectCode: 'MATH-7',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          schedules: [],
+        },
+      ],
+    } as Awaited<ReturnType<typeof classService.getByStudent>>);
+    mockedAssessmentService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: '',
+      data: [],
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 120,
+      totalPages: 0,
+    });
+    mockedAnnouncementService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: '',
+      data: [],
+    });
+    mockedSchoolEventService.getAll.mockResolvedValueOnce({
+      success: true,
+      message: '',
+      data: [],
+    });
+
+    render(<StudentCalendarPage />);
+
+    expect(await screen.findByText('No events yet.')).toBeInTheDocument();
+    expect(
+      screen.queryByText("Some calendar items couldn't be loaded"),
+    ).not.toBeInTheDocument();
   });
 });

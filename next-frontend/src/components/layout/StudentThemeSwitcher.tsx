@@ -128,6 +128,8 @@ export function StudentThemeSwitcher() {
                     <motion.button
                       key={option.id}
                       type="button"
+                      aria-label={`Use ${option.label} theme`}
+                      aria-pressed={isActive}
                       onClick={() => {
                         setTheme(option.id);
                         setOpen(false);

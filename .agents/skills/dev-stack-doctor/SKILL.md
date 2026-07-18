@@ -29,6 +29,7 @@ Restore the development stack by verifying configuration, dependencies, and read
 ## Workflow
 
 1. Verify declared configuration first:
+   - root `.env` (live Compose input; never print secrets)
    - `.env.compose.example`
    - `docker-compose.yml`
    - service-specific `.env.example` or `.env.docker`

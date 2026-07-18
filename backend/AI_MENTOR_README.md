@@ -1,599 +1,268 @@
-# AI Mentor Module — Architecture & Setup Guide
+# AI Mentor and AI Workflow Guide
 
-> **Nexora LMS** — Module Extraction + AI Mentor for Gat Andres Bonifacio High School
-> SDG 4 – Quality Education | NestJS + PostgreSQL + OpenRouter-primary production runtime + optional local Ollama fallback
+This document describes the current backend/FastAPI boundary. It replaces the old Ollama-only, echo-endpoint, and one-off migration instructions.
 
-> **Current operating note:** This document contains useful historical architecture context, but production deployments no longer assume Ollama-only AI. On Railway, ai-service is internal-only, the backend proxies all AI traffic, and OpenRouter-backed cloud mode is the primary production runtime. Treat local Ollama setup below as optional development guidance unless a deployment explicitly provisions Ollama.
+## Architecture
 
----
-
-## Table of Contents
-
-1. [Architecture Overview](#architecture-overview)
-2. [Why Ollama (Local LLM)](#why-ollama-local-llm)
-3. [Module Structure](#module-structure)
-4. [Setup Instructions](#setup-instructions)
-5. [API Endpoints](#api-endpoints)
-6. [Request-Response Lifecycle](#request-response-lifecycle)
-7. [Database Schema](#database-schema)
-8. [Code Walkthrough](#code-walkthrough)
-9. [Evolving from Rule-Based to AI](#evolving-from-rule-based-to-ai)
-10. [Phase 2: AI Mentor Chat (Future)](#phase-2-ai-mentor-chat-future)
-11. [Swapping LLM Providers](#swapping-llm-providers)
-12. [Troubleshooting](#troubleshooting)
-
----
-
-## Architecture Overview
-
-```
-┌──────────────┐     ┌───────────────┐     ┌──────────────────┐     ┌────────────────────┐
-│    Users     │────▶│  LMS Core     │────▶│  File Upload     │────▶│   AI Mentor        │
-│  (JWT Auth)  │     │  (Classes,    │     │  (PDF Upload,    │     │  (Module Extract,  │
-│              │     │   Lessons)    │     │   Storage)       │     │   Chat, Logging)   │
-└──────────────┘     └───────────────┘     └──────────────────┘     └────────┬───────────┘
-                                                                             │
-                                                     ┌──────────────────────┼──────────────────────┐
-                                                     │                      │                      │
-                                              ┌──────▼──────┐      ┌───────▼───────┐     ┌────────▼────────┐
-                                              │   Ollama    │      │  Rule-Based   │     │   DB Logging    │
-                                              │  (Local LLM)│      │  Fallback     │     │  (ai_logs +     │
-                                              │  llama3.2:3b│      │  Extractor    │     │   extractions)  │
-                                              └─────────────┘      └───────────────┘     └─────────────────┘
+```text
+Web / mobile
+    │ authenticated /api requests
+    ▼
+NestJS AiMentorController
+    ├── validates JWT, role, DTO, class policy, and ownership
+    ├── reads/writes backend-owned workflow and audit state
+    ├── enqueues durable teacher/extraction jobs in BullMQ
+    └── calls AiProxyService with the internal shared secret
+                     │
+                     ▼
+             FastAPI ai-service
+             ├── retrieval/indexing
+             ├── tutor, JA practice/review/ask
+             ├── extraction and draft generation
+             └── Ollama or OpenAI-compatible cloud runtime
 ```
 
-**Data flow for Module Extraction:**
-1. Teacher uploads PDF → `POST /api/files/upload` (existing endpoint)
-2. Teacher triggers extraction → `POST /api/ai/extract-module` with `{ fileId }`
-3. Service reads PDF from disk → `pdf-parse` extracts raw text
-4. Raw text sent to Ollama (or rule-based fallback) → structured JSON
-5. Result stored in `extracted_modules` table
-6. Teacher reviews structured content on frontend
-7. Teacher confirms → `POST /api/ai/extractions/:id/apply`
-8. System creates real `lessons` + `lesson_content_blocks` rows
+Public clients never call FastAPI. NestJS remains responsible for auth, RBAC, official academic state, audit policy, queue ownership, and response contracts. FastAPI is an internal assistive execution engine.
 
----
+## Current capabilities
 
-## Why Ollama (Local Development Option)
+- student tutor bootstrap, sessions, messages, and answer feedback
+- JA hub, practice, review, and ask flows
+- mentor explanations
+- module extraction prepare/status/review/apply/retry/cancel
+- class and library retrieval indexing
+- teacher lesson-plan, quiz, and intervention draft jobs
+- per-class AI policy
+- admin analytics chat/history
+- health and model readiness
+- audit-safe job polling and results
 
-| Factor | OpenRouter-backed cloud runtime | Local Ollama | Recommended usage |
-|--------|---------------------------------|--------------|-------------------|
-| **Railway deploy simplicity** | No local model host required | Requires separate Ollama service | ✅ OpenRouter for production |
-| **Offline/local development** | Requires internet and API key | Works fully local | ✅ Ollama for local dev |
-| **Rate-limit/cost control** | Token priced | Hardware-bound | depends on deployment goals |
-| **Operational complexity** | Mostly env configuration | Extra runtime/service to operate | ✅ OpenRouter for Railway |
-| **Privacy posture** | Data leaves the local network | Can stay on local infrastructure | deployment-specific |
+The live backend exposed 59 `/api/ai` routes and FastAPI exposed 57 internal paths on July 18, 2026. Use the [exact route catalog](../docs/system-audit/2026-07-18-live-stack-and-route-inventory.md) instead of copying old endpoint tables.
 
-**Current verdict:** For this repository's current Railway production path, use OpenRouter-backed cloud mode first and keep Ollama as an optional local/dev or later self-hosted runtime.
+## Runtime model
 
-### Upgrading the model later
+The local Compose stack uses:
 
-Change one environment variable — no code changes:
-```env
-OLLAMA_MODEL=mistral:7b        # Better quality, needs 8GB+ RAM
-OLLAMA_MODEL=llama3.1:8b       # Best open-source quality, needs 12GB+ RAM
-OLLAMA_MODEL=phi3:mini         # Microsoft's small model, 4GB RAM
-```
+| Component | Current default |
+| --- | --- |
+| Text model | `qwen2.5:3b` |
+| Vision model | `gemma3:4b` |
+| Embedding model | `nomic-embed-text` |
+| FastAPI URL from backend | `http://ai-service:8000` |
+| Ollama URL in containers | `http://ollama:11434` |
+| Public API | NestJS `http://localhost:3000/api/ai/*` |
+| FastAPI host publication | none in core Compose |
 
----
+FastAPI supports `auto`, `cloud`, and `test` runtime modes. OpenAI-compatible cloud fallback is configured with `AI_CLOUD_FALLBACK_*` / OpenRouter-compatible variables. Local Compose is currently Ollama-backed; deployment mode must be verified from deployment environment rather than inferred from this guide.
 
-## Module Structure
+## Start and verify
 
-```
-backend/src/modules/ai-mentor/
-├── ai-mentor.module.ts          # NestJS module definition
-├── ai-mentor.controller.ts      # HTTP endpoints (routes)
-├── ai-mentor.service.ts         # Business logic orchestrator
-├── ollama.service.ts            # Isolated Ollama HTTP client
-├── rule-based-extractor.ts      # Deterministic fallback parser
-└── DTO/
-    ├── chat.dto.ts              # { message: string }
-    └── extract-module.dto.ts    # { fileId: string (UUID) }
-
-backend/src/drizzle/schema/
-    └── ai-mentor.schema.ts      # Database tables + relations
-
-backend/src/config/
-    └── ollama.config.ts         # OLLAMA_BASE_URL, OLLAMA_MODEL env config
-
-backend/drizzle/
-    └── 0032_add_ai_mentor_module.sql  # Migration SQL
-```
-
----
-
-## Setup Instructions
-
-### 1. Install Ollama
-
-**Windows:**
-```
-Download from https://ollama.com/download/windows
-Run the installer
-```
-
-**Mac/Linux:**
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-```
-
-### 2. Pull a model
+From the repository root:
 
 ```bash
-ollama pull llama3.2:3b
-# ~2GB download, runs on 4GB+ RAM
+cp .env.compose.example .env
+# Replace every CHANGE_ME value.
+docker compose up -d
+docker compose ps backend ai-service ollama postgres redis
+docker compose logs --tail=100 backend ai-service ollama
+curl --fail http://localhost:3000/api/health/ready
 ```
 
-### 3. Verify Ollama is running
+Check FastAPI from inside its network boundary:
 
 ```bash
-curl http://localhost:11434/api/tags
-# Should return JSON with available models
+docker compose exec -T ai-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
 ```
 
-### 4. Environment variables
+The backend health endpoints are public. AI feature endpoints generally require a valid Nexora access token and appropriate role/ownership.
 
-Production / Railway baseline:
-```env
-AI_RUNTIME_MODE=cloud
-AI_CLOUD_FALLBACK_PROVIDER=openrouter
-AI_CLOUD_FALLBACK_ENABLED=true
-AI_CLOUD_FALLBACK_BASE_URL=https://openrouter.ai/api/v1
-AI_CLOUD_FALLBACK_API_KEY=CHANGE_ME_OPENROUTER_KEY
-AI_CLOUD_FALLBACK_MODEL=openrouter/auto
-OPENROUTER_EMBEDDING_MODEL=google/gemini-embedding-2-preview
-AI_SERVICE_SHARED_SECRET=CHANGE_ME_INTERNAL_SHARED_SECRET
-```
+## Environment
 
-Optional local Ollama additions:
-```env
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
-OLLAMA_TIMEOUT_MS=120000
-```
+The two services must share exactly the same `AI_SERVICE_SHARED_SECRET`. Never expose it through browser or Expo public variables.
 
-### 5. Run the database migration
+Backend inputs:
+
+- `AI_SERVICE_URL`
+- `AI_SERVICE_SHARED_SECRET`
+- `AI_DEGRADED_ALLOWED`
+- per-flow `AI_SERVICE_TIMEOUT_*` budgets
+- `REDIS_URL`
+- `OLLAMA_BASE_URL` and model names for health/reporting compatibility
+
+FastAPI inputs:
+
+- `DATABASE_URL`
+- `AI_SERVICE_SHARED_SECRET`
+- `BACKEND_INTERNAL_URL`
+- `AI_RUNTIME_MODE`
+- `OLLAMA_BASE_URL` and `OLLAMA_*_MODEL`
+- `AI_CLOUD_FALLBACK_*` when cloud fallback is enabled
+- `UPLOAD_DIR`
+- concurrency and retrieval timeout limits
+
+Root Compose reads root `.env` and then applies service defaults from `backend/.env.docker` and `ai-service/.env.docker`.
+
+## Durable job flow
+
+Teacher generation and extraction work runs through the backend-owned `ai-teacher-generation` queue at worker concurrency 2.
+
+Supported job names:
+
+- `lesson-plan-generation`
+- `quiz-generation`
+- `intervention-recommendation-generation`
+- `module-extraction`
+
+Lifecycle:
+
+1. A public NestJS route authenticates and validates the request.
+2. Backend creates durable workflow state and enqueues the BullMQ job.
+3. The NestJS worker claims the job and calls a protected internal FastAPI execution route.
+4. FastAPI performs the bounded model/retrieval work and updates allowed workflow state.
+5. Backend exposes job status/result, preview/apply, retry, or cancellation through authorized public routes.
+6. Authorized review/apply flows decide whether generated drafts become backend-owned content.
+
+Do not move execution to an untracked FastAPI `asyncio.create_task` or a detached Nest promise. Restart safety, retry/backoff, cancellation, audit metadata, and concurrency depend on BullMQ.
+
+Other AI-related queues include `rag-indexing` and `library-indexing`. Performance recomputation remains a separate backend queue.
+
+## Extraction flow
+
+The active public flow is not the old synchronous “upload a PDF and immediately return lessons” design.
+
+1. Upload/create the source through backend file/module flows.
+2. Call `POST /api/ai/extract-module`.
+3. Poll `GET /api/ai/extractions/:id/status` or fetch the extraction.
+4. Review/edit the draft.
+5. Preview the apply operation.
+6. Apply through the authorized backend route.
+7. Reindex affected retrieval content.
+8. Retry or cancel through explicit routes when needed.
+
+The backend and FastAPI share the upload volume in local Compose. FastAPI can also fetch protected material through `BACKEND_INTERNAL_URL`. Never expose raw upload paths publicly.
+
+## Student learning flow
+
+Tutor/JA routes are backend-authorized and use real lesson, assessment, performance, and retrieval context as allowed by the workflow. Generated explanations and practice are assistive:
+
+- they do not modify official class-record scores
+- they do not grant enrollment or roles
+- they do not activate official interventions without backend teacher/admin policy
+- interaction logs remain distinct from official academic records
+
+LXP eligibility is based on backend performance rules and recomputation, not a single hard-coded score in the AI service.
+
+## Teacher generation flow
+
+Lesson-plan, quiz, and intervention jobs create reviewable drafts. Teachers use job status/result routes, may patch drafts, preview application, then apply through an authorized backend workflow. Queue retries must remain idempotent and cancellation-aware.
+
+`POST /api/ai/teacher/quizzes/generate-draft` also exists, but new work must preserve the durable job contracts used by production flows rather than adding another detached long-running path.
+
+## Persistence
+
+Key backend schema tables in `src/drizzle/schema/ai-mentor.schema.ts` are:
+
+- `ai_interaction_logs`
+- `extracted_modules`
+
+Additional AI, retrieval, job, policy, practice, and intervention state is spread across the relevant schema modules. The authoritative schema is `backend/src/drizzle/schema/`; do not resurrect removed migration names such as `0032_add_ai_mentor_module.sql`.
+
+All active database changes are in the four current journaled migrations. Apply them with:
 
 ```bash
-# Option A: Direct SQL
-psql -U postgres -d capstone -f drizzle/0032_add_ai_mentor_module.sql
-
-# Option B: Via the run-migrations script (if it supports custom files)
-node run-migrations.js
+npm --prefix backend run check:migrations
+node backend/run-migrations.js
 ```
 
-### 6. Start the backend
+## Important code
+
+Backend:
+
+| Path | Responsibility |
+| --- | --- |
+| `src/modules/ai-mentor/ai-mentor.controller.ts` | Public authenticated AI API |
+| `src/modules/ai-mentor/ai-proxy.service.ts` | Shared-secret FastAPI client and contract boundary |
+| `src/modules/ai-mentor/ai-generation-queue.service.ts` | Job creation/retry/cancel state |
+| `src/modules/ai-mentor/processors/ai-generation.processor.ts` | BullMQ worker |
+| `src/modules/ai-mentor/admin-analytics-chat.service.ts` | Backend-grounded admin analytics chat |
+| `src/drizzle/schema/ai-mentor.schema.ts` | Interaction and extraction schema |
+
+FastAPI:
+
+| Path | Responsibility |
+| --- | --- |
+| `app/main.py` | Stable ASGI app, lifecycle, health, readiness |
+| `app/routers/extractions.py` | Extraction routes |
+| `app/extraction_job_service.py` | Extraction state transitions |
+| `app/extraction_pipeline.py` | Extraction execution |
+| `app/retrieval_service.py` | Retrieval |
+| `app/indexing_pipeline.py` | Index construction |
+| `app/embedding_provider.py` | Embeddings |
+| `app/ollama_client.py` | Local model client |
+| `app/cloud_fallback.py` | OpenAI-compatible fallback |
+| `app/schemas.py` | Internal request/response models |
+
+## Verification
+
+Backend contract and queue changes:
 
 ```bash
-npm run start:dev
+cd backend
+npm run lint
+npm run build
+npm run test -- --runInBand
 ```
 
-### 7. Verify the echo endpoint
+Targeted specs are colocated under `src/modules/ai-mentor/*.spec.ts` and `processors/*.spec.ts`.
+
+FastAPI changes:
 
 ```bash
-curl -X POST http://localhost:3000/api/ai/chat \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "hi"}'
-
-# Expected:
-# { "success": true, "message": "AI response", "data": { "reply": "hello" } }
+cd ai-service
+.venv/bin/python scripts/run_tests.py
+AI_RUNTIME_MODE=test .venv/bin/python -c "from app.main import app; print(app.title)"
 ```
 
-### 8. Check Ollama health
+Prompt/model changes also require:
 
 ```bash
-curl http://localhost:3000/api/ai/health
-
-# Expected (Ollama running):
-# { "success": true, "data": { "ollamaAvailable": true, "configuredModel": "llama3.2:3b", "availableModels": ["llama3.2:3b"] } }
-
-# Expected (Ollama not running):
-# { "success": true, "data": { "ollamaAvailable": false, "configuredModel": "llama3.2:3b", "availableModels": [] } }
+python3 scripts/run_eval_suite.py
 ```
 
----
-
-## API Endpoints
-
-| Method | Path | Auth | Roles | Description |
-|--------|------|------|-------|-------------|
-| `POST` | `/api/ai/chat` | JWT | Any | Echo/debug endpoint (`{ message }` → `{ reply }`) |
-| `GET` | `/api/ai/health` | Public | Any | Ollama availability check |
-| `POST` | `/api/ai/extract-module` | JWT | Teacher, Admin | Extract lessons from uploaded PDF |
-| `GET` | `/api/ai/extractions?classId=` | JWT | Teacher, Admin | List past extractions for a class |
-| `GET` | `/api/ai/extractions/:id` | JWT | Teacher, Admin | Get single extraction details |
-| `POST` | `/api/ai/extractions/:id/apply` | JWT | Teacher, Admin | Create lessons from extraction |
-| `GET` | `/api/ai/history` | JWT | Any | User's AI interaction history |
-
----
-
-## Request-Response Lifecycle
-
-### Example: `POST /api/ai/extract-module`
-
-```
-Client (Browser/Mobile)
-  │
-  │  POST /api/ai/extract-module
-  │  Headers: { Authorization: "Bearer <jwt>" }
-  │  Body:    { "fileId": "abc-123-..." }
-  │
-  ▼
-┌─────────────────────────────────────────┐
-│  NestJS HTTP Pipeline                   │
-│                                         │
-│  1. Global JwtAuthGuard                 │
-│     → Validates JWT token               │
-│     → Attaches user to request          │
-│     → Rejects 401 if invalid            │
-│                                         │
-│  2. RolesGuard                          │
-│     → Checks @Roles(Teacher, Admin)     │
-│     → Rejects 403 if student            │
-│                                         │
-│  3. ValidationPipe                      │
-│     → Validates ExtractModuleDto        │
-│     → Ensures fileId is valid UUID      │
-│     → Rejects 400 if invalid            │
-│                                         │
-│  4. AiMentorController.extractModule()  │
-│     → Receives validated DTO + user     │
-│     → Calls AiMentorService             │
-│                                         │
-│  5. AiMentorService.extractModule()     │
-│     → Looks up file in DB               │
-│     → Checks ownership                  │
-│     → Reads PDF from disk               │
-│     → Extracts text via pdf-parse       │
-│     → Creates extraction record         │
-│     → Calls OllamaService.generate()    │
-│       OR falls back to rule-based       │
-│     → Updates extraction record         │
-│     → Logs to ai_interaction_logs       │
-│     → Returns structured result         │
-│                                         │
-│  6. Controller wraps in envelope        │
-│     → { success, message, data }        │
-└─────────────────────────────────────────┘
-  │
-  ▼
-Client receives:
-{
-  "success": true,
-  "message": "Module extracted successfully (llama3.2:3b)",
-  "data": {
-    "extractionId": "...",
-    "modelUsed": "llama3.2:3b",
-    "responseTimeMs": 8500,
-    "structured": {
-      "title": "Module 1: Introduction to Fractions",
-      "description": "...",
-      "lessons": [
-        {
-          "title": "Lesson 1: What are Fractions?",
-          "blocks": [
-            { "type": "text", "order": 0, "content": { "text": "..." } },
-            { "type": "question", "order": 1, "content": { "text": "..." } }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-
----
-
-## Database Schema
-
-### `ai_interaction_logs`
-
-Every AI request/response is logged here for auditing and analytics.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID (PK) | Auto-generated |
-| `user_id` | UUID (FK → users) | Who made the request |
-| `session_type` | ENUM | `module_extraction`, `mentor_chat`, `mistake_explanation` |
-| `input_text` | TEXT | The prompt/input sent to AI (truncated for storage) |
-| `output_text` | TEXT | The AI response (truncated) |
-| `model_used` | TEXT | e.g., `llama3.2:3b` or `rule-based` |
-| `context_metadata` | JSON | Flexible context (fileId, classId, etc.) |
-| `response_time_ms` | INT | Round-trip time in milliseconds |
-| `created_at` | TIMESTAMP | When the interaction occurred |
-
-### `extracted_modules`
-
-Stores PDF → structured lesson extraction results.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID (PK) | Auto-generated |
-| `file_id` | UUID (FK → uploaded_files) | Source PDF |
-| `class_id` | UUID (FK → classes) | Target class |
-| `teacher_id` | UUID (FK → users) | Who triggered extraction |
-| `raw_text` | TEXT | Full text extracted from PDF |
-| `structured_content` | JSON | AI-generated lesson structure |
-| `extraction_status` | ENUM | `pending` → `processing` → `completed`/`failed` |
-| `error_message` | TEXT | Error details if failed |
-| `model_used` | TEXT | Which model/method was used |
-| `created_at` | TIMESTAMP | When extraction started |
-| `updated_at` | TIMESTAMP | When extraction completed |
-
----
-
-## Code Walkthrough
-
-### OllamaService — The LLM Client
-
-```typescript
-// ollama.service.ts — Key method explained
-
-async generate(prompt: string, system?: string): Promise<string> {
-  // AbortController provides timeout support via AbortSignal
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-
-  // POST to Ollama's generate endpoint
-  // stream: false means we get the full response in one JSON payload
-  // temperature: 0.3 keeps output deterministic (important for JSON extraction)
-  const res = await fetch(`${this.baseUrl}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: this.model,
-      prompt,           // The user/instruction prompt
-      system,           // Optional system prompt (sets AI personality)
-      stream: false,
-      options: { temperature: 0.3, num_predict: 4096 },
-    }),
-    signal: controller.signal,
-  });
-
-  const body = await res.json();
-  return body.response;  // The generated text
-}
-```
-
-### Rule-Based Extractor — The Fallback
-
-When Ollama is offline, the rule-based extractor uses regex patterns to split PDF text into lesson blocks:
-
-1. **Heading detection** — Matches patterns like `Lesson 1:`, `Chapter 3 —`, `I. Objectives`
-2. **Question detection** — Lines matching `1. What is...?` or `A) option text`
-3. **Paragraph grouping** — Consecutive text lines become `text` blocks
-
-This ensures the system **never fully breaks** — teachers can always extract modules, even without AI.
-
-### AiMentorService — The Orchestrator
-
-The service ties everything together in `extractModule()`:
-
-1. **Verify file** — Lookup in `uploaded_files`, check ownership
-2. **Read PDF** — `fs.readFileSync()` → buffer → `PDFParse.getText()` → raw text
-3. **Create record** — Insert `extracted_modules` row with status `processing`
-4. **Try Ollama** — Check `isAvailable()`, if yes → build prompt → `generate()` → parse JSON
-5. **Fallback** — If Ollama fails/unavailable → `extractWithRules(rawText)`
-6. **Persist** — Update extraction record with result + status
-7. **Log** — Insert `ai_interaction_logs` row for auditing
-
----
-
-## Evolving from Rule-Based to AI
-
-The system is designed with a clean progression path:
-
-### Stage 1: Echo (Current — Structural Validation)
-```
-POST /api/ai/chat { "message": "hi" } → { "reply": "hello" }
-```
-Purpose: Verify the module wiring, JWT auth, role guards, and response envelope work correctly.
-
-### Stage 2: Rule-Based Extraction (Current)
-- Works immediately, no Ollama required
-- Pattern-matching splits PDFs into sections/questions
-- Lower quality but 100% reliable
-
-### Stage 3: Ollama Extraction (Current — Requires Ollama Install)
-- Higher quality structured output
-- LLM understands context, proper section boundaries
-- Automatic fallback to Stage 2 if Ollama is down
-
-### Stage 4: AI Mentor Chat (Future — See Phase 2)
-- Students ask questions about lessons they got wrong
-- AI explains mistakes, gives hints, recommends remediation
-- Uses assessment responses + lesson content as context
-
-### Stage 5: Intelligent Intervention (Future)
-- AI proactively identifies learning gaps from gradebook data
-- Automatically recommends remedial paths
-- Triggers LXP access for students below threshold
-
----
-
-## Phase 2: AI Mentor Chat (Future)
-
-The concept paper describes an "AI NPC Mentor" that:
-- Explains mistakes on assessments
-- Provides step-by-step hints
-- Recommends remedial activities
-- Logs all feedback for teacher review
-
-### Planned Implementation
-
-**New DTO:**
-```typescript
-export class MentorChatDto {
-  @IsUUID()
-  assessmentAttemptId: string;  // Which attempt to discuss
-
-  @IsUUID()
-  questionId: string;           // Which question to explain
-
-  @IsString()
-  message: string;              // Student's question
-}
-```
-
-**New endpoint:** `POST /api/ai/mentor-chat`
-- Only accessible by students with LXP access (below 60% threshold)
-- Retrieves the question, correct answer, student's wrong answer
-- Builds a context-rich prompt for Ollama
-- Returns explanation + hints (not the answer directly)
-
-**Context prompt template:**
-```
-You are a helpful tutor for a Grade {X} {subject} class.
-The student answered this question incorrectly:
-
-Question: {question_text}
-Student's answer: {student_answer}
-Correct answer: {correct_answer}
-
-The student is now asking: {student_message}
-
-RULES:
-- Do NOT give the answer directly
-- Provide hints that guide the student to the correct answer
-- Reference the lesson material when possible
-- Be encouraging and supportive
-- Keep explanations appropriate for Grade {X} level
-```
-
-### How to add it:
-
-1. Create `DTO/mentor-chat.dto.ts` with the DTO above
-2. Add a `mentorChat()` method to `AiMentorService` that:
-   - Loads the assessment attempt, question, responses
-   - Checks the student is eligible for LXP (score < 60%)
-   - Builds the context prompt
-   - Calls `OllamaService.generate()`
-   - Logs the interaction
-3. Add a `POST /api/ai/mentor-chat` route in the controller
-4. Restrict with `@Roles(RoleName.Student)` + custom LXP eligibility guard
-
----
-
-## Swapping LLM Providers
-
-The `OllamaService` is designed as a **drop-in replaceable** LLM client.
-
-### To switch to Google Gemini:
-
-1. Install: `npm install @google/generative-ai`
-2. Create `gemini.service.ts`:
-```typescript
-@Injectable()
-export class GeminiService {
-  private model: GenerativeModel;
-
-  constructor(private config: ConfigService) {
-    const genAI = new GoogleGenerativeAI(config.get('GEMINI_API_KEY'));
-    this.model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-  }
-
-  getModelName(): string { return 'gemini-1.5-flash'; }
-
-  async isAvailable(): Promise<{ available: boolean; models: string[] }> {
-    try { /* ping API */ return { available: true, models: ['gemini-1.5-flash'] }; }
-    catch { return { available: false, models: [] }; }
-  }
-
-  async generate(prompt: string, system?: string): Promise<string> {
-    const result = await this.model.generateContent(prompt);
-    return result.response.text();
-  }
-}
-```
-3. In `ai-mentor.module.ts`, swap the provider:
-```typescript
-providers: [AiMentorService, GeminiService],  // instead of OllamaService
-```
-4. In `ai-mentor.service.ts`, change the constructor injection type.
-
-**Zero changes to the extraction logic, controller, or DTOs.**
-
-### To switch to OpenAI:
-
-Same pattern — create `openai.service.ts` with the same `generate()` / `isAvailable()` / `getModelName()` interface.
-
-### Hybrid approach (recommended for production):
-
-Use Ollama for high-volume tasks (module extraction, student chat) and a cloud API for rare, complex tasks (generating assessment explanations):
-
-```typescript
-// In AiMentorService:
-constructor(
-  private readonly ollama: OllamaService,
-  private readonly gemini: GeminiService,  // Optional cloud fallback
-) {}
-
-// Use ollama for extraction (high volume, cost-sensitive)
-// Use gemini for detailed explanations (low volume, quality-critical)
-```
-
----
+After queue, shared-secret, route, header, or response-envelope changes, verify both services and one real client consumer. Backend and FastAPI paths are a single contract boundary.
 
 ## Troubleshooting
 
-### Ollama not available
-
-```
-GET /api/ai/health returns { ollamaAvailable: false }
-```
-
-**Solutions:**
-1. Install Ollama: https://ollama.com/download
-2. Start Ollama: `ollama serve` (or restart the Ollama app)
-3. Pull the model: `ollama pull llama3.2:3b`
-4. Check the URL: `OLLAMA_BASE_URL` env var (default: `http://localhost:11434`)
-
-The system will automatically use the rule-based fallback — no extraction requests will fail.
-
-### PDF extraction returns minimal text
-
-The PDF might be image-based (scanned). `pdf-parse` can only extract embedded text, not OCR.
-
-**Solutions:**
-1. Use digitally-created PDFs (from Word, Google Docs)
-2. For scanned PDFs, add OCR preprocessing (future feature — use `tesseract.js`)
-3. The service will throw a descriptive error: "PDF contains too little extractable text"
-
-### Ollama is slow
-
-The `llama3.2:3b` model on CPU can take 30-120 seconds for extraction prompts.
-
-**Solutions:**
-1. Increase timeout: `OLLAMA_TIMEOUT_MS=180000` (3 minutes)
-2. Upgrade model hardware (GPU dramatically speeds up inference)
-3. Use a smaller model: `ollama pull phi3:mini` (2GB, faster)
-4. The rule-based fallback responds in <100ms as a safety net
-
-### Migration fails
+### Backend ready check reports AI failure
 
 ```bash
-# Run the migration manually:
-psql -U postgres -d capstone -f drizzle/0032_add_ai_mentor_module.sql
-
-# Or if using the seed script connection:
-# DATABASE_URL=postgresql://postgres:200411@localhost:5432/capstone
+docker compose logs --tail=100 backend ai-service ollama
+docker compose exec -T ai-service python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
 ```
 
----
+Check model materialization, database access, upload storage, embedding runtime, and `AI_SERVICE_URL`.
 
-## Summary
+### Public AI route returns unauthorized/forbidden
 
-| What was built | Status |
-|----------------|--------|
-| Echo endpoint (`POST /api/ai/chat`) | ✅ Working |
-| Ollama health check (`GET /api/ai/health`) | ✅ Working |
-| Module extraction (`POST /api/ai/extract-module`) | ✅ Working |
-| Rule-based fallback (no Ollama needed) | ✅ Working |
-| Apply extraction → create lessons | ✅ Working |
-| List/get extractions | ✅ Working |
-| AI interaction history logging | ✅ Working |
-| Database schema + migration | ✅ Ready |
-| AI Mentor Chat (student Q&A) | 📋 Planned (Phase 2) |
-| LXP eligibility check | 📋 Planned (Phase 2) |
-| Intelligent intervention triggers | 📋 Planned (Phase 3) |
+Authenticate through NestJS and use the correct role, ownership, class policy, and LXP/assessment context. Do not call FastAPI directly to bypass the backend guard.
+
+### Internal request is rejected
+
+Verify shared-secret equality without printing the value. Confirm the request targets the internal route and that the backend/FastAPI schemas still match.
+
+### Job remains queued or retries
+
+```bash
+docker compose logs --tail=200 backend redis ai-service
+docker compose exec -T redis redis-cli --scan --pattern 'bull:*:meta'
+```
+
+Inspect the job state, worker log, FastAPI readiness, retry reason, and idempotency. Do not delete Redis state until you understand the job and environment.
+
+### Ollama is slow or clamps context
+
+The current local text model reports a 2048 trained context while runtime configuration requests 8192, so Ollama clamps it. Treat this as a model/context policy decision; do not hide the warning by only increasing a timeout.
+
+### Production behavior differs
+
+Confirm `AI_RUNTIME_MODE` and cloud-fallback variables in the deployed environment. The checked local stack is Ollama-backed; this document does not claim a specific external deployment provider.

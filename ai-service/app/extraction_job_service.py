@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import bindparam, text as sa_text
@@ -69,13 +70,36 @@ async def mark_pending_extraction_failed(
     extraction_id: str,
     reason: str,
 ) -> None:
+    finished_at = datetime.now(timezone.utc).isoformat()
     await db.execute(
         sa_text(
-            "UPDATE extracted_modules "
-            "SET extraction_status = 'failed', error_message = :reason, progress_percent = 0, updated_at = NOW() "
-            "WHERE id = :id AND extraction_status = 'pending'"
+            """
+            UPDATE extracted_modules
+            SET
+              extraction_status = 'failed',
+              error_message = :reason,
+              progress_percent = 0,
+              structured_content = jsonb_set(
+                COALESCE(structured_content, '{}'::jsonb),
+                '{audit}',
+                COALESCE(structured_content -> 'audit', '{}'::jsonb)
+                  || jsonb_build_object(
+                    'queueCompensated', TRUE,
+                    'reviewState', 'failed',
+                    'errorMessage', :reason,
+                    'workerFinishedAt', :finishedAt
+                  ),
+                TRUE
+              ),
+              updated_at = NOW()
+            WHERE id = :id AND extraction_status = 'pending'
+            """
         ),
-        {"id": extraction_id, "reason": reason[:2000]},
+        {
+            "id": extraction_id,
+            "reason": reason[:2000],
+            "finishedAt": finished_at,
+        },
     )
     await db.commit()
 

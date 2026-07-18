@@ -17,6 +17,7 @@ from .embedding_provider import (
     embed_texts,
     embedding_to_vector_literal,
     get_embedding_model_label,
+    require_semantic_embeddings,
 )
 from .indexing_pipeline import chunk_text_for_indexing, estimate_token_count
 
@@ -111,7 +112,12 @@ def _extract_text(path: Path, file_kind: str, mime_type: str) -> str:
     raise ValueError(f"Unsupported library file kind: {file_kind}")
 
 
-async def delete_library_file_chunks(db: AsyncSession, file_id: str) -> dict[str, Any]:
+async def delete_library_file_chunks(
+    db: AsyncSession,
+    file_id: str,
+    *,
+    commit: bool = True,
+) -> dict[str, Any]:
     result = await db.execute(
         sa_text(
             """
@@ -122,7 +128,8 @@ async def delete_library_file_chunks(db: AsyncSession, file_id: str) -> dict[str
         ),
         {"fileId": file_id},
     )
-    await db.commit()
+    if commit:
+        await db.commit()
     return {"fileId": file_id, "chunksDeleted": result.rowcount or 0}
 
 
@@ -199,13 +206,18 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
         sanitized = sanitize_extracted_text(raw_text)
         chunks = chunk_text_for_indexing(sanitized.cleaned_text)
 
-        await delete_library_file_chunks(db, file_id)
-
         if not chunks:
             raise ValueError("No indexable text was extracted from the library file")
 
-        embeddings = await embed_texts(chunks)
+        embeddings = require_semantic_embeddings(
+            await embed_texts(chunks),
+            expected_count=len(chunks),
+        )
         embedding_model = get_embedding_model_label(embeddings)
+
+        # Replace the prior usable index only after extraction and embedding
+        # dependencies have succeeded. Deletion and insertion commit together.
+        await delete_library_file_chunks(db, file_id, commit=False)
         created = 0
         for chunk_order, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
             content_hash = hashlib.sha256(
@@ -323,6 +335,7 @@ async def index_library_file(db: AsyncSession, file_id: str) -> dict[str, Any]:
             "sanitizationWarnings": sanitized.warnings,
         }
     except Exception as exc:
+        await db.rollback()
         await db.execute(
             sa_text(
                 """

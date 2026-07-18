@@ -13,8 +13,8 @@ This is the default mobile target for generic Nexora mobile work.
 - Install: `npm install`
 - Start Expo: `npm run start`
 - Android: `npm run android`
-- Android emulator: `npm run android:emulator`
-- Android emulator clean start: `npm run android:emulator:clean`
+- Android emulator on Windows: `npm run android:emulator`
+- Android emulator clean start on Windows: `npm run android:emulator:clean`
 - iOS: `npm run ios`
 - Web: `npm run web`
 - Typecheck: `npm run typecheck`
@@ -54,6 +54,7 @@ This is the default mobile target for generic Nexora mobile work.
 - This is a multi-role app. Do not remove teacher/admin navigation merely because `mobile/` is the default generic mobile target.
 - Refresh depends on backend mobile auth endpoints.
 - `API_BASE_URL` fallback assumes backend port `3000` with `/api`.
+- On non-Windows shells, set `EXPO_PUBLIC_API_URL` explicitly instead of using the Windows-only `android:emulator` scripts.
 - Query invalidation must stay aligned with mutations or screens will stale.
 - The app reaches AI through backend contracts, not directly to `ai-service`.
 - Display-only XP, achievement, readiness, and duration projections must remain derived from real backend data and must not masquerade as official stored records.

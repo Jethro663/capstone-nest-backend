@@ -5,16 +5,31 @@ import {
 } from './dashboard-route-access';
 
 describe('isDashboardRolePathAllowed', () => {
-  it('rejects teacher role on student dashboard paths', () => {
-    expect(isDashboardRolePathAllowed('/dashboard/student/classes/abc', 'teacher')).toBe(
-      false,
-    );
-  });
+  const scopedPaths = {
+    admin: '/dashboard/admin/users',
+    teacher: '/dashboard/teacher/classes',
+    student: '/dashboard/student/courses',
+  } as const;
 
-  it('allows matching role dashboard paths', () => {
-    expect(isDashboardRolePathAllowed('/dashboard/student/classes/abc', 'student')).toBe(
-      true,
-    );
+  it.each(Object.entries(scopedPaths))(
+    '%s can open only its own scoped dashboard paths',
+    (role, ownPath) => {
+      expect(isDashboardRolePathAllowed(ownPath, role)).toBe(true);
+
+      for (const [otherRole, otherPath] of Object.entries(scopedPaths)) {
+        if (otherRole === role) continue;
+        expect(isDashboardRolePathAllowed(otherPath, role)).toBe(false);
+      }
+
+      expect(isDashboardRolePathAllowed('/dashboard/notifications', role)).toBe(true);
+      expect(isDashboardRolePathAllowed('/dashboard', role)).toBe(true);
+    },
+  );
+
+  it('allows shared routes but rejects scoped routes for unknown roles', () => {
+    expect(isDashboardRolePathAllowed('/dashboard/notifications', 'guardian')).toBe(true);
+    expect(isDashboardRolePathAllowed('/dashboard/student/courses', 'guardian')).toBe(false);
+    expect(isDashboardRolePathAllowed('/dashboard/admin', null)).toBe(false);
   });
 });
 

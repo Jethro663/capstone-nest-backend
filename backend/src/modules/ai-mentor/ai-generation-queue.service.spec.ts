@@ -30,9 +30,17 @@ describe('AiGenerationQueueService', () => {
 
     expect(mockQueue.add).toHaveBeenCalledWith(
       'lesson-plan-generation',
-      expect.objectContaining({ jobId: 'job-123', requestedByUserId: 'teacher-1' }),
-      expect.objectContaining({ jobId: 'lesson-plan:job-123' }),
+      expect.objectContaining({
+        jobId: 'job-123',
+        requestedByUserId: 'teacher-1',
+      }),
+      expect.objectContaining({
+        jobId: 'lesson-plan-job-123',
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }),
     );
+    expect(mockQueue.add.mock.calls[0][2].jobId).not.toContain(':');
   });
 
   it('enqueues quiz execution with deterministic BullMQ job id', async () => {
@@ -40,9 +48,17 @@ describe('AiGenerationQueueService', () => {
 
     expect(mockQueue.add).toHaveBeenCalledWith(
       'quiz-generation',
-      expect.objectContaining({ jobId: 'job-123', requestedByUserId: 'teacher-1' }),
-      expect.objectContaining({ jobId: 'quiz:job-123' }),
+      expect.objectContaining({
+        jobId: 'job-123',
+        requestedByUserId: 'teacher-1',
+      }),
+      expect.objectContaining({
+        jobId: 'quiz-job-123',
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }),
     );
+    expect(mockQueue.add.mock.calls[0][2].jobId).not.toContain(':');
   });
 
   it('enqueues intervention execution with deterministic BullMQ job id', async () => {
@@ -50,9 +66,17 @@ describe('AiGenerationQueueService', () => {
 
     expect(mockQueue.add).toHaveBeenCalledWith(
       'intervention-recommendation-generation',
-      expect.objectContaining({ jobId: 'job-123', requestedByUserId: 'teacher-1' }),
-      expect.objectContaining({ jobId: 'intervention:job-123' }),
+      expect.objectContaining({
+        jobId: 'job-123',
+        requestedByUserId: 'teacher-1',
+      }),
+      expect.objectContaining({
+        jobId: 'intervention-job-123',
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+      }),
     );
+    expect(mockQueue.add.mock.calls[0][2].jobId).not.toContain(':');
   });
 
   it('enqueues extraction execution with deterministic BullMQ job id and retry policy', async () => {
@@ -70,6 +94,7 @@ describe('AiGenerationQueueService', () => {
         backoff: { type: 'exponential', delay: 5000 },
       }),
     );
+    expect(mockQueue.add.mock.calls[0][2].jobId).not.toContain(':');
   });
 
   it('removes waiting lesson-plan jobs before execution starts', async () => {
@@ -81,7 +106,7 @@ describe('AiGenerationQueueService', () => {
 
     const result = await service.cancelQueuedLessonPlanJob('job-123');
 
-    expect(mockQueue.getJob).toHaveBeenCalledWith('lesson-plan:job-123');
+    expect(mockQueue.getJob).toHaveBeenCalledWith('lesson-plan-job-123');
     expect(remove).toHaveBeenCalled();
     expect(result).toBe(true);
   });
@@ -95,7 +120,7 @@ describe('AiGenerationQueueService', () => {
 
     const result = await service.cancelQueuedTeacherAiJob('quiz', 'job-123');
 
-    expect(mockQueue.getJob).toHaveBeenCalledWith('quiz:job-123');
+    expect(mockQueue.getJob).toHaveBeenCalledWith('quiz-job-123');
     expect(remove).toHaveBeenCalled();
     expect(result).toBe(true);
   });
@@ -110,9 +135,7 @@ describe('AiGenerationQueueService', () => {
     await expect(
       service.cancelQueuedExtractionJob('extraction-123'),
     ).resolves.toBe(true);
-    expect(mockQueue.getJob).toHaveBeenCalledWith(
-      'extraction-extraction-123',
-    );
+    expect(mockQueue.getJob).toHaveBeenCalledWith('extraction-extraction-123');
     expect(remove).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentLessonViewPage from './page';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
@@ -182,10 +182,51 @@ describe('StudentLessonViewPage structured lesson reader', () => {
 
     expect(screen.getByRole('link', { name: /back/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /back to module/i })).toBeInTheDocument();
-    expect(screen.getByText('Grade 7 - Newton - Maria Santos')).toBeInTheDocument();
+    expect(
+      screen.getByText('Mathematics · Grade 7 - Newton - Maria Santos'),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Key points').length).toBeGreaterThan(0);
     expect(screen.getByText('Which pair shows a ratio?')).toBeInTheDocument();
     expect(screen.getByText('2:3')).toBeInTheDocument();
     expect(screen.getByText('5 + 1')).toBeInTheDocument();
+  });
+
+  it('shows a safe retryable state for a load failure without exposing service detail', async () => {
+    mockedLessonService.getById.mockRejectedValueOnce(
+      new Error('relation lesson_internal_drafts does not exist'),
+    );
+
+    render(<StudentLessonViewPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: "Lesson couldn't be loaded" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('relation lesson_internal_drafts does not exist'),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Fractions and ratios' }),
+    ).toBeInTheDocument();
+    expect(mockedLessonService.getById).toHaveBeenCalledTimes(2);
+  });
+
+  it('distinguishes an explicit missing lesson from a general load failure', async () => {
+    mockedLessonService.getById.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'Lesson row was not found',
+    });
+
+    render(<StudentLessonViewPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Lesson not found' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Courses' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/courses',
+    );
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Lesson row was not found')).not.toBeInTheDocument();
   });
 });

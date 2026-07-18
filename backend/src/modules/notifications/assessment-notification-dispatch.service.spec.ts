@@ -38,8 +38,13 @@ describe('AssessmentNotificationDispatchService', () => {
     expect(queue.add).toHaveBeenCalledWith(
       'assessment-assigned',
       expect.objectContaining({ assessmentId: 'assessment-1' }),
-      expect.objectContaining({ jobId: 'assessment-assigned:assessment-1' }),
+      expect.objectContaining({
+        jobId: 'assessment-assigned-assessment-1',
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
+      }),
     );
+    expect(queue.add.mock.calls[0][2].jobId).not.toContain(':');
   });
 
   it('schedules the due reminder one day before due date', async () => {
@@ -55,9 +60,25 @@ describe('AssessmentNotificationDispatchService', () => {
       'assessment-due-reminder',
       expect.objectContaining({ assessmentId: 'assessment-1' }),
       expect.objectContaining({
-        jobId: 'assessment-due-reminder:assessment-1',
+        jobId: 'assessment-due-reminder-assessment-1',
         delay: 86_400_000,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5_000 },
       }),
     );
+    expect(queue.add.mock.calls[0][2].jobId).not.toContain(':');
+  });
+
+  it('removes the due reminder using the same separator-safe stable id', async () => {
+    const remove = jest.fn().mockResolvedValue(undefined);
+    queue.getJob.mockResolvedValue({ remove });
+
+    await service.removeAssessmentDueReminder('assessment-1');
+
+    expect(queue.getJob).toHaveBeenCalledWith(
+      'assessment-due-reminder-assessment-1',
+    );
+    expect(queue.getJob.mock.calls[0][0]).not.toContain(':');
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });

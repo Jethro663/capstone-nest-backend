@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import hashlib
 import logging
+import math
 
 from . import ollama_client
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
-DEGRADED_EMBEDDING_MODEL = "degraded:hash-embedding-v1"
+
+class EmbeddingProviderUnavailable(RuntimeError):
+    """Raised when no semantically compatible embedding can be produced."""
 
 
 class EmbeddingBatch(list):
@@ -29,21 +31,17 @@ class EmbeddingBatch(list):
 
 
 def _normalize_embedding(raw: list[float]) -> list[float]:
-    values = [float(v) for v in raw[: settings.embedding_dimensions]]
-    if len(values) < settings.embedding_dimensions:
-        values.extend([0.0] * (settings.embedding_dimensions - len(values)))
+    if len(raw) != settings.embedding_dimensions:
+        raise EmbeddingProviderUnavailable(
+            "Embedding provider returned the wrong vector dimension "
+            f"({len(raw)} instead of {settings.embedding_dimensions})"
+        )
+    values = [float(v) for v in raw]
+    if not all(math.isfinite(value) for value in values):
+        raise EmbeddingProviderUnavailable(
+            "Embedding provider returned a non-finite vector value"
+        )
     return values
-
-
-def _hash_embedding(text: str) -> list[float]:
-    values: list[float] = []
-    seed = hashlib.sha256((text or "").encode("utf-8")).digest()
-    counter = 0
-    while len(values) < settings.embedding_dimensions:
-        digest = hashlib.sha256(seed + counter.to_bytes(4, "big")).digest()
-        values.extend((byte / 127.5) - 1.0 for byte in digest)
-        counter += 1
-    return values[: settings.embedding_dimensions]
 
 
 def _provider_name() -> str:
@@ -66,6 +64,32 @@ def get_embedding_provider(batch: object | None = None) -> str:
     return _provider_name()
 
 
+def require_semantic_embeddings(
+    batch: list[list[float]],
+    *,
+    expected_count: int | None = None,
+) -> list[list[float]]:
+    """Reject placeholder vectors before they can enter a real vector space."""
+
+    provider = str(getattr(batch, "provider", "") or "").strip().lower()
+    model = str(getattr(batch, "model", "") or "").strip().lower()
+    if (
+        bool(getattr(batch, "degraded", False))
+        or provider == "degraded"
+        or model.startswith("degraded:")
+    ):
+        raise EmbeddingProviderUnavailable(
+            "Semantic embeddings are unavailable; degraded placeholder vectors "
+            "cannot be stored or compared with provider embeddings"
+        )
+    if expected_count is not None and len(batch) != expected_count:
+        raise EmbeddingProviderUnavailable(
+            "Embedding provider returned an unexpected vector count "
+            f"({len(batch)} instead of {expected_count})"
+        )
+    return batch
+
+
 async def embed_texts(texts: list[str]) -> EmbeddingBatch:
     if not texts:
         return EmbeddingBatch(
@@ -81,17 +105,12 @@ async def embed_texts(texts: list[str]) -> EmbeddingBatch:
             model=get_embedding_model_label(),
         )
     except Exception as exc:
-        if not settings.ai_degraded_allowed:
-            raise
-        warning = f"Embedding provider failed; using degraded deterministic vectors: {exc}"
-        logger.warning("[embedding] %s", warning)
-        return EmbeddingBatch(
-            [_hash_embedding(text) for text in texts],
-            provider="degraded",
-            model=DEGRADED_EMBEDDING_MODEL,
-            degraded=True,
-            warnings=[warning],
+        warning = (
+            "Embedding provider unavailable; semantic fallback vectors are disabled "
+            f"to protect vector-space integrity: {exc}"
         )
+        logger.warning("[embedding] %s", warning)
+        raise EmbeddingProviderUnavailable(warning) from exc
 
 
 def embedding_to_vector_literal(embedding: list[float]) -> str:

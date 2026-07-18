@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { BarChart3 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -49,13 +48,6 @@ interface TeacherHeaderMetricProps {
   accent?: 'neutral' | 'sky' | 'teal' | 'amber' | 'rose';
 }
 
-const accentMap = {
-  sky: 'from-[#dbeafe] via-[#dbeafe] to-transparent text-[#2563eb]',
-  teal: 'from-[#dcfce7] via-[#dcfce7] to-transparent text-[#15803d]',
-  amber: 'from-[#fef3c7] via-[#fef3c7] to-transparent text-[#b45309]',
-  rose: 'from-[#fee2e2] via-[#fee2e2] to-transparent text-[#b91c1c]',
-} as const;
-
 const headerMetricAccentMap = {
   neutral: 'border-[#e2e8f0]',
   sky: 'border-[#bfdbfe]',
@@ -73,7 +65,7 @@ const headerMetricDotMap = {
 } as const;
 
 export function TeacherPageShell({
-  badge = 'Teacher Workspace',
+  badge,
   title,
   description,
   actions,
@@ -83,16 +75,13 @@ export function TeacherPageShell({
   className,
 }: TeacherPageShellProps) {
   return (
-    <div className={cn('teacher-page teacher-figma-page space-y-5 pb-4', className)}>
-      <section className="teacher-figma-header teacher-figma-stagger">
+    <div className={cn('teacher-page space-y-5 pb-4', className)}>
+      <section className="teacher-figma-header">
         <div className="teacher-figma-header__copy">
-          <div className="teacher-figma-header__icon">
-            <BarChart3 className="h-5 w-5" />
-          </div>
           <div className="space-y-3">
-            <p className="teacher-figma-header__badge">{badge}</p>
             <h1 className="teacher-figma-header__title">{title}</h1>
             <p className="teacher-figma-header__description">{description}</p>
+            {badge ? <p className="teacher-figma-header__badge">{badge}</p> : null}
             {headerStats ? <div className="flex flex-wrap gap-2 pt-1">{headerStats}</div> : null}
           </div>
         </div>
@@ -100,7 +89,7 @@ export function TeacherPageShell({
       </section>
 
       {stats ? (
-        <section className="teacher-figma-stagger grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {stats}
         </section>
       ) : null}
@@ -144,44 +133,31 @@ export function TeacherStatCard({
   label,
   value,
   caption,
-  icon: Icon,
   accent = 'sky',
-  showIcon = true,
   valueInHeader = false,
 }: TeacherStatCardProps) {
   return (
-    <div className="teacher-figma-stat teacher-panel-hover relative overflow-hidden rounded-[14px] p-4">
-      <div className={cn('absolute inset-x-0 top-0 h-full bg-gradient-to-br opacity-80', accentMap[accent])} />
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className={cn('gap-3', valueInHeader ? 'flex items-start justify-between' : 'space-y-1.5')}>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--teacher-text-muted)]">
-              {label}
-            </p>
-            <div
-              className={cn(
-                'text-[1.75rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]',
-                valueInHeader && 'shrink-0 text-right',
-              )}
-            >
+    <div className={cn('teacher-figma-stat rounded-xl p-4', `teacher-figma-stat--${accent}`)}>
+      <div className="min-w-0 space-y-1.5">
+        <div className={cn('gap-3', valueInHeader ? 'flex items-start justify-between' : 'space-y-1.5')}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--teacher-text-muted)]">
+            {label}
+          </p>
+          {valueInHeader ? (
+            <div className="shrink-0 text-right text-[1.75rem] font-semibold leading-none tracking-tight text-[var(--teacher-text-strong)]">
               {value}
             </div>
-          </div>
-          {!valueInHeader ? (
-            <div className="text-[1.75rem] font-bold leading-none tracking-tight text-[var(--teacher-text-strong)]">
-              {value}
-            </div>
-          ) : null}
-          {caption ? (
-            <p className={cn('text-xs text-[var(--teacher-text-muted)]', valueInHeader && 'pr-2')}>
-              {caption}
-            </p>
           ) : null}
         </div>
-        {Icon && showIcon ? (
-          <div className="rounded-[10px] border border-[#e2e8f0] bg-white p-2.5 text-[var(--teacher-accent)]">
-            <Icon className="h-4 w-4" />
+        {!valueInHeader ? (
+          <div className="text-[1.75rem] font-semibold leading-none tracking-tight text-[var(--teacher-text-strong)]">
+            {value}
           </div>
+        ) : null}
+        {caption ? (
+          <p className={cn('text-xs text-[var(--teacher-text-muted)]', valueInHeader && 'pr-2')}>
+            {caption}
+          </p>
         ) : null}
       </div>
     </div>
@@ -199,9 +175,9 @@ export function TeacherSectionCard({
   return (
     <Card
       variant="teacher"
-      className={cn('teacher-figma-card overflow-hidden rounded-[15px] border-[#f1f5f9]', className)}
+      className={cn('teacher-figma-card overflow-hidden rounded-xl', className)}
     >
-      <CardHeader className="border-b border-[#f1f5f9] bg-[#ffffff] pb-3">
+      <CardHeader className="border-b border-[var(--teacher-outline)] bg-[var(--teacher-surface)] pb-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <CardTitle className="text-[1.05rem] font-semibold tracking-tight text-[var(--teacher-text-strong)]">
@@ -223,7 +199,7 @@ export function TeacherEmptyState({
   action,
 }: TeacherEmptyStateProps) {
   return (
-    <div className="teacher-soft-panel rounded-[14px] border border-dashed border-[#dbe2ec] px-6 py-8 text-center">
+    <div className="teacher-soft-panel rounded-xl border border-dashed border-[var(--teacher-outline)] px-6 py-8 text-center">
       <div className="mx-auto max-w-md space-y-2">
         <p className="text-base font-semibold tracking-tight text-[var(--teacher-text-strong)]">
           {title}

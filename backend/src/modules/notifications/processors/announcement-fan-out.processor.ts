@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Job } from 'bullmq';
+import { Job, UnrecoverableError } from 'bullmq';
 import { Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../../database/database.service';
@@ -34,6 +34,12 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
   }
 
   async process(job: Job<FanOutJobData>): Promise<void> {
+    if (job.name !== 'fan-out') {
+      throw new UnrecoverableError(
+        `Unsupported announcements job: ${job.name}`,
+      );
+    }
+
     const { announcementId, classId, title, content } = job.data;
 
     this.logger.log(

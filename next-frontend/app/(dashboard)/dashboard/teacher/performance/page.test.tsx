@@ -133,6 +133,8 @@ describe('TeacherPerformancePage', () => {
     mockedPerformanceService.getClassLogs.mockResolvedValue({
       data: {
         classId: 'class-1',
+        threshold: 74,
+        count: 0,
         logs: [],
       },
     } as Awaited<ReturnType<typeof performanceService.getClassLogs>>);
@@ -174,8 +176,12 @@ describe('TeacherPerformancePage', () => {
     mockedPerformanceService.getClassDiagnostics.mockResolvedValue({
       data: {
         classId: 'class-1',
+        threshold: 74,
         lowestAssessments: [],
         conceptHotspots: [],
+        studentCount: 1,
+        atRiskCount: 1,
+        insufficientEvidence: false,
       },
     } as Awaited<ReturnType<typeof performanceService.getClassDiagnostics>>);
     mockedPerformanceService.recomputeClass.mockResolvedValue({
@@ -214,6 +220,55 @@ describe('TeacherPerformancePage', () => {
       expect(mockedPerformanceService.recomputeClass).toHaveBeenCalledWith('class-1');
     });
     expect(mockedPerformanceService.createAnalysisJob).not.toHaveBeenCalled();
+  });
+
+  it('keeps healthy panels visible when diagnostics fail and retries only diagnostics', async () => {
+    mockedPerformanceService.getClassDiagnostics.mockRejectedValueOnce(
+      new Error('sql detail'),
+    );
+
+    render(<TeacherPerformancePage />);
+
+    expect(
+      await screen.findByText('Diagnostics temporarily unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Navarro, Liam')).toBeInTheDocument();
+    expect(screen.queryByText('No concept focus areas yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('sql detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Heatmap/i }));
+    expect(
+      screen.getByText('Diagnostics temporarily unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No concept focus areas yet')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Details/i }));
+    expect(
+      screen.getByText('Diagnostics temporarily unavailable'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No assessment signals yet.')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /retry diagnostics/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockedPerformanceService.getClassDiagnostics).toHaveBeenCalledTimes(2);
+    });
+    expect(mockedPerformanceService.getClassSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a successful empty diagnostics state only after diagnostics load', async () => {
+    render(<TeacherPerformancePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Heatmap/i }));
+
+    expect(
+      await screen.findByText('No concept focus areas yet'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Diagnostics temporarily unavailable'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders a dedicated concept mastery heatmap tab when concept hotspots are available', async () => {
@@ -293,7 +348,15 @@ describe('TeacherPerformancePage', () => {
     } as Awaited<ReturnType<typeof performanceService.createAnalysisJob>>);
     mockedPerformanceService.getAnalysisJobResult.mockResolvedValueOnce({
       data: {
+        job: {
+          jobId: 'job-1',
+          jobType: 'performance_analysis',
+          status: 'completed',
+          outputId: 'output-1',
+        },
         result: {
+          outputId: 'output-1',
+          outputType: 'performance_analysis',
           structuredOutput: {
             classId: 'class-1',
             studentId: null,

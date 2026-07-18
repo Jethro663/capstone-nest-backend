@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { StudentAnnouncementBoardDialog } from '@/components/student/StudentAnnouncementBoardDialog';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
@@ -66,6 +67,13 @@ const DAY_TO_INDEX: Record<string, number> = {
 };
 
 const MARKER_ORDER = ['announcement', 'school_event', 'holiday_break'] as const;
+type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
+type StudentDashboardFeedKind =
+  | 'lessons'
+  | 'assessments'
+  | 'announcements'
+  | 'school-events'
+  | 'attempts';
 type StudentDashboardGuideScreen =
   | 'hero'
   | 'tasks'
@@ -668,82 +676,125 @@ export default function StudentDashboardPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<StudentPageStatus>('loading');
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [failedFeedKinds, setFailedFeedKinds] = useState<
+    StudentDashboardFeedKind[]
+  >([]);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
 
   const fetchData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setStatus('error');
+      setHasLoadedOnce(true);
+      return;
+    }
+
+    setStatus('loading');
 
     try {
-      setLoading(true);
-
       const classRes = await classService.getByStudent(user.id);
       const enrolledClasses = classRes.data || [];
       setClasses(enrolledClasses);
 
       const classIds = enrolledClasses.map((classItem) => classItem.id);
 
-      const [lessonResults, assessmentResults, announcementResults] = await Promise.all([
-        Promise.all(
-          classIds.slice(0, 10).map((classId) =>
-            lessonService.getByClass(classId).catch(() => ({ data: [] as Lesson[] })),
-          ),
-        ),
-        Promise.all(
-          classIds.slice(0, 10).map((classId) =>
-            assessmentService.getByClass(classId).catch(() => ({ data: [] as Assessment[] })),
-          ),
-        ),
-        Promise.all(
-          classIds.slice(0, 10).map(async (classId) => {
-            const result = await announcementService.getByClass(classId, { limit: 8 }).catch(() => ({
-              success: true,
-              message: '',
-              data: [] as Announcement[],
-            }));
-            return [classId, result.data || []] as const;
-          }),
-        ),
-      ]);
-
-      const nextLessons = lessonResults.flatMap((result) => result.data || []);
-      const nextAssessments = assessmentResults.flatMap((result) => result.data || []);
-      const announcementMap = Object.fromEntries(announcementResults);
-
       const currentSchoolYear = enrolledClasses[0]?.schoolYear || getCurrentSchoolYearReference();
-      const schoolEventsRes = await schoolEventService.getAll({ schoolYear: currentSchoolYear }).catch(() => ({
-        success: true,
-        message: '',
-        data: [] as SchoolEvent[],
-      }));
+      const [lessonResults, assessmentResults, announcementResults, schoolEventResults] =
+        await Promise.all([
+          Promise.allSettled(
+            classIds
+              .slice(0, 10)
+              .map((classId) => lessonService.getByClass(classId)),
+          ),
+          Promise.allSettled(
+            classIds
+              .slice(0, 10)
+              .map((classId) => assessmentService.getByClass(classId)),
+          ),
+          Promise.allSettled(
+            classIds.slice(0, 10).map(async (classId) => {
+              const result = await announcementService.getByClass(classId, {
+                limit: 8,
+              });
+              return [classId, result.data || []] as const;
+            }),
+          ),
+          Promise.allSettled([
+            schoolEventService.getAll({ schoolYear: currentSchoolYear }),
+          ]),
+        ]);
 
-      const publishedAssessments = nextAssessments.filter((assessment) => assessment.isPublished);
-      const attemptEntries = await Promise.all(
-        publishedAssessments.map(async (assessment) => {
-          try {
-            const attemptsRes = await assessmentService.getStudentAttempts(assessment.id);
-            return [assessment.id, attemptsRes.data || []] as const;
-          } catch {
-            return [assessment.id, []] as const;
-          }
-        }),
+      const failedKinds = new Set<StudentDashboardFeedKind>();
+      const nextLessons = lessonResults.flatMap((result) =>
+        result.status === 'fulfilled' ? result.value.data || [] : [],
+      );
+      const nextAssessments = assessmentResults.flatMap((result) =>
+        result.status === 'fulfilled' ? result.value.data || [] : [],
+      );
+      const announcementEntries = announcementResults.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
       );
 
-      setLessons(nextLessons);
-      setAssessments(nextAssessments);
-      setAssessmentAttempts(Object.fromEntries(attemptEntries));
-      setAnnouncementsByClass(announcementMap);
-      setSchoolEvents(schoolEventsRes.data || []);
+      if (lessonResults.some((result) => result.status === 'rejected')) {
+        failedKinds.add('lessons');
+      }
+      if (assessmentResults.some((result) => result.status === 'rejected')) {
+        failedKinds.add('assessments');
+      }
+      if (announcementResults.some((result) => result.status === 'rejected')) {
+        failedKinds.add('announcements');
+      }
+      if (schoolEventResults[0]?.status === 'rejected') {
+        failedKinds.add('school-events');
+      }
+
+      const publishedAssessments = nextAssessments.filter((assessment) => assessment.isPublished);
+      const attemptResults = await Promise.allSettled(
+        publishedAssessments.map(async (assessment) => {
+          const attemptsRes = await assessmentService.getStudentAttempts(assessment.id);
+          return [assessment.id, attemptsRes.data || []] as const;
+        }),
+      );
+      const attemptEntries = attemptResults.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : [],
+      );
+
+      if (attemptResults.some((result) => result.status === 'rejected')) {
+        failedKinds.add('attempts');
+      }
+
+      if (lessonResults.length === 0 || nextLessons.length > 0 || !failedKinds.has('lessons')) {
+        setLessons(nextLessons);
+      }
+      if (
+        assessmentResults.length === 0 ||
+        nextAssessments.length > 0 ||
+        !failedKinds.has('assessments')
+      ) {
+        setAssessments(nextAssessments);
+      }
+      if (attemptResults.length === 0 || attemptEntries.length > 0 || !failedKinds.has('attempts')) {
+        setAssessmentAttempts(Object.fromEntries(attemptEntries));
+      }
+      if (
+        announcementResults.length === 0 ||
+        announcementEntries.length > 0 ||
+        !failedKinds.has('announcements')
+      ) {
+        setAnnouncementsByClass(Object.fromEntries(announcementEntries));
+      }
+      if (schoolEventResults[0]?.status === 'fulfilled') {
+        setSchoolEvents(schoolEventResults[0].value.data || []);
+      }
+
+      setFailedFeedKinds(Array.from(failedKinds));
+      setStatus(failedKinds.size > 0 ? 'partial' : 'ready');
     } catch {
-      setClasses([]);
-      setLessons([]);
-      setAssessments([]);
-      setAssessmentAttempts({});
-      setAnnouncementsByClass({});
-      setSchoolEvents([]);
+      setStatus('error');
     } finally {
-      setLoading(false);
+      setHasLoadedOnce(true);
     }
   }, [user?.id]);
 
@@ -768,6 +819,10 @@ export default function StudentDashboardPage() {
   );
   const recentLessons = useMemo(() => lessons.slice(0, 4), [lessons]);
   const todaySchedule = useMemo(() => getScheduleItemsForToday(classes), [classes]);
+  const pendingTasksUnavailable =
+    failedFeedKinds.includes('assessments') ||
+    failedFeedKinds.includes('attempts');
+  const lessonsUnavailable = failedFeedKinds.includes('lessons');
   const continueHref = classes[0] ? `/dashboard/student/classes/${classes[0].id}` : '/dashboard/student/courses';
   const assessmentHrefMap = useMemo(
     () =>
@@ -824,7 +879,7 @@ export default function StudentDashboardPage() {
     return map;
   }, [calendarDayIndex]);
 
-  if (loading) {
+  if (status === 'loading' && !hasLoadedOnce) {
     return (
       <div className="student-v2-dashboard">
         <div className="student-v2-main">
@@ -845,17 +900,53 @@ export default function StudentDashboardPage() {
     );
   }
 
+  if (status === 'error' && classes.length === 0) {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title="Dashboard couldn't be loaded"
+        description="Your enrolled classes are temporarily unavailable. Try loading the dashboard again."
+        primaryAction={{ label: 'Try again', onClick: () => void fetchData() }}
+      />
+    );
+  }
+
   return (
     <>
       <StudentAnnouncementBoardDialog events={schoolEvents} />
       <motion.div className="student-v2-dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+      {status === 'partial' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Some dashboard items couldn't be loaded"
+          description="Available classes and learning items remain visible while you retry the missing feeds."
+          primaryAction={{
+            label: 'Retry dashboard feeds',
+            onClick: () => void fetchData(),
+          }}
+        />
+      ) : status === 'error' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Dashboard refresh failed"
+          description="Your last complete dashboard remains visible while you retry."
+          primaryAction={{
+            label: 'Retry dashboard',
+            onClick: () => void fetchData(),
+          }}
+        />
+      ) : null}
       <div className="student-v2-main">
         <div className="student-v2-column">
           <section className="student-v2-hero">
             <div>
               <p className="student-v2-hero__eyebrow">Good morning!</p>
               <h1>Your Learning Hub</h1>
-              <p>You have {pendingAssessments.length} pending task{pendingAssessments.length === 1 ? '' : 's'} today</p>
+              <p>
+                {pendingTasksUnavailable
+                  ? 'Some task data is temporarily unavailable'
+                  : `You have ${pendingAssessments.length} pending task${pendingAssessments.length === 1 ? '' : 's'} today`}
+              </p>
             </div>
             <div className="student-v2-hero__actions">
               <Link href={continueHref}>
@@ -903,7 +994,9 @@ export default function StudentDashboardPage() {
                       {formatShortDate(assessment.dueDate)}
                     </p>
                   </article>
-                )) : (
+                )) : pendingTasksUnavailable ? (
+                  <p className="student-v2-empty">Pending tasks are temporarily unavailable.</p>
+                ) : (
                   <p className="student-v2-empty">You&apos;re all caught up right now.</p>
                 )}
               </div>
@@ -927,7 +1020,9 @@ export default function StudentDashboardPage() {
                       <Button variant="outline" className="student-v2-lesson-item__button">Open</Button>
                     </Link>
                   </article>
-                )) : (
+                )) : lessonsUnavailable ? (
+                  <p className="student-v2-empty">Recent lessons are temporarily unavailable.</p>
+                ) : (
                   <p className="student-v2-empty">No recent lessons yet.</p>
                 )}
               </div>

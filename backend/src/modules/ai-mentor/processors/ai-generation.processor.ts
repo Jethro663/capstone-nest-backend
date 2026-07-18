@@ -1,6 +1,6 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import type { Job } from 'bullmq';
+import { UnrecoverableError, type Job } from 'bullmq';
 import { AiProxyService } from '../ai-proxy.service';
 
 const TEACHER_AI_QUEUE_CONCURRENCY = 2;
@@ -31,9 +31,21 @@ export class AiGenerationProcessor extends WorkerHost {
       queuedAt?: string;
     }>,
   ): Promise<void> {
+    if (
+      ![
+        'lesson-plan-generation',
+        'quiz-generation',
+        'intervention-recommendation-generation',
+        'module-extraction',
+      ].includes(job.name)
+    ) {
+      throw new UnrecoverableError(
+        `Unsupported ai-teacher-generation job: ${job.name}`,
+      );
+    }
+
     const { jobId, extractionId, queuedAt } = job.data;
-    const executionId =
-      job.name === 'module-extraction' ? extractionId : jobId;
+    const executionId = job.name === 'module-extraction' ? extractionId : jobId;
     if (!executionId) {
       throw new Error(`Missing execution id for ${job.name}`);
     }
@@ -60,9 +72,6 @@ export class AiGenerationProcessor extends WorkerHost {
         await this.proxy.runInternalInterventionJob(executionId, meta);
       } else if (job.name === 'module-extraction') {
         await this.proxy.runInternalExtractionJob(executionId, meta);
-      } else {
-        this.logger.warn(`Unknown job name: ${job.name}, skipping`);
-        return;
       }
       this.logger.log(`${job.name} job ${executionId} completed`);
     } catch (err) {

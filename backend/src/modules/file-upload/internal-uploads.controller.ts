@@ -26,9 +26,9 @@ export class InternalUploadsController {
 
   private assertAuthorized(token?: string) {
     const sharedSecret =
-      this.configService.get<string>('AI_SERVICE_SHARED_SECRET') ?? '';
+      this.configService.get<string>('AI_SERVICE_SHARED_SECRET')?.trim() ?? '';
 
-    if (sharedSecret && token !== sharedSecret) {
+    if (!sharedSecret || token !== sharedSecret) {
       throw new ForbiddenException('Invalid internal service token');
     }
   }
@@ -79,9 +79,7 @@ export class InternalUploadsController {
       if (key.startsWith(`${bucket}/`)) {
         key = key.slice(bucket.length + 1);
       }
-      key = key
-        .replace(/^(\.\/)?uploads\//, '')
-        .replace(/^\.\//, '');
+      key = key.replace(/^(\.\/)?uploads\//, '').replace(/^\.\//, '');
       const signedUrl = await this.storageService.getSignedDownloadUrl(key);
       res.redirect(302, signedUrl);
       return;

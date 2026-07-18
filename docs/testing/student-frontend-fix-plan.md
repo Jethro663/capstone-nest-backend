@@ -1,34 +1,46 @@
 # Student Frontend Fix Plan
 
-## Summary
+## Status
 
-- Target role: `student`
-- Issues to address: `3`
-- This plan is derived from the latest audit evidence and stops before code changes.
+Complete for the approved systemic-tighten scope. There is no open Student-specific remediation item from the 2026-07-15 post-change audit.
 
-## Issues
+## Delivered Work
 
-### 1. [Resolved] Middleware allowed unauthenticated student routes to bypass server-side gating
+### Session-safe role mismatch
 
-- Owner: `frontend`
-- Source area: `next-frontend/middleware.ts`
-- Problem: The middleware treated every pathname as public because PUBLIC_ROUTES included `/` and used startsWith matching, so `/dashboard/*` requests bypassed the intended server-side redirect and fell through to client-side auth handling.
-- Fix intent: Use exact matching for `/`, prefix-aware matching for scoped routes, and redirect `/login` to `/dashboard` only when a refresh cookie exists.
-- Verification: Request `http://localhost:3001/dashboard/student` with no cookies and confirm the final URL is `http://localhost:3001/login?from=%2Fdashboard%2Fstudent`.
+- Preserved the role render gate.
+- Redirected mismatched Students to their own home without logout or refresh-token revocation.
+- Added a one-time neutral notice and three-role regression coverage.
 
-### 2. [Resolved] Public login loaded an avoidable `/api/auth/refresh` 401 on anonymous student sessions
+### Explicit critical-route state ownership
 
-- Owner: `frontend`
-- Source area: `next-frontend/src/providers/AuthProvider.tsx`
-- Problem: AuthProvider always attempted a refresh-token exchange on mount, which turned the expected anonymous state into a 401 network failure and console noise on the public login page.
-- Fix intent: Skip auth bootstrap outside `/dashboard` routes and let middleware own the already-authenticated redirect to `/dashboard`.
-- Verification: Open `/login` with cleared cookies and confirm there is no `/api/auth/refresh` request and no auth-related console error.
+- Added distinct failure, empty, partial, and content handling to Dashboard, Announcements, Calendar, Performance, and class detail.
+- Kept truthful class content visible when an independent region fails.
+- Reused the shared safe dashboard recovery surface without rendering raw errors.
 
-### 3. Prompt-supplied custom student credentials do not exist in the seeded local environment
+### Learners Path and lesson hierarchy
 
-- Owner: `data-seed`
-- Source area: `backend/seed-database.js`
-- Problem: The active seed data does not contain the prompt-supplied student account, so login returns `401 Invalid credentials` even though the seeded student account succeeds.
-- Fix intent: Use the seeded student credentials for regression runs or explicitly add the requested account to the seed/environment when that account is intended to exist.
-- Verification: Login with `student71@lms.local / Student123!` for the seeded environment, or seed the custom account and confirm it returns `200`.
+- Tightened Learners Path controls, counts, explanations, empty/filter-empty states, and AI outage placement.
+- Replaced lesson metadata pills/nested framing with a compact definition row and one reading surface.
+- Preserved real navigation, help, retry, and seeded content.
 
+### Reachable, persistent themes
+
+- Restored the existing theme selector to the real Student TopBar only.
+- Added accessible option names and `aria-pressed` state.
+- Preserved all nine existing themes; no competing palette or new theme was introduced.
+
+## Verification
+
+- Student core/spot-check routes: `8` live routes passed.
+- Theme matrix: `9` themes × `3` surfaces = `27` real selector interactions passed.
+- Role mismatch: foreign Teacher content blocked and Student session preserved.
+- Academic-state access: Student remained HTTP `403` while Teacher received `200`.
+- Responsive matrix: no document overflow at 390 px, 768 px, or 1280 px on Learners Path or lesson detail.
+- Keyboard sweep: changed primary, search/filter, segmented, retry, and help controls showed visual focus.
+- Full frontend Jest gate: `138` suites and `577` tests passed.
+- Integrated Chromium gate: `10/10` passed against the disposable seeded runtime.
+
+## Regression Guard
+
+Future Student shell or theme changes should retain the TopBar unit test, ThemeProvider persistence test, all-theme browser matrix, role-mismatch matrix, and lesson-reader capture. Graded or AI-producing actions remain excluded until a purpose-built reversible fixture exists.

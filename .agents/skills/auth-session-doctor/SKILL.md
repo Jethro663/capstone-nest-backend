@@ -29,7 +29,7 @@ Trace authentication and session failures as a chain, not as isolated files. Dis
 ## Workflow
 
 1. Identify the failing surface:
-   - web -> `middleware.ts`, `app/(dashboard)/layout.tsx`, `src/providers/AuthProvider.tsx`, `src/lib/api-client.ts`
+   - web -> `proxy.ts`, `app/(dashboard)/layout.tsx`, `src/providers/AuthProvider.tsx`, `src/lib/api-client.ts`
    - mobile -> `AppNavigator`, secure storage, `src/api/*`
    - backend -> auth controller, refresh endpoints, guards, cookie config, JWT config
 2. Classify the failure before editing:

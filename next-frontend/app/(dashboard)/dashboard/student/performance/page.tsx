@@ -13,8 +13,11 @@ import {
 } from 'lucide-react';
 import { performanceService } from '@/services/performance-service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { StudentOwnPerformanceSummary } from '@/types/performance';
 import './student-performance.css';
+
+type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
 
 type TrendSubject = {
   key: string;
@@ -385,18 +388,18 @@ function QuarterlyTrendChart({
 export default function StudentPerformancePage() {
   const reduceMotion = useReducedMotion();
   const [summary, setSummary] = useState<StudentOwnPerformanceSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<StudentPageStatus>('loading');
 
-  const fetchSummary = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await performanceService.getStudentOwnSummary();
-      setSummary(response.data);
-    } catch {
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
+  const fetchSummary = useCallback(() => {
+    const request = performanceService.getStudentOwnSummary();
+    void Promise.resolve().then(() => setStatus('loading'));
+
+    void request
+      .then((response) => {
+        setSummary(response.data);
+        setStatus('ready');
+      })
+      .catch(() => setStatus('error'));
   }, []);
 
   useEffect(() => {
@@ -483,7 +486,7 @@ export default function StudentPerformancePage() {
     [orderedClasses],
   );
 
-  if (loading) {
+  if (status === 'loading' && !summary) {
     return (
       <div className="student-performance-page student-performance-loading">
         <Skeleton className="h-24 rounded-lg" />
@@ -499,6 +502,17 @@ export default function StudentPerformancePage() {
         </div>
         <Skeleton className="h-[280px] rounded-lg" />
       </div>
+    );
+  }
+
+  if (status === 'error' && !summary) {
+    return (
+      <DashboardStatePanel
+        kind="error"
+        title="Performance couldn't be loaded"
+        description="Your performance summary is temporarily unavailable. Try loading it again."
+        primaryAction={{ label: 'Try again', onClick: () => void fetchSummary() }}
+      />
     );
   }
 
@@ -526,6 +540,15 @@ export default function StudentPerformancePage() {
           </div>
         </div>
       </MotionCard>
+
+      {status === 'error' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Performance refresh failed"
+          description="Your last complete performance summary remains visible while you retry."
+          primaryAction={{ label: 'Retry performance', onClick: () => void fetchSummary() }}
+        />
+      ) : null}
 
       <div className="sp-kpi-grid">
         <MotionCard index={1} reducedMotion={Boolean(reduceMotion)}>
@@ -720,13 +743,6 @@ export default function StudentPerformancePage() {
           )}
         </section>
       </MotionCard>
-
-      {summary === null && !loading ? (
-        <LocalEmptyState
-          title="We couldn't load your performance summary"
-          description="Try refreshing this page in a moment."
-        />
-      ) : null}
 
       {latestSyncDate ? (
         <p className="sp-meta-text">Last sync detail: {formatDateTime(latestSyncDate)}</p>

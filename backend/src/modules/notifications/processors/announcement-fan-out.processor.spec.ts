@@ -70,6 +70,13 @@ describe('AnnouncementFanOutProcessor', () => {
     );
   });
 
+  it('rejects unsupported queue contracts without side effects', async () => {
+    await expect(
+      processor.process({ ...makeJob(), name: 'unknown-job' } as any),
+    ).rejects.toThrow('Unsupported announcements job: unknown-job');
+    expect(mockDb.query.classes.findFirst).not.toHaveBeenCalled();
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   // Happy path
   // ──────────────────────────────────────────────────────────────────────────

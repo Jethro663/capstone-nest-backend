@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CalendarCheck2,
@@ -17,6 +17,7 @@ import { assessmentService } from '@/services/assessment-service';
 import { schoolEventService } from '@/services/school-event-service';
 import { useAuth } from '@/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
@@ -40,6 +41,12 @@ import {
 import styles from './teacher-calendar.module.css';
 
 type TeacherCalendarMode = 'calendar' | 'upcoming';
+type TeacherCollectionState = 'loading' | 'ready' | 'error' | 'partial';
+
+type CalendarFeedResult =
+  | { kind: 'assessment'; classId: string; data: Assessment[] }
+  | { kind: 'announcement'; classId: string; data: Announcement[] }
+  | { kind: 'school-events'; data: SchoolEvent[] };
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MARKER_ORDER: CalendarFeedKind[] = [
@@ -70,10 +77,16 @@ function getYearButtonLabel(schoolYear: string): string {
 
 export default function TeacherCalendarPage() {
   const { user } = useAuth();
+  const userId = user?.id;
   const searchParams = useSearchParams();
   const classPrefilterAppliedRef = useRef(false);
+  const classRequestRef = useRef(0);
+  const feedRequestRef = useRef(0);
 
-  const [loading, setLoading] = useState(true);
+  const [classState, setClassState] =
+    useState<TeacherCollectionState>('loading');
+  const [feedState, setFeedState] =
+    useState<TeacherCollectionState>('loading');
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [assessmentsByClass, setAssessmentsByClass] = useState<Record<string, Assessment[]>>({});
@@ -88,43 +101,64 @@ export default function TeacherCalendarPage() {
   const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
+  const fetchClasses = useCallback(() => {
+    if (!userId) return;
+
+    const requestId = classRequestRef.current + 1;
+    classRequestRef.current = requestId;
+    const request = classService.getByTeacher(userId, 'active');
+
+    void Promise.resolve().then(() => {
+      if (classRequestRef.current === requestId) setClassState('loading');
+    });
+    void request
+      .then((response) => {
+        if (classRequestRef.current !== requestId) return;
+        const nextClasses = response.data || [];
+        setClasses(nextClasses);
+        setClassState('ready');
+        if (nextClasses.length === 0) {
+          setFeedState('ready');
+        }
+      })
+      .catch(() => {
+        if (classRequestRef.current !== requestId) return;
+        setClassState('error');
+      });
+  }, [userId]);
+
   useEffect(() => {
-    if (!user?.id) return;
-
-    let isActive = true;
-
-    const fetchClasses = async () => {
-      try {
-        setLoading(true);
-        const response = await classService.getByTeacher(user.id, 'active');
-        if (!isActive) return;
-        setClasses(response.data || []);
-      } catch {
-        if (!isActive) return;
-        setClasses([]);
-      } finally {
-        if (isActive) setLoading(false);
-      }
-    };
-
     void fetchClasses();
     return () => {
-      isActive = false;
+      classRequestRef.current += 1;
     };
-  }, [user?.id]);
+  }, [fetchClasses]);
 
   useEffect(() => {
     if (classes.length === 0) return;
     if (classPrefilterAppliedRef.current) return;
     const queryClassId = searchParams.get('classId');
-    setSelectedClassId(resolveInitialClassFilter(queryClassId, classes));
-    classPrefilterAppliedRef.current = true;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setSelectedClassId(resolveInitialClassFilter(queryClassId, classes));
+        classPrefilterAppliedRef.current = true;
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [classes, searchParams]);
 
   useEffect(() => {
     if (classes.length === 0) {
-      setSelectedSchoolYear('');
-      return;
+      let cancelled = false;
+      void Promise.resolve().then(() => {
+        if (!cancelled) setSelectedSchoolYear('');
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     const currentYears = buildSchoolYearList(classes, schoolEvents);
@@ -134,79 +168,128 @@ export default function TeacherCalendarPage() {
     const prefilterClass = queryClassId
       ? classes.find((classItem) => classItem.id === queryClassId)
       : null;
-    setSelectedSchoolYear(prefilterClass?.schoolYear ?? currentYears[0] ?? '');
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setSelectedSchoolYear(prefilterClass?.schoolYear ?? currentYears[0] ?? '');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [classes, schoolEvents, searchParams, selectedSchoolYear]);
 
   useEffect(() => {
     const selectedClass = classes.find((classItem) => classItem.id === selectedClassId);
     if (!selectedClass || !selectedSchoolYear) return;
     if (selectedClass.schoolYear === selectedSchoolYear) return;
-    setSelectedClassId('all');
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setSelectedClassId('all');
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [classes, selectedClassId, selectedSchoolYear]);
 
-  useEffect(() => {
+  const fetchCalendarData = useCallback(() => {
     if (!selectedSchoolYear) return;
 
-    let isActive = true;
+    const requestId = feedRequestRef.current + 1;
+    feedRequestRef.current = requestId;
+    const scopedClasses = classes.filter(
+      (classItem) => classItem.schoolYear === selectedSchoolYear,
+    );
 
-    const fetchCalendarData = async () => {
-      try {
-        setLoading(true);
-        const scopedClasses = classes.filter(
-          (classItem) => classItem.schoolYear === selectedSchoolYear,
-        );
-
-        const assessmentPairs = await Promise.all(
-          scopedClasses.map(async (classItem) => {
-            try {
-              const response = await assessmentService.getByClass(classItem.id, {
-                status: 'all',
-                limit: 120,
-              });
-              return [classItem.id, response.data || []] as const;
-            } catch {
-              return [classItem.id, []] as const;
-            }
-          }),
-        );
-
-        const announcementPairs = await Promise.all(
-          scopedClasses.map(async (classItem) => {
-            try {
-              const response = await announcementService.getByClass(classItem.id, {
-                limit: 60,
-              });
-              return [classItem.id, response.data || []] as const;
-            } catch {
-              return [classItem.id, []] as const;
-            }
-          }),
-        );
-
-        const schoolEventsResponse = await schoolEventService.getAll({
-          schoolYear: selectedSchoolYear,
+    const requests: Array<Promise<CalendarFeedResult>> = [
+      ...scopedClasses.map(async (classItem) => {
+        const response = await assessmentService.getByClass(classItem.id, {
+          status: 'all',
+          limit: 120,
         });
+        return {
+          kind: 'assessment' as const,
+          classId: classItem.id,
+          data: response.data || [],
+        };
+      }),
+      ...scopedClasses.map(async (classItem) => {
+        const response = await announcementService.getByClass(classItem.id, {
+          limit: 60,
+        });
+        return {
+          kind: 'announcement' as const,
+          classId: classItem.id,
+          data: response.data || [],
+        };
+      }),
+      schoolEventService
+        .getAll({ schoolYear: selectedSchoolYear })
+        .then((response) => ({
+          kind: 'school-events' as const,
+          data: response.data || [],
+        })),
+    ];
 
-        if (!isActive) return;
+    void Promise.resolve().then(() => {
+      if (feedRequestRef.current === requestId) setFeedState('loading');
+    });
+    void Promise.allSettled(requests).then((results) => {
+      if (feedRequestRef.current !== requestId) return;
+      const fulfilled = results.filter(
+        (result): result is PromiseFulfilledResult<CalendarFeedResult> =>
+          result.status === 'fulfilled',
+      );
 
-        setAssessmentsByClass(Object.fromEntries(assessmentPairs));
-        setAnnouncementsByClass(Object.fromEntries(announcementPairs));
-        setSchoolEvents(schoolEventsResponse.data || []);
-      } catch {
-        if (!isActive) return;
-        setAssessmentsByClass({});
-        setAnnouncementsByClass({});
-        setSchoolEvents([]);
-      } finally {
-        if (isActive) setLoading(false);
+      if (fulfilled.length === 0) {
+        setFeedState('error');
+        return;
       }
-    };
 
+      const assessmentPairs = fulfilled
+        .filter(
+          (result): result is PromiseFulfilledResult<Extract<CalendarFeedResult, { kind: 'assessment' }>> =>
+            result.value.kind === 'assessment',
+        )
+        .map((result) => [result.value.classId, result.value.data] as const);
+      const announcementPairs = fulfilled
+        .filter(
+          (result): result is PromiseFulfilledResult<Extract<CalendarFeedResult, { kind: 'announcement' }>> =>
+            result.value.kind === 'announcement',
+        )
+        .map((result) => [result.value.classId, result.value.data] as const);
+      const schoolEventsResult = fulfilled.find(
+        (result) => result.value.kind === 'school-events',
+      );
+
+      if (assessmentPairs.length > 0) {
+        setAssessmentsByClass((current) => ({
+          ...current,
+          ...Object.fromEntries(assessmentPairs),
+        }));
+      }
+      if (announcementPairs.length > 0) {
+        setAnnouncementsByClass((current) => ({
+          ...current,
+          ...Object.fromEntries(announcementPairs),
+        }));
+      }
+      if (schoolEventsResult?.value.kind === 'school-events') {
+        setSchoolEvents(schoolEventsResult.value.data);
+      }
+
+      setFeedState(
+        fulfilled.length === results.length ? 'ready' : 'partial',
+      );
+    });
+  }, [classes, selectedSchoolYear]);
+
+  useEffect(() => {
     void fetchCalendarData();
     return () => {
-      isActive = false;
+      feedRequestRef.current += 1;
     };
-  }, [classes, selectedSchoolYear]);
+  }, [fetchCalendarData]);
 
   const schoolYearOptions = useMemo(
     () => buildSchoolYearList(classes, schoolEvents),
@@ -254,6 +337,10 @@ export default function TeacherCalendarPage() {
 
   const activeDayItems = dayIndex[activeDayKey] ?? [];
   const upcomingItems = useMemo(() => getUpcomingFeedItems(mergedFeedItems), [mergedFeedItems]);
+  const hasCalendarData =
+    schoolEvents.length > 0 ||
+    Object.values(assessmentsByClass).some((items) => items.length > 0) ||
+    Object.values(announcementsByClass).some((items) => items.length > 0);
 
   const changeYear = (step: -1 | 1) => {
     if (yearIndex < 0) return;
@@ -262,7 +349,22 @@ export default function TeacherCalendarPage() {
     setSelectedSchoolYear(targetYear);
   };
 
-  if (loading && classes.length === 0) {
+  const pageHeader = (
+    <section className={styles.hero}>
+      <div className={styles.heroIcon}>
+        <CalendarCheck2 className="h-6 w-6" />
+      </div>
+      <div>
+        <p className={styles.heroEyebrow}>Teacher Calendar</p>
+        <h1 className={styles.heroTitle}>Calendar, events, announcements</h1>
+        <p className={styles.heroText}>
+          Unified feed from admin school events, assessments, and class announcements.
+        </p>
+      </div>
+    </section>
+  );
+
+  if (classState === 'loading' && classes.length === 0) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-32 rounded-2xl" />
@@ -271,20 +373,36 @@ export default function TeacherCalendarPage() {
     );
   }
 
+  if (classState === 'error' && classes.length === 0) {
+    return (
+      <div className={styles.page}>
+        {pageHeader}
+        <DashboardStatePanel
+          kind="error"
+          title="Calendar classes couldn't be loaded"
+          description="Try again to load the classes available to your account."
+          primaryAction={{ label: 'Try again', onClick: () => void fetchClasses() }}
+        />
+      </div>
+    );
+  }
+
+  if (classState === 'ready' && classes.length === 0) {
+    return (
+      <div className={styles.page}>
+        {pageHeader}
+        <DashboardStatePanel
+          kind="empty"
+          title="No classes assigned yet"
+          description="Calendar items will appear after an active class is assigned to you."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={styles.page}>
-      <section className={styles.hero}>
-        <div className={styles.heroIcon}>
-          <CalendarCheck2 className="h-6 w-6" />
-        </div>
-        <div>
-          <p className={styles.heroEyebrow}>Teacher Calendar</p>
-          <h1 className={styles.heroTitle}>Calendar, events, announcements</h1>
-          <p className={styles.heroText}>
-            Unified feed from admin school events, assessments, and class announcements.
-          </p>
-        </div>
-      </section>
+      {pageHeader}
 
       <section className={styles.toolbar}>
         <div className={styles.modeSwitch}>
@@ -356,6 +474,41 @@ export default function TeacherCalendarPage() {
           </label>
         </div>
       </section>
+
+      {classState === 'error' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Class filters are temporarily unavailable"
+          description="The last loaded calendar remains visible while you retry the class list."
+          primaryAction={{ label: 'Retry classes', onClick: () => void fetchClasses() }}
+        />
+      ) : null}
+
+      {feedState === 'loading' && !hasCalendarData ? (
+        <Skeleton className="h-[34rem] rounded-2xl" />
+      ) : feedState === 'error' && !hasCalendarData ? (
+        <DashboardStatePanel
+          kind="error"
+          title="Calendar items couldn't be loaded"
+          description="Try again to load assessments, announcements, and school events."
+          primaryAction={{
+            label: 'Retry calendar items',
+            onClick: () => void fetchCalendarData(),
+          }}
+        />
+      ) : (
+        <>
+      {feedState === 'partial' || feedState === 'error' ? (
+        <DashboardStatePanel
+          kind="unavailable"
+          title="Some calendar items are temporarily unavailable"
+          description="Available calendar sources are still shown below."
+          primaryAction={{
+            label: 'Retry calendar items',
+            onClick: () => void fetchCalendarData(),
+          }}
+        />
+      ) : null}
 
       {mode === 'calendar' ? (
         <section className={styles.calendarLayout}>
@@ -436,7 +589,11 @@ export default function TeacherCalendarPage() {
 
             <div className={styles.dayDetailBody}>
               {activeDayItems.length === 0 ? (
-                <p className={styles.emptyText}>No items scheduled for this day.</p>
+                feedState === 'ready' ? (
+                  <p className={styles.emptyText}>No items scheduled for this day.</p>
+                ) : (
+                  <p className={styles.emptyText}>No available items for this day.</p>
+                )
               ) : (
                 activeDayItems.map((item) => (
                   <article key={`${activeDayKey}-${item.id}`} className={styles.dayItem}>
@@ -462,10 +619,12 @@ export default function TeacherCalendarPage() {
       ) : (
         <section className={styles.upcomingLayout}>
           {upcomingItems.length === 0 ? (
+            feedState === 'ready' ? (
             <article className={styles.emptyUpcoming}>
               <h3>No upcoming items</h3>
               <p>Upcoming assessments, announcements, and school events will appear here.</p>
             </article>
+            ) : null
           ) : (
             upcomingItems.map((item, index) => (
               <article
@@ -491,6 +650,8 @@ export default function TeacherCalendarPage() {
             ))
           )}
         </section>
+      )}
+        </>
       )}
     </div>
   );

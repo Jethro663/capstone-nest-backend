@@ -18,7 +18,7 @@ Record:
 - exact failing files or tests
 - whether the signal is structural, functional, or approximate performance-related
 
-Do not use `npm run lint` for the pre-edit baseline. It runs with `--fix`.
+`npm run lint` is the current read-only baseline. Reserve `npm run lint:fix` for deliberate mutation.
 
 ### AI Service
 

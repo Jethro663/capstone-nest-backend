@@ -23,7 +23,8 @@ The backend owns official academic records. LXP and AI features may assist or re
 | `src/modules/` | domain controllers, services, workers, DTOs, and tests |
 | `src/drizzle/schema/` | schema source of truth |
 | `drizzle/` | ordered SQL migrations and snapshots |
-| `src/monitoring/` | metrics and health integration |
+| `src/modules/health/` | liveness and dependency readiness |
+| `src/monitoring/` | Prometheus metrics and structured logging |
 | `docker-entrypoint.sh` | migration/seed bootstrap and upload-volume ownership repair |
 
 Important extracted seams include performance snapshot reads, assessment access, LXP system evaluation, storage cleanup metrics, and AI generation/extraction queue workers. Existing public controllers and response envelopes remain the compatibility facade.
@@ -38,10 +39,12 @@ npm run start:dev
 
 The default development command can coordinate the local AI service. Use `npm run start:dev:core` when only the Nest process should be started.
 
+The development helper reads root `.env` when it bootstraps Compose dependencies. Create it from the root `.env.compose.example` first.
+
 Common endpoints:
 
 - API prefix: `http://localhost:3000/api`
-- Swagger: `http://localhost:3000/api/docs`
+- Swagger in development only: `http://localhost:3000/api/docs`
 - Readiness: `http://localhost:3000/api/health/ready`
 - Metrics: `http://localhost:3000/api/metrics`
 
@@ -91,6 +94,8 @@ npm run check:src-clean
 npm run check:migrations
 npm run seed:smoke
 ```
+
+Apply the checked migration journal from the repository root with `node backend/run-migrations.js`, or from this directory with `node run-migrations.js`.
 
 `npm run lint` is non-mutating. `npm run lint:fix` is the explicit local rewrite command. The warning ceiling is a ratchet for legacy debt; new errors are not accepted.
 

@@ -45,6 +45,90 @@ jest.mock('exceljs', () => {
   };
 });
 
+describe('useTeacherClassRecord loading state', () => {
+  const record = {
+    id: 'record-1',
+    classId: 'class-1',
+    gradingPeriod: 'Q1',
+    status: 'draft',
+  };
+  const spreadsheet = {
+    classRecord: record,
+    header: { quarter: 'Q1' },
+    categories: [],
+    students: [],
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('reports an initial class-record request failure', async () => {
+    (classRecordService.getByClass as jest.Mock).mockRejectedValueOnce(
+      new Error('records unavailable'),
+    );
+
+    const { result } = renderHook(() => useTeacherClassRecord('class-1'));
+
+    await waitFor(() => expect(result.current.recordsStatus).toBe('error'));
+    expect(result.current.classRecords).toEqual([]);
+    expect(result.current.spreadsheetStatus).toBe('idle');
+  });
+
+  it('reports spreadsheet failure independently from valid records', async () => {
+    (classRecordService.getByClass as jest.Mock).mockResolvedValue({ data: [record] });
+    (classRecordService.getSpreadsheet as jest.Mock).mockRejectedValueOnce(
+      new Error('spreadsheet unavailable'),
+    );
+
+    const { result } = renderHook(() => useTeacherClassRecord('class-1'));
+
+    await waitFor(() => expect(result.current.recordsStatus).toBe('ready'));
+    await waitFor(() => expect(result.current.spreadsheetStatus).toBe('error'));
+    expect(result.current.selectedRecord?.id).toBe('record-1');
+    expect(result.current.spreadsheet).toBeNull();
+  });
+
+  it('preserves the last valid records and spreadsheet after refresh fails', async () => {
+    (classRecordService.getByClass as jest.Mock).mockResolvedValue({ data: [record] });
+    (classRecordService.getSpreadsheet as jest.Mock).mockResolvedValue({ data: spreadsheet });
+
+    const { result } = renderHook(() => useTeacherClassRecord('class-1'));
+
+    await waitFor(() => expect(result.current.spreadsheetStatus).toBe('ready'));
+    (classRecordService.getByClass as jest.Mock).mockRejectedValueOnce(
+      new Error('refresh unavailable'),
+    );
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.recordsStatus).toBe('error');
+    expect(result.current.classRecords).toEqual([record]);
+    expect(result.current.spreadsheet).toEqual(spreadsheet);
+  });
+
+  it('retries the selected spreadsheet when class records refresh successfully', async () => {
+    (classRecordService.getByClass as jest.Mock).mockResolvedValue({ data: [record] });
+    (classRecordService.getSpreadsheet as jest.Mock)
+      .mockRejectedValueOnce(new Error('spreadsheet unavailable'))
+      .mockResolvedValueOnce({ data: spreadsheet });
+
+    const { result } = renderHook(() => useTeacherClassRecord('class-1'));
+
+    await waitFor(() => expect(result.current.spreadsheetStatus).toBe('error'));
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    await waitFor(() => expect(result.current.spreadsheetStatus).toBe('ready'));
+    expect(result.current.spreadsheet).toEqual(spreadsheet);
+    expect(classRecordService.getSpreadsheet).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('useTeacherClassRecord export fallback', () => {
   const originalCreateObjectUrl = URL.createObjectURL;
   const originalRevokeObjectUrl = URL.revokeObjectURL;

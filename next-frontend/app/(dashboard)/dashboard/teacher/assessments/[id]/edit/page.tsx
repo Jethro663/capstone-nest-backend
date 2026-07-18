@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   ArrowLeft,
   BarChart3,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   CircleHelp,
@@ -71,6 +70,7 @@ import './assessment-editor.css';
 
 type RightTab = 'settings' | 'advanced' | 'rubric' | 'analytics';
 type Availability = 'given' | 'draft';
+type AcademicQuarterStatus = 'loading' | 'ready' | 'error';
 type ResultReleaseMode =
   | 'score_immediately'
   | 'full_after_delay'
@@ -603,20 +603,21 @@ function AssessmentEditorGuideShot({
       <div className="assessment-editor__guide-canvas">
         <div className="assessment-editor__guide-header-shell">
           <div className="assessment-editor__guide-title-shell">
-            <div className="assessment-editor__workspace-title-meta">
-              <span className="assessment-editor__workspace-kicker">Assessment name</span>
-              <span className="assessment-editor__workspace-editable">Editable</span>
-            </div>
             <div className="assessment-editor__workspace-title-field">
               <span className="assessment-editor__guide-back" />
               <div className="assessment-editor__title-input assessment-editor__title-input--distinguished assessment-editor__guide-title-input">
                 Fractions Checkpoint
               </div>
             </div>
+            <div className="assessment-editor__workspace-context">
+              <span>Class assessment</span>
+              <span>Quarter Q1</span>
+            </div>
           </div>
           <div className="assessment-editor__header-helper-group assessment-editor__guide-helper-shell">
-            <span className="assessment-editor__icon-action assessment-editor__guide-icon">
+            <span className="assessment-editor__warning-action">
               <AlertTriangle className="h-4 w-4" />
+              {issueCount} issues
             </span>
             <span className="assessment-editor__icon-action assessment-editor__guide-icon">
               <CircleHelp className="h-4 w-4" />
@@ -643,7 +644,7 @@ function AssessmentEditorGuideShot({
               Save now
             </AssessmentEditorGuidePin>
             <div className="assessment-editor__header-publish-group assessment-editor__guide-publish-shell">
-              <span className="rounded-full border px-3 py-1 text-xs font-semibold border-emerald-200 bg-emerald-50 text-emerald-700">
+              <span className="assessment-editor__workbar-meta">
                 Saved
               </span>
               <div className="assessment-editor__mode-switch assessment-editor__mode-switch--header">
@@ -892,6 +893,7 @@ export default function AssessmentEditorPage() {
   const latestSerializedDraftRef = useRef('');
   const latestTitleRef = useRef('');
   const titleAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const academicQuarterRequestRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -925,6 +927,8 @@ export default function AssessmentEditorPage() {
   const [category, setCategory] = useState<ClassRecordCategory>('written_work');
   const [quarter, setQuarter] = useState<GradingPeriod | ''>('');
   const [lockedSystemQuarter, setLockedSystemQuarter] = useState<GradingPeriod | null>(null);
+  const [quarterStatus, setQuarterStatus] =
+    useState<AcademicQuarterStatus>('loading');
   const [placementMode, setPlacementMode] = useState<AssessmentPlacementMode>('automatic');
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [slotOverview, setSlotOverview] = useState<ClassRecordSlotOverview | null>(null);
@@ -1156,32 +1160,39 @@ export default function AssessmentEditorPage() {
     void fetchAssessment();
   }, [fetchAssessment]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadCurrentAcademicQuarter = useCallback(async () => {
+    const requestId = academicQuarterRequestRef.current + 1;
+    academicQuarterRequestRef.current = requestId;
+    setQuarterStatus('loading');
 
-    const loadCurrentAcademicQuarter = async () => {
-      try {
-        const response = await academicStateService.getCurrent();
-        if (cancelled) return;
-        const currentQuarter = response.data.quarter as GradingPeriod;
-        setLockedSystemQuarter(currentQuarter);
-      } catch {
-        if (cancelled) return;
-        setLockedSystemQuarter(null);
-      }
-    };
+    try {
+      const response = await academicStateService.getCurrent();
+      if (academicQuarterRequestRef.current !== requestId) return;
 
-    void loadCurrentAcademicQuarter();
+      const currentQuarter = response.data.quarter as GradingPeriod;
+      setLockedSystemQuarter(currentQuarter);
+      setQuarter(currentQuarter);
+      setQuarterStatus('ready');
+    } catch {
+      if (academicQuarterRequestRef.current !== requestId) return;
 
-    return () => {
-      cancelled = true;
-    };
+      setLockedSystemQuarter(null);
+      setQuarterStatus('error');
+    }
   }, []);
 
   useEffect(() => {
-    if (!lockedSystemQuarter) return;
+    void loadCurrentAcademicQuarter();
+
+    return () => {
+      academicQuarterRequestRef.current += 1;
+    };
+  }, [loadCurrentAcademicQuarter]);
+
+  useEffect(() => {
+    if (quarterStatus !== 'ready' || !lockedSystemQuarter) return;
     setQuarter((currentQuarter) => (currentQuarter === lockedSystemQuarter ? currentQuarter : lockedSystemQuarter));
-  }, [lockedSystemQuarter]);
+  }, [lockedSystemQuarter, quarter, quarterStatus]);
 
   useEffect(() => {
     if (rightTab !== 'analytics' || !assessmentId) return;
@@ -1222,6 +1233,20 @@ export default function AssessmentEditorPage() {
       try {
         setSlotOverviewLoading(true);
         setSlotOverviewError(null);
+        const recordsResponse = await classRecordService.getByClass(assessment.classId);
+        if (cancelled) return;
+
+        const quarterWorkbookExists = recordsResponse.data.some(
+          (record) => record.gradingPeriod === quarter,
+        );
+        if (!quarterWorkbookExists) {
+          setSlotOverview(null);
+          setSlotOverviewError(
+            `Create the ${quarter} class record workbook before choosing a slot.`,
+          );
+          return;
+        }
+
         const response = await classRecordService.getSlotOverview(
           assessment.classId,
           quarter,
@@ -2081,6 +2106,11 @@ export default function AssessmentEditorPage() {
   const handleSave = async () => {
     if (!assessment || saving || isReadOnlyMode) return;
 
+    if (availability === 'given' && quarterStatus !== 'ready') {
+      toast.error('Verify the current quarter before publishing this assessment');
+      return;
+    }
+
     if (publishBlocked) {
       toast.error('Complete class record setup before publishing this assessment');
       setWarningOpen(true);
@@ -2319,28 +2349,6 @@ export default function AssessmentEditorPage() {
       description: 'Check readiness, preview the student flow, and save with confidence.',
   },
 ];
-
-  const setupSectionStatusMeta = (sectionId: AssessmentSetupSectionId) => {
-    const issues = groupedSetupIssues[sectionId];
-    if (issues.some((issue) => issue.severity === 'required')) {
-      return {
-        tone: 'needs-attention',
-        label: 'Needs attention',
-      } as const;
-    }
-
-    if (issues.length > 0) {
-      return {
-        tone: 'optional',
-        label: 'Optional',
-      } as const;
-    }
-
-    return {
-      tone: 'done',
-      label: 'Done',
-    } as const;
-  };
 
   const assessmentTypeSwitcher = (
     <div className="assessment-editor__inline-card">
@@ -2609,9 +2617,14 @@ export default function AssessmentEditorPage() {
             <div className="assessment-editor__field">
               <label>Quarter</label>
               <select
+                aria-label="Quarter"
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                disabled={
+                  isReadOnlyMode ||
+                  quarterStatus !== 'ready' ||
+                  Boolean(lockedSystemQuarter)
+                }
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -2887,9 +2900,14 @@ export default function AssessmentEditorPage() {
             <div className="assessment-editor__field">
               <label>Quarter</label>
               <select
+                aria-label="Quarter"
                 value={quarter}
                 onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
+                disabled={
+                  isReadOnlyMode ||
+                  quarterStatus !== 'ready' ||
+                  Boolean(lockedSystemQuarter)
+                }
               >
                 <option value="">Select quarter</option>
                 <option value="Q1">Q1</option>
@@ -2972,23 +2990,28 @@ export default function AssessmentEditorPage() {
           ? rubricContent
           : analyticsContent;
 
-  const saveStateMeta: { label: string; className: string } = (() => {
-    if (saveState === 'saving') {
-      return { label: 'Saving', className: 'border-amber-200 bg-amber-50 text-amber-700' };
-    }
-    if (saveState === 'dirty') {
-      return { label: 'Unsaved', className: 'border-slate-200 bg-slate-100 text-slate-700' };
-    }
-    if (saveState === 'error') {
-      return { label: 'Retry needed', className: 'border-rose-200 bg-rose-50 text-rose-700' };
-    }
-    return { label: 'Saved', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
-  })();
+  const saveStateLabel =
+    saveState === 'saving'
+      ? 'Saving'
+      : saveState === 'dirty'
+        ? 'Unsaved'
+        : saveState === 'error'
+          ? 'Retry needed'
+          : 'Saved';
+  const quarterContextLabel =
+    quarterStatus === 'loading'
+      ? 'Checking quarter'
+      : quarterStatus === 'error'
+        ? 'Quarter unverified'
+        : lockedSystemQuarter
+          ? `Quarter ${lockedSystemQuarter}`
+          : 'Quarter unavailable';
 
   const rubricDisabled = assessmentType !== 'file_upload';
   const warningButtonLabel =
     setupIssues.length === 1 ? 'View 1 setup issue' : `View ${setupIssues.length} setup issues`;
-  const reviewIssues = setupIssues.slice(0, 5);
+  const visibleWarningLabel =
+    setupIssues.length === 1 ? '1 setup issue' : `${setupIssues.length} setup issues`;
   const panelTitle =
     rightTab === 'settings'
       ? 'Settings'
@@ -3325,14 +3348,10 @@ export default function AssessmentEditorPage() {
     );
 
   return (
-    <div className="assessment-editor assessment-editor--flattened px-4 pb-10 pt-3 lg:px-6">
+    <div className="assessment-editor assessment-editor--flattened px-4 pb-8 pt-2 lg:px-6">
       <header className="assessment-editor__header assessment-editor__header--sticky assessment-editor__workspace-header">
         <div className="assessment-editor__workspace-main">
           <div className="assessment-editor__workspace-title-block">
-            <div className="assessment-editor__workspace-title-meta">
-              <span className="assessment-editor__workspace-kicker">Assessment name</span>
-              <span className="assessment-editor__workspace-editable">Editable</span>
-            </div>
             <div className="assessment-editor__workspace-title-field">
               <button
                 type="button"
@@ -3359,6 +3378,11 @@ export default function AssessmentEditorPage() {
                 placeholder="Untitled assessment"
                 disabled={isReadOnlyMode}
               />
+            </div>
+            <div className="assessment-editor__workspace-context" aria-label="Assessment context">
+              <span>{assessment.isCoreTemplateAsset ? 'Core template assessment' : 'Class assessment'}</span>
+              <span aria-hidden="true">·</span>
+              <span>{quarterContextLabel}</span>
             </div>
           </div>
 
@@ -3423,19 +3447,16 @@ export default function AssessmentEditorPage() {
               ref={warningButtonRef}
               type="button"
               variant="outline"
-              size="icon"
-              className={`assessment-editor__icon-action ${
+              className={`assessment-editor__warning-action ${
                 setupIssues.length > 0
-                  ? 'border-amber-300 bg-amber-50 text-amber-900'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  ? 'border-amber-300 text-amber-900'
+                  : 'border-emerald-300 text-emerald-800'
               }`}
               onClick={() => setWarningOpen(true)}
               aria-label={warningButtonLabel}
             >
               <AlertTriangle className="h-4 w-4" />
-              {setupIssues.length > 0 ? (
-                <span className="assessment-editor__icon-badge">{setupIssues.length}</span>
-              ) : null}
+              <span>{visibleWarningLabel}</span>
             </Button>
             <Button
               type="button"
@@ -3452,21 +3473,29 @@ export default function AssessmentEditorPage() {
             </Button>
           </div>
 
-          <div className="assessment-editor__header-publish-group">
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${saveStateMeta.className}`}>
-              {isReadOnlyMode ? 'View only' : saveStateMeta.label}
+          <div
+            className="assessment-editor__header-publish-group"
+            role="group"
+            aria-label="Assessment publishing controls"
+          >
+            <span className="assessment-editor__workbar-meta" aria-label="Assessment status">
+              {isReadOnlyMode ? 'View only' : saveStateLabel}
             </span>
             <Button
               type="button"
               variant="outline"
-              className="rounded-full bg-white"
+              className="assessment-editor__preview-btn"
               onClick={() => setPreviewEnabled((current) => !current)}
               disabled={isReadOnlyMode}
             >
               <Eye className="mr-2 h-4 w-4" />
               {isReadOnlyMode ? 'Read-only preview' : previewEnabled ? 'Back to edit' : 'Preview'}
             </Button>
-            <div className="assessment-editor__mode-switch assessment-editor__mode-switch--header">
+            <div
+              className="assessment-editor__mode-switch assessment-editor__mode-switch--header"
+              role="group"
+              aria-label="Assessment availability"
+            >
               <button
                 type="button"
                 data-active={availability === 'draft'}
@@ -3479,7 +3508,7 @@ export default function AssessmentEditorPage() {
                 type="button"
                 data-active={availability === 'given'}
                 onClick={() => setAvailability('given')}
-                disabled={isReadOnlyMode}
+                disabled={isReadOnlyMode || quarterStatus !== 'ready'}
               >
                 Ready to give
               </button>
@@ -3488,7 +3517,11 @@ export default function AssessmentEditorPage() {
               type="button"
               className="assessment-editor__save-btn"
               onClick={() => void handleSave()}
-              disabled={saving || isReadOnlyMode}
+              disabled={
+                saving ||
+                isReadOnlyMode ||
+                (availability === 'given' && quarterStatus !== 'ready')
+              }
             >
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save now
@@ -3496,472 +3529,39 @@ export default function AssessmentEditorPage() {
           </div>
         </div>
       </header>
-      {false ? (
-        <div className="assessment-editor__flattened-layout">
-        <aside className="assessment-editor__progress-rail" aria-label="Setup progress">
-          <div className="assessment-editor__progress-head">
-            <p className="assessment-editor__kicker">Setup progress</p>
-            <h2>Follow the page in order</h2>
-            <p>Each stage stays visible so a first-time teacher can set up the assessment without opening hidden panels.</p>
-          </div>
-          <div className="assessment-editor__progress-list">
-            {setupSections.map((section, index) => {
-              const status = setupSectionStatusMeta(section.id);
-              const issueCount = groupedSetupIssues[section.id].length;
-              return (
-                <button
-                  key={section.id}
-                  type="button"
-                  className="assessment-editor__progress-item"
-                  data-tone={status.tone}
-                  onClick={() => focusSection(section.id)}
-                >
-                  <span className="assessment-editor__progress-index">{index + 1}</span>
-                  <div>
-                    <strong>{section.title}</strong>
-                    <span>{section.description}</span>
-                    <small>
-                      {status.label}
-                      {issueCount > 0 ? ` (${issueCount} item${issueCount === 1 ? '' : 's'})` : ''}
-                    </small>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        <main className="assessment-editor__staged-content">
-          <section
-            ref={undefined}
-            tabIndex={-1}
-            role="region"
-            aria-label="Assessment basics"
-            className="assessment-editor__stage-section"
-          >
-            <div className="assessment-editor__stage-copy">
-              <p className="assessment-editor__kicker">Stage 1</p>
-              <h2>Assessment basics</h2>
-              <p>Set the title, teacher notes, publish state, and assessment mode before you build the learner experience.</p>
-            </div>
-            <div className="assessment-editor__stage-grid">
-              <div className="assessment-editor__inline-card">
-                <label className="assessment-editor__field-label" htmlFor="assessment-title">
-                  Assessment title
-                </label>
-                <Input
-                  id="assessment-title"
-                  aria-label="Assessment title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  className="h-12 rounded-2xl border-slate-200 bg-slate-50 px-4 text-xl font-black"
-                  placeholder="Untitled assessment"
-                  disabled={isReadOnlyMode}
-                />
-                <div className="assessment-editor__availability">
-                  <button
-                    type="button"
-                    data-active={availability === 'draft'}
-                    onClick={() => setAvailability('draft')}
-                    disabled={isReadOnlyMode}
-                  >
-                    Keep as draft
-                  </button>
-                  <button
-                    type="button"
-                    data-active={availability === 'given'}
-                    onClick={() => setAvailability('given')}
-                    disabled={isReadOnlyMode}
-                  >
-                    Ready to give
-                  </button>
-                </div>
-                <div className="assessment-editor__summary">
-                  <strong>{publishReady ? 'Ready to publish.' : 'Still in setup.'}</strong>{' '}
-                  {publishBlocked
-                    ? 'The warning checklist must be cleared before this can go live.'
-                    : 'You can keep drafting while the checklist guides the next steps.'}
-                </div>
-              </div>
-
-              {assessmentTypeSwitcher}
-
-              <div className="assessment-editor__inline-card assessment-editor__inline-card--wide">
-                <label className="assessment-editor__field-label">Teacher notes</label>
-                <RichTextEditor
-                  value={description}
-                  onChange={setDescription}
-                  className="rounded-2xl"
-                  placeholder="Add notes or instructions for this assessment."
-                  minHeight={170}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section
-            ref={(node) => {
-              sectionRefs.current.content = node;
-            }}
-            tabIndex={-1}
-            role="region"
-            aria-label="Build content"
-            className="assessment-editor__stage-section"
-          >
-            <div className="assessment-editor__stage-copy">
-              <p className="assessment-editor__kicker">Stage 2</p>
-              <h2>Build content</h2>
-              <p>Write questions or switch to file upload mode. The editor keeps everything on one page so setup stays visible.</p>
-            </div>
-            {buildContentBody}
-          </section>
-
-          <section
-            ref={undefined}
-            tabIndex={-1}
-            role="region"
-            aria-label="Delivery rules"
-            className="assessment-editor__stage-section"
-          >
-            <div className="assessment-editor__stage-copy">
-              <p className="assessment-editor__kicker">Stage 3</p>
-              <h2>Delivery rules</h2>
-              <p>Set timing, attempts, feedback, and student control rules before the assessment reaches the class.</p>
-            </div>
-            <div className="assessment-editor__stage-grid">
-              <div className="assessment-editor__inline-card">
-                <div className="assessment-editor__field">
-                  <label>Due Date</label>
-                  <Input
-                    type="datetime-local"
-                    value={dueDate}
-                    onChange={(event) => setDueDate(event.target.value)}
-                    disabled={isReadOnlyMode}
-                  />
-                </div>
-                <div className="assessment-editor__field">
-                  <label>Time Limit (minutes)</label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={3}
-                    value={timeLimitMinutes}
-                    onChange={(event) =>
-                      setTimeLimitMinutes(
-                        sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_TIME_LIMIT_MINUTES),
-                      )
-                    }
-                    onBlur={() =>
-                      setTimeLimitMinutes((current) =>
-                        finalizeBoundedPositiveIntegerInput(
-                          current,
-                          MAX_TIME_LIMIT_MINUTES,
-                          DEFAULT_TIME_LIMIT_MINUTES,
-                        ),
-                      )
-                    }
-                    disabled={isReadOnlyMode}
-                  />
-                </div>
-                <label className="assessment-editor__checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={closeWhenDue}
-                    onChange={(event) => setCloseWhenDue(event.target.checked)}
-                    disabled={isReadOnlyMode}
-                  />
-                  Close assessment when due date passes
-                </label>
-              </div>
-
-              <div className="assessment-editor__inline-card">
-                <div className="assessment-editor__field">
-                  <label>Passing Score (%)</label>
-                  <select
-                    value={passingScore}
-                    onChange={(event) => setPassingScore(normalizePassingScore(Number(event.target.value)))}
-                    disabled={isReadOnlyMode}
-                  >
-                    {PASSING_SCORE_OPTIONS.map((score) => (
-                      <option key={score} value={score}>
-                        {score}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="assessment-editor__field">
-                  <label>Max Attempts</label>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={2}
-                    value={maxAttempts}
-                    onChange={(event) =>
-                      setMaxAttempts(sanitizeBoundedPositiveIntegerInput(event.target.value, MAX_ATTEMPTS))
-                    }
-                    onBlur={() =>
-                      setMaxAttempts((current) =>
-                        finalizeBoundedPositiveIntegerInput(
-                          current,
-                          MAX_ATTEMPTS,
-                          DEFAULT_MAX_ATTEMPTS,
-                        ),
-                      )
-                    }
-                    disabled={isReadOnlyMode}
-                  />
-                </div>
-                <label className="assessment-editor__checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={randomizeQuestions}
-                    onChange={(event) => setRandomizeQuestions(event.target.checked)}
-                    disabled={isReadOnlyMode}
-                  />
-                  Randomize questions and options per student
-                </label>
-                <label className="assessment-editor__checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={timedQuestionsEnabled}
-                    onChange={(event) => {
-                      setTimedQuestionsEnabled(event.target.checked);
-                      if (!event.target.checked) setQuestionTimeLimitSeconds('');
-                    }}
-                    disabled={isReadOnlyMode}
-                  />
-                  Enable per-question timer
-                </label>
-                {timedQuestionsEnabled ? (
-                  <div className="assessment-editor__field">
-                    <label>Question Time (seconds)</label>
-                    <Input
-                      type="number"
-                      min={5}
-                      value={questionTimeLimitSeconds}
-                      onChange={(event) => setQuestionTimeLimitSeconds(event.target.value)}
-                      disabled={isReadOnlyMode}
-                    />
-                  </div>
-                ) : null}
-                <label className="assessment-editor__checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={strictMode}
-                    onChange={(event) => setStrictMode(event.target.checked)}
-                    disabled={isReadOnlyMode}
-                  />
-                  Strict no-return policy for previous questions
-                </label>
-              </div>
-
-              <div className="assessment-editor__inline-card assessment-editor__inline-card--wide">
-                <ResultReleaseSettings
-                  mode={resultReleaseMode}
-                  delayHours={feedbackDelayHours}
-                  assessmentType={assessmentType}
-                  disabled={isReadOnlyMode}
-                  onModeChange={(next) => {
-                    setResultReleaseMode(next);
-                    if (next === 'score_immediately') {
-                      setFeedbackDelayHours(0);
-                    } else if (feedbackDelayHours === 0) {
-                      setFeedbackDelayHours(DEFAULT_RESULT_RELEASE_DELAY_HOURS);
-                    }
-                  }}
-                  onDelayHoursChange={setFeedbackDelayHours}
-                />
-              </div>
-            </div>
-          </section>
-
-          <section
-            ref={undefined}
-            tabIndex={-1}
-            role="region"
-            aria-label="Class record setup"
-            className="assessment-editor__stage-section"
-          >
-            <div className="assessment-editor__stage-copy">
-              <p className="assessment-editor__kicker">Stage 4</p>
-              <h2>Class record setup</h2>
-              <p>Publishing uses this stage to decide where scores belong. Set the category and quarter before release.</p>
-            </div>
-            <div className="assessment-editor__inline-card">
-              <div className="assessment-editor__advanced-inline">
-                <div className="assessment-editor__field">
-                  <label>Category</label>
-                  <select
-                    value={category}
-                    onChange={(event) => setCategory(event.target.value as ClassRecordCategory)}
-                    disabled={isReadOnlyMode}
-                  >
-                    <option value="written_work">Written Work</option>
-                    <option value="performance_task">Performance Task</option>
-                    <option value="quarterly_assessment">Quarterly Assessment</option>
-                  </select>
-                </div>
-                <div className="assessment-editor__field">
-                  <label>Quarter</label>
-                <select
-                  value={quarter}
-                  onChange={(event) => setQuarter(event.target.value as GradingPeriod)}
-                  disabled={isReadOnlyMode || Boolean(lockedSystemQuarter)}
-                >
-                  <option value="">Select quarter</option>
-                  <option value="Q1">Q1</option>
-                  <option value="Q2">Q2</option>
-                  <option value="Q3">Q3</option>
-                  <option value="Q4">Q4</option>
-                </select>
-              </div>
-            </div>
-            {lockedSystemQuarter ? (
-              <p className="text-xs text-slate-500">
-                Quarter is locked to the current system quarter: {lockedSystemQuarter}.
-              </p>
-            ) : null}
-
-              <div className="assessment-editor__placement-toggle">
-                <button
-                  type="button"
-                  data-active={placementMode === 'automatic'}
-                  onClick={() => setPlacementMode('automatic')}
-                  disabled={isReadOnlyMode}
-                >
-                  Automatic slot
-                </button>
-                <button
-                  type="button"
-                  data-active={placementMode === 'manual'}
-                  onClick={() => setPlacementMode('manual')}
-                  disabled={isReadOnlyMode}
-                >
-                  Manual slot
-                </button>
-              </div>
-
-              {!quarter ? (
-                <p className="assessment-editor__empty-small">
-                  Pick a quarter to view available class record positions.
-                </p>
-              ) : slotOverviewLoading ? (
-                <p className="assessment-editor__empty-small">
-                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-                  Loading slot overview...
-                </p>
-              ) : slotOverviewError ? (
-                <p className="assessment-editor__empty-small">{slotOverviewError}</p>
-              ) : selectedCategorySlots ? (
-                <div className="assessment-editor__slots-grid">
-                  {(selectedCategorySlots?.slots ?? []).map((slot) => (
-                    <button
-                      key={slot.itemId}
-                      type="button"
-                      className="assessment-editor__slot-card"
-                      data-active={selectedSlotId === slot.itemId}
-                      disabled={isReadOnlyMode || placementMode !== 'manual' || !slot.isSelectable}
-                      onClick={() => {
-                        if (placementMode !== 'manual' || !slot.isSelectable) return;
-                        setSelectedSlotId(slot.itemId);
-                      }}
-                    >
-                      <strong>{slot.title}</strong>
-                      <span>HPS {slot.maxScore}</span>
-                      <small>Status: {slot.status.replace('_', ' ')}</small>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="assessment-editor__empty-small">No slots found for selected category.</p>
-              )}
-            </div>
-          </section>
-
-          <section
-            ref={undefined}
-            tabIndex={-1}
-            role="region"
-            aria-label="Final review"
-            className="assessment-editor__stage-section"
-          >
-            <div className="assessment-editor__stage-copy">
-              <p className="assessment-editor__kicker">Stage 5</p>
-              <h2>Final review</h2>
-              <p>Use this stage to confirm scoring totals, preview readiness, and what still needs action before publishing.</p>
-            </div>
-            <div className="assessment-editor__stage-grid">
-              <div className="assessment-editor__inline-card">
-                <p className="assessment-editor__kicker">Composer summary</p>
-                <div className="assessment-editor__guide-summary">
-                  <div>
-                    <small>Questions</small>
-                    <strong>{assessmentType === 'file_upload' ? 'File mode' : questions.length}</strong>
-                  </div>
-                  <div>
-                    <small>Total points</small>
-                    <strong>{totalPoints}</strong>
-                  </div>
-                  <div>
-                    <small>Save state</small>
-                    <strong>{saveStateMeta.label}</strong>
-                  </div>
-                </div>
-              </div>
-              <div className="assessment-editor__inline-card">
-                <p className="assessment-editor__kicker">Publish readiness</p>
-                <div className="assessment-editor__review-status" data-tone={publishReady ? 'ready' : 'warning'}>
-                  {publishReady ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-                  <span>{publishReady ? 'Ready to publish' : 'Needs review before publishing'}</span>
-                </div>
-                <p className="text-sm text-slate-600">
-                  {publishReady
-                    ? 'All required setup items are clear for the current publish state.'
-                    : 'Open the warning checklist to resolve the remaining required items.'}
-                </p>
-              </div>
-              <div className="assessment-editor__inline-card assessment-editor__inline-card--wide">
-                <p className="assessment-editor__kicker">Current checklist highlights</p>
-                {reviewIssues.length > 0 ? (
-                  <div className="assessment-editor__review-list">
-                    {reviewIssues.map((issue) => (
-                      <button
-                        key={issue.id}
-                        type="button"
-                        className="assessment-editor__review-item"
-                        data-severity={issue.severity}
-                        onClick={() => focusSection(issue.section)}
-                      >
-                        <strong>{issue.title}</strong>
-                        <span>{issue.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                    Everything needed for the current publish state is complete.
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
-        </main>
-        </div>
-      ) : (
-        <main
-          ref={(node) => {
-            sectionRefs.current.content = node;
-          }}
-          tabIndex={-1}
-          role="region"
-          aria-label="Build content"
-          className="assessment-editor__editor-main"
+      {quarterStatus === 'error' ? (
+        <section
+          className="mx-1 mt-3 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+          aria-live="polite"
         >
-          {buildContentBody}
-        </main>
-      )}
+          <div>
+            <p className="text-sm font-semibold">Current quarter could not be verified</p>
+            <p className="mt-1 text-sm text-amber-800">
+              Drafts can still be saved, but publishing stays unavailable until the check succeeds.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 border-amber-300 bg-white"
+            onClick={() => void loadCurrentAcademicQuarter()}
+          >
+            Retry quarter check
+          </Button>
+        </section>
+      ) : null}
+      <main
+        ref={(node) => {
+          sectionRefs.current.content = node;
+        }}
+        tabIndex={-1}
+        role="region"
+        aria-label="Build content"
+        className="assessment-editor__editor-main"
+      >
+        {buildContentBody}
+      </main>
 
       {assessmentType !== 'file_upload' && questions.length > 0 && !hideFloatingAdd && !isReadOnlyMode ? (
         <Button
@@ -4079,16 +3679,18 @@ export default function AssessmentEditorPage() {
           onClick={() => setPanelOpen(false)}
         />
         <aside
-          className={`absolute right-0 top-0 h-full w-full max-w-[440px] border-l border-slate-200 bg-white px-5 pb-5 pt-4 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.42)] transition-transform duration-300 ${
+          aria-label={`${panelTitle} panel`}
+          className={`absolute right-0 top-0 h-full w-full max-w-[440px] border-l border-slate-200 bg-white px-4 pb-4 pt-3 shadow-[0_28px_54px_-36px_rgba(15,23,42,0.42)] transition-transform duration-300 ${
             panelOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-xl font-black text-slate-900">{panelTitle}</h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-slate-900">{panelTitle}</h3>
             <button
               type="button"
               onClick={() => setPanelOpen(false)}
-              className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:bg-slate-100"
+              className="rounded-lg border border-slate-200 bg-slate-50 p-2 text-slate-500 hover:bg-slate-100"
+              aria-label="Close editor panel"
             >
               <X className="h-4 w-4" />
             </button>
