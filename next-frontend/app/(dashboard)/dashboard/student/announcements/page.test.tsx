@@ -1,8 +1,13 @@
+import { Suspense } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import StudentAnnouncementsPage from './page';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { announcementService } from '@/services/announcement-service';
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: jest.fn(() => new URLSearchParams()),
+}));
 
 jest.mock('@/providers/AuthProvider', () => ({
   useAuth: jest.fn(),
@@ -25,6 +30,10 @@ jest.mock('@/services/announcement-service', () => ({
     getByClass: jest.fn(),
   },
 }));
+
+function renderWithProviders(ui: React.ReactElement) {
+  return render(<Suspense fallback={<div>Loading...</div>}>{ui}</Suspense>);
+}
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockedClassService = classService as jest.Mocked<typeof classService>;
@@ -70,7 +79,7 @@ describe('StudentAnnouncementsPage', () => {
   });
 
   it('matches the teacher announcements shell while keeping the announcement list usable', async () => {
-    const { container } = render(<StudentAnnouncementsPage />);
+    const { container } = renderWithProviders(<StudentAnnouncementsPage />);
 
     expect(await screen.findByText('Quiz schedule')).toBeInTheDocument();
     expect(container.querySelector('.student-announcements-header')).toBeInTheDocument();
@@ -84,7 +93,7 @@ describe('StudentAnnouncementsPage', () => {
   it('shows a safe retryable owner error instead of a no-posts state', async () => {
     mockedClassService.getByStudent.mockRejectedValueOnce(new Error('class sql detail'));
 
-    render(<StudentAnnouncementsPage />);
+    renderWithProviders(<StudentAnnouncementsPage />);
 
     expect(
       await screen.findByText("Announcements couldn't be loaded"),
@@ -105,7 +114,7 @@ describe('StudentAnnouncementsPage', () => {
       data: [],
     });
 
-    render(<StudentAnnouncementsPage />);
+    renderWithProviders(<StudentAnnouncementsPage />);
 
     expect(
       await screen.findByRole('heading', { name: 'No posts yet' }),
@@ -139,7 +148,7 @@ describe('StudentAnnouncementsPage', () => {
       } as Awaited<ReturnType<typeof announcementService.getByClass>>;
     });
 
-    render(<StudentAnnouncementsPage />);
+    renderWithProviders(<StudentAnnouncementsPage />);
 
     expect(await screen.findByText('Quiz schedule')).toBeInTheDocument();
     expect(
@@ -149,7 +158,7 @@ describe('StudentAnnouncementsPage', () => {
   });
 
   it('distinguishes filtered results from a successful no-posts response', async () => {
-    render(<StudentAnnouncementsPage />);
+    renderWithProviders(<StudentAnnouncementsPage />);
 
     await screen.findByText('Quiz schedule');
     fireEvent.click(screen.getByRole('button', { name: 'Pinned' }));

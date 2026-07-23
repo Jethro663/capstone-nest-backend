@@ -263,7 +263,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }
       });
 
-      if (options?.showToast) {
+      if (options?.showToast && !isStudentRole(role)) {
         showLiveNotificationToast(notification, role);
       }
 
@@ -452,10 +452,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       ]);
 
       if (taskReminder) {
-        publishIncomingNotification(taskReminder, { showToast: true });
+        publishIncomingNotification(taskReminder, { showToast: false });
       }
       if (interventionReminder) {
-        publishIncomingNotification(interventionReminder, { showToast: true });
+        publishIncomingNotification(interventionReminder, { showToast: false });
       }
     } catch {
       // Student reminders are helpful but should never block live backend notifications.

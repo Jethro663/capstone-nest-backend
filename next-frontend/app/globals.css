@@ -8658,6 +8658,21 @@ html[data-theme='dark'] {
     #ffffff;
 }
 
+.announcement-highlight {
+  animation: announcementHighlightPulse 2s ease-out;
+}
+
+@keyframes announcementHighlightPulse {
+  0% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5);
+    background-color: rgba(59, 130, 246, 0.1);
+  }
+  100% {
+    box-shadow: none;
+    background-color: transparent;
+  }
+}
+
 .student-announcements-item__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);

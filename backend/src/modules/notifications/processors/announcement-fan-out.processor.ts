@@ -94,6 +94,7 @@ export class AnnouncementFanOutProcessor extends WorkerHost {
       referenceId: announcementId,
       title,
       body: bodyText,
+      metadata: { classId },
     }));
 
     const inserted = await this.notificationsService.createBulkDeduped(inputs);

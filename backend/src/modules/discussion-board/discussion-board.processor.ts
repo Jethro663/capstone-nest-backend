@@ -86,6 +86,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
       referenceId: threadId,
       title,
       body: preview || 'A new discussion has been posted.',
+      metadata: { classId },
     }));
 
     const inserted = await this.notificationsService.createBulkDeduped(inputs);
@@ -97,6 +98,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
         title: notification.title,
         body: notification.body,
         referenceId: notification.referenceId,
+        metadata: notification.metadata,
         createdAt: now,
       });
     }
@@ -121,6 +123,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
         referenceId: threadId,
         title: `New replies in "${threadTitle}"`,
         body: 'A new comment was posted in this discussion thread.',
+        metadata: { classId },
       }));
 
     if (classTeacherId && classTeacherId !== commenterId) {
@@ -130,6 +133,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
         referenceId: threadId,
         title: `New replies in "${threadTitle}"`,
         body: 'A student posted a new comment in your discussion thread.',
+        metadata: { classId },
       });
     }
 
@@ -147,6 +151,7 @@ export class DiscussionBoardProcessor extends WorkerHost {
         title: entry.title,
         body: entry.body,
         referenceId: entry.referenceId,
+        metadata: entry.metadata,
         createdAt: now,
       });
     }

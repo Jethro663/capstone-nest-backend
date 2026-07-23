@@ -7,7 +7,10 @@ export interface Notification {
   message: string;
   isRead: boolean;
   referenceId?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    classId?: string;
+    [key: string]: unknown;
+  } | null;
   createdAt: string;
   readAt?: string | null;
 }

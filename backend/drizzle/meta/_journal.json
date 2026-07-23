@@ -29,6 +29,13 @@
       "when": 1783655890000,
       "tag": "0003_enable_pgvector",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783700000000,
+      "tag": "0004_add_notification_metadata",
+      "breakpoints": true
     }
   ]
 }

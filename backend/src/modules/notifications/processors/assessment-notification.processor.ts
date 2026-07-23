@@ -68,6 +68,7 @@ export class AssessmentNotificationProcessor extends WorkerHost {
         referenceId: data.assessmentId,
         title: `New assessment: ${data.title}`,
         body: 'A new assessment is available in your class.',
+        metadata: { classId: data.classId },
       })),
     );
   }
@@ -94,6 +95,7 @@ export class AssessmentNotificationProcessor extends WorkerHost {
         referenceId: data.assessmentId,
         title: `Due tomorrow: ${data.title}`,
         body: 'This assessment is due in about 24 hours.',
+        metadata: { classId: data.classId },
       })),
     );
   }
@@ -112,6 +114,7 @@ export class AssessmentNotificationProcessor extends WorkerHost {
         title: input.title,
         body: input.body,
         referenceId: input.referenceId,
+        metadata: input.metadata,
         createdAt: now,
       });
     }

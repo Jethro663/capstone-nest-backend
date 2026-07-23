@@ -21,6 +21,7 @@ export interface CreateNotificationInput {
   referenceId?: string;
   title: string;
   body: string;
+  metadata?: Record<string, unknown>;
 }
 
 @Injectable()
@@ -46,6 +47,7 @@ export class NotificationsService {
           referenceId: n.referenceId ?? null,
           title: n.title,
           body: n.body,
+          metadata: n.metadata ?? null,
           isRead: false,
         })),
       )
@@ -59,6 +61,7 @@ export class NotificationsService {
         set: {
           title: sql`excluded.title`,
           body: sql`excluded.body`,
+          metadata: sql`excluded.metadata`,
           isRead: false,
           readAt: null,
           createdAt: new Date(),
@@ -88,6 +91,7 @@ export class NotificationsService {
           referenceId: n.referenceId ?? null,
           title: n.title,
           body: n.body,
+          metadata: n.metadata ?? null,
           isRead: false,
         })),
       )
@@ -107,6 +111,7 @@ export class NotificationsService {
       referenceId: row.referenceId ?? undefined,
       title: row.title,
       body: row.body,
+      metadata: row.metadata as Record<string, unknown> | undefined,
     }));
   }
 

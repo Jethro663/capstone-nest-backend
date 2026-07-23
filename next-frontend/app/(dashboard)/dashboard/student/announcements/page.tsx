@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { BookOpen, Calendar, Hash, Megaphone, Pin, User2 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
@@ -51,6 +52,8 @@ function summarizeAnnouncement(content: string) {
 export default function StudentAnnouncementsPage() {
   const { user } = useAuth();
   const userId = user?.id;
+  const searchParams = useSearchParams();
+  const initialAnnouncementId = searchParams.get('announcement');
   const [announcements, setAnnouncements] = useState<AnnouncementWithClass[]>([]);
   const [status, setStatus] = useState<StudentPageStatus>('loading');
   const [viewFilter, setViewFilter] = useState<AnnouncementViewFilter>('all');
@@ -110,6 +113,19 @@ export default function StudentAnnouncementsPage() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Auto-scroll to specific announcement when navigated from notification
+  useEffect(() => {
+    if (!initialAnnouncementId || status !== 'ready') return;
+    const timer = setTimeout(() => {
+      const element = document.getElementById(`announcement-${initialAnnouncementId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('announcement-highlight');
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [initialAnnouncementId, status]);
 
   const subjectFilters = useMemo(() => {
     const subjectMap = new Map<string, { code: string; className: string }>();
@@ -317,6 +333,7 @@ export default function StudentAnnouncementsPage() {
           <div className="student-announcements-list">
             {filteredAnnouncements.map((ann) => (
               <article
+                id={`announcement-${ann.id}`}
                 key={`${ann.classId}-${ann.id}`}
                 className={`student-announcements-item ${ann.isPinned ? 'student-announcements-item--pinned' : ''}`}
               >

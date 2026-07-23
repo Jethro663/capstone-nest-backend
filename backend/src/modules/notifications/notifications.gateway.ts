@@ -100,6 +100,7 @@ export class NotificationsGateway
       title: string;
       body: string;
       referenceId?: string;
+      metadata?: Record<string, unknown>;
       createdAt: Date;
     },
   ): void {

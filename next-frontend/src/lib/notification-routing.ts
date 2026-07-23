@@ -59,6 +59,8 @@ export function resolveNotificationDestination(notification: Notification, role?
     typeof rawReferenceId === 'string' && rawReferenceId.trim().length > 0
       ? rawReferenceId
       : undefined;
+  const classId = notification.metadata?.classId;
+  const hasClassId = typeof classId === 'string' && classId.trim().length > 0;
 
   if (notification.type === 'student_pending_intervention_reminder') {
     if (resolvedRole === 'student') return '/dashboard/student/ja?entry=lxp';
@@ -73,7 +75,14 @@ export function resolveNotificationDestination(notification: Notification, role?
 
   if (ASSESSMENT_TYPES.has(notification.type)) {
     if (resolvedRole === 'student') {
-      return referenceId ? `/dashboard/student/assessments/${referenceId}` : '/dashboard/student/assessments';
+      if (referenceId) {
+        return hasClassId
+          ? `/dashboard/student/classes/${classId}?assessment=${referenceId}`
+          : `/dashboard/student/assessments/${referenceId}`;
+      }
+      return hasClassId
+        ? `/dashboard/student/classes/${classId}`
+        : '/dashboard/student/assessments';
     }
     if (resolvedRole === 'teacher') {
       return referenceId ? `/dashboard/teacher/assessments/${referenceId}` : '/dashboard/teacher/assessments';
@@ -81,13 +90,29 @@ export function resolveNotificationDestination(notification: Notification, role?
   }
 
   if (ANNOUNCEMENT_TYPES.has(notification.type)) {
-    if (resolvedRole === 'student') return '/dashboard/student/announcements';
-    if (resolvedRole === 'teacher') return '/dashboard/teacher/announcements';
+    if (resolvedRole === 'student') {
+      return hasClassId
+        ? `/dashboard/student/classes/${classId}?announcement=${referenceId ?? ''}`
+        : '/dashboard/student/announcements';
+    }
+    if (resolvedRole === 'teacher') {
+      return hasClassId
+        ? `/dashboard/teacher/announcements?classId=${classId}`
+        : '/dashboard/teacher/announcements';
+    }
   }
 
   if (DISCUSSION_TYPES.has(notification.type)) {
-    if (resolvedRole === 'student') return '/dashboard/student/classes';
-    if (resolvedRole === 'teacher') return '/dashboard/teacher/classes';
+    if (resolvedRole === 'student') {
+      return hasClassId
+        ? `/dashboard/student/classes/${classId}?discussion=${referenceId ?? ''}`
+        : '/dashboard/student/classes';
+    }
+    if (resolvedRole === 'teacher') {
+      return hasClassId
+        ? `/dashboard/teacher/classes/${classId}?discussion=${referenceId ?? ''}`
+        : '/dashboard/teacher/classes';
+    }
   }
 
   if (notification.type === 'grade_updated') {
@@ -98,8 +123,7 @@ export function resolveNotificationDestination(notification: Notification, role?
   if (notification.type === 'extraction_completed' || notification.type === 'extraction_failed') {
     if (resolvedRole === 'teacher') {
       if (referenceId) return `/dashboard/teacher/extractions/${referenceId}`;
-      const classId = notification.metadata?.classId;
-      if (typeof classId === 'string' && classId.trim()) {
+      if (hasClassId) {
         return `/dashboard/teacher/classes/${classId}?view=extraction`;
       }
     }

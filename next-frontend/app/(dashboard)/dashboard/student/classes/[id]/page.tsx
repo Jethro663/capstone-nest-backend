@@ -1185,9 +1185,20 @@ export default function StudentClassDetailPage() {
   const { user, role } = useAuth();
 
   const classId = getClassId(params.id as string | string[] | undefined);
+  const announcementId = searchParams.get('announcement');
+  const discussionId = searchParams.get('discussion');
+  const assessmentId = searchParams.get('assessment');
+
+  // Determine tab from query params - notification deep links use announcement/discussion/assessment params
   const currentTab = isStudentClassTab(searchParams.get('view'))
     ? (searchParams.get('view') as StudentClassTab)
-    : 'modules';
+    : announcementId
+      ? 'announcements'
+      : discussionId
+        ? 'discussion'
+        : assessmentId
+          ? 'assignments'
+          : 'modules';
 
   const [pageStatus, setPageStatus] = useState<ClassPageStatus>('loading');
   const [ownerErrorKind, setOwnerErrorKind] =
@@ -1210,6 +1221,16 @@ export default function StudentClassDetailPage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
   const dataClassIdRef = useRef<string | null>(null);
+
+  // Auto-select discussion thread when navigated from notification
+  useEffect(() => {
+    if (discussionId && currentTab === 'discussion' && discussionThreads.length > 0) {
+      const thread = discussionThreads.find((t) => t.id === discussionId);
+      if (thread) {
+        setSelectedDiscussionThreadId(discussionId);
+      }
+    }
+  }, [discussionId, currentTab, discussionThreads]);
 
   const fetchPageData = useCallback(async () => {
     if (!classId) {
