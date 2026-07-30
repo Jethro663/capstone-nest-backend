@@ -409,7 +409,7 @@ export default function AdminClassRecordTransmutationPage() {
                   </div>
                   <p className="text-xs text-slate-600 mt-0.5">{tbl.description || 'Custom table'}</p>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Bands: {tbl.bands.length} | Created: {new Date(tbl.createdAt).toLocaleDateString()}
+                    Bands: {tbl.bands.length} | Created: {tbl.createdAt ? new Date(tbl.createdAt).toLocaleDateString() : 'N/A'}
                   </p>
                 </div>
 
