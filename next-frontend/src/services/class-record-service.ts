@@ -13,6 +13,9 @@ import type {
   InterventionReportRow,
   ClassRecordItem,
   ClassRecordSlotOverview,
+  TransmutationBand,
+  TransmutationTableRecord,
+  TransmutationPreviewResult,
 } from '@/types/class-record';
 import type { GradingPeriod } from '@/utils/constants';
 
@@ -144,17 +147,17 @@ export const classRecordService = {
   },
 
   // --- Transmutation ---
-  async getActiveTransmutationTable(): Promise<{ success: boolean; data: any }> {
+  async getActiveTransmutationTable(): Promise<{ success: boolean; data: TransmutationTableRecord }> {
     const { data } = await api.get('/class-record/transmutation/active');
     return data;
   },
 
-  async getAllTransmutationTables(): Promise<{ success: boolean; data: any[] }> {
+  async getAllTransmutationTables(): Promise<{ success: boolean; data: TransmutationTableRecord[] }> {
     const { data } = await api.get('/class-record/transmutation/all');
     return data;
   },
 
-  async previewTransmutationTable(file: File): Promise<{ success: boolean; data: any }> {
+  async previewTransmutationTable(file: File): Promise<{ success: boolean; data: TransmutationPreviewResult }> {
     const formData = new FormData();
     formData.append('file', file);
     const { data } = await api.post('/class-record/transmutation/preview', formData, {
@@ -163,12 +166,16 @@ export const classRecordService = {
     return data;
   },
 
-  async applyTransmutationTable(payload: { title: string; description?: string; bands: any[] }): Promise<{ success: boolean; data: any }> {
+  async applyTransmutationTable(payload: {
+    title: string;
+    description?: string;
+    bands: TransmutationBand[];
+  }): Promise<{ success: boolean; data: TransmutationTableRecord }> {
     const { data } = await api.post('/class-record/transmutation/apply', payload);
     return data;
   },
 
-  async activateTransmutationTable(id: string): Promise<{ success: boolean; data: any }> {
+  async activateTransmutationTable(id: string): Promise<{ success: boolean; data: TransmutationTableRecord }> {
     const { data } = await api.post(`/class-record/transmutation/activate/${id}`);
     return data;
   },

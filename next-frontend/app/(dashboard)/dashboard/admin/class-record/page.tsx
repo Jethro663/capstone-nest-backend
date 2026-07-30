@@ -5,15 +5,11 @@ import {
   FileUp,
   CheckCircle2,
   AlertCircle,
-  Clock,
-  Sparkles,
   Search,
   Check,
   RefreshCw,
   Eye,
   ShieldCheck,
-  Table as TableIcon,
-  Layers,
   FileSpreadsheet,
 } from 'lucide-react';
 import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
@@ -62,7 +58,7 @@ export default function AdminClassRecordTransmutationPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [applying, setApplying] = useState<boolean>(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [, setSelectedFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<PreviewPayload | null>(null);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -120,6 +116,7 @@ export default function AdminClassRecordTransmutationPage() {
 
       setPreviewData(res.data);
       setPreviewOpen(true);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
         err?.response?.data?.message || err.message || 'Error processing PDF file.';
@@ -152,6 +149,7 @@ export default function AdminClassRecordTransmutationPage() {
       setPreviewData(null);
       setSelectedFile(null);
       await fetchData();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
         err?.response?.data?.message || err.message || 'Failed to apply transmutation table.';
@@ -172,6 +170,7 @@ export default function AdminClassRecordTransmutationPage() {
         text: `Successfully reactivated "${title}" system-wide!`,
       });
       await fetchData();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
         err?.response?.data?.message || err.message || 'Failed to reactivate table.';

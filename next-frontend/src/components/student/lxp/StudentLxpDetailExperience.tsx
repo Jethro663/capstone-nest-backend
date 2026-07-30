@@ -215,17 +215,18 @@ function CheckpointCard({
     guidedAttemptSummary?.attempts?.some((a) => a.status === 'submitted') ||
     (guidedAttemptSummary?.attemptsUsed ?? 0) > 0,
   );
+  const checkpointScore = (checkpoint as { score?: { submittedAt?: string; scorePercent?: number; passed?: boolean } }).score;
   const hasScoreSubmitted = Boolean(
-    (checkpoint as any).score?.submittedAt ||
-    ((checkpoint as any).score?.scorePercent !== null && (checkpoint as any).score?.scorePercent !== undefined),
+    checkpointScore?.submittedAt ||
+    (checkpointScore?.scorePercent !== null && checkpointScore?.scorePercent !== undefined),
   );
   const isTaken = isQuizOrAssessment && (hasSubmittedGuidedAttempt || hasScoreSubmitted || checkpoint.isCompleted);
 
   const passingScore = guidedAttemptSummary?.passingScore ?? checkpoint.assessment?.passingScore ?? 60;
-  const rawScorePercent = guidedAttemptSummary?.bestScorePercent ?? guidedAttemptSummary?.latestScorePercent ?? (checkpoint as any).score?.scorePercent ?? null;
+  const rawScorePercent = guidedAttemptSummary?.bestScorePercent ?? guidedAttemptSummary?.latestScorePercent ?? checkpointScore?.scorePercent ?? null;
   const isPassed = isQuizOrAssessment && (
     Boolean(guidedAttemptSummary?.passed) ||
-    Boolean((checkpoint as any).score?.passed) ||
+    Boolean(checkpointScore?.passed) ||
     (rawScorePercent !== null && rawScorePercent >= passingScore) ||
     (checkpoint.isCompleted && (rawScorePercent === null || rawScorePercent >= passingScore))
   );

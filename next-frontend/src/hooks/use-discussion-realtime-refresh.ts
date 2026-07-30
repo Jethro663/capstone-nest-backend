@@ -91,9 +91,10 @@ export function useDiscussionRealtimeRefresh({
       }, jitterMs);
     });
 
+    const queuedThreadIds = queuedThreadIdsRef.current;
     return () => {
       unsubscribe();
-      queuedThreadIdsRef.current.clear();
+      queuedThreadIds.clear();
       if (flushTimerRef.current !== null) {
         window.clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;

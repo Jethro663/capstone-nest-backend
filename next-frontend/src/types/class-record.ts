@@ -188,3 +188,29 @@ export interface InterventionReportRow {
     email: string | null;
   } | null;
 }
+
+export interface TransmutationBand {
+  minInitialGrade: number;
+  maxInitialGrade: number;
+  transmutedGrade: number;
+}
+
+export interface TransmutationTableRecord {
+  id: string;
+  title: string;
+  description?: string;
+  isActive: boolean;
+  isSystemDefault?: boolean;
+  bands: TransmutationBand[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TransmutationPreviewResult {
+  title: string;
+  filename: string;
+  bandCount: number;
+  isValid: boolean;
+  validationMessage?: string;
+  bands: TransmutationBand[];
+}

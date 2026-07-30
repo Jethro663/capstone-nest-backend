@@ -1,8 +1,16 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { eq, desc } from 'drizzle-orm';
 import pdfParse from 'pdf-parse';
 import { DatabaseService } from '../../database/database.service';
-import { transmutationTables, TransmutationBand } from '../../drizzle/schema/transmutation.schema';
+import {
+  transmutationTables,
+  TransmutationBand,
+} from '../../drizzle/schema/transmutation.schema';
 
 export interface TransmutationPreviewResult {
   title: string;
@@ -91,12 +99,18 @@ export class TransmutationService {
         .orderBy(desc(transmutationTables.updatedAt))
         .limit(1);
 
-      if (activeRows.length > 0 && Array.isArray(activeRows[0].bands) && activeRows[0].bands.length > 0) {
+      if (
+        activeRows.length > 0 &&
+        Array.isArray(activeRows[0].bands) &&
+        activeRows[0].bands.length > 0
+      ) {
         this.cachedActiveBands = activeRows[0].bands;
         return this.cachedActiveBands;
       }
     } catch (error) {
-      this.logger.warn(`Could not query transmutation_tables from DB, using default bands: ${error}`);
+      this.logger.warn(
+        `Could not query transmutation_tables from DB, using default bands: ${error}`,
+      );
     }
 
     this.cachedActiveBands = DEFAULT_DEPED_TRANSMUTATION_BANDS;
@@ -121,7 +135,8 @@ export class TransmutationService {
     return {
       id: 'system-default',
       title: 'DepEd Order No. 8 s. 2015 Transmutation Table (System Default)',
-      description: 'Official default Department of Education K to 12 grading transmutation table.',
+      description:
+        'Official default Department of Education K to 12 grading transmutation table.',
       isSystemDefault: true,
       isActive: true,
       bands: DEFAULT_DEPED_TRANSMUTATION_BANDS,
@@ -144,7 +159,10 @@ export class TransmutationService {
   /**
    * Parses uploaded file (PDF, CSV, or Text) into a validated preview payload
    */
-  async parseAndPreview(file: { buffer: Buffer; originalname?: string }): Promise<TransmutationPreviewResult> {
+  async parseAndPreview(file: {
+    buffer: Buffer;
+    originalname?: string;
+  }): Promise<TransmutationPreviewResult> {
     const filename = file.originalname || 'uploaded_transmutation_table.pdf';
     let textContent = '';
 
@@ -157,69 +175,103 @@ export class TransmutationService {
           try {
             const res = await pdfModule(file.buffer);
             parsedText = typeof res === 'string' ? res : res?.text || '';
-          } catch {}
+          } catch {
+            /* fallback: direct-call strategy failed */
+          }
         }
 
-        if (!parsedText && pdfModule?.default && typeof pdfModule.default === 'function') {
+        if (
+          !parsedText &&
+          pdfModule?.default &&
+          typeof pdfModule.default === 'function'
+        ) {
           try {
             const res = await pdfModule.default(file.buffer);
             parsedText = typeof res === 'string' ? res : res?.text || '';
-          } catch {}
+          } catch {
+            /* fallback: default-export strategy failed */
+          }
         }
 
         if (!parsedText) {
-          const PDFClass = pdfModule?.PDFParse || (typeof pdfModule === 'function' ? pdfModule : null);
+          const PDFClass =
+            pdfModule?.PDFParse ||
+            (typeof pdfModule === 'function' ? pdfModule : null);
           if (PDFClass) {
             try {
               const instance = new PDFClass({ data: file.buffer });
               if (instance.load && typeof instance.load === 'function') {
                 await instance.load();
               }
-              const res = instance.getText ? await instance.getText() : await instance;
+              const res = instance.getText
+                ? await instance.getText()
+                : await instance;
               parsedText = typeof res === 'string' ? res : res?.text || '';
-            } catch {}
+            } catch {
+              /* fallback: class-constructor strategy failed */
+            }
           }
         }
 
-        if (!parsedText && pdfModule?.pdfParse && typeof pdfModule.pdfParse === 'function') {
+        if (
+          !parsedText &&
+          pdfModule?.pdfParse &&
+          typeof pdfModule.pdfParse === 'function'
+        ) {
           try {
             const res = await pdfModule.pdfParse(file.buffer);
             parsedText = typeof res === 'string' ? res : res?.text || '';
-          } catch {}
+          } catch {
+            /* fallback: named-export pdfParse strategy failed */
+          }
         }
 
         textContent = parsedText;
       } catch (err: any) {
-        throw new BadRequestException(`Failed to parse PDF text: ${err.message}`);
+        throw new BadRequestException(
+          `Failed to parse PDF text: ${err.message}`,
+        );
       }
     } else {
       textContent = file.buffer.toString('utf-8');
     }
 
     if (!textContent || textContent.trim().length === 0) {
-      throw new BadRequestException('The uploaded file contains no extractable text content.');
+      throw new BadRequestException(
+        'The uploaded file contains no extractable text content.',
+      );
     }
 
     const rawBands = this.extractBandsFromText(textContent);
 
     if (rawBands.length === 0) {
-      throw new BadRequestException('Could not detect any valid Initial Grade range pairs in the uploaded document.');
+      throw new BadRequestException(
+        'Could not detect any valid Initial Grade range pairs in the uploaded document.',
+      );
     }
 
     // Sort bands by minInitialGrade descending
-    const sortedBands = [...rawBands].sort((a, b) => b.minInitialGrade - a.minInitialGrade);
+    const sortedBands = [...rawBands].sort(
+      (a, b) => b.minInitialGrade - a.minInitialGrade,
+    );
 
     // Validate coverage
     const hasTop = sortedBands.some((b) => b.maxInitialGrade >= 99);
-    const hasBottom = sortedBands.some((b) => b.minInitialGrade <= 0 || b.minInitialGrade <= 25);
+    const hasBottom = sortedBands.some(
+      (b) => b.minInitialGrade <= 0 || b.minInitialGrade <= 25,
+    );
     const isValid = hasTop && hasBottom && sortedBands.length >= 10;
 
     let validationMessage = 'Valid Transmutation Table structure detected.';
     if (!isValid) {
-      validationMessage = 'Warning: Table ranges may be incomplete or missing upper/lower thresholds.';
+      validationMessage =
+        'Warning: Table ranges may be incomplete or missing upper/lower thresholds.';
     }
 
-    const title = filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ').toUpperCase();
+    const title = filename
+      .replace(/\.[^/.]+$/, '')
+      .replace(/_/g, ' ')
+      .toUpperCase();
 
     return {
       title: title || 'CUSTOM TRANSMUTATION TABLE',
@@ -256,7 +308,12 @@ export class TransmutationService {
         const maxVal = Math.max(val1, val2);
 
         const key = `${minVal}-${maxVal}-${transmuted}`;
-        if (!seen.has(key) && Number.isFinite(minVal) && Number.isFinite(transmuted) && transmuted <= 100) {
+        if (
+          !seen.has(key) &&
+          Number.isFinite(minVal) &&
+          Number.isFinite(transmuted) &&
+          transmuted <= 100
+        ) {
           seen.add(key);
           bands.push({
             minInitialGrade: minVal,
@@ -268,13 +325,20 @@ export class TransmutationService {
       }
 
       // Pattern 2: Single value format: "100.00 100" or "100 -> 100"
-      const singleMatch = line.match(/^(\d+(?:\.\d+)?)\s+(?:(?:->|=>|:|=)\s*)?(\d+)$/);
+      const singleMatch = line.match(
+        /^(\d+(?:\.\d+)?)\s+(?:(?:->|=>|:|=)\s*)?(\d+)$/,
+      );
       if (singleMatch) {
         const initial = parseFloat(singleMatch[1]);
         const transmuted = parseInt(singleMatch[2], 10);
 
         const key = `${initial}-${initial}-${transmuted}`;
-        if (!seen.has(key) && Number.isFinite(initial) && Number.isFinite(transmuted) && transmuted <= 100) {
+        if (
+          !seen.has(key) &&
+          Number.isFinite(initial) &&
+          Number.isFinite(transmuted) &&
+          transmuted <= 100
+        ) {
           seen.add(key);
           bands.push({
             minInitialGrade: initial,
@@ -291,9 +355,16 @@ export class TransmutationService {
   /**
    * Applies confirmed transmutation table system-wide
    */
-  async applyTable(title: string, description: string | undefined, bands: TransmutationBand[], userId?: string) {
+  async applyTable(
+    title: string,
+    description: string | undefined,
+    bands: TransmutationBand[],
+    userId?: string,
+  ) {
     if (!bands || bands.length === 0) {
-      throw new BadRequestException('Cannot apply an empty transmutation table.');
+      throw new BadRequestException(
+        'Cannot apply an empty transmutation table.',
+      );
     }
 
     // Deactivate all active tables
@@ -318,7 +389,9 @@ export class TransmutationService {
       .returning();
 
     this.clearCache();
-    this.logger.log(`Activated new transmutation table: ${inserted.title} (${inserted.id}) system-wide`);
+    this.logger.log(
+      `Activated new transmutation table: ${inserted.title} (${inserted.id}) system-wide`,
+    );
 
     return inserted;
   }
@@ -334,7 +407,9 @@ export class TransmutationService {
       .limit(1);
 
     if (existing.length === 0) {
-      throw new NotFoundException(`Transmutation table with ID ${id} not found.`);
+      throw new NotFoundException(
+        `Transmutation table with ID ${id} not found.`,
+      );
     }
 
     await this.db

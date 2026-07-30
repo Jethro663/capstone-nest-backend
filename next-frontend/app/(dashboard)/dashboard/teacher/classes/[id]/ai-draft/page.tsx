@@ -282,7 +282,7 @@ export default function TeacherAiDraftQuizPage() {
   const [applyPreview, setApplyPreview] = useState<QuizDraftApplyPreview | null>(null);
   const [deleteDialog, setDeleteDialog] = useState<ConfirmationDialogConfig | null>(null);
 
-  const [classItem, setClassItem] = useState<ClassItem | null>(null);
+  const [, setClassItem] = useState<ClassItem | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [indexStatus, setIndexStatus] = useState<AiClassIndexStatus | null>(null);
@@ -446,7 +446,7 @@ export default function TeacherAiDraftQuizPage() {
       }
       try {
         await fetchReadiness();
-      } catch (error) {
+      } catch {
         if (!cancelled) {
           setIndexStatus(buildUnavailableIndexStatus(classId));
         }

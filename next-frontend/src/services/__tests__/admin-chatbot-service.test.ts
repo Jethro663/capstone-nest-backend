@@ -1,7 +1,7 @@
 import { adminChatbotService } from '@/services/admin-chatbot-service';
 import { api, getAccessToken, setAccessToken } from '@/lib/api-client';
 import { refreshSessionAccessToken } from '@/lib/session-refresh';
-import axios from 'axios';
+
 
 const directAxiosPostMock = jest.fn();
 

@@ -5,6 +5,7 @@ import AuthLayout from './layout';
 jest.mock('next/image', () => ({
   __esModule: true,
   default: (props: ImageProps) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { priority: _priority, ...imgProps } = props;
 
     // Keep the image render trivial for link/accessibility assertions.
