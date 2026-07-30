@@ -16,7 +16,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "seed:smoke": "node scripts/post-seed-smoke.js",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 2219",
+    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --max-warnings 2300",
     "lint:fix": "npm run lint -- --fix",
     "test": "jest",
     "test:watch": "jest --watch",

@@ -25,32 +25,11 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { classRecordService } from '@/services/class-record-service';
-
-interface TransmutationBand {
-  minInitialGrade: number;
-  maxInitialGrade?: number;
-  transmutedGrade: number;
-}
-
-interface TransmutationTableRecord {
-  id: string;
-  title: string;
-  description?: string;
-  isSystemDefault: boolean;
-  isActive: boolean;
-  bands: TransmutationBand[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface PreviewPayload {
-  title: string;
-  filename: string;
-  bandCount: number;
-  isValid: boolean;
-  validationMessage: string;
-  bands: TransmutationBand[];
-}
+import type {
+  TransmutationBand,
+  TransmutationTableRecord,
+  TransmutationPreviewResult as PreviewPayload,
+} from '@/types/class-record';
 
 export default function AdminClassRecordTransmutationPage() {
   const [activeTable, setActiveTable] = useState<TransmutationTableRecord | null>(null);
