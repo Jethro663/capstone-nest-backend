@@ -530,22 +530,38 @@ export class SectionsService {
     }
 
     const studentIds = results.map((student) => student.id);
-    const activeSectionMemberships = await this.db
-      .select({
-        studentId: enrollments.studentId,
-        sectionId: enrollments.sectionId,
-        sectionName: sections.name,
-      })
-      .from(enrollments)
-      .innerJoin(sections, eq(sections.id, enrollments.sectionId))
-      .where(
-        and(
-          inArray(enrollments.studentId, studentIds),
-          eq(enrollments.status, 'enrolled'),
-          isNull(enrollments.classId),
-          eq(sections.isActive, true),
-        ),
-      );
+
+    const [activeSectionMemberships, completedSectionMemberships] =
+      await Promise.all([
+        this.db
+          .select({
+            studentId: enrollments.studentId,
+            sectionId: enrollments.sectionId,
+            sectionName: sections.name,
+          })
+          .from(enrollments)
+          .innerJoin(sections, eq(sections.id, enrollments.sectionId))
+          .where(
+            and(
+              inArray(enrollments.studentId, studentIds),
+              eq(enrollments.status, 'enrolled'),
+              isNull(enrollments.classId),
+              eq(sections.isActive, true),
+            ),
+          ),
+        this.db
+          .select({
+            studentId: enrollments.studentId,
+          })
+          .from(enrollments)
+          .where(
+            and(
+              inArray(enrollments.studentId, studentIds),
+              eq(enrollments.status, 'completed'),
+              isNull(enrollments.classId),
+            ),
+          ),
+      ]);
 
     const membershipByStudentId = new Map<
       string,
@@ -559,23 +575,32 @@ export class SectionsService {
       });
     }
 
+    const completedStudentIds = new Set(
+      completedSectionMemberships.map((m) => m.studentId),
+    );
+
     const mapped = results.map((candidate) => {
       const membership = membershipByStudentId.get(candidate.id);
+      const isCompleted = completedStudentIds.has(candidate.id);
       const hasActiveSectionEnrollment = Boolean(
         membership && membership.sectionId !== sectionId,
       );
       const hasGradeMismatch = Boolean(
         candidate.gradeLevel && candidate.gradeLevel !== section.gradeLevel,
       );
-      const isEligible = !hasActiveSectionEnrollment && !hasGradeMismatch;
-      const eligibilityReason = hasActiveSectionEnrollment
-        ? `Already in section ${membership?.sectionName ?? 'another section'}`
-        : hasGradeMismatch
-          ? `Grade mismatch (${candidate.gradeLevel ?? 'N/A'} vs ${section.gradeLevel})`
-          : null;
+      const isEligible =
+        !isCompleted && !hasActiveSectionEnrollment && !hasGradeMismatch;
+      const eligibilityReason = isCompleted
+        ? 'Student has completed/graduated'
+        : hasActiveSectionEnrollment
+          ? `Already in section ${membership?.sectionName ?? 'another section'}`
+          : hasGradeMismatch
+            ? `Grade mismatch (${candidate.gradeLevel ?? 'N/A'} vs ${section.gradeLevel})`
+            : null;
 
       return {
         ...candidate,
+        isCompleted,
         isEligible,
         eligibilityReason,
         hasActiveSectionEnrollment,
@@ -2476,6 +2501,87 @@ export class SectionsService {
       retainedCount,
       fromSection,
       targetSection,
+    };
+  }
+
+  async graduateStudents(
+    dto: {
+      fromSectionId: string;
+      studentIds: string[];
+    },
+    actorId?: string,
+    actorRoles: string[] = [],
+  ) {
+    const fromSection = await this.db.query.sections.findFirst({
+      where: eq(sections.id, dto.fromSectionId),
+      columns: {
+        id: true,
+        name: true,
+        gradeLevel: true,
+        schoolYear: true,
+      },
+    });
+
+    if (!fromSection) throw new NotFoundException('Source section not found');
+
+    const uniqueStudentIds = [...new Set(dto.studentIds)];
+    const readinessByStudentId =
+      await this.getSectionStudentPromotionReadiness(
+        fromSection.id,
+        uniqueStudentIds,
+      );
+    const studentReadiness = Array.from(readinessByStudentId.values());
+    const unfinalizedStudents = studentReadiness.filter(
+      (student) => !student.isFinalized,
+    );
+
+    if (unfinalizedStudents.length > 0) {
+      throw new BadRequestException({
+        message: 'Finalize selected student grades before graduating students.',
+        unfinalizedStudents,
+      });
+    }
+
+    const failingStudents = studentReadiness.filter(
+      (student) => !student.isPassing,
+    );
+
+    if (failingStudents.length > 0) {
+      throw new BadRequestException({
+        message:
+          'Only finalized passing students can be graduated. Retain failing students instead.',
+        failingStudents,
+      });
+    }
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(enrollments)
+        .set({ status: 'completed' })
+        .where(
+          and(
+            eq(enrollments.sectionId, fromSection.id),
+            eq(enrollments.status, 'enrolled'),
+            inArray(enrollments.studentId, uniqueStudentIds),
+          ),
+        );
+    });
+
+    await this.auditService.log({
+      actorId: actorId ?? 'system',
+      action: 'section.students.graduated',
+      targetType: 'section',
+      targetId: fromSection.id,
+      metadata: {
+        actorRole: this.resolveActorRole(actorRoles),
+        fromSectionId: fromSection.id,
+        graduatedCount: uniqueStudentIds.length,
+      },
+    });
+
+    return {
+      graduatedCount: uniqueStudentIds.length,
+      fromSection,
     };
   }
 

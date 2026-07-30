@@ -44,6 +44,20 @@ export default function AdminSystemSettingsPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [confirmationText, setConfirmationText] = useState('');
 
+  const [notifyingTeachers, setNotifyingTeachers] = useState(false);
+
+  const handleNotifyTeachers = async () => {
+    try {
+      setNotifyingTeachers(true);
+      const res = await academicStateService.notifyTeachers();
+      toast.success(res.data.message || 'Teachers notified successfully');
+    } catch {
+      toast.error('Failed to dispatch teacher notifications');
+    } finally {
+      setNotifyingTeachers(false);
+    }
+  };
+
   const schoolYearOptions = useMemo(
     () => deriveSchoolYearChoices(currentState?.schoolYear ?? ''),
     [currentState?.schoolYear],
@@ -185,13 +199,23 @@ export default function AdminSystemSettingsPage() {
         title="Academic State"
         description="Preview impact before transitioning. This requires a second confirmation and admin password."
         action={(
-          <Button
-            onClick={openTransitionDialog}
-            className="admin-button-solid rounded-xl font-black"
-            disabled={refreshingPreview || !preview || transitionBlocked}
-          >
-            Transition State
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleNotifyTeachers}
+              disabled={notifyingTeachers}
+              className="rounded-xl font-bold border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+            >
+              {notifyingTeachers ? 'Notifying...' : 'Notify Teachers to Finalize Grades'}
+            </Button>
+            <Button
+              onClick={openTransitionDialog}
+              className="admin-button-solid rounded-xl font-black"
+              disabled={refreshingPreview || !preview || transitionBlocked}
+            >
+              Transition State
+            </Button>
+          </div>
         )}
       >
         <div className="grid gap-4 md:grid-cols-2">
@@ -246,9 +270,20 @@ export default function AdminSystemSettingsPage() {
                     ? preview.impact.promotionReadiness.message
                     : 'No active students are blocking the transition.'}
                   {preview.impact.promotionReadiness.studentsMissingFinalizedGrades > 0 ? (
-                    <span className="mt-1 block">
-                      {preview.impact.promotionReadiness.studentsMissingFinalizedGrades} active student(s) still need finalized grades.
-                    </span>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-red-200 pt-2">
+                      <span className="block text-xs font-bold text-red-800">
+                        {preview.impact.promotionReadiness.studentsMissingFinalizedGrades} active student(s) still need finalized grades before transitioning.
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleNotifyTeachers}
+                        disabled={notifyingTeachers}
+                        className="rounded-lg font-black bg-amber-600 text-white hover:bg-amber-700"
+                      >
+                        {notifyingTeachers ? 'Sending Notifications...' : 'Notify Unfinalized Teachers'}
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
               </div>

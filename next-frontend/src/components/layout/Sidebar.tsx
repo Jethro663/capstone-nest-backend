@@ -243,9 +243,9 @@ const adminNav: NavItem[] = [
     icon: Upload,
   },
   {
-    label: "Access Students",
-    href: "/dashboard/admin/access-students",
-    icon: Users,
+    label: "Class Record",
+    href: "/dashboard/admin/class-record",
+    icon: ClipboardList,
   },
   {
     label: "User Reports",
@@ -300,9 +300,9 @@ const adminNavCategories: NavCategory[] = [
         icon: Upload,
       },
       {
-        label: "Access Students",
-        href: "/dashboard/admin/access-students",
-        icon: Users,
+        label: "Class Record",
+        href: "/dashboard/admin/class-record",
+        icon: ClipboardList,
       },
       {
         label: "User Reports",

@@ -206,6 +206,113 @@
   font-weight: 700;
 }
 
+/* GREEN Card Panel for Taken & Passed Quizzes */
+.student-lxp-checkpoint-card--passed-quiz {
+  border: 2px solid #10b981 !important;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(16, 185, 129, 0.18) !important;
+}
+
+.student-lxp-checkpoint-card--passed-quiz:hover {
+  border-color: #059669 !important;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+}
+
+.student-lxp-checkpoint-card--passed-quiz .student-lxp-checkpoint-card__index {
+  background: #bbf7d0 !important;
+  color: #14532d !important;
+}
+
+/* RED Card Panel for Not Taken or Failed Quizzes */
+.student-lxp-checkpoint-card--failed-quiz {
+  border: 2px solid #f43f5e !important;
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(244, 63, 94, 0.18) !important;
+}
+
+.student-lxp-checkpoint-card--failed-quiz:hover {
+  border-color: #e11d48 !important;
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+}
+
+.student-lxp-checkpoint-card--failed-quiz .student-lxp-checkpoint-card__index {
+  background: #fecdd3 !important;
+  color: #881337 !important;
+}
+
+/* Side Score & Title Row Layout */
+.student-lxp-checkpoint-card__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.student-lxp-checkpoint-card__side-score {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.student-lxp-checkpoint-card__score-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.student-lxp-checkpoint-card__score-badge--passed {
+  background: #059669;
+  color: #ffffff;
+  border: 1px solid #047857;
+}
+
+.student-lxp-checkpoint-card__score-badge--failed {
+  background: #e11d48;
+  color: #ffffff;
+  border: 1px solid #be123c;
+}
+
+.student-lxp-checkpoint-card__score-badge--none {
+  background: #94a3b8;
+  color: #ffffff;
+}
+
+/* Quiz Status Tags (TAKEN • PASSED / TAKEN • FAILED / NOT TAKEN) */
+.student-lxp-checkpoint-card__quiz-tag,
+.student-lxp-checkpoint-card__result-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.student-lxp-checkpoint-card__quiz-tag--passed,
+.student-lxp-checkpoint-card__result-pill--passed {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border: 1.5px solid #86efac !important;
+}
+
+.student-lxp-checkpoint-card__quiz-tag--failed,
+.student-lxp-checkpoint-card__result-pill--failed {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  border: 1.5px solid #fda4af !important;
+}
+
 .student-lxp-checkpoint-card__actions {
   display: inline-flex;
   align-items: center;
@@ -254,9 +361,20 @@
     padding: 13px 14px;
   }
 
+  .student-lxp-checkpoint-card__title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .student-lxp-checkpoint-card__side-score {
+    margin-left: 0;
+  }
+
   .student-lxp-checkpoint-card__footer {
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
   }
 
   .student-lxp-checkpoint-card__actions {

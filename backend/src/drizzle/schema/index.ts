@@ -13,3 +13,5 @@ export * from './class-templates.schema';
 export * from './discussion-board.schema';
 export * from './academic-state.schema';
 export * from './app-version.schema';
+export * from './transmutation.schema';
+

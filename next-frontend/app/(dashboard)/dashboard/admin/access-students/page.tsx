@@ -181,7 +181,16 @@ export default function AdminAccessStudentsPage() {
     [selectedStudents],
   );
 
+  const isGrade10 = selectedSection?.gradeLevel === '10';
+
   const canMoveUpSelected =
+    !isGrade10 &&
+    selectedStudents.length > 0 &&
+    unfinalizedSelectedCount === 0 &&
+    passingSelectedCount === selectedStudents.length;
+
+  const canGraduateSelected =
+    isGrade10 &&
     selectedStudents.length > 0 &&
     unfinalizedSelectedCount === 0 &&
     passingSelectedCount === selectedStudents.length;
@@ -200,13 +209,35 @@ export default function AdminAccessStudentsPage() {
       return 'Selected students are mixed passing and failing. Process passing and failing students separately.';
     }
     if (passingSelectedCount === selectedStudents.length) {
-      return 'Selected student(s) are finalized and passing, ready to move up.';
+      return isGrade10
+        ? 'Selected Grade 10 student(s) are finalized and passing, ready to graduate.'
+        : 'Selected student(s) are finalized and passing, ready to move up.';
     }
     if (failingSelectedCount === selectedStudents.length) {
       return 'Selected student(s) are finalized and failing, ready to retain.';
     }
     return 'Finalize grades first, then process students based on passing or failing status.';
-  }, [failingSelectedCount, passingSelectedCount, selectedStudents.length, unfinalizedSelectedCount]);
+  }, [failingSelectedCount, isGrade10, passingSelectedCount, selectedStudents.length, unfinalizedSelectedCount]);
+
+  const [graduating, setGraduating] = useState(false);
+
+  const handleGraduateSelected = async () => {
+    if (!selectedSectionId || selectedStudentIds.size === 0) return;
+    try {
+      setGraduating(true);
+      const res = await sectionService.graduateStudents({
+        fromSectionId: selectedSectionId,
+        studentIds: Array.from(selectedStudentIds),
+      });
+      toast.success(res.message || `${res.data?.graduatedCount} student(s) graduated successfully`);
+      setSelectedStudentIds(new Set());
+      await fetchOverview('refresh');
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to graduate students'));
+    } finally {
+      setGraduating(false);
+    }
+  };
 
   const fetchOverview = useCallback(async (mode: 'initial' | 'refresh' | 'sync') => {
     try {
@@ -645,15 +676,27 @@ export default function AdminAccessStudentsPage() {
                         <ClipboardCheck className="mr-2 h-4 w-4" />
                         {finalizing ? 'Finalizing...' : 'Finalize Selected Grades'}
                       </Button>
-                      <Button
-                        type="button"
-                        className="admin-button-solid rounded-xl font-black disabled:opacity-50"
-                        onClick={() => void openTransferDialog('promote')}
-                        disabled={!canMoveUpSelected}
-                      >
-                        <ArrowUpCircle className="mr-2 h-4 w-4" />
-                        Move Up
-                      </Button>
+                      {isGrade10 ? (
+                        <Button
+                          type="button"
+                          className="rounded-xl font-black bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                          onClick={() => void handleGraduateSelected()}
+                          disabled={!canGraduateSelected || graduating}
+                        >
+                          <ArrowUpCircle className="mr-2 h-4 w-4" />
+                          {graduating ? 'Graduating...' : 'Graduate Students'}
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          className="admin-button-solid rounded-xl font-black disabled:opacity-50"
+                          onClick={() => void openTransferDialog('promote')}
+                          disabled={!canMoveUpSelected}
+                        >
+                          <ArrowUpCircle className="mr-2 h-4 w-4" />
+                          Move Up
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="destructive"

@@ -8,12 +8,17 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, RoleName } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ClassRecordService } from './class-record.service';
 import { ClassRecordSyncService } from './class-record-sync.service';
+import { TransmutationService } from './transmutation.service';
 import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
@@ -25,7 +30,60 @@ export class ClassRecordController {
   constructor(
     private readonly classRecordService: ClassRecordService,
     private readonly syncService: ClassRecordSyncService,
+    private readonly transmutationService: TransmutationService,
   ) {}
+
+  // ── Transmutation Management ───────────────────────────────────────────
+
+  @Get('transmutation/active')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async getActiveTransmutationTable() {
+    const data = await this.transmutationService.getActiveTableRecord();
+    return { success: true, data };
+  }
+
+  @Get('transmutation/all')
+  @Roles(RoleName.Admin)
+  async getAllTransmutationTables() {
+    const data = await this.transmutationService.getAllTables();
+    return { success: true, data };
+  }
+
+  @Post('transmutation/preview')
+  @Roles(RoleName.Admin)
+  @UseInterceptors(FileInterceptor('file'))
+  async previewTransmutationTable(@UploadedFile() file: { buffer: Buffer; originalname?: string }) {
+    if (!file) {
+      throw new BadRequestException('Please upload a PDF or file containing a transmutation table.');
+    }
+    const data = await this.transmutationService.parseAndPreview(file);
+    return { success: true, data };
+  }
+
+  @Post('transmutation/apply')
+  @Roles(RoleName.Admin)
+  async applyTransmutationTable(
+    @Body() body: { title: string; description?: string; bands: any[] },
+    @CurrentUser() user: { userId: string },
+  ) {
+    const data = await this.transmutationService.applyTable(
+      body.title,
+      body.description,
+      body.bands,
+      user.userId,
+    );
+    return { success: true, data };
+  }
+
+  @Post('transmutation/activate/:id')
+  @Roles(RoleName.Admin)
+  async activateTransmutationTable(
+    @Param('id') id: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    const data = await this.transmutationService.activateTableById(id, user.userId);
+    return { success: true, data };
+  }
 
   // ── Class Record ─────────────────────────────────────────────────────────
 

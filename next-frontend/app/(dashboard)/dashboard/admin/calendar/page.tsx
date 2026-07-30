@@ -296,19 +296,24 @@ export default function AdminCalendarPage() {
     const initialize = async () => {
       try {
         setLoading(true);
+        let activeSchoolYear = '';
+        try {
+          const activeRes = await fetch('/api/academic-state/active');
+          if (activeRes.ok) {
+            const activeJson = await activeRes.json();
+            if (activeJson.data?.schoolYear) {
+              activeSchoolYear = activeJson.data.schoolYear;
+            }
+          }
+        } catch {}
+
         const classResponse = await classService.getAll({ limit: 100 });
         if (!active) return;
         const classRows = classResponse.data?.data || [];
         setClasses(classRows);
 
-        const yearOptions = [
-          ...new Set([
-            ...buildSchoolYearList(classRows, []),
-            ...getCurrentToFutureSchoolYears(4),
-          ]),
-        ].sort((left, right) => right.localeCompare(left));
-
-        setSelectedSchoolYear(yearOptions[0] ?? '');
+        const currentYearDefault = getCurrentToFutureSchoolYears(1)[0];
+        setSelectedSchoolYear(activeSchoolYear || currentYearDefault);
       } catch {
         if (!active) return;
         setClasses([]);

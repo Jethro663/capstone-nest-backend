@@ -39,6 +39,20 @@ export class AcademicStateController {
     };
   }
 
+  @Post('notify-teachers')
+  @Roles(RoleName.Admin)
+  async notifyUnfinalizedTeachers(@CurrentUser() user: any) {
+    const actorId = user?.userId ?? user?.id;
+    const data = await this.academicStateService.notifyUnfinalizedTeachers(
+      actorId,
+    );
+    return {
+      success: true,
+      message: data.message,
+      data,
+    };
+  }
+
   @Post('transition')
   @Roles(RoleName.Admin)
   async transition(

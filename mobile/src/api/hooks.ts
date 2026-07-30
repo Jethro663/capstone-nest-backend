@@ -829,6 +829,14 @@ export function useClassRecordReopenMutation(classId?: string, recordId?: string
   });
 }
 
+export function useActiveTransmutationTable() {
+  return useQuery({
+    queryKey: ["activeTransmutationTable"],
+    queryFn: () => classRecordApi.getActiveTransmutationTable(),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useDiscussionCommentMutation(classId?: string, threadId?: string) {
   const queryClient = useQueryClient();
   return useMutation({

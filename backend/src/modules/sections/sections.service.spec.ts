@@ -398,6 +398,7 @@ describe('SectionsService', () => {
         data: [
           {
             ...candidateRow,
+            isCompleted: false,
             isEligible: true,
             eligibilityReason: null,
             hasActiveSectionEnrollment: false,

@@ -17,7 +17,8 @@ export interface CreateNotificationInput {
     | 'assessment_assigned'
     | 'grade_updated'
     | 'assessment_due'
-    | 'assessment_graded';
+    | 'assessment_graded'
+    | 'grade_finalization_requested';
   referenceId?: string;
   title: string;
   body: string;

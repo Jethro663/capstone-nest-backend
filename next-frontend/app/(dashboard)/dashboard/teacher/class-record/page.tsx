@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
 import { dashboardService } from '@/services/dashboard-service';
+import { classRecordService } from '@/services/class-record-service';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import type { ClassItem } from '@/types/class';
 import type { GradingPeriod } from '@/utils/constants';
@@ -19,11 +20,22 @@ export default function ClassRecordPage() {
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState(preselectedClassId);
+  const [activeTableTitle, setActiveTableTitle] = useState<string>('');
   const [classListStatus, setClassListStatus] = useState<
     'loading' | 'ready' | 'error'
   >('loading');
 
   const classRecordState = useTeacherClassRecord(selectedClassId || undefined);
+
+  useEffect(() => {
+    classRecordService.getActiveTransmutationTable()
+      .then((res) => {
+        if (res?.data?.title) {
+          setActiveTableTitle(res.data.title);
+        }
+      })
+      .catch(() => {});
+  }, []);
   const selectedClass = useMemo(
     () => classes.find((classItem) => classItem.id === selectedClassId) ?? null,
     [classes, selectedClassId],
@@ -102,9 +114,17 @@ export default function ClassRecordPage() {
 
   return (
     <main className="teacher-class-record-page space-y-3 pb-4">
-      <header className="teacher-class-record-header">
+      <header className="teacher-class-record-header flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1>Class Record</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1>Class Record</h1>
+            {activeTableTitle && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200 shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                Table Standard: {activeTableTitle}
+              </span>
+            )}
+          </div>
           <p>Review grades, manage quarter records, and export the official workbook.</p>
         </div>
         <Button

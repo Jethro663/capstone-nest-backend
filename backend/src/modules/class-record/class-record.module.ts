@@ -5,6 +5,7 @@ import { ClassRecordController } from './class-record.controller';
 import { ClassRecordService } from './class-record.service';
 import { ClassRecordComputationService } from './class-record-computation.service';
 import { ClassRecordSyncService } from './class-record-sync.service';
+import { TransmutationService } from './transmutation.service';
 import { AdviserSectionGuard } from './guards/adviser-section.guard';
 import { AuditModule } from '../audit/audit.module';
 
@@ -15,8 +16,9 @@ import { AuditModule } from '../audit/audit.module';
     ClassRecordService,
     ClassRecordComputationService,
     ClassRecordSyncService,
+    TransmutationService,
     AdviserSectionGuard,
   ],
-  exports: [ClassRecordService],
+  exports: [ClassRecordService, TransmutationService],
 })
 export class ClassRecordModule {}

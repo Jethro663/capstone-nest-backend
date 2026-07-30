@@ -60,4 +60,24 @@ export const academicStateService = {
       };
     };
   },
+
+  async notifyTeachers() {
+    const { data } = await api.post('/academic-state/notify-teachers');
+    return data as {
+      success: boolean;
+      message: string;
+      data: {
+        message: string;
+        notifiedClassesCount: number;
+        notifiedTeachersCount: number;
+        details?: Array<{
+          classId: string;
+          subjectName: string;
+          sectionName: string;
+          gradeLevel: string;
+          teacherId: string;
+        }>;
+      };
+    };
+  },
 };

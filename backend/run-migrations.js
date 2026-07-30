@@ -9,7 +9,7 @@ env.config(); // Load .env if present
 // Reads DATABASE_URL from env, falls back to the local dev default.
 const connectionString =
   process.env.DATABASE_URL ||
-  'postgresql://postgres:200411@postgres:5432/capstone';
+  'postgresql://postgres:200411@marcdustin:5432/capstone';
 
 const client = new Client({ connectionString });
 

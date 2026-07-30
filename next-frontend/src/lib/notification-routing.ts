@@ -62,6 +62,13 @@ export function resolveNotificationDestination(notification: Notification, role?
   const classId = notification.metadata?.classId;
   const hasClassId = typeof classId === 'string' && classId.trim().length > 0;
 
+  if (notification.type === 'grade_finalization_requested') {
+    if (hasClassId && resolvedRole === 'teacher') {
+      return `/dashboard/teacher/classes/${classId}?view=class-record`;
+    }
+    return resolvedRole === 'teacher' ? '/dashboard/teacher/classes' : '/dashboard/notifications';
+  }
+
   if (notification.type === 'student_pending_intervention_reminder') {
     if (resolvedRole === 'student') return '/dashboard/student/ja?entry=lxp';
     return '/dashboard/notifications';

@@ -11,7 +11,7 @@ import { WinstonLoggerService } from './common/logger/winston-logger.service';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import express from 'express';
-import { validateEnvironment } from './config/validate-env.js';
+import { validateEnvironment } from './config/validate-env';
 
 function parseOriginList(value?: string): string[] {
   if (!value) return [];

@@ -129,6 +129,11 @@ export class FeedbackService {
         message: `Detailed feedback available in ${Math.max(0, hoursUntilUnlock)} hours. Review lessons to learn why answers are correct!`,
       };
     } else {
+      filteredAttempt.responses = filteredAttempt.responses.map((r: any) => ({
+        ...r,
+        hint: r.hint || this.generateLearningHint(r.question, r.isCorrect),
+      }));
+
       filteredAttempt.feedbackStatus = {
         level: 'standard',
         unlocked: true,
@@ -179,7 +184,7 @@ export class FeedbackService {
     } else {
       filteredAttempt.responses = filteredAttempt.responses.map((r: any) => ({
         ...r,
-        hint: this.generateLearningHint(r.question, r.isCorrect),
+        hint: r.hint || this.generateLearningHint(r.question, r.isCorrect),
       }));
 
       filteredAttempt.feedbackStatus = {
@@ -193,31 +198,53 @@ export class FeedbackService {
     return filteredAttempt;
   }
 
+  private stripHtml(text: string): string {
+    return String(text ?? '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   /**
-   * Generate learning-focused hints rather than just showing answers.
+   * Generate learning-focused hints based on question content, concept tags, and explanation.
    */
-  generateLearningHint(question: any, isCorrect: boolean): string {
-    if (isCorrect) {
-      return `✓ Correct! You understood the concept in question "${question.content.substring(0, 50)}..."`;
+  generateLearningHint(question: any, isCorrect?: boolean | null): string {
+    if (!question) {
+      return 'Review the core subject concepts in this module.';
     }
 
-    switch (question.type) {
-      case QuestionType.MULTIPLE_CHOICE:
-      case QuestionType.DROPDOWN:
-        return `Review the lesson content about this topic. The correct answer involves understanding the key concept.`;
-
-      case QuestionType.TRUE_FALSE:
-        return `Think about whether the statement is always true or if there are exceptions. Review the lesson.`;
-
-      case QuestionType.MULTIPLE_SELECT:
-        return `This question requires selecting ALL correct answers. Review which concepts apply.`;
-
-      case QuestionType.SHORT_ANSWER:
-      case QuestionType.FILL_BLANK:
-        return `Compare your answer with the key terms in the lesson. Make sure you used precise language.`;
-
-      default:
-        return `Review this question and the related lesson content.`;
+    if (question.hint && typeof question.hint === 'string' && question.hint.trim()) {
+      return question.hint.trim();
     }
+
+    if (question.reviewHint && typeof question.reviewHint === 'string' && question.reviewHint.trim()) {
+      return question.reviewHint.trim();
+    }
+
+    const rawExplanation = question.explanation ? this.stripHtml(question.explanation) : '';
+    const rawContent = question.content ? this.stripHtml(question.content) : '';
+
+    if (rawExplanation.length > 5) {
+      return `Key Concept: ${rawExplanation}`;
+    }
+
+    const conceptTags = Array.isArray(question.conceptTags)
+      ? question.conceptTags.join(', ')
+      : typeof question.weakConceptTag === 'string'
+        ? question.weakConceptTag
+        : '';
+
+    if (conceptTags) {
+      return `Focus Concept: This question tests ${conceptTags}. Recall key definitions and rules from the lesson modules.`;
+    }
+
+    const shortContent = rawContent.length > 70 ? `${rawContent.substring(0, 70)}...` : rawContent;
+    if (shortContent) {
+      return `Educational Clue: Pay close attention to the terms in "${shortContent}". Compare your reasoning with module core concepts.`;
+    }
+
+    return 'Educational Clue: Review the key principles in your class module materials for this question topic.';
   }
 }

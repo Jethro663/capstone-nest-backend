@@ -1442,15 +1442,13 @@ export class AssessmentsService {
           .where(eq(assessments.classId, classId)),
       ]);
 
+      const totalCount = Number(totalResult[0]?.value ?? 0);
       return {
         data: assessmentList,
-        total: totalResult[0]?.value ?? 0,
+        total: totalCount,
         page,
         limit,
-        totalPages: Math.max(
-          Math.ceil((totalResult[0]?.value ?? 0) / limit),
-          1,
-        ),
+        totalPages: Math.max(Math.ceil(totalCount / limit), 1),
       };
     }
 
@@ -3964,6 +3962,14 @@ export class AssessmentsService {
 
     return {
       ...attempt,
+      responses: (attempt.responses || []).map((r: any) => ({
+        ...r,
+        hint:
+          r.hint ||
+          (this.feedbackService?.generateLearningHint
+            ? this.feedbackService.generateLearningHint(r.question, r.isCorrect)
+            : null),
+      })),
       isReturned: attempt.isReturned,
       returnedAt: attempt.returnedAt,
       teacherFeedback: attempt.teacherFeedback,

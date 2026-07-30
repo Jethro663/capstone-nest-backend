@@ -365,26 +365,27 @@ export default function StudentGuidedAssessmentPage() {
               {response?.isCorrect ? "Correct" : "Review"}
             </StudentStatusChip>
           </div>
-          <div className="guided-answer-feedback__summary mt-3 grid gap-2 text-sm text-[var(--student-text-soft)] sm:grid-cols-2">
-            <p
-              className={
-                response?.isCorrect
-                  ? "guided-answer-feedback__student"
-                  : "guided-answer-feedback__student is-wrong"
-              }
-            >
-              Your previous answer: {formatAnswer(question, response?.answer)}
-            </p>
-            <p className="guided-answer-feedback__correct">
-              Correct answer: {formatCorrectAnswer(question)}
-            </p>
-          </div>
+          <p
+            className={
+              response?.isCorrect
+                ? "guided-answer-feedback__student mt-3 text-sm text-[var(--student-text-soft)]"
+                : "guided-answer-feedback__student is-wrong mt-3 text-sm text-[var(--student-text-soft)]"
+            }
+          >
+            Your previous answer: {formatAnswer(question, response?.answer)}
+          </p>
           {reviewHint ? (
-            <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-sm leading-6 text-[#155e75]">
-              <strong className="block text-[#0f3f56]">JA clue</strong>
+            <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3.5 text-sm leading-6 text-[#155e75]">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#0f3f56]">
+                <Lightbulb className="h-4 w-4 text-[#0284c7]" />
+                <span>Educational Hint / Concept Context</span>
+              </div>
               <p className="mt-1">{reviewHint}</p>
             </div>
           ) : null}
+          <p className="guided-answer-feedback__correct mt-3 text-sm text-[var(--student-text-soft)] font-medium">
+            Correct answer: {formatCorrectAnswer(question)}
+          </p>
           <p className="mt-3 text-sm leading-6 text-[var(--student-text-soft)]">
             {stripRichText(question.explanation)}
           </p>

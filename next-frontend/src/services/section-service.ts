@@ -264,6 +264,7 @@ export type BulkStudentTransferResponse = {
   data: {
     movedCount?: number;
     retainedCount?: number;
+    graduatedCount?: number;
     failingStudents?: Array<{
       studentId: string;
       finalGrade: number | null;
@@ -459,6 +460,11 @@ export const sectionService = {
 
   async failStudents(dto: FailStudentsDto): Promise<BulkStudentTransferResponse> {
     const { data } = await api.post('/sections/access-students/fail', dto);
+    return data;
+  },
+
+  async graduateStudents(dto: { fromSectionId: string; studentIds: string[] }): Promise<BulkStudentTransferResponse> {
+    const { data } = await api.post('/sections/access-students/graduate', dto);
     return data;
   },
 

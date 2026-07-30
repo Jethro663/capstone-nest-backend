@@ -2,9 +2,12 @@ import {
   Injectable,
   UnprocessableEntityException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { TransmutationService } from './transmutation.service';
+import { TransmutationBand } from '../../drizzle/schema/transmutation.schema';
 import {
   classRecords,
   classRecordCategories,
@@ -24,7 +27,7 @@ export interface CategoryBreakdown {
   totalHPS: number;
   /** Percentage Score = (totalRaw / totalHPS) x 100 */
   percentageScore: number;
-  /** Weighted Score = PS x (weight / 100) */
+  /** Weighted Score = percentageScore x (weightPercentage / 100) */
   weightedScore: number;
 }
 
@@ -91,7 +94,10 @@ const DEPED_TRANSMUTATION_TABLE: readonly DepEdTransmutationBand[] = [
 export class ClassRecordComputationService {
   private readonly logger = new Logger(ClassRecordComputationService.name);
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    @Optional() private readonly transmutationService?: TransmutationService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -123,13 +129,33 @@ export class ClassRecordComputationService {
   }
 
   /**
-   * Converts initial grade to transmuted grade based on official DepEd table.
-   * Thresholds follow the DepEd transmutation table.
+   * Converts initial grade to transmuted grade based on official active transmutation table.
    */
-  transmute(initialGrade: number): number {
+  transmute(initialGrade: number, customBands?: TransmutationBand[]): number {
     const safeInitialGrade = Number.isFinite(initialGrade) ? initialGrade : 0;
     const normalizedInitialGrade = Math.min(100, Math.max(0, safeInitialGrade));
     const epsilon = 1e-9;
+
+    const activeBands = customBands;
+
+    if (activeBands && activeBands.length > 0) {
+      for (const band of activeBands) {
+        const minVal = band.minInitialGrade;
+        const maxVal = band.maxInitialGrade ?? minVal;
+        if (
+          normalizedInitialGrade + epsilon >= minVal &&
+          normalizedInitialGrade <= maxVal + epsilon
+        ) {
+          return band.transmutedGrade;
+        }
+      }
+      // Fallback matching if between bands
+      for (const band of activeBands) {
+        if (normalizedInitialGrade + epsilon >= band.minInitialGrade) {
+          return band.transmutedGrade;
+        }
+      }
+    }
 
     for (const band of DEPED_TRANSMUTATION_TABLE) {
       if (normalizedInitialGrade + epsilon >= band.minInitialGrade) {
@@ -227,7 +253,8 @@ export class ClassRecordComputationService {
       itemsByCategory.get(item.categoryId)!.push(item);
     }
 
-    // 5. Compute per-student grades using DepEd formula
+    // 5. Compute per-student grades using DepEd formula and active transmutation table
+    const activeBands = this.transmutationService ? await this.transmutationService.getActiveBands() : undefined;
     const results = new Map<string, StudentGradeResult>();
 
     for (const studentId of studentIds) {
@@ -291,7 +318,7 @@ export class ClassRecordComputationService {
       }
 
       initialGrade = Math.round(initialGrade * 1000) / 1000;
-      const quarterlyGrade = this.transmute(initialGrade);
+      const quarterlyGrade = this.transmute(initialGrade, activeBands);
 
       const remarks: 'Passed' | 'For Intervention' =
         quarterlyGrade < 75 ? 'For Intervention' : 'Passed';

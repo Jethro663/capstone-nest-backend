@@ -1398,38 +1398,67 @@ export default function TeacherInterventionsPage() {
                   {activeDetailAssignments.length === 0 ? (
                     <p className="text-[#8ea0bc]">No assigned checkpoints yet.</p>
                   ) : (
-                    activeDetailAssignments.map((assignment) => (
-                      <div
-                        key={assignment.id}
-                        className="flex items-center justify-between gap-3 rounded-md bg-white/5 px-3 py-2"
-                      >
-                        <div>
-                          <p className="font-medium">{assignment.label}</p>
-                          <p className="text-xs text-[#8ea0bc]">
-                            {assignmentTypeLabel(assignment.type)}
-                          </p>
-                          {assignmentContentTitle(assignment) !== assignment.label ? (
-                            <p className="text-xs text-[#c8d2e3]">{assignmentContentTitle(assignment)}</p>
-                          ) : null}
+                    activeDetailAssignments.map((assignment) => {
+                      const isQuizOrAssessment =
+                        assignment.type === 'guided_assessment' ||
+                        assignment.type === 'assessment_retry' ||
+                        Boolean(assignment.assessment);
+                      const isTaken = Boolean(assignment.isCompleted || assignment.score);
+                      const scorePercent = assignment.score?.scorePercent ?? null;
+                      const isPassed = Boolean(
+                        assignment.isCompleted ||
+                        (scorePercent !== null && scorePercent >= (assignment.assessment?.passingScore ?? 60)),
+                      );
+
+                      const quizTag = !isQuizOrAssessment
+                        ? null
+                        : isTaken
+                          ? isPassed
+                            ? 'TAKEN • PASSED'
+                            : 'TAKEN • FAILED'
+                          : 'NOT TAKEN';
+
+                      const isGreen = isQuizOrAssessment ? (isTaken && isPassed) : assignment.isCompleted;
+
+                      return (
+                        <div
+                          key={assignment.id}
+                          className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+                            isGreen
+                              ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-100'
+                              : 'bg-rose-950/40 border-rose-500/50 text-rose-100'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-medium text-sm text-white">{assignment.label}</p>
+                            <p className="text-xs text-[#a0aec0]">
+                              {assignmentTypeLabel(assignment.type)}
+                            </p>
+                            {assignmentContentTitle(assignment) !== assignment.label ? (
+                              <p className="text-xs text-[#cbd5e1]">{assignmentContentTitle(assignment)}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-col items-end gap-1 text-right">
+                            {assignment.score ? (
+                              <span className={`text-xs font-extrabold px-2 py-0.5 rounded-full ${isPassed ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+                                {formatPercent(assignment.score.scorePercent)} score
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">No score</span>
+                            )}
+                            <Badge
+                              className={`border-0 font-bold uppercase text-[10px] tracking-wider ${
+                                isGreen
+                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                              }`}
+                            >
+                              {quizTag ?? (assignment.isCompleted ? 'Done' : 'Pending')}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          {assignment.score ? (
-                            <span className="text-xs font-semibold text-white">
-                              {formatPercent(assignment.score.scorePercent)} score
-                            </span>
-                          ) : null}
-                          <Badge
-                            className={
-                              assignment.isCompleted
-                                ? 'teacher-badge-success border-0'
-                                : 'teacher-badge-danger border-0'
-                            }
-                          >
-                            {assignment.isCompleted ? 'Done' : 'Pending'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

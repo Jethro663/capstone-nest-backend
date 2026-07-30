@@ -11,7 +11,15 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
+import { Lightbulb } from 'lucide-react';
 import type { AttemptResult } from '@/types/assessment';
+
+function getCorrectAnswerText(response: AttemptResult['responses'][number]) {
+  return response.question?.options
+    ?.filter((option) => option.isCorrect)
+    .map((option) => option.text)
+    .join(', ');
+}
 
 export default function TeacherAttemptResultsPage() {
   const params = useParams();
@@ -108,74 +116,107 @@ export default function TeacherAttemptResultsPage() {
       <div>
         <h2 className="mb-3 text-lg font-semibold">Question Review</h2>
         <div className="space-y-3">
-          {result.responses.map((response, index) => (
-            <motion.div
-              key={response.questionId}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + index * 0.06, duration: 0.3 }}
-            >
-              <Card
-                className={`border-l-4 ${
-                  response.isCorrect === null || response.isCorrect === undefined
-                    ? 'border-l-yellow-400'
-                    : response.isCorrect
-                      ? 'border-l-green-500'
-                      : 'border-l-red-500'
-                }`}
+          {result.responses.map((response, index) => {
+            const questionHint =
+              response.hint ||
+              (response.question?.explanation
+                ? `Key Concept: ${response.question.explanation.replace(/<[^>]*>/g, '')}`
+                : 'Review the key definitions in your class module for this question.');
+            const correctAnswerText = getCorrectAnswerText(response);
+
+            return (
+              <motion.div
+                key={response.questionId}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 + index * 0.06, duration: 0.3 }}
               >
-                <CardContent className="p-4">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Q{index + 1}</span>
-                      <Badge
-                        variant={
-                          response.isCorrect === null || response.isCorrect === undefined
-                            ? 'secondary'
+                <Card
+                  className={`border-l-4 ${
+                    response.isCorrect === null || response.isCorrect === undefined
+                      ? 'border-l-yellow-400'
+                      : response.isCorrect
+                        ? 'border-l-green-500'
+                        : 'border-l-red-500'
+                  }`}
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">Q{index + 1}</span>
+                        <Badge
+                          variant={
+                            response.isCorrect === null || response.isCorrect === undefined
+                              ? 'secondary'
+                              : response.isCorrect
+                                ? 'default'
+                                : 'destructive'
+                          }
+                        >
+                          {response.isCorrect === null || response.isCorrect === undefined
+                            ? 'Pending Review'
                             : response.isCorrect
-                              ? 'default'
-                              : 'destructive'
-                        }
-                      >
-                        {response.isCorrect === null || response.isCorrect === undefined
-                          ? 'Pending Review'
-                          : response.isCorrect
-                            ? 'Correct'
-                            : 'Incorrect'}
-                      </Badge>
+                              ? 'Correct'
+                              : 'Incorrect'}
+                        </Badge>
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {response.pointsEarned ?? 0}/{response.question?.points ?? 0} pts
+                      </span>
                     </div>
-                    <span className="text-sm text-muted-foreground">
-                      {response.pointsEarned ?? 0}/{response.question?.points ?? 0} pts
-                    </span>
-                  </div>
 
-                  <RichTextRenderer
-                    html={response.question?.content ?? '<p>No question content.</p>'}
-                    className="font-medium"
-                  />
-                  {response.question?.imageUrl && (
-                    <div className="mt-2">
-                      <Image
-                        src={response.question.imageUrl}
-                        alt="Question"
-                        width={960}
-                        height={540}
-                        unoptimized
-                        className="max-h-40 h-auto w-auto rounded-md border object-contain"
+                    <RichTextRenderer
+                      html={response.question?.content ?? '<p>No question content.</p>'}
+                      className="font-medium"
+                    />
+                    {response.question?.imageUrl && (
+                      <div>
+                        <Image
+                          src={response.question.imageUrl}
+                          alt="Question"
+                          width={960}
+                          height={540}
+                          unoptimized
+                          className="max-h-40 h-auto w-auto rounded-md border object-contain"
+                        />
+                      </div>
+                    )}
+
+                    {response.studentAnswer && (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Student Answer: </span>
+                        <span className="font-semibold">{response.studentAnswer}</span>
+                      </p>
+                    )}
+
+                    {questionHint ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-amber-900">
+                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-900">
+                          <Lightbulb className="h-4 w-4 text-amber-600" />
+                          <span>Educational Hint / Concept Context</span>
+                        </div>
+                        <p className="mt-1 text-xs leading-relaxed text-amber-800">{questionHint}</p>
+                      </div>
+                    ) : null}
+
+                    {correctAnswerText ? (
+                      <p className="text-sm">
+                        <span className="text-muted-foreground">Correct Answer: </span>
+                        <span className="font-semibold text-emerald-700">{correctAnswerText}</span>
+                      </p>
+                    ) : null}
+
+                    {response.question?.explanation ? (
+                      <RichTextRenderer
+                        html={response.question.explanation}
+                        className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-800"
                       />
-                    </div>
-                  )}
-
-                  {response.studentAnswer && (
-                    <p className="mt-2 text-sm">
-                      <span className="text-muted-foreground">Answer: </span>
-                      <span>{response.studentAnswer}</span>
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                    ) : null}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </motion.div>

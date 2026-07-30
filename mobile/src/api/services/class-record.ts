@@ -98,6 +98,11 @@ export const classRecordApi = {
     return normalizeArray<InterventionReportRow>(unwrapEnvelope(response.data));
   },
 
+  async getActiveTransmutationTable() {
+    const response = await apiClient.get<ApiEnvelope<{ id: string; title: string; description?: string }>>("/class-record/transmutation/active");
+    return unwrapEnvelope(response.data);
+  },
+
   listQuarters(): GradingPeriod[] {
     return ["Q1", "Q2", "Q3", "Q4"];
   },

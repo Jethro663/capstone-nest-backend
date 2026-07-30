@@ -1,8 +1,8 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Text, View } from "react-native";
-import { queryKeys, useClassRecordPreviewGrades, useClassRecordSpreadsheet, useTeacherClasses } from "../api/hooks";
+import { queryKeys, useActiveTransmutationTable, useClassRecordPreviewGrades, useClassRecordSpreadsheet, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { classRecordApi } from "../api/services/class-record";
 import type { RootStackParamList } from "../navigation/types";
@@ -30,6 +30,7 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
+  const activeTableQuery = useActiveTransmutationTable();
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedQuarter, setSelectedQuarter] = useState<"Q1" | "Q2" | "Q3" | "Q4">("Q1");
@@ -136,6 +137,30 @@ export function TeacherClassRecordScreen({ navigation }: Props) {
         ]);
       }}
     >
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 8,
+          marginBottom: 4,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          backgroundColor: "#fff1f2",
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: "#fecdd3",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        <Text style={{ fontSize: 11, fontWeight: "700", color: "#9f1239" }}>
+          Transmutation Standard:
+        </Text>
+        <Text style={{ fontSize: 11, fontWeight: "800", color: "#be123c", flex: 1 }} numberOfLines={1}>
+          {activeTableQuery.data?.title || "DepEd Order No. 8 s. 2015 Transmutation Table"}
+        </Text>
+      </View>
+
       <TeacherStats
         items={[
           { label: "Records", value: records.length, tone: "red" },

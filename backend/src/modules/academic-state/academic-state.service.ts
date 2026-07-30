@@ -26,6 +26,8 @@ import {
   users,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationsGateway } from '../notifications/notifications.gateway';
 import { TransitionAcademicStateDto } from './DTO/transition-academic-state.dto';
 
 type QuarterKey = 'Q1' | 'Q2' | 'Q3' | 'Q4';
@@ -63,6 +65,8 @@ export class AcademicStateService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly auditService: AuditService,
+    private readonly notificationsService: NotificationsService,
+    private readonly notificationsGateway: NotificationsGateway,
   ) {}
 
   private get db() {
@@ -876,6 +880,118 @@ export class AcademicStateService {
       },
       transitionConfirmationText:
         AcademicStateService.TRANSITION_CONFIRMATION_TEXT,
+    };
+  }
+
+  async notifyUnfinalizedTeachers(actorId: string) {
+    const current = await this.ensureCurrentState();
+
+    const unfinalizedClassRows = await this.db
+      .select({
+        classId: classes.id,
+        subjectName: classes.subjectName,
+        teacherId: classes.teacherId,
+        sectionId: sections.id,
+        sectionName: sections.name,
+        sectionGradeLevel: sections.gradeLevel,
+        classRecordId: classRecords.id,
+      })
+      .from(classRecords)
+      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .innerJoin(sections, eq(sections.id, classes.sectionId))
+      .where(
+        and(
+          eq(classRecords.status, 'draft'),
+          eq(classes.schoolYear, current.schoolYear),
+          eq(classes.isActive, true),
+        ),
+      );
+
+    if (unfinalizedClassRows.length === 0) {
+      return {
+        message: 'No unfinalized classes found for the active school year.',
+        notifiedClassesCount: 0,
+        notifiedTeachersCount: 0,
+        details: [],
+      };
+    }
+
+    const uniqueClassesMap = new Map<
+      string,
+      (typeof unfinalizedClassRows)[number]
+    >();
+    for (const row of unfinalizedClassRows) {
+      if (row.teacherId && !uniqueClassesMap.has(row.classId)) {
+        uniqueClassesMap.set(row.classId, row);
+      }
+    }
+
+    const uniqueClasses = Array.from(uniqueClassesMap.values());
+    if (uniqueClasses.length === 0) {
+      return {
+        message: 'No active teacher assignments found for unfinalized classes.',
+        notifiedClassesCount: 0,
+        notifiedTeachersCount: 0,
+        details: [],
+      };
+    }
+
+    const notificationInputs = uniqueClasses.map((item) => ({
+      userId: item.teacherId!,
+      type: 'grade_finalization_requested' as const,
+      referenceId: item.classId,
+      title: `Finalize Grades: ${item.subjectName}`,
+      body: `School year transition is pending. Please finalize grades for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}).`,
+      metadata: {
+        classId: item.classId,
+        sectionId: item.sectionId,
+        subjectName: item.subjectName,
+        sectionName: item.sectionName,
+        gradeLevel: item.sectionGradeLevel,
+        view: 'class-record',
+      },
+    }));
+
+    const inserted =
+      await this.notificationsService.createBulkDeduped(notificationInputs);
+
+    for (const n of inserted) {
+      this.notificationsGateway.emitToUser(n.userId, {
+        id: `gen-${Date.now()}-${n.referenceId || 'ref'}`,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        referenceId: n.referenceId,
+        metadata: n.metadata,
+        createdAt: new Date(),
+      });
+    }
+
+    const notifiedTeacherIds = new Set(uniqueClasses.map((c) => c.teacherId!));
+
+    await this.auditService.log({
+      actorId,
+      action: 'academic_state.teachers_notified',
+      targetType: 'academic_state',
+      targetId: this.singletonStateId,
+      metadata: {
+        schoolYear: current.schoolYear,
+        notifiedClassesCount: uniqueClasses.length,
+        notifiedTeachersCount: notifiedTeacherIds.size,
+      },
+    });
+
+    return {
+      message: `Successfully sent ${inserted.length} notification(s) to ${notifiedTeacherIds.size} teacher(s) across ${uniqueClasses.length} unfinalized subject(s).`,
+      notifiedClassesCount: uniqueClasses.length,
+      notifiedTeachersCount: notifiedTeacherIds.size,
+      details: uniqueClasses.map((item) => ({
+        classId: item.classId,
+        subjectName: item.subjectName,
+        sectionName: item.sectionName,
+        gradeLevel: item.sectionGradeLevel,
+        teacherId: item.teacherId,
+      })),
     };
   }
 

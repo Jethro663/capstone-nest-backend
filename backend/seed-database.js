@@ -21,7 +21,7 @@ config();
 
 const DB_URL =
   process.env.DATABASE_URL ||
-  'postgresql://postgres:200411@postgres:5432/capstone';
+  'postgresql://postgres:200411@marcdustin:5432/capstone';
 
 const ROLES = [
   { name: 'admin', description: 'System administrator with full access' },

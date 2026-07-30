@@ -31,6 +31,7 @@ import { AccessStudentsOverviewQueryDto } from './DTO/access-students-overview.d
 import { AccessStudentsTargetSectionsQueryDto } from './DTO/access-students-target-sections.dto';
 import { MoveUpStudentsDto } from './DTO/move-up-students.dto';
 import { FailStudentsDto } from './DTO/fail-students.dto';
+import { GraduateStudentsDto } from './DTO/graduate-students.dto';
 import { FinalizeAccessStudentGradesDto } from './DTO/finalize-access-student-grades.dto';
 import { Throttle } from '@nestjs/throttler';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -205,6 +206,25 @@ export class SectionsController {
     return {
       success: true,
       message: `${data.retainedCount} student(s) retained successfully`,
+      data,
+    };
+  }
+
+  @Post('access-students/graduate')
+  @Roles(RoleName.Admin)
+  async graduateStudents(
+    @Body() dto: GraduateStudentsDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    const data = await this.sectionsService.graduateStudents(
+      dto,
+      user?.userId,
+      user?.roles ?? [],
+    );
+
+    return {
+      success: true,
+      message: `${data.graduatedCount} student(s) graduated successfully`,
       data,
     };
   }

@@ -182,6 +182,8 @@ function CheckpointCard({
   const isReplay = checkpoint.type === 'assessment_retry';
   const isGuidedAssessment = checkpoint.type === 'guided_assessment';
   const isGeneratedLesson = checkpoint.type === 'generated_lesson_review';
+  const isQuizOrAssessment = isGuidedAssessment || isReplay || Boolean(checkpoint.assessment);
+
   const lessonHref = buildLessonHref(classId, checkpoint.lesson?.id);
   const generatedLessonHref = checkpoint.generatedLesson
     ? `/dashboard/student/lxp/${encode(classId)}/generated-lessons/${encode(checkpoint.id)}`
@@ -202,13 +204,52 @@ function CheckpointCard({
       : isGeneratedLesson
         ? generatedLessonHref
         : lessonHref;
+
   const guidedAttemptSummary = checkpoint.guidedAttemptSummary ?? null;
   const guidedAttemptSlots = isGuidedAssessment ? getGuidedAttemptSlots(guidedAttemptSummary) : [];
   const guidedStatus = isGuidedAssessment
     ? getGuidedCheckpointStatus(checkpoint, readOnly)
     : null;
-  const statusLabel = guidedStatus?.label ?? (checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available');
-  const statusTone = guidedStatus?.tone ?? (checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open');
+
+  const hasSubmittedGuidedAttempt = Boolean(
+    guidedAttemptSummary?.attempts?.some((a) => a.status === 'submitted') ||
+    (guidedAttemptSummary?.attemptsUsed ?? 0) > 0,
+  );
+  const hasScoreSubmitted = Boolean(
+    (checkpoint as any).score?.submittedAt ||
+    ((checkpoint as any).score?.scorePercent !== null && (checkpoint as any).score?.scorePercent !== undefined),
+  );
+  const isTaken = isQuizOrAssessment && (hasSubmittedGuidedAttempt || hasScoreSubmitted || checkpoint.isCompleted);
+
+  const passingScore = guidedAttemptSummary?.passingScore ?? checkpoint.assessment?.passingScore ?? 60;
+  const rawScorePercent = guidedAttemptSummary?.bestScorePercent ?? guidedAttemptSummary?.latestScorePercent ?? (checkpoint as any).score?.scorePercent ?? null;
+  const isPassed = isQuizOrAssessment && (
+    Boolean(guidedAttemptSummary?.passed) ||
+    Boolean((checkpoint as any).score?.passed) ||
+    (rawScorePercent !== null && rawScorePercent >= passingScore) ||
+    (checkpoint.isCompleted && (rawScorePercent === null || rawScorePercent >= passingScore))
+  );
+
+  const quizStatusTag = !isQuizOrAssessment
+    ? null
+    : isTaken
+      ? isPassed
+        ? 'TAKEN • PASSED'
+        : 'TAKEN • FAILED'
+      : 'NOT TAKEN';
+
+  const quizCardTone = !isQuizOrAssessment
+    ? null
+    : (isTaken && isPassed)
+      ? 'passed'
+      : 'failed';
+
+  const statusLabel = isQuizOrAssessment
+    ? (isTaken ? (isPassed ? 'Passed' : 'Failed') : 'Not Taken')
+    : (guidedStatus?.label ?? (checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available'));
+  const statusTone = isQuizOrAssessment
+    ? (quizCardTone === 'passed' ? 'completed' : 'open')
+    : (guidedStatus?.tone ?? (checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'));
 
   const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
     if (!(target instanceof Element)) return false;
@@ -233,9 +274,11 @@ function CheckpointCard({
       className={cn(
         'student-lxp-checkpoint-card',
         primaryHref ? 'student-lxp-checkpoint-card--interactive' : null,
+        isQuizOrAssessment && (quizCardTone === 'passed' ? 'student-lxp-checkpoint-card--passed-quiz' : 'student-lxp-checkpoint-card--failed-quiz'),
       )}
       data-type={isGuidedAssessment ? 'guided' : isReplay ? 'replay' : 'step'}
       data-state={checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'}
+      data-quiz-result={quizCardTone ?? undefined}
       role={primaryHref ? 'link' : undefined}
       tabIndex={primaryHref ? 0 : undefined}
       onClick={handleCardClick}
@@ -245,10 +288,45 @@ function CheckpointCard({
         <header className="student-lxp-checkpoint-card__header">
           <span className="student-lxp-checkpoint-card__index">{index + 1}</span>
           <div className="student-lxp-checkpoint-card__copy">
-            <h3>{title}</h3>
+            <div className="student-lxp-checkpoint-card__title-row">
+              <h3>{title}</h3>
+              {isQuizOrAssessment ? (
+                <div className="student-lxp-checkpoint-card__side-score">
+                  {rawScorePercent !== null ? (
+                    <span
+                      className={cn(
+                        'student-lxp-checkpoint-card__score-badge',
+                        isPassed
+                          ? 'student-lxp-checkpoint-card__score-badge--passed'
+                          : 'student-lxp-checkpoint-card__score-badge--failed',
+                      )}
+                    >
+                      Score: {Math.round(rawScorePercent)}%
+                    </span>
+                  ) : (
+                    <span className="student-lxp-checkpoint-card__score-badge student-lxp-checkpoint-card__score-badge--none">
+                      No score
+                    </span>
+                  )}
+                </div>
+              ) : null}
+            </div>
             <div className="student-lxp-checkpoint-card__meta" aria-label="Checkpoint details">
               <span>{checkpoint.xpAwarded} XP</span>
-              <span>{isGuidedAssessment ? statusLabel : checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
+              {isQuizOrAssessment ? (
+                <span
+                  className={cn(
+                    'student-lxp-checkpoint-card__quiz-tag',
+                    isTaken && isPassed
+                      ? 'student-lxp-checkpoint-card__quiz-tag--passed'
+                      : 'student-lxp-checkpoint-card__quiz-tag--failed',
+                  )}
+                >
+                  {quizStatusTag}
+                </span>
+              ) : (
+                <span>{checkpoint.isCompleted ? 'Done' : readOnly ? 'Closed' : 'Open'}</span>
+              )}
               <span>{isGuidedAssessment ? 'AI Plan Assessment' : isReplay ? 'Replay' : 'Lesson Step'}</span>
             </div>
           </div>
@@ -300,20 +378,35 @@ function CheckpointCard({
       ) : null}
 
       <footer className="student-lxp-checkpoint-card__footer">
-        <span
-          className={cn(
-            'student-lxp-checkpoint-card__status',
-            statusTone === 'completed'
-              ? 'student-lxp-checkpoint-card__status--completed'
-              : statusTone === 'closed'
-                ? 'student-lxp-checkpoint-card__status--closed'
-                : statusTone === 'warning'
-                  ? 'student-lxp-checkpoint-card__status--warning'
-                  : 'student-lxp-checkpoint-card__status--open',
-          )}
-        >
-          {statusLabel}
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className={cn(
+              'student-lxp-checkpoint-card__status',
+              statusTone === 'completed'
+                ? 'student-lxp-checkpoint-card__status--completed'
+                : statusTone === 'closed'
+                  ? 'student-lxp-checkpoint-card__status--closed'
+                  : statusTone === 'warning'
+                    ? 'student-lxp-checkpoint-card__status--warning'
+                    : 'student-lxp-checkpoint-card__status--open',
+            )}
+          >
+            {statusLabel}
+          </span>
+          {isQuizOrAssessment ? (
+            <span
+              className={cn(
+                'student-lxp-checkpoint-card__result-pill',
+                isTaken && isPassed
+                  ? 'student-lxp-checkpoint-card__result-pill--passed'
+                  : 'student-lxp-checkpoint-card__result-pill--failed',
+              )}
+            >
+              {quizStatusTag}
+            </span>
+          ) : null}
+        </div>
+
         <div className="student-lxp-checkpoint-card__actions">
           {isReplay ? (
             <Link href={jaHref} className="student-lxp-checkpoint-card__link">

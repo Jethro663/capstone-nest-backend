@@ -651,6 +651,12 @@ export default function StudentAssessmentResultsPage() {
                   response.pointsEarned !== undefined &&
                   response.pointsEarned !== (response.isCorrect ? response.question?.points ?? 0 : 0);
 
+                const questionHint =
+                  response.hint ||
+                  (response.question?.explanation
+                    ? `Key Concept: ${response.question.explanation.replace(/<[^>]*>/g, '')}`
+                    : 'Review the key definitions in your class module for this question.');
+
                 return (
                   <div key={response.questionId}>
                     <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
@@ -716,11 +722,21 @@ export default function StudentAssessmentResultsPage() {
                             </div>
                           ) : null}
 
-                          <div className="mt-3 space-y-2 text-sm">
+                          <div className="mt-3 space-y-3 text-sm">
                             <p>
                               <span className="text-slate-500">Your previous answer: </span>
                               <span className="font-semibold text-slate-900">{answerText ?? 'No answer provided'}</span>
                             </p>
+
+                            {questionHint ? (
+                              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-amber-900">
+                                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-900">
+                                  <Lightbulb className="h-4 w-4 text-amber-600" />
+                                  <span>Educational Hint / Concept Context</span>
+                                </div>
+                                <p className="mt-1.5 text-xs leading-relaxed text-amber-800">{questionHint}</p>
+                              </div>
+                            ) : null}
 
                             {correctAnswerText ? (
                               <p>

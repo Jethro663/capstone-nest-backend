@@ -26,6 +26,7 @@ export const notificationTypeEnum = pgEnum('notification_type', [
   'grade_updated',
   'assessment_due',
   'assessment_graded',
+  'grade_finalization_requested',
 ]);
 
 // ==========================================

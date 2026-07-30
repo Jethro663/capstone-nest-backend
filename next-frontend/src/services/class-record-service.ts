@@ -142,4 +142,34 @@ export const classRecordService = {
     const { data } = await api.get(`/class-record/${id}/reports/intervention`);
     return data;
   },
+
+  // --- Transmutation ---
+  async getActiveTransmutationTable(): Promise<{ success: boolean; data: any }> {
+    const { data } = await api.get('/class-record/transmutation/active');
+    return data;
+  },
+
+  async getAllTransmutationTables(): Promise<{ success: boolean; data: any[] }> {
+    const { data } = await api.get('/class-record/transmutation/all');
+    return data;
+  },
+
+  async previewTransmutationTable(file: File): Promise<{ success: boolean; data: any }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post('/class-record/transmutation/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
+  async applyTransmutationTable(payload: { title: string; description?: string; bands: any[] }): Promise<{ success: boolean; data: any }> {
+    const { data } = await api.post('/class-record/transmutation/apply', payload);
+    return data;
+  },
+
+  async activateTransmutationTable(id: string): Promise<{ success: boolean; data: any }> {
+    const { data } = await api.post(`/class-record/transmutation/activate/${id}`);
+    return data;
+  },
 };
