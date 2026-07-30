@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { eq, desc } from 'drizzle-orm';
-import pdfParse from 'pdf-parse';
+
 import { DatabaseService } from '../../database/database.service';
 import {
   transmutationTables,
@@ -168,7 +168,9 @@ export class TransmutationService {
 
     if (filename.endsWith('.pdf')) {
       try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
         const pdfModule = require('pdf-parse');
+        /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
         let parsedText = '';
 
         if (typeof pdfModule === 'function') {
@@ -227,7 +229,9 @@ export class TransmutationService {
         }
 
         textContent = parsedText;
-      } catch (err: any) {
+        /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+      } catch (error) {
+        const err = error as Error;
         throw new BadRequestException(
           `Failed to parse PDF text: ${err.message}`,
         );
