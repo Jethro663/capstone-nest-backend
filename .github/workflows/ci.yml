@@ -9,7 +9,7 @@ on:
       - "ai-service/**"
       - ".github/workflows/**"
   push:
-    branches: [developement, main]
+    branches: [developement, master]
     paths:
       - "backend/**"
       - "next-frontend/**"

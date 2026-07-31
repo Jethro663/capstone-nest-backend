@@ -3,7 +3,7 @@ name: Railway Deploy (developement)
 on:
   workflow_run:
     workflows: [CI]
-    branches: [developement]
+    branches: [developement, master]
     types: [completed]
 
 concurrency:
@@ -20,7 +20,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_branch == 'developement' &&
+      (github.event.workflow_run.head_branch == 'developement' || github.event.workflow_run.head_branch == 'master') &&
       github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
     environment:
@@ -56,7 +56,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_branch == 'developement' &&
+      (github.event.workflow_run.head_branch == 'developement' || github.event.workflow_run.head_branch == 'master') &&
       github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
     environment:
@@ -92,7 +92,7 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      github.event.workflow_run.head_branch == 'developement' &&
+      (github.event.workflow_run.head_branch == 'developement' || github.event.workflow_run.head_branch == 'master') &&
       github.event.workflow_run.head_sha != ''
     runs-on: ubuntu-latest
     environment:
