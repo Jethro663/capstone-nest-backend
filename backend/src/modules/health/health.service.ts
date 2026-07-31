@@ -12,6 +12,7 @@ type DependencyStatus = {
 type ServiceMetadata = {
   name: string;
   version: string;
+  gitCommit: string;
 };
 
 type ReadinessStatus = {
@@ -49,6 +50,7 @@ export class HealthService {
     return {
       name: 'backend',
       version: process.env.npm_package_version ?? '0.0.0',
+      gitCommit: this.configService.get<string>('RAILWAY_GIT_COMMIT_SHA') ?? 'development',
     };
   }
 
