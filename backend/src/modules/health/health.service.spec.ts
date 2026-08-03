@@ -66,6 +66,7 @@ describe('HealthService', () => {
     expect(readiness.service).toEqual({
       name: 'backend',
       version: '0.0.1-test',
+      gitCommit: 'development',
     });
     expect(readiness.dependencies.aiService.version).toBe('1.0.0-test');
 
