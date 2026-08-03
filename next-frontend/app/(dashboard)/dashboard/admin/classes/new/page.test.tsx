@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, act } from '@testing-library/react';
 import CreateClassPage from './page';
 
 const push = jest.fn();
@@ -183,7 +183,9 @@ describe('CreateClassPage', () => {
       schedules: [{ days: ['M'], startTime: '08:00', endTime: '09:00' }],
     } as const;
 
-    await formProps.onSubmit(submittedValues as any);
+    await act(async () => {
+      await formProps.onSubmit(submittedValues as any);
+    });
 
     expect(classService.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -209,7 +211,9 @@ describe('CreateClassPage', () => {
       onTemplateChange: (templateId: string) => void;
     };
     const initialProfile = firstProps.initialValues.gradingProfile;
-    firstProps.onTemplateChange('template-123');
+    await act(async () => {
+      firstProps.onTemplateChange('template-123');
+    });
 
     await waitFor(() => {
       const latestProps = classFormMock.mock.calls[

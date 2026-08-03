@@ -1,6 +1,6 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within, act } from '@testing-library/react';
 import TeacherModuleDetailPage from './page';
 import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
@@ -718,7 +718,12 @@ describe('TeacherModuleDetailPage', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: /Choose from Library/i }));
       const picker = await screen.findByRole('dialog', { name: 'Choose from Library' });
       fireEvent.click(await within(picker).findByRole('button', { name: /General Science File/i }));
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+      
+      await act(async () => {
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
+        // Allow microtasks to flush so attachItem resolves and state updates happen inside act
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
     };
 
     await attachLibraryFile();
