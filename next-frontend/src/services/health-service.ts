@@ -11,6 +11,7 @@ export const FRONTEND_APP_VERSION =
 type ServiceMetadata = {
   name: string;
   version: string;
+  gitCommit?: string;
 };
 
 type DependencyStatus = {

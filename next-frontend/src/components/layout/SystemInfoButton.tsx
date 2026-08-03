@@ -90,8 +90,14 @@ export function SystemInfoButton({
     };
   }, [open]);
 
-  const backendVersion =
+  const rawBackendVersion =
     liveness?.service?.version ?? readiness?.service?.version ?? 'Unavailable';
+  const backendGit =
+    liveness?.service?.gitCommit ?? readiness?.service?.gitCommit;
+  const backendVersion =
+    rawBackendVersion === 'Unavailable'
+      ? rawBackendVersion
+      : `${rawBackendVersion} (${backendGit ? (backendGit === 'development' ? 'dev' : `build ${backendGit.substring(0, 7)}`) : 'dev'})`;
   const aiVersion =
     aiHealth?.service?.version ??
     readiness?.dependencies.aiService.version ??
