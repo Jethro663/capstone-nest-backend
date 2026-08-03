@@ -20,10 +20,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const version = process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA
-    ? process.env.NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA.substring(0, 7)
-    : 'dev';
-
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
@@ -32,9 +28,6 @@ export default function RootLayout({
             <AuthProvider>
               {children}
               <Toaster />
-              <div className="fixed bottom-1 right-2 text-[10px] font-mono text-muted-foreground/30 pointer-events-none z-[9999]">
-                {version}
-              </div>
             </AuthProvider>
           </ThemeProvider>
         </QueryProvider>
