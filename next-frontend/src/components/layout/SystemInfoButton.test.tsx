@@ -73,7 +73,7 @@ describe('SystemInfoButton', () => {
     });
 
     expect(screen.getByText('0.1.0-test')).toBeInTheDocument();
-    expect(await screen.findByText('0.0.1-test')).toBeInTheDocument();
+    expect(await screen.findByText('0.0.1-test (dev)')).toBeInTheDocument();
     expect(await screen.findByText('1.0.0-test')).toBeInTheDocument();
     expect(await screen.findByText(/Model: llama3/i)).toBeInTheDocument();
     expect(await screen.findAllByText('Operational')).toHaveLength(2);
