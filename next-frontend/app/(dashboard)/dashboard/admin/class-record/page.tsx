@@ -26,7 +26,6 @@ import {
 } from '@/components/ui/dialog';
 import { classRecordService } from '@/services/class-record-service';
 import type {
-  TransmutationBand,
   TransmutationTableRecord,
   TransmutationPreviewResult as PreviewPayload,
 } from '@/types/class-record';

@@ -30,7 +30,7 @@ import {
   getFallbackGradient,
   getHeroStyle,
   normalizeCustomization,
-  type CardViewMode,
+  type CardGradientId,
   type ClassCardCustomization,
 } from '@/components/class/class-card-theme';
 import {
@@ -715,7 +715,7 @@ export default function TeacherClassesPage() {
       ? { themeKind: 'image' as const, imageUrl: classItem.cardBannerUrl }
       : null;
     const fromPreset = classItem.cardPreset
-      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as any }
+      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as CardGradientId }
       : null;
 
     setDraftCustomization(
@@ -795,7 +795,7 @@ export default function TeacherClassesPage() {
         current.map((c) => (c.id === customizingClass.id ? response.data.class : c)),
       );
       toast.success('Class banner updated.');
-    } catch (error) {
+    } catch {
       toast.error('Upload failed. Please use an image smaller than 12MB.');
     } finally {
       setUploadingThemeImage(false);
@@ -930,7 +930,7 @@ export default function TeacherClassesPage() {
                   const theme = classItem.cardBannerUrl
                     ? { themeKind: 'image' as const, imageUrl: classItem.cardBannerUrl }
                     : classItem.cardPreset
-                      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as any }
+                      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as CardGradientId }
                       : fallback;
                   const normalizedTheme = normalizeCustomization(theme, 'oceanic-blue');
                   const isMenuOpen = openCardMenuId === classItem.id;
@@ -1110,7 +1110,7 @@ export default function TeacherClassesPage() {
                     setDraftCustomization((current) => ({
                       ...current,
                       themeKind: 'gradient',
-                      gradientId: gradient.id as any,
+                      gradientId: gradient.id as CardGradientId,
                     }))
                   }
                 >

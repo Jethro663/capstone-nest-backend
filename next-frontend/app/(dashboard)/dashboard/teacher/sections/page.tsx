@@ -39,6 +39,7 @@ import {
   getFallbackGradient,
   getHeroStyle,
   normalizeCustomization,
+  type CardGradientId,
   type CardViewMode,
   type ClassCardCustomization,
 } from '@/components/class/class-card-theme';
@@ -52,7 +53,6 @@ import {
   toDateKey,
 } from '@/components/teacher/my-sections/types';
 
-const STORAGE_KEY_CUSTOMIZE = 'teacher-section-card-customize-v1';
 const STORAGE_KEY_VIEW = 'teacher-section-view-mode-v1';
 const MAX_SECTION_BANNER_SIZE_BYTES = 12 * 1024 * 1024;
 
@@ -302,7 +302,7 @@ export default function TeacherSectionsPage() {
     const fromPreset = section.cardPreset
       ? {
           themeKind: 'gradient' as const,
-          gradientId: section.cardPreset as any,
+          gradientId: section.cardPreset as CardGradientId,
         }
       : null;
 
@@ -562,7 +562,7 @@ export default function TeacherSectionsPage() {
                   const theme = section.cardBannerUrl
                     ? { themeKind: 'image' as const, imageUrl: section.cardBannerUrl }
                     : section.cardPreset
-                      ? { themeKind: 'gradient' as const, gradientId: section.cardPreset as any }
+                      ? { themeKind: 'gradient' as const, gradientId: section.cardPreset as CardGradientId }
                       : fallback;
                   const normalizedTheme = normalizeCustomization(theme, 'oceanic-blue');
                   const isMenuOpen = openCardMenuId === section.id;

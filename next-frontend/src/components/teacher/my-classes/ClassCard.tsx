@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import type { ClassCardCustomization } from '@/components/class/class-card-theme';
-import { getGradientOption, getHeroStyle } from '@/components/class/class-card-theme';
+import { getHeroStyle } from '@/components/class/class-card-theme';
 import type { ClassItem } from '@/types/class';
 import { getTeacherName } from '@/utils/helpers';
 import { cn } from '@/utils/cn';
@@ -124,7 +124,6 @@ export function ClassCard({
   onCustomize,
 }: ClassCardProps) {
   const accent = CARD_ACCENTS[accentIndex % CARD_ACCENTS.length];
-  const gradient = theme ? getGradientOption(theme.gradientId) : null;
   const heroStyle = theme ? getHeroStyle(theme) : {};
 
   // Fallback to static accent if no theme is provided (e.g. initial render or if unused)
