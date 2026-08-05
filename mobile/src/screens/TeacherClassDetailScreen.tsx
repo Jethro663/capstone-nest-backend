@@ -14,6 +14,7 @@ import {
 } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { announcementsApi } from "../api/services/announcements";
+import { modulesApi } from "../api/services/modules";
 import { toAppError } from "../api/http";
 import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/types";
 import { confirmAction } from "../utils/confirmAction";
@@ -23,6 +24,7 @@ import { TeacherDiscussionBoard } from "../components/teacher/TeacherDiscussionB
 import { TeacherExtractionBoard } from "../components/teacher/TeacherExtractionBoard";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnnouncementEditorModal";
+import { TeacherAddModuleModal } from "../components/teacher/TeacherAddModuleModal";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -66,6 +68,8 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
 
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [showAddModuleModal, setShowAddModuleModal] = useState(false);
+  const [creatingModule, setCreatingModule] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<{
     id?: string;
     title?: string;
@@ -212,6 +216,24 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       tabRefetchersRef.current[tab] = refetcher;
     };
 
+  const handleCreateModule = async (payload: { title: string; description: string }) => {
+    try {
+      setCreatingModule(true);
+      await modulesApi.create({
+        classId,
+        title: payload.title,
+        description: payload.description || undefined,
+      });
+      setShowAddModuleModal(false);
+      await modulesQuery.refetch();
+      Alert.alert("Module Created", `"${payload.title}" has been added to this class.`);
+    } catch (err) {
+      Alert.alert("Unable to create module", toAppError(err).message);
+    } finally {
+      setCreatingModule(false);
+    }
+  };
+
   const handleCreateAssessment = async () => {
     if (creatingAssessment) return;
     try {
@@ -322,7 +344,18 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       ) : null}
 
       {activeTab === "modules" ? (
-        <TeacherPanel title="Modules" subtitle="Open modules, inspect their content, and manage lock or visibility at the module level.">
+        <TeacherPanel
+          title="Modules"
+          subtitle="Open modules, inspect their content, and manage lock or visibility at the module level."
+          action={
+            <TeacherActionButton
+              label="Add Module"
+              icon="plus"
+              tone="green"
+              onPress={() => setShowAddModuleModal(true)}
+            />
+          }
+        >
           {modulesQuery.data?.length ? (
             modulesQuery.data.map((module, index) => (
               <TeacherRow
@@ -711,6 +744,14 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           setShowAnnouncementModal(false);
           setEditingAnnouncement(null);
         }}
+      />
+
+      <TeacherAddModuleModal
+        visible={showAddModuleModal}
+        className={classQuery.data?.subjectName}
+        saving={creatingModule}
+        onSave={(payload) => void handleCreateModule(payload)}
+        onClose={() => setShowAddModuleModal(false)}
       />
 
       <TeacherConfirmModal

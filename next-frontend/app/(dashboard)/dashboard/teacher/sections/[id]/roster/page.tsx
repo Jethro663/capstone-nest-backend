@@ -13,6 +13,7 @@ import {
   sectionService,
   type RosterStudent,
 } from '@/services/section-service';
+import { useAuth } from '@/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -42,6 +43,7 @@ export default function SectionRosterPage() {
   const params = useParams();
   const router = useRouter();
   const sectionId = params.id as string;
+  const { isAuthenticated } = useAuth();
 
   const [section, setSection] = useState<Section | null>(null);
   const [roster, setRoster] = useState<RosterStudent[]>([]);
@@ -52,6 +54,7 @@ export default function SectionRosterPage() {
   const [scheduleOpen, setScheduleOpen] = useState(true);
 
   const fetchData = useCallback(async () => {
+    if (!isAuthenticated) return;
     try {
       setLoading(true);
       const [sectionRes, rosterRes] = await Promise.all([
@@ -68,7 +71,7 @@ export default function SectionRosterPage() {
     } finally {
       setLoading(false);
     }
-  }, [sectionId]);
+  }, [isAuthenticated, sectionId]);
 
   useEffect(() => {
     void fetchData();
