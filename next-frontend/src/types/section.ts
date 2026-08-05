@@ -7,6 +7,7 @@ export interface Section {
   roomNumber?: string;
   adviserId?: string;
   adviser?: { id: string; firstName?: string; lastName?: string; email?: string };
+  cardPreset?: string | null;
   cardBannerUrl?: string | null;
   isActive: boolean;
   isHidden?: boolean;

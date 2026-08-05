@@ -1,4 +1,4 @@
-﻿export type {
+export type {
   StudentParityRouteName,
   StudentSupportRouteName,
 } from "./student-route-manifest";
@@ -44,6 +44,7 @@ export type RootStackParamList = {
   LXP: { classId?: string; tab?: LxpMobileTab } | undefined;
   StudentGuidedAssessment: { classId: string; assignmentId: string };
   StudentJaReviewAssessment: { classId: string; assessmentId?: string; attemptId?: string; title?: string };
+  StudentEvaluations: undefined;
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
   Transcript: undefined;

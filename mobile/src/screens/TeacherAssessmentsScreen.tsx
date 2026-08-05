@@ -4,11 +4,13 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { queryKeys, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -43,6 +45,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<FilterMode>("all");
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
+  const [deletingAssessment, setDeletingAssessment] = useState<{ id: string; title: string } | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
   const assessmentQueries = useQueries({
@@ -90,6 +96,57 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         .filter((group) => group.assessments.length > 0),
     [classesQuery.data, filteredRecords],
   );
+
+  const toggleSelectAssessment = (id: string) => {
+    setSelectedAssessmentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllAssessments = () => {
+    const allIds = filteredRecords.map((a) => a.id);
+    if (selectedAssessmentIds.length === allIds.length && allIds.length > 0) {
+      setSelectedAssessmentIds([]);
+    } else {
+      setSelectedAssessmentIds(allIds);
+    }
+  };
+
+  const refetchAllAssessments = async () => {
+    await Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+  };
+
+  const handleDeleteSingleAssessment = async () => {
+    if (!deletingAssessment || isDeletingAssessment) return;
+    try {
+      setIsDeletingAssessment(true);
+      await assessmentsApi.delete(deletingAssessment.id);
+      setDeletingAssessment(null);
+      setSelectedAssessmentIds((prev) => prev.filter((id) => id !== deletingAssessment.id));
+      await refetchAllAssessments();
+      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.");
+    } catch (err) {
+      Alert.alert("Unable to delete assessment", toAppError(err).message);
+    } finally {
+      setIsDeletingAssessment(false);
+    }
+  };
+
+  const handleBulkDeleteAssessments = async () => {
+    if (!selectedAssessmentIds.length || isDeletingAssessment) return;
+    try {
+      setIsDeletingAssessment(true);
+      await Promise.all(selectedAssessmentIds.map((id) => assessmentsApi.delete(id)));
+      setShowBulkDeleteConfirm(false);
+      setSelectedAssessmentIds([]);
+      await refetchAllAssessments();
+      Alert.alert("Assessments Deleted", `${selectedAssessmentIds.length} assessment(s) deleted successfully.`);
+    } catch (err) {
+      Alert.alert("Unable to delete assessments", toAppError(err).message);
+    } finally {
+      setIsDeletingAssessment(false);
+    }
+  };
 
   const handleCreateAssessment = async (targetClassId?: string) => {
     if (creatingAssessment) return;
@@ -158,7 +215,58 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         </View>
       </TeacherPanel>
 
-      <TeacherPanel title="Classes with assessments" subtitle="Tap a class to expand or collapse its assessment list.">
+      <TeacherPanel
+        title="Classes with assessments"
+        subtitle="Select assessments using checkboxes to bulk delete, or tap a class to expand."
+        action={
+          selectedAssessmentIds.length > 0 ? (
+            <TeacherActionButton
+              label={`Delete Selected (${selectedAssessmentIds.length})`}
+              icon="trash-can-outline"
+              tone="red"
+              onPress={() => setShowBulkDeleteConfirm(true)}
+            />
+          ) : undefined
+        }
+      >
+        {filteredRecords.length ? (
+          <View
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              backgroundColor: theme.surface2,
+              borderBottomWidth: 1,
+              borderBottomColor: theme.border,
+            }}
+          >
+            <Pressable
+              onPress={toggleSelectAllAssessments}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <MaterialCommunityIcons
+                name={
+                  selectedAssessmentIds.length === filteredRecords.length
+                    ? "checkbox-marked"
+                    : selectedAssessmentIds.length > 0
+                    ? "checkbox-intermediate"
+                    : "checkbox-blank-outline"
+                }
+                size={20}
+                color={selectedAssessmentIds.length > 0 ? theme.red : theme.muted}
+              />
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
+                {selectedAssessmentIds.length === filteredRecords.length ? "Deselect All" : "Select All"}
+              </Text>
+            </Pressable>
+            <Text style={{ fontSize: 11, color: theme.muted }}>
+              {selectedAssessmentIds.length} of {filteredRecords.length} selected
+            </Text>
+          </View>
+        ) : null}
+
         {classGroups.length ? (
           classGroups.map(({ classItem, assessments }) => {
             const expanded = expandedClassId === classItem.id;
@@ -201,6 +309,19 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                         key={assessment.id}
                         title={assessment.title}
                         subtitle={`${assessment.type.replace(/_/g, " ")} · Due ${formatDate(assessment.dueDate)}`}
+                        left={
+                          <Pressable
+                            onPress={() => toggleSelectAssessment(assessment.id)}
+                            hitSlop={8}
+                            style={{ paddingRight: 4 }}
+                          >
+                            <MaterialCommunityIcons
+                              name={selectedAssessmentIds.includes(assessment.id) ? "checkbox-marked" : "checkbox-blank-outline"}
+                              size={20}
+                              color={selectedAssessmentIds.includes(assessment.id) ? theme.red : theme.dim}
+                            />
+                          </Pressable>
+                        }
                         onPress={() =>
                           navigation.navigate("TeacherAssessmentDetail", {
                             assessmentId: assessment.id,
@@ -215,17 +336,25 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                             <Text style={{ fontSize: 10, color: theme.muted }}>
                               {assessment.questions?.length ?? 0} questions
                             </Text>
-                            <Pressable
-                              onPress={() =>
-                                navigation.navigate("TeacherAssessmentEditor", {
-                                  assessmentId: assessment.id,
-                                  classId: assessment.classId,
-                                })
-                              }
-                              style={{ marginTop: 4, borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 8, paddingVertical: 4 }}
-                            >
-                              <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
-                            </Pressable>
+                            <View style={{ marginTop: 4, flexDirection: "row", gap: 6 }}>
+                              <Pressable
+                                onPress={() =>
+                                  navigation.navigate("TeacherAssessmentEditor", {
+                                    assessmentId: assessment.id,
+                                    classId: assessment.classId,
+                                  })
+                                }
+                                style={{ borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 8, paddingVertical: 4 }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                              </Pressable>
+                              <Pressable
+                                onPress={() => setDeletingAssessment({ id: assessment.id, title: assessment.title })}
+                                style={{ borderRadius: 6, backgroundColor: theme.redSoft, borderWidth: 1, borderColor: theme.redLine, paddingHorizontal: 6, paddingVertical: 4 }}
+                              >
+                                <MaterialCommunityIcons name="trash-can-outline" size={13} color={theme.red} />
+                              </Pressable>
+                            </View>
                           </View>
                         }
                       />
@@ -238,6 +367,28 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
           <TeacherEmpty title="No classes with assessments" subtitle="Create or publish an assessment to make its class appear here." icon="clipboard-search-outline" />
         )}
       </TeacherPanel>
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingAssessment)}
+        title="Delete Assessment?"
+        description={
+          deletingAssessment
+            ? `Are you sure you want to delete "${deletingAssessment.title}"? All student attempts, responses, and grades will be permanently removed.`
+            : ""
+        }
+        loading={isDeletingAssessment}
+        onCancel={() => setDeletingAssessment(null)}
+        onConfirm={() => void handleDeleteSingleAssessment()}
+      />
+
+      <TeacherConfirmModal
+        visible={showBulkDeleteConfirm}
+        title="Delete Selected Assessments?"
+        description={`Are you sure you want to delete ${selectedAssessmentIds.length} selected assessment(s)? This action cannot be undone and will permanently remove all linked student submissions.`}
+        loading={isDeletingAssessment}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={() => void handleBulkDeleteAssessments()}
+      />
     </TeacherScreen>
   );
 }

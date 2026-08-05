@@ -227,7 +227,10 @@ export const sections = pgTable(
     schoolYear: text('school_year').notNull(), // e.g., "2024-2025"
     capacity: integer('capacity').notNull().default(40),
     roomNumber: text('room_number'),
+    cardPreset: text('card_preset').notNull().default('aurora'),
     cardBannerUrl: text('card_banner_url'),
+    isArchived: boolean('is_archived').default(false),
+    archivedAt: timestamp('archived_at'),
 
     adviserId: uuid('adviser_id').references(() => users.id, {
       onDelete: 'set null',

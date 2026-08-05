@@ -91,4 +91,33 @@ export const classesApi = {
     );
     return unwrapEnvelope(response.data);
   },
+
+  async updatePresentation(classId: string, dto: { cardPreset?: string | null; cardBannerUrl?: string | null }) {
+    const response = await apiClient.patch<ApiEnvelope<ClassItem>>(`/classes/${classId}/presentation`, dto);
+    return unwrapEnvelope(response.data);
+  },
+
+  async uploadBanner(classId: string, imageUri: string) {
+    const formData = new FormData();
+    const filename = imageUri.split('/').pop() || 'banner.jpg';
+    
+    // Determine MIME type based on extension
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : `image`;
+
+    formData.append("image", {
+      uri: imageUri,
+      name: filename,
+      type,
+    } as any);
+
+    const response = await apiClient.post<ApiEnvelope<ClassItem>>(
+      `/classes/${classId}/banner`,
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return unwrapEnvelope(response.data);
+  },
 };

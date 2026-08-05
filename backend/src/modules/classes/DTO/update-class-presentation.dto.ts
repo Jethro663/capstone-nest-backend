@@ -1,11 +1,14 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsString, ValidateIf, Allow } from 'class-validator';
 
 export class UpdateClassPresentationDto {
-  @IsOptional()
+  @Allow()
+  @ValidateIf((o, v) => v !== null && v !== undefined)
   @IsString({ message: 'cardPreset must be a string' })
-  cardPreset?: string;
+  cardPreset?: string | null;
 
-  @IsOptional()
+  @Allow()
+  @ValidateIf((o, v) => v !== null && v !== undefined)
   @IsString({ message: 'cardBannerUrl must be a string' })
   cardBannerUrl?: string | null;
 }
+

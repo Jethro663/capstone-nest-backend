@@ -120,7 +120,6 @@ export default function TeacherSectionsPage() {
   const [status, setStatus] = useState<SectionVisibilityStatus>('active');
   const [viewMode, setViewMode] = useState<CardViewMode>('card');
   const [searchQuery, setSearchQuery] = useState('');
-  const [customizationBySection, setCustomizationBySection] = useState<Record<string, ClassCardCustomization>>({});
   const [hasHydratedLocalPrefs, setHasHydratedLocalPrefs] = useState(false);
   const [customizingSection, setCustomizingSection] = useState<Section | null>(null);
   const [uploadingThemeImage, setUploadingThemeImage] = useState(false);
@@ -202,15 +201,6 @@ export default function TeacherSectionsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY_CUSTOMIZE);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Record<string, unknown>;
-        const normalizedEntries = Object.entries(parsed).map(([sectionId, value]) => [
-          sectionId,
-          normalizeCustomization(value, 'oceanic-blue'),
-        ]);
-        setCustomizationBySection(Object.fromEntries(normalizedEntries));
-      }
       const savedView = window.localStorage.getItem(STORAGE_KEY_VIEW);
       if (savedView === 'card' || savedView === 'wide') {
         setViewMode(savedView);
@@ -225,18 +215,12 @@ export default function TeacherSectionsPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!hasHydratedLocalPrefs) return;
-    window.localStorage.setItem(STORAGE_KEY_VIEW, viewMode);
-  }, [hasHydratedLocalPrefs, viewMode]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!hasHydratedLocalPrefs) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY_CUSTOMIZE, JSON.stringify(customizationBySection));
+      window.localStorage.setItem(STORAGE_KEY_VIEW, viewMode);
     } catch {
       // ignore quota errors
     }
-  }, [customizationBySection, hasHydratedLocalPrefs]);
+  }, [viewMode, hasHydratedLocalPrefs]);
 
   useEffect(() => {
     if (!openCardMenuId || typeof document === 'undefined') return;
@@ -306,18 +290,25 @@ export default function TeacherSectionsPage() {
     return map;
   }, [sectionEvents]);
 
-  const openCustomize = (section: Section, index: number) => {
+  const startCustomization = (section: Section, index: number) => {
     setOpenCardMenuId(null);
     const fallback = getFallbackGradient(index);
-    const existing = customizationBySection[section.id];
     const fromBanner = section.cardBannerUrl
       ? {
-          ...createDefaultCustomization(fallback),
           themeKind: 'image' as const,
           imageUrl: section.cardBannerUrl,
         }
-      : createDefaultCustomization(fallback);
-    setDraftCustomization(existing ?? fromBanner);
+      : null;
+    const fromPreset = section.cardPreset
+      ? {
+          themeKind: 'gradient' as const,
+          gradientId: section.cardPreset as any,
+        }
+      : null;
+
+    setDraftCustomization(
+      normalizeCustomization(fromBanner ?? fromPreset ?? fallback, 'oceanic-blue')
+    );
     setCustomizingSection(section);
   };
 
@@ -356,20 +347,20 @@ export default function TeacherSectionsPage() {
     const sectionId = customizingSection.id;
     const nextCustomization = draftCustomization;
 
-    setCustomizationBySection((current) => ({
-      ...current,
-      [sectionId]: nextCustomization,
-    }));
     setCustomizingSection(null);
 
     try {
       setSavingThemeCustomization(true);
-      const response = await sectionService.updatePresentation(sectionId, {
-        cardBannerUrl:
-          nextCustomization.themeKind === 'image' && nextCustomization.imageUrl
-            ? nextCustomization.imageUrl
-            : null,
-      });
+      const payload: { cardPreset?: string | null; cardBannerUrl?: string | null } = {};
+      if (nextCustomization.themeKind === 'image' && nextCustomization.imageUrl) {
+        payload.cardBannerUrl = nextCustomization.imageUrl;
+        payload.cardPreset = null;
+      } else if (nextCustomization.themeKind === 'gradient' && nextCustomization.gradientId) {
+        payload.cardPreset = nextCustomization.gradientId;
+        payload.cardBannerUrl = null;
+      }
+
+      const response = await sectionService.updatePresentation(sectionId, payload);
 
       setSections((current) =>
         current.map((section) => (section.id === sectionId ? response.data : section)),
@@ -381,14 +372,25 @@ export default function TeacherSectionsPage() {
     }
   };
 
-  const resetCustomization = () => {
+  const resetCustomization = async () => {
     if (!customizingSection) return;
-    setCustomizationBySection((current) => {
-      const next = { ...current };
-      delete next[customizingSection.id];
-      return next;
-    });
+    const sectionId = customizingSection.id;
     setCustomizingSection(null);
+
+    try {
+      setSavingThemeCustomization(true);
+      const response = await sectionService.updatePresentation(sectionId, {
+        cardPreset: 'aurora',
+        cardBannerUrl: null,
+      });
+      setSections((current) =>
+        current.map((section) => (section.id === sectionId ? response.data : section)),
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to reset card theme.'));
+    } finally {
+      setSavingThemeCustomization(false);
+    }
   };
 
   const handleThemeImageUpload = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -557,22 +559,19 @@ export default function TeacherSectionsPage() {
               >
                 {filteredSections.map((section, index) => {
                   const fallback = getFallbackGradient(index);
-                  const theme =
-                    customizationBySection[section.id] ??
-                    (section.cardBannerUrl
-                      ? {
-                          ...createDefaultCustomization(fallback),
-                          themeKind: 'image' as const,
-                          imageUrl: section.cardBannerUrl,
-                        }
-                      : createDefaultCustomization(fallback));
+                  const theme = section.cardBannerUrl
+                    ? { themeKind: 'image' as const, imageUrl: section.cardBannerUrl }
+                    : section.cardPreset
+                      ? { themeKind: 'gradient' as const, gradientId: section.cardPreset as any }
+                      : fallback;
+                  const normalizedTheme = normalizeCustomization(theme, 'oceanic-blue');
                   const isMenuOpen = openCardMenuId === section.id;
 
                   return (
                     <SectionCard
                       key={section.id}
                       section={section}
-                      theme={theme}
+                      theme={normalizedTheme}
                       menuOpen={isMenuOpen}
                       statusFilter={status}
                       visibilityUpdating={updatingVisibilitySectionId === section.id}
@@ -581,7 +580,7 @@ export default function TeacherSectionsPage() {
                       onToggleMenu={() =>
                         setOpenCardMenuId((current) => (current === section.id ? null : section.id))
                       }
-                      onCustomize={() => openCustomize(section, index)}
+                      onCustomize={() => startCustomization(section, index)}
                       onToggleVisibility={() => void toggleSectionVisibility(section)}
                     />
                   );

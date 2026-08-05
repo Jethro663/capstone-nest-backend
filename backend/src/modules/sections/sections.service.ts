@@ -1109,7 +1109,7 @@ export class SectionsService {
 
   async updatePresentation(
     id: string,
-    presentation: { cardBannerUrl?: string | null },
+    presentation: { cardPreset?: string | null; cardBannerUrl?: string | null },
     requesterId?: string,
     requesterRoles?: string[],
   ) {
@@ -1124,9 +1124,12 @@ export class SectionsService {
       this.ensureTeacherCanAccessSection(sectionRecord, requesterId);
     }
 
-    const payload: { cardBannerUrl?: string | null; updatedAt: Date } = {
+    const payload: { cardPreset?: string; cardBannerUrl?: string | null; updatedAt: Date } = {
       updatedAt: new Date(),
     };
+    if (presentation.cardPreset !== undefined && presentation.cardPreset !== null) {
+      payload.cardPreset = presentation.cardPreset;
+    }
     if (presentation.cardBannerUrl !== undefined) {
       payload.cardBannerUrl = presentation.cardBannerUrl;
     }

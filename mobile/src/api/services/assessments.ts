@@ -191,6 +191,13 @@ export const assessmentsApi = {
     return unwrapEnvelope(response.data);
   },
 
+  async delete(assessmentId: string) {
+    const response = await apiClient.delete<ApiEnvelope<{ success?: boolean; message?: string }>>(
+      `/assessments/${assessmentId}`,
+    );
+    return unwrapEnvelope(response.data);
+  },
+
   async createQuestion(payload: CreateQuestionDto) {
     const response = await apiClient.post<ApiEnvelope<AssessmentQuestion>>(
       "/assessments/questions",

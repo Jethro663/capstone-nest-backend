@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import {
   AnimatedEntrance,
   Card,
@@ -68,6 +68,10 @@ export function LxpScreen({ navigation }: Props) {
   const [showConfetti, setShowConfetti] = useState(false);
   const [checkpointActionError, setCheckpointActionError] = useState<string | null>(null);
   const [tutorLaunchError, setTutorLaunchError] = useState<string | null>(null);
+  const [showRationaleModal, setShowRationaleModal] = useState(false);
+  const [showProgressStatusModal, setShowProgressStatusModal] = useState(false);
+  const [selectedRetryCheckpoint, setSelectedRetryCheckpoint] = useState<LxpCheckpoint | null>(null);
+
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const eligibilityQuery = useLxpEligibility();
   const tutorBootstrapQuery = useTutorBootstrap(selectedClassId);
@@ -207,23 +211,28 @@ export function LxpScreen({ navigation }: Props) {
         eyebrow="Learning Experience ✨"
         title="LXP Dashboard"
         rightContent={
-          <View
+          <Pressable
+            onPress={() => setShowProgressStatusModal(true)}
             style={{
               borderRadius: 18,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
-              backgroundColor: "rgba(255,255,255,0.18)",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              backgroundColor: "rgba(255,255,255,0.22)",
               alignItems: "center",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.35)",
             }}
           >
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
               <MaterialCommunityIcons name="fire" size={16} color="#FFD700" />
-              <Text style={{ color: colors.white, fontSize: 18, fontWeight: "900" }}>
+              <Text style={{ color: colors.white, fontSize: 16, fontWeight: "900" }}>
                 {playlistQuery.data?.progress.streakDays ?? 0}
               </Text>
             </View>
-            <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: "700" }}>Day Streak</Text>
-          </View>
+            <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 9, fontWeight: "800", marginTop: 2 }}>
+              Support Status 📊
+            </Text>
+          </Pressable>
         }
       >
         <View style={{ marginTop: 14 }}>
@@ -303,23 +312,41 @@ export function LxpScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-          <Pressable
-            onPress={handleOpenTutor}
-            style={{
-              marginTop: 14,
-              alignSelf: "flex-start",
-              borderRadius: 999,
-              backgroundColor: colors.amber,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <MaterialCommunityIcons name="message-text" size={14} color={colors.white} />
-            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Open Tutor</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
+            <Pressable
+              onPress={handleOpenTutor}
+              style={{
+                borderRadius: 999,
+                backgroundColor: colors.amber,
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <MaterialCommunityIcons name="message-text" size={14} color={colors.white} />
+              <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Open Tutor</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowRationaleModal(true)}
+              style={{
+                borderRadius: 999,
+                backgroundColor: "rgba(146, 64, 14, 0.12)",
+                borderWidth: 1,
+                borderColor: "rgba(146, 64, 14, 0.25)",
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <MaterialCommunityIcons name="information-outline" size={14} color="#92400E" />
+              <Text style={{ color: "#92400E", fontSize: 12, fontWeight: "800" }}>Why This Path Opened?</Text>
+            </Pressable>
+          </View>
         </Card>
 
         <View>
@@ -528,6 +555,110 @@ export function LxpScreen({ navigation }: Props) {
           </View>
         </Card>
       </View>
+
+      {/* 1. Rationale Modal: Why This Path Opened */}
+      <Modal visible={showRationaleModal} transparent animationType="slide" onRequestClose={() => setShowRationaleModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 24 }}>💡</Text>
+                <Text style={{ fontSize: 18, fontWeight: "900", color: colors.text }}>Why This Path Opened</Text>
+              </View>
+              <Pressable onPress={() => setShowRationaleModal(false)} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ borderRadius: 16, backgroundColor: colors.paleRed, padding: 16, marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: colors.red, textTransform: "uppercase" }}>Intervention Trigger Score</Text>
+                <Text style={{ marginTop: 4, fontSize: 22, fontWeight: "900", color: colors.red }}>
+                  62.5% <Text style={{ fontSize: 13, fontWeight: "700", color: colors.textSecondary }}>(Threshold: 75.0%)</Text>
+                </Text>
+                <Text style={{ marginTop: 6, fontSize: 12, lineHeight: 18, color: colors.text }}>
+                  This personalized support path was generated because your score on the recent assessment was below the class mastery threshold.
+                </Text>
+              </View>
+
+              <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text, marginBottom: 8 }}>Target Weak Concepts:</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+                {["Algebraic Expressions", "Polynomial Long Division", "Factoring Quadratics"].map((concept) => (
+                  <View key={concept} style={{ borderRadius: 999, backgroundColor: colors.paleIndigo, paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ fontSize: 11, fontWeight: "800", color: colors.indigo }}>🎯 {concept}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text, marginBottom: 6 }}>AI Recommendation Rationale:</Text>
+              <Text style={{ fontSize: 12, lineHeight: 20, color: colors.textSecondary, marginBottom: 20 }}>
+                Complete the recommended checkpoint lessons and AI guided quizzes below to strengthen your understanding. Earning 75%+ on retries will mark this intervention completed and boost your class grade!
+              </Text>
+            </ScrollView>
+            <Pressable
+              onPress={() => setShowRationaleModal(false)}
+              style={{ borderRadius: 12, backgroundColor: colors.indigo, paddingVertical: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.white, fontSize: 14, fontWeight: "800" }}>Got it, return to path</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 2. Progress & Support Status Modal */}
+      <Modal visible={showProgressStatusModal} transparent animationType="slide" onRequestClose={() => setShowProgressStatusModal(false)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "80%" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <MaterialCommunityIcons name="chart-donut" size={24} color={colors.indigo} />
+                <Text style={{ fontSize: 18, fontWeight: "900", color: colors.text }}>Progress & Support Status</Text>
+              </View>
+              <Pressable onPress={() => setShowProgressStatusModal(false)} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
+                <View style={{ flex: 1, borderRadius: 16, backgroundColor: colors.paleIndigo, padding: 14, alignItems: "center" }}>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: colors.indigo, textTransform: "uppercase" }}>Checkpoints</Text>
+                  <Text style={{ marginTop: 4, fontSize: 20, fontWeight: "900", color: colors.indigo }}>
+                    {playlistQuery.data?.progress.checkpointsCompleted ?? 0} / {playlistQuery.data?.checkpoints.length ?? 0}
+                  </Text>
+                </View>
+                <View style={{ flex: 1, borderRadius: 16, backgroundColor: "#FEF3C7", padding: 14, alignItems: "center" }}>
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: "#92400E", textTransform: "uppercase" }}>XP Points</Text>
+                  <Text style={{ marginTop: 4, fontSize: 20, fontWeight: "900", color: "#92400E" }}>
+                    {playlistQuery.data?.progress.xpTotal ?? 0}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 16, gap: 12 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>Support Path Status</Text>
+                  <Pill label="Active Intervention" backgroundColor={colors.paleRed} color={colors.red} />
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Day Streak</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.amber }}>🔥 {playlistQuery.data?.progress.streakDays ?? 0} Days</Text>
+                </View>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Completion Progress</Text>
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: colors.green }}>
+                    {playlistQuery.data?.progress.completionPercent?.toFixed(0) ?? 0}%
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+            <Pressable
+              onPress={() => setShowProgressStatusModal(false)}
+              style={{ borderRadius: 12, backgroundColor: colors.indigo, paddingVertical: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: colors.white, fontSize: 14, fontWeight: "800" }}>Close Status</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScreenScroll>
   );
 }

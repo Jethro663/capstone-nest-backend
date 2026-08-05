@@ -88,6 +88,12 @@ export interface CreateClassModuleDto {
   isLocked?: boolean;
 }
 
+export interface CreateModuleSectionDto {
+  title: string;
+  description?: string;
+  order?: number;
+}
+
 export interface UpdateModuleItemDto {
   order?: number;
   isVisible?: boolean;

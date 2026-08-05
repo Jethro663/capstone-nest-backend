@@ -925,8 +925,8 @@ export function ProfileScreen(props: Props) {
           <QuickLink
             icon="clipboard-check-outline"
             iconColor={theme.purple}
-            label="Assessment History"
-            onPress={() => props.navigation.navigate("AssessmentHistory" as never)}
+            label="Evaluations"
+            onPress={() => props.navigation.navigate("StudentEvaluations" as never)}
           />
         </View>
 

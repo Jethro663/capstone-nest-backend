@@ -17,11 +17,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/cn';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import type { Announcement } from '@/types/announcement';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem, ClassVisibilityStatus } from '@/types/class';
+import { getApiErrorMessage } from '@/lib/api-error';
+import {
+  GRADIENT_OPTIONS,
+  createDefaultCustomization,
+  getFallbackGradient,
+  getHeroStyle,
+  normalizeCustomization,
+  type CardViewMode,
+  type ClassCardCustomization,
+} from '@/components/class/class-card-theme';
 import {
   CalendarCard,
   toDateKey,
@@ -446,6 +457,16 @@ export default function TeacherClassesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
+
+  // Theme Customization State
+  const [customizingClass, setCustomizingClass] = useState<ClassItem | null>(null);
+  const [uploadingThemeImage, setUploadingThemeImage] = useState(false);
+  const [savingThemeCustomization, setSavingThemeCustomization] = useState(false);
+  const [openCardMenuId, setOpenCardMenuId] = useState<string | null>(null);
+  const [draftCustomization, setDraftCustomization] = useState<ClassCardCustomization>(
+    createDefaultCustomization('oceanic-blue'),
+  );
+
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -687,6 +708,100 @@ export default function TeacherClassesPage() {
     );
   }
 
+  const startCustomization = (classItem: ClassItem, index: number) => {
+    setOpenCardMenuId(null);
+    const fallback = getFallbackGradient(index);
+    const fromBanner = classItem.cardBannerUrl
+      ? { themeKind: 'image' as const, imageUrl: classItem.cardBannerUrl }
+      : null;
+    const fromPreset = classItem.cardPreset
+      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as any }
+      : null;
+
+    setDraftCustomization(
+      normalizeCustomization(fromBanner ?? fromPreset ?? fallback, 'oceanic-blue')
+    );
+    setCustomizingClass(classItem);
+  };
+
+  const saveCustomization = async () => {
+    if (!customizingClass) return;
+    const classId = customizingClass.id;
+    const nextCustomization = draftCustomization;
+    setCustomizingClass(null);
+
+    try {
+      setSavingThemeCustomization(true);
+      const payload: { cardPreset?: string | null; cardBannerUrl?: string | null } = {};
+      if (nextCustomization.themeKind === 'image' && nextCustomization.imageUrl) {
+        payload.cardBannerUrl = nextCustomization.imageUrl;
+        payload.cardPreset = null;
+      } else if (nextCustomization.themeKind === 'gradient' && nextCustomization.gradientId) {
+        payload.cardPreset = nextCustomization.gradientId;
+        payload.cardBannerUrl = null;
+      }
+      
+      const response = await classService.updatePresentation(classId, payload);
+      setClasses((current) =>
+        current.map((c) => (c.id === classId ? response.data : c)),
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to save card theme.'));
+    } finally {
+      setSavingThemeCustomization(false);
+    }
+  };
+
+  const resetCustomization = async () => {
+    if (!customizingClass) return;
+    const classId = customizingClass.id;
+    setCustomizingClass(null);
+
+    try {
+      setSavingThemeCustomization(true);
+      const response = await classService.updatePresentation(classId, {
+        cardPreset: 'aurora',
+        cardBannerUrl: null,
+      });
+      setClasses((current) =>
+        current.map((c) => (c.id === classId ? response.data : c)),
+      );
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to reset card theme.'));
+    } finally {
+      setSavingThemeCustomization(false);
+    }
+  };
+
+  const handleThemeImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !customizingClass) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file.');
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      toast.error('Image is too large. Please upload a file smaller than 12MB.');
+      return;
+    }
+
+    try {
+      setUploadingThemeImage(true);
+      const response = await classService.uploadBanner(customizingClass.id, file);
+      const uploadedUrl = response.data.cardBannerUrl;
+      setDraftCustomization((current) => ({ ...current, themeKind: 'image', imageUrl: uploadedUrl }));
+      setClasses((current) =>
+        current.map((c) => (c.id === customizingClass.id ? response.data.class : c)),
+      );
+      toast.success('Class banner updated.');
+    } catch (error) {
+      toast.error('Upload failed. Please use an image smaller than 12MB.');
+    } finally {
+      setUploadingThemeImage(false);
+    }
+  };
+
   return (
     <div className="space-y-5 bg-[#f7f7fb] p-1">
       <header className="rounded-[1.6rem] border border-[#dbe1ec] bg-white p-5 shadow-[0_18px_36px_-30px_rgba(11,23,54,0.45)] sm:p-6">
@@ -810,16 +925,31 @@ export default function TeacherClassesPage() {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-                {filteredClasses.map((classItem, index) => (
-                  <ClassCard
-                    key={classItem.id}
-                    classItem={classItem}
-                    metrics={metricsByClass[classItem.id] ?? EMPTY_METRICS}
-                    accentIndex={index}
-                    classHref={`/dashboard/teacher/classes/${classItem.id}`}
-                    lessonsHref={`/dashboard/teacher/classes/${classItem.id}?view=modules`}
-                  />
-                ))}
+                {filteredClasses.map((classItem, index) => {
+                  const fallback = getFallbackGradient(index);
+                  const theme = classItem.cardBannerUrl
+                    ? { themeKind: 'image' as const, imageUrl: classItem.cardBannerUrl }
+                    : classItem.cardPreset
+                      ? { themeKind: 'gradient' as const, gradientId: classItem.cardPreset as any }
+                      : fallback;
+                  const normalizedTheme = normalizeCustomization(theme, 'oceanic-blue');
+                  const isMenuOpen = openCardMenuId === classItem.id;
+
+                  return (
+                    <ClassCard
+                      key={classItem.id}
+                      classItem={classItem}
+                      metrics={metricsByClass[classItem.id] ?? EMPTY_METRICS}
+                      accentIndex={index}
+                      classHref={`/dashboard/teacher/classes/${classItem.id}`}
+                      lessonsHref={`/dashboard/teacher/classes/${classItem.id}?view=lessons`}
+                      theme={normalizedTheme}
+                      menuOpen={isMenuOpen}
+                      onToggleMenu={() => setOpenCardMenuId((current) => (current === classItem.id ? null : classItem.id))}
+                      onCustomize={() => startCustomization(classItem, index)}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -929,6 +1059,171 @@ export default function TeacherClassesPage() {
                 </Button>
               )}
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(customizingClass)} onOpenChange={(open) => !open && setCustomizingClass(null)}>
+        <DialogContent className="teacher-customize-dialog">
+          <DialogHeader>
+            <DialogTitle>Customize Class Card Theme</DialogTitle>
+            <DialogDescription>
+              Choose a gradient or upload an image and reposition it like a class cover.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="teacher-customize-dialog__section">
+            <p>Theme Type</p>
+            <div className="teacher-customize-dialog__mode">
+              <button
+                type="button"
+                data-active={draftCustomization.themeKind === 'gradient'}
+                onClick={() => setDraftCustomization((current) => ({ ...current, themeKind: 'gradient' }))}
+              >
+                Gradient
+              </button>
+              <button
+                type="button"
+                data-active={draftCustomization.themeKind === 'image'}
+                onClick={() =>
+                  setDraftCustomization((current) => ({
+                    ...current,
+                    themeKind: current.imageUrl ? 'image' : 'gradient',
+                  }))
+                }
+                disabled={!draftCustomization.imageUrl}
+              >
+                Image
+              </button>
+            </div>
+          </div>
+
+          <div className="teacher-customize-dialog__section">
+            <p>Gradient Palette</p>
+            <div className="teacher-customize-dialog__gradients">
+              {GRADIENT_OPTIONS.map((gradient) => (
+                <button
+                  key={gradient.id}
+                  type="button"
+                  data-active={draftCustomization.gradientId === gradient.id}
+                  onClick={() =>
+                    setDraftCustomization((current) => ({
+                      ...current,
+                      themeKind: 'gradient',
+                      gradientId: gradient.id as any,
+                    }))
+                  }
+                >
+                  <span style={{ background: gradient.background }} />
+                  {gradient.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="teacher-customize-dialog__section">
+            <div className="teacher-customize-dialog__image-head">
+              <p>Image Theme</p>
+              <label className="teacher-customize-dialog__upload">
+                {uploadingThemeImage ? 'Uploading...' : 'Upload Image'}
+                <input type="file" accept="image/*" onChange={(event) => void handleThemeImageUpload(event)} />
+              </label>
+            </div>
+
+            {draftCustomization.imageUrl ? (
+              <div className="teacher-customize-dialog__image-tools">
+                <div
+                  className="teacher-customize-dialog__image-preview"
+                  style={getHeroStyle({ ...draftCustomization, themeKind: 'image' })}
+                />
+                <div className="teacher-customize-dialog__slider">
+                  <label htmlFor="theme-image-position-x">Horizontal</label>
+                  <input
+                    id="theme-image-position-x"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={draftCustomization.imagePositionX}
+                    onChange={(event) =>
+                      setDraftCustomization((current) => ({
+                        ...current,
+                        imagePositionX: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="teacher-customize-dialog__slider">
+                  <label htmlFor="theme-image-position-y">Vertical</label>
+                  <input
+                    id="theme-image-position-y"
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={draftCustomization.imagePositionY}
+                    onChange={(event) =>
+                      setDraftCustomization((current) => ({
+                        ...current,
+                        imagePositionY: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="teacher-customize-dialog__slider">
+                  <label htmlFor="theme-image-scale">Zoom</label>
+                  <input
+                    id="theme-image-scale"
+                    type="range"
+                    min={100}
+                    max={220}
+                    value={draftCustomization.imageScale}
+                    onChange={(event) =>
+                      setDraftCustomization((current) => ({
+                        ...current,
+                        imageScale: Number(event.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="teacher-customize-dialog__image-actions">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setDraftCustomization((current) => ({
+                        ...current,
+                        themeKind: 'gradient',
+                        imageUrl: null,
+                      }))
+                    }
+                  >
+                    Remove Image
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDraftCustomization((current) => ({ ...current, themeKind: 'image' }))}
+                  >
+                    Use Image Theme
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="teacher-customize-dialog__empty">No image uploaded yet.</p>
+            )}
+          </div>
+
+          <DialogFooter className="teacher-customize-dialog__footer">
+            <Button type="button" variant="outline" onClick={resetCustomization} disabled={savingThemeCustomization}>
+              Reset
+            </Button>
+            <Button
+              type="button"
+              className="teacher-home-refresh"
+              onClick={() => void saveCustomization()}
+              disabled={savingThemeCustomization}
+            >
+              {savingThemeCustomization ? 'Saving...' : 'Save Theme'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

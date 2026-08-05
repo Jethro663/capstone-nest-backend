@@ -32,6 +32,7 @@ jest.mock("react-native", () => {
     ScrollView: component("ScrollView"),
     TextInput: component("TextInput"),
     Image: component("Image"),
+    Modal: component("Modal"),
     Alert: { alert: jest.fn() },
   };
 });
@@ -141,6 +142,7 @@ jest.mock("../../api/hooks", () => ({
   useTeacherClasses: jest.fn(),
   useAssessmentDetail: jest.fn(),
   useTeacherAssessmentUpdateMutation: jest.fn(),
+  useTeacherDeleteAssessmentMutation: jest.fn(() => ({ mutate: jest.fn(), isPending: false })),
   useTeacherAssessmentSubmissions: jest.fn(),
   useTeacherProfile: jest.fn(),
   useTeacherProfileUpdateMutation: jest.fn(),

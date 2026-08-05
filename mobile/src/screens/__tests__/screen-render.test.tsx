@@ -64,6 +64,7 @@ jest.mock("react-native", () => {
     ScrollView: component("ScrollView"),
     TextInput: component("TextInput"),
     Image: component("Image"),
+    Modal: component("Modal"),
     RefreshControl: component("RefreshControl"),
     Alert: { alert: jest.fn() },
     AppState: { addEventListener: jest.fn(() => ({ remove: jest.fn() })) },

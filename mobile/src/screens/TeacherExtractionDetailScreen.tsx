@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as DocumentPicker from "expo-document-picker";
 import { extractionsApi } from "../api/services/extractions";
+import { fileUploadApi } from "../api/services/file-upload";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import type { Extraction, ExtractionSection } from "../types/extraction";
@@ -93,6 +95,36 @@ export function TeacherExtractionDetailScreen({ navigation, route }: ExtractionD
     }
   };
 
+  const handleUploadDocumentForExtraction = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: [
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ],
+        copyToCacheDirectory: true,
+      });
+      if (!res.canceled && res.assets && res.assets[0]) {
+        const asset = res.assets[0];
+        const uploadedFile = await fileUploadApi.upload(
+          { uri: asset.uri, name: asset.name, type: asset.mimeType },
+          { classId, scope: "private", aiEnabled: true },
+        );
+        const extractionRes = await extractionsApi.start({ fileId: uploadedFile.id, targetSectionCount: 3 });
+        Alert.alert("Extraction queued", "File uploaded and document extraction started successfully!");
+        if (extractionRes.extractionId) {
+          navigation.replace("TeacherExtractionDetail", {
+            extractionId: extractionRes.extractionId,
+            classId,
+          });
+        }
+      }
+    } catch (err) {
+      Alert.alert("Unable to extract document", getErrorMessage(err));
+    }
+  };
+
   const sections = extraction?.structuredContent?.sections ?? [];
 
   return (
@@ -119,6 +151,7 @@ export function TeacherExtractionDetailScreen({ navigation, route }: ExtractionD
           <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <TeacherActionButton label={saving ? "Saving..." : "Save"} icon="content-save-outline" tone="blue" disabled={saving || !extraction?.structuredContent} onPress={() => void save()} />
             <TeacherActionButton label="Apply extraction" icon="check-decagram-outline" tone="green" disabled={!extraction || extraction.qualityGate === "fail"} onPress={() => void applyExtraction()} />
+            <TeacherActionButton label="Upload new doc" icon="file-upload-outline" tone="purple" onPress={() => void handleUploadDocumentForExtraction()} />
             <TeacherActionButton label="Delete" icon="trash-can-outline" tone="red" disabled={!extraction} onPress={() => void deleteExtraction()} />
           </View>
         </View>

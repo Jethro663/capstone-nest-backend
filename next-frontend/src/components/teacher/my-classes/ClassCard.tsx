@@ -16,9 +16,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import type { ClassCardCustomization } from '@/components/class/class-card-theme';
+import { getGradientOption, getHeroStyle } from '@/components/class/class-card-theme';
 import type { ClassItem } from '@/types/class';
 import { getTeacherName } from '@/utils/helpers';
 import { cn } from '@/utils/cn';
+import { MoreHorizontal } from 'lucide-react';
 
 export interface ClassCardMetrics {
   lessonsCount: number;
@@ -33,21 +36,13 @@ interface ClassCardProps {
   accentIndex: number;
   classHref: string;
   lessonsHref: string;
+  theme?: ClassCardCustomization;
+  menuOpen?: boolean;
+  onToggleMenu?: () => void;
+  onCustomize?: () => void;
 }
 
-const CARD_ACCENTS = [
-  {
-    hero: 'from-[#f43f5e] via-[#ef476f] to-[#dd2954]',
-    chip: 'bg-[#ffe7ee] text-[#be123c] border-[#fecdd8]',
-    icon: 'bg-white/20 text-white',
-    button: 'bg-[#f43f5e] text-white hover:bg-[#e11d48]',
-  },
-  {
-    hero: 'from-[#0b1736] via-[#1b2d5f] to-[#253d78]',
-    chip: 'bg-[#e8efff] text-[#1d4ed8] border-[#bfdbfe]',
-    icon: 'bg-white/15 text-white',
-    button: 'bg-[#0b1736] text-white hover:bg-[#121f47]',
-  },
+export const CARD_ACCENTS = [
   {
     hero: 'from-[#be123c] via-[#9f1239] to-[#701a75]',
     chip: 'bg-[#ffe8ef] text-[#9f1239] border-[#fbcfe8]',
@@ -123,8 +118,20 @@ export function ClassCard({
   accentIndex,
   classHref,
   lessonsHref,
+  theme,
+  menuOpen,
+  onToggleMenu,
+  onCustomize,
 }: ClassCardProps) {
   const accent = CARD_ACCENTS[accentIndex % CARD_ACCENTS.length];
+  const gradient = theme ? getGradientOption(theme.gradientId) : null;
+  const heroStyle = theme ? getHeroStyle(theme) : {};
+
+  // Fallback to static accent if no theme is provided (e.g. initial render or if unused)
+  const isFallback = !theme;
+  const fallbackHero = isFallback ? 'from-[#0b1736] via-[#1b2d5f] to-[#253d78]' : '';
+  const fallbackIcon = isFallback ? 'bg-white/15 text-white' : '';
+
   const progress = clampProgress(metrics.progressPercent);
   const subjectName = classItem.subjectName || classItem.className || classItem.name || 'Class';
   const sectionName = classItem.section?.name ?? 'Section TBA';
@@ -140,14 +147,61 @@ export function ClassCard({
         'hover:-translate-y-1 hover:border-[#c7d2e8] hover:shadow-[0_26px_42px_-26px_rgba(11,23,54,0.48),inset_0_1px_0_rgba(255,255,255,0.9)]',
       )}
     >
-      <div className={cn('relative overflow-hidden bg-gradient-to-br px-5 pb-5 pt-4 text-white', accent.hero)}>
+      <div 
+        className={cn('relative overflow-hidden px-5 pb-5 pt-4 text-white', isFallback ? `bg-gradient-to-br ${fallbackHero}` : '')}
+        style={heroStyle}
+      >
         <div className="pointer-events-none absolute inset-0 opacity-25 [background-image:radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.5)_1px,transparent_0)] [background-size:14px_14px]" />
         <div className="relative flex items-start justify-between gap-3">
           <Badge className="border border-white/35 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-white">
             Grade {gradeLevel}
           </Badge>
-          <div className={cn('grid h-11 w-11 place-items-center rounded-2xl border border-white/25', accent.icon)}>
-            {renderSubjectIcon(iconKey)}
+          
+          <div className="flex items-center gap-1.5">
+            {onCustomize && (
+              <div className="relative z-20">
+                <button
+                  type="button"
+                  data-class-card-menu
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onToggleMenu?.();
+                  }}
+                  className={cn(
+                    'grid h-8 w-8 place-items-center rounded-full border border-white/20 bg-black/10 text-white transition hover:bg-black/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white',
+                    menuOpen && 'bg-black/20 ring-2 ring-white',
+                  )}
+                  aria-label="Class options"
+                  aria-expanded={menuOpen}
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+
+                {menuOpen && (
+                  <div
+                    className="absolute right-0 top-10 flex w-48 origin-top-right flex-col rounded-xl border border-[#e4e9f1] bg-white p-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.12)] animate-in fade-in zoom-in-95"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#f3f0f9]"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onCustomize();
+                      }}
+                    >
+                      Customize class
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className={cn('grid h-11 w-11 place-items-center rounded-2xl border border-white/25', isFallback ? fallbackIcon : 'bg-white/20 text-white')}>
+              {renderSubjectIcon(iconKey)}
+            </div>
           </div>
         </div>
 

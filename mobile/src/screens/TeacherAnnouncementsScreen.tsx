@@ -1,15 +1,16 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, View } from "react-native";
 import { useAnnouncements, useTeacherAnnouncementMutation, useTeacherClasses, useTeacherDeleteAnnouncementMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
+import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnnouncementEditorModal";
 import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
-  TeacherInlineField,
   TeacherPanel,
   TeacherRow,
   TeacherScreen,
@@ -39,11 +40,15 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
   const announcementsQuery = useAnnouncements(effectiveClassId);
   const saveMutation = useTeacherAnnouncementMutation(effectiveClassId);
   const deleteMutation = useTeacherDeleteAnnouncementMutation(effectiveClassId);
-  const [editingId, setEditingId] = useState<string | undefined>();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [scheduledAt, setScheduledAt] = useState("");
-  const [pinned, setPinned] = useState(false);
+  const [showEditorModal, setShowEditorModal] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<{
+    id?: string;
+    title?: string;
+    content?: string;
+    isPinned?: boolean;
+    scheduledAt?: string;
+  } | null>(null);
+  const [deletingAnnouncement, setDeletingAnnouncement] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => {
     if (selectedClassId === "all" && classesQuery.data?.[0]?.id) {
@@ -74,51 +79,29 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
     });
   }, [announcements, feedFilter, search]);
 
-  const resetForm = () => {
-    setEditingId(undefined);
-    setTitle("");
-    setContent("");
-    setScheduledAt("");
-    setPinned(false);
-  };
-
-  const saveAnnouncement = async () => {
-    if (!effectiveClassId || !title.trim() || !content.trim()) {
-      Alert.alert("Missing details", "Select a class, then provide both a title and content.");
+  const handleSave = async (payload: { title: string; content: string; isPinned: boolean; scheduledAt?: string }) => {
+    if (!effectiveClassId) {
+      Alert.alert("No class selected", "Please select a class before posting.");
       return;
     }
-
     try {
       await saveMutation.mutateAsync({
-        announcementId: editingId,
-        payload: {
-          title: title.trim(),
-          content: content.trim(),
-          isPinned: pinned,
-          scheduledAt: scheduledAt.trim() || undefined,
-        },
+        announcementId: editingAnnouncement?.id,
+        payload,
       });
-      resetForm();
+      setShowEditorModal(false);
+      setEditingAnnouncement(null);
+      await announcementsQuery.refetch();
+      Alert.alert("Success", editingAnnouncement?.id ? "Announcement updated." : "Announcement published.");
     } catch (error) {
       Alert.alert("Unable to save announcement", toAppError(error).message);
-    }
-  };
-
-  const removeAnnouncement = async (announcementId: string) => {
-    try {
-      await deleteMutation.mutateAsync(announcementId);
-      if (editingId === announcementId) {
-        resetForm();
-      }
-    } catch (error) {
-      Alert.alert("Unable to delete announcement", toAppError(error).message);
     }
   };
 
   return (
     <TeacherScreen
       title="Announcements"
-      subtitle="Create, schedule, pin, and edit class announcements with live mobile controls."
+      subtitle="Create, schedule, pin, and edit class announcements with rich formatting."
       icon="bullhorn-outline"
       showBackButton
       onBackPress={() => navigation.goBack()}
@@ -144,7 +127,6 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
             active={effectiveClassId === entry.id}
             onPress={() => {
               setSelectedClassId(entry.id);
-              resetForm();
             }}
           />
         ))}
@@ -153,54 +135,49 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search announcement feed" />
 
       <TeacherPanel
-        title={editingId ? "Edit announcement" : "Create announcement"}
-        subtitle={currentClass ? `Posting to ${currentClass.subjectCode} | ${currentClass.subjectName}` : "Select a class first."}
-      >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Title" value={title} onChangeText={setTitle} placeholder="Post title" />
-          <TeacherInlineField label="Content" value={content} onChangeText={setContent} placeholder="Write the class update" multiline />
-          <TeacherInlineField
-            label="Schedule (optional)"
-            value={scheduledAt}
-            onChangeText={setScheduledAt}
-            placeholder="ISO or YYYY-MM-DD HH:mm"
+        title="Class Announcement Composer"
+        subtitle={currentClass ? `Target class: ${currentClass.subjectCode} - ${currentClass.subjectName}` : "Select a class to post announcements."}
+        action={
+          <TeacherActionButton
+            label="Create Announcement"
+            icon="plus"
+            tone="green"
+            disabled={!effectiveClassId}
+            onPress={() => {
+              setEditingAnnouncement(null);
+              setShowEditorModal(true);
+            }}
           />
-
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        }
+      >
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <TeacherActionButton
+            label="New Post with Rich Text"
+            icon="square-edit-outline"
+            tone="green"
+            disabled={!effectiveClassId}
+            onPress={() => {
+              setEditingAnnouncement(null);
+              setShowEditorModal(true);
+            }}
+          />
+          {currentClass ? (
             <TeacherActionButton
-              label={pinned ? "Pinned" : "Pin post"}
-              icon="pin-outline"
-              tone={pinned ? "amber" : "neutral"}
-              onPress={() => setPinned((current) => !current)}
-            />
-            <TeacherActionButton
-              label={editingId ? "Save changes" : "Create post"}
-              icon="content-save-outline"
-              tone="green"
-              onPress={() => void saveAnnouncement()}
-              disabled={saveMutation.isPending}
-            />
-            {editingId ? (
-              <TeacherActionButton label="Cancel edit" icon="close" tone="purple" onPress={resetForm} />
-            ) : null}
-            <TeacherActionButton
-              label="Open class"
+              label="Open Class View"
               icon="book-open-variant"
               tone="blue"
-              disabled={!currentClass}
               onPress={() => {
-                if (!currentClass) return;
                 navigation.navigate("TeacherClassDetail", {
                   classId: currentClass.id,
                   initialTab: "announcements",
                 });
               }}
             />
-          </View>
+          ) : null}
         </View>
       </TeacherPanel>
 
-      <TeacherPanel title="Announcement feed" subtitle="Tap a post to load it into the editor and keep updates moving.">
+      <TeacherPanel title="Announcement Feed" subtitle="Tap any announcement to edit its title, formatted content, pin status, or schedule.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {(["all", "pinned", "scheduled"] as FeedFilter[]).map((entry) => (
             <TeacherChip
@@ -217,25 +194,84 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
             <TeacherRow
               key={announcement.id}
               title={announcement.title}
-              subtitle={`${announcement.isPinned ? "Pinned" : "Post"} | ${formatDate(announcement.scheduledAt || announcement.createdAt)} | ${stripRichText(announcement.content).slice(0, 110)}`}
+              subtitle={`${announcement.isPinned ? "Pinned · " : ""}${formatDate(announcement.scheduledAt || announcement.createdAt)} · ${stripRichText(announcement.content).slice(0, 90)}`}
               onPress={() => {
-                setEditingId(announcement.id);
-                setTitle(announcement.title);
-                setContent(stripRichText(announcement.content));
-                setScheduledAt(announcement.scheduledAt || "");
-                setPinned(Boolean(announcement.isPinned));
+                setEditingAnnouncement({
+                  id: announcement.id,
+                  title: announcement.title,
+                  content: announcement.content,
+                  isPinned: Boolean(announcement.isPinned),
+                  scheduledAt: announcement.scheduledAt || "",
+                });
+                setShowEditorModal(true);
               }}
               right={
-                <Pressable onPress={() => void removeAnnouncement(announcement.id)}>
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: "#FF9CAA" }}>Delete</Text>
-                </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Pressable
+                    onPress={() => {
+                      setEditingAnnouncement({
+                        id: announcement.id,
+                        title: announcement.title,
+                        content: announcement.content,
+                        isPinned: Boolean(announcement.isPinned),
+                        scheduledAt: announcement.scheduledAt || "",
+                      });
+                      setShowEditorModal(true);
+                    }}
+                    style={{ borderRadius: 6, backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 8, paddingVertical: 4 }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#ffffff" }}>Edit</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setDeletingAnnouncement({ id: announcement.id, title: announcement.title })}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#FF9CAA" }}>Delete</Text>
+                  </Pressable>
+                </View>
               }
             />
           ))
         ) : (
-          <TeacherEmpty title="No announcements yet" subtitle="Create the first announcement for this class from the composer above." icon="bullhorn-outline" />
+          <TeacherEmpty title="No announcements yet" subtitle="Create the first announcement for this class using the composer button above." icon="bullhorn-outline" />
         )}
       </TeacherPanel>
+
+      <TeacherAnnouncementEditorModal
+        visible={showEditorModal}
+        className={currentClass?.subjectName}
+        editingId={editingAnnouncement?.id}
+        initialTitle={editingAnnouncement?.title ?? ""}
+        initialContent={editingAnnouncement?.content ?? ""}
+        initialPinned={editingAnnouncement?.isPinned ?? false}
+        initialScheduledAt={editingAnnouncement?.scheduledAt ?? ""}
+        saving={saveMutation.isPending}
+        onSave={(payload) => void handleSave(payload)}
+        onClose={() => {
+          setShowEditorModal(false);
+          setEditingAnnouncement(null);
+        }}
+      />
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingAnnouncement)}
+        title="Delete Announcement"
+        description={
+          deletingAnnouncement
+            ? `Are you sure you want to delete "${deletingAnnouncement.title}"?`
+            : ""
+        }
+        loading={deleteMutation.isPending}
+        onCancel={() => setDeletingAnnouncement(null)}
+        onConfirm={async () => {
+          if (!deletingAnnouncement) return;
+          try {
+            await deleteMutation.mutateAsync(deletingAnnouncement.id);
+            setDeletingAnnouncement(null);
+            await announcementsQuery.refetch();
+          } catch (error) {
+            Alert.alert("Unable to delete announcement", toAppError(error).message);
+          }
+        }}
+      />
     </TeacherScreen>
   );
 }
+

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { Pressable, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { queryKeys, useStudentClasses } from "../api/hooks";
 import { announcementsApi } from "../api/services/announcements";
@@ -37,6 +37,9 @@ function CountPill({ label, value, color = theme.red }: { label: string; value: 
 
 export function AnnouncementsScreen(_: Props) {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [selectedClassId, setSelectedClassId] = useState<string>("all");
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<any | null>(null);
+
   const { user } = useAuth();
   const classesQuery = useStudentClasses(user?.userId || user?.id);
   const classIds = classesQuery.data?.map((item) => item.id) ?? [];
@@ -62,7 +65,17 @@ export function AnnouncementsScreen(_: Props) {
   }, [announcementQueries, classesQuery.data]);
 
   const pinnedCount = announcements.filter((entry) => entry.isPinned).length;
-  const filteredAnnouncements = filterMode === "pinned" ? announcements.filter((entry) => entry.isPinned) : announcements;
+  const filteredAnnouncements = useMemo(() => {
+    let list = announcements;
+    if (selectedClassId !== "all") {
+      list = list.filter((entry) => entry.classId === selectedClassId);
+    }
+    if (filterMode === "pinned") {
+      list = list.filter((entry) => entry.isPinned);
+    }
+    return list;
+  }, [announcements, filterMode, selectedClassId]);
+
   const refreshing = classesQuery.isRefetching || announcementQueries.some((query) => query.isRefetching);
 
   return (
@@ -186,8 +199,9 @@ export function AnnouncementsScreen(_: Props) {
       ) : (
         <View style={{ marginTop: 6 }}>
           {filteredAnnouncements.map((announcement, index) => (
-            <View
+            <Pressable
               key={`${announcement.classId}-${announcement.id}`}
+              onPress={() => setSelectedAnnouncement(announcement)}
               style={{
                 marginHorizontal: 16,
                 marginTop: index === 0 ? 6 : 8,
@@ -232,13 +246,54 @@ export function AnnouncementsScreen(_: Props) {
                   </Text>
                 </View>
               </View>
-              <Text style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: theme.subtext }}>
+              <Text numberOfLines={3} style={{ marginTop: 9, fontSize: 12, lineHeight: 19, color: theme.subtext }}>
                 {stripRichText(announcement.content)}
               </Text>
-            </View>
+            </Pressable>
           ))}
         </View>
       )}
+
+      {/* Announcement Detail Modal */}
+      <Modal visible={Boolean(selectedAnnouncement)} transparent animationType="slide" onRequestClose={() => setSelectedAnnouncement(null)}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
+          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: "85%" }}>
+            <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                {selectedAnnouncement?.isPinned ? (
+                  <View style={{ alignSelf: "flex-start", borderRadius: 4, backgroundColor: theme.amberSoft, paddingHorizontal: 8, paddingVertical: 3, marginBottom: 6 }}>
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.amber }}>📌 Pinned Announcement</Text>
+                  </View>
+                ) : null}
+                <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
+                  {selectedAnnouncement?.title}
+                </Text>
+                <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
+                  {selectedAnnouncement?.subject} | Posted {selectedAnnouncement?.createdAt}
+                </Text>
+              </View>
+              <Pressable onPress={() => setSelectedAnnouncement(null)} style={{ padding: 4 }}>
+                <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator style={{ marginBottom: 16 }}>
+              <View style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, padding: 14 }}>
+                <Text style={{ fontSize: 13, lineHeight: 22, color: theme.text }}>
+                  {stripRichText(selectedAnnouncement?.content || "")}
+                </Text>
+              </View>
+            </ScrollView>
+
+            <Pressable
+              onPress={() => setSelectedAnnouncement(null)}
+              style={{ borderRadius: 12, backgroundColor: theme.red, paddingVertical: 12, alignItems: "center" }}
+            >
+              <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "800" }}>Close Announcement</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScreenScroll>
   );
 }

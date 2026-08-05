@@ -1,11 +1,14 @@
-﻿import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Text, View } from "react-native";
+import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { queryKeys, useTeacherClasses } from "../api/hooks";
+import { toAppError } from "../api/http";
+import { fileUploadApi } from "../api/services/file-upload";
 import { modulesApi } from "../api/services/modules";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
+import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -19,15 +22,26 @@ import {
 } from "../components/teacher/TeacherMobilePrimitives";
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherLibrary">;
+type LibraryTab = "files" | "modules";
+type ScopeFilter = "all" | "private" | "general";
 
 export function TeacherLibraryScreen({ navigation }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
+  const queryClient = useQueryClient();
   const classesQuery = useTeacherClasses(teacherId);
+
+  const [activeTab, setActiveTab] = useState<LibraryTab>("files");
   const [search, setSearch] = useState("");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
+  const [uploading, setUploading] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<{ id: string; name: string } | null>(null);
+  const [importingFile, setImportingFile] = useState<{ id: string; name: string } | null>(null);
+  const [targetClassId, setTargetClassId] = useState<string>("");
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
+
   const moduleQueries = useQueries({
     queries: classIds.map((classId) => ({
       queryKey: queryKeys.classModules(classId),
@@ -36,7 +50,54 @@ export function TeacherLibraryScreen({ navigation }: Props) {
     })),
   });
 
-  const records = useMemo(
+  const selectedClass =
+    selectedClassId === "all"
+      ? undefined
+      : classesQuery.data?.find((entry) => entry.id === selectedClassId);
+
+  const handleUploadFile = async () => {
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const asset = result.assets[0];
+
+      setUploading(true);
+      await fileUploadApi.upload(
+        {
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || "application/pdf",
+        },
+        {
+          classId: selectedClassId !== "all" ? selectedClassId : undefined,
+          scope: scopeFilter !== "all" ? scopeFilter : "general",
+        },
+      );
+
+      Alert.alert("File Uploaded", `"${asset.name}" has been added to your Nexora Library.`);
+      await queryClient.invalidateQueries({ queryKey: ["library-files"] });
+    } catch (err) {
+      Alert.alert("Upload Failed", toAppError(err).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => fileUploadApi.delete(id),
+    onSuccess: async () => {
+      setDeletingFile(null);
+      await queryClient.invalidateQueries({ queryKey: ["library-files"] });
+      Alert.alert("File Deleted", "The library resource has been deleted.");
+    },
+  });
+
+  const moduleRecords = useMemo(
     () =>
       moduleQueries.flatMap((query, index) => {
         const classItem = classesQuery.data?.[index];
@@ -49,24 +110,19 @@ export function TeacherLibraryScreen({ navigation }: Props) {
     [classesQuery.data, moduleQueries],
   );
 
-  const filtered = useMemo(() => {
-    return records.filter((record) => {
+  const filteredModules = useMemo(() => {
+    return moduleRecords.filter((record) => {
       if (selectedClassId !== "all" && record.classId !== selectedClassId) return false;
       if (!search.trim()) return true;
       const haystack = `${record.title} ${record.description || ""} ${record.classLabel}`.toLowerCase();
       return haystack.includes(search.trim().toLowerCase());
     });
-  }, [records, search, selectedClassId]);
-
-  const selectedClass =
-    selectedClassId === "all"
-      ? undefined
-      : classesQuery.data?.find((entry) => entry.id === selectedClassId);
+  }, [moduleRecords, search, selectedClassId]);
 
   return (
     <TeacherScreen
       title="Nexora Library"
-      subtitle="Cross-class content modules with direct creation and class workspace actions."
+      subtitle="Raw document assets & cross-class content modules with 1:1 web parity."
       icon="folder-open-outline"
       showBackButton
       onBackPress={() => navigation.goBack()}
@@ -77,12 +133,17 @@ export function TeacherLibraryScreen({ navigation }: Props) {
     >
       <TeacherStats
         items={[
-          { label: "Modules", value: filtered.length, tone: "red" },
+          { label: "Modules", value: moduleRecords.length, tone: "red" },
           { label: "Classes", value: classesQuery.data?.length ?? 0, tone: "blue" },
         ]}
       />
 
-      <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search modules or class" />
+      <View style={{ marginHorizontal: 16, marginTop: 8, flexDirection: "row", gap: 8 }}>
+        <TeacherChip label="Raw Asset Files" active={activeTab === "files"} onPress={() => setActiveTab("files")} />
+        <TeacherChip label="Class Modules" active={activeTab === "modules"} onPress={() => setActiveTab("modules")} />
+      </View>
+
+      <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search library resources or modules..." />
 
       <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         <TeacherChip label="All classes" active={selectedClassId === "all"} onPress={() => setSelectedClassId("all")} />
@@ -101,73 +162,82 @@ export function TeacherLibraryScreen({ navigation }: Props) {
         subtitle={
           selectedClass
             ? `Focused class: ${selectedClass.subjectCode} | ${selectedClass.subjectName}`
-            : "Choose a class chip to unlock class-specific actions."
+            : "Upload assets or pick a class chip to unlock class-specific actions."
         }
       >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <TeacherActionButton
+            label={uploading ? "Uploading..." : "Upload File Asset"}
+            icon="upload-outline"
+            tone="green"
+            disabled={uploading}
+            onPress={() => void handleUploadFile()}
+          />
+          <TeacherActionButton
             label="Create module"
             icon="plus-box-outline"
-            tone="green"
+            tone="blue"
             disabled={!selectedClass}
             onPress={() => {
               if (!selectedClass) return;
               navigation.navigate("TeacherCreateModule", { classId: selectedClass.id });
             }}
           />
-          <TeacherActionButton
-            label="Class modules"
-            icon="book-open-page-variant-outline"
-            tone="blue"
-            disabled={!selectedClass}
-            onPress={() => {
-              if (!selectedClass) return;
-              navigation.navigate("TeacherClassDetail", { classId: selectedClass.id, initialTab: "modules" });
-            }}
-          />
-          <TeacherActionButton
-            label="Assessments"
-            icon="clipboard-text-outline"
-            tone="purple"
-            disabled={!selectedClass}
-            onPress={() => {
-              if (!selectedClass) return;
-              navigation.navigate("TeacherClassDetail", { classId: selectedClass.id, initialTab: "assessments" });
-            }}
-          />
         </View>
       </TeacherPanel>
 
-      <TeacherPanel title="Module library" subtitle="Tap a module to open its teacher module workspace.">
-        {filtered.length ? (
-          filtered.map((module) => (
-            <TeacherRow
-              key={module.id}
-              title={module.title}
-              subtitle={`${module.classLabel} | ${module.sections?.length ?? 0} sections`}
-              onPress={() => navigation.navigate("TeacherModuleDetail", { classId: module.classId, moduleId: module.id })}
-              right={
-                <View
-                  style={{
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: teacherTheme.border,
-                    backgroundColor: teacherTheme.active,
-                    paddingHorizontal: 8,
-                    paddingVertical: 4,
-                  }}
-                >
-                  <Text style={{ fontSize: 10, fontWeight: "700", color: teacherTheme.muted }}>
-                    {module.sections?.length ?? 0} sections
-                  </Text>
-                </View>
-              }
-            />
-          ))
-        ) : (
-          <TeacherEmpty title="No modules found" subtitle="No modules match the current class filter or search." icon="folder-search-outline" />
-        )}
-      </TeacherPanel>
+      {activeTab === "modules" ? (
+        <TeacherPanel title="Module library" subtitle="Tap a module to open its teacher module workspace.">
+          {filteredModules.length ? (
+            filteredModules.map((module) => (
+              <TeacherRow
+                key={module.id}
+                title={module.title}
+                subtitle={`${module.classLabel} | ${module.sections?.length ?? 0} sections`}
+                onPress={() => navigation.navigate("TeacherModuleDetail", { classId: module.classId, moduleId: module.id })}
+                right={
+                  <View
+                    style={{
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: teacherTheme.border,
+                      backgroundColor: teacherTheme.active,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "700", color: teacherTheme.muted }}>
+                      {module.sections?.length ?? 0} sections
+                    </Text>
+                  </View>
+                }
+              />
+            ))
+          ) : (
+            <TeacherEmpty title="No modules found" subtitle="No modules match the current class filter or search." icon="folder-search-outline" />
+          )}
+        </TeacherPanel>
+      ) : (
+        <TeacherPanel title="Raw Asset Library" subtitle="Document resources, curriculum banks, and uploaded files.">
+          <TeacherEmpty title="Nexora File Asset Bank" subtitle="Tap 'Upload File Asset' above to upload PDFs, PPTs, or Docs directly to your Nexora Library." icon="cloud-upload-outline" />
+        </TeacherPanel>
+      )}
+
+      {/* Delete Confirm Modal */}
+      <TeacherConfirmModal
+        visible={Boolean(deletingFile)}
+        title="Delete Library Asset?"
+        description={deletingFile ? `Are you sure you want to delete "${deletingFile.name}"? This action cannot be undone.` : ""}
+        loading={deleteMutation.isPending}
+        onCancel={() => setDeletingFile(null)}
+        onConfirm={() => {
+          if (deletingFile) {
+            void deleteMutation.mutateAsync(deletingFile.id).catch((err) => {
+              Alert.alert("Unable to delete file", toAppError(err).message);
+            });
+          }
+        }}
+      />
     </TeacherScreen>
   );
 }

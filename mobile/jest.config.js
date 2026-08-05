@@ -14,6 +14,7 @@ module.exports = {
     ],
   },
   moduleNameMapper: {
+    "^expo-document-picker$": "<rootDir>/src/__mocks__/expo-document-picker.js",
     "\\.(png|jpg|jpeg|gif|webp)$": "<rootDir>/src/__mocks__/assetMock.js",
   },
   moduleFileExtensions: ["ts", "tsx", "js", "json"],

@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Modal, Pressable, Text, View } from "react-native";
 import {
   useAssessmentDetail,
   useTeacherAssessmentSubmissions,
   useTeacherAssessmentUpdateMutation,
+  useTeacherDeleteAssessmentMutation,
 } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
 import { toAppError } from "../api/http";
@@ -30,23 +31,143 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function DeleteConfirmModal({
+  visible,
+  title,
+  deleting,
+  onConfirm,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  deleting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.redSoft, alignItems: "center", justifyContent: "center" }}>
+              <MaterialCommunityIcons name="trash-can-outline" size={22} color={theme.red} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Delete Assessment?</Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>This action cannot be undone</Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 13, color: theme.text, lineHeight: 18 }}>
+            Are you sure you want to delete <Text style={{ fontWeight: "800" }}>"{title}"</Text>? All student responses, attempts, and grades linked to this assessment will be permanently removed.
+          </Text>
+
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+            <TeacherActionButton label="Cancel" tone="neutral" disabled={deleting} onPress={onClose} />
+            <TeacherActionButton
+              label={deleting ? "Deleting..." : "Delete Assessment"}
+              icon="trash-can-outline"
+              tone="red"
+              disabled={deleting}
+              onPress={onConfirm}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
   const { assessmentId, classId } = route.params;
   const assessmentQuery = useAssessmentDetail(assessmentId);
   const submissionsQuery = useTeacherAssessmentSubmissions(assessmentId);
   const updateMutation = useTeacherAssessmentUpdateMutation(assessmentId);
+  const [releasingGrades, setReleasingGrades] = useState(false);
   const assessment = assessmentQuery.data;
   const submissions = submissionsQuery.data;
 
   const turnedIn = submissions?.summary.turnedIn ?? 0;
   const returned = submissions?.summary.returned ?? 0;
 
+  const handleBatchReleaseGrades = async () => {
+    if (!submissions?.submissions || releasingGrades) return;
+    const unreturnedSubmissions = submissions.submissions.filter(
+      (s) => s.latestAttemptId && !s.latestAttemptReturnedAt
+    );
+    if (!unreturnedSubmissions.length) {
+      Alert.alert("No unreturned grades", "All submitted attempts have already been released.");
+      return;
+    }
+    try {
+      setReleasingGrades(true);
+      for (const sub of unreturnedSubmissions) {
+        if (sub.latestAttemptId) {
+          await assessmentsApi.returnGrade(sub.latestAttemptId);
+        }
+      }
+      await submissionsQuery.refetch();
+      Alert.alert("Success", `Released grades for ${unreturnedSubmissions.length} student submission(s).`);
+    } catch (err) {
+      Alert.alert("Unable to release grades", toAppError(err).message);
+    } finally {
+      setReleasingGrades(false);
+    }
+  };
+
   const togglePublished = async () => {
     if (!assessment) return;
+    if (
+      !assessment.isPublished &&
+      assessment.type !== "file_upload" &&
+      (!assessment.questions || assessment.questions.length === 0)
+    ) {
+      Alert.alert(
+        "Cannot publish assessment",
+        "Please add at least 1 question to the assessment before publishing.",
+      );
+      return;
+    }
     try {
       await updateMutation.mutateAsync({ isPublished: !assessment.isPublished });
+      Alert.alert(
+        "Publish status updated",
+        assessment.isPublished
+          ? "Assessment moved to draft mode."
+          : "Assessment published successfully! Students can now view it.",
+      );
     } catch (error) {
       Alert.alert("Unable to update assessment", toAppError(error).message);
+    }
+  };
+
+  const deleteMutation = useTeacherDeleteAssessmentMutation(assessmentId);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+
+  const handleDeleteConfirm = async () => {
+    try {
+      await deleteMutation.mutateAsync();
+      setShowDeleteConfirmModal(false);
+      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.", [
+        {
+          text: "OK",
+          onPress: () => {
+            const targetClassId = classId || assessment?.classId;
+            if (targetClassId) {
+              navigation.navigate("TeacherClassDetail", {
+                classId: targetClassId,
+                initialTab: "assessments",
+              });
+            } else {
+              navigation.goBack();
+            }
+          },
+        },
+      ]);
+    } catch (error) {
+      Alert.alert("Unable to delete assessment", toAppError(error).message);
     }
   };
 
@@ -103,6 +224,20 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                 tone={assessment.isPublished ? "amber" : "green"}
                 onPress={() => void togglePublished()}
                 disabled={updateMutation.isPending}
+              />
+              <TeacherActionButton
+                label={releasingGrades ? "Releasing..." : "Release grades"}
+                icon="send-outline"
+                tone="green"
+                onPress={() => void handleBatchReleaseGrades()}
+                disabled={releasingGrades}
+              />
+              <TeacherActionButton
+                label="Delete assessment"
+                icon="trash-can-outline"
+                tone="red"
+                onPress={() => setShowDeleteConfirmModal(true)}
+                disabled={deleteMutation.isPending}
               />
               {assessment.teacherAttachmentFile ? (
                 <TeacherActionButton
@@ -164,6 +299,14 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
       ) : (
         <TeacherPanel title="Assessment unavailable" subtitle={assessmentQuery.error ? toAppError(assessmentQuery.error).message : "Loading assessment"} />
       )}
+
+      <DeleteConfirmModal
+        visible={showDeleteConfirmModal}
+        title={assessment?.title || "Assessment"}
+        deleting={deleteMutation.isPending}
+        onConfirm={() => void handleDeleteConfirm()}
+        onClose={() => setShowDeleteConfirmModal(false)}
+      />
     </TeacherScreen>
   );
 }

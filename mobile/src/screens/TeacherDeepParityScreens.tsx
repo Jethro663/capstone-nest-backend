@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { classesApi } from "../api/services/classes";
 import { sectionsApi } from "../api/services/sections";
 import { fileUploadApi } from "../api/services/file-upload";
@@ -493,6 +494,35 @@ export function TeacherSectionStudentProfileScreen({ navigation, route }: Sectio
             <TeacherRow title="Grade level" subtitle={profile.student.profile?.gradeLevel || profile.section.gradeLevel || "N/A"} />
             <TeacherRow title="Phone" subtitle={profile.student.profile?.phone || "N/A"} />
             <TeacherRow title="Address" subtitle={profile.student.profile?.address || "N/A"} />
+            <View style={{ paddingHorizontal: 14, paddingVertical: 12 }}>
+              <TeacherActionButton
+                label="Unenroll student"
+                icon="account-remove-outline"
+                tone="red"
+                onPress={() => {
+                  Alert.alert(
+                    "Unenroll Student",
+                    `Are you sure you want to remove ${formatName(profile.student)} from this section?`,
+                    [
+                      { text: "Cancel", style: "cancel" },
+                      {
+                        text: "Remove",
+                        style: "destructive",
+                        onPress: async () => {
+                          try {
+                            await sectionsApi.removeStudent(sectionId, studentId);
+                            Alert.alert("Student removed", `${formatName(profile.student)} was removed from this section.`);
+                            navigation.goBack();
+                          } catch (error) {
+                            Alert.alert("Unable to remove student", getErrorMessage(error));
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+              />
+            </View>
           </TeacherPanel>
           <TeacherPanel title="Class enrollments" subtitle="Classes linked to this section student.">
             {profile.enrollments?.length ? (
@@ -604,6 +634,7 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [newBlock, setNewBlock] = useState("");
+  const [newBlockType, setNewBlockType] = useState<"text" | "image" | "video" | "file">("text");
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
@@ -637,7 +668,7 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
     if (!lesson || !newBlock.trim()) return;
     try {
       await lessonsApi.createBlock(lesson.id, {
-        type: "text",
+        type: newBlockType,
         content: newBlock.trim(),
         order: (lesson.contentBlocks?.length ?? 0) + 1,
       });
@@ -654,6 +685,23 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
       await load();
     } catch (error) {
       Alert.alert("Unable to update block", getErrorMessage(error));
+    }
+  };
+
+  const moveBlock = async (index: number, direction: "up" | "down") => {
+    if (!lesson?.contentBlocks) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= lesson.contentBlocks.length) return;
+    const nextBlocks = [...lesson.contentBlocks];
+    const [moved] = nextBlocks.splice(index, 1);
+    nextBlocks.splice(targetIndex, 0, moved);
+    try {
+      await lessonsApi.reorderBlocks(lesson.id, {
+        blocks: nextBlocks.map((b, i) => ({ id: b.id, order: i + 1 })),
+      });
+      await load();
+    } catch (error) {
+      Alert.alert("Unable to reorder blocks", getErrorMessage(error));
     }
   };
 
@@ -683,7 +731,7 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
   return (
     <TeacherScreen
       title={lesson?.title || "Lesson editor"}
-      subtitle="Mobile lesson editing for details, publish state, and text blocks."
+      subtitle="Mobile lesson editing for details, publish state, and block management."
       icon="notebook-edit-outline"
       showBackButton
       onBackPress={() => navigation.goBack()}
@@ -700,23 +748,53 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
           </View>
         </View>
       </TeacherPanel>
-      <TeacherPanel title="Add text block" subtitle="Mobile authoring keeps the safest common block type available.">
+
+      <TeacherPanel title="Add content block" subtitle="Select block type and enter text content.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Text block" value={newBlock} onChangeText={setNewBlock} multiline />
+          <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
+            {(["text", "image", "video", "file"] as const).map((type) => (
+              <TeacherChip
+                key={type}
+                label={type.toUpperCase()}
+                active={newBlockType === type}
+                onPress={() => setNewBlockType(type)}
+              />
+            ))}
+          </View>
+          <TeacherInlineField label={`${newBlockType.toUpperCase()} content`} value={newBlock} onChangeText={setNewBlock} multiline />
           <View style={{ marginTop: 12 }}>
             <TeacherActionButton label="Add block" icon="plus" tone="green" disabled={!newBlock.trim()} onPress={() => void addTextBlock()} />
           </View>
         </View>
       </TeacherPanel>
-      <TeacherPanel title="Content blocks" subtitle="Review, edit text-like blocks, or remove blocks.">
+
+      <TeacherPanel title="Content blocks" subtitle="Review, reorder, edit text-like blocks, or remove blocks.">
         {lesson?.contentBlocks?.length ? (
           lesson.contentBlocks.map((block, index) => {
             const text = extractLessonBlockText(block);
             return (
               <View key={block.id} style={{ paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: theme.red }}>
-                  {block.type} | Block {index + 1}
-                </Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: theme.red, textTransform: "uppercase" }}>
+                    {block.type} | Block {index + 1}
+                  </Text>
+                  <View style={{ flexDirection: "row", gap: 4 }}>
+                    <Pressable
+                      onPress={() => void moveBlock(index, "up")}
+                      disabled={index === 0}
+                      style={{ padding: 4, opacity: index === 0 ? 0.3 : 1 }}
+                    >
+                      <MaterialCommunityIcons name="chevron-up" size={18} color={theme.text} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void moveBlock(index, "down")}
+                      disabled={index === (lesson.contentBlocks?.length ?? 0) - 1}
+                      style={{ padding: 4, opacity: index === (lesson.contentBlocks?.length ?? 0) - 1 ? 0.3 : 1 }}
+                    >
+                      <MaterialCommunityIcons name="chevron-down" size={18} color={theme.text} />
+                    </Pressable>
+                  </View>
+                </View>
                 <TextInput
                   multiline
                   value={text}
@@ -753,7 +831,7 @@ export function TeacherLessonEditorScreen({ navigation, route }: LessonEditorPro
             );
           })
         ) : (
-          <TeacherEmpty title="No content blocks" subtitle="Add a text block to start mobile authoring." />
+          <TeacherEmpty title="No content blocks" subtitle="Add a content block to start mobile authoring." />
         )}
       </TeacherPanel>
     </TeacherScreen>

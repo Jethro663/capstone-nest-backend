@@ -1455,18 +1455,22 @@ export class ClassesService {
 
   async updatePresentation(
     id: string,
-    presentation: { cardPreset?: string; cardBannerUrl?: string | null },
+    presentation: { cardPreset?: string | null; cardBannerUrl?: string | null },
     requesterId: string,
     requesterRoles: string[],
   ) {
     const existing = await this.findById(id);
     this.ensureTeacherCanAccessClass(existing, requesterId, requesterRoles);
 
-    const payload: Record<string, unknown> = {
+    const payload: {
+      cardPreset?: string;
+      cardBannerUrl?: string | null;
+      updatedAt: Date;
+    } = {
       updatedAt: new Date(),
     };
 
-    if (presentation.cardPreset !== undefined) {
+    if (presentation.cardPreset !== undefined && presentation.cardPreset !== null) {
       payload.cardPreset = presentation.cardPreset;
     }
 

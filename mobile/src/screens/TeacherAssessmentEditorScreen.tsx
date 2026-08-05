@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   queryKeys,
   useAssessmentDetail,
   useTeacherClasses,
+  useTeacherDeleteAssessmentMutation,
 } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
@@ -41,7 +42,9 @@ type SupportedQuestionType =
   | "true_false"
   | "short_answer"
   | "fill_blank"
-  | "dropdown";
+  | "dropdown"
+  | "matching"
+  | "essay";
 
 type SupportedAssessmentType = "quiz" | "exam" | "assignment" | "file_upload";
 
@@ -74,6 +77,8 @@ const QUESTION_TYPE_OPTIONS: Array<{ value: SupportedQuestionType; label: string
   { value: "multiple_select", label: "Multiple Select" },
   { value: "true_false", label: "True/False" },
   { value: "short_answer", label: "Short Answer" },
+  { value: "essay", label: "Essay" },
+  { value: "matching", label: "Matching" },
   { value: "fill_blank", label: "Fill in Blank" },
   { value: "dropdown", label: "Dropdown" },
 ];
@@ -129,7 +134,8 @@ function isOptionQuestion(type: SupportedQuestionType) {
     type === "multiple_choice" ||
     type === "multiple_select" ||
     type === "true_false" ||
-    type === "dropdown"
+    type === "dropdown" ||
+    type === "matching"
   );
 }
 
@@ -143,6 +149,13 @@ function createDefaultOptions(type: SupportedQuestionType): DraftOption[] {
 
   if (type === "fill_blank") {
     return [{ localId: createLocalId(), text: "", isCorrect: true }];
+  }
+
+  if (type === "matching") {
+    return [
+      { localId: createLocalId(), text: "Premise 1 -> Option A", isCorrect: true },
+      { localId: createLocalId(), text: "Premise 2 -> Option B", isCorrect: true },
+    ];
   }
 
   if (isOptionQuestion(type)) {
@@ -163,7 +176,9 @@ function normalizeQuestionType(value?: string | null): SupportedQuestionType {
     value === "true_false" ||
     value === "short_answer" ||
     value === "fill_blank" ||
-    value === "dropdown"
+    value === "dropdown" ||
+    value === "matching" ||
+    value === "essay"
   ) {
     return value;
   }
@@ -242,6 +257,467 @@ function formatAssessmentTypeLabel(value: SupportedAssessmentType) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+export function DatePickerModal({
+  visible,
+  value,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  value: string;
+  onSelect: (dateStr: string) => void;
+  onClose: () => void;
+}) {
+  const initialDate = useMemo(() => {
+    if (!value) return new Date();
+    const parsed = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  }, [value]);
+
+  const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
+  const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
+  const [selectedDay, setSelectedDay] = useState(initialDate.getDate());
+  const [selectedHour, setSelectedHour] = useState(`${initialDate.getHours()}`.padStart(2, "0"));
+  const [selectedMinute, setSelectedMinute] = useState(`${initialDate.getMinutes()}`.padStart(2, "0"));
+
+  useEffect(() => {
+    if (visible) {
+      const d = !value ? new Date() : new Date(value.includes("T") ? value : value.replace(" ", "T"));
+      const valid = !Number.isNaN(d.getTime()) ? d : new Date();
+      setCurrentMonth(valid.getMonth());
+      setCurrentYear(valid.getFullYear());
+      setSelectedDay(valid.getDate());
+      setSelectedHour(`${valid.getHours()}`.padStart(2, "0"));
+      setSelectedMinute(`${valid.getMinutes()}`.padStart(2, "0"));
+    }
+  }, [visible, value]);
+
+  const daysInMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth]);
+  const startDayOfWeek = useMemo(() => new Date(currentYear, currentMonth, 1).getDay(), [currentYear, currentMonth]);
+  const monthName = useMemo(() => new Date(currentYear, currentMonth, 1).toLocaleDateString("en-US", { month: "long" }), [currentYear, currentMonth]);
+
+  const handleApply = () => {
+    const y = currentYear;
+    const m = `${currentMonth + 1}`.padStart(2, "0");
+    const d = `${selectedDay}`.padStart(2, "0");
+    const formatted = `${y}-${m}-${d} ${selectedHour}:${selectedMinute}`;
+    onSelect(formatted);
+    onClose();
+  };
+
+  const handleQuickPreset = (daysOffset: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + daysOffset);
+    setCurrentYear(target.getFullYear());
+    setCurrentMonth(target.getMonth());
+    setSelectedDay(target.getDate());
+  };
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 18, gap: 14 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Select Due Date</Text>
+            <Pressable onPress={onClose} style={{ padding: 4 }}>
+              <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
+            </Pressable>
+          </View>
+
+          {/* Quick Presets */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            <TeacherChip label="Today" active={false} onPress={() => handleQuickPreset(0)} />
+            <TeacherChip label="Tomorrow" active={false} onPress={() => handleQuickPreset(1)} />
+            <TeacherChip label="+7 Days" active={false} onPress={() => handleQuickPreset(7)} />
+            <TeacherChip label="+30 Days" active={false} onPress={() => handleQuickPreset(30)} />
+            <TeacherChip label="Clear" active={false} onPress={() => { onSelect(""); onClose(); }} />
+          </View>
+
+          {/* Month Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: theme.active, padding: 10, borderRadius: 10 }}>
+            <Pressable onPress={() => {
+              if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear((y) => y - 1); }
+              else { setCurrentMonth((m) => m - 1); }
+            }}>
+              <MaterialCommunityIcons name="chevron-left" size={22} color={theme.text} />
+            </Pressable>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text }}>
+              {monthName} {currentYear}
+            </Text>
+            <Pressable onPress={() => {
+              if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear((y) => y + 1); }
+              else { setCurrentMonth((m) => m + 1); }
+            }}>
+              <MaterialCommunityIcons name="chevron-right" size={22} color={theme.text} />
+            </Pressable>
+          </View>
+
+          {/* Day Grid Header */}
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            {["S", "M", "T", "W", "T", "F", "S"].map((day, idx) => (
+              <Text key={idx} style={{ width: 36, textAlign: "center", fontSize: 11, fontWeight: "700", color: theme.muted }}>
+                {day}
+              </Text>
+            ))}
+          </View>
+
+          {/* Calendar Days */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            {Array.from({ length: startDayOfWeek }).map((_, idx) => (
+              <View key={`blank-${idx}`} style={{ width: "14.28%", height: 36 }} />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, idx) => {
+              const dayNum = idx + 1;
+              const isSelected = dayNum === selectedDay;
+              return (
+                <Pressable
+                  key={`day-${dayNum}`}
+                  onPress={() => setSelectedDay(dayNum)}
+                  style={{
+                    width: "14.28%",
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <View style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: isSelected ? theme.blue : "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    <Text style={{ fontSize: 12, fontWeight: isSelected ? "800" : "600", color: isSelected ? "#ffffff" : theme.text }}>
+                      {dayNum}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* Time Selector */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Time (HH:mm)</Text>
+            <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+              <TextInput
+                value={selectedHour}
+                onChangeText={(val) => {
+                  const cleaned = val.replace(/[^0-9]/g, "");
+                  if (cleaned.length <= 2) {
+                    const num = parseInt(cleaned || "0", 10);
+                    setSelectedHour(`${Math.min(23, num)}`.padStart(2, "0"));
+                  }
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                style={{ width: 44, height: 36, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, color: theme.text, textAlign: "center", fontSize: 13, fontWeight: "700" }}
+              />
+              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>:</Text>
+              <TextInput
+                value={selectedMinute}
+                onChangeText={(val) => {
+                  const cleaned = val.replace(/[^0-9]/g, "");
+                  if (cleaned.length <= 2) {
+                    const num = parseInt(cleaned || "0", 10);
+                    setSelectedMinute(`${Math.min(59, num)}`.padStart(2, "0"));
+                  }
+                }}
+                keyboardType="number-pad"
+                maxLength={2}
+                style={{ width: 44, height: 36, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, color: theme.text, textAlign: "center", fontSize: 13, fontWeight: "700" }}
+              />
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+            <TeacherActionButton label="Cancel" tone="neutral" onPress={onClose} />
+            <TeacherActionButton label="Apply Date" tone="blue" onPress={handleApply} />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function TimeLimitDropdownModal({
+  visible,
+  value,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  value: string;
+  onSelect: (val: string) => void;
+  onClose: () => void;
+}) {
+  const [customMode, setCustomMode] = useState(false);
+  const [customMinutes, setCustomMinutes] = useState(value);
+
+  const OPTIONS = [
+    { label: "No time limit", value: "" },
+    { label: "15 minutes", value: "15" },
+    { label: "30 minutes", value: "30" },
+    { label: "45 minutes", value: "45" },
+    { label: "60 minutes (1 hour)", value: "60" },
+    { label: "90 minutes (1.5 hours)", value: "90" },
+    { label: "120 minutes (2 hours)", value: "120" },
+  ];
+
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <View style={{ width: "100%", maxWidth: 360, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 18, gap: 12 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Select Time Limit</Text>
+            <Pressable onPress={onClose} style={{ padding: 4 }}>
+              <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
+            </Pressable>
+          </View>
+
+          {!customMode ? (
+            <View style={{ gap: 6 }}>
+              {OPTIONS.map((opt) => (
+                <Pressable
+                  key={opt.value || "none"}
+                  onPress={() => {
+                    onSelect(opt.value);
+                    onClose();
+                  }}
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 12,
+                    borderRadius: 10,
+                    backgroundColor: value === opt.value ? theme.blueSoft : theme.active,
+                    borderWidth: 1,
+                    borderColor: value === opt.value ? theme.blue : theme.border,
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: value === opt.value ? theme.blue : theme.text }}>
+                    {opt.label}
+                  </Text>
+                  {value === opt.value ? (
+                    <MaterialCommunityIcons name="check" size={16} color={theme.blue} />
+                  ) : null}
+                </Pressable>
+              ))}
+
+              <Pressable
+                onPress={() => setCustomMode(true)}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  borderRadius: 10,
+                  backgroundColor: theme.active,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+                  Custom minutes...
+                </Text>
+                <MaterialCommunityIcons name="pencil-outline" size={16} color={theme.muted} />
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ gap: 12 }}>
+              <Text style={{ fontSize: 12, fontWeight: "600", color: theme.muted }}>
+                Enter custom duration in minutes (numbers only):
+              </Text>
+              <TextInput
+                value={customMinutes}
+                onChangeText={(val) => setCustomMinutes(val.replace(/[^0-9]/g, ""))}
+                keyboardType="number-pad"
+                placeholder="e.g. 25"
+                placeholderTextColor={theme.dim}
+                style={{
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
+                  color: theme.text,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  fontSize: 14,
+                  fontWeight: "700",
+                }}
+              />
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10 }}>
+                <TeacherActionButton label="Back" tone="neutral" onPress={() => setCustomMode(false)} />
+                <TeacherActionButton
+                  label="Set Minutes"
+                  tone="blue"
+                  onPress={() => {
+                    onSelect(customMinutes.replace(/[^0-9]/g, ""));
+                    onClose();
+                  }}
+                />
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function SaveConfirmModal({
+  visible,
+  title,
+  className,
+  type,
+  questionCount,
+  dueDate,
+  passScore,
+  maxAttempts,
+  timeLimit,
+  saving,
+  onConfirm,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  className: string;
+  type: string;
+  questionCount: number;
+  dueDate: string;
+  passScore: string;
+  maxAttempts: string;
+  timeLimit: string;
+  saving: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.greenSoft, alignItems: "center", justifyContent: "center" }}>
+              <MaterialCommunityIcons name="content-save-check-outline" size={22} color={theme.green} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Confirm Save Assessment</Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>Review changes before saving</Text>
+            </View>
+          </View>
+
+          <View style={{ backgroundColor: theme.active, borderRadius: 12, padding: 12, gap: 8, borderWidth: 1, borderColor: theme.border }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Title:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text, flex: 1, textAlign: "right" }} numberOfLines={1}>
+                {title || "Untitled Assessment"}
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Class:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{className || "Selected Class"}</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Type:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, textTransform: "capitalize" }}>{type.replace("_", " ")}</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Questions:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>{questionCount} question(s)</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Due Date:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{dueDate || "No due date"}</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Pass % / Max Attempts:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{passScore}% / {maxAttempts} attempt(s)</Text>
+            </View>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ fontSize: 12, color: theme.muted }}>Time Limit:</Text>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{timeLimit ? `${timeLimit} mins` : "No limit"}</Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 11, color: theme.muted, textAlign: "center" }}>
+            Saving will sync changes immediately across Web & Mobile.
+          </Text>
+
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+            <TeacherActionButton label="Cancel" tone="neutral" disabled={saving} onPress={onClose} />
+            <TeacherActionButton
+              label={saving ? "Saving..." : "Confirm & Save"}
+              icon="check"
+              tone="green"
+              disabled={saving}
+              onPress={onConfirm}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DeleteConfirmModal({
+  visible,
+  title,
+  deleting,
+  onConfirm,
+  onClose,
+}: {
+  visible: boolean;
+  title: string;
+  deleting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  if (!visible) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
+        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.redSoft, alignItems: "center", justifyContent: "center" }}>
+              <MaterialCommunityIcons name="trash-can-outline" size={22} color={theme.red} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Delete Assessment?</Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>This action cannot be undone</Text>
+            </View>
+          </View>
+
+          <Text style={{ fontSize: 13, color: theme.text, lineHeight: 18 }}>
+            Are you sure you want to delete <Text style={{ fontWeight: "800" }}>"{title || "this assessment"}"</Text>? All student responses, attempts, and grades linked to this assessment will be permanently removed.
+          </Text>
+
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
+            <TeacherActionButton label="Cancel" tone="neutral" disabled={deleting} onPress={onClose} />
+            <TeacherActionButton
+              label={deleting ? "Deleting..." : "Delete Assessment"}
+              icon="trash-can-outline"
+              tone="red"
+              disabled={deleting}
+              onPress={onConfirm}
+            />
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
@@ -268,6 +744,36 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   const [removedQuestionIds, setRemovedQuestionIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [showTimeLimitModal, setShowTimeLimitModal] = useState(false);
+  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const deleteMutation = useTeacherDeleteAssessmentMutation(assessmentId);
+
+  const handleDeleteAssessmentConfirm = async () => {
+    if (!assessmentId) return;
+    try {
+      await deleteMutation.mutateAsync();
+      setShowDeleteConfirmModal(false);
+      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.", [
+        {
+          text: "OK",
+          onPress: () => {
+            if (selectedClassId) {
+              navigation.navigate("TeacherClassDetail", {
+                classId: selectedClassId,
+                initialTab: "assessments",
+              });
+            } else {
+              navigation.goBack();
+            }
+          },
+        },
+      ]);
+    } catch (error) {
+      Alert.alert("Unable to delete assessment", toAppError(error).message);
+    }
+  };
 
   useEffect(() => {
     if (!selectedClassId && classesQuery.data?.[0]?.id) {
@@ -551,10 +1057,21 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleSave = async () => {
+  const handleSavePress = () => {
+    try {
+      validateQuestionPayload();
+      getAssessmentPayload();
+      setShowSaveConfirmModal(true);
+    } catch (error) {
+      Alert.alert("Cannot save assessment", toAppError(error).message);
+    }
+  };
+
+  const executeSave = async () => {
     if (saving) return;
     try {
       setSaving(true);
+      setShowSaveConfirmModal(false);
       validateQuestionPayload();
       const { payload, publishAfterSave } = getAssessmentPayload();
 
@@ -603,16 +1120,20 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
       }
 
-      Alert.alert("Assessment saved", "Teacher assessment and questions saved successfully.", [
+      Alert.alert("Assessment Saved", "Your assessment changes have been saved successfully.", [
         {
-          text: "Open detail",
-          onPress: () =>
-            navigation.replace("TeacherAssessmentDetail", {
-              assessmentId: targetAssessmentId!,
-              classId: targetClassId,
-            }),
+          text: "OK",
+          onPress: () => {
+            if (targetClassId) {
+              navigation.navigate("TeacherClassDetail", {
+                classId: targetClassId,
+                initialTab: "assessments",
+              });
+            } else {
+              navigation.goBack();
+            }
+          },
         },
-        { text: "Continue editing", style: "cancel" },
       ]);
     } catch (error) {
       Alert.alert("Unable to save assessment", toAppError(error).message);
@@ -762,22 +1283,26 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
                   Due date
                 </Text>
-                <TextInput
-                  value={dueDateInput}
-                  onChangeText={setDueDateInput}
-                  placeholder="YYYY-MM-DD HH:mm"
-                  placeholderTextColor={theme.dim}
+                <Pressable
+                  onPress={() => setShowDatePickerModal(true)}
                   style={{
                     marginTop: 6,
                     borderRadius: 10,
                     borderWidth: 1,
                     borderColor: theme.border,
                     backgroundColor: theme.active,
-                    color: theme.text,
                     paddingHorizontal: 12,
                     paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
                   }}
-                />
+                >
+                  <Text style={{ fontSize: 13, color: dueDateInput ? theme.text : theme.dim }} numberOfLines={1}>
+                    {dueDateInput ? dueDateInput : "No due date (Tap to set)"}
+                  </Text>
+                  <MaterialCommunityIcons name="calendar-month-outline" size={16} color={theme.blue} />
+                </Pressable>
               </View>
               <View style={{ width: 108 }}>
                 <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
@@ -785,7 +1310,18 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 </Text>
                 <TextInput
                   value={passingScoreInput}
-                  onChangeText={setPassingScoreInput}
+                  onChangeText={(val) => {
+                    const cleaned = val.replace(/[^0-9]/g, "");
+                    if (!cleaned) {
+                      setPassingScoreInput("");
+                      return;
+                    }
+                    const num = Math.min(100, Math.max(1, parseInt(cleaned, 10)));
+                    setPassingScoreInput(String(num));
+                  }}
+                  onBlur={() => {
+                    if (!passingScoreInput.trim()) setPassingScoreInput("60");
+                  }}
                   keyboardType="number-pad"
                   placeholder="60"
                   placeholderTextColor={theme.dim}
@@ -810,7 +1346,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 </Text>
                 <TextInput
                   value={maxAttemptsInput}
-                  onChangeText={setMaxAttemptsInput}
+                  onChangeText={(val) => setMaxAttemptsInput(val.replace(/[^0-9]/g, ""))}
+                  onBlur={() => {
+                    if (!maxAttemptsInput.trim() || parseInt(maxAttemptsInput, 10) < 1) setMaxAttemptsInput("1");
+                  }}
                   keyboardType="number-pad"
                   placeholder="1"
                   placeholderTextColor={theme.dim}
@@ -828,26 +1367,33 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
-                  Time limit (min)
+                  Time limit
                 </Text>
-                <TextInput
-                  value={timeLimitInput}
-                  onChangeText={setTimeLimitInput}
-                  keyboardType="number-pad"
-                  editable={assessmentType !== "file_upload"}
-                  placeholder={assessmentType === "file_upload" ? "Not used" : "Optional"}
-                  placeholderTextColor={theme.dim}
+                <Pressable
+                  disabled={assessmentType === "file_upload"}
+                  onPress={() => setShowTimeLimitModal(true)}
                   style={{
                     marginTop: 6,
                     borderRadius: 10,
                     borderWidth: 1,
                     borderColor: theme.border,
                     backgroundColor: assessmentType === "file_upload" ? theme.surface : theme.active,
-                    color: theme.text,
                     paddingHorizontal: 12,
                     paddingVertical: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
                   }}
-                />
+                >
+                  <Text style={{ fontSize: 13, color: timeLimitInput ? theme.text : theme.dim }} numberOfLines={1}>
+                    {assessmentType === "file_upload"
+                      ? "Not used"
+                      : timeLimitInput
+                        ? `${timeLimitInput} minutes`
+                        : "No limit (Tap to set)"}
+                  </Text>
+                  <MaterialCommunityIcons name="clock-outline" size={16} color={theme.blue} />
+                </Pressable>
               </View>
             </View>
 
@@ -1037,10 +1583,12 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                   </View>
                 </View>
 
-                {question.type === "short_answer" ? (
+                {question.type === "short_answer" || question.type === "essay" ? (
                   <View style={{ borderRadius: 10, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, paddingHorizontal: 12, paddingVertical: 10 }}>
                     <Text style={{ fontSize: 11, color: "#9D9D9D" }}>
-                      Short answer items do not need predefined options.
+                      {question.type === "essay"
+                        ? "Essay questions accept long-form text responses and require manual teacher scoring."
+                        : "Short answer items do not need predefined options."}
                     </Text>
                   </View>
                 ) : (
@@ -1188,23 +1736,69 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             icon="content-save-outline"
             tone="green"
             disabled={saving || creatingDraft || classOptions.length === 0}
-            onPress={() => void handleSave()}
+            onPress={() => void handleSavePress()}
           />
           {assessmentId ? (
-            <TeacherActionButton
-              label="Open assessment detail"
-              icon="open-in-new"
-              tone="blue"
-              onPress={() =>
-                navigation.navigate("TeacherAssessmentDetail", {
-                  assessmentId,
-                  classId: selectedClassId || undefined,
-                })
-              }
-            />
+            <>
+              <TeacherActionButton
+                label="Open assessment detail"
+                icon="open-in-new"
+                tone="blue"
+                onPress={() =>
+                  navigation.navigate("TeacherAssessmentDetail", {
+                    assessmentId,
+                    classId: selectedClassId || undefined,
+                  })
+                }
+              />
+              <TeacherActionButton
+                label="Delete assessment"
+                icon="trash-can-outline"
+                tone="red"
+                disabled={saving || deleteMutation.isPending}
+                onPress={() => setShowDeleteConfirmModal(true)}
+              />
+            </>
           ) : null}
         </View>
       </TeacherPanel>
+
+      <DatePickerModal
+        visible={showDatePickerModal}
+        value={dueDateInput}
+        onSelect={(dateStr) => setDueDateInput(dateStr)}
+        onClose={() => setShowDatePickerModal(false)}
+      />
+
+      <TimeLimitDropdownModal
+        visible={showTimeLimitModal}
+        value={timeLimitInput}
+        onSelect={(val) => setTimeLimitInput(val)}
+        onClose={() => setShowTimeLimitModal(false)}
+      />
+
+      <SaveConfirmModal
+        visible={showSaveConfirmModal}
+        title={title}
+        className={classOptions.find((c) => c.id === selectedClassId)?.subjectName || selectedClassId}
+        type={assessmentType}
+        questionCount={sortedQuestions.length}
+        dueDate={dueDateInput}
+        passScore={passingScoreInput}
+        maxAttempts={maxAttemptsInput}
+        timeLimit={timeLimitInput}
+        saving={saving}
+        onConfirm={() => void executeSave()}
+        onClose={() => setShowSaveConfirmModal(false)}
+      />
+
+      <DeleteConfirmModal
+        visible={showDeleteConfirmModal}
+        title={title || "this assessment"}
+        deleting={deleteMutation.isPending}
+        onConfirm={() => void handleDeleteAssessmentConfirm()}
+        onClose={() => setShowDeleteConfirmModal(false)}
+      />
     </TeacherScreen>
   );
 }

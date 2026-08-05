@@ -17,6 +17,8 @@ export interface TeacherSection {
     lastName?: string | null;
     email?: string | null;
   } | null;
+  cardPreset?: string | null;
+  cardBannerUrl?: string | null;
 }
 
 export interface TeacherSectionsListResponse {

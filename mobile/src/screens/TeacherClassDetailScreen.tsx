@@ -9,14 +9,20 @@ import {
   useClassModules,
   useSchoolEvents,
   useTeacherEnrollments,
+  useTeacherModuleDeleteMutation,
+  useTeacherModuleReorderMutation,
 } from "../api/hooks";
 import { assessmentsApi } from "../api/services/assessments";
+import { announcementsApi } from "../api/services/announcements";
 import { toAppError } from "../api/http";
 import type { RootStackParamList, TeacherClassDetailTab } from "../navigation/types";
+import { confirmAction } from "../utils/confirmAction";
 import { formatStudentIdentityLine } from "../utils/studentIdentity";
 import { TeacherClassRecordBoard } from "../components/teacher/TeacherClassRecordBoard";
 import { TeacherDiscussionBoard } from "../components/teacher/TeacherDiscussionBoard";
 import { TeacherExtractionBoard } from "../components/teacher/TeacherExtractionBoard";
+import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
+import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnnouncementEditorModal";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -53,6 +59,23 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const { classId, initialTab } = route.params;
   const [activeTab, setActiveTab] = useState<TeacherClassDetailTab>(initialTab ?? "modules");
   const [creatingAssessment, setCreatingAssessment] = useState(false);
+  const [deletingModule, setDeletingModule] = useState<{ id: string; title: string } | null>(null);
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
+  const [deletingAssessment, setDeletingAssessment] = useState<{ id: string; title: string } | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
+
+  const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<{
+    id?: string;
+    title?: string;
+    content?: string;
+    isPinned?: boolean;
+    scheduledAt?: string;
+  } | null>(null);
+  const [deletingAnnouncementModal, setDeletingAnnouncementModal] = useState<{ id: string; title: string } | null>(null);
+  const [savingAnnouncement, setSavingAnnouncement] = useState(false);
+
   const tabRefetchersRef = useRef<Partial<Record<TeacherClassDetailTab, () => Promise<unknown>>>>({});
   const classQuery = useClassDetail(classId);
   const modulesQuery = useClassModules(classId);
@@ -60,6 +83,102 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
   const announcementsQuery = useAnnouncements(classId);
   const rosterQuery = useTeacherEnrollments(classId);
   const schoolEventsQuery = useSchoolEvents({ schoolYear: classQuery.data?.schoolYear });
+  const moduleDeleteMutation = useTeacherModuleDeleteMutation(classId);
+  const moduleReorderMutation = useTeacherModuleReorderMutation(classId);
+
+  const toggleSelectAssessment = (id: string) => {
+    setSelectedAssessmentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAllAssessments = () => {
+    const allIds = assessmentsQuery.data?.map((a) => a.id) ?? [];
+    if (selectedAssessmentIds.length === allIds.length && allIds.length > 0) {
+      setSelectedAssessmentIds([]);
+    } else {
+      setSelectedAssessmentIds(allIds);
+    }
+  };
+
+  const handleDeleteSingleAssessment = async () => {
+    if (!deletingAssessment || isDeletingAssessment) return;
+    try {
+      setIsDeletingAssessment(true);
+      await assessmentsApi.delete(deletingAssessment.id);
+      setDeletingAssessment(null);
+      setSelectedAssessmentIds((prev) => prev.filter((id) => id !== deletingAssessment.id));
+      await assessmentsQuery.refetch();
+      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.");
+    } catch (err) {
+      Alert.alert("Unable to delete assessment", toAppError(err).message);
+    } finally {
+      setIsDeletingAssessment(false);
+    }
+  };
+
+  const handleBulkDeleteAssessments = async () => {
+    if (!selectedAssessmentIds.length || isDeletingAssessment) return;
+    try {
+      setIsDeletingAssessment(true);
+      await Promise.all(selectedAssessmentIds.map((id) => assessmentsApi.delete(id)));
+      setShowBulkDeleteConfirm(false);
+      setSelectedAssessmentIds([]);
+      await assessmentsQuery.refetch();
+      Alert.alert("Assessments Deleted", `${selectedAssessmentIds.length} assessment(s) deleted successfully.`);
+    } catch (err) {
+      Alert.alert("Unable to delete assessments", toAppError(err).message);
+    } finally {
+      setIsDeletingAssessment(false);
+    }
+  };
+
+  const handleSaveAnnouncement = async (payload: { title: string; content: string; isPinned: boolean; scheduledAt?: string }) => {
+    try {
+      setSavingAnnouncement(true);
+      if (editingAnnouncement?.id) {
+        await announcementsApi.update(classId, editingAnnouncement.id, payload);
+        Alert.alert("Announcement Updated", "Your announcement changes have been saved.");
+      } else {
+        await announcementsApi.create(classId, payload);
+        Alert.alert("Announcement Created", "Your announcement has been posted successfully.");
+      }
+      setShowAnnouncementModal(false);
+      setEditingAnnouncement(null);
+      await announcementsQuery.refetch();
+    } catch (err) {
+      Alert.alert("Unable to save announcement", toAppError(err).message);
+    } finally {
+      setSavingAnnouncement(false);
+    }
+  };
+
+  const handleDeleteAnnouncementConfirm = async () => {
+    if (!deletingAnnouncementModal) return;
+    try {
+      await announcementsApi.delete(classId, deletingAnnouncementModal.id);
+      setDeletingAnnouncementModal(null);
+      await announcementsQuery.refetch();
+      Alert.alert("Announcement Deleted", "The announcement was deleted successfully.");
+    } catch (err) {
+      Alert.alert("Unable to delete announcement", toAppError(err).message);
+    }
+  };
+
+  const moveModule = async (index: number, direction: "up" | "down") => {
+    const list = modulesQuery.data;
+    if (!list) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    const nextList = [...list];
+    const [moved] = nextList.splice(index, 1);
+    nextList.splice(targetIndex, 0, moved);
+    try {
+      await moduleReorderMutation.mutateAsync(nextList.map((m) => m.id));
+    } catch (err) {
+      Alert.alert("Unable to reorder modules", toAppError(err).message);
+    }
+  };
 
   const upcomingItems = useMemo(() => {
     const assessmentItems = (assessmentsQuery.data ?? []).map((assessment) => ({
@@ -205,12 +324,36 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       {activeTab === "modules" ? (
         <TeacherPanel title="Modules" subtitle="Open modules, inspect their content, and manage lock or visibility at the module level.">
           {modulesQuery.data?.length ? (
-            modulesQuery.data.map((module) => (
+            modulesQuery.data.map((module, index) => (
               <TeacherRow
                 key={module.id}
                 title={module.title}
                 subtitle={`${module.sections?.length ?? 0} sections - ${module.isLocked ? "Locked" : "Unlocked"} - ${module.isVisible === false ? "Hidden" : "Visible"}`}
                 onPress={() => navigation.navigate("TeacherModuleDetail", { classId, moduleId: module.id })}
+                right={
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                    <Pressable
+                      onPress={() => void moveModule(index, "up")}
+                      disabled={index === 0 || moduleReorderMutation.isPending}
+                      style={{ padding: 6, opacity: index === 0 ? 0.3 : 1 }}
+                    >
+                      <MaterialCommunityIcons name="chevron-up" size={20} color={theme.text} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => void moveModule(index, "down")}
+                      disabled={index === (modulesQuery.data?.length ?? 0) - 1 || moduleReorderMutation.isPending}
+                      style={{ padding: 6, opacity: index === (modulesQuery.data?.length ?? 0) - 1 ? 0.3 : 1 }}
+                    >
+                      <MaterialCommunityIcons name="chevron-down" size={20} color={theme.text} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setDeletingModule({ id: module.id, title: module.title })}
+                      style={{ padding: 6 }}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={18} color={theme.red} />
+                    </Pressable>
+                  </View>
+                }
               />
             ))
           ) : (
@@ -222,51 +365,132 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       {activeTab === "assessments" ? (
         <TeacherPanel
           title="Assessments"
-          subtitle="Open an assessment to review submissions, grade attempts, edit questions, or create new drafts."
+          subtitle="Select assessments to bulk delete, or open one to review submissions, grade attempts, or edit."
           action={
-            <TeacherActionButton
-              label={creatingAssessment ? "Creating..." : "Create"}
-              icon="plus"
-              tone="green"
-              disabled={creatingAssessment}
-              onPress={() => void handleCreateAssessment()}
-            />
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {selectedAssessmentIds.length > 0 ? (
+                <TeacherActionButton
+                  label={`Delete Selected (${selectedAssessmentIds.length})`}
+                  icon="trash-can-outline"
+                  tone="red"
+                  onPress={() => setShowBulkDeleteConfirm(true)}
+                />
+              ) : null}
+              <TeacherActionButton
+                label={creatingAssessment ? "Creating..." : "Create"}
+                icon="plus"
+                tone="green"
+                disabled={creatingAssessment}
+                onPress={() => void handleCreateAssessment()}
+              />
+            </View>
           }
         >
           {assessmentsQuery.data?.length ? (
-            assessmentsQuery.data.map((assessment) => (
-              <TeacherRow
-                key={assessment.id}
-                title={assessment.title}
-                subtitle={`${assessment.isPublished ? "Published" : "Draft"} - ${assessment.type.replace(/_/g, " ")} - Due ${formatDate(assessment.dueDate)}`}
-                onPress={() =>
-                  navigation.navigate("TeacherAssessmentDetail", {
-                    assessmentId: assessment.id,
-                    classId,
-                  })
-                }
-                right={
-                  <Pressable
+            <>
+              <View
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: theme.surface2,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.border,
+                }}
+              >
+                <Pressable
+                  onPress={toggleSelectAllAssessments}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <MaterialCommunityIcons
+                    name={
+                      selectedAssessmentIds.length === (assessmentsQuery.data?.length ?? 0)
+                        ? "checkbox-marked"
+                        : selectedAssessmentIds.length > 0
+                        ? "checkbox-intermediate"
+                        : "checkbox-blank-outline"
+                    }
+                    size={20}
+                    color={selectedAssessmentIds.length > 0 ? theme.red : theme.muted}
+                  />
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>
+                    {selectedAssessmentIds.length === (assessmentsQuery.data?.length ?? 0)
+                      ? "Deselect All"
+                      : "Select All"}
+                  </Text>
+                </Pressable>
+                <Text style={{ fontSize: 11, color: theme.muted }}>
+                  {selectedAssessmentIds.length} of {assessmentsQuery.data.length} selected
+                </Text>
+              </View>
+
+              {assessmentsQuery.data.map((assessment) => {
+                const isSelected = selectedAssessmentIds.includes(assessment.id);
+                return (
+                  <TeacherRow
+                    key={assessment.id}
+                    title={assessment.title}
+                    subtitle={`${assessment.isPublished ? "Published" : "Draft"} - ${assessment.type.replace(/_/g, " ")} - Due ${formatDate(assessment.dueDate)}`}
+                    left={
+                      <Pressable
+                        onPress={() => toggleSelectAssessment(assessment.id)}
+                        hitSlop={8}
+                        style={{ paddingRight: 4 }}
+                      >
+                        <MaterialCommunityIcons
+                          name={isSelected ? "checkbox-marked" : "checkbox-blank-outline"}
+                          size={20}
+                          color={isSelected ? theme.red : theme.dim}
+                        />
+                      </Pressable>
+                    }
                     onPress={() =>
-                      navigation.navigate("TeacherAssessmentEditor", {
+                      navigation.navigate("TeacherAssessmentDetail", {
                         assessmentId: assessment.id,
                         classId,
                       })
                     }
-                    style={{
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.active,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
-                  </Pressable>
-                }
-              />
-            ))
+                    right={
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Pressable
+                          onPress={() =>
+                            navigation.navigate("TeacherAssessmentEditor", {
+                              assessmentId: assessment.id,
+                              classId,
+                            })
+                          }
+                          style={{
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: theme.border,
+                            backgroundColor: theme.active,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => setDeletingAssessment({ id: assessment.id, title: assessment.title })}
+                          style={{
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: theme.redLine,
+                            backgroundColor: theme.redSoft,
+                            paddingHorizontal: 8,
+                            paddingVertical: 6,
+                          }}
+                        >
+                          <MaterialCommunityIcons name="trash-can-outline" size={14} color={theme.red} />
+                        </Pressable>
+                      </View>
+                    }
+                  />
+                );
+              })}
+            </>
           ) : (
             <TeacherEmpty title="No assessments yet" subtitle="Assessments assigned to this class will appear here." icon="clipboard-text-outline" />
           )}
@@ -274,18 +498,77 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       ) : null}
 
       {activeTab === "announcements" ? (
-        <TeacherPanel title="Announcements" subtitle="Review recent updates for this class or jump to the full announcement manager.">
+        <TeacherPanel
+          title="Announcements"
+          subtitle="Publish class updates with rich formatting, pin posts, or schedule announcements."
+          action={
+            <TeacherActionButton
+              label="Create Announcement"
+              icon="plus"
+              tone="green"
+              onPress={() => {
+                setEditingAnnouncement(null);
+                setShowAnnouncementModal(true);
+              }}
+            />
+          }
+        >
           {announcementsQuery.data?.length ? (
             announcementsQuery.data.map((announcement) => (
               <TeacherRow
                 key={announcement.id}
                 title={announcement.title}
-                subtitle={`${announcement.isPinned ? "Pinned" : "Post"} - ${stripRichText(announcement.content).slice(0, 110) || "No content preview available."}`}
-                onPress={() => navigation.getParent()?.navigate("Announcements" as never)}
+                subtitle={`${announcement.isPinned ? "Pinned · " : ""}${stripRichText(announcement.content).slice(0, 100) || "No content preview available."}`}
+                left={
+                  announcement.isPinned ? (
+                    <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: theme.amberSoft, alignItems: "center", justifyContent: "center" }}>
+                      <MaterialCommunityIcons name="pin" size={16} color={theme.amber} />
+                    </View>
+                  ) : undefined
+                }
+                right={
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Pressable
+                      onPress={() => {
+                        setEditingAnnouncement({
+                          id: announcement.id,
+                          title: announcement.title,
+                          content: announcement.content,
+                          isPinned: Boolean(announcement.isPinned),
+                          scheduledAt: announcement.scheduledAt || "",
+                        });
+                        setShowAnnouncementModal(true);
+                      }}
+                      style={{
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.active,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setDeletingAnnouncementModal({ id: announcement.id, title: announcement.title })}
+                      style={{
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.redLine,
+                        backgroundColor: theme.redSoft,
+                        paddingHorizontal: 8,
+                        paddingVertical: 6,
+                      }}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={14} color={theme.red} />
+                    </Pressable>
+                  </View>
+                }
               />
             ))
           ) : (
-            <TeacherEmpty title="No announcements yet" subtitle="Use the announcements tab to publish quick class updates." icon="bullhorn-outline" />
+            <TeacherEmpty title="No announcements yet" subtitle="Tap 'Create Announcement' above to publish quick class updates." icon="bullhorn-outline" />
           )}
         </TeacherPanel>
       ) : null}
@@ -316,37 +599,38 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
       ) : null}
 
       {activeTab === "calendar" ? (
-        <TeacherPanel title="Calendar" subtitle="Upcoming class-relevant dates pulled from assessments and school events.">
+        <TeacherPanel title="Class Calendar" subtitle="School events and assessment due dates mapped to this class section.">
           {upcomingItems.length ? (
-            upcomingItems.map((entry) => (
-              <TeacherRow key={entry.id} title={entry.title} subtitle={entry.subtitle} onPress={entry.action} />
+            upcomingItems.map((item) => (
+              <TeacherRow key={item.id} title={item.title} subtitle={item.subtitle} onPress={item.action} />
             ))
           ) : (
-            <TeacherEmpty title="No upcoming items" subtitle="No assessments or school events are queued for this class right now." icon="calendar-blank-outline" />
+            <TeacherEmpty title="No upcoming items" subtitle="No events or assessment deadlines are currently scheduled." icon="calendar-blank-outline" />
           )}
-          <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-            <Pressable
-              onPress={() => navigation.navigate("TeacherCalendar", { classId })}
-              style={{
-                borderRadius: 10,
-                backgroundColor: theme.redSoft,
-                paddingHorizontal: 12,
-                paddingVertical: 11,
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.red }}>Open full calendar</Text>
-            </Pressable>
-          </View>
         </TeacherPanel>
       ) : null}
 
       {activeTab === "students" ? (
-        <TeacherPanel title="Roster" subtitle="Simple learner list for quick mobile checks.">
+        <TeacherPanel
+          title="Students & Roster"
+          subtitle="Learners enrolled in this class section."
+          action={
+            <TeacherActionButton
+              label="Manage roster"
+              icon="account-multiple-plus-outline"
+              tone="blue"
+              onPress={() =>
+                navigation.navigate("TeacherClassAddStudents", {
+                  classId,
+                })
+              }
+            />
+          }
+        >
           {rosterQuery.data?.length ? (
             rosterQuery.data.map((entry) => {
-              const name = [entry.student?.firstName, entry.student?.lastName].filter(Boolean).join(" ").trim() || entry.student?.email || "Learner";
-              const studentId = entry.student?.id || entry.studentId || entry.userId;
+              const studentId = entry.student?.id || entry.studentId;
+              const name = [entry.student?.firstName, entry.student?.lastName].filter(Boolean).join(" ").trim() || entry.student?.email || "Student";
               return (
                 <TeacherRow
                   key={entry.id}
@@ -369,6 +653,77 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
           )}
         </TeacherPanel>
       ) : null}
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingModule)}
+        title="Delete Module"
+        description={
+          deletingModule
+            ? `Are you sure you want to delete "${deletingModule.title}"? This action cannot be undone.`
+            : ""
+        }
+        loading={moduleDeleteMutation.isPending}
+        onCancel={() => setDeletingModule(null)}
+        onConfirm={async () => {
+          if (!deletingModule) return;
+          try {
+            await moduleDeleteMutation.mutateAsync(deletingModule.id);
+            setDeletingModule(null);
+          } catch (err) {
+            Alert.alert("Error", toAppError(err).message);
+          }
+        }}
+      />
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingAssessment)}
+        title="Delete Assessment?"
+        description={
+          deletingAssessment
+            ? `Are you sure you want to delete "${deletingAssessment.title}"? All student attempts, responses, and grades will be permanently removed.`
+            : ""
+        }
+        loading={isDeletingAssessment}
+        onCancel={() => setDeletingAssessment(null)}
+        onConfirm={() => void handleDeleteSingleAssessment()}
+      />
+
+      <TeacherConfirmModal
+        visible={showBulkDeleteConfirm}
+        title="Delete Selected Assessments?"
+        description={`Are you sure you want to delete ${selectedAssessmentIds.length} selected assessment(s)? This action cannot be undone and will permanently remove all linked student submissions.`}
+        loading={isDeletingAssessment}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        onConfirm={() => void handleBulkDeleteAssessments()}
+      />
+
+      <TeacherAnnouncementEditorModal
+        visible={showAnnouncementModal}
+        className={classQuery.data?.subjectName}
+        editingId={editingAnnouncement?.id}
+        initialTitle={editingAnnouncement?.title ?? ""}
+        initialContent={editingAnnouncement?.content ?? ""}
+        initialPinned={editingAnnouncement?.isPinned ?? false}
+        initialScheduledAt={editingAnnouncement?.scheduledAt ?? ""}
+        saving={savingAnnouncement}
+        onSave={(payload) => void handleSaveAnnouncement(payload)}
+        onClose={() => {
+          setShowAnnouncementModal(false);
+          setEditingAnnouncement(null);
+        }}
+      />
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingAnnouncementModal)}
+        title="Delete Announcement?"
+        description={
+          deletingAnnouncementModal
+            ? `Are you sure you want to delete "${deletingAnnouncementModal.title}"? This action cannot be undone.`
+            : ""
+        }
+        onCancel={() => setDeletingAnnouncementModal(null)}
+        onConfirm={() => void handleDeleteAnnouncementConfirm()}
+      />
     </TeacherScreen>
   );
 }

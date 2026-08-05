@@ -632,6 +632,129 @@ export function useTeacherModuleUpdateMutation(classId?: string, moduleId?: stri
   });
 }
 
+export function useTeacherModuleDeleteMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (moduleId: string) => modulesApi.delete(moduleId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleSectionCreateMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof modulesApi.createSection>[1]) => modulesApi.createSection(moduleId!, payload),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleSectionDeleteMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sectionId: string) => modulesApi.deleteSection(sectionId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleReorderMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (moduleIds: string[]) => modulesApi.reorderModules(classId!, moduleIds),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleSectionReorderMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sectionIds: string[]) => modulesApi.reorderSections(moduleId!, sectionIds),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleItemReorderMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sectionId, itemIds }: { sectionId: string; itemIds: string[] }) =>
+      modulesApi.reorderItems(sectionId, itemIds),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleItemAttachMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      sectionId,
+      payload,
+    }: {
+      sectionId: string;
+      payload: Parameters<typeof modulesApi.attachItem>[1];
+    }) => modulesApi.attachItem(sectionId, payload),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleItemDetachMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => modulesApi.detachItem(itemId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
+export function useTeacherModuleCoverMutation(classId?: string, moduleId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: Parameters<typeof modulesApi.uploadCover>[1]) =>
+      modulesApi.uploadCover(moduleId!, file),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+      }
+    },
+  });
+}
+
 export function useTeacherModuleItemUpdateMutation(classId?: string, moduleId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -675,6 +798,18 @@ export function useTeacherAssessmentUpdateMutation(assessmentId?: string) {
       if (data.classId) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.assessments(data.classId) });
       }
+    },
+  });
+}
+
+export function useTeacherDeleteAssessmentMutation(assessmentId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => assessmentsApi.delete(assessmentId!),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentDetail(assessmentId!) });
+      await queryClient.invalidateQueries({ queryKey: ["assessments"] });
+      await queryClient.invalidateQueries({ queryKey: ["teacherClasses"] });
     },
   });
 }
@@ -929,6 +1064,90 @@ export function useDiscussionReportCommentMutation(classId?: string, threadId?: 
       discussionBoardApi.reportComment(classId!, threadId!, commentId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+    },
+  });
+}
+
+export function useTeacherClassPresentationUpdateMutation(hookClassId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { classId?: string; cardPreset?: string | null; cardBannerUrl?: string | null }) => {
+      const targetClassId = payload.classId || hookClassId;
+      if (!targetClassId) throw new Error("classId is required");
+      return classesApi.updatePresentation(targetClassId, {
+        cardPreset: payload.cardPreset,
+        cardBannerUrl: payload.cardBannerUrl,
+      });
+    },
+    onSuccess: async (_, variables) => {
+      const targetClassId = variables.classId || hookClassId;
+      if (targetClassId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
+        await queryClient.invalidateQueries({ queryKey: ["teacher-classes"] });
+      }
+    },
+  });
+}
+
+export function useTeacherSectionPresentationUpdateMutation(hookSectionId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { sectionId?: string; cardPreset?: string | null; cardBannerUrl?: string | null }) => {
+      const targetSectionId = payload.sectionId || hookSectionId;
+      if (!targetSectionId) throw new Error("sectionId is required");
+      return sectionsApi.updatePresentation(targetSectionId, {
+        cardPreset: payload.cardPreset,
+        cardBannerUrl: payload.cardBannerUrl,
+      });
+    },
+    onSuccess: async (_, variables) => {
+      const targetSectionId = variables.sectionId || hookSectionId;
+      if (targetSectionId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(targetSectionId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("all") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("active") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("archived") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("hidden") });
+      }
+    },
+  });
+}
+
+export function useUploadClassBannerMutation(hookClassId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { classId?: string; imageUri: string }) => {
+      const targetClassId = payload.classId || hookClassId;
+      if (!targetClassId) throw new Error("classId is required");
+      return classesApi.uploadBanner(targetClassId, payload.imageUri);
+    },
+    onSuccess: async (_, variables) => {
+      const targetClassId = variables.classId || hookClassId;
+      if (targetClassId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
+        await queryClient.invalidateQueries({ queryKey: ["teacher-classes"] });
+      }
+    },
+  });
+}
+
+export function useUploadSectionBannerMutation(hookSectionId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { sectionId?: string; imageUri: string }) => {
+      const targetSectionId = payload.sectionId || hookSectionId;
+      if (!targetSectionId) throw new Error("sectionId is required");
+      return sectionsApi.uploadBanner(targetSectionId, payload.imageUri);
+    },
+    onSuccess: async (_, variables) => {
+      const targetSectionId = variables.sectionId || hookSectionId;
+      if (targetSectionId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(targetSectionId) });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("all") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("active") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("archived") });
+        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("hidden") });
+      }
     },
   });
 }

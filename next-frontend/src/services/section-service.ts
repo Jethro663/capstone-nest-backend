@@ -333,7 +333,7 @@ export const sectionService = {
   /** PATCH /sections/:id/presentation - Teacher, Admin */
   async updatePresentation(
     id: string,
-    dto: { cardBannerUrl?: string | null },
+    dto: { cardPreset?: string; cardBannerUrl?: string | null },
   ): Promise<{ success: boolean; message: string; data: Section }> {
     const { data } = await api.patch(`/sections/${id}/presentation`, dto);
     return data;
