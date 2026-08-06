@@ -73,6 +73,7 @@ import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
+import { useAuth } from '@/providers/AuthProvider';
 import { normalizeRichText } from '@/lib/rich-text';
 import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
 import { upsertTrackedExtractionNotification } from '@/lib/extraction-notification-tracker';
@@ -1190,6 +1191,7 @@ export default function TeacherClassDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const aiAvailability = useAiAvailability();
+  const { isAuthenticated } = useAuth();
   const classIdParam = params.id;
   const classId = Array.isArray(classIdParam) ? classIdParam[0] : (classIdParam as string) || '';
   const isClassIdValid = UUID_PATTERN.test(classId);
@@ -1290,6 +1292,7 @@ export default function TeacherClassDetailPage() {
   const classRecordState = useTeacherClassRecord(isClassIdValid ? classId : undefined);
 
   const fetchData = useCallback(async () => {
+    if (!isAuthenticated) return;
     if (!isClassIdValid) {
       setClassItem(null);
       setModules([]);
@@ -1398,7 +1401,7 @@ export default function TeacherClassDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, classId, isClassIdValid, resetDiscussionWorkspace]);
+  }, [activeTab, classId, isAuthenticated, isClassIdValid, resetDiscussionWorkspace]);
 
   useEffect(() => {
     void fetchData();
