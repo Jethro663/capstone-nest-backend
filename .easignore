@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+android/
+ios/
+dist/
+mobile/node_modules/
+next-frontend/node_modules/
+capstone-nest-backend/node_modules/
+.next/
