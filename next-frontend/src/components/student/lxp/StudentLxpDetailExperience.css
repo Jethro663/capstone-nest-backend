@@ -382,3 +382,30 @@
     justify-content: flex-start;
   }
 }
+.student-lxp-checkpoint-card--not-taken-quiz {
+  border: 2px solid #f43f5e !important;
+  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(244, 63, 94, 0.18) !important;
+}
+
+.student-lxp-checkpoint-card--not-taken-quiz:hover {
+  border-color: #e11d48 !important;
+  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+}
+
+.student-lxp-checkpoint-card--not-taken-quiz .student-lxp-checkpoint-card__index {
+  background: #fecdd3 !important;
+  color: #881337 !important;
+}
+
+.student-lxp-checkpoint-card__quiz-tag--not-taken {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fecdd3;
+}
+
+.student-lxp-checkpoint-card__result-pill--not-taken {
+  background: #ffe4e6;
+  color: #be123c;
+  border-color: #fecdd3;
+}
