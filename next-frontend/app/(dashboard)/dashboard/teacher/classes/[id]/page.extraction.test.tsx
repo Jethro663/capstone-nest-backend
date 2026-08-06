@@ -21,6 +21,19 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
+jest.mock('@/providers/AuthProvider', () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    loading: false,
+    status: 'authenticated',
+    user: { id: 'teacher-1', roles: [{ name: 'teacher' }] },
+    role: 'teacher',
+    isProfileIncomplete: false,
+    setUser: jest.fn(),
+    refreshAuth: jest.fn(),
+  }),
+}));
+
 jest.mock('sonner', () => ({
   toast: {
     error: jest.fn(),
