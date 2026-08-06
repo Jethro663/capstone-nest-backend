@@ -10,12 +10,6 @@ on:
       - ".github/workflows/**"
   push:
     branches: [developement, master]
-    paths:
-      - "backend/**"
-      - "next-frontend/**"
-      - "mobile/**"
-      - "ai-service/**"
-      - ".github/workflows/**"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
