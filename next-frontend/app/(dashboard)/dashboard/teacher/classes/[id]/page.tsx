@@ -3818,7 +3818,7 @@ export default function TeacherClassDetailPage() {
                                 style={{ width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%` }}
                               />
                             </div>
-                            <span>{student.gradePercent !== null ? `${student.gradePercent.toFixed(1)}%` : '--'}</span>
+                            <span>{student.gradePercent != null ? `${Number(student.gradePercent).toFixed(1)}%` : '--'}</span>
                           </div>
                         </Link>
                       </td>

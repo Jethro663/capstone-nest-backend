@@ -636,13 +636,13 @@ async def _claim_ai_job_execution(
             f"""
             UPDATE ai_generation_jobs
             SET
-              status = 'processing',
-              error_message = NULL,
-              source_filters = :sourceFilters,
-              updated_at = NOW()
+                status = 'processing',
+                error_message = NULL,
+                source_filters = (:sourceFilters)::jsonb,
+                updated_at = NOW()
             WHERE id = :jobId
               AND (
-                status IN ('pending', 'failed')
+                  status IN ('pending', 'failed')
                 OR (
                   :allowStaleProcessing = TRUE
                   AND status IN ('processing', 'running')
@@ -5002,8 +5002,7 @@ async def run_teacher_lesson_plan_job(
 
     _set_ai_job_runtime(job_id, **runtime_patch)
 
-    # Reconstruct the request body from source_filters
-    source_filters = job["source_filters"] or {}
+    source_filters = source_filters_dict
     body = GenerateLessonPlanRequest(
         classId=str(job["class_id"]) if job["class_id"] else "",
         anchorType=source_filters.get("anchorType", "module"),
@@ -5104,7 +5103,7 @@ async def run_teacher_quiz_job(
 
     _set_ai_job_runtime(job_id, **runtime_patch)
 
-    source_filters = job["source_filters"] or {}
+    source_filters = source_filters_dict
     body = GenerateQuizDraftRequest(
         classId=str(job["class_id"]) if job["class_id"] else "",
         lessonIds=source_filters.get("lessonIds", []),
@@ -5214,7 +5213,7 @@ async def run_teacher_intervention_job(
 
     _set_ai_job_runtime(job_id, **runtime_patch)
 
-    source_filters = job["source_filters"] or {}
+    source_filters = source_filters_dict
     case_id = source_filters.get("caseId", "")
     note = source_filters.get("note")
     user = RequestUser(

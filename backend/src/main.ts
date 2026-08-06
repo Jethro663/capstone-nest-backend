@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import express from 'express';
 import { validateEnvironment } from './config/validate-env';
+import { LoggingExceptionFilter } from './logging-filter';
 
 function parseOriginList(value?: string): string[] {
   if (!value) return [];
@@ -108,6 +109,8 @@ async function bootstrap() {
 
   // Global metrics interceptor
   app.useGlobalInterceptors(new MetricsInterceptor());
+
+  app.useGlobalFilters(new LoggingExceptionFilter());
 
   // Swagger — only exposed outside production to avoid leaking API shapes
   if (!isProd) {

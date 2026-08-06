@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Bell,
   RefreshCcw,
+  Download,
 } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { useNotifications } from '@/providers/NotificationProvider';
@@ -359,6 +360,38 @@ export default function TeacherDashboardPage() {
             ))}
           </div>
         )}
+      </TeacherSectionCard>
+
+      {/* Student App Download */}
+      <TeacherSectionCard
+        title="Student Mobile App"
+        description="Get the latest Android APK for your students"
+      >
+        <div className="rounded-xl border border-[var(--teacher-outline)] bg-[var(--teacher-surface)] p-5">
+          <div className="flex items-start gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[var(--teacher-accent)] text-white">
+              <Download className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-[var(--teacher-text-strong)]">
+                Nexora Student App
+              </h4>
+              <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
+                Download the latest APK to install the student app on Android devices. Share this link with your students.
+              </p>
+              <div className="mt-4">
+                <a
+                  href="/downloads/nexora-student-mobile-release.apk"
+                  download
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--teacher-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--teacher-accent-hover)]"
+                >
+                  <Download className="h-4 w-4" />
+                  Download APK
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </TeacherSectionCard>
     </TeacherPageShell>
   );

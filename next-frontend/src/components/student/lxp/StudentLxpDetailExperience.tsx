@@ -241,9 +241,11 @@ function CheckpointCard({
 
   const quizCardTone = !isQuizOrAssessment
     ? null
-    : (isTaken && isPassed)
-      ? 'passed'
-      : 'failed';
+    : !isTaken
+      ? 'not-taken'
+      : isPassed
+        ? 'passed'
+        : 'failed';
 
   const statusLabel = isQuizOrAssessment
     ? (isTaken ? (isPassed ? 'Passed' : 'Failed') : 'Not Taken')
@@ -275,7 +277,7 @@ function CheckpointCard({
       className={cn(
         'student-lxp-checkpoint-card',
         primaryHref ? 'student-lxp-checkpoint-card--interactive' : null,
-        isQuizOrAssessment && (quizCardTone === 'passed' ? 'student-lxp-checkpoint-card--passed-quiz' : 'student-lxp-checkpoint-card--failed-quiz'),
+        isQuizOrAssessment && (quizCardTone === 'passed' ? 'student-lxp-checkpoint-card--passed-quiz' : quizCardTone === 'failed' ? 'student-lxp-checkpoint-card--failed-quiz' : 'student-lxp-checkpoint-card--not-taken-quiz'),
       )}
       data-type={isGuidedAssessment ? 'guided' : isReplay ? 'replay' : 'step'}
       data-state={checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'}
@@ -318,9 +320,11 @@ function CheckpointCard({
                 <span
                   className={cn(
                     'student-lxp-checkpoint-card__quiz-tag',
-                    isTaken && isPassed
-                      ? 'student-lxp-checkpoint-card__quiz-tag--passed'
-                      : 'student-lxp-checkpoint-card__quiz-tag--failed',
+                    !isTaken
+                      ? 'student-lxp-checkpoint-card__quiz-tag--not-taken'
+                      : isPassed
+                        ? 'student-lxp-checkpoint-card__quiz-tag--passed'
+                        : 'student-lxp-checkpoint-card__quiz-tag--failed',
                   )}
                 >
                   {quizStatusTag}
@@ -398,9 +402,11 @@ function CheckpointCard({
             <span
               className={cn(
                 'student-lxp-checkpoint-card__result-pill',
-                isTaken && isPassed
-                  ? 'student-lxp-checkpoint-card__result-pill--passed'
-                  : 'student-lxp-checkpoint-card__result-pill--failed',
+                !isTaken
+                  ? 'student-lxp-checkpoint-card__result-pill--not-taken'
+                  : isPassed
+                    ? 'student-lxp-checkpoint-card__result-pill--passed'
+                    : 'student-lxp-checkpoint-card__result-pill--failed',
               )}
             >
               {quizStatusTag}

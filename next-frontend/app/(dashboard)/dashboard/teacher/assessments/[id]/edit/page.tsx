@@ -2218,11 +2218,11 @@ export default function AssessmentEditorPage() {
         ...(isCoreTemplateAssessment ? {} : { isPublished: targetPublishedState }),
       };
 
-      await assessmentService.update(assessment.id, updatePayload);
-
       if (!isCoreTemplateAssessment && assessmentType !== 'file_upload') {
         await syncQuestions();
       }
+
+      await assessmentService.update(assessment.id, updatePayload);
 
       if (isCoreTemplateAssessment && assessment.isPublished !== targetPublishedState) {
         await assessmentService.releaseCore(assessment.id, {
