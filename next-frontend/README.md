@@ -1,4 +1,4 @@
-# Nexora Web Frontend
+ # Nexora Web Frontend
 
 Next.js 16 App Router and React 19 browser client for Nexora’s student, teacher, and administrator workflows.
 
