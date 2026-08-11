@@ -16,7 +16,7 @@ import {
 const PPTX_MIME =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'document' | 'image' | 'file';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'document' | 'image';
 
 export function getLibraryFileKind(file: Express.Multer.File): LibraryFileKind {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -27,7 +27,9 @@ export function getLibraryFileKind(file: Express.Multer.File): LibraryFileKind {
   if (['.doc', '.docx', '.xls', '.xlsx'].includes(ext)) return 'document';
   if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) return 'image';
 
-  return 'file';
+  throw new UnsupportedMediaTypeException(
+    'Only .pdf, .txt, .csv, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .jpg, .jpeg, .png, and .webp files are supported.',
+  );
 }
 
 @Injectable()
