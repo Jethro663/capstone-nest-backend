@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -55,6 +56,11 @@ export function TeacherLibraryScreen({ navigation }: Props) {
       ? undefined
       : classesQuery.data?.find((entry) => entry.id === selectedClassId);
 
+  const filesQuery = useQuery({
+    queryKey: ["library-files", selectedClassId, search],
+    queryFn: () => fileUploadApi.getAll({ classId: selectedClassId !== "all" ? selectedClassId : undefined, search: search.trim() || undefined }),
+  });
+
   const handleUploadFile = async () => {
     try {
       const DocumentPicker = await import("expo-document-picker");
@@ -67,7 +73,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
       const asset = result.assets[0];
 
       setUploading(true);
-      await fileUploadApi.upload(
+      const uploaded = await fileUploadApi.upload(
         {
           uri: asset.uri,
           name: asset.name,
@@ -75,12 +81,14 @@ export function TeacherLibraryScreen({ navigation }: Props) {
         },
         {
           classId: selectedClassId !== "all" ? selectedClassId : undefined,
-          scope: scopeFilter !== "all" ? scopeFilter : "general",
+          scope: "private",
         },
       );
 
-      Alert.alert("File Uploaded", `"${asset.name}" has been added to your Nexora Library.`);
+      setActiveTab("files");
       await queryClient.invalidateQueries({ queryKey: ["library-files"] });
+      await filesQuery.refetch();
+      Alert.alert("File Asset Uploaded", `"${asset.name}" (ID: ${uploaded?.id?.slice(0, 8) || "uploaded"}) has been successfully added to your Nexora Library.`);
     } catch (err) {
       Alert.alert("Upload Failed", toAppError(err).message);
     } finally {
@@ -93,6 +101,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
     onSuccess: async () => {
       setDeletingFile(null);
       await queryClient.invalidateQueries({ queryKey: ["library-files"] });
+      await filesQuery.refetch();
       Alert.alert("File Deleted", "The library resource has been deleted.");
     },
   });
@@ -219,7 +228,37 @@ export function TeacherLibraryScreen({ navigation }: Props) {
         </TeacherPanel>
       ) : (
         <TeacherPanel title="Raw Asset Library" subtitle="Document resources, curriculum banks, and uploaded files.">
-          <TeacherEmpty title="Nexora File Asset Bank" subtitle="Tap 'Upload File Asset' above to upload PDFs, PPTs, or Docs directly to your Nexora Library." icon="cloud-upload-outline" />
+          {filesQuery.data?.length ? (
+            filesQuery.data.map((file) => {
+              const name = file.originalName || file.filename || "Uploaded File";
+              const sizeLabel = file.sizeBytes ? `${Math.round(file.sizeBytes / 1024)} KB` : "";
+              const dateLabel = file.createdAt ? new Date(file.createdAt).toLocaleDateString() : "";
+              return (
+                <TeacherRow
+                  key={file.id}
+                  title={name}
+                  subtitle={[file.mimeType || "Document", sizeLabel, dateLabel].filter(Boolean).join(" · ")}
+                  right={
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <TeacherActionButton
+                        label="Open"
+                        tone="blue"
+                        onPress={() => void fileUploadApi.open(file.id, name)}
+                      />
+                      <Pressable
+                        onPress={() => setDeletingFile({ id: file.id, name })}
+                        style={{ padding: 6 }}
+                      >
+                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={teacherTheme.red} />
+                      </Pressable>
+                    </View>
+                  }
+                />
+              );
+            })
+          ) : (
+            <TeacherEmpty title="Nexora File Asset Bank" subtitle="Tap 'Upload File Asset' above to upload PDFs, PPTs, or Docs directly to your Nexora Library." icon="cloud-upload-outline" />
+          )}
         </TeacherPanel>
       )}
 

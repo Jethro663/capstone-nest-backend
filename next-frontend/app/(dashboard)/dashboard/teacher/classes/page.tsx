@@ -732,13 +732,11 @@ export default function TeacherClassesPage() {
 
     try {
       setSavingThemeCustomization(true);
-      const payload: { cardPreset?: string | null; cardBannerUrl?: string | null } = {};
+      const payload: { cardPreset?: string; cardBannerUrl?: string } = {};
       if (nextCustomization.themeKind === 'image' && nextCustomization.imageUrl) {
         payload.cardBannerUrl = nextCustomization.imageUrl;
-        payload.cardPreset = null;
       } else if (nextCustomization.themeKind === 'gradient' && nextCustomization.gradientId) {
         payload.cardPreset = nextCustomization.gradientId;
-        payload.cardBannerUrl = null;
       }
       
       const response = await classService.updatePresentation(classId, payload);

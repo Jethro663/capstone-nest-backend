@@ -432,17 +432,16 @@ export default function TeacherInterventionWorkspacePage() {
     try {
       setLoadingResult(true);
       const resultRes = await aiService.getInterventionJobResult(jobId);
-      const structured = normalizeStructuredOutput(
-        resultRes.data.result.structuredOutput,
-      );
+      const rawStructured = resultRes?.data?.result?.structuredOutput;
+      const structured = normalizeStructuredOutput(rawStructured ?? ({} as InterventionStructuredOutput));
       setResult(structured);
       setApprovedGeneratedContent(null);
       setStatusWarning(null);
       setLessonXp(
-        Object.fromEntries(structured.recommendedLessons.map((lesson) => [lesson.lessonId, 20])),
+        Object.fromEntries((structured.recommendedLessons ?? []).map((lesson) => [lesson.lessonId, 20])),
       );
       setAssessmentXp(
-        Object.fromEntries(structured.recommendedAssessments.map((assessment) => [assessment.assessmentId, 30])),
+        Object.fromEntries((structured.recommendedAssessments ?? []).map((assessment) => [assessment.assessmentId, 30])),
       );
       setActiveTab('assign');
       return true;
@@ -453,6 +452,8 @@ export default function TeacherInterventionWorkspacePage() {
       );
       setStatusWarning(message);
       toast.error(message);
+      // Fallback: active tab moves to assign so teacher isn't stuck on step 2 generating
+      setActiveTab('assign');
       return false;
     } finally {
       setLoadingResult(false);
@@ -540,7 +541,16 @@ export default function TeacherInterventionWorkspacePage() {
   );
 
   useEffect(() => {
-    if (!job || ['completed', 'approved', 'failed', 'rejected'].includes(job.status)) {
+    if (!job) return;
+
+    if (['completed', 'approved'].includes(job.status)) {
+      if (!result) {
+        void loadInterventionJobResult(job.jobId);
+      }
+      return;
+    }
+
+    if (['failed', 'rejected'].includes(job.status)) {
       return;
     }
 
@@ -572,7 +582,7 @@ export default function TeacherInterventionWorkspacePage() {
     }, 10_000);
 
     return () => window.clearInterval(interval);
-  }, [job, loadInterventionJobResult]);
+  }, [job, result, loadInterventionJobResult]);
 
   const hasCaseContext = Boolean(queueEntry && queueEntry.aiPlanEligible !== false);
   const existingCheckpointCount = queueEntry?.totalCheckpoints ?? 0;

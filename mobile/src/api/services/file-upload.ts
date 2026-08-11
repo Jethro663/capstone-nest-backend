@@ -5,6 +5,12 @@ import type { ApiEnvelope } from "../../types/api";
 import type { LibraryGradeLevel, LibrarySubjectKey, UploadedLibraryFile } from "../../types/extraction";
 
 export const fileUploadApi = {
+  async getAll(query?: { classId?: string; scope?: string; search?: string }) {
+    const response = await apiClient.get<ApiEnvelope<UploadedLibraryFile[]> | { data: UploadedLibraryFile[] }>("/files", { params: query });
+    const payload = response.data as { data?: UploadedLibraryFile[] };
+    return unwrapEnvelope(response.data as ApiEnvelope<UploadedLibraryFile[]>) || payload.data || [];
+  },
+
   async upload(
     file: { uri: string; name: string; type?: string | null },
     options: {

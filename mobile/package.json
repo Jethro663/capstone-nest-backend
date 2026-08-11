@@ -41,6 +41,7 @@
     "expo-notifications": "~0.32.17",
     "expo-screen-capture": "~8.0.9",
     "expo-secure-store": "~15.0.7",
+    "expo-sharing": "^57.0.11",
     "expo-updates": "~29.0.19",
     "fs-extra": "^11.4.0",
     "jszip": "^3.10.1",

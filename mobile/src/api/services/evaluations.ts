@@ -6,6 +6,7 @@ export type EvaluationInboxItem = {
   id: string;
   type: "teacher_class" | "ja_hub" | "learners_path";
   title: string;
+  classId?: string;
   subjectCode?: string;
   subjectName?: string;
   teacherName?: string;
@@ -23,13 +24,16 @@ export type SubmitEvaluationDto = {
   comments?: string;
 };
 
+const submittedEvaluationIds = new Set<string>();
+
 export const evaluationsApi = {
   getStudentInbox: async (): Promise<EvaluationInboxItem[]> => {
+    let items: EvaluationInboxItem[] = [];
     try {
       const res = await apiClient.get<ApiEnvelope<EvaluationInboxItem[]>>("/evaluations/my-inbox");
-      return normalizeArray<EvaluationInboxItem>(unwrapEnvelope(res.data));
+      items = normalizeArray<EvaluationInboxItem>(unwrapEnvelope(res.data));
     } catch {
-      return [
+      items = [
         {
           id: "eval-1",
           type: "teacher_class",
@@ -52,9 +56,17 @@ export const evaluationsApi = {
         },
       ];
     }
+
+    return items.map((item) => {
+      if (submittedEvaluationIds.has(item.id)) {
+        return { ...item, status: "submitted", submittedAt: new Date().toISOString() };
+      }
+      return item;
+    });
   },
 
   submitEvaluation: async (payload: SubmitEvaluationDto): Promise<{ success: boolean; message: string }> => {
+    submittedEvaluationIds.add(payload.evaluationId);
     try {
       const res = await apiClient.post<ApiEnvelope<{ success: boolean; message: string }>>("/evaluations/submit", payload);
       return unwrapEnvelope(res.data);

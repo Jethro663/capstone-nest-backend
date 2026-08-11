@@ -1,6 +1,7 @@
-import { ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import type { SpreadsheetCategory, SpreadsheetData, SpreadsheetStudentRow } from "../../types/class-record";
-import { TeacherEmpty, TeacherPanel, teacherTheme as theme } from "./TeacherMobilePrimitives";
+import { TeacherActionButton, TeacherEmpty, TeacherPanel, teacherTheme as theme } from "./TeacherMobilePrimitives";
+import { toAppError } from "../../api/http";
 
 type Props = {
   workbook?: SpreadsheetData | null;
@@ -146,10 +147,54 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
   const columns = buildColumns(workbook);
   const sheetWidth = columns.reduce((total, column) => total + column.width, 0);
 
+  const handleExportWorkbook = async () => {
+    try {
+      const FileSystem = await import("expo-file-system/legacy");
+      const { openLocalFile } = await import("../../api/services/protected-files");
+
+      const headerRow = columns.map((col) => `"${col.label.replace(/\n/g, " ")}"`).join(",");
+      const dataRows = rows.map((student) =>
+        columns.map((col) => `"${String(col.getValue(student)).replace(/"/g, '""')}"`).join(","),
+      );
+
+      const csvContent = [headerRow, ...dataRows].join("\n");
+      const fileName = `Class_Record_${workbook.header.subjectCode || "Grade"}_Q${workbook.header.quarter || "1"}.csv`;
+      const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      const fileUri = `${baseDir}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const Sharing = await import("expo-sharing");
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: "Export DepEd Class Record Workbook",
+          UTI: "public.comma-separated-values-text",
+        });
+      } else {
+        await openLocalFile(fileUri);
+      }
+
+      Alert.alert("Workbook Exported Successfully", `The Class Record CSV (${fileName}) has been generated and saved.`);
+    } catch (err) {
+      Alert.alert("Export Failed", toAppError(err).message);
+    }
+  };
+
   return (
     <TeacherPanel
       title="Class Record Workbook"
       subtitle="Swipe sideways to inspect item scores, percentage scores, weighted scores, and transmuted grades."
+      action={
+        <TeacherActionButton
+          label="Export Workbook"
+          icon="file-download-outline"
+          tone="green"
+          onPress={() => void handleExportWorkbook()}
+        />
+      }
     >
       <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
         <View

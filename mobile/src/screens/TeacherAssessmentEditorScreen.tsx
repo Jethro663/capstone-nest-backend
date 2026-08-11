@@ -212,6 +212,9 @@ function parseDateInput(value: string) {
   if (Number.isNaN(date.getTime())) {
     throw new Error("Use due date format YYYY-MM-DD HH:mm");
   }
+  if (date.getTime() < Date.now()) {
+    throw new Error("Assessment due date cannot be earlier than the present date and time.");
+  }
   return date.toISOString();
 }
 
@@ -301,6 +304,14 @@ export function DatePickerModal({
     const m = `${currentMonth + 1}`.padStart(2, "0");
     const d = `${selectedDay}`.padStart(2, "0");
     const formatted = `${y}-${m}-${d} ${selectedHour}:${selectedMinute}`;
+    const parsedDate = new Date(`${y}-${m}-${d}T${selectedHour}:${selectedMinute}`);
+    if (!Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() < Date.now()) {
+      Alert.alert(
+        "Invalid Due Date",
+        "Assessment due date cannot be earlier than the present date and time.",
+      );
+      return;
+    }
     onSelect(formatted);
     onClose();
   };
@@ -863,9 +874,14 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   };
 
   const validateQuestionPayload = () => {
-    if (assessmentType === "file_upload") return;
+    if (assessmentType === "file_upload") {
+      if (!fileUploadInstructions.trim()) {
+        throw new Error("File upload instructions are required for file upload assessments.");
+      }
+      return;
+    }
     if (sortedQuestions.length === 0) {
-      throw new Error("Add at least one question before saving this assessment type.");
+      throw new Error("No questions entered. Please add at least 1 question to the assessment before saving.");
     }
 
     sortedQuestions.forEach((question, index) => {
@@ -1275,7 +1291,20 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             </Text>
             <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
               <TeacherChip label="Draft" active={status === "draft"} onPress={() => setStatus("draft")} />
-              <TeacherChip label="Published" active={status === "published"} onPress={() => setStatus("published")} />
+              <TeacherChip
+                label="Published"
+                active={status === "published"}
+                onPress={() => {
+                  if (assessmentType !== "file_upload" && sortedQuestions.length === 0) {
+                    Alert.alert(
+                      "Cannot Publish Assessment",
+                      "No questions entered. Please add at least 1 question before publishing.",
+                    );
+                    return;
+                  }
+                  setStatus("published");
+                }}
+              />
             </View>
 
             <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>

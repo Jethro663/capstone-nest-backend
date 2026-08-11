@@ -15,6 +15,7 @@ import { ModuleDetailScreen } from "../screens/ModuleDetailScreen";
 import { AssessmentsScreen } from "../screens/AssessmentsScreen";
 import { JaScreen } from "../screens/JaScreen";
 import { ProfileScreen } from "../screens/ProfileScreen";
+import { AnnouncementsScreen } from "../screens/AnnouncementsScreen";
 import { NotificationsInboxScreen } from "../screens/NotificationsInboxScreen";
 import { SubjectLessonsScreen as ClassWorkspaceScreen } from "../screens/SubjectLessonsScreen";
 import { LoginScreen } from "../screens/LoginScreen";
@@ -170,7 +171,7 @@ const studentTabScreens = {
   Classes: ClassesRouteScreen,
   Assessments: AssessmentsScreen,
   JA: JaRouteScreen,
-  Announcements: NotificationsInboxScreen,
+  Announcements: AnnouncementsScreen,
   Profile: ProfileScreen,
 } satisfies { [K in StudentTabRouteName]: TabScreenComponent<K> };
 
