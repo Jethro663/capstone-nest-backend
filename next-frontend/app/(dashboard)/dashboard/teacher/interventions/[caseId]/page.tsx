@@ -394,6 +394,7 @@ export default function TeacherInterventionWorkspacePage() {
   } | null>(null);
   const [artifactActionLoading, setArtifactActionLoading] = useState(false);
   const statusFailuresRef = useRef(0);
+  const fetchedJobResultIdRef = useRef<string | null>(null);
   const activeClassId = classId || queueEntry?.classId || '';
   const interventionsRoute = useMemo(() => {
     return activeClassId
@@ -431,6 +432,7 @@ export default function TeacherInterventionWorkspacePage() {
   const loadInterventionJobResult = useCallback(async (jobId: string): Promise<boolean> => {
     try {
       setLoadingResult(true);
+      fetchedJobResultIdRef.current = jobId;
       const resultRes = await aiService.getInterventionJobResult(jobId);
       const rawStructured = resultRes?.data?.result?.structuredOutput;
       const structured = normalizeStructuredOutput(rawStructured ?? ({} as InterventionStructuredOutput));
@@ -452,8 +454,6 @@ export default function TeacherInterventionWorkspacePage() {
       );
       setStatusWarning(message);
       toast.error(message);
-      // Fallback: active tab moves to assign so teacher isn't stuck on step 2 generating
-      setActiveTab('assign');
       return false;
     } finally {
       setLoadingResult(false);
@@ -544,7 +544,7 @@ export default function TeacherInterventionWorkspacePage() {
     if (!job) return;
 
     if (['completed', 'approved'].includes(job.status)) {
-      if (!result) {
+      if (!result && fetchedJobResultIdRef.current !== job.jobId) {
         void loadInterventionJobResult(job.jobId);
       }
       return;
@@ -562,7 +562,9 @@ export default function TeacherInterventionWorkspacePage() {
         setJob(statusRes.data);
         if (['completed', 'approved'].includes(statusRes.data.status)) {
           window.clearInterval(interval);
-          await loadInterventionJobResult(statusRes.data.jobId);
+          if (fetchedJobResultIdRef.current !== statusRes.data.jobId) {
+            await loadInterventionJobResult(statusRes.data.jobId);
+          }
         } else if (['failed', 'rejected'].includes(statusRes.data.status)) {
           window.clearInterval(interval);
           setStatusWarning(
@@ -601,6 +603,7 @@ export default function TeacherInterventionWorkspacePage() {
     try {
       setCreatingJob(true);
       setResult(null);
+      fetchedJobResultIdRef.current = null;
       statusFailuresRef.current = 0;
       setStatusWarning(null);
       const res = await aiService.createInterventionJob(caseId, {
