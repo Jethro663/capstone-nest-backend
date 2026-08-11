@@ -377,16 +377,17 @@ export default function TeacherDashboardPage() {
                 Nexora Student App
               </h4>
               <p className="mt-1 text-xs text-[var(--teacher-text-muted)]">
-                Download the latest APK to install the student app on Android devices. Share this link with your students.
+                Download the latest APK (v0.1.2) to install the student app on Android devices. Share this link with your students.
               </p>
               <div className="mt-4">
                 <a
-                  href="/downloads/nexora-student-mobile-release.apk"
-                  download
+                  href="https://expo.dev/accounts/marcdizon2005/projects/nexora-lms-mobile/builds/f2cd8d4e-5d47-48d3-95bc-f1982c15bd06"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-lg bg-[var(--teacher-accent)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--teacher-accent-hover)]"
                 >
                   <Download className="h-4 w-4" />
-                  Download APK
+                  Download APK (v0.1.2)
                 </a>
               </div>
             </div>
