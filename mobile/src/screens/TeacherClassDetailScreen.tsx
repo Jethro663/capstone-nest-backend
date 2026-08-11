@@ -2,7 +2,9 @@ import { useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  queryKeys,
   useAnnouncements,
   useAssessments,
   useClassDetail,
@@ -12,6 +14,7 @@ import {
   useTeacherModuleDeleteMutation,
   useTeacherModuleReorderMutation,
 } from "../api/hooks";
+import { classesApi } from "../api/services/classes";
 import { assessmentsApi } from "../api/services/assessments";
 import { announcementsApi } from "../api/services/announcements";
 import { modulesApi } from "../api/services/modules";
@@ -58,6 +61,7 @@ const CLASS_TABS: Array<{ key: TeacherClassDetailTab; label: string }> = [
 ];
 
 export function TeacherClassDetailScreen({ navigation, route }: Props) {
+  const queryClient = useQueryClient();
   const { classId, initialTab } = route.params;
   const [activeTab, setActiveTab] = useState<TeacherClassDetailTab>(initialTab ?? "modules");
   const [creatingAssessment, setCreatingAssessment] = useState(false);
@@ -669,14 +673,40 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                   key={entry.id}
                   title={name}
                   subtitle={formatStudentIdentityLine(entry.student, "No LRN or email available")}
-                  onPress={
-                    studentId
-                      ? () =>
-                          navigation.navigate("TeacherClassStudentOverview", {
-                            classId,
-                            studentId,
-                          })
-                      : undefined
+                  right={
+                    studentId ? (
+                      <TeacherActionButton
+                        label="Remove"
+                        tone="red"
+                        onPress={() => {
+                          Alert.alert(
+                            "Remove Student",
+                            `Are you sure you want to remove ${name} from this class?`,
+                            [
+                              { text: "Cancel", style: "cancel" },
+                              {
+                                text: "Remove",
+                                style: "destructive",
+                                onPress: async () => {
+                                  try {
+                                    await classesApi.unenrollStudent(classId, studentId);
+                                    queryClient.setQueryData(
+                                      queryKeys.teacherEnrollments(classId),
+                                      (old: any) => (Array.isArray(old) ? old.filter((item: any) => (item.student?.id || item.studentId) !== studentId) : [])
+                                    );
+                                    await queryClient.invalidateQueries({ queryKey: queryKeys.teacherEnrollments(classId) });
+                                    await rosterQuery.refetch();
+                                    Alert.alert("Student removed", `${name} was removed from this class.`);
+                                  } catch (err) {
+                                    Alert.alert("Unable to remove student", toAppError(err).message);
+                                  }
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                      />
+                    ) : undefined
                   }
                 />
               );

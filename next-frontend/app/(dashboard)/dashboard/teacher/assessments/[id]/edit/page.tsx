@@ -1515,6 +1515,18 @@ export default function AssessmentEditorPage() {
         severity: 'recommended',
         actionLabel: 'Open delivery rules',
       });
+    } else {
+      const parsedDue = new Date(dueDate);
+      if (!Number.isNaN(parsedDue.getTime()) && parsedDue.getTime() < Date.now()) {
+        issues.push({
+          id: 'invalid-past-due-date',
+          title: 'Due date cannot be in the past',
+          description: 'Assessment due date cannot be earlier than the present date and time.',
+          section: 'delivery',
+          severity: 'required',
+          actionLabel: 'Open delivery rules',
+        });
+      }
     }
 
     if (!randomizeQuestions && !timedQuestionsEnabled && !strictMode) {
@@ -2122,8 +2134,18 @@ export default function AssessmentEditorPage() {
       focusSection('basics');
       return;
     }
+
+    if (dueDate) {
+      const parsedDue = new Date(dueDate);
+      if (!Number.isNaN(parsedDue.getTime()) && parsedDue.getTime() < Date.now()) {
+        toast.error('Assessment due date cannot be earlier than the present date and time.');
+        focusSection('delivery');
+        return;
+      }
+    }
+
     if (assessmentType !== 'file_upload' && questions.length === 0) {
-      toast.error('Add at least one question');
+      toast.error('No questions entered. Please add at least 1 question to the assessment before saving.');
       focusSection('content');
       return;
     }
@@ -2719,7 +2741,16 @@ export default function AssessmentEditorPage() {
           <Input
             type="datetime-local"
             value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
+            onChange={(event) => {
+              const val = event.target.value;
+              setDueDate(val);
+              if (val) {
+                const parsed = new Date(val);
+                if (!Number.isNaN(parsed.getTime()) && parsed.getTime() < Date.now()) {
+                  toast.error('Assessment due date cannot be earlier than the present date and time.');
+                }
+              }
+            }}
             disabled={isReadOnlyMode}
           />
         </div>
@@ -3507,7 +3538,15 @@ export default function AssessmentEditorPage() {
               <button
                 type="button"
                 data-active={availability === 'given'}
-                onClick={() => setAvailability('given')}
+                onClick={() => {
+                  if (assessmentType !== 'file_upload' && questions.length === 0) {
+                    toast.error(
+                      'No questions entered. Please add at least 1 question before setting status to Ready to give.',
+                    );
+                    return;
+                  }
+                  setAvailability('given');
+                }}
                 disabled={isReadOnlyMode || quarterStatus !== 'ready'}
               >
                 Ready to give

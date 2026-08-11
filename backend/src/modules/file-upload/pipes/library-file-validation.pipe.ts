@@ -16,24 +16,18 @@ import {
 const PPTX_MIME =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'image';
+export type LibraryFileKind = 'pdf' | 'txt' | 'pptx' | 'document' | 'image' | 'file';
 
 export function getLibraryFileKind(file: Express.Multer.File): LibraryFileKind {
   const ext = path.extname(file.originalname).toLowerCase();
 
-  if (file.mimetype === 'application/pdf' && ext === '.pdf') return 'pdf';
-  if (file.mimetype === 'text/plain' && ext === '.txt') return 'txt';
-  if (file.mimetype === PPTX_MIME && ext === '.pptx') return 'pptx';
-  if (
-    ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype) &&
-    ['.jpg', '.jpeg', '.png', '.webp'].includes(ext)
-  ) {
-    return 'image';
-  }
+  if (ext === '.pdf') return 'pdf';
+  if (['.txt', '.csv'].includes(ext)) return 'txt';
+  if (['.pptx', '.ppt'].includes(ext)) return 'pptx';
+  if (['.doc', '.docx', '.xls', '.xlsx'].includes(ext)) return 'document';
+  if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) return 'image';
 
-  throw new UnsupportedMediaTypeException(
-    'Only PDF, TXT, PPTX, JPG, PNG, and WEBP library files are supported. Legacy PPT requires a configured converter and is not enabled.',
-  );
+  return 'file';
 }
 
 @Injectable()
@@ -41,7 +35,7 @@ export class LibraryFileValidationPipe implements PipeTransform {
   async transform(file: Express.Multer.File) {
     if (!file) {
       throw new UnsupportedMediaTypeException(
-        'A PDF, TXT, PPTX, JPG, PNG, or WEBP file is required.',
+        'A supported document or image file is required.',
       );
     }
 
@@ -79,17 +73,7 @@ export class LibraryFileValidationPipe implements PipeTransform {
       )
     ) {
       throw new UnsupportedMediaTypeException(
-        'Only .pdf, .txt, .pptx, .jpg, .jpeg, .png, and .webp files are supported.',
-      );
-    }
-
-    if (
-      !ALLOWED_MIME_TYPES.includes(
-        file.mimetype as (typeof ALLOWED_MIME_TYPES)[number],
-      )
-    ) {
-      throw new UnsupportedMediaTypeException(
-        'Unsupported file type. Upload PDF, TXT, PPTX, JPG, PNG, or WEBP files only.',
+        'Only .pdf, .txt, .csv, .doc, .docx, .ppt, .pptx, .xls, .xlsx, .jpg, .jpeg, .png, and .webp files are supported.',
       );
     }
   }
@@ -135,6 +119,11 @@ export class LibraryFileValidationPipe implements PipeTransform {
     const isWebp =
       riffHeader === 'RIFF' && webpHeader.toString('ascii') === 'WEBP';
     const isZip = header[0] === 0x50 && header[1] === 0x4b;
+    const isOleDoc =
+      header[0] === 0xd0 &&
+      header[1] === 0xcf &&
+      header[2] === 0x11 &&
+      header[3] === 0xe0;
     const looksBinary = header.includes(0x00);
 
     if (kind === 'pdf' && !isPdf) {
@@ -144,17 +133,24 @@ export class LibraryFileValidationPipe implements PipeTransform {
       );
     }
 
-    if (kind === 'pptx' && !isZip) {
+    if (kind === 'pptx' && !isZip && !isOleDoc) {
       await this.cleanup(absolutePath);
       throw new UnsupportedMediaTypeException(
-        'The uploaded PPTX failed file signature validation.',
+        'The uploaded presentation failed file signature validation.',
+      );
+    }
+
+    if (kind === 'document' && !isZip && !isOleDoc) {
+      await this.cleanup(absolutePath);
+      throw new UnsupportedMediaTypeException(
+        'The uploaded document failed file signature validation.',
       );
     }
 
     if (kind === 'txt' && looksBinary) {
       await this.cleanup(absolutePath);
       throw new UnsupportedMediaTypeException(
-        'The uploaded TXT file appears to contain binary data.',
+        'The uploaded text file appears to contain invalid binary data.',
       );
     }
 

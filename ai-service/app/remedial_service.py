@@ -1039,20 +1039,19 @@ Recommended lesson evidence:
         },
     )
     output_id = output_row.scalar_one()
-    if not existing_job_id:
-        await db.execute(
-            sa_text(
-                """
-                UPDATE ai_generation_jobs
-                SET
-                  status = 'completed',
-                  error_message = NULL,
-                  updated_at = NOW()
-                WHERE id = :jobId
-                """
-            ),
-            {"jobId": job_id},
-        )
+    await db.execute(
+        sa_text(
+            """
+            UPDATE ai_generation_jobs
+            SET
+              status = 'completed',
+              error_message = NULL,
+              updated_at = NOW()
+            WHERE id = :jobId
+            """
+        ),
+        {"jobId": job_id},
+    )
     await db.commit()
 
     return {

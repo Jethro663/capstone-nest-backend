@@ -306,7 +306,12 @@ export function TeacherClassAddStudentsScreen({ navigation, route }: ClassAddStu
                     ? formatStudentIdentityWithStatus(student, "Eligible")
                     : formatStudentIdentityWithStatus(student, student.disabledReason || "Not eligible")
                 }
-                onPress={() => navigation.navigate("TeacherClassStudentOverview", { classId, studentId: student.id })}
+                onPress={() => {
+                  if (!student.isEligible) return;
+                  setSelectedIds((current) =>
+                    current.includes(student.id) ? current.filter((id) => id !== student.id) : [...current, student.id],
+                  );
+                }}
                 right={
                   <Pressable
                     disabled={!student.isEligible}

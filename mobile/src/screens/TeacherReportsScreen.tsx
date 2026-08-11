@@ -1,6 +1,7 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
+import { toAppError } from "../api/http";
 import {
   useTeacherClasses,
   useTeacherReportAssessmentSummary,
@@ -170,6 +171,42 @@ export function TeacherReportsScreen({ navigation }: Props) {
     systemUsageQuery.isRefetching ||
     classesQuery.isRefetching;
 
+  const handleDownloadReport = async () => {
+    try {
+      const FileSystem = await import("expo-file-system/legacy");
+      const { openLocalFile } = await import("../api/services/protected-files");
+
+      const currentMeta = reportMeta.find((entry) => entry.key === selectedReport);
+      const titleLabel = currentMeta?.label || "Report";
+      const header = `"Item Title","Details / Subtitle"`;
+      const rows = visibleRows.map((row) => `"${row.title.replace(/"/g, '""')}","${row.subtitle.replace(/"/g, '""')}"`);
+
+      const csvContent = [header, ...rows].join("\n");
+      const fileName = `Teacher_Report_${titleLabel}_${selectedClassId}.csv`;
+      const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
+      const fileUri = `${baseDir}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const Sharing = await import("expo-sharing");
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: "text/csv",
+          dialogTitle: `Download ${titleLabel} Report`,
+          UTI: "public.comma-separated-values-text",
+        });
+      } else {
+        await openLocalFile(fileUri);
+      }
+
+      Alert.alert("Report Exported Successfully", `The ${titleLabel} report CSV file (${fileName}) has been generated and saved.`);
+    } catch (err) {
+      Alert.alert("Download Failed", toAppError(err).message);
+    }
+  };
+
   return (
     <TeacherScreen
       title="Reports"
@@ -225,6 +262,12 @@ export function TeacherReportsScreen({ navigation }: Props) {
         </View>
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <TeacherActionButton
+            label="Download report"
+            icon="download-outline"
+            tone="green"
+            onPress={() => void handleDownloadReport()}
+          />
+          <TeacherActionButton
             label="Open performance"
             icon="chart-line"
             tone="blue"
@@ -242,6 +285,14 @@ export function TeacherReportsScreen({ navigation }: Props) {
       <TeacherPanel
         title={`${reportMeta.find((entry) => entry.key === selectedReport)?.label || "Report"} snapshot`}
         subtitle="Top records from the selected teacher report endpoint."
+        action={
+          <TeacherActionButton
+            label="Download CSV"
+            icon="file-download-outline"
+            tone="green"
+            onPress={() => void handleDownloadReport()}
+          />
+        }
       >
         {visibleRows.length ? (
           visibleRows.slice(0, 30).map((row) => (

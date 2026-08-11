@@ -15,12 +15,14 @@ export type LibraryGradeLevel = "7" | "8" | "9" | "10";
 export interface UploadedLibraryFile {
   id: string;
   originalName: string;
+  filename?: string;
   mimeType: string;
   sizeBytes: number;
   classId?: string | null;
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
   aiEnabled?: boolean;
+  createdAt?: string;
 }
 
 export interface ExtractionBlock {

@@ -9,6 +9,9 @@ import type { RootStackParamList } from "../navigation/types";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
 import { studentDarkTheme as theme } from "../theme/studentDark";
 
+import { useStudentClasses } from "../api/hooks";
+import { useAuth } from "../providers/AuthProvider";
+
 type Props = NativeStackScreenProps<RootStackParamList, "StudentEvaluations">;
 type TabFilter = "pending" | "submitted";
 
@@ -35,8 +38,12 @@ function StarRating({ label, rating, onChange }: { label: string; rating: number
 }
 
 export function StudentEvaluationsScreen({ navigation }: Props) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const classesQuery = useStudentClasses(user?.userId || user?.id);
+
   const [activeTab, setActiveTab] = useState<TabFilter>("pending");
+  const [selectedClassId, setSelectedClassId] = useState<string>("all");
   const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationInboxItem | null>(null);
 
   // Form ratings
@@ -56,7 +63,10 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
     onSuccess: (data) => {
       Alert.alert("Evaluation Submitted", data.message || "Thank you for submitting your evaluation feedback!");
       setSelectedEvaluation(null);
+      setActiveTab("submitted");
       void queryClient.invalidateQueries({ queryKey: ["student-evaluations-inbox"] });
+      void queryClient.invalidateQueries({ queryKey: ["teacher-evaluations-inbox"] });
+      void inboxQuery.refetch();
     },
     onError: (err) => {
       Alert.alert("Submission Failed", toAppError(err).message);
@@ -67,7 +77,13 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
   const pendingItems = useMemo(() => inboxItems.filter((item) => item.status === "pending"), [inboxItems]);
   const submittedItems = useMemo(() => inboxItems.filter((item) => item.status === "submitted"), [inboxItems]);
 
-  const visibleItems = activeTab === "pending" ? pendingItems : submittedItems;
+  const visibleItems = useMemo(() => {
+    let list = activeTab === "pending" ? pendingItems : submittedItems;
+    if (selectedClassId !== "all") {
+      list = list.filter((item) => item.classId === selectedClassId || item.subjectCode === selectedClassId);
+    }
+    return list;
+  }, [activeTab, pendingItems, selectedClassId, submittedItems]);
 
   const handleSubmit = () => {
     if (!selectedEvaluation) return;
@@ -115,6 +131,48 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
           </View>
         </View>
       </View>
+
+      {/* Class Chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 16, marginTop: 12 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable
+            onPress={() => setSelectedClassId("all")}
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: selectedClassId === "all" ? theme.blue : theme.border,
+              backgroundColor: selectedClassId === "all" ? theme.surface : theme.bg,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: selectedClassId === "all" ? theme.blue : theme.muted }}>
+              All classes
+            </Text>
+          </Pressable>
+          {(classesQuery.data ?? []).map((entry) => {
+            const active = selectedClassId === entry.id || selectedClassId === entry.subjectCode;
+            return (
+              <Pressable
+                key={entry.id}
+                onPress={() => setSelectedClassId(entry.id)}
+                style={{
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? theme.blue : theme.border,
+                  backgroundColor: active ? theme.surface : theme.bg,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: active ? theme.blue : theme.muted }}>
+                  {entry.subjectCode}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       {/* Tabs */}
       <View style={{ marginHorizontal: 16, marginTop: 14, flexDirection: "row", gap: 8 }}>

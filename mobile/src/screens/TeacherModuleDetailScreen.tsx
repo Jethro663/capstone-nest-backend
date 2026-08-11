@@ -19,6 +19,9 @@ import {
 } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
+import { fileUploadApi } from "../api/services/file-upload";
+import { assessmentsApi } from "../api/services/assessments";
+import { lessonsApi } from "../api/services/lessons";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
@@ -40,6 +43,8 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const [attachingSectionId, setAttachingSectionId] = useState<string | null>(null);
   const [attachItemType, setAttachItemType] = useState<"lesson" | "assessment" | "file">("assessment");
   const [attachTargetId, setAttachTargetId] = useState("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const moduleQuery = useModuleDetail(classId, moduleId);
   const moduleUpdateMutation = useTeacherModuleUpdateMutation(classId, moduleId);
@@ -440,7 +445,24 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
 
             {attachItemType === "assessment" ? (
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 6 }}>Select Assessment</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted }}>Select Assessment</Text>
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        const created = await assessmentsApi.create({ title: "New Assessment", classId });
+                        await assessmentsQuery.refetch();
+                        setAttachTargetId(created.id);
+                        Alert.alert("Assessment Created", "Draft assessment created and selected!");
+                      } catch (err) {
+                        Alert.alert("Error", toAppError(err).message);
+                      }
+                    }}
+                    style={{ borderRadius: 6, backgroundColor: theme.greenSoft, paddingHorizontal: 8, paddingVertical: 4 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.green }}>+ Create New</Text>
+                  </Pressable>
+                </View>
                 <ScrollView style={{ maxHeight: 160, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 6 }}>
                   {assessmentsQuery.data?.length ? (
                     assessmentsQuery.data.map((assessment) => (
@@ -460,13 +482,30 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                       </Pressable>
                     ))
                   ) : (
-                    <Text style={{ padding: 10, fontSize: 12, color: theme.muted }}>No assessments found for this class.</Text>
+                    <Text style={{ padding: 10, fontSize: 12, color: theme.muted }}>No assessments found for this class. Tap "+ Create New" above.</Text>
                   )}
                 </ScrollView>
               </View>
             ) : attachItemType === "lesson" ? (
               <View style={{ marginBottom: 16 }}>
-                <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 6 }}>Select Lesson</Text>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted }}>Select Lesson</Text>
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        const created = await lessonsApi.create({ title: "New Lesson", classId });
+                        await lessonsQuery.refetch();
+                        setAttachTargetId(created.id);
+                        Alert.alert("Lesson Created", "Draft lesson created and selected!");
+                      } catch (err) {
+                        Alert.alert("Error", toAppError(err).message);
+                      }
+                    }}
+                    style={{ borderRadius: 6, backgroundColor: theme.greenSoft, paddingHorizontal: 8, paddingVertical: 4 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.green }}>+ Create New</Text>
+                  </Pressable>
+                </View>
                 <ScrollView style={{ maxHeight: 160, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 6 }}>
                   {lessonsQuery.data?.length ? (
                     lessonsQuery.data.map((lesson) => (
@@ -486,22 +525,53 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                       </Pressable>
                     ))
                   ) : (
-                    <Text style={{ padding: 10, fontSize: 12, color: theme.muted }}>No lessons found for this class.</Text>
+                    <Text style={{ padding: 10, fontSize: 12, color: theme.muted }}>No lessons found for this class. Tap "+ Create New" above.</Text>
                   )}
                 </ScrollView>
               </View>
             ) : (
               <View style={{ marginBottom: 16 }}>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 6 }}>
-                  Enter File ID
+                  Document File Attachment
                 </Text>
-                <TextInput
-                  style={{ backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 8, paddingHorizontal: 12, height: 44, fontSize: 13, color: theme.text }}
-                  placeholder="Enter file UUID..."
-                  placeholderTextColor={theme.muted}
-                  value={attachTargetId}
-                  onChangeText={setAttachTargetId}
-                />
+                <Pressable
+                  disabled={uploadingFile}
+                  onPress={async () => {
+                    try {
+                      const DocumentPicker = await import("expo-document-picker");
+                      const res = await DocumentPicker.getDocumentAsync({ type: "*/*", copyToCacheDirectory: true });
+                      if (res.canceled || !res.assets || !res.assets[0]) return;
+                      const asset = res.assets[0];
+                      setUploadingFile(true);
+                      setSelectedFileName(asset.name);
+                      const uploaded = await fileUploadApi.upload(
+                        { uri: asset.uri, name: asset.name, type: asset.mimeType || "application/pdf" },
+                        { classId, scope: "private" },
+                      );
+                      setAttachTargetId(uploaded.id);
+                      Alert.alert("File Uploaded", `"${asset.name}" ready to attach.`);
+                    } catch (err) {
+                      Alert.alert("Upload Failed", toAppError(err).message);
+                    } finally {
+                      setUploadingFile(false);
+                    }
+                  }}
+                  style={{
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    backgroundColor: theme.active,
+                    padding: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <MaterialCommunityIcons name="cloud-upload-outline" size={24} color={theme.blue} />
+                  <Text style={{ marginTop: 6, fontSize: 13, fontWeight: "700", color: theme.text }}>
+                    {uploadingFile ? "Uploading File..." : selectedFileName ? `Selected: ${selectedFileName}` : "Tap to Pick Document / File"}
+                  </Text>
+                  <Text style={{ marginTop: 2, fontSize: 11, color: theme.muted }}>Supports PDF, DOCX, PPTX, Images, and More</Text>
+                </Pressable>
               </View>
             )}
 

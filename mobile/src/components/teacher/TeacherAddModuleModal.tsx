@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { teacherTheme as theme } from "./TeacherMobilePrimitives";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
@@ -76,94 +76,53 @@ export function TeacherAddModuleModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "flex-end" }}>
-        <View
-          style={{
-            maxHeight: "90%",
-            backgroundColor: theme.surface,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            borderWidth: 1,
-            borderColor: theme.border,
-            paddingHorizontal: 20,
-            paddingTop: 18,
-            paddingBottom: 24,
-          }}
-        >
-          {/* ── Header ── */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>Add Module</Text>
-              {className ? (
-                <Text style={{ marginTop: 2, fontSize: 12, color: theme.subtext }}>
-                  Adding to{" "}
-                  <Text style={{ fontWeight: "700", color: theme.red }}>{className}</Text>
-                </Text>
-              ) : null}
-            </View>
-            <Pressable
-              onPress={onClose}
-              disabled={saving}
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 16,
-                backgroundColor: theme.surface2,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <MaterialCommunityIcons name="close" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", paddingHorizontal: 16 }}>
+          <View
+            style={{
+              maxHeight: "85%",
+              backgroundColor: theme.surface,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: theme.border,
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: 24,
+            }}
           >
-            {/* ── Module Title ── */}
-            <Text
-              style={{
-                fontSize: 11,
-                fontWeight: "700",
-                color: theme.muted,
-                textTransform: "uppercase",
-                letterSpacing: 0.6,
-                marginBottom: 6,
-              }}
-            >
-              Module Title *
-            </Text>
-            <TextInput
-              ref={titleRef}
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g., Introduction to Algebra"
-              placeholderTextColor={theme.dim}
-              returnKeyType="next"
-              style={{
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.active,
-                color: theme.text,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                fontSize: 14,
-                marginBottom: 16,
-              }}
-            />
+            {/* ── Header ── */}
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: "900", color: theme.text }}>Add Module</Text>
+                {className ? (
+                  <Text style={{ marginTop: 2, fontSize: 12, color: theme.subtext }}>
+                    Adding to{" "}
+                    <Text style={{ fontWeight: "700", color: theme.red }}>{className}</Text>
+                  </Text>
+                ) : null}
+              </View>
+              <Pressable
+                onPress={onClose}
+                disabled={saving}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: theme.surface2,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons name="close" size={18} color={theme.text} />
+              </Pressable>
+            </View>
 
-            {/* ── Description label + toolbar ── */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 6,
-              }}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
+              {/* ── Module Title ── */}
               <Text
                 style={{
                   fontSize: 11,
@@ -171,125 +130,167 @@ export function TeacherAddModuleModal({
                   color: theme.muted,
                   textTransform: "uppercase",
                   letterSpacing: 0.6,
+                  marginBottom: 6,
                 }}
               >
-                Description & Formatting
+                Module Title *
               </Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Tap tools to format</Text>
-            </View>
+              <TextInput
+                ref={titleRef}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g., Introduction to Algebra"
+                placeholderTextColor={theme.dim}
+                returnKeyType="next"
+                style={{
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
+                  color: theme.text,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  marginBottom: 16,
+                }}
+              />
 
-            {/* Formatting toolbar */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ marginBottom: 8 }}
-            >
-              <View style={{ flexDirection: "row", gap: 4 }}>
-                {FORMATTING_TOOLS.map((tool) => (
-                  <Pressable
-                    key={tool.label}
-                    onPress={() => insertFormatting(tool.prefix, tool.suffix, tool.placeholder)}
-                    style={{
-                      borderRadius: 8,
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      backgroundColor: theme.surface2,
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    <MaterialCommunityIcons name={tool.icon} size={15} color={theme.red} />
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: theme.text }}>
-                      {tool.label}
-                    </Text>
-                  </Pressable>
-                ))}
+              {/* ── Description label + toolbar ── */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.6,
+                  }}
+                >
+                  Description & Formatting
+                </Text>
+                <Text style={{ fontSize: 10, color: theme.muted }}>Tap tools to format</Text>
               </View>
+
+              {/* Formatting toolbar */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 8 }}
+              >
+                <View style={{ flexDirection: "row", gap: 4 }}>
+                  {FORMATTING_TOOLS.map((tool) => (
+                    <Pressable
+                      key={tool.label}
+                      onPress={() => insertFormatting(tool.prefix, tool.suffix, tool.placeholder)}
+                      style={{
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: theme.border,
+                        backgroundColor: theme.surface2,
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <MaterialCommunityIcons name={tool.icon} size={15} color={theme.red} />
+                      <Text style={{ fontSize: 11, fontWeight: "700", color: theme.text }}>
+                        {tool.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </ScrollView>
+
+              {/* Description text area */}
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+                placeholder="Write a short overview of this module's content... (optional)"
+                placeholderTextColor={theme.dim}
+                multiline
+                textAlignVertical="top"
+                style={{
+                  minHeight: 110,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
+                  color: theme.text,
+                  paddingHorizontal: 12,
+                  paddingVertical: 12,
+                  fontSize: 13,
+                  lineHeight: 19,
+                  marginBottom: 8,
+                }}
+              />
+
+              {/* Hint */}
+              <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 16 }}>
+                You can add sections and content to this module after it is created.
+              </Text>
             </ScrollView>
 
-            {/* Description text area */}
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-              placeholder="Write a short overview of this module's content... (optional)"
-              placeholderTextColor={theme.dim}
-              multiline
-              textAlignVertical="top"
+            {/* ── Footer ── */}
+            <View
               style={{
-                minHeight: 110,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.active,
-                color: theme.text,
-                paddingHorizontal: 12,
-                paddingVertical: 12,
-                fontSize: 13,
-                lineHeight: 19,
-                marginBottom: 8,
-              }}
-            />
-
-            {/* Hint */}
-            <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 16 }}>
-              You can add sections and content to this module after it is created.
-            </Text>
-          </ScrollView>
-
-          {/* ── Footer ── */}
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              gap: 10,
-              paddingTop: 12,
-              borderTopWidth: 1,
-              borderTopColor: theme.border,
-            }}
-          >
-            <Pressable
-              onPress={onClose}
-              disabled={saving}
-              style={{
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme.border,
-                backgroundColor: theme.surface2,
-                paddingHorizontal: 16,
-                paddingVertical: 10,
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Cancel</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleSave}
-              disabled={!canSave}
-              style={{
-                opacity: canSave ? 1 : 0.45,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: theme.redLine,
-                backgroundColor: theme.red,
-                paddingHorizontal: 18,
-                paddingVertical: 10,
                 flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
+                justifyContent: "flex-end",
+                gap: 10,
+                paddingTop: 12,
+                borderTopWidth: 1,
+                borderTopColor: theme.border,
               }}
             >
-              <MaterialCommunityIcons name="view-module-outline" size={16} color="#ffffff" />
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#ffffff" }}>
-                {saving ? "Creating..." : "Create Module"}
-              </Text>
-            </Pressable>
+              <Pressable
+                onPress={onClose}
+                disabled={saving}
+                style={{
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.surface2,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                }}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={handleSave}
+                disabled={!canSave}
+                style={{
+                  opacity: canSave ? 1 : 0.45,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.redLine,
+                  backgroundColor: theme.red,
+                  paddingHorizontal: 18,
+                  paddingVertical: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <MaterialCommunityIcons name="view-module-outline" size={16} color="#ffffff" />
+                <Text style={{ fontSize: 13, fontWeight: "800", color: "#ffffff" }}>
+                  {saving ? "Creating..." : "Create Module"}
+                </Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

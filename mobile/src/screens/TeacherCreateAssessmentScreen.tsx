@@ -29,8 +29,14 @@ const assessmentTypes: AssessmentType[] = [
 
 function normalizeDueDate(raw: string): string | undefined {
   if (!raw.trim()) return undefined;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return undefined;
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("Use a valid date format such as YYYY-MM-DD HH:mm or YYYY-MM-DDTHH:mm.");
+  }
+  if (parsed.getTime() < Date.now()) {
+    throw new Error("Assessment due date cannot be earlier than the present date and time.");
+  }
   return parsed.toISOString();
 }
 
@@ -52,20 +58,21 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
       return;
     }
 
-    const dueDate = normalizeDueDate(dueDateInput);
-    if (dueDateInput.trim() && !dueDate) {
-      Alert.alert(
-        "Invalid due date",
-        "Use a valid date format such as 2026-05-30 14:00 or 2026-05-30T14:00.",
-      );
-      return;
+    let dueDate: string | undefined;
+    if (dueDateInput.trim()) {
+      try {
+        dueDate = normalizeDueDate(dueDateInput);
+      } catch (error) {
+        Alert.alert("Invalid Due Date", toAppError(error).message);
+        return;
+      }
     }
 
     const parsedPassing = Number.parseInt(passingScore, 10);
     const parsedAttempts = Number.parseInt(maxAttempts, 10);
 
     try {
-      await mutation.mutateAsync({
+      const created = await mutation.mutateAsync({
         classId,
         title: cleanTitle,
         description: description.trim() || undefined,
@@ -75,8 +82,17 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
         maxAttempts: Number.isFinite(parsedAttempts) && parsedAttempts > 0 ? parsedAttempts : undefined,
         strictMode,
       });
-      Alert.alert("Assessment created", "The assessment has been created and is ready for editing.");
-      navigation.goBack();
+      Alert.alert("Assessment created", "The assessment draft has been created. Please add questions in the editor.", [
+        {
+          text: "Add Questions Now",
+          onPress: () => {
+            navigation.replace("TeacherAssessmentEditor", {
+              assessmentId: created.id,
+              classId,
+            });
+          },
+        },
+      ]);
     } catch (error) {
       const appError = toAppError(error);
       Alert.alert("Unable to create assessment", appError.message);

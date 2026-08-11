@@ -68,7 +68,12 @@ export function AnnouncementsScreen(_: Props) {
   const filteredAnnouncements = useMemo(() => {
     let list = announcements;
     if (selectedClassId !== "all") {
-      list = list.filter((entry) => entry.classId === selectedClassId);
+      list = list.filter(
+        (entry) =>
+          entry.classId === selectedClassId ||
+          entry.subject.toLowerCase().includes(selectedClassId.toLowerCase()) ||
+          entry.subject === selectedClassId,
+      );
     }
     if (filterMode === "pinned") {
       list = list.filter((entry) => entry.isPinned);
@@ -123,6 +128,48 @@ export function AnnouncementsScreen(_: Props) {
         <CountPill label="Pinned" value={pinnedCount} color={theme.amber} />
         <CountPill label="Classes" value={classIds.length} color={theme.blue} />
       </View>
+
+      {/* Class Filters */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 16, marginTop: 12 }}>
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable
+            onPress={() => setSelectedClassId("all")}
+            style={{
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: selectedClassId === "all" ? theme.redLine : theme.border,
+              backgroundColor: selectedClassId === "all" ? theme.redSoft : theme.surface,
+              paddingHorizontal: 12,
+              paddingVertical: 6,
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "700", color: selectedClassId === "all" ? theme.red : theme.muted }}>
+              All classes
+            </Text>
+          </Pressable>
+          {(classesQuery.data ?? []).map((entry) => {
+            const active = selectedClassId === entry.id || selectedClassId === entry.subjectCode;
+            return (
+              <Pressable
+                key={entry.id}
+                onPress={() => setSelectedClassId(entry.id)}
+                style={{
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: active ? theme.redLine : theme.border,
+                  backgroundColor: active ? theme.redSoft : theme.surface,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: active ? theme.red : theme.muted }}>
+                  {entry.subjectCode}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       <View
         style={{

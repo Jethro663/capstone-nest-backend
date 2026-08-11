@@ -10,6 +10,11 @@ export type LessonCompletionStatus = {
 };
 
 export const lessonsApi = {
+  async create(payload: { title: string; classId: string; description?: string }) {
+    const response = await apiClient.post<ApiEnvelope<Lesson>>("/lessons", payload);
+    return unwrapEnvelope(response.data);
+  },
+
   async getByClass(classId: string) {
     const response = await apiClient.get<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}`);
     return normalizeArray<Lesson>(unwrapEnvelope(response.data));

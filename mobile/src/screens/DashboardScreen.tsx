@@ -1068,6 +1068,23 @@ export function DashboardScreen({ navigation }: Props) {
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Pressable
+                accessibilityLabel="Open announcements"
+                onPress={() => navigation.navigate("Announcements")}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 999,
+                  backgroundColor: theme.surface,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons name="bullhorn-outline" size={18} color={theme.red} />
+              </Pressable>
+
+              <Pressable
                 accessibilityLabel="Open notifications"
                 onPress={handleOpenNotifications}
                 style={{
@@ -1269,6 +1286,13 @@ export function DashboardScreen({ navigation }: Props) {
                 icon: "chart-line" as const,
                 color: theme.green,
                 onPress: () => navigation.navigate("Performance"),
+              },
+              {
+                label: "Evaluations",
+                value: "Forms",
+                icon: "clipboard-check-outline" as const,
+                color: theme.amber,
+                onPress: () => navigation.navigate("StudentEvaluations"),
               },
               {
                 label: "Profile",
