@@ -105,6 +105,14 @@ class Settings(BaseSettings):
         default="https://api.openai.com/v1",
         validation_alias=AliasChoices("AI_CLOUD_FALLBACK_BASE_URL", "OPENROUTER_BASE_URL"),
     )
+    ai_cloud_embedding_base_url: str = Field(
+        default="",
+        validation_alias="AI_CLOUD_EMBEDDING_BASE_URL",
+    )
+    ai_cloud_embedding_api_key: str = Field(
+        default="",
+        validation_alias="AI_CLOUD_EMBEDDING_API_KEY",
+    )
     ai_cloud_fallback_referer: str = Field(
         default="",
         validation_alias="OPENROUTER_HTTP_REFERER",

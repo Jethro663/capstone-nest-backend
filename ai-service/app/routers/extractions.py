@@ -75,12 +75,12 @@ async def _claim_extraction_execution(
                 extraction_status IN ('pending', 'failed')
                 OR (
                   :allowStaleProcessing = TRUE
-                  AND extraction_status IN ('processing', 'running')
+                  AND extraction_status = 'processing'
                   AND updated_at < NOW() - INTERVAL '{EXTRACTION_EXECUTION_LEASE_SECONDS} seconds'
                 )
                 OR (
                   :allowSupersedingRetry = TRUE
-                  AND extraction_status IN ('processing', 'running')
+                  AND extraction_status = 'processing'
                   AND structured_content -> 'audit' ->> 'workerLeaseId' = :previousLeaseId
                 )
               )
@@ -236,11 +236,11 @@ def build_extraction_router(
             meta_dict,
             attempt,
         )
-        if status in {"processing", "running"}:
+        if status == "processing":
             if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
                 raise HTTPException(
                     409,
-                    f"Extraction {extraction_id} is already running",
+                    f"Extraction {extraction_id} is already processing",
                 )
 
         execution_lease_id = str(uuid.uuid4())

@@ -90,6 +90,21 @@ def _headers() -> dict[str, str]:
     return headers
 
 
+def _embedding_headers() -> dict[str, str]:
+    api_key = settings.ai_cloud_embedding_api_key.strip() or settings.ai_cloud_fallback_api_key.strip()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    referer = settings.ai_cloud_fallback_referer.strip()
+    title = settings.ai_cloud_fallback_title.strip()
+    if referer:
+        headers["HTTP-Referer"] = referer
+    if title:
+        headers["X-Title"] = title
+    return headers
+
+
 def _normalize_response_text(body: dict[str, Any]) -> str:
     content = body.get("choices", [{}])[0].get("message", {}).get("content", "")
     if isinstance(content, str):
@@ -245,9 +260,11 @@ def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": get_embedding_model(),
         "input": texts,
-        "dimensions": settings.embedding_dimensions,
-        "encoding_format": "float",
     }
+    # OpenRouter throws a 400 Bad Request if we send dimensions/encoding_format for models that don't support it
+    if _provider_name() != "openrouter":
+        payload["dimensions"] = settings.embedding_dimensions
+        payload["encoding_format"] = "float"
     return payload
 
 
@@ -257,10 +274,11 @@ async def _post_embedding_payload(
     *,
     timeout: int,
 ) -> dict[str, Any]:
-    endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/embeddings"
+    base_url = settings.ai_cloud_embedding_base_url.strip() or settings.ai_cloud_fallback_base_url.strip()
+    endpoint = base_url.rstrip("/") + "/embeddings"
     response = await client.post(
         endpoint,
-        headers=_headers(),
+        headers=_embedding_headers(),
         json=_build_embedding_payload(texts),
         timeout=timeout,
     )
