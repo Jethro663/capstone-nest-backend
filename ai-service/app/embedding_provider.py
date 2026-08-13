@@ -31,6 +31,12 @@ class EmbeddingBatch(list):
 
 
 def _normalize_embedding(raw: list[float]) -> list[float]:
+    if len(raw) > settings.embedding_dimensions:
+        raw = raw[:settings.embedding_dimensions]
+        norm = math.sqrt(sum(v * v for v in raw))
+        if norm > 0:
+            raw = [v / norm for v in raw]
+
     if len(raw) != settings.embedding_dimensions:
         raise EmbeddingProviderUnavailable(
             "Embedding provider returned the wrong vector dimension "
