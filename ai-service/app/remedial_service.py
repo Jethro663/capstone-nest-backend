@@ -1047,7 +1047,6 @@ Recommended lesson evidence:
             """
             UPDATE ai_generation_jobs
             SET
-              status = 'completed',
               error_message = NULL,
               updated_at = NOW()
             WHERE id = :jobId
