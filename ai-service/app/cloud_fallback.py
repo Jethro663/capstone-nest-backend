@@ -355,26 +355,35 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         return []
 
     client = _get_cloud_client()
-    body = await _post_embedding_payload(
-        client,
-        texts,
-        timeout=settings.ollama_timeout_chat_s,
-    )
-    ordered_embeddings = _collect_embedding_response(body, text_count=len(texts))
+    all_ordered_embeddings: list[list[float]] = []
 
-    missing_indexes = [
-        index for index, embedding in enumerate(ordered_embeddings) if embedding is None
-    ]
-    for index in missing_indexes:
-        retry_body = await _post_embedding_payload(
+    # Gemini APIs limit requests to 100 items per batch. We use 90 to be safe.
+    chunk_size = 90
+    for i in range(0, len(texts), chunk_size):
+        batch = texts[i : i + chunk_size]
+        body = await _post_embedding_payload(
             client,
-            [texts[index]],
+            batch,
             timeout=settings.ollama_timeout_chat_s,
         )
-        retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
-        if retry_embeddings and retry_embeddings[0] is not None:
-            ordered_embeddings[index] = retry_embeddings[0]
+        ordered_embeddings = _collect_embedding_response(body, text_count=len(batch))
 
-    if any(item is None for item in ordered_embeddings):
-        raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")
-    return [item for item in ordered_embeddings if item is not None]
+        missing_indexes = [
+            index for index, embedding in enumerate(ordered_embeddings) if embedding is None
+        ]
+        for index in missing_indexes:
+            retry_body = await _post_embedding_payload(
+                client,
+                [batch[index]],
+                timeout=settings.ollama_timeout_chat_s,
+            )
+            retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
+            if retry_embeddings and retry_embeddings[0] is not None:
+                ordered_embeddings[index] = retry_embeddings[0]
+
+        if any(item is None for item in ordered_embeddings):
+            raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")
+        
+        all_ordered_embeddings.extend([item for item in ordered_embeddings if item is not None])
+
+    return all_ordered_embeddings
