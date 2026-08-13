@@ -291,14 +291,15 @@ async def _post_embedding_payload(
         json=_build_embedding_payload(texts),
         timeout=timeout,
     )
-    if response.is_error:
+    status_code = getattr(response, "status_code", 200)
+    if status_code >= 400:
         try:
             error_body = response.json()
         except Exception:
-            error_body = response.text
+            error_body = getattr(response, "text", "")
         logger.error(
             "[cloud_fallback] embedding request failed %s — response body: %s",
-            response.status_code,
+            status_code,
             error_body,
         )
     response.raise_for_status()
