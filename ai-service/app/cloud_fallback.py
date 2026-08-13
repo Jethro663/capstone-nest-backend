@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 _cloud_client: httpx.AsyncClient | None = None
 
@@ -257,12 +260,18 @@ async def chat(
 
 
 def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
+    model = get_embedding_model()
     payload: dict[str, Any] = {
-        "model": get_embedding_model(),
+        "model": model,
         "input": texts,
     }
-    # OpenRouter throws a 400 Bad Request if we send dimensions/encoding_format for models that don't support it
-    if _provider_name() != "openrouter":
+    if _provider_name() == "openrouter":
+        # Gemini embedding models require task_type; OpenRouter passes this through to Google's API.
+        # Without it, Google returns 400. Other OpenRouter-served models ignore unknown fields.
+        if "gemini" in model.lower():
+            payload["task_type"] = "RETRIEVAL_DOCUMENT"
+    else:
+        # OpenAI-compatible endpoints accept these; OpenRouter does not for most models.
         payload["dimensions"] = settings.embedding_dimensions
         payload["encoding_format"] = "float"
     return payload
@@ -282,6 +291,16 @@ async def _post_embedding_payload(
         json=_build_embedding_payload(texts),
         timeout=timeout,
     )
+    if response.is_error:
+        try:
+            error_body = response.json()
+        except Exception:
+            error_body = response.text
+        logger.error(
+            "[cloud_fallback] embedding request failed %s — response body: %s",
+            response.status_code,
+            error_body,
+        )
     response.raise_for_status()
     return response.json()
 
