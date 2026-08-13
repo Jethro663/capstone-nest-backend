@@ -203,8 +203,14 @@ class LessonPlanInternalExecutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["data"]["status"], "approved")
 
-    async def test_internal_route_rejects_running_job(self) -> None:
-        """Running jobs should return 409 Conflict."""
+    @patch("app.main._claim_ai_job_execution", new_callable=AsyncMock, return_value=False)
+    @patch("app.main._run_lesson_plan_generation_job", new_callable=AsyncMock)
+    async def test_internal_route_rejects_running_job(
+        self,
+        mock_run_job: AsyncMock,
+        mock_claim: AsyncMock,
+    ) -> None:
+        """Running/processing jobs should return 409 Conflict."""
         from fastapi import HTTPException as FastAPIHTTPException
         from app.main import run_teacher_lesson_plan_job
 
@@ -215,7 +221,7 @@ class LessonPlanInternalExecutionTests(unittest.IsolatedAsyncioTestCase):
             "job_type": "class_lesson_plan_generation",
             "class_id": "class-1",
             "teacher_id": "teacher-1",
-            "status": "running",
+            "status": "processing",
             "source_filters": {},
         }
         mock_db.execute.return_value = mock_result
@@ -228,38 +234,8 @@ class LessonPlanInternalExecutionTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 409)
-
-    @patch("app.main._persist_ai_job_runtime", new_callable=AsyncMock)
-    @patch("app.main._run_lesson_plan_generation_job", new_callable=AsyncMock)
-    async def test_internal_route_rejects_processing_job(
-        self,
-        mock_run_job: AsyncMock,
-        mock_persist: AsyncMock,
-    ) -> None:
-        """Processing jobs should return 409 Conflict on attempt 1."""
-        from fastapi import HTTPException as FastAPIHTTPException
-        from app.main import run_teacher_lesson_plan_job
-
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.mappings.return_value.first.return_value = {
-            "id": "job-proc",
-            "job_type": "class_lesson_plan_generation",
-            "class_id": "class-1",
-            "teacher_id": "teacher-1",
-            "status": "processing",
-            "source_filters": {},
-        }
-        mock_db.execute.return_value = mock_result
-
-        with self.assertRaises(FastAPIHTTPException) as ctx:
-            await run_teacher_lesson_plan_job(
-                job_id="job-proc",
-                _auth=None,
-                db=mock_db,
-            )
-
-        self.assertEqual(ctx.exception.status_code, 409)
+        mock_run_job.assert_not_awaited()
+        mock_claim.assert_not_awaited()
 
     @patch("app.main._run_lesson_plan_generation_job", new_callable=AsyncMock)
     async def test_internal_route_allows_stale_processing_job_on_retry(
