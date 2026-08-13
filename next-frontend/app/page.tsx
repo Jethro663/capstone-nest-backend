@@ -671,12 +671,11 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <a
-                href="https://expo.dev/accounts/marcdizon2005/projects/nexora-lms-mobile/builds/f2cd8d4e-5d47-48d3-95bc-f1982c15bd06"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/downloads/nexora-student-mobile-release.apk"
+                download="nexora-student-mobile.apk"
                 className="inline-flex items-center justify-center gap-3 rounded-full border border-white/24 bg-white/10 px-5 py-3 text-base font-semibold text-white transition-colors duration-200 hover:bg-white/14"
               >
-                Download Android APK (v0.1.2)
+                Download Android APK
                 <ArrowDown className="h-4 w-4" />
               </a>
               <a

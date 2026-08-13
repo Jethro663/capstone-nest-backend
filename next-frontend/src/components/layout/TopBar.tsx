@@ -56,7 +56,7 @@ export function TopBar({
     : 'U';
   const avatarSrc = resolveUserProfilePicture(user);
   const profileHref = getProfileRoute(effectiveRole);
-  const studentApkHref = 'https://expo.dev/accounts/marcdizon2005/projects/nexora-lms-mobile/builds/f2cd8d4e-5d47-48d3-95bc-f1982c15bd06';
+  const studentApkHref = '/downloads/nexora-student-mobile-release.apk';
 
   if (isAdminShell) {
     return (
@@ -219,11 +219,10 @@ export function TopBar({
 
           <a
             href={studentApkHref}
-            target="_blank"
-            rel="noopener noreferrer"
+            download="nexora-student-mobile.apk"
             className="student-topbar-shell__icon-button"
-            title="Download Nexora Mobile for Android (v0.1.2)"
-            aria-label="Download Nexora Mobile for Android (v0.1.2)"
+            title="Download Nexora Mobile for Android"
+            aria-label="Download Nexora Mobile for Android"
           >
             <span className="student-topbar-shell__apk-art" aria-hidden="true">
               <Image
