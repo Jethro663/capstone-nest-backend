@@ -426,6 +426,7 @@ export function TeacherInlineField({
   onChangeText,
   placeholder,
   multiline = false,
+  maxLength,
 }: {
   label: string;
   value: string;

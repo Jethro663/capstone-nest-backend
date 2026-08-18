@@ -173,6 +173,7 @@ function EditableField({
   placeholder,
   keyboardType,
   autoCapitalize = "sentences",
+  maxLength,
 }: {
   label: string;
   required?: boolean;
@@ -279,13 +280,13 @@ export function ProfileScreen(props: Props) {
   const profile = profileQuery.data;
   const updateMutation = useProfileUpdateMutation(user?.userId || user?.id);
   const avatarMutation = useProfileAvatarMutation();
-  const [phone, setPhone] = useState(profile?.phone || "");
-  const [address, setAddress] = useState(profile?.address || "");
-  const [familyName, setFamilyName] = useState(profile?.familyName || "");
-  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship || "");
-  const [familyContact, setFamilyContact] = useState(profile?.familyContact || "");
-  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth || profile?.dob || user?.dateOfBirth || user?.dob || "");
-  const [gender, setGender] = useState(profile?.gender || user?.gender || "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [address, setAddress] = useState(profile?.address ?? "");
+  const [familyName, setFamilyName] = useState(profile?.familyName ?? "");
+  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship ?? "");
+  const [familyContact, setFamilyContact] = useState(profile?.familyContact ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ?? profile?.dob ?? user?.dateOfBirth ?? user?.dob ?? "");
+  const [gender, setGender] = useState(profile?.gender ?? user?.gender ?? "");
   const [error, setError] = useState("");
 
   const currentFirstName = user?.firstName || "";
@@ -384,11 +385,11 @@ export function ProfileScreen(props: Props) {
       }
 
       const payload = {
-        phone: normPhone,
+        phone: normPhone ?? undefined,
         address,
         familyName,
         familyRelationship,
-        familyContact: normFamilyContact,
+        familyContact: normFamilyContact ?? undefined,
         ...(hasValue(dateOfBirth) ? { dateOfBirth, dob: dateOfBirth } : {}),
         ...(hasValue(gender) ? { gender } : {}),
       };

@@ -45,11 +45,11 @@ export function TeacherProfileScreen(_: Props) {
   const [employeeId, setEmployeeId] = useState("");
 
   useEffect(() => {
-    setPhone(profile?.phone || profile?.contactNumber || "");
-    setAddress(profile?.address || "");
-    setDepartment(profile?.department || "");
-    setSpecialization(profile?.specialization || "");
-    setEmployeeId(profile?.employeeId || "");
+    setPhone(profile?.phone ?? profile?.contactNumber ?? "");
+    setAddress(profile?.address ?? "");
+    setDepartment(profile?.department ?? "");
+    setSpecialization(profile?.specialization ?? "");
+    setEmployeeId(profile?.employeeId ?? "");
   }, [profile?.address, profile?.contactNumber, profile?.department, profile?.employeeId, profile?.phone, profile?.specialization]);
 
   const fullName = useMemo(
@@ -69,8 +69,8 @@ export function TeacherProfileScreen(_: Props) {
       }
 
       await updateMutation.mutateAsync({
-        phone: normPhone,
-        contactNumber: normPhone,
+        phone: normPhone ?? undefined,
+        contactNumber: normPhone ?? undefined,
         address: address.trim() || undefined,
         department: department.trim() || undefined,
         specialization: specialization.trim() || undefined,
