@@ -432,6 +432,7 @@ export function TeacherInlineField({
   onChangeText: (value: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={{ marginTop: 10 }}>
@@ -440,6 +441,7 @@ export function TeacherInlineField({
       </Text>
       <TextInput
         multiline={multiline}
+        maxLength={maxLength}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={theme.dim}
