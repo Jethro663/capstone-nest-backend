@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import httpx
 
 from .config import settings
+
+logger = logging.getLogger(__name__)
 
 _cloud_client: httpx.AsyncClient | None = None
 
@@ -79,6 +82,21 @@ def supports_embeddings() -> bool:
 def _headers() -> dict[str, str]:
     headers = {
         "Authorization": f"Bearer {settings.ai_cloud_fallback_api_key}",
+        "Content-Type": "application/json",
+    }
+    referer = settings.ai_cloud_fallback_referer.strip()
+    title = settings.ai_cloud_fallback_title.strip()
+    if referer:
+        headers["HTTP-Referer"] = referer
+    if title:
+        headers["X-Title"] = title
+    return headers
+
+
+def _embedding_headers() -> dict[str, str]:
+    api_key = settings.ai_cloud_embedding_api_key.strip() or settings.ai_cloud_fallback_api_key.strip()
+    headers = {
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     referer = settings.ai_cloud_fallback_referer.strip()
@@ -242,12 +260,20 @@ async def chat(
 
 
 def _build_embedding_payload(texts: list[str]) -> dict[str, Any]:
+    model = get_embedding_model()
     payload: dict[str, Any] = {
-        "model": get_embedding_model(),
+        "model": model,
         "input": texts,
-        "dimensions": settings.embedding_dimensions,
-        "encoding_format": "float",
     }
+    if _provider_name() == "openrouter":
+        # Gemini embedding models require task_type; OpenRouter passes this through to Google's API.
+        # Without it, Google returns 400. Other OpenRouter-served models ignore unknown fields.
+        if "gemini" in model.lower():
+            payload["task_type"] = "RETRIEVAL_DOCUMENT"
+    else:
+        # OpenAI-compatible endpoints accept these; OpenRouter does not for most models.
+        payload["dimensions"] = settings.embedding_dimensions
+        payload["encoding_format"] = "float"
     return payload
 
 
@@ -257,13 +283,25 @@ async def _post_embedding_payload(
     *,
     timeout: int,
 ) -> dict[str, Any]:
-    endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/embeddings"
+    base_url = settings.ai_cloud_embedding_base_url.strip() or settings.ai_cloud_fallback_base_url.strip()
+    endpoint = base_url.rstrip("/") + "/embeddings"
     response = await client.post(
         endpoint,
-        headers=_headers(),
+        headers=_embedding_headers(),
         json=_build_embedding_payload(texts),
         timeout=timeout,
     )
+    status_code = getattr(response, "status_code", 200)
+    if status_code >= 400:
+        try:
+            error_body = response.json()
+        except Exception:
+            error_body = getattr(response, "text", "")
+        logger.error(
+            "[cloud_fallback] embedding request failed %s — response body: %s",
+            status_code,
+            error_body,
+        )
     response.raise_for_status()
     return response.json()
 
@@ -317,26 +355,35 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         return []
 
     client = _get_cloud_client()
-    body = await _post_embedding_payload(
-        client,
-        texts,
-        timeout=settings.ollama_timeout_chat_s,
-    )
-    ordered_embeddings = _collect_embedding_response(body, text_count=len(texts))
+    all_ordered_embeddings: list[list[float]] = []
 
-    missing_indexes = [
-        index for index, embedding in enumerate(ordered_embeddings) if embedding is None
-    ]
-    for index in missing_indexes:
-        retry_body = await _post_embedding_payload(
+    # Gemini APIs limit requests to 100 items per batch. We use 90 to be safe.
+    chunk_size = 90
+    for i in range(0, len(texts), chunk_size):
+        batch = texts[i : i + chunk_size]
+        body = await _post_embedding_payload(
             client,
-            [texts[index]],
+            batch,
             timeout=settings.ollama_timeout_chat_s,
         )
-        retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
-        if retry_embeddings and retry_embeddings[0] is not None:
-            ordered_embeddings[index] = retry_embeddings[0]
+        ordered_embeddings = _collect_embedding_response(body, text_count=len(batch))
 
-    if any(item is None for item in ordered_embeddings):
-        raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")
-    return [item for item in ordered_embeddings if item is not None]
+        missing_indexes = [
+            index for index, embedding in enumerate(ordered_embeddings) if embedding is None
+        ]
+        for index in missing_indexes:
+            retry_body = await _post_embedding_payload(
+                client,
+                [batch[index]],
+                timeout=settings.ollama_timeout_chat_s,
+            )
+            retry_embeddings = _collect_embedding_response(retry_body, text_count=1)
+            if retry_embeddings and retry_embeddings[0] is not None:
+                ordered_embeddings[index] = retry_embeddings[0]
+
+        if any(item is None for item in ordered_embeddings):
+            raise CloudFallbackUnavailable("Cloud embedding response did not contain a vector for each input.")
+        
+        all_ordered_embeddings.extend([item for item in ordered_embeddings if item is not None])
+
+    return all_ordered_embeddings

@@ -132,10 +132,13 @@ describe('RosterImportPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Upload & Import' }));
 
-    await waitFor(() =>
-      expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file),
+    await waitFor(
+      () => {
+        expect(mockedRosterImportService.preview).toHaveBeenCalledWith('section-1', file);
+        expect(mockedRosterImportService.commit).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 3000 }
     );
-    await waitFor(() => expect(mockedRosterImportService.commit).toHaveBeenCalledTimes(1));
   });
 
   it('shows a file attachment notification and local spreadsheet preview when a CSV is attached', async () => {

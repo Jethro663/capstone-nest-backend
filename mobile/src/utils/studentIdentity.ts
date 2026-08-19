@@ -50,3 +50,17 @@ export function formatStudentIdentityWithStatus(
   if (identity && cleanStatus) return `${identity} | ${cleanStatus}`;
   return identity || cleanStatus || fallback;
 }
+
+export function normalizePhilippinePhone(value: string): string | null {
+  const trimmed = value.trim();
+
+  if (/^09\d{9}$/.test(trimmed)) {
+    return `+63${trimmed.slice(1)}`;
+  }
+
+  if (/^\+639\d{9}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return null;
+}

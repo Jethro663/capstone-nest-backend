@@ -10,6 +10,7 @@ import { peekAppError, toAppError } from "../api/http";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { buildProfileFullName } from "./screen-flow";
+import { normalizePhilippinePhone } from "../utils/studentIdentity";
 import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
@@ -172,6 +173,7 @@ function EditableField({
   placeholder,
   keyboardType,
   autoCapitalize = "sentences",
+  maxLength,
 }: {
   label: string;
   required?: boolean;
@@ -180,6 +182,7 @@ function EditableField({
   placeholder: string;
   keyboardType?: "default" | "email-address" | "numeric" | "phone-pad";
   autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  maxLength?: number;
 }) {
   return (
     <View style={{ flex: 1 }}>
@@ -187,6 +190,7 @@ function EditableField({
       <TextInput
         autoCapitalize={autoCapitalize}
         keyboardType={keyboardType}
+        maxLength={maxLength}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={theme.dim}
@@ -276,13 +280,13 @@ export function ProfileScreen(props: Props) {
   const profile = profileQuery.data;
   const updateMutation = useProfileUpdateMutation(user?.userId || user?.id);
   const avatarMutation = useProfileAvatarMutation();
-  const [phone, setPhone] = useState(profile?.phone || "");
-  const [address, setAddress] = useState(profile?.address || "");
-  const [familyName, setFamilyName] = useState(profile?.familyName || "");
-  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship || "");
-  const [familyContact, setFamilyContact] = useState(profile?.familyContact || "");
-  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth || profile?.dob || user?.dateOfBirth || user?.dob || "");
-  const [gender, setGender] = useState(profile?.gender || user?.gender || "");
+  const [phone, setPhone] = useState(profile?.phone ?? "");
+  const [address, setAddress] = useState(profile?.address ?? "");
+  const [familyName, setFamilyName] = useState(profile?.familyName ?? "");
+  const [familyRelationship, setFamilyRelationship] = useState(profile?.familyRelationship ?? "");
+  const [familyContact, setFamilyContact] = useState(profile?.familyContact ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(profile?.dateOfBirth ?? profile?.dob ?? user?.dateOfBirth ?? user?.dob ?? "");
+  const [gender, setGender] = useState(profile?.gender ?? user?.gender ?? "");
   const [error, setError] = useState("");
 
   const currentFirstName = user?.firstName || "";
@@ -367,12 +371,25 @@ export function ProfileScreen(props: Props) {
   const handleSave = async () => {
     try {
       setError("");
+
+      const normPhone = phone ? normalizePhilippinePhone(phone) : phone;
+      const normFamilyContact = familyContact ? normalizePhilippinePhone(familyContact) : familyContact;
+
+      if (phone && !normPhone) {
+        setError("Use 09XXXXXXXXX or +639XXXXXXXXX.");
+        return;
+      }
+      if (familyContact && !normFamilyContact) {
+        setError("Use 09XXXXXXXXX or +639XXXXXXXXX.");
+        return;
+      }
+
       const payload = {
-        phone,
+        phone: normPhone ?? undefined,
         address,
         familyName,
         familyRelationship,
-        familyContact,
+        familyContact: normFamilyContact ?? undefined,
         ...(hasValue(dateOfBirth) ? { dateOfBirth, dob: dateOfBirth } : {}),
         ...(hasValue(gender) ? { gender } : {}),
       };
@@ -746,6 +763,7 @@ export function ProfileScreen(props: Props) {
                 label="Contact Number"
                 onChangeText={setPhone}
                 placeholder="0917..."
+                maxLength={13}
                 required
                 value={phone}
               />
@@ -803,6 +821,7 @@ export function ProfileScreen(props: Props) {
                 label="Guardian Contact"
                 onChangeText={setFamilyContact}
                 placeholder="0917..."
+                maxLength={13}
                 required
                 value={familyContact}
               />

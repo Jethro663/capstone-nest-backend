@@ -870,7 +870,10 @@ Recommended lesson evidence:
             task="intervention",
             response_format=INTERVENTION_RECOMMENDATION_FORMAT,
         )
-        ai_summary = json.loads(raw)
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("Expected dictionary from AI summary")
+        ai_summary = parsed
     except Exception:
         pass
 
@@ -1044,7 +1047,6 @@ Recommended lesson evidence:
             """
             UPDATE ai_generation_jobs
             SET
-              status = 'completed',
               error_message = NULL,
               updated_at = NOW()
             WHERE id = :jobId

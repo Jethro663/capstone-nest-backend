@@ -4805,11 +4805,11 @@ describe("mobile rendered screen flows", () => {
     });
 
     expect(profileUpdateMutateAsync).toHaveBeenCalledWith({
-      phone: "09170001111",
+      phone: "+639170001111",
       address: "Sample address",
       familyName: "Parent",
       familyRelationship: "Guardian",
-      familyContact: "09990002222",
+      familyContact: "+639990002222",
     });
   });
 

@@ -645,12 +645,12 @@ async def _claim_ai_job_execution(
                   status IN ('pending', 'failed')
                 OR (
                   :allowStaleProcessing = TRUE
-                  AND status IN ('processing', 'running')
+                  AND status = 'processing'
                   AND updated_at < NOW() - INTERVAL '{AI_JOB_EXECUTION_LEASE_SECONDS} seconds'
                 )
                 OR (
                   :allowSupersedingRetry = TRUE
-                  AND status IN ('processing', 'running')
+                  AND status = 'processing'
                   AND source_filters -> 'runtime' ->> 'workerLeaseId' = :previousLeaseId
                 )
               )
@@ -4983,9 +4983,9 @@ async def run_teacher_lesson_plan_job(
     # 3. If a worker process crashes abruptly without writing workerFinishedAt, the DB row remains in "processing".
     # 4. Reclaim is delayed beyond the backend's full 15-minute request budget.
     # 5. Every write is fenced by workerLeaseId, so a superseded request cannot commit.
-    if job["status"] in ("processing", "running"):
+    if job["status"] == "processing":
         if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
-            raise HTTPException(409, f"Job {job_id} is already running")
+            raise HTTPException(409, f"Job {job_id} is already processing")
 
     runtime_patch = _worker_runtime_patch(meta_dict, attempt)
     claimed = await _claim_ai_job_execution(
@@ -5084,9 +5084,9 @@ async def run_teacher_quiz_job(
         attempt,
     )
 
-    if job["status"] in ("processing", "running"):
+    if job["status"] == "processing":
         if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
-            raise HTTPException(409, f"Job {job_id} is already running")
+            raise HTTPException(409, f"Job {job_id} is already processing")
 
     runtime_patch = _worker_runtime_patch(meta_dict, attempt)
     claimed = await _claim_ai_job_execution(
@@ -5194,9 +5194,9 @@ async def run_teacher_intervention_job(
         attempt,
     )
 
-    if job["status"] in ("processing", "running"):
+    if job["status"] == "processing":
         if attempt <= 1 or not (is_stale_processing or allow_superseding_retry):
-            raise HTTPException(409, f"Job {job_id} is already running")
+            raise HTTPException(409, f"Job {job_id} is already processing")
 
     runtime_patch = _worker_runtime_patch(meta_dict, attempt)
     claimed = await _claim_ai_job_execution(

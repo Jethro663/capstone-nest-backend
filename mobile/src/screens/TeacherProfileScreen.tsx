@@ -10,6 +10,7 @@ import {
   useTeacherProfileUpdateMutation,
 } from "../api/hooks";
 import { toAppError } from "../api/http";
+import { normalizePhilippinePhone } from "../utils/studentIdentity";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import {
@@ -44,11 +45,11 @@ export function TeacherProfileScreen(_: Props) {
   const [employeeId, setEmployeeId] = useState("");
 
   useEffect(() => {
-    setPhone(profile?.phone || profile?.contactNumber || "");
-    setAddress(profile?.address || "");
-    setDepartment(profile?.department || "");
-    setSpecialization(profile?.specialization || "");
-    setEmployeeId(profile?.employeeId || "");
+    setPhone(profile?.phone ?? profile?.contactNumber ?? "");
+    setAddress(profile?.address ?? "");
+    setDepartment(profile?.department ?? "");
+    setSpecialization(profile?.specialization ?? "");
+    setEmployeeId(profile?.employeeId ?? "");
   }, [profile?.address, profile?.contactNumber, profile?.department, profile?.employeeId, profile?.phone, profile?.specialization]);
 
   const fullName = useMemo(
@@ -59,9 +60,17 @@ export function TeacherProfileScreen(_: Props) {
 
   const saveProfile = async () => {
     try {
+      const trimmedPhone = phone.trim();
+      const normPhone = trimmedPhone ? normalizePhilippinePhone(trimmedPhone) : undefined;
+      
+      if (trimmedPhone && !normPhone) {
+        Alert.alert("Invalid Phone", "Use 09XXXXXXXXX or +639XXXXXXXXX.");
+        return;
+      }
+
       await updateMutation.mutateAsync({
-        phone: phone.trim() || undefined,
-        contactNumber: phone.trim() || undefined,
+        phone: normPhone ?? undefined,
+        contactNumber: normPhone ?? undefined,
         address: address.trim() || undefined,
         department: department.trim() || undefined,
         specialization: specialization.trim() || undefined,
@@ -148,7 +157,7 @@ export function TeacherProfileScreen(_: Props) {
 
       <TeacherPanel title="Teacher profile" subtitle="Stay inside the same flatter mobile form language used by the existing profile flow.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Phone" value={phone} onChangeText={setPhone} placeholder="09XXXXXXXXX" />
+          <TeacherInlineField label="Phone" value={phone} onChangeText={setPhone} placeholder="09XXXXXXXXX" maxLength={13} />
           <TeacherInlineField label="Address" value={address} onChangeText={setAddress} placeholder="Home address" multiline />
           <TeacherInlineField label="Department" value={department} onChangeText={setDepartment} placeholder="Department" />
           <TeacherInlineField label="Specialization" value={specialization} onChangeText={setSpecialization} placeholder="Specialization" />

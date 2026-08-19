@@ -170,7 +170,7 @@ describe('NotificationsService', () => {
       expect(insertChain.onConflictDoUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           target: expect.any(Array),
-          where: expect.anything(),
+          targetWhere: expect.anything(),
           set: expect.objectContaining({
             title: expect.anything(),
             body: expect.anything(),
