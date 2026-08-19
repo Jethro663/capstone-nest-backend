@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     upload_dir: str = "../backend/uploads"
     backend_internal_url: str = ""
     backend_upload_fetch_timeout_s: int = 60
-    max_raw_text: int = 50_000
+    max_raw_text: int = 120_000
     db_pool_size: int = Field(default=10, validation_alias="DB_POOL_SIZE")
     db_max_overflow: int = Field(default=15, validation_alias="DB_MAX_OVERFLOW")
     db_pool_timeout_s: int = Field(default=30, validation_alias="DB_POOL_TIMEOUT_S")
@@ -58,6 +58,18 @@ class Settings(BaseSettings):
     ai_extraction_bg_max_concurrency: int = Field(
         default=1,
         validation_alias="AI_EXTRACTION_BG_MAX_CONCURRENCY",
+    )
+    extraction_enrichment_enabled: bool = Field(
+        default=True,
+        validation_alias="EXTRACTION_ENRICHMENT_ENABLED",
+    )
+    ollama_timeout_enrichment_s: int = Field(
+        default=180,
+        validation_alias=AliasChoices(
+            "OLLAMA_TIMEOUT_ENRICHMENT_S",
+            "OLLAMA_TIMEOUT_EXTRACTION_S",
+            "OLLAMA_TIMEOUT",
+        ),
     )
     ai_service_shared_secret: str = ""
     ai_degraded_allowed: bool = False

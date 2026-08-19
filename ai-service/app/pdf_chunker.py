@@ -3,9 +3,10 @@ PDF Chunker – Splits large PDF text into manageable chunks for
 LLM extraction, preserving natural document boundaries.
 
 Priority order for splitting:
-  1. Heading-based (Lesson/Chapter/Module markers)
-  2. Page-based (form-feed characters)
-  3. Character-based (fixed size with overlap)
+  1. Markdown-heading-based (# / ## / ### from pymupdf4llm output)
+  2. Heading-based (Lesson/Chapter/Module markers)
+  3. Page-based (form-feed characters)
+  4. Character-based (fixed size with overlap)
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-DEFAULT_MAX_CHUNK_SIZE = 8000
+DEFAULT_MAX_CHUNK_SIZE = 10000
 DEFAULT_OVERLAP_SIZE = 500
-DEFAULT_SINGLE_CHUNK_THRESHOLD = 10000
+DEFAULT_SINGLE_CHUNK_THRESHOLD = 12000
 
 HEADING_PATTERNS = [
     re.compile(r"^(?:lesson|chapter|module|unit|topic|part)\s+\d+", re.I | re.M),
@@ -24,6 +25,8 @@ HEADING_PATTERNS = [
     re.compile(r"^[A-Z]\.\s+[A-Z]", re.M),
 ]
 
+MARKDOWN_HEADING_RE = re.compile(r"^(#{1,4})\s+(.+)$", re.MULTILINE)
+
 
 @dataclass
 class TextChunk:
@@ -31,7 +34,7 @@ class TextChunk:
     total: int
     text: str
     context_header: str
-    split_method: str  # heading | page | character | single
+    split_method: str  # markdown_heading | heading | page | character | single
 
 
 @dataclass
@@ -64,6 +67,11 @@ def chunk_text(
             )
         ]
 
+    # Try Markdown-heading-aware splitting first (from pymupdf4llm output)
+    md_chunks = _split_by_markdown_headings(text, max_chunk_size)
+    if len(md_chunks) > 1:
+        return _format_chunks(md_chunks, document_title, "markdown_heading")
+
     heading_chunks = _split_by_headings(text, max_chunk_size)
     if len(heading_chunks) > 1:
         return _format_chunks(heading_chunks, document_title, "heading")
@@ -77,6 +85,54 @@ def chunk_text(
 
 
 # ---------------------------------------------------------------------------
+
+
+def _split_by_markdown_headings(text: str, max_size: int) -> list[_RawChunk]:
+    """Split on Markdown headings (# / ## / ###), preserving parent context."""
+    matches = list(MARKDOWN_HEADING_RE.finditer(text))
+    if len(matches) < 2:
+        return [_RawChunk(text=text)]
+
+    sections: list[_RawChunk] = []
+    parent_headings: dict[int, str] = {}
+
+    for match_index, match in enumerate(matches):
+        heading_level = len(match.group(1))
+        heading_text = match.group(2).strip()
+        start = match.start()
+        end = matches[match_index + 1].start() if match_index + 1 < len(matches) else len(text)
+
+        section_text = text[start:end].strip()
+        if not section_text:
+            continue
+
+        # Track parent headings for context
+        parent_headings[heading_level] = heading_text
+        # Clear child headings when we encounter a parent
+        for level in list(parent_headings.keys()):
+            if level > heading_level:
+                del parent_headings[level]
+
+        # Build context from parent headings
+        context_parts = []
+        for level in sorted(parent_headings.keys()):
+            if level < heading_level:
+                context_parts.append(parent_headings[level])
+
+        # Prepend parent context to the chunk
+        if context_parts:
+            context_line = " > ".join(context_parts)
+            section_text = f"[Context: {context_line}]\n\n{section_text}"
+
+        sections.append(_RawChunk(text=section_text, heading=heading_text))
+
+    # If the text before the first heading is substantial, include it
+    first_heading_pos = matches[0].start()
+    preamble = text[:first_heading_pos].strip()
+    if len(preamble) > 100:
+        sections.insert(0, _RawChunk(text=preamble, heading="Introduction"))
+
+    return _merge_and_split(sections, max_size)
 
 
 def _split_by_headings(text: str, max_size: int) -> list[_RawChunk]:

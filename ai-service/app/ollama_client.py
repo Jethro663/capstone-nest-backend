@@ -32,6 +32,7 @@ TaskName = Literal[
     "quiz_generation",
     "intervention",
     "text_extraction",
+    "lesson_enrichment",
     "vision_extraction",
     "vision_explanation",
 ]
@@ -77,7 +78,7 @@ TASK_PROFILES: dict[TaskName, dict[str, Any]] = {
     "text_extraction": {
         "model_kind": "text",
         "temperature": 0,
-        "num_predict": 3072,
+        "num_predict": 4096,
         "timeout": settings.ollama_timeout_extraction_s,
     },
     "vision_extraction": {
@@ -91,6 +92,12 @@ TASK_PROFILES: dict[TaskName, dict[str, Any]] = {
         "temperature": 0.2,
         "num_predict": 1024,
         "timeout": settings.ollama_timeout_chat_s,
+    },
+    "lesson_enrichment": {
+        "model_kind": "text",
+        "temperature": 0.2,
+        "num_predict": 4096,
+        "timeout": settings.ollama_timeout_enrichment_s,
     },
 }
 
