@@ -2266,9 +2266,9 @@ async def run_extraction(
             execution_lease_id=execution_lease_id,
         )
         doc = fitz.open(file_path)
-        pages = _extract_pdf_pages(doc)
+        pages = await run_in_managed_thread(_extract_pdf_pages, doc)
         # Use Markdown-aware extraction for structured text (tables, headers, lists)
-        raw_text = _extract_pdf_as_markdown(doc)
+        raw_text = await run_in_managed_thread(_extract_pdf_as_markdown, doc)
 
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
@@ -2515,6 +2515,16 @@ async def run_extraction(
             enrichment_progress_per_section = 8 / max(len(sections), 1)
             for section_index, section in enumerate(sections):
                 await _raise_if_cancelled(db, extraction_id, execution_lease_id)
+
+                # Renew worker lease and update progress during this long-running loop
+                current_progress = int(87 + (section_index * enrichment_progress_per_section))
+                await _update_extraction(
+                    db,
+                    extraction_id,
+                    {"progress_percent": min(current_progress, 95)},
+                    execution_lease_id=execution_lease_id,
+                )
+
                 section_title = str(section.get("title") or f"Section {section_index + 1}")
                 # Collect all text from lesson blocks for enrichment
                 block_texts: list[str] = []
