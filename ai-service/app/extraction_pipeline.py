@@ -17,6 +17,7 @@ from copy import deepcopy
 from typing import Any
 
 import fitz  # PyMuPDF
+import pymupdf4llm
 from sqlalchemy import bindparam, text as sa_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,6 +87,108 @@ STRUCTURE_SYSTEM_PROMPT = (
     "Identify the module title, a short description, and the major instructional sections. "
     "Preserve the original wording where possible. Return JSON only."
 )
+
+
+def _build_enrichment_system_prompt(extraction_style: str) -> str:
+    """Build the enrichment prompt based on extraction style."""
+    if extraction_style == "faithful":
+        # Faithful mode: minimal enrichment, just clean formatting
+        return (
+            "You are an expert educator's assistant that cleans up raw module text for readability. "
+            "Fix obvious formatting issues (broken paragraphs, stray whitespace, garbled table layouts) "
+            "but preserve the original wording and structure exactly. Do not reorganize or paraphrase. "
+            "Return the cleaned text with simple Markdown formatting (headings, bold for terms, lists).\n\n"
+            "Rules:\n"
+            "1. Fix formatting artifacts from PDF extraction only\n"
+            "2. Do NOT add, remove, or rephrase any content\n"
+            "3. Preserve tables using Markdown table syntax\n"
+            "4. Return plain text with Markdown formatting"
+        )
+    elif extraction_style == "student_friendly":
+        # Student-friendly mode: maximum enrichment
+        return (
+            "You are an expert Filipino DepEd curriculum designer creating digital lesson content "
+            "for Grades 7-10 students at Gat Andres Bonifacio High School. "
+            "Transform raw module text into a clear, student-friendly, engaging lesson.\n\n"
+            "Rules:\n"
+            "1. Preserve ALL factual content — do not omit any concepts, definitions, or examples\n"
+            "2. Reorganize for clarity: start with objectives, then explanation, then examples, then summary\n"
+            "3. Break long paragraphs into short, digestible chunks (3-4 sentences max)\n"
+            "4. Simplify complex language for Grade 7-10 Filipino students\n"
+            "5. Preserve tables and lists in Markdown format\n"
+            "6. Wrap key terms in **bold**\n"
+            "7. Add a brief '**Key Takeaway:**' line at the end\n"
+            "8. Use simple, clear language appropriate for Filipino high school students\n"
+            "9. Return the enriched content as plain text with Markdown formatting\n"
+            "10. Do NOT invent information that isn't in the source material"
+        )
+    else:
+        # Clean mode (default): balanced enrichment
+        return (
+            "You are an expert educator's assistant that converts raw module text into "
+            "well-structured lesson content for a Learning Management System used by Gat Andres "
+            "Bonifacio High School (Grades 7-10, Philippines DepEd curriculum).\n\n"
+            "Rules:\n"
+            "1. Preserve ALL factual content — do not omit any concepts, definitions, or examples\n"
+            "2. Reorganize for clarity: group related content, ensure logical flow\n"
+            "3. Break long wall-of-text paragraphs into readable chunks\n"
+            "4. Preserve tables and lists in Markdown format\n"
+            "5. Wrap key terms in **bold**\n"
+            "6. Add a brief '**Key Takeaway:**' line at the end of the section\n"
+            "7. Return the enriched content as plain text with Markdown formatting\n"
+            "8. Do NOT invent information that isn't in the source material"
+        )
+
+
+def _build_enrichment_prompt(section_title: str, section_body: str, extraction_style: str) -> str:
+    """Build the user prompt for the enrichment pass."""
+    style_instruction = {
+        "faithful": "Clean up the formatting only. Do not reorganize or paraphrase.",
+        "clean": "Transform this into a well-structured, clear lesson section.",
+        "student_friendly": "Transform this into an engaging, easy-to-understand lesson for Filipino high school students.",
+    }.get(extraction_style, "Transform this into a well-structured, clear lesson section.")
+
+    return (
+        f'Section: "{section_title}"\n\n'
+        f"Instruction: {style_instruction}\n\n"
+        f"RAW CONTENT:\n---\n{section_body[:8000]}\n---\n\n"
+        "Return ONLY the enriched content as formatted text. Do not wrap in JSON or code blocks."
+    )
+
+
+async def _enrich_section(
+    section_body: str,
+    section_title: str,
+    extraction_style: str,
+) -> str | None:
+    """Run the enrichment LLM pass on a single section. Returns enriched text or None on failure."""
+    if not section_body or len(section_body.strip()) < 50:
+        return None
+    try:
+        enriched = await ollama_client.generate(
+            _build_enrichment_prompt(section_title, section_body, extraction_style),
+            _build_enrichment_system_prompt(extraction_style),
+            task="lesson_enrichment",
+        )
+        # Basic validation: enriched text should not be drastically shorter
+        enriched = enriched.strip()
+        if len(enriched) < len(section_body.strip()) * 0.3:
+            logger.warning(
+                "[extraction] Enrichment produced suspiciously short output for '%s' "
+                "(%d chars vs %d original), keeping raw content",
+                section_title, len(enriched), len(section_body),
+            )
+            return None
+        # Strip any accidental JSON/code block wrapping
+        enriched = re.sub(r"^```(?:markdown|text)?\s*", "", enriched)
+        enriched = re.sub(r"\s*```$", "", enriched).strip()
+        return enriched
+    except Exception as err:
+        logger.warning(
+            "[extraction] Enrichment failed for section '%s': %s — keeping raw content",
+            section_title, err,
+        )
+        return None
 
 IMAGE_ASSIGNMENT_THRESHOLD = 0.75
 IMAGE_REVIEW_THRESHOLD = 0.85
@@ -188,7 +291,7 @@ def _slug(text: str) -> str:
     return compact[:48] or "section"
 
 
-def _render_pdf_pages_to_images(doc: fitz.Document, max_pages: int = 4) -> list[dict[str, str]]:
+def _render_pdf_pages_to_images(doc: fitz.Document, max_pages: int = 12) -> list[dict[str, str]]:
     rendered: list[dict[str, str]] = []
     for page_index in range(min(len(doc), max_pages)):
         page = doc.load_page(page_index)
@@ -215,6 +318,24 @@ def _extract_pdf_pages(doc: fitz.Document) -> list[dict[str, Any]]:
             }
         )
     return pages
+
+
+def _extract_pdf_as_markdown(doc: fitz.Document) -> str:
+    """Extract PDF to Markdown using pymupdf4llm, preserving tables, headers, and structure."""
+    try:
+        md_text = pymupdf4llm.to_markdown(doc, show_progress=False)
+        if md_text and len(md_text.strip()) > 20:
+            return md_text.strip()
+    except Exception as err:
+        logger.warning("[extraction] pymupdf4llm markdown extraction failed: %s — falling back to plain text", err)
+    # Fallback: use standard page text extraction joined with form-feeds
+    pages_text: list[str] = []
+    for index in range(len(doc)):
+        page = doc.load_page(index)
+        text = page.get_text().strip()
+        if text:
+            pages_text.append(text)
+    return "\f".join(pages_text)
 
 
 def _extract_pdf_embedded_images(
@@ -2145,8 +2266,9 @@ async def run_extraction(
             execution_lease_id=execution_lease_id,
         )
         doc = fitz.open(file_path)
-        pages = _extract_pdf_pages(doc)
-        raw_text = "\f".join(page["text"] for page in pages if page["text"])
+        pages = await run_in_managed_thread(_extract_pdf_pages, doc)
+        # Use Markdown-aware extraction for structured text (tables, headers, lists)
+        raw_text = await run_in_managed_thread(_extract_pdf_as_markdown, doc)
 
         if len(raw_text) > settings.max_raw_text:
             raw_text = raw_text[: settings.max_raw_text]
@@ -2288,7 +2410,7 @@ async def run_extraction(
             {"progress_percent": 30},
             execution_lease_id=execution_lease_id,
         )
-        chunks = chunk_text(cleaned_text, document_title=original_name, max_chunk_size=8000)
+        chunks = chunk_text(cleaned_text, document_title=original_name, max_chunk_size=10000)
         await _update_extraction(
             db,
             extraction_id,
@@ -2356,7 +2478,7 @@ async def run_extraction(
         )
         final_result["audit"].update(
             {
-                "pipelineStages": ["ingest", "classify", "segment", "structure", "coherence_cleanup", "validate", "persist"],
+                "pipelineStages": ["ingest", "classify", "segment", "structure", "enrich", "coherence_cleanup", "validate", "persist"],
                 "classification": {
                     "safe": classification.safe,
                     "category": classification.category,
@@ -2373,6 +2495,113 @@ async def run_extraction(
                 "finalSectionCount": len(final_result.get("sections", [])),
             }
         )
+
+        # ── Pass 2: Lesson Enrichment ──────────────────────────────────
+        enrichment_results: dict[str, str] = {}
+        enrichment_skipped: list[str] = []
+        if (
+            settings.extraction_enrichment_enabled
+            and health["available"]
+            and extraction_style != "faithful"
+            and final_result.get("sections")
+        ):
+            await _update_extraction(
+                db,
+                extraction_id,
+                {"progress_percent": 87},
+                execution_lease_id=execution_lease_id,
+            )
+            sections = final_result["sections"]
+            enrichment_progress_per_section = 8 / max(len(sections), 1)
+            for section_index, section in enumerate(sections):
+                await _raise_if_cancelled(db, extraction_id, execution_lease_id)
+
+                # Renew worker lease and update progress during this long-running loop
+                current_progress = int(87 + (section_index * enrichment_progress_per_section))
+                await _update_extraction(
+                    db,
+                    extraction_id,
+                    {"progress_percent": min(current_progress, 95)},
+                    execution_lease_id=execution_lease_id,
+                )
+
+                section_title = str(section.get("title") or f"Section {section_index + 1}")
+                # Collect all text from lesson blocks for enrichment
+                block_texts: list[str] = []
+                for block in section.get("lessonBlocks", []):
+                    if not isinstance(block, dict) or block.get("type") != "text":
+                        continue
+                    content = block.get("content")
+                    if isinstance(content, dict):
+                        block_text = str(content.get("text") or content.get("html") or "").strip()
+                    elif isinstance(content, str):
+                        block_text = content.strip()
+                    else:
+                        continue
+                    if block_text:
+                        block_texts.append(block_text)
+
+                raw_section_text = "\n\n".join(block_texts)
+                if not raw_section_text or len(raw_section_text.strip()) < 50:
+                    enrichment_skipped.append(f"Section '{section_title}': too short for enrichment")
+                    continue
+
+                enriched = await _enrich_section(
+                    raw_section_text,
+                    section_title,
+                    extraction_style,
+                )
+                if enriched:
+                    enrichment_results[str(section_index)] = enriched
+                    # Replace the text blocks with a single enriched block
+                    non_text_blocks = [
+                        block for block in section.get("lessonBlocks", [])
+                        if isinstance(block, dict) and block.get("type") != "text"
+                    ]
+                    enriched_block = {
+                        "type": "text",
+                        "order": 0,
+                        "content": {"text": enriched},
+                        "metadata": {
+                            "sourceMethod": "enriched",
+                            "enrichmentStyle": extraction_style,
+                            "originalCharCount": len(raw_section_text),
+                            "enrichedCharCount": len(enriched),
+                            "reviewIssueIds": [],
+                        },
+                    }
+                    section["lessonBlocks"] = [enriched_block] + non_text_blocks
+                    # Re-index block order
+                    for block_idx, block in enumerate(section["lessonBlocks"]):
+                        block["order"] = block_idx
+                else:
+                    enrichment_skipped.append(f"Section '{section_title}': enrichment failed, kept raw")
+
+                await _update_extraction(
+                    db,
+                    extraction_id,
+                    {"progress_percent": round(87 + enrichment_progress_per_section * (section_index + 1))},
+                    execution_lease_id=execution_lease_id,
+                )
+
+            final_result["audit"]["enrichment"] = {
+                "enabled": True,
+                "style": extraction_style,
+                "sectionsEnriched": len(enrichment_results),
+                "sectionsSkipped": len(enrichment_skipped),
+                "skippedReasons": enrichment_skipped,
+            }
+        else:
+            skip_reason = (
+                "disabled by config" if not settings.extraction_enrichment_enabled
+                else "faithful style" if extraction_style == "faithful"
+                else "model unavailable" if not health["available"]
+                else "no sections"
+            )
+            final_result["audit"]["enrichment"] = {
+                "enabled": False,
+                "reason": skip_reason,
+            }
         if final_result["audit"]["overallConfidence"] < 0.6:
             final_result["audit"]["warnings"].append("Overall extraction confidence is low; teacher review is strongly recommended.")
         if len(final_result.get("sections", [])) == 0:

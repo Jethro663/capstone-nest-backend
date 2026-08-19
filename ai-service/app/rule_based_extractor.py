@@ -12,6 +12,7 @@ HEADING_RE = re.compile(
     r"(?:lesson|chapter|module|unit|topic|part)\s*\d*\s*[:\-\u2013\u2014.]\s*(.+)"
     r"|([IVXLCDM]+\.\s+.+)"
     r"|([A-Z]\.\s+.+)"
+    r"|(#{1,4}\s+.+)"
     r")",
     re.I | re.M,
 )
@@ -44,7 +45,7 @@ def extract_with_rules(
             if current["body_lines"]:
                 sections.append(current)
             current = {
-                "heading": (match.group(1) or match.group(2) or match.group(3) or line).strip(),
+                "heading": (match.group(1) or match.group(2) or match.group(3) or match.group(4) or line).strip(),
                 "body_lines": [],
             }
         else:

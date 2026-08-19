@@ -474,6 +474,10 @@ class ExtractionRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "app.extraction_pipeline._extract_pdf_pages",
                 return_value=[{"pageNumber": 1, "text": "Enough selectable text for extraction.", "charCount": 38}],
             ),
+            patch(
+                "app.extraction_pipeline._extract_pdf_as_markdown",
+                return_value="Enough selectable text for extraction.",
+            ),
         ):
             with self.assertRaises(ExtractionCancelled):
                 await run_extraction(
