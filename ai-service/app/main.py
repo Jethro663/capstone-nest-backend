@@ -3691,6 +3691,10 @@ async def list_extractions(
         structured_content = _normalize_structured_content(
             item.get("structured_content"),
         )
+        # Strip heavy content (lessonBlocks) for list view to reduce payload size
+        for section in structured_content.get("sections", []):
+            if "lessonBlocks" in section:
+                del section["lessonBlocks"]
         item["structured_content"] = structured_content
         audit = structured_content.get("audit") or {}
         item["qualityGate"] = audit.get("qualityGate")
