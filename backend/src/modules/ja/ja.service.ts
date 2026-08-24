@@ -1374,7 +1374,7 @@ export class JaService {
       };
     }
 
-    const eligibleAttempts = await this.db
+    const eligibleAttemptsRaw = await this.db
       .select({
         attemptId: assessmentAttempts.id,
         assessmentId: assessments.id,
@@ -1382,22 +1382,35 @@ export class JaService {
         submittedAt: assessmentAttempts.submittedAt,
         score: assessmentAttempts.score,
         passed: assessmentAttempts.passed,
+        isSubmitted: sql<boolean>`CASE WHEN ${assessmentAttempts.id} IS NOT NULL AND ${assessmentAttempts.isSubmitted} = true THEN true ELSE false END`,
       })
-      .from(assessmentAttempts)
-      .innerJoin(
-        assessments,
-        eq(assessments.id, assessmentAttempts.assessmentId),
+      .from(assessments)
+      .leftJoin(
+        assessmentAttempts,
+        and(
+          eq(assessmentAttempts.assessmentId, assessments.id),
+          eq(assessmentAttempts.studentId, studentId),
+          eq(assessmentAttempts.isSubmitted, true),
+        ),
       )
       .where(
         and(
-          eq(assessmentAttempts.studentId, studentId),
-          eq(assessmentAttempts.isSubmitted, true),
           eq(assessments.classId, base.selectedClassId),
           eq(assessments.isPublished, true),
         ),
       )
-      .orderBy(desc(assessmentAttempts.submittedAt))
-      .limit(20);
+      .orderBy(desc(assessmentAttempts.submittedAt), desc(assessments.createdAt))
+      .limit(30);
+
+    const eligibleAttempts = eligibleAttemptsRaw.map((row) => ({
+      attemptId: row.attemptId ?? row.assessmentId,
+      assessmentId: row.assessmentId,
+      assessmentTitle: row.assessmentTitle,
+      submittedAt: row.submittedAt,
+      score: row.score,
+      passed: row.passed,
+      isSubmitted: row.isSubmitted,
+    }));
 
     const sessions = await this.db.query.jaSessions.findMany({
       where: and(

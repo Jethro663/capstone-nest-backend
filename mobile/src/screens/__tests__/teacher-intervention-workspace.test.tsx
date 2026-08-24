@@ -300,7 +300,7 @@ describe("TeacherInterventionWorkspaceContent", () => {
       assessmentAssignments: [
         {
           assessmentId: "assessment-1",
-          label: "AI plan: Retry quiz",
+          label: "AI plan: Replay Assessments",
           xpAwarded: 30,
         },
       ],

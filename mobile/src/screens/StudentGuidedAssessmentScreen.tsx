@@ -9,6 +9,7 @@ import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import { colors, gradients, shadow } from "../theme/tokens";
 import type { GuidedAssessmentQuestion, GuidedAssessmentResultResponse, GuidedAssessmentSessionResponse } from "../types/lxp";
 import { GradientHeader, ProgressBar, Refreshable, ScreenScroll } from "../components/ui/primitives";
+import { cleanJaClueText } from "../utils/cleanJaClue";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentGuidedAssessment">;
 
@@ -249,7 +250,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                   {reviewHint ? (
                     <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
                       <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
-                      <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{reviewHint}</Text>
+                      <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(reviewHint)}</Text>
                     </View>
                   ) : null}
                   <Text style={{ marginTop: 8, color: theme.muted, fontSize: 12, lineHeight: 18 }}>{stripRichText(question.explanation)}</Text>
@@ -287,7 +288,7 @@ export function StudentGuidedAssessmentScreen({ navigation, route }: Props) {
                 {activeReviewHint ? (
                   <View style={{ marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: "#7DD3FC", backgroundColor: "#F0F9FF", padding: 10 }}>
                     <Text style={{ color: "#075985", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
-                    <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{activeReviewHint}</Text>
+                    <Text style={{ marginTop: 4, color: "#155E75", fontSize: 12, lineHeight: 18, fontWeight: "700" }}>{cleanJaClueText(activeReviewHint)}</Text>
                   </View>
                 ) : null}
               </View>

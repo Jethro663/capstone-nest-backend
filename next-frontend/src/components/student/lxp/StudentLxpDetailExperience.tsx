@@ -502,10 +502,20 @@ export default function StudentLxpDetailExperience() {
     () => [...(playlist?.checkpoints ?? [])].sort((left, right) => left.order - right.order),
     [playlist?.checkpoints],
   );
-  const replays = checkpoints.filter(
-    (checkpoint) =>
-      checkpoint.type === 'assessment_retry' || checkpoint.type === 'guided_assessment',
-  );
+  const replays = useMemo(() => {
+    const list = checkpoints.filter(
+      (checkpoint) =>
+        checkpoint.type === 'assessment_retry' || checkpoint.type === 'guided_assessment',
+    );
+    const guided = list.filter((c) => c.type === 'guided_assessment');
+    const retries = list.filter((c) => c.type === 'assessment_retry');
+    if (retries.length === 0) return guided;
+    const consolidatedRetry = {
+      ...retries[0],
+      title: 'AI plan: Replay Assessments',
+    };
+    return [...guided, consolidatedRetry];
+  }, [checkpoints]);
   const steps = checkpoints;
   const progressPercent = clampPercent(
     overview?.progress.completionPercent ?? playlist?.progress.completionPercent,

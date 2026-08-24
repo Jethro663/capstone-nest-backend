@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { peekAppError, toAppError } from "../api/http";
 import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
@@ -1062,25 +1062,91 @@ function ReplayPanel({
         <Text style={{ color: dark.text, fontSize: 16, fontWeight: "800" }}>Pick an assessment to replay</Text>
         <Text style={{ marginTop: 5, color: dark.muted, fontSize: 12, lineHeight: 18 }}>Replay mode builds a focused retry session from a submitted assessment attempt.</Text>
       </View>
-      {attempts.length ? attempts.map((attempt) => {
-        const used = Math.max(0, Number(attempt.reviewSessionCount ?? 0));
-        const max = Math.max(1, Number(attempt.maxReviewSessions ?? 3));
-        const locked = Boolean(attempt.locked) || (!attempt.activeReviewSessionId && used >= max);
-        return (
-        <Pressable key={attempt.attemptId} disabled={busy || locked} onPress={() => onStart(attempt)}>
-          <DarkPanel style={{ opacity: locked ? 0.62 : 1 }}>
-            <Text style={{ color: dark.text, fontSize: 13, fontWeight: "800" }}>{attempt.assessmentTitle}</Text>
-            <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11 }}>Score: {attempt.score ?? "Pending"} - {formatDate(attempt.submittedAt)}</Text>
-            <Text style={{ marginTop: 6, color: locked ? dark.red : dark.green, fontSize: 11, fontWeight: "900" }}>
-              {locked ? "Locked after 3 replay tries" : `${Math.max(0, max - used)} replay ${max - used === 1 ? "try" : "tries"} left`}
-            </Text>
-          </DarkPanel>
-        </Pressable>
-        );
-      }) : (
+      {attempts.length ? (
+        attempts.map((attempt) => {
+          const isSubmitted = Boolean(
+            (attempt as unknown as Record<string, unknown>).isSubmitted ??
+            (attempt.submittedAt && attempt.attemptId)
+          );
+          const used = Math.max(0, Number(attempt.reviewSessionCount ?? 0));
+          const max = Math.max(1, Number(attempt.maxReviewSessions ?? 3));
+          const locked = Boolean(attempt.locked) || (!attempt.activeReviewSessionId && used >= max);
+
+          return (
+            <Pressable
+              key={attempt.attemptId || attempt.assessmentId}
+              disabled={busy || (isSubmitted && locked)}
+              onPress={() => {
+                if (isSubmitted) {
+                  onStart(attempt);
+                } else {
+                  Alert.alert(
+                    "Not Yet Taken",
+                    "Please submit this assessment attempt first in class before opening JA Replay."
+                  );
+                }
+              }}
+              style={({ pressed }) => [{
+                borderRadius: 20,
+                borderWidth: 1.5,
+                borderColor: isSubmitted ? "#86EFAC" : "#FECDD3",
+                backgroundColor: isSubmitted ? "#F0FDF4" : "#FFF1F2",
+                padding: 15,
+                marginBottom: 10,
+                opacity: pressed ? 0.85 : 1,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }]}
+            >
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <MaterialCommunityIcons
+                    name={isSubmitted ? "check-circle" : "alert-circle-outline"}
+                    size={18}
+                    color={isSubmitted ? "#16A34A" : "#E11D48"}
+                  />
+                  <Text style={{ color: dark.text, fontSize: 14, fontWeight: "900", flex: 1 }}>
+                    {stripRichText(attempt.assessmentTitle)}
+                  </Text>
+                </View>
+
+                <Text style={{ color: dark.muted, fontSize: 11, fontWeight: "700" }}>
+                  {isSubmitted
+                    ? `Submitted ${formatDate(attempt.submittedAt)} ${attempt.score !== null ? `• Score: ${attempt.score}%` : ""}`
+                    : "Not yet submitted in class"}
+                </Text>
+
+                {isSubmitted ? (
+                  <Text style={{ marginTop: 4, color: locked ? dark.red : "#15803D", fontSize: 11, fontWeight: "900" }}>
+                    {locked ? "Locked after 3 replay tries" : `${Math.max(0, max - used)} replay ${max - used === 1 ? "try" : "tries"} left`}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={{
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 999,
+                backgroundColor: isSubmitted ? "#DCFCE7" : "#FFE4E6",
+                borderWidth: 1,
+                borderColor: isSubmitted ? "#86EFAC" : "#FDA4AF",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+              }}>
+                <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: isSubmitted ? "#16A34A" : "#E11D48" }} />
+                <Text style={{ color: isSubmitted ? "#15803D" : "#991B1B", fontSize: 11, fontWeight: "900" }}>
+                  {isSubmitted ? "Submitted" : "Not Yet Taken"}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })
+      ) : (
         <DarkPanel>
-          <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800", textAlign: "center" }}>No eligible attempts yet</Text>
-          <Text style={{ marginTop: 6, color: dark.muted, fontSize: 11, lineHeight: 17, textAlign: "center" }}>Complete an assessment and return here to replay weak areas.</Text>
+          <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800", textAlign: "center" }}>No class assessments found</Text>
+          <Text style={{ marginTop: 6, color: dark.muted, fontSize: 11, lineHeight: 17, textAlign: "center" }}>Complete an assessment in class to unlock JA Replay.</Text>
         </DarkPanel>
       )}
       {session ? <SessionPanel session={session} answers={answers} setAnswers={setAnswers} onSubmit={onSubmit} onComplete={onComplete} canComplete={allReady} submitLabel="Submit Replay" /> : null}

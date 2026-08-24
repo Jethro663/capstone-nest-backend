@@ -490,6 +490,34 @@ def _best_lesson_clue(
     return best_title, best_reference, best_sentence
 
 
+UNICODE_ESCAPE_PATTERN = re.compile(r"\\u([0-9a-fA-F]{4})")
+INTERNAL_METADATA_PATTERN = re.compile(r"\s*\|\s*(?:block|lesson|question|chunk):[^\s\|)]+", re.IGNORECASE)
+
+
+def _decode_unicode_escapes(text: str) -> str:
+    if not text or "\\u" not in text:
+        return text
+    def replace_hex(match: re.Match) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except ValueError:
+            return match.group(0)
+    return UNICODE_ESCAPE_PATTERN.sub(replace_hex, text)
+
+
+def _clean_clue_text(text: str) -> str:
+    if not text:
+        return ""
+    decoded = _decode_unicode_escapes(str(text))
+    cleaned = INTERNAL_METADATA_PATTERN.sub("", decoded)
+    cleaned = re.sub(r"\(([^)]+)\)\s*\(\1\)", r"(\1)", cleaned)
+    cleaned = re.sub(r"\(\s*\|\s*\)", "", cleaned)
+    cleaned = re.sub(r"\(\s*\)", "", cleaned)
+    cleaned = re.sub(r"\s*\|\s*", " ", cleaned)
+    cleaned = WHITESPACE_PATTERN.sub(" ", cleaned).strip()
+    return cleaned
+
+
 def _build_guided_question_review_hint(
     question: dict[str, Any],
     concept_label: str | None,
@@ -506,17 +534,18 @@ def _build_guided_question_review_hint(
     if not focus:
         focus = "the key idea from the lesson"
 
-    title, source_reference, sentence = _best_lesson_clue(question, concept_label, recommended_lessons)
-    reference_copy = f" ({source_reference})" if source_reference else ""
+    title, _source_reference, sentence = _best_lesson_clue(question, concept_label, recommended_lessons)
+    clean_title = _clean_clue_text(title)
+    clean_sentence = _clean_clue_text(sentence)
 
-    if sentence and title:
+    if clean_sentence and clean_title:
         return (
-            f"Review {title}{reference_copy}: {sentence} "
+            f"Review {clean_title}: {clean_sentence} "
             "Use that clue to connect the lesson step to this question."
         )
-    if title:
+    if clean_title:
         return (
-            f"Revisit {title}{reference_copy} and focus on the part about {focus}. "
+            f"Revisit {clean_title} and focus on the part about {focus}. "
             "Compare that lesson step with the clue in this question."
         )
     return f"Look back at the module section about {focus}, then explain why the answer fits."
@@ -972,12 +1001,13 @@ Recommended lesson evidence:
         ],
         "assessmentAssignments": [
             {
-                "assessmentId": item["assessmentId"],
+                "assessmentId": recommended_assessments[0]["assessmentId"],
                 "xpAwarded": 30,
-                "label": f"AI plan: {item['title']}",
+                "label": "AI plan: Replay Assessments",
             }
-            for item in recommended_assessments
-        ],
+        ]
+        if recommended_assessments
+        else [],
         "note": "AI recommendation based on weak concepts: "
         + ", ".join(weak_concepts[:3]),
     }

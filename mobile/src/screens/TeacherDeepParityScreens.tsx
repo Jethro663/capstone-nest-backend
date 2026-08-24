@@ -1519,11 +1519,13 @@ export function TeacherInterventionWorkspaceContent({
           label: `AI plan: ${lesson.title}`,
           xpAwarded: parseXp(lessonXp[lesson.lessonId], DEFAULT_LESSON_XP),
         })),
-        assessmentAssignments: visibleAssessments.map((assessment) => ({
-          assessmentId: assessment.assessmentId,
-          label: `AI plan: ${assessment.title}`,
-          xpAwarded: parseXp(assessmentXp[assessment.assessmentId], DEFAULT_ASSESSMENT_XP),
-        })),
+        assessmentAssignments: visibleAssessments.length > 0 ? [
+          {
+            assessmentId: visibleAssessments[0].assessmentId,
+            label: "AI plan: Replay Assessments",
+            xpAwarded: parseXp(assessmentXp[visibleAssessments[0].assessmentId], DEFAULT_ASSESSMENT_XP),
+          }
+        ] : [],
       });
       await load();
       Alert.alert("Intervention assigned", "The student can now see the intervention path in Learner's Path.");

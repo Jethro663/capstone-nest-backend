@@ -5,9 +5,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  AlertCircle,
   ArrowLeft,
   BookOpen,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -17,6 +19,7 @@ import {
   Loader2,
   Menu,
   MessageCircleQuestion,
+  PlayCircle,
   ShieldAlert,
   Sparkles,
   X,
@@ -223,6 +226,26 @@ function summarizeJaCorrectAnswer(item: JaPracticeSessionItem) {
     : "Answer key unavailable";
 }
 
+export function cleanJaClueText(value: string | null | undefined): string {
+  if (!value) return "";
+  let text = String(value);
+  if (text.includes("\\u")) {
+    text = text.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => {
+      try {
+        return String.fromCharCode(parseInt(hex, 16));
+      } catch {
+        return _;
+      }
+    });
+  }
+  text = text.replace(/\s*\|\s*(?:block|lesson|question|chunk):[^\s\|)]+/gi, "");
+  text = text.replace(/\(([^)]+)\)\s*\(\1\)/g, "($1)");
+  text = text.replace(/\(\s*\|\s*\)/g, "");
+  text = text.replace(/\(\s*\)/g, "");
+  text = text.replace(/\s*\|\s*/g, " ");
+  return text.replace(/\s+/g, " ").trim();
+}
+
 function JaAnswerFeedback({
   item,
   fallbackAnswers,
@@ -238,14 +261,16 @@ function JaAnswerFeedback({
   );
   const correctAnswer = summarizeJaCorrectAnswer(item);
   const isCorrect = item.response.isCorrect;
-  const baseComment =
+
+  const rawClue =
+    item.hint ||
+    item.explanation ||
     item.response.feedback ||
     (isCorrect
       ? "Correct. Keep your momentum."
       : "Not quite yet. Review the answer key and try the next one.");
-  const comment = isCorrect
-    ? baseComment
-    : `${baseComment} Correct answer: ${correctAnswer}.`;
+
+  const clueText = cleanJaClueText(rawClue);
 
   return (
     <div
@@ -292,8 +317,8 @@ function JaAnswerFeedback({
         </div>
       </div>
       <div className="ja-answer-review__comment">
-        <strong>JA comment</strong>
-        <p>{comment}</p>
+        <strong>JA clue</strong>
+        <p>{clueText}</p>
       </div>
     </div>
   );
@@ -1917,31 +1942,97 @@ export default function StudentJaWorkspace({
                     </p>
                   </div>
 
-                  <div className="ja-review-attempts">
+                  <div className="ja-review-attempts grid gap-3 sm:grid-cols-1">
                     {hub.review.eligibleAttempts.length === 0 ? (
-                      <p className="ja-inline-empty">
-                        No eligible attempts yet. Complete an assessment and
-                        return to replay weak areas.
+                      <p className="ja-inline-empty text-slate-500 font-medium">
+                        No class assessments found. Take an assessment in your class to unlock JA Replay.
                       </p>
                     ) : (
-                      hub.review.eligibleAttempts.map((attempt) => (
-                        <button
-                          key={attempt.attemptId}
-                          type="button"
-                          disabled={aiUnavailable}
-                          onClick={() => void startReview(attempt.attemptId)}
-                        >
-                          <strong>{attempt.assessmentTitle}</strong>
-                          <span>
-                            Submitted{" "}
-                            {new Date(attempt.submittedAt).toLocaleDateString()}{" "}
-                            |{" "}
-                            {attempt.score !== null
-                              ? `${attempt.score}%`
-                              : "Ungraded"}
-                          </span>
-                        </button>
-                      ))
+                      hub.review.eligibleAttempts.map((attempt) => {
+                        const isSubmitted = Boolean(
+                          (attempt as unknown as Record<string, unknown>).isSubmitted ??
+                          (attempt.submittedAt && attempt.attemptId)
+                        );
+                        return (
+                          <button
+                            key={attempt.attemptId || attempt.assessmentId}
+                            type="button"
+                            disabled={aiUnavailable}
+                            className={cn(
+                              "ja-assessment-card group relative w-full text-left flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 transition-all duration-200 shadow-sm",
+                              isSubmitted
+                                ? "border-emerald-300/80 bg-gradient-to-r from-emerald-50/90 via-teal-50/30 to-white hover:-translate-y-0.5 hover:border-emerald-500 hover:shadow-md cursor-pointer"
+                                : "border-rose-200/90 bg-gradient-to-r from-rose-50/80 via-amber-50/20 to-white hover:border-rose-300 opacity-95 cursor-pointer"
+                            )}
+                            onClick={() => {
+                              if (isSubmitted && attempt.attemptId) {
+                                void startReview(attempt.attemptId);
+                              } else {
+                                toast.info(
+                                  "Please submit this assessment attempt first before opening JA Replay."
+                                );
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <div
+                                className={cn(
+                                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs transition-transform duration-200 group-hover:scale-105",
+                                  isSubmitted
+                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                    : "bg-rose-100 text-rose-700 border border-rose-200"
+                                )}
+                              >
+                                {isSubmitted ? (
+                                  <CheckCircle2 className="h-6 w-6" />
+                                ) : (
+                                  <AlertCircle className="h-6 w-6" />
+                                )}
+                              </div>
+                              <div>
+                                <h4 className="text-base font-semibold text-[#102744]">
+                                  {attempt.assessmentTitle}
+                                </h4>
+                                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                                  {isSubmitted
+                                    ? `Submitted ${new Date(attempt.submittedAt!).toLocaleDateString()}`
+                                    : "Not yet submitted in class"}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-2xs",
+                                  isSubmitted
+                                    ? "border-emerald-300 bg-emerald-100/90 text-emerald-800"
+                                    : "border-rose-300 bg-rose-100/90 text-rose-800"
+                                )}
+                              >
+                                <span
+                                  className={cn(
+                                    "h-2 w-2 rounded-full",
+                                    isSubmitted ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                                  )}
+                                />
+                                {isSubmitted
+                                  ? attempt.score !== null
+                                    ? `Submitted ${attempt.score}%`
+                                    : "Submitted"
+                                  : "Not Yet Taken"}
+                              </span>
+
+                              {isSubmitted ? (
+                                <span className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs group-hover:bg-emerald-700">
+                                  <PlayCircle className="mr-1.5 h-4 w-4" />
+                                  Start Replay
+                                </span>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -853,11 +853,13 @@ export default function TeacherInterventionWorkspacePage() {
           xpAwarded: lessonXp[lesson.lessonId] ?? 20,
           label: `AI plan: ${lesson.title}`,
         })),
-        assessmentAssignments: visibleAssessments.map((assessment) => ({
-          assessmentId: assessment.assessmentId,
-          xpAwarded: assessmentXp[assessment.assessmentId] ?? 30,
-          label: `AI plan: ${assessment.title}`,
-        })),
+        assessmentAssignments: visibleAssessments.length > 0 ? [
+          {
+            assessmentId: visibleAssessments[0].assessmentId,
+            xpAwarded: assessmentXp[visibleAssessments[0].assessmentId] ?? 30,
+            label: 'AI plan: Replay Assessments',
+          }
+        ] : [],
       });
       toast.success('AI intervention plan assigned.');
       router.push(interventionsRoute);

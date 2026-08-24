@@ -9,6 +9,7 @@ import type { RootStackParamList } from "../navigation/types";
 import { studentDarkTheme as theme, stripRichText } from "../theme/studentDark";
 import { colors, gradients, shadow } from "../theme/tokens";
 import type { JaPracticeSessionItem, JaPracticeSessionResponse, JaReviewAttemptSummary } from "../types/ja";
+import { cleanJaClueText } from "../utils/cleanJaClue";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentJaReviewAssessment">;
 type AnswerState = Record<string, string[]>;
@@ -340,10 +341,13 @@ export function StudentJaReviewAssessmentScreen({ navigation, route }: Props) {
                   <Text style={{ marginTop: 5, color: "#166534", fontSize: 12, lineHeight: 18, fontWeight: "900" }}>
                     Correct answer: {formatOptionNames(activeItem, getCorrectOptionIds(activeItem))}
                   </Text>
-                  {activeItem.response.feedback || activeItem.explanation ? (
-                    <Text style={{ marginTop: 8, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
-                      {stripRichText(activeItem.response.feedback || activeItem.explanation || "")}
-                    </Text>
+                  {activeItem.response.feedback || activeItem.explanation || activeItem.hint ? (
+                    <View style={{ marginTop: 10, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.7)", padding: 10 }}>
+                      <Text style={{ color: "#0F3F56", fontSize: 11, fontWeight: "900", textTransform: "uppercase" }}>JA clue</Text>
+                      <Text style={{ marginTop: 3, color: theme.muted, fontSize: 12, lineHeight: 18 }}>
+                        {cleanJaClueText(activeItem.hint || activeItem.explanation || activeItem.response.feedback)}
+                      </Text>
+                    </View>
                   ) : null}
                 </View>
               ) : null}

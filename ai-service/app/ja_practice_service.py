@@ -1046,6 +1046,8 @@ async def generate_ja_review_session_packet(
         rows,
         key=lambda item: (bool(item.get("is_correct")),),
     )
+    from .remedial_service import _build_guided_question_review_hint, _clean_clue_text
+
     selected_items: list[dict[str, Any]] = []
     for row in sorted_rows:
         qtype = str(row["question_type"])
@@ -1054,13 +1056,17 @@ async def generate_ja_review_session_packet(
         if answer_key is None:
             continue
         is_correct = bool(row.get("is_correct"))
-        focus_text = _question_focus_text(row.get("question_content"), qtype)
-        helper_intro = (
-            f"You missed this before. Recheck {focus_text}."
-            if not is_correct
-            else f"You got this before. Explain why {focus_text} points to your answer."
-        )
         explanation = str(row.get("question_explanation") or "").strip()
+        concept_tags = row.get("concept_tags")
+        concept_label = concept_tags[0] if isinstance(concept_tags, list) and concept_tags else None
+        
+        grounded_clue = _build_guided_question_review_hint(
+            {"content": row.get("question_content"), "explanation": explanation, "options": options},
+            concept_label,
+            None,
+        )
+        clean_hint = _clean_clue_text(grounded_clue or explanation or f"Review key concept: {concept_label or 'lesson topic'}.")
+
         selected_items.append(
             {
                 "id": f"r-{len(selected_items) + 1}",
@@ -1071,8 +1077,8 @@ async def generate_ja_review_session_packet(
                     for opt in options
                 ],
                 "answerKey": answer_key,
-                "hint": helper_intro,
-                "explanation": explanation or helper_intro,
+                "hint": clean_hint,
+                "explanation": _clean_clue_text(explanation) or clean_hint,
                 "citations": [
                     {
                         "label": str(row["assessment_title"]),

@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StudentObjectiveAssessmentSurface } from "@/components/student/assessment/StudentObjectiveAssessmentSurface";
 import { StudentStatusChip } from "@/components/student/student-primitives";
 import { lxpService } from "@/services/lxp-service";
+import { cleanJaClueText } from "@/components/student/ja/StudentJaWorkspace";
 import type { SharedQuestionType } from "@/components/assessment/shared-answer-input";
 import type { GuidedAssessmentQuestion } from "@/types/lxp";
 import "../../../../assessments/[id]/take/take-page.css";
