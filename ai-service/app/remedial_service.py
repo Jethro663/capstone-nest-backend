@@ -522,6 +522,7 @@ def _build_guided_question_review_hint(
     question: dict[str, Any],
     concept_label: str | None,
     recommended_lessons: list[dict[str, Any]] | None,
+    fallback_title: str | None = None,
 ) -> str:
     stem = _sanitize_plain_text(question.get("content") or question.get("stem"), max_length=240)
     focus = _clean_hint_focus(concept_label) or _clean_hint_focus(_derive_question_focus_label(stem))
@@ -535,6 +536,13 @@ def _build_guided_question_review_hint(
         focus = "the key idea from the lesson"
 
     title, _source_reference, sentence = _best_lesson_clue(question, concept_label, recommended_lessons)
+    if not title and fallback_title:
+        title = fallback_title
+
+    explanation = _clean_clue_text(question.get("explanation") or "")
+    if not sentence and explanation and not _is_direct_answer_sentence(explanation, question):
+        sentence = explanation
+
     clean_title = _clean_clue_text(title)
     clean_sentence = _clean_clue_text(sentence)
 
@@ -548,7 +556,12 @@ def _build_guided_question_review_hint(
             f"Revisit {clean_title} and focus on the part about {focus}. "
             "Compare that lesson step with the clue in this question."
         )
-    return f"Look back at the module section about {focus}, then explain why the answer fits."
+    if clean_sentence:
+        return (
+            f"Review {focus}: {clean_sentence} "
+            "Use that clue to connect the lesson step to this question."
+        )
+    return f"Review {focus} and compare that concept with the clue in this question."
 
 
 def _build_guided_question_hint(
