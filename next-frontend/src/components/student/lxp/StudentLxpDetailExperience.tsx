@@ -32,6 +32,7 @@ import { lxpService } from '@/services/lxp-service';
 import { jaService } from '@/services/ja-service';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { LxpCheckpoint, LxpOverviewResponse, PlaylistResponse } from '@/types/lxp';
+import type { JaHubResponse } from '@/types/ja';
 import { cn } from '@/utils/cn';
 import './StudentLxpDetailExperience.css';
 
@@ -507,7 +508,7 @@ export default function StudentLxpDetailExperience() {
   const currentTab = getTab(searchParams.get('tab'));
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
-  const [jaHub, setJaHub] = useState<any | null>(null);
+  const [jaHub, setJaHub] = useState<JaHubResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
