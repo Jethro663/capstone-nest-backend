@@ -12,6 +12,7 @@ import {
   index,
   primaryKey,
   json,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -597,7 +598,7 @@ export const assessmentQuestions = pgTable(
     explanation: text('explanation'),
     imageUrl: text('image_url'),
     metadata: json('metadata'),
-    conceptTags: json('concept_tags'),
+    conceptTags: jsonb('concept_tags'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
