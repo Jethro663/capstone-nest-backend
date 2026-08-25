@@ -92,7 +92,9 @@ describe('TokenService', () => {
         },
       ]);
 
-      await expect(service.validateAndRotate('raced-raw-token')).rejects.toThrow(
+      await expect(
+        service.validateAndRotate('raced-raw-token'),
+      ).rejects.toThrow(
         new UnauthorizedException(
           'Token recently refreshed. Please use your latest active session.',
         ),

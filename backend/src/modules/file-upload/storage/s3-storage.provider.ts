@@ -23,7 +23,9 @@ export class S3StorageProvider implements StorageProviderInterface {
 
   constructor() {
     this.bucket =
-      process.env.STORAGE_BUCKET || process.env.AWS_S3_BUCKET || 'nexora-uploads';
+      process.env.STORAGE_BUCKET ||
+      process.env.AWS_S3_BUCKET ||
+      'nexora-uploads';
     this.region =
       process.env.STORAGE_REGION || process.env.AWS_REGION || 'us-east-1';
     this.publicUrl =
@@ -88,7 +90,9 @@ export class S3StorageProvider implements StorageProviderInterface {
         ? { ResponseContentDisposition: `attachment; filename="${filename}"` }
         : {}),
     });
-    return getSignedUrl(this.s3Client, command, { expiresIn: expiresInSeconds });
+    return getSignedUrl(this.s3Client, command, {
+      expiresIn: expiresInSeconds,
+    });
   }
 
   async getSignedUploadUrl(input: {
@@ -130,7 +134,9 @@ export class S3StorageProvider implements StorageProviderInterface {
       const byteArray = await response.Body.transformToByteArray();
       return Buffer.from(byteArray);
     } catch (error) {
-      this.logger.error(`Failed to get object ${key} from S3: ${(error as Error).message}`);
+      this.logger.error(
+        `Failed to get object ${key} from S3: ${(error as Error).message}`,
+      );
       throw new NotFoundException(`Object not found: ${key}`);
     }
   }
@@ -144,7 +150,9 @@ export class S3StorageProvider implements StorageProviderInterface {
         error instanceof Error
           ? error.message
           : 'S3 HeadBucket probe check failed';
-      this.logger.error(`S3 health check failed for bucket ${this.bucket}: ${message}`);
+      this.logger.error(
+        `S3 health check failed for bucket ${this.bucket}: ${message}`,
+      );
       return { ok: false, message };
     }
   }

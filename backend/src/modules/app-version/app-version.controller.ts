@@ -89,9 +89,7 @@ export class AppVersionController {
     }
 
     if (!headerValue || headerValue.trim() !== expected) {
-      throw new UnauthorizedException(
-        'Invalid or missing X-CI-Secret header.',
-      );
+      throw new UnauthorizedException('Invalid or missing X-CI-Secret header.');
     }
   }
 }

@@ -215,15 +215,25 @@ export class FeedbackService {
       return 'Review the core subject concepts in this module.';
     }
 
-    if (question.hint && typeof question.hint === 'string' && question.hint.trim()) {
+    if (
+      question.hint &&
+      typeof question.hint === 'string' &&
+      question.hint.trim()
+    ) {
       return question.hint.trim();
     }
 
-    if (question.reviewHint && typeof question.reviewHint === 'string' && question.reviewHint.trim()) {
+    if (
+      question.reviewHint &&
+      typeof question.reviewHint === 'string' &&
+      question.reviewHint.trim()
+    ) {
       return question.reviewHint.trim();
     }
 
-    const rawExplanation = question.explanation ? this.stripHtml(question.explanation) : '';
+    const rawExplanation = question.explanation
+      ? this.stripHtml(question.explanation)
+      : '';
     const rawContent = question.content ? this.stripHtml(question.content) : '';
 
     if (rawExplanation.length > 5) {
@@ -240,7 +250,8 @@ export class FeedbackService {
       return `Focus Concept: This question tests ${conceptTags}. Recall key definitions and rules from the lesson modules.`;
     }
 
-    const shortContent = rawContent.length > 70 ? `${rawContent.substring(0, 70)}...` : rawContent;
+    const shortContent =
+      rawContent.length > 70 ? `${rawContent.substring(0, 70)}...` : rawContent;
     if (shortContent) {
       return `Educational Clue: Pay close attention to the terms in "${shortContent}". Compare your reasoning with module core concepts.`;
     }

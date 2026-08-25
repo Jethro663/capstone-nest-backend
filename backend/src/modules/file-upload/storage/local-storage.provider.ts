@@ -1,4 +1,9 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import type {
@@ -52,7 +57,9 @@ export class LocalStorageProvider implements StorageProviderInterface {
         await fs.promises.unlink(safePath);
       }
     } catch (error) {
-      this.logger.warn(`Failed to delete local object ${key}: ${(error as Error).message}`);
+      this.logger.warn(
+        `Failed to delete local object ${key}: ${(error as Error).message}`,
+      );
     }
   }
 

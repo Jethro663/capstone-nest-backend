@@ -43,9 +43,8 @@ export class AcademicStateController {
   @Roles(RoleName.Admin)
   async notifyUnfinalizedTeachers(@CurrentUser() user: any) {
     const actorId = user?.userId ?? user?.id;
-    const data = await this.academicStateService.notifyUnfinalizedTeachers(
-      actorId,
-    );
+    const data =
+      await this.academicStateService.notifyUnfinalizedTeachers(actorId);
     return {
       success: true,
       message: data.message,

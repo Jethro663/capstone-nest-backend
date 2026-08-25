@@ -188,8 +188,14 @@ describe('PerformanceService', () => {
   });
 
   it('recomputeStudent starts independent component reads in parallel', async () => {
-    let resolveAssessment!: (value: { average: number; sampleSize: number }) => void;
-    let resolveClassRecord!: (value: { average: number; sampleSize: number }) => void;
+    let resolveAssessment!: (value: {
+      average: number;
+      sampleSize: number;
+    }) => void;
+    let resolveClassRecord!: (value: {
+      average: number;
+      sampleSize: number;
+    }) => void;
     const assessmentPromise = new Promise<{
       average: number;
       sampleSize: number;
@@ -798,34 +804,40 @@ describe('PerformanceService', () => {
 
     snapshotReadService.findForStudentClasses.mockResolvedValue(
       new Map([
-        ['class-1', {
-        id: 's1',
-        studentId: 'student-1',
-        classId: 'class-1',
-        assessmentAverage: 82,
-        classRecordAverage: 78,
-        blendedScore: 80,
-        assessmentSampleSize: 3,
-        classRecordSampleSize: 4,
-        hasData: true,
-        isAtRisk: false,
-        thresholdApplied: 74,
-        lastComputedAt: new Date(),
-      }],
-        ['class-2', {
-        id: 's2',
-        studentId: 'student-1',
-        classId: 'class-2',
-        assessmentAverage: 60,
-        classRecordAverage: 66,
-        blendedScore: 63,
-        assessmentSampleSize: 3,
-        classRecordSampleSize: 4,
-        hasData: true,
-        isAtRisk: true,
-        thresholdApplied: 74,
-        lastComputedAt: new Date(),
-      }],
+        [
+          'class-1',
+          {
+            id: 's1',
+            studentId: 'student-1',
+            classId: 'class-1',
+            assessmentAverage: 82,
+            classRecordAverage: 78,
+            blendedScore: 80,
+            assessmentSampleSize: 3,
+            classRecordSampleSize: 4,
+            hasData: true,
+            isAtRisk: false,
+            thresholdApplied: 74,
+            lastComputedAt: new Date(),
+          },
+        ],
+        [
+          'class-2',
+          {
+            id: 's2',
+            studentId: 'student-1',
+            classId: 'class-2',
+            assessmentAverage: 60,
+            classRecordAverage: 66,
+            blendedScore: 63,
+            assessmentSampleSize: 3,
+            classRecordSampleSize: 4,
+            hasData: true,
+            isAtRisk: true,
+            thresholdApplied: 74,
+            lastComputedAt: new Date(),
+          },
+        ],
       ]),
     );
     const recomputeStudent = jest.spyOn(service, 'recomputeStudent');
@@ -874,20 +886,22 @@ describe('PerformanceService', () => {
         ],
       ]),
     );
-    const recomputeStudent = jest.spyOn(service, 'recomputeStudent').mockResolvedValue({
-      id: 's2',
-      studentId: 'student-1',
-      classId: 'class-2',
-      assessmentAverage: 60,
-      classRecordAverage: 60,
-      blendedScore: 60,
-      assessmentSampleSize: 1,
-      classRecordSampleSize: 1,
-      hasData: true,
-      isAtRisk: true,
-      thresholdApplied: 74,
-      lastComputedAt: new Date(),
-    });
+    const recomputeStudent = jest
+      .spyOn(service, 'recomputeStudent')
+      .mockResolvedValue({
+        id: 's2',
+        studentId: 'student-1',
+        classId: 'class-2',
+        assessmentAverage: 60,
+        classRecordAverage: 60,
+        blendedScore: 60,
+        assessmentSampleSize: 1,
+        classRecordSampleSize: 1,
+        hasData: true,
+        isAtRisk: true,
+        thresholdApplied: 74,
+        lastComputedAt: new Date(),
+      });
 
     const result = await service.getStudentOwnSummary('student-1');
 

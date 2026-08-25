@@ -52,9 +52,13 @@ export class ClassRecordController {
   @Post('transmutation/preview')
   @Roles(RoleName.Admin)
   @UseInterceptors(FileInterceptor('file'))
-  async previewTransmutationTable(@UploadedFile() file: { buffer: Buffer; originalname?: string }) {
+  async previewTransmutationTable(
+    @UploadedFile() file: { buffer: Buffer; originalname?: string },
+  ) {
     if (!file) {
-      throw new BadRequestException('Please upload a PDF or file containing a transmutation table.');
+      throw new BadRequestException(
+        'Please upload a PDF or file containing a transmutation table.',
+      );
     }
     const data = await this.transmutationService.parseAndPreview(file);
     return { success: true, data };
@@ -81,7 +85,10 @@ export class ClassRecordController {
     @Param('id') id: string,
     @CurrentUser() user: { userId: string },
   ) {
-    const data = await this.transmutationService.activateTableById(id, user.userId);
+    const data = await this.transmutationService.activateTableById(
+      id,
+      user.userId,
+    );
     return { success: true, data };
   }
 

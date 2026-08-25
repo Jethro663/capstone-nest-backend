@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { appVersions } from '../../drizzle/schema';
@@ -68,7 +64,8 @@ export class AppVersionService {
         .set({
           minSupportedVersionCode: dto.minSupportedVersionCode,
           nativeVersion: dto.nativeVersion,
-          otaRuntimeVersion: dto.otaRuntimeVersion ?? duplicate.otaRuntimeVersion,
+          otaRuntimeVersion:
+            dto.otaRuntimeVersion ?? duplicate.otaRuntimeVersion,
           apkDownloadUrl: dto.apkDownloadUrl,
           requiresFullApk: dto.requiresFullApk ?? duplicate.requiresFullApk,
           releaseNotes: dto.releaseNotes ?? duplicate.releaseNotes,
@@ -145,14 +142,20 @@ export class AppVersionService {
 
     // Evaluate binary / APK update requirements:
     // 1. Forced APK update if clientVersionCode < minSupportedVersionCode
-    if (clientVersionCode > 0 && clientVersionCode < policy.minSupportedVersionCode) {
+    if (
+      clientVersionCode > 0 &&
+      clientVersionCode < policy.minSupportedVersionCode
+    ) {
       updateType = 'apk_forced';
       isForceUpdate = true;
     }
     // 2. Optional APK update if:
     //    a) client is within supported window but behind latest versionCode AND this release mandates native binary upgrade (requiresFullApk is true), OR
     //    b) the client has an incompatible native runtime mismatch regardless of version lag
-    else if ((clientVersionCode < policy.versionCode && policy.requiresFullApk) || hasRuntimeMismatch) {
+    else if (
+      (clientVersionCode < policy.versionCode && policy.requiresFullApk) ||
+      hasRuntimeMismatch
+    ) {
       updateType = 'apk_optional';
       isForceUpdate = false;
     }

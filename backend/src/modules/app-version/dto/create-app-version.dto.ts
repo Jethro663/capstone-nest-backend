@@ -64,7 +64,10 @@ export class CreateAppVersionDto {
     description: 'Direct download URL for the APK or store link',
   })
   @IsString()
-  @IsUrl({ require_tld: false }, { message: 'apkDownloadUrl must be a valid URL' })
+  @IsUrl(
+    { require_tld: false },
+    { message: 'apkDownloadUrl must be a valid URL' },
+  )
   apkDownloadUrl: string;
 
   @ApiPropertyOptional({

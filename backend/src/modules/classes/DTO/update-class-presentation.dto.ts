@@ -11,4 +11,3 @@ export class UpdateClassPresentationDto {
   @IsString({ message: 'cardBannerUrl must be a string' })
   cardBannerUrl?: string | null;
 }
-

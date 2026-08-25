@@ -57,8 +57,7 @@ const ENV_RULES: EnvRule[] = [
   {
     key: 'AWS_SECRET_ACCESS_KEY',
     required: false,
-    description:
-      'S3-compatible secret key (required when STORAGE_DRIVER=s3)',
+    description: 'S3-compatible secret key (required when STORAGE_DRIVER=s3)',
   },
 
   // ── Optional but recommended ──
@@ -117,9 +116,7 @@ export function validateEnvironment(): void {
   ).toLowerCase();
   if (storageDriver === 's3' || storageDriver === 'r2') {
     if (!process.env.AWS_ACCESS_KEY_ID) {
-      errors.push(
-        '  ✗ AWS_ACCESS_KEY_ID — Required when STORAGE_DRIVER=s3/r2',
-      );
+      errors.push('  ✗ AWS_ACCESS_KEY_ID — Required when STORAGE_DRIVER=s3/r2');
     }
     if (!process.env.AWS_SECRET_ACCESS_KEY) {
       errors.push(

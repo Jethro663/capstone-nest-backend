@@ -140,11 +140,9 @@ describe('ClassRecordService performance events', () => {
       { id: 'record-1', classId: 'class-1', gradingPeriod: 'Q1' },
     ]);
 
-    const result = await service.listAdviserSection(
-      'section-1',
-      'teacher-1',
-      ['teacher'],
-    );
+    const result = await service.listAdviserSection('section-1', 'teacher-1', [
+      'teacher',
+    ]);
 
     expect(db.query.classRecords.findMany).toHaveBeenCalledTimes(1);
     expect(result).toEqual({

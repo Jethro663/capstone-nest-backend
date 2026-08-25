@@ -140,7 +140,9 @@ export class StorageService implements StorageProviderInterface {
     } else if (file.path && fs.existsSync(file.path)) {
       buffer = await fs.promises.readFile(file.path);
     } else {
-      throw new BadRequestException('Uploaded file content is empty or missing');
+      throw new BadRequestException(
+        'Uploaded file content is empty or missing',
+      );
     }
 
     const res = await this.putObject({

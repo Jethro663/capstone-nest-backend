@@ -1124,10 +1124,17 @@ export class SectionsService {
       this.ensureTeacherCanAccessSection(sectionRecord, requesterId);
     }
 
-    const payload: { cardPreset?: string; cardBannerUrl?: string | null; updatedAt: Date } = {
+    const payload: {
+      cardPreset?: string;
+      cardBannerUrl?: string | null;
+      updatedAt: Date;
+    } = {
       updatedAt: new Date(),
     };
-    if (presentation.cardPreset !== undefined && presentation.cardPreset !== null) {
+    if (
+      presentation.cardPreset !== undefined &&
+      presentation.cardPreset !== null
+    ) {
       payload.cardPreset = presentation.cardPreset;
     }
     if (presentation.cardBannerUrl !== undefined) {
@@ -2528,11 +2535,10 @@ export class SectionsService {
     if (!fromSection) throw new NotFoundException('Source section not found');
 
     const uniqueStudentIds = [...new Set(dto.studentIds)];
-    const readinessByStudentId =
-      await this.getSectionStudentPromotionReadiness(
-        fromSection.id,
-        uniqueStudentIds,
-      );
+    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
+      fromSection.id,
+      uniqueStudentIds,
+    );
     const studentReadiness = Array.from(readinessByStudentId.values());
     const unfinalizedStudents = studentReadiness.filter(
       (student) => !student.isFinalized,

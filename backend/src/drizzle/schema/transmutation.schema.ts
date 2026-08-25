@@ -1,4 +1,12 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { users } from './base.schema';
 
 export interface TransmutationBand {
@@ -24,6 +32,8 @@ export const transmutationTables = pgTable(
   },
   (table) => ({
     isActiveIdx: index('transmutation_tables_is_active_idx').on(table.isActive),
-    updatedAtIdx: index('transmutation_tables_updated_at_idx').on(table.updatedAt),
+    updatedAtIdx: index('transmutation_tables_updated_at_idx').on(
+      table.updatedAt,
+    ),
   }),
 );

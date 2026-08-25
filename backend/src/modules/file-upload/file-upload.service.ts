@@ -61,7 +61,14 @@ interface SaveFileRecordDto {
   gradeLevel?: GradeLevelDto;
   teacherVisible?: boolean;
   contentHash?: string;
-  fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx' | 'document' | 'image' | 'file';
+  fileKind?:
+    | LibraryFileKindDto
+    | 'pdf'
+    | 'txt'
+    | 'pptx'
+    | 'document'
+    | 'image'
+    | 'file';
 }
 
 interface CreateFolderDto {
@@ -270,7 +277,15 @@ export class FileUploadService {
   }
 
   private isIndexableFileKind(
-    fileKind?: LibraryFileKindDto | 'pdf' | 'txt' | 'pptx' | 'document' | 'image' | 'file' | null,
+    fileKind?:
+      | LibraryFileKindDto
+      | 'pdf'
+      | 'txt'
+      | 'pptx'
+      | 'document'
+      | 'image'
+      | 'file'
+      | null,
   ) {
     return (
       !fileKind ||

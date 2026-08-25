@@ -1470,7 +1470,10 @@ export class ClassesService {
       updatedAt: new Date(),
     };
 
-    if (presentation.cardPreset !== undefined && presentation.cardPreset !== null) {
+    if (
+      presentation.cardPreset !== undefined &&
+      presentation.cardPreset !== null
+    ) {
       payload.cardPreset = presentation.cardPreset;
     }
 

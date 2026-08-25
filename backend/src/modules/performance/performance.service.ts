@@ -378,7 +378,9 @@ export class PerformanceService {
             classRecord: {
               average:
                 recordTotal.sampleSize > 0
-                  ? this.round(recordTotal.normalizedSum / recordTotal.sampleSize)
+                  ? this.round(
+                      recordTotal.normalizedSum / recordTotal.sampleSize,
+                    )
                   : null,
               sampleSize: recordTotal.sampleSize,
             },

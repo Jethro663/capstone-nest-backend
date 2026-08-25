@@ -254,7 +254,9 @@ export class ClassRecordComputationService {
     }
 
     // 5. Compute per-student grades using DepEd formula and active transmutation table
-    const activeBands = this.transmutationService ? await this.transmutationService.getActiveBands() : undefined;
+    const activeBands = this.transmutationService
+      ? await this.transmutationService.getActiveBands()
+      : undefined;
     const results = new Map<string, StudentGradeResult>();
 
     for (const studentId of studentIds) {

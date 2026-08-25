@@ -216,7 +216,6 @@ type AssessmentView = {
 
 type GradingPeriodCode = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
-
 @Injectable()
 export class AssessmentsService {
   private readonly logger = new Logger(AssessmentsService.name);
@@ -903,7 +902,9 @@ export class AssessmentsService {
     if (extension === 'pdf') {
       const buffer = await fs.readFile(absolutePath);
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>;
+      const pdfParse = require('pdf-parse') as (
+        buf: Buffer,
+      ) => Promise<{ text: string }>;
       const parsed = await pdfParse(buffer);
       return parsed.text.trim();
     }
@@ -1099,35 +1100,40 @@ export class AssessmentsService {
     await this.validateForPublish(assessment.id);
   }
 
-  private async canStudentAccessAssessment(assessment: {
-    id: string;
-    classId: string;
-    isPublished?: boolean | null;
-    isCoreTemplateAsset?: boolean | null;
-  }, preloadedItems?: AssessmentVisibilityItem[]) {
+  private async canStudentAccessAssessment(
+    assessment: {
+      id: string;
+      classId: string;
+      isPublished?: boolean | null;
+      isCoreTemplateAsset?: boolean | null;
+    },
+    preloadedItems?: AssessmentVisibilityItem[],
+  ) {
     if (!assessment.isPublished) return false;
     if (!assessment.isCoreTemplateAsset) return true;
 
-    const attachedItems = preloadedItems ?? (await this.db.query.moduleItems.findMany({
-      where: and(
-        eq(moduleItems.assessmentId, assessment.id),
-        eq(moduleItems.itemType, 'assessment'),
-      ),
-      with: {
-        section: {
-          with: {
-            module: {
-              columns: {
-                id: true,
-                classId: true,
-                isVisible: true,
-                isLocked: true,
+    const attachedItems =
+      preloadedItems ??
+      ((await this.db.query.moduleItems.findMany({
+        where: and(
+          eq(moduleItems.assessmentId, assessment.id),
+          eq(moduleItems.itemType, 'assessment'),
+        ),
+        with: {
+          section: {
+            with: {
+              module: {
+                columns: {
+                  id: true,
+                  classId: true,
+                  isVisible: true,
+                  isLocked: true,
+                },
               },
             },
           },
         },
-      },
-    })) as AssessmentVisibilityItem[];
+      })) as AssessmentVisibilityItem[]);
 
     if (attachedItems.length === 0) {
       return true;
@@ -1484,7 +1490,12 @@ export class AssessmentsService {
 
     const visibleAssessments: typeof assessmentList = [];
     for (const assessment of assessmentList) {
-      if (await this.canStudentAccessAssessment(assessment, assessment.moduleItems)) {
+      if (
+        await this.canStudentAccessAssessment(
+          assessment,
+          assessment.moduleItems,
+        )
+      ) {
         visibleAssessments.push(assessment);
       }
     }

@@ -1201,7 +1201,9 @@ export const uploadedFiles = pgTable(
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     filePath: text('file_path').notNull(),
     storageKey: text('storage_key'),
-    storageProvider: varchar('storage_provider', { length: 50 }).default('local'),
+    storageProvider: varchar('storage_provider', { length: 50 }).default(
+      'local',
+    ),
     storageBucket: varchar('storage_bucket', { length: 100 }),
     uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
     deletedAt: timestamp('deleted_at'),

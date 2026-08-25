@@ -17,9 +17,9 @@ describe('AcademicStateController role metadata', () => {
   });
 
   it('keeps preview and transition Admin-only', () => {
-    expect(
-      Reflect.getMetadata(ROLES_KEY, method('getImpactPreview')),
-    ).toEqual([RoleName.Admin]);
+    expect(Reflect.getMetadata(ROLES_KEY, method('getImpactPreview'))).toEqual([
+      RoleName.Admin,
+    ]);
     expect(Reflect.getMetadata(ROLES_KEY, method('transition'))).toEqual([
       RoleName.Admin,
     ]);

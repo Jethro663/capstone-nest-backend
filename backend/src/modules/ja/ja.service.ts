@@ -1399,7 +1399,10 @@ export class JaService {
           eq(assessments.isPublished, true),
         ),
       )
-      .orderBy(desc(assessmentAttempts.submittedAt), desc(assessments.createdAt))
+      .orderBy(
+        desc(assessmentAttempts.submittedAt),
+        desc(assessments.createdAt),
+      )
       .limit(30);
 
     const sessions = await this.db.query.jaSessions.findMany({
@@ -1435,7 +1438,9 @@ export class JaService {
         .select({
           sessionId: jaSessionItems.sessionId,
           total: count(jaSessionItems.id),
-          correct: count(sql`CASE WHEN ${jaSessionResponses.isCorrect} = true THEN 1 END`),
+          correct: count(
+            sql`CASE WHEN ${jaSessionResponses.isCorrect} = true THEN 1 END`,
+          ),
         })
         .from(jaSessionItems)
         .leftJoin(
@@ -1463,12 +1468,17 @@ export class JaService {
         );
       });
 
-      const completedSession = matchingSessions.find((s) => s.status === 'completed');
+      const completedSession = matchingSessions.find(
+        (s) => s.status === 'completed',
+      );
       const activeSession = matchingSessions.find((s) => s.status === 'active');
-      const latestSession = activeSession || completedSession || matchingSessions[0];
+      const latestSession =
+        activeSession || completedSession || matchingSessions[0];
 
       const isReplayCompleted = Boolean(completedSession);
-      const replayScore = completedSession ? (completedScoresMap.get(completedSession.id) ?? null) : null;
+      const replayScore = completedSession
+        ? (completedScoresMap.get(completedSession.id) ?? null)
+        : null;
 
       return {
         attemptId: row.attemptId ?? row.assessmentId,
@@ -1641,7 +1651,10 @@ export class JaService {
     const completedReviewSession = existingReviewSessions.find(
       (session) => session.status === 'completed',
     );
-    if (completedReviewSession && existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS) {
+    if (
+      completedReviewSession &&
+      existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS
+    ) {
       return this.getSession(user, completedReviewSession.id, 'review');
     }
 
