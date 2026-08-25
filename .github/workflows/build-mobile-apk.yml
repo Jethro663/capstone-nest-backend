@@ -86,18 +86,27 @@ jobs:
           git diff-index --quiet HEAD || (git commit -m "chore(download): auto-update student APK release v${{ steps.version.outputs.version }} [skip ci]" && git push)
 
       - name: Register New Version in Backend
-        if: ${{ vars.BACKEND_URL != '' && secrets.CI_ADMIN_SECRET != '' }}
+        env:
+          CI_SECRET: ${{ secrets.CI_ADMIN_SECRET }}
+          BACKEND_API_URL: ${{ vars.BACKEND_URL }}
+          APK_URL: ${{ vars.APK_DOWNLOAD_URL || format('{0}/downloads/nexora-student-mobile-release.apk', vars.FRONTEND_URL) }}
+        if: ${{ vars.BACKEND_URL != '' }}
         run: |
+          if [ -z "$CI_SECRET" ]; then
+            echo "::warning::CI_ADMIN_SECRET not set, skipping version registration"
+            exit 0
+          fi
+
           HTTP_STATUS=$(curl -s -o /tmp/register-response.json -w "%{http_code}" \
-            -X POST "${{ vars.BACKEND_URL }}/app-version/register" \
-            -H "X-CI-Secret: ${{ secrets.CI_ADMIN_SECRET }}" \
+            -X POST "${BACKEND_API_URL}/app-version/register" \
+            -H "X-CI-Secret: ${CI_SECRET}" \
             -H "Content-Type: application/json" \
             -d '{
               "platform": "android",
               "versionCode": ${{ steps.version.outputs.version_code }},
               "nativeVersion": "${{ steps.version.outputs.version }}",
               "minSupportedVersionCode": ${{ steps.version.outputs.version_code }},
-              "apkDownloadUrl": "${{ vars.APK_DOWNLOAD_URL || format('{0}/downloads/nexora-student-mobile-release.apk', vars.FRONTEND_URL) }}",
+              "apkDownloadUrl": "'"${APK_URL}"'",
               "requiresFullApk": true,
               "releaseNotes": "Automated CI build v${{ steps.version.outputs.version }} (code ${{ steps.version.outputs.version_code }})"
             }')
@@ -108,3 +117,4 @@ jobs:
           if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
             echo "::warning::Backend version registration failed with HTTP $HTTP_STATUS (non-blocking)"
           fi
+
