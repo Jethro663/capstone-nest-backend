@@ -1019,37 +1019,39 @@ async def _fetch_review_attempt_questions(
 
 
 async def _fetch_class_lessons_for_review(db: AsyncSession, class_id: str) -> list[dict[str, Any]]:
-    rows = await db.execute(
-        sa_text(
-            """
-            SELECT
-              l.id AS "lessonId",
-              l.title AS "title",
-              m.title AS "moduleTitle",
-              l.summary AS "summary",
-              l.content AS "content"
-            FROM lessons l
-            INNER JOIN class_modules m ON m.id = l.module_id
-            WHERE m.class_id = :classId
-            ORDER BY m.order_index ASC, l.order_index ASC
-            """
-        ),
-        {"classId": class_id},
-    )
-    results = []
-    for r in rows.mappings():
-        mod_title = str(r["moduleTitle"] or "").strip()
-        les_title = str(r["title"] or "").strip()
-        full_title = f"{mod_title}: {les_title}" if mod_title and les_title and mod_title not in les_title else les_title or mod_title
-        results.append({
-            "lessonId": str(r["lessonId"]),
-            "title": full_title,
-            "sourceReference": full_title,
-            "summary": str(r["summary"] or ""),
-            "content": str(r["content"] or ""),
-            "clueText": f"{r['summary'] or ''} {r['content'] or ''}".strip(),
-        })
-    return results
+    try:
+        rows = await db.execute(
+            sa_text(
+                """
+                SELECT
+                  l.id AS "lessonId",
+                  l.title AS "title",
+                  COALESCE(l.description, '') AS "summary"
+                FROM lessons l
+                WHERE l.class_id = :classId
+                  AND l.is_draft = false
+                ORDER BY l."order" ASC
+                """
+            ),
+            {"classId": class_id},
+        )
+        results = []
+        for r in rows.mappings():
+            les_title = str(r["title"] or "").strip()
+            if not les_title:
+                continue
+            results.append({
+                "lessonId": str(r["lessonId"]),
+                "title": les_title,
+                "sourceReference": les_title,
+                "summary": str(r["summary"] or ""),
+                "content": str(r["summary"] or ""),
+                "clueText": f"{les_title} {r['summary'] or ''}".strip(),
+            })
+        return results
+    except Exception as exc:
+        logger.warning("Failed to fetch class lessons for JA review: %s", exc)
+        return []
 
 
 async def generate_ja_review_session_packet(
