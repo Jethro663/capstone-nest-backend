@@ -23,7 +23,7 @@ jobs:
   build-and-update-apk:
     name: Build Android Release APK & Sync Web Download
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -52,16 +52,11 @@ jobs:
           cd mobile
           npm ci
 
-      - name: Export Expo JS Bundle
-        run: |
-          cd mobile
-          npx expo export --platform android
-
       - name: Build Android Release APK
         run: |
           cd mobile/android
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a --no-daemon
 
       - name: Extract Version Metadata from app.json
         id: version
@@ -117,4 +112,3 @@ jobs:
           if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
             echo "::warning::Backend version registration failed with HTTP $HTTP_STATUS (non-blocking)"
           fi
-
