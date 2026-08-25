@@ -1440,10 +1440,7 @@ export class JaService {
         .from(jaSessionItems)
         .leftJoin(
           jaSessionResponses,
-          and(
-            eq(jaSessionResponses.sessionId, jaSessionItems.sessionId),
-            eq(jaSessionResponses.itemId, jaSessionItems.id),
-          ),
+          eq(jaSessionResponses.sessionItemId, jaSessionItems.id),
         )
         .where(inArray(jaSessionItems.sessionId, completedSessionIds))
         .groupBy(jaSessionItems.sessionId);
