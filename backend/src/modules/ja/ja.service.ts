@@ -1402,16 +1402,6 @@ export class JaService {
       .orderBy(desc(assessmentAttempts.submittedAt), desc(assessments.createdAt))
       .limit(30);
 
-    const eligibleAttempts = eligibleAttemptsRaw.map((row) => ({
-      attemptId: row.attemptId ?? row.assessmentId,
-      assessmentId: row.assessmentId,
-      assessmentTitle: row.assessmentTitle,
-      submittedAt: row.submittedAt,
-      score: row.score,
-      passed: row.passed,
-      isSubmitted: row.isSubmitted,
-    }));
-
     const sessions = await this.db.query.jaSessions.findMany({
       where: and(
         eq(jaSessions.studentId, studentId),
@@ -1427,11 +1417,75 @@ export class JaService {
         strikeCount: true,
         rewardState: true,
         groundingStatus: true,
+        sourceSnapshotJson: true,
         startedAt: true,
         completedAt: true,
       },
       orderBy: [desc(jaSessions.updatedAt)],
-      limit: 20,
+      limit: 30,
+    });
+
+    const completedSessionIds = sessions
+      .filter((s) => s.status === 'completed')
+      .map((s) => s.id);
+
+    const completedScoresMap = new Map<string, number>();
+    if (completedSessionIds.length > 0) {
+      const scoreRows = await this.db
+        .select({
+          sessionId: jaSessionItems.sessionId,
+          total: count(jaSessionItems.id),
+          correct: count(sql`CASE WHEN ${jaSessionResponses.isCorrect} = true THEN 1 END`),
+        })
+        .from(jaSessionItems)
+        .leftJoin(
+          jaSessionResponses,
+          and(
+            eq(jaSessionResponses.sessionId, jaSessionItems.sessionId),
+            eq(jaSessionResponses.itemId, jaSessionItems.id),
+          ),
+        )
+        .where(inArray(jaSessionItems.sessionId, completedSessionIds))
+        .groupBy(jaSessionItems.sessionId);
+
+      for (const row of scoreRows) {
+        const total = Number(row.total || 0);
+        const correct = Number(row.correct || 0);
+        const percent = total > 0 ? Math.round((correct / total) * 100) : 0;
+        completedScoresMap.set(row.sessionId, percent);
+      }
+    }
+
+    const eligibleAttempts = eligibleAttemptsRaw.map((row) => {
+      const matchingSessions = sessions.filter((s) => {
+        const snapshot = s.sourceSnapshotJson as any;
+        return (
+          snapshot?.assessmentId === row.assessmentId ||
+          snapshot?.attemptId === row.attemptId ||
+          snapshot?.attemptId === row.assessmentId
+        );
+      });
+
+      const completedSession = matchingSessions.find((s) => s.status === 'completed');
+      const activeSession = matchingSessions.find((s) => s.status === 'active');
+      const latestSession = activeSession || completedSession || matchingSessions[0];
+
+      const isReplayCompleted = Boolean(completedSession);
+      const replayScore = completedSession ? (completedScoresMap.get(completedSession.id) ?? null) : null;
+
+      return {
+        attemptId: row.attemptId ?? row.assessmentId,
+        assessmentId: row.assessmentId,
+        assessmentTitle: row.assessmentTitle,
+        submittedAt: row.submittedAt,
+        score: row.score,
+        passed: row.passed,
+        isSubmitted: row.isSubmitted,
+        isReplayCompleted,
+        replayScore,
+        replaySessionId: latestSession?.id ?? null,
+        replayCount: matchingSessions.length,
+      };
     });
 
     return {
@@ -1575,7 +1629,7 @@ export class JaService {
           eq(jaSessions.studentId, studentId),
           eq(jaSessions.classId, dto.classId),
           eq(jaSessions.mode, 'review'),
-          sql`${jaSessions.sourceSnapshotJson}->>'attemptId' = ${dto.attemptId}`,
+          sql`(${jaSessions.sourceSnapshotJson}->>'attemptId' = ${dto.attemptId} OR ${jaSessions.sourceSnapshotJson}->>'assessmentId' = ${attempt[0].assessmentId})`,
         ),
       )
       .orderBy(desc(jaSessions.updatedAt));
@@ -1587,10 +1641,11 @@ export class JaService {
       return this.getSession(user, activeReviewSession.id, 'review');
     }
 
-    if (existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS) {
-      throw new BadRequestException(
-        'This assessment already used all 3 JA replay tries.',
-      );
+    const completedReviewSession = existingReviewSessions.find(
+      (session) => session.status === 'completed',
+    );
+    if (completedReviewSession && existingReviewSessions.length >= JA_REVIEW_MAX_ATTEMPTS) {
+      return this.getSession(user, completedReviewSession.id, 'review');
     }
 
     const { allowedLessonIds, allowedAssessmentIds } =

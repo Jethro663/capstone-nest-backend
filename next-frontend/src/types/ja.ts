@@ -177,6 +177,9 @@ export interface JaReviewAttemptSummary {
   submittedAt: string;
   score: number | null;
   passed: boolean | null;
+  isReplayCompleted?: boolean;
+  replayScore?: number | null;
+  replayCount?: number;
 }
 
 export interface JaHubResponse {

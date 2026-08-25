@@ -240,6 +240,23 @@
   color: #881337 !important;
 }
 
+/* AMBER / YELLOW Card Panel for Ongoing Replay Tasks (1..N-1 completed) */
+.student-lxp-checkpoint-card--ongoing-quiz {
+  border: 2px solid #f59e0b !important;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
+  box-shadow: 0 4px 14px -3px rgba(245, 158, 11, 0.18) !important;
+}
+
+.student-lxp-checkpoint-card--ongoing-quiz:hover {
+  border-color: #d97706 !important;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+}
+
+.student-lxp-checkpoint-card--ongoing-quiz .student-lxp-checkpoint-card__index {
+  background: #fde68a !important;
+  color: #78350f !important;
+}
+
 /* Side Score & Title Row Layout */
 .student-lxp-checkpoint-card__title-row {
   display: flex;

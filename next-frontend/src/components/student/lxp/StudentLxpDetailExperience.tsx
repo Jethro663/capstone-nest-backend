@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
 import { ClassWorkspaceShell, type ClassWorkspaceTabItem } from '@/components/class/workspace/ClassWorkspaceShell';
 import { lxpService } from '@/services/lxp-service';
+import { jaService } from '@/services/ja-service';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import type { LxpCheckpoint, LxpOverviewResponse, PlaylistResponse } from '@/types/lxp';
 import { cn } from '@/utils/cn';
@@ -169,6 +170,7 @@ function CheckpointCard({
   readOnly,
   completing,
   onComplete,
+  replaySummary,
 }: {
   checkpoint: LxpCheckpoint;
   classId: string;
@@ -176,6 +178,7 @@ function CheckpointCard({
   readOnly: boolean;
   completing: boolean;
   onComplete: (checkpointId: string) => void;
+  replaySummary?: { totalCount: number; completedCount: number; percent: number; avgScore: number | null } | null;
 }) {
   const router = useRouter();
   const title = getCheckpointTitle(checkpoint);
@@ -220,38 +223,71 @@ function CheckpointCard({
     checkpointScore?.submittedAt ||
     (checkpointScore?.scorePercent !== null && checkpointScore?.scorePercent !== undefined),
   );
-  const isTaken = isQuizOrAssessment && (hasSubmittedGuidedAttempt || hasScoreSubmitted || checkpoint.isCompleted);
+
+  const isReplayOngoing = isReplay && (replaySummary?.completedCount ?? 0) > 0 && (replaySummary?.completedCount ?? 0) < (replaySummary?.totalCount ?? 1);
+  const isReplayFullyCompleted = isReplay && (replaySummary?.totalCount ?? 0) > 0 && (replaySummary?.completedCount ?? 0) === (replaySummary?.totalCount ?? 1);
+
+  const isTaken = isQuizOrAssessment && (
+    isReplay
+      ? (isReplayOngoing || isReplayFullyCompleted)
+      : (hasSubmittedGuidedAttempt || hasScoreSubmitted || checkpoint.isCompleted)
+  );
 
   const passingScore = guidedAttemptSummary?.passingScore ?? checkpoint.assessment?.passingScore ?? 60;
-  const rawScorePercent = guidedAttemptSummary?.bestScorePercent ?? guidedAttemptSummary?.latestScorePercent ?? checkpointScore?.scorePercent ?? null;
+  const rawScorePercent = isReplay
+    ? (replaySummary?.avgScore ?? null)
+    : (guidedAttemptSummary?.bestScorePercent ?? guidedAttemptSummary?.latestScorePercent ?? checkpointScore?.scorePercent ?? null);
+
   const isPassed = isQuizOrAssessment && (
-    Boolean(guidedAttemptSummary?.passed) ||
-    Boolean(checkpointScore?.passed) ||
-    (rawScorePercent !== null && rawScorePercent >= passingScore) ||
-    (checkpoint.isCompleted && (rawScorePercent === null || rawScorePercent >= passingScore))
+    isReplay
+      ? isReplayFullyCompleted
+      : (
+          Boolean(guidedAttemptSummary?.passed) ||
+          Boolean(checkpointScore?.passed) ||
+          (rawScorePercent !== null && rawScorePercent >= passingScore) ||
+          (checkpoint.isCompleted && (rawScorePercent === null || rawScorePercent >= passingScore))
+        )
   );
 
   const quizStatusTag = !isQuizOrAssessment
     ? null
-    : isTaken
-      ? isPassed
+    : isReplay
+      ? isReplayFullyCompleted
         ? 'TAKEN • PASSED'
-        : 'TAKEN • FAILED'
-      : 'NOT TAKEN';
+        : isReplayOngoing
+          ? `ONGOING • ${replaySummary?.completedCount}/${replaySummary?.totalCount} REPLAYED`
+          : 'NOT TAKEN'
+      : isTaken
+        ? isPassed
+          ? 'TAKEN • PASSED'
+          : 'TAKEN • FAILED'
+        : 'NOT TAKEN';
 
   const quizCardTone = !isQuizOrAssessment
     ? null
-    : !isTaken
-      ? 'not-taken'
-      : isPassed
+    : isReplay
+      ? isReplayFullyCompleted
         ? 'passed'
-        : 'failed';
+        : isReplayOngoing
+          ? 'ongoing'
+          : 'not-taken'
+      : !isTaken
+        ? 'not-taken'
+        : isPassed
+          ? 'passed'
+          : 'failed';
 
   const statusLabel = isQuizOrAssessment
-    ? (isTaken ? (isPassed ? 'Passed' : 'Failed') : 'Not Taken')
+    ? isReplay
+      ? isReplayFullyCompleted
+        ? 'Passed'
+        : isReplayOngoing
+          ? `Ongoing (${replaySummary?.completedCount}/${replaySummary?.totalCount})`
+          : 'Not Taken'
+      : (isTaken ? (isPassed ? 'Passed' : 'Failed') : 'Not Taken')
     : (guidedStatus?.label ?? (checkpoint.isCompleted ? 'Completed' : readOnly ? 'Closed' : 'Available'));
   const statusTone = isQuizOrAssessment
-    ? (quizCardTone === 'passed' ? 'completed' : 'open')
+    ? (quizCardTone === 'passed' ? 'completed' : quizCardTone === 'ongoing' ? 'warning' : 'open')
     : (guidedStatus?.tone ?? (checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'));
 
   const isNestedInteractiveTarget = (target: EventTarget | null, currentTarget: HTMLElement) => {
@@ -277,7 +313,15 @@ function CheckpointCard({
       className={cn(
         'student-lxp-checkpoint-card',
         primaryHref ? 'student-lxp-checkpoint-card--interactive' : null,
-        isQuizOrAssessment && (quizCardTone === 'passed' ? 'student-lxp-checkpoint-card--passed-quiz' : quizCardTone === 'failed' ? 'student-lxp-checkpoint-card--failed-quiz' : 'student-lxp-checkpoint-card--not-taken-quiz'),
+        isQuizOrAssessment && (
+          quizCardTone === 'passed'
+            ? 'student-lxp-checkpoint-card--passed-quiz'
+            : quizCardTone === 'ongoing'
+              ? 'student-lxp-checkpoint-card--ongoing-quiz'
+              : quizCardTone === 'failed'
+                ? 'student-lxp-checkpoint-card--failed-quiz'
+                : 'student-lxp-checkpoint-card--not-taken-quiz'
+        ),
       )}
       data-type={isGuidedAssessment ? 'guided' : isReplay ? 'replay' : 'step'}
       data-state={checkpoint.isCompleted ? 'completed' : readOnly ? 'closed' : 'open'}
@@ -463,6 +507,7 @@ export default function StudentLxpDetailExperience() {
   const currentTab = getTab(searchParams.get('tab'));
   const [overview, setOverview] = useState<LxpOverviewResponse | null>(null);
   const [playlist, setPlaylist] = useState<PlaylistResponse | null>(null);
+  const [jaHub, setJaHub] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completingId, setCompletingId] = useState<string | null>(null);
@@ -491,11 +536,41 @@ export default function StudentLxpDetailExperience() {
     } finally {
       setLoading(false);
     }
+
+    if (jaService && typeof jaService.getHub === 'function') {
+      try {
+        const hubRes = await jaService.getHub(classId);
+        if (hubRes?.data) {
+          setJaHub(hubRes.data);
+        }
+      } catch {
+        // Optional secondary enrichment
+      }
+    }
   }, [classId]);
 
   useEffect(() => {
     void fetchDetail();
   }, [fetchDetail]);
+
+  const replaySummary = useMemo(() => {
+    const attempts = (jaHub?.review?.eligibleAttempts ?? []) as Array<{ isReplayCompleted?: boolean; replayScore?: number | null }>;
+    const totalCount = attempts.length;
+    const completedCount = attempts.filter((a) => a.isReplayCompleted).length;
+    const completedScores = attempts
+      .map((a) => a.replayScore)
+      .filter((s): s is number => typeof s === 'number');
+    const avgScore = completedScores.length > 0
+      ? Math.round(completedScores.reduce((sum, val) => sum + val, 0) / completedScores.length)
+      : null;
+
+    return {
+      totalCount,
+      completedCount,
+      percent: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+      avgScore,
+    };
+  }, [jaHub]);
 
   const readOnly = isCompletedCase(overview, playlist);
   const checkpoints = useMemo(
@@ -707,6 +782,7 @@ export default function StudentLxpDetailExperience() {
                   readOnly={readOnly}
                   completing={false}
                   onComplete={handleComplete}
+                  replaySummary={replaySummary}
                 />
               ))}
             </div>

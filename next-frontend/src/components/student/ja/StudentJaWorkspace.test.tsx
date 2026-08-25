@@ -592,7 +592,7 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     fireEvent.click(
       await screen.findByRole('button', {
-        name: /Fractions Quiz.*Submitted.*62%/i,
+        name: /Fractions Quiz.*62%/i,
       }),
     );
     expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
@@ -1116,7 +1116,7 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     expect(await screen.findByText(/JA is taking a break/i)).toBeInTheDocument();
     const replayButton = await screen.findByRole('button', {
-      name: /Fractions Quiz.*Submitted.*62%/i,
+      name: /Fractions Quiz.*62%/i,
     });
     expect(replayButton).toBeDisabled();
     fireEvent.click(replayButton);

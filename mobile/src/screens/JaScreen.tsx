@@ -1064,6 +1064,7 @@ function ReplayPanel({
       </View>
       {attempts.length ? (
         attempts.map((attempt) => {
+          const isReplayed = Boolean(attempt.isReplayCompleted);
           const isSubmitted = Boolean(
             (attempt as unknown as Record<string, unknown>).isSubmitted ??
             (attempt.submittedAt && attempt.attemptId)
@@ -1079,18 +1080,13 @@ function ReplayPanel({
               onPress={() => {
                 if (isSubmitted) {
                   onStart(attempt);
-                } else {
-                  Alert.alert(
-                    "Not Yet Taken",
-                    "Please submit this assessment attempt first in class before opening JA Replay."
-                  );
                 }
               }}
               style={({ pressed }) => [{
                 borderRadius: 20,
                 borderWidth: 1.5,
-                borderColor: isSubmitted ? "#86EFAC" : "#FECDD3",
-                backgroundColor: isSubmitted ? "#F0FDF4" : "#FFF1F2",
+                borderColor: isReplayed ? "#86EFAC" : "#FDA4AF",
+                backgroundColor: isReplayed ? "#F0FDF4" : "#FFF1F2",
                 padding: 15,
                 marginBottom: 10,
                 opacity: pressed ? 0.85 : 1,
@@ -1102,9 +1098,9 @@ function ReplayPanel({
               <View style={{ flex: 1, paddingRight: 10 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
                   <MaterialCommunityIcons
-                    name={isSubmitted ? "check-circle" : "alert-circle-outline"}
+                    name={isReplayed ? "check-circle" : "alert-circle-outline"}
                     size={18}
-                    color={isSubmitted ? "#16A34A" : "#E11D48"}
+                    color={isReplayed ? "#16A34A" : "#E11D48"}
                   />
                   <Text style={{ color: dark.text, fontSize: 14, fontWeight: "900", flex: 1 }}>
                     {stripRichText(attempt.assessmentTitle)}
@@ -1112,14 +1108,20 @@ function ReplayPanel({
                 </View>
 
                 <Text style={{ color: dark.muted, fontSize: 11, fontWeight: "700" }}>
-                  {isSubmitted
-                    ? `Submitted ${formatDate(attempt.submittedAt)} ${attempt.score !== null ? `• Score: ${attempt.score}%` : ""}`
-                    : "Not yet submitted in class"}
+                  {isReplayed
+                    ? `Replay Score: ${attempt.replayScore ?? 100}% • Original Class Score: ${attempt.score ?? 0}%`
+                    : attempt.score !== null
+                      ? `Original Class Score: ${attempt.score}% • JA Replay Pending`
+                      : "Not yet retaken in JA Replay"}
                 </Text>
 
-                {isSubmitted ? (
-                  <Text style={{ marginTop: 4, color: locked ? dark.red : "#15803D", fontSize: 11, fontWeight: "900" }}>
-                    {locked ? "Locked after 3 replay tries" : `${Math.max(0, max - used)} replay ${max - used === 1 ? "try" : "tries"} left`}
+                {isReplayed ? (
+                  <Text style={{ marginTop: 4, color: "#15803D", fontSize: 11, fontWeight: "900" }}>
+                    Replay Completed • Tap to view result
+                  </Text>
+                ) : isSubmitted ? (
+                  <Text style={{ marginTop: 4, color: "#991B1B", fontSize: 11, fontWeight: "900" }}>
+                    Tap to start JA Replay
                   </Text>
                 ) : null}
               </View>
@@ -1128,16 +1130,16 @@ function ReplayPanel({
                 paddingHorizontal: 12,
                 paddingVertical: 6,
                 borderRadius: 999,
-                backgroundColor: isSubmitted ? "#DCFCE7" : "#FFE4E6",
+                backgroundColor: isReplayed ? "#DCFCE7" : "#FFE4E6",
                 borderWidth: 1,
-                borderColor: isSubmitted ? "#86EFAC" : "#FDA4AF",
+                borderColor: isReplayed ? "#86EFAC" : "#FDA4AF",
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 5,
               }}>
-                <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: isSubmitted ? "#16A34A" : "#E11D48" }} />
-                <Text style={{ color: isSubmitted ? "#15803D" : "#991B1B", fontSize: 11, fontWeight: "900" }}>
-                  {isSubmitted ? "Submitted" : "Not Yet Taken"}
+                <View style={{ width: 6, height: 6, borderRadius: 999, backgroundColor: isReplayed ? "#16A34A" : "#E11D48" }} />
+                <Text style={{ color: isReplayed ? "#15803D" : "#991B1B", fontSize: 11, fontWeight: "900" }}>
+                  {isReplayed ? `Score: ${attempt.replayScore ?? 100}%` : "Not Retaken Yet"}
                 </Text>
               </View>
             </Pressable>

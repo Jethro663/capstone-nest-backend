@@ -1,7 +1,4 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import StudentLxpDetailExperience from './StudentLxpDetailExperience';
-import { lxpService } from '@/services/lxp-service';
-import { healthService } from '@/services/health-service';
 
 const push = jest.fn();
 const replace = jest.fn();
@@ -20,6 +17,18 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
+jest.mock('@/services/ja-service', () => ({
+  jaService: {
+    getHub: jest.fn().mockResolvedValue({
+      data: {
+        review: {
+          eligibleAttempts: [],
+        },
+      },
+    }),
+  },
+}));
+
 jest.mock('@/services/lxp-service', () => ({
   lxpService: {
     getEligibility: jest.fn(),
@@ -35,6 +44,11 @@ jest.mock('@/services/health-service', () => ({
     getReadiness: jest.fn(),
   },
 }));
+
+import StudentLxpDetailExperience from './StudentLxpDetailExperience';
+import { lxpService } from '@/services/lxp-service';
+import { healthService } from '@/services/health-service';
+import { jaService } from '@/services/ja-service';
 
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
 const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
@@ -156,6 +170,7 @@ describe('StudentLxpDetailExperience', () => {
     mockedLxpService.getOverview.mockResolvedValue(overviewResponse as never);
     mockedLxpService.getPlaylist.mockResolvedValue(activePlaylistResponse as never);
     mockedLxpService.completeCheckpoint.mockResolvedValue(activePlaylistResponse as never);
+    (jaService.getHub as jest.Mock).mockResolvedValue({ data: { review: { eligibleAttempts: [] } } });
   });
 
   it('defaults to Assigned Steps and renders the four path workspace tabs only', async () => {

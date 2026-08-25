@@ -1949,7 +1949,8 @@ export default function StudentJaWorkspace({
                       </p>
                     ) : (
                       hub.review.eligibleAttempts.map((attempt) => {
-                        const isSubmitted = Boolean(
+                        const isReplayed = Boolean(attempt.isReplayCompleted);
+                        const isClassSubmitted = Boolean(
                           (attempt as unknown as Record<string, unknown>).isSubmitted ??
                           (attempt.submittedAt && attempt.attemptId)
                         );
@@ -1960,12 +1961,12 @@ export default function StudentJaWorkspace({
                             disabled={aiUnavailable}
                             className={cn(
                               "ja-assessment-card group relative w-full text-left flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 transition-all duration-200 shadow-sm",
-                              isSubmitted
+                              isReplayed
                                 ? "border-emerald-300/80 bg-gradient-to-r from-emerald-50/90 via-teal-50/30 to-white hover:-translate-y-0.5 hover:border-emerald-500 hover:shadow-md cursor-pointer"
-                                : "border-rose-200/90 bg-gradient-to-r from-rose-50/80 via-amber-50/20 to-white hover:border-rose-300 opacity-95 cursor-pointer"
+                                : "border-rose-300/90 bg-gradient-to-r from-rose-50/90 via-amber-50/30 to-white hover:-translate-y-0.5 hover:border-rose-400 hover:shadow-md cursor-pointer"
                             )}
                             onClick={() => {
-                              if (isSubmitted && attempt.attemptId) {
+                              if (isClassSubmitted && attempt.attemptId) {
                                 void startReview(attempt.attemptId);
                               } else {
                                 toast.info(
@@ -1978,12 +1979,12 @@ export default function StudentJaWorkspace({
                               <div
                                 className={cn(
                                   "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs transition-transform duration-200 group-hover:scale-105",
-                                  isSubmitted
+                                  isReplayed
                                     ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                                     : "bg-rose-100 text-rose-700 border border-rose-200"
                                 )}
                               >
-                                {isSubmitted ? (
+                                {isReplayed ? (
                                   <CheckCircle2 className="h-6 w-6" />
                                 ) : (
                                   <AlertCircle className="h-6 w-6" />
@@ -1994,9 +1995,11 @@ export default function StudentJaWorkspace({
                                   {attempt.assessmentTitle}
                                 </h4>
                                 <p className="mt-0.5 text-xs font-medium text-slate-500">
-                                  {isSubmitted
-                                    ? `Submitted ${new Date(attempt.submittedAt!).toLocaleDateString()}`
-                                    : "Not yet submitted in class"}
+                                  {isReplayed
+                                    ? `Replay Score: ${attempt.replayScore ?? 100}% • Original Class Score: ${attempt.score ?? 0}%`
+                                    : attempt.score !== null
+                                      ? `Original Class Score: ${attempt.score}% • JA Replay Pending`
+                                      : "Not yet retaken in JA Replay"}
                                 </p>
                               </div>
                             </div>
@@ -2005,7 +2008,7 @@ export default function StudentJaWorkspace({
                               <span
                                 className={cn(
                                   "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-2xs",
-                                  isSubmitted
+                                  isReplayed
                                     ? "border-emerald-300 bg-emerald-100/90 text-emerald-800"
                                     : "border-rose-300 bg-rose-100/90 text-rose-800"
                                 )}
@@ -2013,22 +2016,25 @@ export default function StudentJaWorkspace({
                                 <span
                                   className={cn(
                                     "h-2 w-2 rounded-full",
-                                    isSubmitted ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
+                                    isReplayed ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
                                   )}
                                 />
-                                {isSubmitted
-                                  ? attempt.score !== null
-                                    ? `Submitted ${attempt.score}%`
-                                    : "Submitted"
-                                  : "Not Yet Taken"}
+                                {isReplayed
+                                  ? `Replay Score: ${attempt.replayScore ?? 100}%`
+                                  : "Not Retaken Yet"}
                               </span>
 
-                              {isSubmitted ? (
-                                <span className="inline-flex items-center rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs group-hover:bg-emerald-700">
-                                  <PlayCircle className="mr-1.5 h-4 w-4" />
-                                  Start Replay
-                                </span>
-                              ) : null}
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors",
+                                  isReplayed
+                                    ? "bg-emerald-600 group-hover:bg-emerald-700"
+                                    : "bg-rose-600 group-hover:bg-rose-700"
+                                )}
+                              >
+                                <PlayCircle className="mr-1.5 h-4 w-4" />
+                                {isReplayed ? "View Replay Result" : "Start Replay"}
+                              </span>
                             </div>
                           </button>
                         );
