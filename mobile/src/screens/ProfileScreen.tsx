@@ -11,6 +11,8 @@ import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { buildProfileFullName } from "./screen-flow";
 import { normalizePhilippinePhone } from "../utils/studentIdentity";
+import { analyzePhPhone } from "../utils/phPhoneValidation";
+import { PhPhoneInputField } from "../components/ui/PhPhoneInputField";
 import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
@@ -330,6 +332,13 @@ export function ProfileScreen(props: Props) {
     user?.gender,
   ]);
 
+  const phoneAnalysis = useMemo(() => analyzePhPhone(phone), [phone]);
+  const familyContactAnalysis = useMemo(() => analyzePhPhone(familyContact), [familyContact]);
+
+  const isPhoneValid = !hasValue(phone) || phoneAnalysis.isValid;
+  const isFamilyContactValid = !hasValue(familyContact) || familyContactAnalysis.isValid;
+  const isContactSectionValid = isPhoneValid && isFamilyContactValid;
+
   const statusItems = useMemo<ProfileStatusItem[]>(
     () => [
       { label: "First Name", value: currentFirstName },
@@ -337,11 +346,11 @@ export function ProfileScreen(props: Props) {
       { label: "Grade Level", value: currentGradeLevel },
       { label: "Date of Birth", value: dateOfBirth },
       { label: "Gender", value: gender },
-      { label: "Contact Number", value: phone },
+      { label: "Contact Number", value: phoneAnalysis.isValid ? phone : null },
       { label: "Home Address", value: address },
       { label: "Guardian Name", value: familyName },
       { label: "Relationship", value: familyRelationship },
-      { label: "Guardian Contact", value: familyContact },
+      { label: "Guardian Contact", value: familyContactAnalysis.isValid ? familyContact : null },
     ],
     [
       address,
@@ -350,14 +359,17 @@ export function ProfileScreen(props: Props) {
       currentLastName,
       dateOfBirth,
       familyContact,
+      familyContactAnalysis.isValid,
       familyName,
       familyRelationship,
       gender,
       phone,
+      phoneAnalysis.isValid,
     ],
   );
 
   const requiredCount = statusItems.filter((item) => !hasValue(item.value)).length;
+  const canSaveProfile = isContactSectionValid && requiredCount === 0;
   const refreshBusy = profileQuery.isRefetching || updateMutation.isPending || avatarMutation.isPending;
   const completionHeadline =
     requiredCount === 0
@@ -372,17 +384,31 @@ export function ProfileScreen(props: Props) {
     try {
       setError("");
 
-      const normPhone = phone ? normalizePhilippinePhone(phone) : phone;
-      const normFamilyContact = familyContact ? normalizePhilippinePhone(familyContact) : familyContact;
+      if (hasValue(phone) && !phoneAnalysis.isValid) {
+        setError(`Contact Number: ${phoneAnalysis.message}`);
+        return;
+      }
+      if (hasValue(familyContact) && !familyContactAnalysis.isValid) {
+        setError(`Guardian Contact: ${familyContactAnalysis.message}`);
+        return;
+      }
+      const editableRequiredMissing = [
+        dateOfBirth,
+        gender,
+        phone,
+        address,
+        familyName,
+        familyRelationship,
+        familyContact,
+      ].some((val) => !hasValue(val));
 
-      if (phone && !normPhone) {
-        setError("Use 09XXXXXXXXX or +639XXXXXXXXX.");
+      if (editableRequiredMissing) {
+        setError("Please complete all required profile fields before saving.");
         return;
       }
-      if (familyContact && !normFamilyContact) {
-        setError("Use 09XXXXXXXXX or +639XXXXXXXXX.");
-        return;
-      }
+
+      const normPhone = phoneAnalysis.normalizedE164 ?? normalizePhilippinePhone(phone) ?? phone;
+      const normFamilyContact = familyContactAnalysis.normalizedE164 ?? normalizePhilippinePhone(familyContact) ?? familyContact;
 
       const payload = {
         phone: normPhone ?? undefined,
@@ -758,12 +784,12 @@ export function ProfileScreen(props: Props) {
             }}
           >
             <View style={{ borderRightColor: theme.border, borderRightWidth: 1, flex: 1, paddingRight: 12 }}>
-              <EditableField
-                keyboardType="phone-pad"
+              <PhPhoneInputField
                 label="Contact Number"
-                onChangeText={setPhone}
-                placeholder="0917..."
-                maxLength={13}
+                onChangeText={(next) => {
+                  setError("");
+                  setPhone(next);
+                }}
                 required
                 value={phone}
               />
@@ -816,12 +842,12 @@ export function ProfileScreen(props: Props) {
               />
             </View>
             <View style={{ flex: 1, paddingLeft: 12 }}>
-              <EditableField
-                keyboardType="phone-pad"
+              <PhPhoneInputField
                 label="Guardian Contact"
-                onChangeText={setFamilyContact}
-                placeholder="0917..."
-                maxLength={13}
+                onChangeText={(next) => {
+                  setError("");
+                  setFamilyContact(next);
+                }}
                 required
                 value={familyContact}
               />
@@ -831,20 +857,27 @@ export function ProfileScreen(props: Props) {
 
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>
           <Pressable
+            disabled={updateMutation.isPending || !isContactSectionValid}
             onPress={() => void handleSave()}
             style={{
               alignItems: "center",
-              backgroundColor: theme.red,
+              backgroundColor: isContactSectionValid ? theme.red : theme.surface,
+              borderColor: isContactSectionValid ? theme.red : theme.border,
               borderRadius: 10,
+              borderWidth: 1,
               justifyContent: "center",
-              opacity: updateMutation.isPending ? 0.7 : 1,
+              opacity: updateMutation.isPending || !isContactSectionValid ? 0.6 : 1,
               paddingVertical: 12,
             }}
           >
             <View style={{ alignItems: "center", flexDirection: "row" }}>
-              <MaterialCommunityIcons color="#FFFFFF" name="content-save-outline" size={14} />
-              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "600", marginLeft: 7 }}>
-                {updateMutation.isPending ? "Saving Profile Changes..." : "Save Profile Changes"}
+              <MaterialCommunityIcons color={isContactSectionValid ? "#FFFFFF" : theme.dim} name="content-save-outline" size={14} />
+              <Text style={{ color: isContactSectionValid ? "#FFFFFF" : theme.dim, fontSize: 13, fontWeight: "600", marginLeft: 7 }}>
+                {updateMutation.isPending
+                  ? "Saving Profile Changes..."
+                  : !isContactSectionValid
+                    ? "Fix Invalid PH Contact Numbers to Save"
+                    : "Save Profile Changes"}
               </Text>
             </View>
           </Pressable>

@@ -897,6 +897,8 @@ describe("mobile rendered screen flows", () => {
         familyRelationship: "Guardian",
         familyContact: "09990002222",
         profilePicture: "",
+        dateOfBirth: "2000-01-01",
+        gender: "Female",
       }) as ReturnType<typeof useProfile>,
     );
     profileUpdateMutateAsync = jest.fn().mockResolvedValue(undefined);
@@ -4810,6 +4812,9 @@ describe("mobile rendered screen flows", () => {
       familyName: "Parent",
       familyRelationship: "Guardian",
       familyContact: "+639990002222",
+      dateOfBirth: "2000-01-01",
+      dob: "2000-01-01",
+      gender: "Female",
     });
   });
 

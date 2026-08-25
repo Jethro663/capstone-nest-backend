@@ -1,3 +1,5 @@
+import { analyzePhPhone } from "./phPhoneValidation";
+
 type StudentIdentitySource = {
   email?: string | null;
   lrn?: string | null;
@@ -52,15 +54,6 @@ export function formatStudentIdentityWithStatus(
 }
 
 export function normalizePhilippinePhone(value: string): string | null {
-  const trimmed = value.trim();
-
-  if (/^09\d{9}$/.test(trimmed)) {
-    return `+63${trimmed.slice(1)}`;
-  }
-
-  if (/^\+639\d{9}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  return null;
+  const result = analyzePhPhone(value);
+  return result.normalizedE164;
 }
