@@ -1,8 +1,13 @@
-import { Injectable } from '@nestjs/common';
-import { desc, eq } from 'drizzle-orm';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
+import { and, desc, eq } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { appVersions } from '../../drizzle/schema';
 import { CheckAppVersionDto } from './dto/check-app-version.dto';
+import { CreateAppVersionDto } from './dto/create-app-version.dto';
 
 export type UpdateType = 'none' | 'apk_optional' | 'apk_forced';
 
@@ -23,10 +28,84 @@ export interface AppVersionDecision {
 
 @Injectable()
 export class AppVersionService {
+  private readonly logger = new Logger(AppVersionService.name);
+
   constructor(private readonly databaseService: DatabaseService) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  /**
+   * Register or update a version release for a given platform.
+   * Prevents version code regressions and upserts by platform + versionCode.
+   */
+  async registerVersion(dto: CreateAppVersionDto) {
+    // Guard against version regression: new versionCode must be >= existing latest
+    const existing = await this.db.query.appVersions.findFirst({
+      where: eq(appVersions.platform, dto.platform),
+      orderBy: [desc(appVersions.versionCode)],
+    });
+
+    if (existing && dto.versionCode < existing.versionCode) {
+      throw new BadRequestException(
+        `Version code regression: incoming ${dto.versionCode} is lower than current latest ${existing.versionCode} for platform "${dto.platform}".`,
+      );
+    }
+
+    // Check if this exact platform + versionCode already exists (upsert)
+    const duplicate = await this.db.query.appVersions.findFirst({
+      where: and(
+        eq(appVersions.platform, dto.platform),
+        eq(appVersions.versionCode, dto.versionCode),
+      ),
+    });
+
+    if (duplicate) {
+      // Update existing record in-place
+      const [updated] = await this.db
+        .update(appVersions)
+        .set({
+          minSupportedVersionCode: dto.minSupportedVersionCode,
+          nativeVersion: dto.nativeVersion,
+          otaRuntimeVersion: dto.otaRuntimeVersion ?? duplicate.otaRuntimeVersion,
+          apkDownloadUrl: dto.apkDownloadUrl,
+          requiresFullApk: dto.requiresFullApk ?? duplicate.requiresFullApk,
+          releaseNotes: dto.releaseNotes ?? duplicate.releaseNotes,
+          apkSha256: dto.apkSha256 ?? duplicate.apkSha256,
+          apkSizeBytes: dto.apkSizeBytes ?? duplicate.apkSizeBytes,
+          updatedAt: new Date(),
+        })
+        .where(eq(appVersions.id, duplicate.id))
+        .returning();
+
+      this.logger.log(
+        `Updated app version record for ${dto.platform} versionCode=${dto.versionCode}`,
+      );
+      return updated;
+    }
+
+    // Insert new version record
+    const [created] = await this.db
+      .insert(appVersions)
+      .values({
+        platform: dto.platform,
+        versionCode: dto.versionCode,
+        minSupportedVersionCode: dto.minSupportedVersionCode,
+        nativeVersion: dto.nativeVersion,
+        otaRuntimeVersion: dto.otaRuntimeVersion ?? '1',
+        apkDownloadUrl: dto.apkDownloadUrl,
+        requiresFullApk: dto.requiresFullApk ?? false,
+        releaseNotes: dto.releaseNotes ?? null,
+        apkSha256: dto.apkSha256 ?? null,
+        apkSizeBytes: dto.apkSizeBytes ?? null,
+      })
+      .returning();
+
+    this.logger.log(
+      `Registered new app version for ${dto.platform} versionCode=${dto.versionCode} (${dto.nativeVersion})`,
+    );
+    return created;
   }
 
   async checkVersion(query: CheckAppVersionDto): Promise<AppVersionDecision> {

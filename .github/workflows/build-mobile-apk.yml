@@ -63,6 +63,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
+      - name: Extract Version Metadata from app.json
+        id: version
+        run: |
+          VERSION=$(jq -r '.expo.version' mobile/app.json)
+          VERSION_CODE=$(jq -r '.expo.android.versionCode' mobile/app.json)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "Extracted: version=$VERSION, versionCode=$VERSION_CODE"
+
       - name: Replace Embedded APK in Next.js Web Downloads
         run: |
           mkdir -p next-frontend/public/downloads
@@ -74,4 +83,28 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add next-frontend/public/downloads/nexora-student-mobile-release.apk
-          git diff-index --quiet HEAD || (git commit -m "chore(download): auto-update student APK release build [skip ci]" && git push)
+          git diff-index --quiet HEAD || (git commit -m "chore(download): auto-update student APK release v${{ steps.version.outputs.version }} [skip ci]" && git push)
+
+      - name: Register New Version in Backend
+        if: ${{ vars.BACKEND_URL != '' && secrets.CI_ADMIN_SECRET != '' }}
+        run: |
+          HTTP_STATUS=$(curl -s -o /tmp/register-response.json -w "%{http_code}" \
+            -X POST "${{ vars.BACKEND_URL }}/app-version/register" \
+            -H "X-CI-Secret: ${{ secrets.CI_ADMIN_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "platform": "android",
+              "versionCode": ${{ steps.version.outputs.version_code }},
+              "nativeVersion": "${{ steps.version.outputs.version }}",
+              "minSupportedVersionCode": ${{ steps.version.outputs.version_code }},
+              "apkDownloadUrl": "${{ vars.APK_DOWNLOAD_URL || format('{0}/downloads/nexora-student-mobile-release.apk', vars.FRONTEND_URL) }}",
+              "requiresFullApk": true,
+              "releaseNotes": "Automated CI build v${{ steps.version.outputs.version }} (code ${{ steps.version.outputs.version_code }})"
+            }')
+
+          echo "Backend responded with HTTP $HTTP_STATUS"
+          cat /tmp/register-response.json
+
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
+            echo "::warning::Backend version registration failed with HTTP $HTTP_STATUS (non-blocking)"
+          fi
