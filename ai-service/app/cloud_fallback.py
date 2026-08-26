@@ -200,6 +200,17 @@ async def generate_text(
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/chat/completions"
     client = _get_cloud_client()
     response = await client.post(endpoint, headers=_headers(), json=payload, timeout=timeout)
+    status_code = getattr(response, "status_code", 200)
+    if status_code >= 400:
+        try:
+            error_body = response.json()
+        except Exception:
+            error_body = getattr(response, "text", "")
+        logger.error(
+            "[cloud_fallback] text generation request failed %s — response body: %s",
+            status_code,
+            error_body,
+        )
     response.raise_for_status()
     body = response.json()
     return _normalize_response_text(body)
@@ -254,6 +265,17 @@ async def chat(
     endpoint = settings.ai_cloud_fallback_base_url.rstrip("/") + "/chat/completions"
     client = _get_cloud_client()
     response = await client.post(endpoint, headers=_headers(), json=payload, timeout=timeout)
+    status_code = getattr(response, "status_code", 200)
+    if status_code >= 400:
+        try:
+            error_body = response.json()
+        except Exception:
+            error_body = getattr(response, "text", "")
+        logger.error(
+            "[cloud_fallback] chat request failed %s — response body: %s",
+            status_code,
+            error_body,
+        )
     response.raise_for_status()
     body = response.json()
     return _normalize_response_text(body)
