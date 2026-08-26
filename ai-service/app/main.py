@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from sqlalchemy import text as sa_text, bindparam
 from sqlalchemy.dialects import postgresql
@@ -5020,13 +5020,22 @@ async def run_teacher_lesson_plan_job(
         roles=["teacher"],
     )
 
-    # Run the actual generation (this is the long-running LLM call)
-    await _run_lesson_plan_generation_job(
-        job_id,
-        body,
-        user,
-        execution_lease_id=str(runtime_patch["workerLeaseId"]),
-    )
+    try:
+        await _run_lesson_plan_generation_job(
+            job_id,
+            body,
+            user,
+            execution_lease_id=str(runtime_patch["workerLeaseId"]),
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "message": f"Lesson plan generation failed: {exc}",
+                "data": {"jobId": job_id, "status": "failed"},
+            },
+        )
 
     return {
         "success": True,
@@ -5131,12 +5140,22 @@ async def run_teacher_quiz_job(
         roles=["teacher"],
     )
 
-    await _run_quiz_generation_job(
-        job_id,
-        body,
-        user,
-        execution_lease_id=str(runtime_patch["workerLeaseId"]),
-    )
+    try:
+        await _run_quiz_generation_job(
+            job_id,
+            body,
+            user,
+            execution_lease_id=str(runtime_patch["workerLeaseId"]),
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "message": f"Quiz draft generation failed: {exc}",
+                "data": {"jobId": job_id, "status": "failed"},
+            },
+        )
 
     return {
         "success": True,
@@ -5226,13 +5245,23 @@ async def run_teacher_intervention_job(
         roles=["teacher"],
     )
 
-    await _run_intervention_generation_job(
-        job_id,
-        case_id,
-        note,
-        user,
-        execution_lease_id=str(runtime_patch["workerLeaseId"]),
-    )
+    try:
+        await _run_intervention_generation_job(
+            job_id,
+            case_id,
+            note,
+            user,
+            execution_lease_id=str(runtime_patch["workerLeaseId"]),
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": False,
+                "message": f"Intervention recommendation generation failed: {exc}",
+                "data": {"jobId": job_id, "status": "failed"},
+            },
+        )
 
     return {
         "success": True,
