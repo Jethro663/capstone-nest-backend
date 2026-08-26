@@ -790,10 +790,35 @@ def _parse_quiz_blueprint_output(raw: str) -> dict[str, Any]:
     parsed = json.loads(cleaned)
     if not isinstance(parsed, dict):
         raise ValueError("Blueprint output is not a JSON object")
+
+    if "conceptCoverage" not in parsed and "concept_coverage" in parsed:
+        parsed["conceptCoverage"] = parsed["concept_coverage"]
+
+    if "questionBlueprints" not in parsed:
+        if "question_blueprints" in parsed:
+            parsed["questionBlueprints"] = parsed["question_blueprints"]
+        elif "questions" in parsed and isinstance(parsed["questions"], list):
+            blueprints = []
+            for item in parsed["questions"]:
+                if isinstance(item, dict):
+                    blueprints.append({
+                        "intent": item.get("content") or item.get("intent") or "Assess concept understanding",
+                        "difficulty": item.get("difficulty") or "medium",
+                        "sourceCitation": item.get("explanation") or item.get("sourceCitation") or "Lesson source evidence",
+                    })
+            if blueprints:
+                parsed["questionBlueprints"] = blueprints
+
     if not isinstance(parsed.get("conceptCoverage"), list) or not parsed["conceptCoverage"]:
-        raise ValueError("Blueprint output did not contain concept coverage")
+        title_desc = f"{parsed.get('title', '')} {parsed.get('description', '')}".strip()
+        if title_desc:
+            parsed["conceptCoverage"] = [title_desc[:100]]
+        else:
+            raise ValueError("Blueprint output did not contain concept coverage")
+
     if not isinstance(parsed.get("questionBlueprints"), list) or not parsed["questionBlueprints"]:
         raise ValueError("Blueprint output did not contain question blueprints")
+
     return parsed
 
 
