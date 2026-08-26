@@ -294,7 +294,6 @@ export default function TeacherAiDraftQuizPage() {
   const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
   const [selectedExtractionIds, setSelectedExtractionIds] = useState<string[]>([]);
   const [useAllSourcesWhenNoneSelected, setUseAllSourcesWhenNoneSelected] = useState(true);
-  const [draftSourceAcknowledged, setDraftSourceAcknowledged] = useState(false);
 
   const [job, setJob] = useState<AiGenerationJob | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -538,24 +537,21 @@ export default function TeacherAiDraftQuizPage() {
     return lessons.map((lesson) => {
       const ready = readyLessonMap.get(lesson.id);
       const blocker = lessonBlockerMap.get(lesson.id);
-      const isDraftSource =
-        Boolean(lesson.isDraft) ||
-        String(blocker?.reason || '').toLowerCase().includes('draft');
-      const selectable = !blocker || isDraftSource;
+      const selectable = !blocker && !lesson.isDraft;
       let stateLabel = 'Status unavailable';
       let tone: 'ready' | 'index' | 'blocked' = 'index';
-      if (ready?.status === 'indexed') {
+      if (lesson.isDraft) {
+        tone = 'blocked';
+        stateLabel = blocker?.reason || 'Publish this lesson before indexing it for AI generation.';
+      } else if (ready?.status === 'indexed') {
         tone = 'ready';
         stateLabel = `${ready.chunkCount} indexed chunk(s)`;
       } else if (ready?.status === 'ready_to_index') {
         tone = 'index';
         stateLabel = 'Ready to index';
       } else if (blocker) {
-        tone = isDraftSource ? 'index' : 'blocked';
+        tone = 'blocked';
         stateLabel = blocker.reason;
-      } else if (lesson.isDraft) {
-        tone = 'index';
-        stateLabel = 'Lesson is still a draft.';
       }
       return {
         id: lesson.id,
@@ -566,7 +562,6 @@ export default function TeacherAiDraftQuizPage() {
         tone,
         stateLabel,
         updatedAt: ready?.updatedAt ?? blocker?.updatedAt ?? lesson.updatedAt ?? null,
-        isDraftSource,
       };
     });
   }, [lessonBlockerMap, lessons, readyLessonMap, selectedLessonIds]);
@@ -645,8 +640,6 @@ export default function TeacherAiDraftQuizPage() {
   const hasAnySource = lessons.length + extractions.length > 0;
   const hasManualSelection =
     selectedLessonIds.length + selectedExtractionIds.length > 0;
-  const selectedDraftSourceCount = selectedLessons.filter((lesson) => lesson.isDraft).length;
-  const hasDraftSourceSelection = selectedDraftSourceCount > 0;
   const hasRunningJob = Boolean(
     displayJob && !isAiDraftTerminalStatus(displayJob.status),
   );
@@ -665,8 +658,7 @@ export default function TeacherAiDraftQuizPage() {
     generationReady &&
     hasAnySource &&
     isQuestionCountValid &&
-    (useAllSourcesWhenNoneSelected || hasManualSelection) &&
-    (!hasDraftSourceSelection || draftSourceAcknowledged);
+    (useAllSourcesWhenNoneSelected || hasManualSelection);
 
   const readinessBadge = getReadinessBadge(indexStatus);
   const assessmentId =
@@ -797,11 +789,6 @@ export default function TeacherAiDraftQuizPage() {
       toast.error('Select at least one lesson or extraction, or enable the fallback option.');
       return;
     }
-    if (hasDraftSourceSelection && !draftSourceAcknowledged) {
-      toast.error('Acknowledge selected draft sources before generating.');
-      return;
-    }
-
     try {
       setActiveTab('generation');
       setSubmitting(true);
@@ -831,7 +818,7 @@ export default function TeacherAiDraftQuizPage() {
         lessonIds,
         extractionIds,
         sourcePolicy: 'published_default',
-        allowDraftSources: hasDraftSourceSelection && draftSourceAcknowledged,
+        allowDraftSources: false,
       });
       setCurrentJobId(response.data.jobId);
       setJob(response.data);
@@ -1577,19 +1564,6 @@ export default function TeacherAiDraftQuizPage() {
               <span>Use every ready class source when nothing is selected manually</span>
             </label>
 
-            {hasDraftSourceSelection ? (
-              <label className="teacher-ai-draft__checkbox teacher-ai-draft__checkbox--warning">
-                <input
-                  type="checkbox"
-                  checked={draftSourceAcknowledged}
-                  onChange={(event) => setDraftSourceAcknowledged(event.target.checked)}
-                />
-                <span>
-                  I understand {selectedDraftSourceCount} selected draft source(s) may be less final than published material.
-                </span>
-              </label>
-            ) : null}
-
             <div className="teacher-ai-draft__selection-summary">
               <Badge variant="secondary">{selectedLessonIds.length} lesson(s)</Badge>
               <Badge variant="outline">
@@ -1607,11 +1581,9 @@ export default function TeacherAiDraftQuizPage() {
                   : readinessUnavailable
                     ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
                   : hasAnySource
-                    ? hasDraftSourceSelection && !draftSourceAcknowledged
-                      ? 'Acknowledge selected draft sources before generating.'
-                      : generationReady
-                        ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
-                        : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
+                    ? generationReady
+                      ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
+                      : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
                     : 'No source lessons or extractions are available for this class yet.'}
               </p>
             ) : null}

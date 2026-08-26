@@ -11,12 +11,19 @@ import type {
   AiTutorSession,
   AiTutorSessionStart,
   ClassAiPolicy,
+  CreateQuizDraftJobInput,
+  GenerateQuizDraftDto,
   InterventionRecommendationDto,
   InterventionStructuredOutput,
+  QuizDraftApplyPreview,
+  QuizDraftApplyResponse,
   QuizDraftStructuredOutput,
   TutorRecommendationPayload,
   UpdateClassAiPolicyDto,
+  UpdateQuizDraftDto,
 } from "../../types/ai";
+
+const AI_JOB_TIMEOUT_MS = 150_000;
 
 const AI_JOB_STATUSES = [
   "queued",
@@ -109,21 +116,17 @@ export const aiApi = {
   },
 
   async reindexClass(classId: string) {
-    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(`/ai/index/classes/${classId}`);
+    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(
+      `/ai/index/classes/${classId}`,
+      undefined,
+      { timeout: AI_JOB_TIMEOUT_MS },
+    );
     return unwrapEnvelope(response.data);
   },
 
-  async createQuizDraftJob(payload: {
-    classId: string;
-    title?: string;
-    questionCount?: number;
-    questionType?: string;
-    teacherNote?: string;
-    lessonIds?: string[];
-    extractionIds?: string[];
-  }) {
-    const clampedCount = Math.max(1, Math.min(15, payload.questionCount ?? 10));
-    const dto = {
+  async createQuizDraftJob(payload: CreateQuizDraftJobInput) {
+    const clampedCount = Math.max(1, Math.min(15, payload.questionCount));
+    const dto: GenerateQuizDraftDto = {
       classId: payload.classId,
       title: payload.title?.trim() || "AI Draft Assessment",
       questionCount: clampedCount,
@@ -142,8 +145,40 @@ export const aiApi = {
     return normalizeJob(unwrapEnvelope(response.data));
   },
 
+  async updateQuizDraft(jobId: string, payload: UpdateQuizDraftDto) {
+    const response = await apiClient.patch<ApiEnvelope<AiGenerationJob>>(
+      `/ai/teacher/quizzes/jobs/${jobId}/draft`,
+      payload,
+    );
+    return normalizeJob(unwrapEnvelope(response.data));
+  },
+
+  async previewQuizDraftApply(jobId: string) {
+    const response = await apiClient.post<ApiEnvelope<QuizDraftApplyPreview>>(
+      `/ai/teacher/quizzes/jobs/${jobId}/apply/preview`,
+      {},
+    );
+    return unwrapEnvelope(response.data);
+  },
+
+  async retryQuizDraftJob(jobId: string) {
+    const response = await apiClient.post<ApiEnvelope<AiGenerationJob>>(
+      `/ai/teacher/quizzes/jobs/${jobId}/retry`,
+      {},
+    );
+    return normalizeJob(unwrapEnvelope(response.data));
+  },
+
+  async cancelQuizDraftJob(jobId: string) {
+    const response = await apiClient.post<ApiEnvelope<AiGenerationJob>>(
+      `/ai/teacher/quizzes/jobs/${jobId}/cancel`,
+      {},
+    );
+    return normalizeJob(unwrapEnvelope(response.data));
+  },
+
   async applyQuizDraftJob(jobId: string) {
-    const response = await apiClient.post<ApiEnvelope<{ assessmentId?: string }>>(
+    const response = await apiClient.post<ApiEnvelope<QuizDraftApplyResponse>>(
       `/ai/teacher/quizzes/jobs/${jobId}/apply`,
       {},
     );

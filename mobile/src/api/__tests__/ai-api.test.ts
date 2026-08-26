@@ -5,6 +5,8 @@ jest.mock("../client", () => ({
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -149,5 +151,111 @@ describe("aiApi", () => {
     expect(result.job.id).toBe("job-1");
     expect(result.result?.structuredOutput?.recommendedLessons).toEqual([]);
     expect(result.result?.structuredOutput?.aiSummary.summary).toContain("temporarily unavailable");
+  });
+
+  it("creates a quiz draft with explicit published indexed source ids", async () => {
+    mockedApiClient.post.mockResolvedValue({
+      data: {
+        data: {
+          jobId: "quiz-job-1",
+          status: "queued",
+        },
+      },
+    });
+
+    await aiApi.createQuizDraftJob({
+      classId: "class-1",
+      title: "  Fractions check  ",
+      questionCount: 99,
+      questionType: "multiple_choice",
+      teacherNote: "  Focus on equivalent fractions  ",
+      lessonIds: ["lesson-1"],
+      extractionIds: ["extraction-1"],
+    });
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      "/ai/teacher/quizzes/jobs",
+      expect.objectContaining({
+        classId: "class-1",
+        title: "Fractions check",
+        questionCount: 15,
+        teacherNote: "Focus on equivalent fractions",
+        sourcePolicy: "published_default",
+        allowDraftSources: false,
+        lessonIds: ["lesson-1"],
+        extractionIds: ["extraction-1"],
+      }),
+    );
+  });
+
+  it("uses the long-running timeout when reindexing a class", async () => {
+    mockedApiClient.post.mockResolvedValue({ data: { data: { classId: "class-1" } } });
+
+    await aiApi.reindexClass("class-1");
+
+    expect(mockedApiClient.post).toHaveBeenCalledWith(
+      "/ai/index/classes/class-1",
+      undefined,
+      { timeout: 150_000 },
+    );
+  });
+
+  it("exposes quiz draft review, retry, cancel, and apply contracts", async () => {
+    mockedApiClient.patch.mockResolvedValue({
+      data: { data: { jobId: "quiz-job-1", status: "completed" } },
+    });
+    mockedApiClient.post
+      .mockResolvedValueOnce({
+        data: { data: { jobId: "quiz-job-1", canApply: true, blockedReasons: [] } },
+      })
+      .mockResolvedValueOnce({
+        data: { data: { jobId: "quiz-job-2", status: "queued" } },
+      })
+      .mockResolvedValueOnce({
+        data: { data: { jobId: "quiz-job-2", status: "cancelled" } },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: {
+            jobId: "quiz-job-1",
+            alreadyApplied: false,
+            applyResult: { assessmentId: "assessment-1" },
+          },
+        },
+      });
+
+    const structuredOutput = {
+      title: "Reviewed draft",
+      questions: [{ content: "One half equals?", type: "multiple_choice", reviewed: true }],
+    };
+    await aiApi.updateQuizDraft("quiz-job-1", { structuredOutput });
+    const preview = await aiApi.previewQuizDraftApply("quiz-job-1");
+    const retry = await aiApi.retryQuizDraftJob("quiz-job-1");
+    const cancel = await aiApi.cancelQuizDraftJob("quiz-job-2");
+    const applied = await aiApi.applyQuizDraftJob("quiz-job-1");
+
+    expect(mockedApiClient.patch).toHaveBeenCalledWith(
+      "/ai/teacher/quizzes/jobs/quiz-job-1/draft",
+      { structuredOutput },
+    );
+    expect(mockedApiClient.post).toHaveBeenNthCalledWith(
+      1,
+      "/ai/teacher/quizzes/jobs/quiz-job-1/apply/preview",
+      {},
+    );
+    expect(mockedApiClient.post).toHaveBeenNthCalledWith(
+      2,
+      "/ai/teacher/quizzes/jobs/quiz-job-1/retry",
+      {},
+    );
+    expect(mockedApiClient.post).toHaveBeenNthCalledWith(
+      3,
+      "/ai/teacher/quizzes/jobs/quiz-job-2/cancel",
+      {},
+    );
+    expect(preview.canApply).toBe(true);
+    expect(retry.id).toBe("quiz-job-2");
+    expect(cancel.status).toBe("cancelled");
+    expect(applied.applyResult.assessmentId).toBe("assessment-1");
   });
 });

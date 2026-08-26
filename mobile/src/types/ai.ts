@@ -128,38 +128,209 @@ export interface AiGenerationJob {
   updatedAt?: string | null;
 }
 
+export interface IndexingSummary {
+  classId: string;
+  chunksIndexed: number;
+  lessonChunks?: number;
+  extractionChunks?: number;
+  questionChunks?: number;
+  lastIndexedAt?: string | null;
+  degraded?: boolean;
+  warnings?: string[];
+  embeddingProvider?: string;
+  embeddingModel?: string;
+}
+
+export interface AiReadyLessonSource {
+  lessonId: string;
+  title: string;
+  chunkCount: number;
+  status: "indexed" | "ready_to_index";
+  updatedAt?: string | null;
+}
+
+export interface AiLessonSourceBlocker {
+  lessonId: string;
+  title: string;
+  reason: string;
+  updatedAt?: string | null;
+}
+
+export interface AiReadyExtractionSource {
+  extractionId: string;
+  title: string;
+  chunkCount: number;
+  status: "indexed" | "ready_to_index";
+  updatedAt?: string | null;
+}
+
+export interface AiExtractionSourceBlocker {
+  extractionId: string;
+  title: string;
+  status?: string | null;
+  reason: string;
+  updatedAt?: string | null;
+}
+
 export interface AiClassIndexStatus {
   classId: string;
-  sourceSummary?: {
-    lessons?: { total?: number; ready?: number; blocked?: number };
-    extractions?: { total?: number; ready?: number; blocked?: number };
+  chunksIndexed: number;
+  lessonChunks: number;
+  extractionChunks: number;
+  questionChunks: number;
+  lastIndexedAt?: string | null;
+  latestSourceUpdateAt?: string | null;
+  isStale: boolean;
+  needsReindex: boolean;
+  reason?: string | null;
+  readyLessons: AiReadyLessonSource[];
+  lessonBlockers: AiLessonSourceBlocker[];
+  readyExtractions: AiReadyExtractionSource[];
+  extractionBlockers: AiExtractionSourceBlocker[];
+  sourceSummary: {
+    lessons: { total: number; ready: number; blocked: number };
+    extractions: { total: number; ready: number; blocked: number };
+    questions: {
+      assessments: number;
+      assessmentsWithQuestions: number;
+      questionCount: number;
+      needsIndex: number;
+    };
   };
-  lessons?: Array<{
-    id: string;
-    title?: string | null;
-    state?: string | null;
-    blockerReason?: string | null;
-    updatedAt?: string | null;
-  }>;
-  extractions?: Array<{
-    id: string;
-    title?: string | null;
-    state?: string | null;
-    blockerReason?: string | null;
-    updatedAt?: string | null;
-  }>;
+}
+
+export interface QuizDraftProvenance {
+  chunkId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  sourceReference?: string;
+  sourceTitle?: string;
+  sourceSnippet?: string;
+  confidence?: number;
+  selectionReason?: string;
+}
+
+export interface QuizDraftReviewIssue {
+  id: string;
+  code: string;
+  severity: "blocking" | "warning" | "info" | string;
+  scope: string;
+  message: string;
+  questionIndex?: number | null;
+  optionIndex?: number | null;
+  resolved: boolean;
+  resolution?: string | null;
+}
+
+export interface QuizDraftApplyResult {
+  assessmentId: string;
+  outputId?: string;
+  questionsCreated?: number;
+  totalPoints?: number;
+  appliedAt?: string;
 }
 
 export interface QuizDraftStructuredOutput {
-  title?: string;
+  title: string;
   description?: string;
-  questions?: Array<{
-    content?: string;
-    type?: string;
+  blueprint?: {
+    title: string;
+    description: string;
+    conceptCoverage: string[];
+    questionBlueprints: Array<{
+      intent: string;
+      difficulty: string;
+      sourceCitation: string;
+    }>;
+  };
+  questions: Array<{
+    id?: string;
+    type: string;
+    content: string;
     points?: number;
-    options?: Array<{ text?: string; isCorrect?: boolean }>;
+    explanation?: string;
+    conceptTags?: string[];
+    difficulty?: string;
+    cognitiveLevel?: string;
+    provenance?: QuizDraftProvenance;
+    groundingScore?: number;
+    issueIds?: string[];
+    expectedAnswer?: string;
+    rubric?: string;
+    reviewed?: boolean;
+    options?: Array<{ text: string; isCorrect: boolean; order?: number }>;
   }>;
+  qualityGate?: "pass" | "warn" | "fail";
+  reviewRequired?: boolean;
+  reviewState?: string;
+  reviewIssues?: QuizDraftReviewIssue[];
+  sourceManifest?: QuizDraftProvenance[];
+  audit?: {
+    applyResult?: QuizDraftApplyResult | null;
+    [key: string]: unknown;
+  };
+  assessmentId?: string;
+  runtime?: {
+    assessmentId?: string;
+    outputId?: string;
+    indexing?: IndexingSummary;
+  };
 }
+
+export interface UpdateQuizDraftDto {
+  structuredOutput: QuizDraftStructuredOutput;
+}
+
+export interface QuizDraftApplyPreview {
+  jobId?: string;
+  outputId?: string;
+  canApply: boolean;
+  alreadyApplied?: boolean;
+  blockedReasons: string[];
+  applyResult?: QuizDraftApplyResult | null;
+  assessment: {
+    title: string;
+    description?: string;
+    type?: string;
+    passingScore?: number;
+    feedbackLevel?: string;
+    classRecordCategory?: string;
+    quarter?: string;
+    totalPoints: number;
+    questionCount: number;
+  };
+  questions?: QuizDraftStructuredOutput["questions"];
+  reviewIssues?: QuizDraftReviewIssue[];
+}
+
+export interface QuizDraftApplyResponse {
+  jobId: string;
+  outputId?: string;
+  alreadyApplied: boolean;
+  applyResult: QuizDraftApplyResult;
+  preview?: QuizDraftApplyPreview;
+}
+
+export interface GenerateQuizDraftDto {
+  classId: string;
+  lessonIds?: string[];
+  extractionIds?: string[];
+  title?: string;
+  questionCount: number;
+  questionType: string;
+  assessmentType: "quiz";
+  passingScore: number;
+  teacherNote?: string;
+  feedbackLevel: "standard";
+  classRecordCategory: "written_work";
+  sourcePolicy: "published_default";
+  allowDraftSources: false;
+}
+
+export type CreateQuizDraftJobInput = Pick<
+  GenerateQuizDraftDto,
+  "classId" | "questionCount" | "questionType"
+> & Partial<Omit<GenerateQuizDraftDto, "classId" | "questionCount" | "questionType">>;
 
 export interface AiGenerationJobResult<TOutput> {
   job: AiGenerationJob;

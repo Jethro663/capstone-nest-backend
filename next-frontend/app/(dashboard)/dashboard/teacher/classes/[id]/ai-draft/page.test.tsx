@@ -297,6 +297,27 @@ describe('TeacherAiDraftQuizPage', () => {
     expect(screen.getByText('Extraction is still processing.')).toBeInTheDocument();
   });
 
+  it('shows draft lessons as blocked and never acknowledges draft sources', async () => {
+    mockedAiService.getClassIndexStatus.mockResolvedValue({
+      data: buildIndexStatus({
+        readyLessons: [],
+        lessonBlockers: [
+          {
+            lessonId: 'lesson-blocked',
+            title: 'Decimals',
+            reason: 'Lesson is still in draft status.',
+          },
+        ],
+      }),
+    } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    const draftCheckbox = await screen.findByRole('checkbox', { name: /decimals/i });
+    expect(draftCheckbox).toBeDisabled();
+    expect(screen.queryByText(/selected draft source/i)).not.toBeInTheDocument();
+  });
+
   it('disables draft generation when AI source readiness is unavailable', async () => {
     mockedAiService.getClassIndexStatus.mockRejectedValue({
       response: {
