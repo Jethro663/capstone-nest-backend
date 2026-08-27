@@ -15,3 +15,13 @@ export function writeTeacherAiDraftJobId(classId: string, jobId: string) {
 export function clearTeacherAiDraftJobId(classId: string) {
   return AsyncStorage.removeItem(activeJobKey(classId));
 }
+
+export async function clearTeacherAiDraftJobIdIfMatches(
+  classId: string,
+  jobId: string,
+) {
+  const storedJobId = await readTeacherAiDraftJobId(classId);
+  if (storedJobId === jobId) {
+    await clearTeacherAiDraftJobId(classId);
+  }
+}

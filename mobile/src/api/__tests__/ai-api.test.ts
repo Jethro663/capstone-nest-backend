@@ -131,6 +131,46 @@ describe("aiApi", () => {
     expect(result.message).toBe("Done");
   });
 
+  it("lists web-created quiz jobs with normalized display fields", async () => {
+    mockedApiClient.get.mockResolvedValue({
+      data: {
+        data: [
+          {
+            jobId: "job-10",
+            jobType: "quiz_generation",
+            classId: "class-1",
+            title: "Fractions checkpoint",
+            status: "approved",
+            progressPercent: 100,
+            assessmentId: "assessment-10",
+            createdAt: "2026-08-27T01:00:00.000Z",
+            updatedAt: "2026-08-27T02:00:00.000Z",
+          },
+          { jobId: 11, status: "unexpected", progressPercent: "45" },
+        ],
+      },
+    });
+
+    const result = await aiApi.listTeacherJobs({ limit: 20 });
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/ai/teacher/jobs", {
+      params: { jobType: "quiz_generation", limit: 20 },
+    });
+    expect(result[0]).toMatchObject({
+      jobId: "job-10",
+      title: "Fractions checkpoint",
+      status: "approved",
+      assessmentId: "assessment-10",
+    });
+    expect(result[1]).toMatchObject({
+      jobId: "unknown-job",
+      classId: null,
+      title: "AI Draft Quiz",
+      status: "processing",
+      progressPercent: 45,
+    });
+  });
+
   it("returns a safe fallback for malformed intervention job results", async () => {
     mockedApiClient.get.mockResolvedValue({
       data: {

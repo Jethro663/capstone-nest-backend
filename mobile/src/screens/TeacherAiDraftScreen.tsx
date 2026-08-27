@@ -42,7 +42,7 @@ const QUESTION_TYPES = [
 const TERMINAL_STATUSES = ["completed", "approved", "failed", "cancelled", "rejected"];
 
 export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
-  const { classId } = route.params;
+  const { classId, jobId: requestedJobId } = route.params;
   const [indexStatus, setIndexStatus] = useState<Awaited<ReturnType<typeof aiApi.getClassIndexStatus>> | null>(null);
   const [job, setJob] = useState<Awaited<ReturnType<typeof aiApi.createQuizDraftJob>> | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof aiApi.getQuizDraftJobResult>> | null>(null);
@@ -85,10 +85,13 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
     let active = true;
     const restore = async () => {
       try {
-        const jobId = await readTeacherAiDraftJobId(classId);
+        const jobId = requestedJobId?.trim() || await readTeacherAiDraftJobId(classId);
         if (!jobId || !active) return;
         const restored = await aiApi.getTeacherJobStatus(jobId);
         if (!active) return;
+        if (requestedJobId) {
+          await writeTeacherAiDraftJobId(classId, jobId);
+        }
         setJob(restored);
         if (restored.status === "completed" || restored.status === "approved") await loadJobResult(restored.id);
       } catch (error) {
@@ -101,7 +104,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
     return () => {
       active = false;
     };
-  }, [classId, loadJobResult]);
+  }, [classId, loadJobResult, requestedJobId]);
 
   const refreshJob = useCallback(async () => {
     if (!job?.id) return;

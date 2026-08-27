@@ -5,12 +5,16 @@ import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Pressable, Text, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { queryKeys, useTeacherClasses } from "../api/hooks";
+import { queryKeys, useTeacherAiJobs, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
+import { aiApi } from "../api/services/ai";
+import { clearTeacherAiDraftJobIdIfMatches } from "../api/teacher-ai-draft-jobs";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
+import { TeacherAiJobsPanel } from "./teacher-assessments/TeacherAiJobsPanel";
+import type { TeacherAiJobSummary } from "../types/ai";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -41,6 +45,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const { user } = useAuth();
   const teacherId = user?.userId || user?.id;
   const classesQuery = useTeacherClasses(teacherId);
+  const aiJobsQuery = useTeacherAiJobs();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterMode>("all");
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
@@ -49,6 +54,8 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [deletingAssessment, setDeletingAssessment] = useState<{ id: string; title: string } | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
+  const [deletingAiJob, setDeletingAiJob] = useState<TeacherAiJobSummary | null>(null);
+  const [isDeletingAiJob, setIsDeletingAiJob] = useState(false);
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
   const assessmentQueries = useQueries({
@@ -95,6 +102,16 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         }))
         .filter((group) => group.assessments.length > 0),
     [classesQuery.data, filteredRecords],
+  );
+
+  const classNames = useMemo(
+    () => Object.fromEntries(
+      (classesQuery.data ?? []).map((classItem) => [
+        classItem.id,
+        `${classItem.subjectCode} · ${classItem.subjectName}`,
+      ]),
+    ),
+    [classesQuery.data],
   );
 
   const toggleSelectAssessment = (id: string) => {
@@ -173,14 +190,35 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
     }
   };
 
+  const handleDeleteAiJob = async () => {
+    if (!deletingAiJob || isDeletingAiJob) return;
+    try {
+      setIsDeletingAiJob(true);
+      await aiApi.deleteTeacherJob(deletingAiJob.jobId);
+      if (deletingAiJob.classId) {
+        await clearTeacherAiDraftJobIdIfMatches(
+          deletingAiJob.classId,
+          deletingAiJob.jobId,
+        );
+      }
+      setDeletingAiJob(null);
+      await aiJobsQuery.refetch();
+      Alert.alert("AI Draft Job Deleted", "The generation job was removed. Any approved assessment remains available.");
+    } catch (error) {
+      Alert.alert("Unable to delete AI draft job", toAppError(error).message);
+    } finally {
+      setIsDeletingAiJob(false);
+    }
+  };
+
   return (
     <TeacherScreen
       title="Assessments"
       subtitle="Open a class accordion to review its specific assessments and grading workflow."
       icon="clipboard-text-outline"
-      refreshing={classesQuery.isRefetching || assessmentQueries.some((query) => query.isRefetching)}
+      refreshing={classesQuery.isRefetching || aiJobsQuery.isRefetching || assessmentQueries.some((query) => query.isRefetching)}
       onRefresh={() => {
-        void Promise.all([classesQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
+        void Promise.all([classesQuery.refetch(), aiJobsQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
       }}
     >
       <TeacherStats
@@ -214,6 +252,32 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
           />
         </View>
       </TeacherPanel>
+
+      <TeacherAiJobsPanel
+        jobs={aiJobsQuery.data ?? []}
+        classNames={classNames}
+        loading={aiJobsQuery.isLoading}
+        error={aiJobsQuery.isError}
+        onRefresh={() => void aiJobsQuery.refetch()}
+        onResume={(job) => {
+          if (!job.classId) {
+            Alert.alert("Class unavailable", "This AI draft job is not linked to an available class.");
+            return;
+          }
+          navigation.navigate("TeacherAiDraft", {
+            classId: job.classId,
+            jobId: job.jobId,
+          });
+        }}
+        onOpenAssessment={(job) => {
+          if (!job.assessmentId) return;
+          navigation.navigate("TeacherAssessmentEditor", {
+            assessmentId: job.assessmentId,
+            classId: job.classId ?? undefined,
+          });
+        }}
+        onRequestDelete={setDeletingAiJob}
+      />
 
       <TeacherPanel
         title="Classes with assessments"
@@ -388,6 +452,20 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         loading={isDeletingAssessment}
         onCancel={() => setShowBulkDeleteConfirm(false)}
         onConfirm={() => void handleBulkDeleteAssessments()}
+      />
+
+      <TeacherConfirmModal
+        visible={Boolean(deletingAiJob)}
+        title="Delete AI Draft Job?"
+        description={
+          deletingAiJob
+            ? `Delete "${deletingAiJob.title}" and its generated draft? An approved assessment already created from this job will not be deleted.`
+            : ""
+        }
+        confirmLabel="Delete Job"
+        loading={isDeletingAiJob}
+        onCancel={() => setDeletingAiJob(null)}
+        onConfirm={() => void handleDeleteAiJob()}
       />
     </TeacherScreen>
   );

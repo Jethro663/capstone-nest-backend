@@ -67,7 +67,7 @@ export type RootStackParamList = {
   TeacherSectionAddStudents: { sectionId: string };
   TeacherSectionStudentProfile: { sectionId: string; studentId: string };
   TeacherExtractionDetail: { extractionId: string; classId?: string };
-  TeacherAiDraft: { classId: string };
+  TeacherAiDraft: { classId: string; jobId?: string };
   TeacherInterventionDetail: { caseId: string; classId?: string };
   TeacherLibrary: undefined;
   TeacherClassRecord: undefined;

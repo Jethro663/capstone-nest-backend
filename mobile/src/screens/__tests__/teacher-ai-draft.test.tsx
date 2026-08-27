@@ -140,12 +140,12 @@ async function flushPromises() {
   await Promise.resolve();
 }
 
-async function renderScreen() {
+async function renderScreen(jobId?: string) {
   let renderer: TestRenderer.ReactTestRenderer;
   const navigation = { goBack: jest.fn(), navigate: jest.fn() };
   await act(async () => {
     renderer = TestRenderer.create(
-      <TeacherAiDraftScreen navigation={navigation as never} route={{ params: { classId: "class-1" } } as never} />,
+      <TeacherAiDraftScreen navigation={navigation as never} route={{ params: { classId: "class-1", jobId } } as never} />,
     );
     await flushPromises();
   });
@@ -215,6 +215,25 @@ describe("TeacherAiDraftScreen", () => {
 
     expect(mockedAiApi.getTeacherJobStatus).toHaveBeenCalledWith("job-1");
     expect(mockedAiApi.getQuizDraftJobResult).toHaveBeenCalledWith("job-1");
+  });
+
+  it("restores the job selected from the assessment tab before the cached job", async () => {
+    mockedStorage.readTeacherAiDraftJobId.mockResolvedValue("job-cached");
+    mockedAiApi.getTeacherJobStatus.mockResolvedValue({
+      ...completedJob,
+      id: "job-selected",
+      jobId: "job-selected",
+    } as never);
+    mockedAiApi.getQuizDraftJobResult.mockResolvedValue(readyResult as never);
+
+    await renderScreen("job-selected");
+
+    expect(mockedAiApi.getTeacherJobStatus).toHaveBeenCalledWith("job-selected");
+    expect(mockedAiApi.getTeacherJobStatus).not.toHaveBeenCalledWith("job-cached");
+    expect(mockedStorage.writeTeacherAiDraftJobId).toHaveBeenCalledWith(
+      "class-1",
+      "job-selected",
+    );
   });
 
   it("shows a detailed failure and persists the replacement retry job", async () => {

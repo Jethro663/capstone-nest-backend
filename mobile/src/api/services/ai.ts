@@ -15,10 +15,12 @@ import type {
   GenerateQuizDraftDto,
   InterventionRecommendationDto,
   InterventionStructuredOutput,
+  ListTeacherAiJobsQuery,
   QuizDraftApplyPreview,
   QuizDraftApplyResponse,
   QuizDraftStructuredOutput,
   TutorRecommendationPayload,
+  TeacherAiJobSummary,
   UpdateClassAiPolicyDto,
   UpdateQuizDraftDto,
 } from "../../types/ai";
@@ -77,6 +79,29 @@ function normalizeJob(job: unknown): AiGenerationJob {
     errorMessage: typeof raw.errorMessage === "string" ? raw.errorMessage : null,
     outputId: typeof raw.outputId === "string" ? raw.outputId : null,
     assessmentId: typeof raw.assessmentId === "string" ? raw.assessmentId : null,
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
+  };
+}
+
+function normalizeTeacherAiJobSummary(value: unknown): TeacherAiJobSummary {
+  const raw = value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+  return {
+    jobId: typeof raw.jobId === "string" ? raw.jobId : "unknown-job",
+    jobType: typeof raw.jobType === "string" ? raw.jobType : "quiz_generation",
+    classId: typeof raw.classId === "string" ? raw.classId : null,
+    title:
+      typeof raw.title === "string" && raw.title.trim()
+        ? raw.title.trim()
+        : "AI Draft Quiz",
+    status: normalizeAiJobStatus(raw.status) as AiGenerationStatus,
+    progressPercent: normalizeProgressPercent(raw.progressPercent),
+    statusMessage: typeof raw.statusMessage === "string" ? raw.statusMessage : null,
+    errorMessage: typeof raw.errorMessage === "string" ? raw.errorMessage : null,
+    outputId: typeof raw.outputId === "string" ? raw.outputId : null,
+    assessmentId: typeof raw.assessmentId === "string" ? raw.assessmentId : null,
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : null,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : null,
   };
 }
@@ -196,6 +221,21 @@ export const aiApi = {
   async getTeacherJobStatus(jobId: string) {
     const response = await apiClient.get<ApiEnvelope<AiGenerationJob>>(`/ai/teacher/jobs/${jobId}`);
     return normalizeJob(unwrapEnvelope(response.data));
+  },
+
+  async listTeacherJobs(query: ListTeacherAiJobsQuery = {}) {
+    const response = await apiClient.get<ApiEnvelope<TeacherAiJobSummary[]>>(
+      "/ai/teacher/jobs",
+      {
+        params: {
+          ...(query.classId ? { classId: query.classId } : {}),
+          jobType: "quiz_generation",
+          limit: query.limit ?? 20,
+        },
+      },
+    );
+    const jobs = unwrapEnvelope(response.data);
+    return Array.isArray(jobs) ? jobs.map(normalizeTeacherAiJobSummary) : [];
   },
 
   async deleteTeacherJob(jobId: string) {

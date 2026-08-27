@@ -30,6 +30,8 @@ export const queryKeys = {
   classes: (studentId: string) => ["classes", studentId] as const,
   teacherClasses: (teacherId: string, status = "active") =>
     ["teacher-classes", teacherId, status] as const,
+  teacherAiJobs: (classId?: string) =>
+    ["teacher-ai-jobs", classId ?? "all"] as const,
   classDetail: (classId: string) => ["class-detail", classId] as const,
   teacherEnrollments: (classId: string) => ["teacher-enrollments", classId] as const,
   classModules: (classId: string) => ["class-modules", classId] as const,
@@ -129,6 +131,21 @@ export const useTeacherClasses = (teacherId?: string, status = "active") =>
     queryKey: teacherId ? queryKeys.teacherClasses(teacherId, status) : ["teacher-classes", "missing", status],
     queryFn: () => classesApi.getTeacherClasses(teacherId!, status as never),
     enabled: !!teacherId,
+  });
+
+export const useTeacherAiJobs = (classId?: string) =>
+  useQuery({
+    queryKey: queryKeys.teacherAiJobs(classId),
+    queryFn: () => aiApi.listTeacherJobs({ classId, limit: 20 }),
+    refetchInterval: (query) =>
+      query.state.data?.some((job) =>
+        job.status === "pending" ||
+        job.status === "queued" ||
+        job.status === "processing" ||
+        job.status === "running"
+      )
+        ? 10_000
+        : false,
   });
 
 export const useTeacherEnrollments = (classId?: string) =>
