@@ -48,6 +48,7 @@ import {
 import { InterventionRecommendationDto } from './DTO/intervention-recommendation.dto';
 import { DemoInterventionPlanDto } from './DTO/demo-intervention-plan.dto';
 import { UpdateClassAiPolicyDto } from './DTO/class-ai-policy.dto';
+import { ListTeacherAiJobsQueryDto } from './DTO/list-teacher-ai-jobs-query.dto';
 import {
   StudentTutorAnswersDto,
   StudentTutorBootstrapQueryDto,
@@ -79,6 +80,7 @@ import {
   uploadedFiles,
 } from '../../drizzle/schema';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { TeacherAiJobQueryService } from './teacher-ai-job-query.service';
 
 @ApiTags('AI Mentor')
 @ApiBearerAuth('token')
@@ -99,6 +101,7 @@ export class AiMentorController {
     private readonly auditService: AuditService,
     private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
     private readonly aiGenerationQueueService: AiGenerationQueueService,
+    private readonly teacherAiJobQueryService: TeacherAiJobQueryService,
   ) {}
 
   private get db() {
@@ -2662,6 +2665,22 @@ export class AiMentorController {
       };
     }
     return result;
+  }
+
+  @Get('teacher/jobs')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  @ApiOperation({
+    summary: 'List recent AI generation jobs owned by the current teacher',
+  })
+  async listTeacherJobs(
+    @Query() query: ListTeacherAiJobsQueryDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Teacher AI generation jobs retrieved',
+      data: await this.teacherAiJobQueryService.listTeacherJobs(user.id, query),
+    };
   }
 
   @Get('teacher/jobs/:jobId')

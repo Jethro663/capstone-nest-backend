@@ -12,6 +12,7 @@ import { ReportsModule } from '../reports/reports.module';
 import { AnalyticsModule } from '../analytics/analytics.module';
 import { PerformanceModule } from '../performance/performance.module';
 import { LxpModule } from '../lxp/lxp.module';
+import { TeacherAiJobQueryService } from './teacher-ai-job-query.service';
 
 /**
  * AI Mentor Module
@@ -42,6 +43,7 @@ import { LxpModule } from '../lxp/lxp.module';
     AdminAnalyticsChatService,
     AiGenerationQueueService,
     AiGenerationProcessor,
+    TeacherAiJobQueryService,
   ],
   exports: [AiProxyService, AdminAnalyticsChatService],
 })

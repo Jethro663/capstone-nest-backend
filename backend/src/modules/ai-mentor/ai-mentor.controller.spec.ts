@@ -4,6 +4,7 @@ import { AiMentorController } from './ai-mentor.controller';
 import { AiProxyService } from './ai-proxy.service';
 import { AiGenerationQueueService } from './ai-generation-queue.service';
 import { AdminAnalyticsChatService } from './admin-analytics-chat.service';
+import { TeacherAiJobQueryService } from './teacher-ai-job-query.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -56,6 +57,9 @@ const mockAdminAnalyticsChat = {
   getSession: jest.fn(),
   logDeniedAttempt: jest.fn(),
 };
+const mockTeacherAiJobs = {
+  listTeacherJobs: jest.fn(),
+};
 const mockDb = {
   query: {
     enrollments: { findMany: jest.fn() },
@@ -105,6 +109,8 @@ describe('AiMentorController', () => {
     mockAdminAnalyticsChat.getSession.mockReset();
     mockAdminAnalyticsChat.logDeniedAttempt.mockReset();
     mockAdminAnalyticsChat.logDeniedAttempt.mockResolvedValue(undefined);
+    mockTeacherAiJobs.listTeacherJobs.mockReset();
+    mockTeacherAiJobs.listTeacherJobs.mockResolvedValue([]);
     mockDb.query.enrollments.findMany.mockReset();
     mockDb.query.classModules.findMany.mockReset();
     mockDb.query.classes.findFirst.mockReset();
@@ -178,6 +184,10 @@ describe('AiMentorController', () => {
         {
           provide: AdminAnalyticsChatService,
           useValue: mockAdminAnalyticsChat,
+        },
+        {
+          provide: TeacherAiJobQueryService,
+          useValue: mockTeacherAiJobs,
         },
         { provide: DatabaseService, useValue: { db: mockDb } },
         { provide: AuditService, useValue: mockAudit },
@@ -2102,6 +2112,45 @@ describe('AiMentorController', () => {
           sessionId: '11111111-1111-1111-1111-111111111111',
           messages: [],
         },
+      });
+    });
+  });
+
+  describe('listTeacherJobs()', () => {
+    it('should return recent jobs owned by the current teacher', async () => {
+      const query = {
+        classId: CLASS_ID,
+        jobType: 'quiz_generation' as const,
+        limit: 6,
+      };
+      const summaries = [
+        {
+          jobId: JOB_ID,
+          jobType: 'quiz_generation',
+          classId: CLASS_ID,
+          title: 'Generated fractions quiz',
+          status: 'approved' as const,
+          progressPercent: 100,
+          statusMessage: 'Approved',
+          errorMessage: null,
+          outputId: 'output-1',
+          assessmentId: 'assessment-1',
+          createdAt: '2026-08-27T01:00:00.000Z',
+          updatedAt: '2026-08-27T02:00:00.000Z',
+        },
+      ];
+      mockTeacherAiJobs.listTeacherJobs.mockResolvedValue(summaries);
+
+      const result = await controller.listTeacherJobs(query, TEACHER_USER);
+
+      expect(mockTeacherAiJobs.listTeacherJobs).toHaveBeenCalledWith(
+        TEACHER_USER.id,
+        query,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Teacher AI generation jobs retrieved',
+        data: summaries,
       });
     });
   });
