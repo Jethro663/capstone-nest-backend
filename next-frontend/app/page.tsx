@@ -280,10 +280,6 @@ export default function LandingPage() {
                   Enter Nexora
                   <ArrowRight className="h-4 w-4" />
                 </Link>
-                <Link href="/demo" className="landing-button-ghost justify-center text-base">
-                  Open Demo
-                  <ArrowUpRight className="h-4 w-4" />
-                </Link>
                 <a href="#experience" className="landing-button-ghost justify-center text-base">
                   Explore the platform
                   <ArrowUpRight className="h-4 w-4" />
