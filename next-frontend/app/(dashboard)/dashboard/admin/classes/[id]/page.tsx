@@ -2020,7 +2020,7 @@ export default function AdminClassDetailPage() {
       </ClassWorkspaceShell>
 
       <Dialog open={moduleDialogOpen} onOpenChange={setModuleDialogOpen}>
-        <DialogContent>
+        <DialogContent variant="admin">
           <DialogHeader>
             <DialogTitle>Create Module</DialogTitle>
             <DialogDescription>Add a new module directly to this class workspace.</DialogDescription>
@@ -2056,7 +2056,7 @@ export default function AdminClassDetailPage() {
       </Dialog>
 
       <Dialog open={assessmentDialogOpen} onOpenChange={setAssessmentDialogOpen}>
-        <DialogContent>
+        <DialogContent variant="admin">
           <DialogHeader>
             <DialogTitle>Create Assessment</DialogTitle>
             <DialogDescription>Create a new assessment shell for this class.</DialogDescription>
@@ -2092,7 +2092,7 @@ export default function AdminClassDetailPage() {
       </Dialog>
 
       <Dialog open={announcementDialogOpen} onOpenChange={setAnnouncementDialogOpen}>
-        <DialogContent>
+        <DialogContent variant="admin">
           <DialogHeader>
             <DialogTitle>Create Announcement</DialogTitle>
             <DialogDescription>Post a new announcement to this class feed.</DialogDescription>
@@ -2137,7 +2137,7 @@ export default function AdminClassDetailPage() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent variant="admin">
           <DialogHeader>
             <DialogTitle>Report Comment</DialogTitle>
             <DialogDescription>Send this reply into the moderation audit trail for follow-up.</DialogDescription>

@@ -1378,7 +1378,7 @@ export default function AdminTemplateModuleWorkspacePage() {
         if (open) return;
         resetAssessmentPicker();
       }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent variant="admin" className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {assessmentPickerState.itemIndex === null ? 'Tag Assessment in Module' : 'Retag Assessment'}
@@ -1448,7 +1448,7 @@ export default function AdminTemplateModuleWorkspacePage() {
       </Dialog>
 
       <Dialog open={visibilityConfirmOpen} onOpenChange={setVisibilityConfirmOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent variant="admin" className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Make Module Visible by Default?</DialogTitle>
             <DialogDescription>

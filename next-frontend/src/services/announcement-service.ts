@@ -1,12 +1,27 @@
 import { api } from '@/lib/api-client';
-import type { Announcement, CreateAnnouncementDto, UpdateAnnouncementDto } from '@/types/announcement';
+import type {
+  Announcement,
+  CreateAnnouncementDto,
+  TeacherAnnouncementFeed,
+  UpdateAnnouncementDto,
+} from '@/types/announcement';
 
 export interface AnnouncementsQuery {
   page?: number;
   limit?: number;
 }
 
+export interface TeacherAnnouncementsQuery extends AnnouncementsQuery {
+  classId?: string;
+}
+
 export const announcementService = {
+  /** GET /teacher/announcements — Teacher */
+  async getTeacherFeed(query?: TeacherAnnouncementsQuery): Promise<{ success: boolean; message: string; data: TeacherAnnouncementFeed }> {
+    const { data } = await api.get('/teacher/announcements', { params: query });
+    return data;
+  },
+
   /** POST /classes/:classId/announcements — Teacher */
   async create(classId: string, dto: CreateAnnouncementDto): Promise<{ success: boolean; message: string; data: Announcement }> {
     const { data } = await api.post(`/classes/${classId}/announcements`, dto);

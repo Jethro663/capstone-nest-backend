@@ -11,10 +11,29 @@ export interface Announcement {
   scheduledAt?: string;
   isArchived: boolean;
   fileIds?: string[];
-  createdBy?: string;
-  author?: { firstName?: string; lastName?: string };
+  authorId?: string;
+  author?: { id?: string; firstName?: string; lastName?: string };
+  class?: {
+    id: string;
+    subjectCode: string;
+    subjectName: string;
+    section: { id: string; name: string } | null;
+  };
+  canEdit?: boolean;
+  canDelete?: boolean;
+  restrictionReason?: 'core_template' | 'not_author' | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface TeacherAnnouncementFeed {
+  items: Announcement[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  pinnedTotal: number;
+  latestCreatedAt: string | null;
 }
 
 export interface CreateAnnouncementDto {

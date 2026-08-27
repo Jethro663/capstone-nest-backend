@@ -11,8 +11,11 @@ export interface Announcement {
   scheduledAt?: string;
   isArchived: boolean;
   fileIds?: string[];
-  createdBy?: string;
-  author?: { firstName?: string; lastName?: string };
+  authorId?: string;
+  author?: { id?: string; firstName?: string; lastName?: string };
+  canEdit?: boolean;
+  canDelete?: boolean;
+  restrictionReason?: "core_template" | "not_author" | null;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -246,7 +246,7 @@ export default function AdminSectionRosterPage() {
       </AdminSectionCard>
 
       <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
-        <DialogContent className="rounded-[1.6rem] border-[var(--admin-outline)] bg-white shadow-2xl">
+        <DialogContent variant="admin" className="rounded-[1.6rem] border-[var(--admin-outline)] bg-white shadow-2xl">
           <DialogHeader>
             <DialogTitle>Student Info</DialogTitle>
             <DialogDescription>Quick profile summary for the selected student.</DialogDescription>

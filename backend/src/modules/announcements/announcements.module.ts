@@ -4,6 +4,7 @@ import { AnnouncementsController } from './announcements.controller';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsScheduler } from './announcements.scheduler';
 import { AuditModule } from '../audit/audit.module';
+import { TeacherAnnouncementsController } from './teacher-announcements.controller';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { AuditModule } from '../audit/audit.module';
       name: 'announcements',
     }),
   ],
-  controllers: [AnnouncementsController],
+  controllers: [AnnouncementsController, TeacherAnnouncementsController],
   providers: [AnnouncementsService, AnnouncementsScheduler],
   exports: [AnnouncementsService],
 })

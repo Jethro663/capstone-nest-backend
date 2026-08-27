@@ -414,7 +414,7 @@ export default function AdminUserDetailPage() {
       </div>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <DialogContent className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
+        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
           <DialogHeader>
             <DialogTitle>Reset User Password</DialogTitle>
             <DialogDescription>
@@ -442,7 +442,7 @@ export default function AdminUserDetailPage() {
           }
         }}
       >
-        <DialogContent className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
+        <DialogContent variant="admin" className="rounded-[1.1rem] border border-[var(--admin-outline)] bg-white shadow-xl">
           <DialogHeader>
             <DialogTitle>New Temporary Password</DialogTitle>
             <DialogDescription>

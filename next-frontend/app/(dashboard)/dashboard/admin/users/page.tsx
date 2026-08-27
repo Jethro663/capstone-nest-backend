@@ -694,7 +694,7 @@ export default function UserManagementPage() {
       </AdminSectionCard>
 
       <Dialog open={!!showPurge} onOpenChange={() => setShowPurge(null)}>
-        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
+        <DialogContent variant="admin" className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-rose-600">Permanently Delete User</DialogTitle>
             <DialogDescription>

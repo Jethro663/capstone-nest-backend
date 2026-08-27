@@ -431,7 +431,7 @@ export default function AdminClassRecordTransmutationPage() {
 
       {/* Roster-Import Style Preview Modal */}
       <Dialog open={previewOpen} onOpenChange={(open) => { if (!open) handleCancelPreview(); }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col bg-white border-slate-200 text-slate-900 shadow-2xl rounded-2xl">
+        <DialogContent variant="admin" className="max-w-3xl max-h-[90vh] flex flex-col bg-white border-slate-200 text-slate-900 shadow-2xl rounded-2xl">
           <DialogHeader className="border-b border-slate-200 pb-4">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900">
               <Eye className="h-5 w-5 text-rose-600" />

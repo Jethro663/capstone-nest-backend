@@ -295,7 +295,7 @@ export default function AdminSystemSettingsPage() {
       </AdminSectionCard>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent variant="admin" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Confirm Academic State Transition</DialogTitle>
             <DialogDescription>

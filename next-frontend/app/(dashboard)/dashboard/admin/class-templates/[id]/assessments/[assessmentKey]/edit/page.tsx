@@ -1680,7 +1680,7 @@ export default function AdminTemplateAssessmentEditorPage() {
           if (!open) setInsertAfterQuestionIndex(null);
         }}
       >
-        <DialogContent className="max-w-4xl rounded-3xl border-slate-200 p-0">
+        <DialogContent variant="admin" className="max-w-4xl rounded-3xl border-slate-200 p-0">
           <DialogHeader className="border-b border-slate-100 px-6 py-5">
             <DialogTitle className="text-xl font-black text-slate-900">Add Question</DialogTitle>
             <DialogDescription className="text-slate-500">
@@ -1724,7 +1724,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       </Dialog>
 
       <Dialog open={questionDetailsOpen} onOpenChange={setQuestionDetailsOpen}>
-        <DialogContent className="max-w-3xl rounded-3xl border-slate-200 p-0">
+        <DialogContent variant="admin" className="max-w-3xl rounded-3xl border-slate-200 p-0">
           <DialogHeader className="border-b border-slate-100 px-6 py-5">
             <DialogTitle className="text-xl font-black text-slate-900">Question details</DialogTitle>
             <DialogDescription className="text-slate-500">
@@ -1860,7 +1860,7 @@ export default function AdminTemplateAssessmentEditorPage() {
       </Dialog>
 
       <Dialog open={warningOpen} onOpenChange={setWarningOpen}>
-        <DialogContent className="assessment-editor__warning-dialog">
+        <DialogContent variant="admin" className="assessment-editor__warning-dialog">
           <DialogHeader>
             <DialogTitle>Assessment setup checklist</DialogTitle>
             <DialogDescription>

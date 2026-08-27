@@ -2,7 +2,10 @@ import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
-import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
+import {
+  QueryAnnouncementsDto,
+  QueryTeacherAnnouncementsDto,
+} from './DTO/query-announcements.dto';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -189,5 +192,25 @@ describe('QueryAnnouncementsDto', () => {
     expect(errors).toHaveLength(0);
     expect(instance.page).toBe(5);
     expect(instance.limit).toBe(10);
+  });
+});
+
+describe('QueryTeacherAnnouncementsDto', () => {
+  it('accepts an optional UUID class filter', async () => {
+    const errors = await errorsFor(QueryTeacherAnnouncementsDto, {
+      page: 2,
+      limit: 20,
+      classId: '550e8400-e29b-41d4-a716-446655440000',
+    });
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects a non-UUID class filter', async () => {
+    const errors = await errorsFor(QueryTeacherAnnouncementsDto, {
+      classId: 'not-a-class-id',
+    });
+
+    expect(errors.length).toBeGreaterThan(0);
   });
 });

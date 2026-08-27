@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnnouncementsController } from './announcements.controller';
+import { TeacherAnnouncementsController } from './teacher-announcements.controller';
 import { AnnouncementsService } from './announcements.service';
 
 // ─── Fixtures ───────────────────────────────────────────────────────────────
@@ -37,6 +38,7 @@ describe('AnnouncementsController', () => {
     findOne: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    findTeacherFeed: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -239,6 +241,53 @@ describe('AnnouncementsController', () => {
         TEACHER_USER.userId,
         false,
       );
+    });
+  });
+});
+
+describe('TeacherAnnouncementsController', () => {
+  let controller: TeacherAnnouncementsController;
+
+  const mockService = {
+    findTeacherFeed: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+
+    const module: TestingModule = await Test.createTestingModule({
+      controllers: [TeacherAnnouncementsController],
+      providers: [{ provide: AnnouncementsService, useValue: mockService }],
+    }).compile();
+
+    controller = module.get<TeacherAnnouncementsController>(
+      TeacherAnnouncementsController,
+    );
+  });
+
+  it('returns the teacher feed in the standard response envelope', async () => {
+    const feed = {
+      items: [makeAnnouncement()],
+      page: 1,
+      limit: 20,
+      total: 1,
+      totalPages: 1,
+      pinnedTotal: 0,
+      latestCreatedAt: new Date('2026-08-28T04:00:00.000Z'),
+    };
+    mockService.findTeacherFeed.mockResolvedValue(feed);
+
+    const query = { page: 1, limit: 20 };
+    const result = await controller.findAll(query, TEACHER_USER);
+
+    expect(mockService.findTeacherFeed).toHaveBeenCalledWith(
+      TEACHER_USER.userId,
+      query,
+    );
+    expect(result).toEqual({
+      success: true,
+      message: 'Teacher announcements retrieved.',
+      data: feed,
     });
   });
 });

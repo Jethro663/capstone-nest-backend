@@ -6,12 +6,15 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { and, eq, isNull, desc, sql } from 'drizzle-orm';
+import { and, eq, isNull, desc, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { announcements, classes, enrollments } from '../../drizzle/schema';
 import { CreateAnnouncementDto } from './DTO/create-announcement.dto';
 import { UpdateAnnouncementDto } from './DTO/update-announcement.dto';
-import { QueryAnnouncementsDto } from './DTO/query-announcements.dto';
+import {
+  QueryAnnouncementsDto,
+  QueryTeacherAnnouncementsDto,
+} from './DTO/query-announcements.dto';
 import { AuditService } from '../audit/audit.service';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 
@@ -110,6 +113,30 @@ export class AnnouncementsService {
         `Core template announcements are immutable; use release control to ${action}`,
       );
     }
+  }
+
+  private decorateCapabilities<
+    T extends { authorId: string; isCoreTemplateAsset?: boolean | null },
+  >(announcement: T, viewerId: string, viewerRoles: string[]) {
+    if (announcement.isCoreTemplateAsset) {
+      return {
+        ...announcement,
+        canEdit: false,
+        canDelete: false,
+        restrictionReason: 'core_template' as const,
+      };
+    }
+
+    const canManage =
+      viewerRoles.includes('admin') ||
+      (viewerRoles.includes('teacher') && announcement.authorId === viewerId);
+
+    return {
+      ...announcement,
+      canEdit: canManage,
+      canDelete: canManage,
+      restrictionReason: canManage ? null : ('not_author' as const),
+    };
   }
 
   // ─── CRUD ───────────────────────────────────────────────────────────────────
@@ -214,7 +241,112 @@ export class AnnouncementsService {
       },
     });
 
-    return rows;
+    return rows.map((row) =>
+      this.decorateCapabilities(row, viewerId, viewerRoles),
+    );
+  }
+
+  async findTeacherFeed(
+    teacherId: string,
+    query: QueryTeacherAnnouncementsDto,
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const offset = (page - 1) * limit;
+
+    const ownedClasses = await this.db.query.classes.findMany({
+      where: eq(classes.teacherId, teacherId),
+      columns: {
+        id: true,
+        subjectCode: true,
+        subjectName: true,
+      },
+      with: {
+        section: {
+          columns: { id: true, name: true },
+        },
+      },
+    });
+
+    if (
+      query.classId &&
+      !ownedClasses.some((ownedClass) => ownedClass.id === query.classId)
+    ) {
+      throw new ForbiddenException(
+        'You can only access announcements for your own classes.',
+      );
+    }
+
+    const classIds = query.classId
+      ? [query.classId]
+      : ownedClasses.map((ownedClass) => ownedClass.id);
+
+    if (classIds.length === 0) {
+      return {
+        items: [],
+        page,
+        limit,
+        total: 0,
+        totalPages: 1,
+        pinnedTotal: 0,
+        latestCreatedAt: null,
+      };
+    }
+
+    const scope = and(
+      inArray(announcements.classId, classIds),
+      isNull(announcements.archivedAt),
+    );
+
+    const [summary] = await this.db
+      .select({
+        total: sql<number>`count(*)`.mapWith(Number),
+        pinnedTotal:
+          sql<number>`sum(case when ${announcements.isPinned} then 1 else 0 end)`.mapWith(
+            Number,
+          ),
+        latestCreatedAt: sql<Date | null>`max(${announcements.createdAt})`,
+      })
+      .from(announcements)
+      .where(scope);
+
+    const rows = await this.db.query.announcements.findMany({
+      where: scope,
+      orderBy: [desc(announcements.isPinned), desc(announcements.createdAt)],
+      limit,
+      offset,
+      with: {
+        class: {
+          columns: {
+            id: true,
+            subjectCode: true,
+            subjectName: true,
+          },
+          with: {
+            section: {
+              columns: { id: true, name: true },
+            },
+          },
+        },
+        author: {
+          columns: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    const total = summary?.total ?? 0;
+
+    return {
+      items: rows.map((row) =>
+        this.decorateCapabilities(row, teacherId, ['teacher']),
+      ),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      pinnedTotal: summary?.pinnedTotal ?? 0,
+      latestCreatedAt: summary?.latestCreatedAt ?? null,
+    };
   }
 
   async findOne(
@@ -252,7 +384,7 @@ export class AnnouncementsService {
       throw new NotFoundException('Announcement not found.');
     }
 
-    return row;
+    return this.decorateCapabilities(row, viewerId, viewerRoles);
   }
 
   async update(

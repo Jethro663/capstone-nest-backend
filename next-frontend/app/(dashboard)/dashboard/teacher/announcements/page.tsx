@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { BookOpen, Calendar, Hash, Megaphone, Pencil, Pin, Plus, Trash2, User2 } from 'lucide-react';
 import { announcementService } from '@/services/announcement-service';
@@ -64,9 +64,19 @@ export default function TeacherAnnouncementsPage() {
   const [selectedClassId, setSelectedClassId] = useState('');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [feedPage, setFeedPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalAnnouncements, setTotalAnnouncements] = useState(0);
+  const [pinnedCount, setPinnedCount] = useState(0);
+  const [latestCreatedAt, setLatestCreatedAt] = useState<string | null>(null);
+  const [failedPage, setFailedPage] = useState<number | null>(null);
+  const feedRequestId = useRef(0);
 
   const [showComposer, setShowComposer] = useState(false);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [contentHtml, setContentHtml] = useState('');
   const [pinned, setPinned] = useState(false);
@@ -100,22 +110,59 @@ export default function TeacherAnnouncementsPage() {
     }
   }, [classes, initialClassId, selectedClassId]);
 
-  const fetchAnnouncements = useCallback(async () => {
-    if (!selectedClassId) {
-      setAnnouncements([]);
-      return;
+  const fetchAnnouncements = useCallback(async (page = 1, append = false) => {
+    const requestId = ++feedRequestId.current;
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setFeedLoading(true);
     }
-
     try {
-      const response = await announcementService.getByClass(selectedClassId);
-      setAnnouncements(Array.isArray(response.data) ? response.data : []);
+      const response = await announcementService.getTeacherFeed({
+        page,
+        limit: 20,
+        ...(selectedClassId ? { classId: selectedClassId } : {}),
+      });
+      if (requestId !== feedRequestId.current) return;
+      const incoming = Array.isArray(response.data.items) ? response.data.items : [];
+      setAnnouncements((current) => {
+        if (!append) return incoming;
+        const byId = new Map(current.map((item) => [item.id, item]));
+        incoming.forEach((item) => byId.set(item.id, item));
+        return Array.from(byId.values());
+      });
+      setFeedPage(response.data.page);
+      setTotalPages(response.data.totalPages);
+      setTotalAnnouncements(response.data.total);
+      setPinnedCount(response.data.pinnedTotal);
+      setLatestCreatedAt(response.data.latestCreatedAt);
+      setFailedPage(null);
     } catch {
-      setAnnouncements([]);
+      if (requestId !== feedRequestId.current) return;
+      if (!append) {
+        setAnnouncements([]);
+        setTotalAnnouncements(0);
+        setPinnedCount(0);
+        setLatestCreatedAt(null);
+      }
+      setFailedPage(page);
+    } finally {
+      if (requestId === feedRequestId.current) {
+        if (append) {
+          setLoadingMore(false);
+        } else {
+          setFeedLoading(false);
+        }
+      }
     }
   }, [selectedClassId]);
 
   useEffect(() => {
-    void fetchAnnouncements();
+    setAnnouncements([]);
+    setFeedPage(1);
+    setTotalPages(1);
+    setFailedPage(null);
+    void fetchAnnouncements(1, false);
   }, [fetchAnnouncements]);
 
   const selectedClass = useMemo(
@@ -143,16 +190,15 @@ export default function TeacherAnnouncementsPage() {
     [sortedAnnouncements, viewFilter],
   );
 
-  const pinnedCount = announcements.filter((announcement) => announcement.isPinned).length;
-  const latestAnnouncement = announcements[0];
-  const latestAnnouncementDate = latestAnnouncement
-    ? formatAnnouncementDate(latestAnnouncement.createdAt)
+  const latestAnnouncementDate = latestCreatedAt
+    ? formatAnnouncementDate(latestCreatedAt)
     : 'No posts yet';
   const hasActiveFilters = viewFilter !== 'all';
 
   const resetComposer = () => {
     setShowComposer(false);
     setEditingAnnouncementId(null);
+    setEditingClassId(null);
     setTitle('');
     setContentHtml('');
     setPinned(false);
@@ -160,6 +206,7 @@ export default function TeacherAnnouncementsPage() {
 
   const openComposer = () => {
     setEditingAnnouncementId(null);
+    setEditingClassId(null);
     setTitle('');
     setContentHtml('');
     setPinned(false);
@@ -167,7 +214,12 @@ export default function TeacherAnnouncementsPage() {
   };
 
   const handleEdit = (announcement: Announcement) => {
+    if (announcement.canEdit !== true) {
+      showProtectedAction(announcement, 'edited');
+      return;
+    }
     setEditingAnnouncementId(announcement.id);
+    setEditingClassId(announcement.classId);
     setTitle(announcement.title);
     setContentHtml(normalizeRichText(announcement.content));
     setPinned(Boolean(announcement.isPinned));
@@ -177,19 +229,20 @@ export default function TeacherAnnouncementsPage() {
   const handleSave = async () => {
     const safeTitle = title.trim();
     const safeContent = sanitizeRichTextHtml(contentHtml).trim();
-    if (!selectedClassId || !safeTitle || !safeContent || saving) return;
+    const targetClassId = editingAnnouncementId ? editingClassId : selectedClassId;
+    if (!targetClassId || !safeTitle || !safeContent || saving) return;
 
     try {
       setSaving(true);
       if (editingAnnouncementId) {
-        await announcementService.update(selectedClassId, editingAnnouncementId, {
+        await announcementService.update(targetClassId, editingAnnouncementId, {
           title: safeTitle,
           content: safeContent,
           isPinned: pinned,
         });
         toast.success('Announcement updated');
       } else {
-        await announcementService.create(selectedClassId, {
+        await announcementService.create(targetClassId, {
           title: safeTitle,
           content: safeContent,
           isPinned: pinned,
@@ -198,7 +251,7 @@ export default function TeacherAnnouncementsPage() {
       }
 
       resetComposer();
-      await fetchAnnouncements();
+      await fetchAnnouncements(1, false);
     } catch {
       toast.error(editingAnnouncementId ? 'Failed to update announcement' : 'Failed to create announcement');
     } finally {
@@ -207,12 +260,16 @@ export default function TeacherAnnouncementsPage() {
   };
 
   const handleTogglePin = async (announcement: Announcement) => {
-    if (!selectedClassId || pinningAnnouncementId) return;
+    if (announcement.canEdit !== true) {
+      showProtectedAction(announcement, 'changed');
+      return;
+    }
+    if (pinningAnnouncementId) return;
 
     const nextPinned = !announcement.isPinned;
     try {
       setPinningAnnouncementId(announcement.id);
-      await announcementService.update(selectedClassId, announcement.id, {
+      await announcementService.update(announcement.classId, announcement.id, {
         isPinned: nextPinned,
       });
       setAnnouncements((prev) =>
@@ -222,6 +279,7 @@ export default function TeacherAnnouncementsPage() {
             : entry,
         ),
       );
+      setPinnedCount((current) => Math.max(0, current + (nextPinned ? 1 : -1)));
       toast.success(nextPinned ? 'Announcement pinned' : 'Announcement unpinned');
     } catch {
       toast.error('Failed to update pin status');
@@ -231,6 +289,11 @@ export default function TeacherAnnouncementsPage() {
   };
 
   const handleDelete = (announcement: Announcement) => {
+    if (announcement.canDelete !== true) {
+      showProtectedAction(announcement, 'deleted');
+      return;
+    }
+    const announcementClass = announcement.class ?? selectedClass;
     setConfirmation({
       title: 'Delete announcement?',
       description: 'This removes the post from the class bulletin board for students immediately.',
@@ -239,20 +302,30 @@ export default function TeacherAnnouncementsPage() {
       details: (
         <p className="text-sm">
           <span className="font-black text-[var(--teacher-text-strong)]">{announcement.title}</span>
-          {' '}will be removed from {selectedClass?.subjectName ?? 'this class'}.
+          {' '}will be removed from {announcementClass?.subjectName ?? 'this class'}.
         </p>
       ),
       onConfirm: async () => {
         try {
-          await announcementService.delete(selectedClassId, announcement.id);
+          await announcementService.delete(announcement.classId, announcement.id);
           toast.success('Deleted');
-          setAnnouncements((prev) => prev.filter((entry) => entry.id !== announcement.id));
+          await fetchAnnouncements(1, false);
         } catch {
           toast.error('Failed to delete');
         }
       },
     });
   };
+
+  function showProtectedAction(
+    announcement: Announcement,
+    action: 'edited' | 'changed' | 'deleted',
+  ) {
+    const message = announcement.restrictionReason === 'core_template'
+      ? `This administrator-managed announcement cannot be ${action}.`
+      : `Only the original author can have this announcement ${action}.`;
+    toast.error(message);
+  }
 
   if (loading) {
     return (
@@ -292,7 +365,7 @@ export default function TeacherAnnouncementsPage() {
           <div className="teacher-announcements-header__stats">
             <article className="teacher-announcements-header__stat">
               <p>Total posts</p>
-              <strong>{announcements.length}</strong>
+              <strong>{totalAnnouncements}</strong>
             </article>
             <article className="teacher-announcements-header__stat">
               <p>Pinned</p>
@@ -304,7 +377,7 @@ export default function TeacherAnnouncementsPage() {
             </article>
             <article className="teacher-announcements-header__stat">
               <p>Active class</p>
-              <strong>{selectedClass?.subjectName || 'N/A'}</strong>
+              <strong>{selectedClass?.subjectName || 'All Classes'}</strong>
             </article>
           </div>
         </section>
@@ -313,7 +386,7 @@ export default function TeacherAnnouncementsPage() {
         <div className="teacher-announcements-toolbar">
           <p>
             Showing <strong>{filteredAnnouncements.length}</strong> of{' '}
-            <strong>{announcements.length}</strong> announcements.
+            <strong>{totalAnnouncements}</strong> announcements.
           </p>
 
           <select
@@ -354,16 +427,25 @@ export default function TeacherAnnouncementsPage() {
           </div>
         </div>
 
-        {!selectedClassId ? (
+        {feedLoading ? (
           <div className="teacher-announcements-empty">
-            <p>Select a class to load announcements.</p>
+            <p>Loading announcements...</p>
+          </div>
+        ) : failedPage === 1 ? (
+          <div className="teacher-announcements-empty">
+            <div className="space-y-3">
+              <p>Announcements could not be loaded.</p>
+              <Button onClick={() => void fetchAnnouncements(1, false)}>Retry</Button>
+            </div>
           </div>
         ) : filteredAnnouncements.length === 0 ? (
           <div className="teacher-announcements-empty">
             <div className="space-y-3">
               <p>
                 {announcements.length === 0
-                  ? 'No announcements for this class yet.'
+                  ? selectedClassId
+                    ? 'No announcements for this class yet.'
+                    : 'No announcements across your classes yet.'
                   : hasActiveFilters
                     ? 'No announcements match your current filter.'
                     : 'No announcements for this class yet.'}
@@ -373,9 +455,11 @@ export default function TeacherAnnouncementsPage() {
                   Show all announcements
                 </Button>
               ) : null}
-              <Button className="teacher-announcements-header__create" onClick={openComposer}>
-                Create First Announcement
-              </Button>
+              {selectedClassId ? (
+                <Button className="teacher-announcements-header__create" onClick={openComposer}>
+                  Create First Announcement
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -461,14 +545,21 @@ export default function TeacherAnnouncementsPage() {
                           <BookOpen className="h-3.5 w-3.5" />
                           Subject
                         </dt>
-                        <dd>{selectedClass?.subjectName || 'Class announcement'}</dd>
+                        <dd>{announcement.class?.subjectName || selectedClass?.subjectName || 'Class announcement'}</dd>
                       </div>
                       <div className="teacher-announcements-item__fact">
                         <dt>
                           <Hash className="h-3.5 w-3.5" />
                           Subject code
                         </dt>
-                        <dd>{selectedClass?.subjectCode || 'Not set'}</dd>
+                        <dd>{announcement.class?.subjectCode || selectedClass?.subjectCode || 'Not set'}</dd>
+                      </div>
+                      <div className="teacher-announcements-item__fact">
+                        <dt>
+                          <User2 className="h-3.5 w-3.5" />
+                          Section
+                        </dt>
+                        <dd>{announcement.class?.section?.name || selectedClass?.section?.name || 'Not set'}</dd>
                       </div>
                       <div className="teacher-announcements-item__fact">
                         <dt>
@@ -486,6 +577,13 @@ export default function TeacherAnnouncementsPage() {
                 </div>
               </article>
             ))}
+            {failedPage && failedPage > 1 ? (
+              <Button onClick={() => void fetchAnnouncements(failedPage, true)}>Retry loading more</Button>
+            ) : feedPage < totalPages ? (
+              <Button disabled={loadingMore} onClick={() => void fetchAnnouncements(feedPage + 1, true)}>
+                {loadingMore ? 'Loading...' : 'Load More'}
+              </Button>
+            ) : null}
           </div>
         )}
       </section>

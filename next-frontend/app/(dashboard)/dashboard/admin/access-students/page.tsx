@@ -802,7 +802,7 @@ export default function AdminAccessStudentsPage() {
       </AdminSectionCard>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent variant="admin" className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {dialogMode === 'promote' ? 'Move Up Students' : 'Retain Students'}

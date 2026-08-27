@@ -200,7 +200,7 @@ export default function AdminAnnouncementsPage() {
       </AdminSectionCard>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
+        <DialogContent variant="admin" className="rounded-[1.6rem] border-white/40 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(236,253,245,0.92))] shadow-2xl">
           <DialogHeader><DialogTitle>Create Announcement</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div><Label>Title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} className="admin-input" /></div>

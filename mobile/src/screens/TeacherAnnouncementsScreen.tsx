@@ -1,30 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, View } from "react-native";
 import { useAnnouncements, useTeacherAnnouncementMutation, useTeacherClasses, useTeacherDeleteAnnouncementMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAnnouncementEditorModal } from "../components/teacher/TeacherAnnouncementEditorModal";
+import { TeacherAnnouncementRow } from "../components/teacher/TeacherAnnouncementRow";
 import {
   TeacherActionButton,
   TeacherChip,
   TeacherEmpty,
   TeacherPanel,
-  TeacherRow,
   TeacherScreen,
   TeacherSearch,
   TeacherStats,
   stripRichText,
 } from "../components/teacher/TeacherMobilePrimitives";
-
-function formatDate(value?: string | null) {
-  if (!value) return "Unscheduled";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unscheduled";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 type Props = NativeStackScreenProps<RootStackParamList, "TeacherAnnouncements">;
 type FeedFilter = "all" | "pinned" | "scheduled";
@@ -61,10 +54,12 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
     () =>
       (announcementsQuery.data ?? [])
         .slice()
-        .sort(
-          (left, right) =>
-            new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime(),
-        ),
+        .sort((left, right) => {
+          if (left.isPinned !== right.isPinned) {
+            return Number(right.isPinned) - Number(left.isPinned);
+          }
+          return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+        }),
     [announcementsQuery.data],
   );
 
@@ -177,7 +172,7 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
         </View>
       </TeacherPanel>
 
-      <TeacherPanel title="Announcement Feed" subtitle="Tap any announcement to edit its title, formatted content, pin status, or schedule.">
+      <TeacherPanel title="Announcement Feed" subtitle="Tap an announcement to read it. Use Edit or Delete for announcements you own.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           {(["all", "pinned", "scheduled"] as FeedFilter[]).map((entry) => (
             <TeacherChip
@@ -191,41 +186,21 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
 
         {filteredAnnouncements.length ? (
           filteredAnnouncements.map((announcement) => (
-            <TeacherRow
+            <TeacherAnnouncementRow
               key={announcement.id}
-              title={announcement.title}
-              subtitle={`${announcement.isPinned ? "Pinned · " : ""}${formatDate(announcement.scheduledAt || announcement.createdAt)} · ${stripRichText(announcement.content).slice(0, 90)}`}
-              onPress={() => {
+              announcement={announcement}
+              onEdit={(entry) => {
                 setEditingAnnouncement({
-                  id: announcement.id,
-                  title: announcement.title,
-                  content: announcement.content,
-                  isPinned: Boolean(announcement.isPinned),
-                  scheduledAt: announcement.scheduledAt || "",
+                  id: entry.id,
+                  title: entry.title,
+                  content: entry.content,
+                  isPinned: Boolean(entry.isPinned),
+                  scheduledAt: entry.scheduledAt || "",
                 });
                 setShowEditorModal(true);
               }}
-              right={
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Pressable
-                    onPress={() => {
-                      setEditingAnnouncement({
-                        id: announcement.id,
-                        title: announcement.title,
-                        content: announcement.content,
-                        isPinned: Boolean(announcement.isPinned),
-                        scheduledAt: announcement.scheduledAt || "",
-                      });
-                      setShowEditorModal(true);
-                    }}
-                    style={{ borderRadius: 6, backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 8, paddingVertical: 4 }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#ffffff" }}>Edit</Text>
-                  </Pressable>
-                  <Pressable onPress={() => setDeletingAnnouncement({ id: announcement.id, title: announcement.title })}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: "#FF9CAA" }}>Delete</Text>
-                  </Pressable>
-                </View>
+              onDelete={(entry) =>
+                setDeletingAnnouncement({ id: entry.id, title: entry.title })
               }
             />
           ))
@@ -274,4 +249,3 @@ export function TeacherAnnouncementsScreen({ navigation }: Props) {
     </TeacherScreen>
   );
 }
-

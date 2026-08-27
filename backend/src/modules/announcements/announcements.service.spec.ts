@@ -87,7 +87,7 @@ describe('AnnouncementsService', () => {
 
     mockDb = {
       query: {
-        classes: { findFirst: jest.fn() },
+        classes: { findFirst: jest.fn(), findMany: jest.fn() },
         enrollments: { findFirst: jest.fn() },
         announcements: {
           findFirst: jest.fn(),
@@ -96,6 +96,7 @@ describe('AnnouncementsService', () => {
       },
       insert: jest.fn(),
       update: jest.fn(),
+      select: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -231,7 +232,7 @@ describe('AnnouncementsService', () => {
       );
     });
 
-    it('returns announcements from db', async () => {
+    it('returns announcements with owner capabilities', async () => {
       const rows = [makeAnnouncement(), makeAnnouncement({ id: 'ann-2' })];
       mockDb.query.announcements.findMany.mockResolvedValue(rows);
 
@@ -243,6 +244,98 @@ describe('AnnouncementsService', () => {
       );
 
       expect(result).toHaveLength(2);
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          canEdit: true,
+          canDelete: true,
+          restrictionReason: null,
+        }),
+      );
+    });
+
+    it('marks announcements from another author as protected', async () => {
+      mockDb.query.announcements.findMany.mockResolvedValue([
+        makeAnnouncement({ authorId: 'admin-uuid-1' }),
+      ]);
+
+      const [result] = await service.findAllByClass(
+        CLASS_ID,
+        TEACHER_ID,
+        ['teacher'],
+        {},
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          canEdit: false,
+          canDelete: false,
+          restrictionReason: 'not_author',
+        }),
+      );
+    });
+
+    it('prioritizes core template protection over ownership', async () => {
+      mockDb.query.announcements.findMany.mockResolvedValue([
+        makeAnnouncement({ isCoreTemplateAsset: true }),
+      ]);
+
+      const [result] = await service.findAllByClass(
+        CLASS_ID,
+        TEACHER_ID,
+        ['teacher'],
+        {},
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          canEdit: false,
+          canDelete: false,
+          restrictionReason: 'core_template',
+        }),
+      );
+    });
+
+    it('allows admins to manage non-core announcements', async () => {
+      mockDb.query.announcements.findMany.mockResolvedValue([
+        makeAnnouncement({ authorId: 'teacher-uuid-99' }),
+      ]);
+
+      const [result] = await service.findAllByClass(
+        CLASS_ID,
+        'admin-uuid-1',
+        ['admin'],
+        {},
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          canEdit: true,
+          canDelete: true,
+          restrictionReason: null,
+        }),
+      );
+    });
+
+    it('returns false capabilities to enrolled students', async () => {
+      mockDb.query.enrollments.findFirst.mockResolvedValue({ id: 'enrollment' });
+      mockDb.query.announcements.findMany.mockResolvedValue([
+        makeAnnouncement({ authorId: 'teacher-uuid-99' }),
+      ]);
+
+      const [result] = await service.findAllByClass(
+        CLASS_ID,
+        'student-uuid-1',
+        ['student'],
+        {},
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          canEdit: false,
+          canDelete: false,
+          restrictionReason: 'not_author',
+        }),
+      );
     });
 
     it('throws ForbiddenException when student viewer is not enrolled', async () => {
@@ -251,6 +344,123 @@ describe('AnnouncementsService', () => {
       await expect(
         service.findAllByClass(CLASS_ID, 'student-uuid-99', ['student'], {}),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('findTeacherFeed()', () => {
+    const classTwo = {
+      id: 'class-uuid-2',
+      teacherId: TEACHER_ID,
+      subjectCode: 'SCI8',
+      subjectName: 'Science',
+      section: { id: 'section-2', name: 'Bonifacio' },
+    };
+
+    beforeEach(() => {
+      mockDb.query.classes.findMany.mockResolvedValue([
+        { ...makeClass(), subjectCode: 'MATH8', section: null },
+        classTwo,
+      ]);
+      mockDb.select.mockReturnValue({
+        from: jest.fn().mockReturnValue({
+          where: jest.fn().mockResolvedValue([
+            {
+              total: 3,
+              pinnedTotal: 1,
+              latestCreatedAt: new Date('2026-08-28T04:00:00.000Z'),
+            },
+          ]),
+        }),
+      });
+      mockDb.query.announcements.findMany.mockResolvedValue([
+        makeAnnouncement({
+          id: 'pinned',
+          isPinned: true,
+          class: classTwo,
+          author: { id: TEACHER_ID, firstName: 'Tina', lastName: 'Teacher' },
+        }),
+        makeAnnouncement({
+          id: 'regular',
+          class: { ...makeClass(), subjectCode: 'MATH8', section: null },
+          author: { id: 'admin-uuid-1', firstName: 'Ada', lastName: 'Admin' },
+          authorId: 'admin-uuid-1',
+        }),
+      ]);
+    });
+
+    it('returns paginated announcements across the teacher owned classes', async () => {
+      const result = await service.findTeacherFeed(TEACHER_ID, {
+        page: 1,
+        limit: 2,
+      });
+
+      expect(mockDb.query.classes.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.anything(),
+        }),
+      );
+      expect(mockDb.query.announcements.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          limit: 2,
+          offset: 0,
+          orderBy: expect.any(Array),
+        }),
+      );
+      expect(result).toEqual({
+        items: [
+          expect.objectContaining({ id: 'pinned', canEdit: true }),
+          expect.objectContaining({
+            id: 'regular',
+            canDelete: false,
+            restrictionReason: 'not_author',
+          }),
+        ],
+        page: 1,
+        limit: 2,
+        total: 3,
+        totalPages: 2,
+        pinnedTotal: 1,
+        latestCreatedAt: new Date('2026-08-28T04:00:00.000Z'),
+      });
+    });
+
+    it('rejects a class filter that is not owned by the teacher', async () => {
+      mockDb.query.classes.findMany.mockResolvedValue([
+        { ...makeClass(), subjectCode: 'MATH8', section: null },
+      ]);
+
+      await expect(
+        service.findTeacherFeed(TEACHER_ID, {
+          classId: 'class-uuid-2',
+          page: 1,
+          limit: 20,
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('accepts a class filter owned by the teacher', async () => {
+      await expect(
+        service.findTeacherFeed(TEACHER_ID, {
+          classId: CLASS_ID,
+          page: 1,
+          limit: 20,
+        }),
+      ).resolves.toEqual(expect.objectContaining({ total: 3 }));
+    });
+
+    it('returns an empty first page when the teacher has no classes', async () => {
+      mockDb.query.classes.findMany.mockResolvedValue([]);
+
+      await expect(service.findTeacherFeed(TEACHER_ID, {})).resolves.toEqual({
+        items: [],
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 1,
+        pinnedTotal: 0,
+        latestCreatedAt: null,
+      });
+      expect(mockDb.query.announcements.findMany).not.toHaveBeenCalled();
     });
   });
 
@@ -266,7 +476,14 @@ describe('AnnouncementsService', () => {
       const result = await service.findOne(CLASS_ID, ANN_ID, TEACHER_ID, [
         'teacher',
       ]);
-      expect(result).toEqual(ann);
+      expect(result).toEqual(
+        expect.objectContaining({
+          ...ann,
+          canEdit: true,
+          canDelete: true,
+          restrictionReason: null,
+        }),
+      );
     });
 
     it('throws NotFoundException when announcement does not exist', async () => {
