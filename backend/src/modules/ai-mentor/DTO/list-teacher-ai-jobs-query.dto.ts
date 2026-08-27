@@ -8,7 +8,7 @@ export class ListTeacherAiJobsQueryDto {
 
   @IsOptional()
   @IsIn(['quiz_generation'])
-  jobType: 'quiz_generation' = 'quiz_generation';
+  jobType = 'quiz_generation' as const;
 
   @IsOptional()
   @Type(() => Number)
@@ -17,4 +17,3 @@ export class ListTeacherAiJobsQueryDto {
   @Max(50)
   limit = 20;
 }
-

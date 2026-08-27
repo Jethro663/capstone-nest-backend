@@ -50,11 +50,13 @@ jest.mock('framer-motion', () => {
   };
 });
 
-describe('Landing demo CTA', () => {
-  it('renders a public demo link on landing page', () => {
+describe('Landing entry CTAs', () => {
+  it('does not link to the removed demo route and keeps the portal entry', () => {
     render(<LandingPage />);
-    const links = screen.getAllByRole('link', { name: /demo/i });
-    expect(links.length).toBeGreaterThan(0);
-    expect(links[0]).toHaveAttribute('href', '/demo');
+    expect(screen.queryByRole('link', { name: /demo/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /enter nexora/i })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    );
   });
 });
