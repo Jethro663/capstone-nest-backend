@@ -1,15 +1,31 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { AiGenerationQueueService } from './ai-generation-queue.service';
+import { DatabaseService } from '../../database/database.service';
 
 describe('AiGenerationQueueService', () => {
   let service: AiGenerationQueueService;
   let mockQueue: any;
+  let mockDatabase: any;
 
   beforeEach(async () => {
     mockQueue = {
       add: jest.fn().mockResolvedValue(undefined),
       getJob: jest.fn().mockResolvedValue(null),
+    };
+    const updateWhere = jest.fn().mockResolvedValue(undefined);
+    const updateSet = jest.fn().mockReturnValue({ where: updateWhere });
+    mockDatabase = {
+      db: {
+        query: {
+          extractedModules: {
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+        },
+        update: jest.fn().mockReturnValue({ set: updateSet }),
+      },
+      updateSet,
+      updateWhere,
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -18,6 +34,10 @@ describe('AiGenerationQueueService', () => {
         {
           provide: getQueueToken('ai-teacher-generation'),
           useValue: mockQueue,
+        },
+        {
+          provide: DatabaseService,
+          useValue: mockDatabase,
         },
       ],
     }).compile();
@@ -138,4 +158,39 @@ describe('AiGenerationQueueService', () => {
     expect(mockQueue.getJob).toHaveBeenCalledWith('extraction-extraction-123');
     expect(remove).toHaveBeenCalledTimes(1);
   });
+
+  it('marks stale processing extractions without a live queue job as failed', async () => {
+    mockDatabase.db.query.extractedModules.findMany.mockResolvedValue([
+      { id: 'stale-extraction' },
+    ]);
+    mockQueue.getJob.mockResolvedValue(null);
+
+    await service.onApplicationBootstrap();
+
+    expect(mockQueue.getJob).toHaveBeenCalledWith(
+      'extraction-stale-extraction',
+    );
+    expect(mockDatabase.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extractionStatus: 'failed',
+        errorMessage: expect.stringContaining('Retry'),
+      }),
+    );
+  });
+
+  it.each(['active', 'waiting', 'delayed']) (
+    'preserves stale processing extractions while the queue job is %s',
+    async (state) => {
+      mockDatabase.db.query.extractedModules.findMany.mockResolvedValue([
+        { id: 'live-extraction' },
+      ]);
+      mockQueue.getJob.mockResolvedValue({
+        getState: jest.fn().mockResolvedValue(state),
+      });
+
+      await service.onApplicationBootstrap();
+
+      expect(mockDatabase.updateSet).not.toHaveBeenCalled();
+    },
+  );
 });

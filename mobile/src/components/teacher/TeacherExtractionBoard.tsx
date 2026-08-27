@@ -1,16 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import * as DocumentPicker from "expo-document-picker";
-import { Text, View } from "react-native";
+import { Alert, AppState, Text, View } from "react-native";
 import {
-  useExtractionApplyMutation,
+  useExtractionCancelMutation,
   useExtractionDeleteMutation,
+  useExtractionRetryMutation,
   useExtractionStartMutation,
   useExtractionsByClass,
 } from "../../api/hooks";
 import { peekAppError, toAppError } from "../../api/http";
 import { fileUploadApi } from "../../api/services/file-upload";
+import {
+  addActiveExtraction,
+  loadActiveExtractions,
+  removeActiveExtraction,
+  setActiveExtractions,
+} from "../../api/teacher-extraction-jobs";
 import type { ClassItem } from "../../types/class";
-import type { Extraction, LibraryGradeLevel, LibrarySubjectKey } from "../../types/extraction";
+import type { Extraction, ExtractionStyle, LibraryGradeLevel, LibrarySubjectKey } from "../../types/extraction";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -71,30 +78,23 @@ function getExtractionStatusLabel(extraction: Extraction) {
   return extraction.extractionStatus;
 }
 
-function canApplyExtraction(extraction: Extraction) {
-  return (
-    !extraction.isApplied &&
-    (extraction.extractionStatus === "completed" || extraction.extractionStatus === "applied") &&
-    Boolean(extraction.structuredContent?.sections?.length)
-  );
-}
-
 export function TeacherExtractionBoard({ classId, classItem, registerRefetch, onOpenExtraction }: Props) {
   const extractionsQuery = useExtractionsByClass(classId);
   const startMutation = useExtractionStartMutation(classId);
-  const applyMutation = useExtractionApplyMutation(classId);
   const deleteMutation = useExtractionDeleteMutation(classId);
+  const retryMutation = useExtractionRetryMutation(classId);
+  const cancelMutation = useExtractionCancelMutation(classId);
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ExtractionFilter>("all");
   const [targetSectionCount, setTargetSectionCount] = useState<TargetSectionCount>(3);
+  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyle>("clean");
   const [subjectKey, setSubjectKey] = useState<LibrarySubjectKey | undefined>(() =>
     normalizeLibrarySubjectKey(classItem?.subjectCode, classItem?.subjectName),
   );
   const [gradeLevel, setGradeLevel] = useState<LibraryGradeLevel | undefined>(() =>
     normalizeLibraryGradeLevel(classItem?.subjectGradeLevel ?? classItem?.section?.gradeLevel),
   );
-  const [quarters, setQuarters] = useState(["Quarter 1"]);
   const [selectedExtractionId, setSelectedExtractionId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -110,7 +110,30 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
     setGradeLevel((current) => current ?? normalizedGrade);
   }, [classItem?.section?.gradeLevel, classItem?.subjectCode, classItem?.subjectGradeLevel, classItem?.subjectName]);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void extractionsQuery.refetch();
+    });
+    return () => subscription.remove();
+  }, [extractionsQuery]);
+
   const extractionItems = Array.isArray(extractionsQuery.data) ? extractionsQuery.data : [];
+
+  useEffect(() => {
+    void loadActiveExtractions(classId).then(async (activeIds) => {
+      if (activeIds.length > 0) await extractionsQuery.refetch();
+    });
+  }, [classId]);
+
+  useEffect(() => {
+    if (!extractionsQuery.isSuccess) return;
+    void setActiveExtractions(
+      classId,
+      extractionItems
+        .filter((extraction) => extraction.extractionStatus === "pending" || extraction.extractionStatus === "processing")
+        .map((extraction) => extraction.id),
+    );
+  }, [classId, extractionItems, extractionsQuery.isSuccess]);
 
   const filteredExtractions = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -142,6 +165,9 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
     filteredExtractions.find((entry) => entry.id === selectedExtractionId) ??
     extractionItems.find((entry) => entry.id === selectedExtractionId) ??
     null;
+  const hasActiveExtraction = extractionItems.some(
+    (entry) => entry.extractionStatus === "pending" || entry.extractionStatus === "processing",
+  );
 
   const startExtraction = async () => {
     try {
@@ -174,10 +200,12 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
         },
       );
 
-      await startMutation.mutateAsync({
+      const started = await startMutation.mutateAsync({
         fileId: uploadedFile.id,
         targetSectionCount,
+        extractionStyle,
       });
+      await addActiveExtraction(classId, started.extractionId);
 
       await extractionsQuery.refetch();
     } catch (error) {
@@ -187,10 +215,30 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
     }
   };
 
-  const applyExtraction = async (extractionId: string) => {
+  const retryExtraction = async (extraction: Extraction) => {
     try {
       setActionError(null);
-      await applyMutation.mutateAsync({ extractionId });
+      const requested = extraction.structuredContent?.audit?.requestedSectionCount;
+      const target = requested === 3 || requested === 4 || requested === 5 ? requested : targetSectionCount;
+      const result = await retryMutation.mutateAsync({
+        extractionId: extraction.id,
+        payload: {
+          targetSectionCount: target,
+          extractionStyle: extraction.structuredContent?.audit?.extractionStyle ?? extractionStyle,
+        },
+      });
+      await addActiveExtraction(classId, result.extractionId);
+      await extractionsQuery.refetch();
+    } catch (error) {
+      setActionError(toAppError(error).message);
+    }
+  };
+
+  const cancelExtraction = async (extractionId: string) => {
+    try {
+      setActionError(null);
+      await cancelMutation.mutateAsync(extractionId);
+      await removeActiveExtraction(classId, extractionId);
       await extractionsQuery.refetch();
     } catch (error) {
       setActionError(toAppError(error).message);
@@ -201,12 +249,20 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
     try {
       setActionError(null);
       await deleteMutation.mutateAsync(extractionId);
+      await removeActiveExtraction(classId, extractionId);
       if (selectedExtractionId === extractionId) {
         setSelectedExtractionId(null);
       }
     } catch (error) {
       setActionError(toAppError(error).message);
     }
+  };
+
+  const confirmDeleteExtraction = (extractionId: string) => {
+    Alert.alert("Delete extraction?", "This extraction draft will be permanently removed.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void removeExtraction(extractionId) },
+    ]);
   };
 
   return (
@@ -223,48 +279,6 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
           />
         ))}
       </View>
-
-      <TeacherPanel
-        title="Quarters management"
-        subtitle="Organize extracted lessons and assessment drafts by grading period before applying them to the class."
-        action={
-          <TeacherActionButton
-            label="Create Quarter"
-            icon="plus"
-            tone="green"
-            disabled={quarters.length >= 4}
-            onPress={() => setQuarters((current) => (current.length >= 4 ? current : [...current, `Quarter ${current.length + 1}`]))}
-          />
-        }
-      >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
-          {quarters.map((quarter, index) => (
-            <View
-              key={quarter}
-              style={{
-                minHeight: 48,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: teacherTheme.border,
-                backgroundColor: teacherTheme.surface2,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <View>
-                <Text style={{ fontSize: 13, fontWeight: "800", color: teacherTheme.text }}>{quarter}</Text>
-                <Text style={{ marginTop: 2, fontSize: 11, color: teacherTheme.muted }}>
-                  {index === 0 ? "Default extraction target" : "Ready for extraction grouping"}
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, fontWeight: "800", color: teacherTheme.blue }}>Q{index + 1}</Text>
-            </View>
-          ))}
-        </View>
-      </TeacherPanel>
 
       <TeacherPanel title="Start AI Extraction" subtitle="Upload a PDF and convert it into structured lesson and assessment drafts.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
@@ -301,6 +315,20 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
                 label={`Grade ${entry}`}
                 active={gradeLevel === entry}
                 onPress={() => setGradeLevel(entry)}
+              />
+            ))}
+          </View>
+
+          <Text style={{ marginTop: 10, fontSize: 10, fontWeight: "700", color: "#8C8C8C", textTransform: "uppercase", letterSpacing: 0.7 }}>
+            Extraction style
+          </Text>
+          <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            {(["faithful", "clean", "student_friendly"] as const).map((value) => (
+              <TeacherChip
+                key={value}
+                label={value === "student_friendly" ? "Student friendly" : value[0].toUpperCase() + value.slice(1)}
+                active={extractionStyle === value}
+                onPress={() => setExtractionStyle(value)}
               />
             ))}
           </View>
@@ -354,8 +382,13 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
         </TeacherPanel>
       ) : null}
 
-      {extractionsQuery.error ? (
-        <TeacherPanel title="Extraction list unavailable" subtitle={peekAppError(extractionsQuery.error).message}>
+      {extractionsQuery.error && (!hasActiveExtraction || extractionsQuery.failureCount >= 3) ? (
+        <TeacherPanel
+          title={hasActiveExtraction ? "Live updates paused" : "Extraction list unavailable"}
+          subtitle={hasActiveExtraction
+            ? `${peekAppError(extractionsQuery.error).message} Active extraction progress is preserved; tap Refresh when your connection returns.`
+            : peekAppError(extractionsQuery.error).message}
+        >
           <View />
         </TeacherPanel>
       ) : null}
@@ -373,6 +406,13 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
               <Text style={{ marginTop: 3, fontSize: 11, color: "#9D9D9D" }}>
                 {extraction.structuredContent?.sections?.length ?? 0} sections - {extraction.structuredContent?.mediaAssets?.length ?? 0} media assets
               </Text>
+              <Text style={{ marginTop: 3, fontSize: 11, color: "#9D9D9D" }}>
+                {extraction.progressPercent}% - {extraction.processedChunks}/{extraction.totalChunks ?? "?"} chunks
+                {extraction.structuredContent?.audit?.extractionStyle ? ` - ${extraction.structuredContent.audit.extractionStyle.replace("_", " ")}` : ""}
+              </Text>
+              {extraction.errorMessage ? (
+                <Text style={{ marginTop: 5, fontSize: 11, color: teacherTheme.red }}>{extraction.errorMessage}</Text>
+              ) : null}
 
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
                 <TeacherActionButton
@@ -389,13 +429,22 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
                     onPress={() => onOpenExtraction(extraction.id)}
                   />
                 ) : null}
-                {canApplyExtraction(extraction) ? (
+                {extraction.extractionStatus === "pending" || extraction.extractionStatus === "processing" ? (
                   <TeacherActionButton
-                    label={applyMutation.isPending ? "Applying..." : "Apply"}
-                    icon="check-circle-outline"
+                    label={cancelMutation.isPending ? "Cancelling..." : "Cancel"}
+                    icon="cancel"
+                    tone="amber"
+                    disabled={cancelMutation.isPending}
+                    onPress={() => void cancelExtraction(extraction.id)}
+                  />
+                ) : null}
+                {extraction.extractionStatus === "failed" || extraction.extractionStatus === "completed" || extraction.extractionStatus === "applied" ? (
+                  <TeacherActionButton
+                    label={retryMutation.isPending ? "Retrying..." : "Retry"}
+                    icon="restart"
                     tone="green"
-                    disabled={applyMutation.isPending}
-                    onPress={() => void applyExtraction(extraction.id)}
+                    disabled={retryMutation.isPending}
+                    onPress={() => void retryExtraction(extraction)}
                   />
                 ) : null}
                 <TeacherActionButton
@@ -403,7 +452,7 @@ export function TeacherExtractionBoard({ classId, classItem, registerRefetch, on
                   icon="delete-outline"
                   tone="neutral"
                   disabled={deleteMutation.isPending}
-                  onPress={() => void removeExtraction(extraction.id)}
+                  onPress={() => confirmDeleteExtraction(extraction.id)}
                 />
               </View>
             </View>

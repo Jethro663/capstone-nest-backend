@@ -1,5 +1,11 @@
-import { Injectable, Logger, HttpException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  HttpException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Agent } from 'undici';
 import { CircuitBreaker } from '../../common/circuit-breaker';
 import {
   CIRCUIT_BREAKER_FAILURE_THRESHOLD,
@@ -12,7 +18,7 @@ import {
  * by the NestJS JwtAuthGuard / RolesGuard on the controller).
  */
 @Injectable()
-export class AiProxyService {
+export class AiProxyService implements OnModuleDestroy {
   private readonly logger = new Logger(AiProxyService.name);
   private readonly baseUrl: string;
   private readonly chatTimeoutMs: number;
@@ -23,6 +29,8 @@ export class AiProxyService {
   private readonly internalQuizTimeoutMs: number;
   private readonly internalInterventionTimeoutMs: number;
   private readonly internalExtractionTimeoutMs: number;
+  private readonly internalTransportTimeoutMs: number;
+  private readonly internalDispatcher: Agent;
   private readonly sharedSecret: string;
   private readonly breaker: CircuitBreaker;
 
@@ -64,6 +72,17 @@ export class AiProxyService {
         '900000',
       10,
     );
+    this.internalTransportTimeoutMs =
+      Math.max(
+        this.lessonPlanTimeoutMs,
+        this.internalQuizTimeoutMs,
+        this.internalInterventionTimeoutMs,
+        this.internalExtractionTimeoutMs,
+      ) + 30_000;
+    this.internalDispatcher = new Agent({
+      headersTimeout: this.internalTransportTimeoutMs,
+      bodyTimeout: this.internalTransportTimeoutMs,
+    });
     this.sharedSecret =
       this.config.get<string>('AI_SERVICE_SHARED_SECRET')?.trim() || '';
 
@@ -85,11 +104,18 @@ export class AiProxyService {
     });
 
     this.logger.log(`AI proxy configured -> ${this.baseUrl}`);
+    this.logger.log(
+      `Internal AI deadlines configured -> extraction=${this.internalExtractionTimeoutMs}ms, transport=${this.internalTransportTimeoutMs}ms`,
+    );
     if (!this.sharedSecret) {
       this.logger.warn(
         'AI_SERVICE_SHARED_SECRET is empty. AI proxy requests will fail closed with 503 until it is configured.',
       );
     }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.internalDispatcher.close();
   }
 
   getCircuitBreakerState(): {
@@ -265,6 +291,7 @@ export class AiProxyService {
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const startedAt = Date.now();
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
@@ -275,7 +302,8 @@ export class AiProxyService {
         },
         body: JSON.stringify(meta ?? {}),
         signal: controller.signal,
-      });
+        dispatcher: this.internalDispatcher,
+      } as RequestInit & { dispatcher: Agent });
 
       if (!response.ok) {
         const text = await response.text();
@@ -289,14 +317,22 @@ export class AiProxyService {
 
       return await response.json();
     } catch (err) {
+      const elapsedMs = Date.now() - startedAt;
       if (err instanceof Error && err.name === 'AbortError') {
         this.logger.error(
-          `Internal ${jobLabel} execution timed out after ${timeoutMs}ms`,
+          `Internal ${jobLabel} execution timed out after ${elapsedMs}ms (deadline=${timeoutMs}ms, attempt=${String(meta?.attempt ?? 'unknown')})`,
         );
         throw new Error(
           `ai-service internal execution timed out after ${timeoutMs}ms for ${jobLabel}`,
         );
       }
+      const cause =
+        err instanceof Error && err.cause && typeof err.cause === 'object'
+          ? (err.cause as { name?: string; message?: string; code?: string })
+          : undefined;
+      this.logger.error(
+        `Internal ${jobLabel} transport failed after ${elapsedMs}ms (attempt=${String(meta?.attempt ?? 'unknown')}, error=${err instanceof Error ? err.name : typeof err}, code=${cause?.code ?? 'unknown'}, cause=${cause?.name ?? 'unknown'}: ${cause?.message ?? (err instanceof Error ? err.message : String(err))})`,
+      );
       throw err;
     } finally {
       clearTimeout(timer);

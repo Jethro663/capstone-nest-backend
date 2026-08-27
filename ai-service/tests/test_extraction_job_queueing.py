@@ -14,7 +14,7 @@ from app.main import (
     run_internal_extraction,
 )
 from app.schemas import ExtractRequest, RetryExtractionRequest
-from app.extraction_pipeline import ExtractionCancelled
+from app.extraction_pipeline import ExtractionCancelled, ExtractionExecutionSuperseded
 
 
 def query_result(*, row=None, scalar=None):
@@ -274,6 +274,47 @@ class InternalExtractionExecutionTests(unittest.IsolatedAsyncioTestCase):
         run.assert_awaited_once()
         self.assertTrue(claim.await_args.kwargs["allow_superseding_retry"])
         self.assertEqual(claim.await_args.kwargs["previous_lease_id"], "lease-old")
+
+    @patch(
+        "app.routers.extractions._claim_extraction_execution",
+        new_callable=AsyncMock,
+        return_value=True,
+    )
+    async def test_superseded_execution_returns_a_clean_terminal_response(
+        self,
+        _claim: AsyncMock,
+    ) -> None:
+        db = AsyncMock()
+        db.execute = AsyncMock(
+            return_value=query_result(
+                row={
+                    "id": "extraction-1",
+                    "file_id": "file-1",
+                    "teacher_id": "teacher-1",
+                    "extraction_status": "pending",
+                    "structured_content": {"audit": {}},
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            )
+        )
+
+        with patch(
+            "app.routers.extractions.run_extraction",
+            new=AsyncMock(
+                side_effect=ExtractionExecutionSuperseded(
+                    "Extraction extraction-1 lost its worker lease"
+                )
+            ),
+        ):
+            result = await run_internal_extraction(
+                extraction_id="extraction-1",
+                meta={"bullmqJobId": "bull-extract-1", "attempt": 1},
+                _auth=None,
+                db=db,
+            )
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["data"]["status"], "superseded")
 
     async def test_queue_compensated_extraction_is_terminal_if_enqueue_was_ambiguous(
         self,

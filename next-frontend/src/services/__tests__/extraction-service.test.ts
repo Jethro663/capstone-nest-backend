@@ -1,5 +1,6 @@
 import { extractionService } from '@/services/extraction-service';
 import { api } from '@/lib/api-client';
+import parityFixture from '../../../../contract-fixtures/extraction-parity.json';
 
 jest.mock('@/lib/api-client', () => ({
   api: {
@@ -111,6 +112,16 @@ describe('extractionService', () => {
     expect(result.data.progressPercent).toBe(12);
     expect(result.data.totalChunks).toBe(40);
     expect(result.data.processedChunks).toBe(5);
+  });
+
+  it('normalizes the shared extraction fixture to the canonical contract', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: { success: true, message: 'ok', data: parityFixture.raw },
+    });
+
+    const result = await extractionService.getById('fixture-extraction');
+
+    expect(result.data).toMatchObject(parityFixture.expected);
   });
 
   it('normalizes media assets and review metadata from extraction payloads', async () => {

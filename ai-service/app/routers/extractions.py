@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
@@ -17,11 +18,16 @@ from ..extraction_job_service import (
     create_pending_extraction,
     mark_pending_extraction_failed,
 )
-from ..extraction_pipeline import ExtractionCancelled, run_extraction
+from ..extraction_pipeline import (
+    ExtractionCancelled,
+    ExtractionExecutionSuperseded,
+    run_extraction,
+)
 from ..schemas import ExtractRequest, RequestUser
 
 
 EXTRACTION_EXECUTION_LEASE_SECONDS = 16 * 60
+logger = logging.getLogger(__name__)
 
 
 def _safe_int(value: Any, default: int) -> int:
@@ -289,6 +295,16 @@ def build_extraction_router(
                 "success": True,
                 "message": "Extraction was cancelled",
                 "data": {"extractionId": extraction_id, "status": "failed"},
+            }
+        except ExtractionExecutionSuperseded:
+            logger.info(
+                "[extraction] Extraction %s was superseded by a newer BullMQ attempt",
+                extraction_id,
+            )
+            return {
+                "success": True,
+                "message": "Extraction execution was superseded by a newer attempt",
+                "data": {"extractionId": extraction_id, "status": "superseded"},
             }
         return {
             "success": True,

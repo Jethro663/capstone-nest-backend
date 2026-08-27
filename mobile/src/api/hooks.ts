@@ -264,6 +264,15 @@ export const useExtractionsByClass = (classId?: string) =>
     queryKey: classId ? queryKeys.extractionsByClass(classId) : ["extractions", "missing"],
     queryFn: () => extractionsApi.listByClass(classId!),
     enabled: !!classId,
+    retry: false,
+    refetchInterval: (query) => {
+      if (query.state.fetchFailureCount >= 3) return false;
+      return query.state.data?.some(
+        (extraction) => extraction.extractionStatus === "pending" || extraction.extractionStatus === "processing",
+      )
+        ? 10_000
+        : false;
+    },
   });
 
 export const useClassRecordsByClass = (classId?: string) =>
@@ -930,6 +939,31 @@ export function useExtractionDeleteMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (extractionId: string) => extractionsApi.delete(extractionId),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useExtractionRetryMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ extractionId, payload }: { extractionId: string; payload?: Parameters<typeof extractionsApi.retry>[1] }) =>
+      extractionsApi.retry(extractionId, payload),
+    onSuccess: async () => {
+      if (classId) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+      }
+    },
+  });
+}
+
+export function useExtractionCancelMutation(classId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (extractionId: string) => extractionsApi.cancel(extractionId),
     onSuccess: async () => {
       if (classId) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });

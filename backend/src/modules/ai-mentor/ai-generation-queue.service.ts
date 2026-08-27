@@ -1,6 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { and, eq, lt } from 'drizzle-orm';
+import { DatabaseService } from '../../database/database.service';
+import { extractedModules } from '../../drizzle/schema';
 
 const SHARED_JOB_OPTIONS = {
   attempts: 3,
@@ -8,6 +11,11 @@ const SHARED_JOB_OPTIONS = {
   removeOnComplete: 100,
   removeOnFail: 200,
 };
+
+const EXTRACTION_EXECUTION_LEASE_MS = 16 * 60 * 1000;
+const LIVE_EXTRACTION_JOB_STATES = new Set(['active', 'waiting', 'delayed']);
+const STALE_EXTRACTION_ERROR =
+  'Extraction processing was interrupted before completion. Tap Retry to start it again.';
 
 /**
  * Enqueues AI generation jobs onto the BullMQ `ai-teacher-generation` queue.
@@ -17,13 +25,66 @@ const SHARED_JOB_OPTIONS = {
  * request/response cycle and durable background processing.
  */
 @Injectable()
-export class AiGenerationQueueService {
+export class AiGenerationQueueService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AiGenerationQueueService.name);
 
   constructor(
     @InjectQueue('ai-teacher-generation')
     private readonly queue: Queue,
+    private readonly databaseService: DatabaseService,
   ) {}
+
+  async onApplicationBootstrap(): Promise<void> {
+    try {
+      await this.reconcileStaleExtractions();
+    } catch (error) {
+      this.logger.error(
+        `Unable to reconcile stale extraction jobs: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  async reconcileStaleExtractions(): Promise<number> {
+    const cutoff = new Date(Date.now() - EXTRACTION_EXECUTION_LEASE_MS);
+    const staleExtractions =
+      await this.databaseService.db.query.extractedModules.findMany({
+        where: and(
+          eq(extractedModules.extractionStatus, 'processing'),
+          lt(extractedModules.updatedAt, cutoff),
+        ),
+        columns: { id: true },
+      });
+
+    let reconciled = 0;
+    for (const extraction of staleExtractions) {
+      const job = await this.queue.getJob(`extraction-${extraction.id}`);
+      const state = job ? await job.getState() : null;
+      if (state && LIVE_EXTRACTION_JOB_STATES.has(state)) continue;
+
+      await this.databaseService.db
+        .update(extractedModules)
+        .set({
+          extractionStatus: 'failed',
+          errorMessage: STALE_EXTRACTION_ERROR,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(extractedModules.id, extraction.id),
+            eq(extractedModules.extractionStatus, 'processing'),
+            lt(extractedModules.updatedAt, cutoff),
+          ),
+        );
+      reconciled += 1;
+    }
+
+    if (reconciled > 0) {
+      this.logger.warn(
+        `Marked ${reconciled} stale extraction job(s) as failed for manual retry`,
+      );
+    }
+    return reconciled;
+  }
 
   /**
    * Enqueue a lesson-plan execution job. The ai-service public route has

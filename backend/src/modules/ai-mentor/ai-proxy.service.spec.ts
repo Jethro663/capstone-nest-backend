@@ -69,6 +69,36 @@ describe('AiProxyService', () => {
     ).toBe(300000);
   });
 
+  it('keeps the internal transport deadline above the logical extraction timeout', () => {
+    expect((service as any).internalTransportTimeoutMs).toBeGreaterThan(
+      (service as any).internalExtractionTimeoutMs,
+    );
+    expect((service as any).internalTransportTimeoutMs).toBe(930000);
+  });
+
+  it('logs actionable Undici transport diagnostics for internal extraction failures', async () => {
+    const cause = Object.assign(new Error('socket closed'), {
+      name: 'SocketError',
+      code: 'UND_ERR_SOCKET',
+    });
+    const transportError = new TypeError('fetch failed', { cause });
+    jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(transportError);
+    const logError = jest.spyOn((service as any).logger, 'error');
+
+    await expect(
+      service.runInternalExtractionJob('extraction-transport', {
+        bullmqJobId: 'extraction-extraction-transport',
+        attempt: 2,
+      }),
+    ).rejects.toBe(transportError);
+
+    expect(logError).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /module extraction extraction-transport transport failed after \d+ms \(attempt=2, error=TypeError, code=UND_ERR_SOCKET, cause=SocketError: socket closed\)/,
+      ),
+    );
+  });
+
   it('runs extraction jobs through the shared-secret internal endpoint', async () => {
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
@@ -85,6 +115,7 @@ describe('AiProxyService', () => {
       'http://localhost:8000/internal/extractions/extraction-123/run',
       expect.objectContaining({
         method: 'POST',
+        dispatcher: expect.anything(),
         headers: expect.objectContaining({
           'X-Internal-Service-Token': 'test-shared-secret',
         }),
