@@ -15,6 +15,7 @@ import type {
   MentorExplainResponse,
   IndexingSummary,
   LessonPlanStructuredOutput,
+  ListTeacherAiJobsQuery,
   QuizDraftApplyPreview,
   QuizDraftApplyResponse,
   QuizDraftStructuredOutput,
@@ -24,6 +25,7 @@ import type {
   StudentTutorRecommendation,
   StudentTutorSessionResponse,
   StudentTutorSessionStartResponse,
+  TeacherAiJobSummary,
   UpdateClassAiPolicyDto,
   UpdateLessonPlanDraftDto,
   UpdateQuizDraftDto,
@@ -125,6 +127,46 @@ function normalizeJobEnvelope(payload: unknown): Envelope<AiGenerationJob> {
       updatedAt:
         typeof rawRecord.updatedAt === 'string' ? rawRecord.updatedAt : null,
     },
+  };
+}
+
+function normalizeTeacherAiJobSummary(value: unknown): TeacherAiJobSummary {
+  const record =
+    value && typeof value === 'object'
+      ? (value as Record<string, unknown>)
+      : {};
+
+  return {
+    jobId: typeof record.jobId === 'string' ? record.jobId : 'unknown-job',
+    jobType:
+      typeof record.jobType === 'string' ? record.jobType : 'quiz_generation',
+    classId: typeof record.classId === 'string' ? record.classId : null,
+    title:
+      typeof record.title === 'string' && record.title.trim()
+        ? record.title.trim()
+        : 'AI Draft Quiz',
+    status: normalizeAiJobStatus(record.status),
+    progressPercent: normalizeProgressPercent(record.progressPercent),
+    statusMessage:
+      typeof record.statusMessage === 'string' ? record.statusMessage : null,
+    errorMessage:
+      typeof record.errorMessage === 'string' ? record.errorMessage : null,
+    outputId: typeof record.outputId === 'string' ? record.outputId : null,
+    assessmentId:
+      typeof record.assessmentId === 'string' ? record.assessmentId : null,
+    createdAt: typeof record.createdAt === 'string' ? record.createdAt : null,
+    updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
+  };
+}
+
+function normalizeTeacherAiJobsEnvelope(
+  payload: unknown,
+): Envelope<TeacherAiJobSummary[]> {
+  const envelope = normalizeEnvelope<unknown>(payload);
+  const records = Array.isArray(envelope.data) ? envelope.data : [];
+  return {
+    ...envelope,
+    data: records.map(normalizeTeacherAiJobSummary),
   };
 }
 
@@ -279,6 +321,19 @@ export const aiService = {
   async getTeacherJobStatus(jobId: string): Promise<Envelope<AiGenerationJob>> {
     const { data } = await api.get(`/ai/teacher/jobs/${jobId}`);
     return normalizeJobEnvelope(data);
+  },
+
+  async listTeacherJobs(
+    query: ListTeacherAiJobsQuery = {},
+  ): Promise<Envelope<TeacherAiJobSummary[]>> {
+    const { data } = await api.get('/ai/teacher/jobs', {
+      params: {
+        ...(query.classId ? { classId: query.classId } : {}),
+        jobType: 'quiz_generation',
+        limit: query.limit ?? 20,
+      },
+    });
+    return normalizeTeacherAiJobsEnvelope(data);
   },
 
   async deleteTeacherJob(jobId: string): Promise<Envelope<AiGenerationJob>> {

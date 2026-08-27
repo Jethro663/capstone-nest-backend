@@ -53,7 +53,6 @@ import { announcementService } from '@/services/announcement-service';
 import { discussionBoardService } from '@/services/discussion-board-service';
 import { assessmentService } from '@/services/assessment-service';
 import { extractionService } from '@/services/extraction-service';
-import { aiService } from '@/services/ai-service';
 import { classRecordService } from '@/services/class-record-service';
 import { fileService } from '@/services/file-service';
 import { Button } from '@/components/ui/button';
@@ -71,11 +70,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
 import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
+import { AiDraftJobsPanel } from '@/components/teacher/assessment/AiDraftJobsPanel';
 import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
 import { useAuth } from '@/providers/AuthProvider';
 import { normalizeRichText } from '@/lib/rich-text';
-import { isAiDraftTerminalStatus, readTrackedAiDraftJobs, type TrackedAiDraftJobEntry, writeTrackedAiDraftJobs } from '@/lib/ai-draft-job-tracker';
 import { upsertTrackedExtractionNotification } from '@/lib/extraction-notification-tracker';
 import {
   createCroppedModuleCoverBlob,
@@ -1253,8 +1252,6 @@ export default function TeacherClassDetailPage() {
   const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
-  const [aiDraftJobs, setAiDraftJobs] = useState<TrackedAiDraftJobEntry[]>([]);
-  const [aiDraftJobsBusy, setAiDraftJobsBusy] = useState(false);
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
   const [targetSectionCount, setTargetSectionCount] = useState<ExtractionTargetSectionCount>(4);
@@ -1407,69 +1404,6 @@ export default function TeacherClassDetailPage() {
     void fetchData();
   }, [fetchData]);
 
-  const refreshAiDraftJobs = useCallback(async () => {
-    if (!isClassIdValid) {
-      setAiDraftJobs([]);
-      return;
-    }
-    const cached = readTrackedAiDraftJobs(classId);
-    if (cached.length === 0) {
-      setAiDraftJobs([]);
-      return;
-    }
-
-    setAiDraftJobsBusy(true);
-    try {
-      const refreshed = await Promise.all(cached.map(async (entry) => {
-        try {
-          const statusRes = await aiService.getTeacherJobStatus(entry.jobId);
-          return {
-            ...entry,
-            lastKnownStatus: statusRes.data.status,
-            lastKnownProgress: statusRes.data.progressPercent,
-            assessmentId: statusRes.data.assessmentId ?? entry.assessmentId ?? null,
-            updatedAt: statusRes.data.updatedAt ?? entry.updatedAt ?? null,
-          };
-        } catch {
-          return entry;
-        }
-      }));
-
-      const sorted = [...refreshed].sort((a, b) => {
-        const aTs = Date.parse(a.updatedAt || a.createdAt);
-        const bTs = Date.parse(b.updatedAt || b.createdAt);
-        return bTs - aTs;
-      });
-      writeTrackedAiDraftJobs(classId, sorted);
-      setAiDraftJobs(readTrackedAiDraftJobs(classId));
-    } finally {
-      setAiDraftJobsBusy(false);
-    }
-  }, [classId, isClassIdValid]);
-
-  useEffect(() => {
-    if (!isClassIdValid) {
-      setAiDraftJobs([]);
-      return;
-    }
-    setAiDraftJobs(readTrackedAiDraftJobs(classId));
-  }, [classId, isClassIdValid]);
-
-  useEffect(() => {
-    if (activeTab !== 'assignments') return;
-    void refreshAiDraftJobs();
-  }, [activeTab, refreshAiDraftJobs]);
-
-  useEffect(() => {
-    if (activeTab !== 'assignments') return;
-    if (aiDraftJobs.length === 0) return;
-    if (!aiDraftJobs.some((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus))) return;
-    const interval = window.setInterval(() => {
-      void refreshAiDraftJobs();
-    }, 10_000);
-    return () => window.clearInterval(interval);
-  }, [activeTab, aiDraftJobs, refreshAiDraftJobs]);
-
   useEffect(() => {
     if (activeTab !== 'extraction') return;
     if (!extractions.some((entry) => entry.extractionStatus === 'pending' || entry.extractionStatus === 'processing')) {
@@ -1609,11 +1543,6 @@ export default function TeacherClassDetailPage() {
     return map;
   }, [modules]);
 
-  const recentAiDraftJobs = useMemo(() => aiDraftJobs.slice(0, 6), [aiDraftJobs]);
-  const activeAiDraftJobCount = useMemo(
-    () => aiDraftJobs.filter((entry) => !isAiDraftTerminalStatus(entry.lastKnownStatus)).length,
-    [aiDraftJobs],
-  );
   const activeGuidePage =
     teacherClassGuidePages[helpPage] ?? teacherClassGuidePages[0];
 
@@ -2949,54 +2878,7 @@ export default function TeacherClassDetailPage() {
               </div>
             </div>
 
-            <article className="teacher-class-workspace__assignment-card">
-              <div className="teacher-class-workspace__assignment-main">
-                <div className="teacher-class-workspace__assignment-icon">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="teacher-class-workspace__assignment-copy">
-                  <div className="teacher-class-workspace__assignment-tags">
-                    <span>AI Draft Jobs</span>
-                    <span data-status={activeAiDraftJobCount > 0 ? 'published' : 'draft'}>
-                      {activeAiDraftJobCount > 0 ? `${activeAiDraftJobCount} active` : 'No active jobs'}
-                    </span>
-                  </div>
-                  <p>
-                    {aiDraftJobsBusy ? 'Refreshing AI draft tracker...' : `${recentAiDraftJobs.length} tracked job(s) for this class`}
-                  </p>
-                  {recentAiDraftJobs.length === 0 ? (
-                    <div className="teacher-class-workspace__assignment-actions">
-                      <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
-                        Start AI Draft
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="teacher-class-workspace__stack">
-                      {recentAiDraftJobs.map((entry) => (
-                        <div key={entry.jobId} className="teacher-class-workspace__selection-bar">
-                          <div>
-                            <strong>{entry.jobId}</strong>
-                            <p className="text-xs text-muted-foreground">
-                              {entry.lastKnownStatus} - {Math.round(entry.lastKnownProgress)}% - {formatRelativeTime(entry.updatedAt || entry.createdAt)}
-                            </p>
-                          </div>
-                          <div className="teacher-class-workspace__selection-actions">
-                            <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
-                              Resume
-                            </Link>
-                            {entry.assessmentId ? (
-                              <Link href={`/dashboard/teacher/assessments/${entry.assessmentId}/edit`} className="teacher-class-workspace__outline">
-                                Open Assessment
-                              </Link>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </article>
+            <AiDraftJobsPanel classId={classId} />
 
             <div className="teacher-class-workspace__chips">
               {ASSIGNMENT_FILTERS.map((filter) => (

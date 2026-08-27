@@ -10,10 +10,14 @@ import { lessonService } from '@/services/lesson-service';
 import { toast } from 'sonner';
 
 const pushMock = jest.fn();
+let mockSearchJobId: string | null = null;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'class-1' }),
   useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => ({
+    get: (key: string) => (key === 'jobId' ? mockSearchJobId : null),
+  }),
 }));
 
 jest.mock('sonner', () => ({
@@ -173,6 +177,7 @@ describe('TeacherAiDraftQuizPage', () => {
     jest.clearAllMocks();
     jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-25T12:00:00.000Z'));
     window.localStorage.clear();
+    mockSearchJobId = null;
 
     mockedClassService.getById.mockResolvedValue({
       data: {
@@ -556,6 +561,48 @@ describe('TeacherAiDraftQuizPage', () => {
 
     expect(pushMock).toHaveBeenCalledWith(
       '/dashboard/teacher/assessments/assessment-1/edit',
+    );
+  });
+
+  it('loads the job selected by the URL even when another cached job is newer', async () => {
+    mockSearchJobId = 'job-from-link';
+    seedTrackedJobs([
+      {
+        jobId: 'job-cached',
+        jobType: 'quiz_generation',
+        createdAt: '2026-04-27T08:00:00.000Z',
+        lastKnownStatus: 'processing',
+        lastKnownProgress: 60,
+      },
+    ]);
+    mockedAiService.getTeacherJobStatus.mockResolvedValue({
+      data: buildJob({ jobId: 'job-from-link' }),
+    } as any);
+    mockedAiService.getQuizDraftJobResult.mockResolvedValue({
+      data: {
+        job: {
+          jobId: 'job-from-link',
+          jobType: 'quiz_generation',
+          status: 'completed',
+          outputId: 'output-linked',
+          assessmentId: 'assessment-1',
+        },
+        result: {
+          outputId: 'output-linked',
+          outputType: 'assessment_draft',
+          structuredOutput: buildResult(),
+        },
+      },
+    } as any);
+
+    render(<TeacherAiDraftQuizPage />);
+
+    await screen.findByText('Fractions AI Draft');
+    expect(mockedAiService.getTeacherJobStatus).toHaveBeenCalledWith(
+      'job-from-link',
+    );
+    expect(mockedAiService.getTeacherJobStatus).not.toHaveBeenCalledWith(
+      'job-cached',
     );
   });
 

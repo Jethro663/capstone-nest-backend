@@ -196,6 +196,26 @@ export interface AiGenerationJob {
   updatedAt?: string | null;
 }
 
+export interface TeacherAiJobSummary {
+  jobId: string;
+  jobType: string;
+  classId: string | null;
+  title: string;
+  status: AiGenerationStatus;
+  progressPercent: number;
+  statusMessage: string | null;
+  errorMessage: string | null;
+  outputId: string | null;
+  assessmentId: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface ListTeacherAiJobsQuery {
+  classId?: string;
+  limit?: number;
+}
+
 export interface AiGenerationJobResult<TStructuredOutput = Record<string, unknown>> {
   job: {
     jobId: string;

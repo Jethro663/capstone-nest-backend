@@ -71,6 +71,59 @@ describe('aiService', () => {
     });
   });
 
+  it('lists class quiz jobs with stable summary fields', async () => {
+    mockedApi.get.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            jobId: 'job-10',
+            jobType: 'quiz_generation',
+            classId: 'class-1',
+            title: 'Fractions checkpoint',
+            status: 'approved',
+            progressPercent: 100,
+            outputId: 'output-10',
+            assessmentId: 'assessment-10',
+            createdAt: '2026-08-27T01:00:00.000Z',
+            updatedAt: '2026-08-27T02:00:00.000Z',
+          },
+          {
+            jobId: 11,
+            status: 'unexpected',
+            progressPercent: '58.5',
+          },
+        ],
+      },
+    });
+
+    const result = await aiService.listTeacherJobs({
+      classId: 'class-1',
+      limit: 6,
+    });
+
+    expect(mockedApi.get).toHaveBeenCalledWith('/ai/teacher/jobs', {
+      params: {
+        classId: 'class-1',
+        jobType: 'quiz_generation',
+        limit: 6,
+      },
+    });
+    expect(result.data[0]).toMatchObject({
+      jobId: 'job-10',
+      title: 'Fractions checkpoint',
+      status: 'approved',
+      assessmentId: 'assessment-10',
+    });
+    expect(result.data[1]).toMatchObject({
+      jobId: 'unknown-job',
+      title: 'AI Draft Quiz',
+      status: 'processing',
+      progressPercent: 58.5,
+      classId: null,
+    });
+  });
+
   it('fetches class index readiness', async () => {
     mockedApi.get.mockResolvedValue({
       data: {

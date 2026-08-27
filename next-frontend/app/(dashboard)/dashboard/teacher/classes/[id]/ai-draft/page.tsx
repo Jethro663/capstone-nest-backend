@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowDown,
@@ -270,7 +270,9 @@ function resolveQuestionIssues(
 export default function TeacherAiDraftQuizPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const classId = params.id as string;
+  const requestedJobId = searchParams.get('jobId')?.trim() || null;
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -459,14 +461,14 @@ export default function TeacherAiDraftQuizPage() {
 
   useEffect(() => {
     const cached = syncTrackedJobs();
-    if (cached.length > 0) {
-      setCurrentJobId((current) => current ?? cached[0].jobId);
+    if (requestedJobId || cached.length > 0) {
+      setCurrentJobId((current) => requestedJobId ?? current ?? cached[0].jobId);
     } else {
       setCurrentJobId(null);
       setJob(null);
       setResult(null);
     }
-  }, [classId, syncTrackedJobs]);
+  }, [classId, requestedJobId, syncTrackedJobs]);
 
   useEffect(() => {
     if (!currentJobId) {
