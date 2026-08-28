@@ -2,11 +2,21 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from app.config import Settings
 
 
 class SettingsTests(unittest.TestCase):
+    def test_cloud_text_model_defaults_to_gemini_3_7_flash(self) -> None:
+        with patch.dict(os.environ, {"AI_RUNTIME_MODE": "test"}, clear=True):
+            settings = Settings(_env_file=None)
+
+        self.assertEqual(
+            settings.ai_cloud_fallback_model,
+            "google/gemini-3.7-flash",
+        )
+
     def test_settings_prefers_env_local_over_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

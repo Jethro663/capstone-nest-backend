@@ -98,7 +98,7 @@ class Settings(BaseSettings):
         validation_alias="AI_CLOUD_FALLBACK_PROVIDER",
     )
     ai_cloud_fallback_model: str = Field(
-        default="gpt-4o-mini",
+        default="google/gemini-3.7-flash",
         validation_alias=AliasChoices("AI_CLOUD_FALLBACK_MODEL", "OPENROUTER_TEXT_MODEL"),
     )
     ai_cloud_fallback_vision_model: str = Field(
