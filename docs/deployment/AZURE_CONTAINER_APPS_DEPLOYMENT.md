@@ -108,7 +108,7 @@ AI_CLOUD_FALLBACK_PROVIDER=openrouter
 AI_CLOUD_FALLBACK_ENABLED=true
 AI_CLOUD_FALLBACK_BASE_URL=https://openrouter.ai/api/v1
 AI_CLOUD_FALLBACK_API_KEY=<openrouter-api-key>
-AI_CLOUD_FALLBACK_MODEL=openrouter/auto
+AI_CLOUD_FALLBACK_MODEL=google/gemini-3.7-flash
 OPENROUTER_EMBEDDING_MODEL=google/gemini-embedding-2-preview
 ```
 

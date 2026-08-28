@@ -84,7 +84,7 @@ flowchart LR
 | ai_cloud_fallback_enabled | bool | Field(default=False, validation_alias='AI_CLOUD_FALLBACK_ENABLED') |
 | ai_runtime_mode | str | Field(default='auto', validation_alias=AliasChoices('AI_RUNTIME_MODE', 'ai_runtime_mode')) |
 | ai_cloud_fallback_provider | str | Field(default='openai', validation_alias='AI_CLOUD_FALLBACK_PROVIDER') |
-| ai_cloud_fallback_model | str | Field(default='gpt-4o-mini', validation_alias=AliasChoices('AI_CLOUD_FALLBACK_MODEL', 'OPENROUTER_TEXT_MODEL')) |
+| ai_cloud_fallback_model | str | Field(default='google/gemini-3.7-flash', validation_alias=AliasChoices('AI_CLOUD_FALLBACK_MODEL', 'OPENROUTER_TEXT_MODEL')) |
 | ai_cloud_fallback_vision_model | str | Field(default='', validation_alias='OPENROUTER_VISION_MODEL') |
 | ai_cloud_fallback_embedding_model | str | Field(default='google/gemini-embedding-2-preview', validation_alias='OPENROUTER_EMBEDDING_MODEL') |
 | ai_cloud_fallback_api_key | str | Field(default='', validation_alias=AliasChoices('AI_CLOUD_FALLBACK_API_KEY', 'OPENROUTER_API_KEY')) |
@@ -101,7 +101,7 @@ flowchart LR
 | Embeddings | nomic-embed-text through Ollama | Exactly 768 dimensions | Configured cloud embedding model is google/gemini-embedding-2-preview when cloud embedding is deliberately enabled. |
 | Module extraction | Configured local text or vision runtime | 240-second extraction timeout; extraction background concurrency one | Rule-based and structured repair paths supplement model extraction. |
 | Quiz generation | Configured local text runtime | 150-second quiz-generation timeout | Schema validation and repair prompts run before accepting the draft. |
-| Teacher generation | Configured local text runtime | Teacher background concurrency two | Optional cloud runtime fallback model defaults to gpt-4o-mini. |
+| Teacher generation | Configured local text runtime | Teacher background concurrency two | Optional cloud runtime fallback model defaults to google/gemini-3.7-flash. |
 
 - Runtime mode defaults to auto. The adapter chooses the configured local or OpenAI-compatible provider according to settings and task support.
 - Cloud fallback must be explicitly enabled. A configured API key alone must not silently broaden data egress.
