@@ -23,7 +23,6 @@ import {
   type DashboardRole,
 } from '@/lib/dashboard-route-access';
 import { SystemInfoButton } from './SystemInfoButton';
-import { StudentThemeSwitcher } from './StudentThemeSwitcher';
 import { NotificationBellDropdown } from '@/components/notifications/NotificationBellDropdown';
 
 interface TopBarProps {
@@ -215,8 +214,6 @@ export function TopBar({
         </div>
 
         <div className="student-topbar-shell__actions">
-          <StudentThemeSwitcher />
-
           <a
             href={studentApkHref}
             download="nexora-student-mobile.apk"

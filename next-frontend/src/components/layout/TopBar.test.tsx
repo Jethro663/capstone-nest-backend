@@ -35,15 +35,14 @@ jest.mock('@/lib/auth-actions', () => ({
 }));
 
 describe('TopBar', () => {
-  it('exposes the theme selector only in the Student shell', () => {
-    const { rerender } = render(
-      <TopBar onMenuToggle={jest.fn()} shellRole="student" />,
-    );
+  it.each(['student', 'teacher', 'admin'] as const)(
+    'does not expose the legacy theme selector in the %s shell',
+    (shellRole) => {
+      render(<TopBar onMenuToggle={jest.fn()} shellRole={shellRole} />);
 
-    expect(screen.getByRole('button', { name: 'Select theme' })).toBeInTheDocument();
-
-    rerender(<TopBar onMenuToggle={jest.fn()} shellRole="teacher" />);
-
-    expect(screen.queryByRole('button', { name: 'Select theme' })).not.toBeInTheDocument();
-  });
+      expect(
+        screen.queryByRole('button', { name: 'Select theme' }),
+      ).not.toBeInTheDocument();
+    },
+  );
 });
