@@ -8,17 +8,15 @@ export interface AppOrbitLoaderProps {
   variant?: LoaderVariant;
   message?: string;
   icon?: LucideIcon;
-  fullScreen?: boolean;
 }
 
-const CALM_DEFAULT_MESSAGE = 'Loading your portal...';
-const STUDENT_DEFAULT_MESSAGE = 'Wait a minute!';
+const CALM_DEFAULT_MESSAGE = 'Preparing your workspace…';
+const STUDENT_DEFAULT_MESSAGE = 'Preparing your learning space…';
 
 export function AppOrbitLoader({
   variant = 'calm',
   message,
   icon,
-  fullScreen = true,
 }: AppOrbitLoaderProps) {
   const prefersReducedMotion = useReducedMotion();
   const OrbitIcon = icon ?? (variant === 'student' ? BookOpen : null);
@@ -28,13 +26,12 @@ export function AppOrbitLoader({
 
   return (
     <div
-      className={`orbit-loader ${fullScreen ? 'orbit-loader--fullscreen' : ''} orbit-loader--${variant}`}
+      className={`orbit-loader orbit-loader--${variant}`}
       role="status"
       aria-live="polite"
       aria-busy="true"
       data-testid="app-orbit-loader"
     >
-      <div className="orbit-loader__backdrop" aria-hidden="true" />
       <div className="orbit-loader__content">
         {prefersReducedMotion ? (
           <div
@@ -50,23 +47,19 @@ export function AppOrbitLoader({
                 ) : null}
               </div>
             </div>
-            <div className="orbit-loader__ring orbit-loader__ring--inner orbit-loader__ring--still">
-              <div className="orbit-loader__orb orbit-loader__orb--inner" data-testid="orbit-ring-b" />
-            </div>
           </div>
         ) : (
-          <motion.div
-            className="orbit-loader__system"
-            animate={{ rotate: [0, 360] }}
-            transition={{ duration: 3.4, repeat: Infinity, ease: 'linear' }}
-            aria-hidden="true"
-          >
-            <div className="orbit-loader__well" />
+          <div className="orbit-loader__system" aria-hidden="true">
+            <motion.div
+              className="orbit-loader__well"
+              animate={{ scale: [1, 1.06, 1], opacity: [0.8, 1, 0.8] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+            />
 
             <motion.div
               className="orbit-loader__ring orbit-loader__ring--outer"
               animate={{ rotate: [0, 360] }}
-              transition={{ duration: 2.1, repeat: Infinity, ease: 'linear' }}
+              transition={{ duration: 2.8, repeat: Infinity, ease: 'linear' }}
             >
               <div className="orbit-loader__orb orbit-loader__orb--outer" data-testid="orbit-ring-a">
                 {OrbitIcon ? (
@@ -74,15 +67,7 @@ export function AppOrbitLoader({
                 ) : null}
               </div>
             </motion.div>
-
-            <motion.div
-              className="orbit-loader__ring orbit-loader__ring--inner"
-              animate={{ rotate: [0, -360] }}
-              transition={{ duration: 1.65, repeat: Infinity, ease: 'linear' }}
-            >
-              <div className="orbit-loader__orb orbit-loader__orb--inner" data-testid="orbit-ring-b" />
-            </motion.div>
-          </motion.div>
+          </div>
         )}
 
         <p className="orbit-loader__message">{copy}</p>

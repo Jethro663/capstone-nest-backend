@@ -13625,43 +13625,17 @@ html[data-theme='dark'] {
   overflow: hidden;
   isolation: isolate;
   width: 100%;
-  min-height: 18rem;
-  padding: 2rem;
+  min-height: 100vh;
+  padding: 1.5rem;
   color: #e2e8f0;
 }
 
-.orbit-loader--fullscreen {
-  min-height: 100vh;
-}
-
 .orbit-loader--calm {
-  background:
-    radial-gradient(circle at 50% 40%, rgba(15, 23, 42, 0.95), rgba(2, 6, 23, 0.98) 60%, rgba(2, 6, 23, 1) 100%),
-    linear-gradient(180deg, #020617 0%, #0b1220 100%);
+  background: radial-gradient(circle at 50% 46%, #111c31 0%, #070d19 42%, #050a13 100%);
 }
 
 .orbit-loader--student {
-  background:
-    radial-gradient(circle at 50% 36%, rgba(127, 29, 29, 0.82), rgba(15, 23, 42, 0.98) 62%, rgba(2, 6, 23, 1) 100%),
-    linear-gradient(160deg, #020617 8%, #0f172a 52%, #1f2937 100%);
-}
-
-.orbit-loader__backdrop {
-  position: absolute;
-  inset: -35%;
-  border-radius: 9999px;
-  filter: blur(70px);
-  opacity: 0.9;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.orbit-loader--calm .orbit-loader__backdrop {
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(15, 23, 42, 0) 65%);
-}
-
-.orbit-loader--student .orbit-loader__backdrop {
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.24) 0%, rgba(15, 23, 42, 0) 65%);
+  background: radial-gradient(circle at 50% 46%, #251316 0%, #0e0d14 42%, #080a10 100%);
 }
 
 .orbit-loader__content {
@@ -13674,24 +13648,23 @@ html[data-theme='dark'] {
 
 .orbit-loader__system {
   position: relative;
-  width: 11rem;
-  height: 11rem;
+  width: 6.5rem;
+  height: 6.5rem;
   display: grid;
   place-items: center;
-  filter: drop-shadow(0 26px 42px rgba(2, 6, 23, 0.55));
+  filter: drop-shadow(0 12px 20px rgba(2, 6, 23, 0.35));
 }
 
 .orbit-loader__system--static {
-  filter: drop-shadow(0 14px 26px rgba(2, 6, 23, 0.48));
+  filter: drop-shadow(0 8px 14px rgba(2, 6, 23, 0.3));
 }
 
 .orbit-loader__well {
   position: absolute;
   inset: 34%;
   border-radius: 9999px;
-  background:
-    radial-gradient(circle at 42% 42%, rgba(15, 23, 42, 0.14), rgba(2, 6, 23, 0.9) 48%, rgba(2, 6, 23, 1) 100%);
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16), 0 0 26px rgba(15, 23, 42, 0.66);
+  background: #070d18;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
 }
 
 .orbit-loader__ring {
@@ -13705,11 +13678,6 @@ html[data-theme='dark'] {
   border: 1px solid rgba(148, 163, 184, 0.26);
 }
 
-.orbit-loader__ring--inner {
-  inset: 15%;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-}
-
 .orbit-loader__ring--still {
   opacity: 0.9;
 }
@@ -13719,53 +13687,37 @@ html[data-theme='dark'] {
   left: 50%;
   border-radius: 9999px;
   transform: translateX(-50%);
-  box-shadow: 0 0 14px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 3px 8px rgba(2, 6, 23, 0.32);
 }
 
 .orbit-loader__orb--outer {
-  top: -0.5rem;
-  width: 1.85rem;
-  height: 1.85rem;
+  top: -0.42rem;
+  width: 1.5rem;
+  height: 1.5rem;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #f8fafc 0%, #cbd5e1 100%);
+  background: #dbeafe;
   color: #0f172a;
 }
 
-.orbit-loader__orb--inner {
-  top: -0.4rem;
-  width: 1.2rem;
-  height: 1.2rem;
-  background: linear-gradient(145deg, #fca5a5 0%, #f87171 100%);
-}
-
 .orbit-loader__icon {
-  width: 0.92rem;
-  height: 0.92rem;
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .orbit-loader--calm .orbit-loader__orb--outer {
-  background: linear-gradient(145deg, #dbeafe 0%, #93c5fd 100%);
-}
-
-.orbit-loader--calm .orbit-loader__orb--inner {
-  background: linear-gradient(145deg, #67e8f9 0%, #38bdf8 100%);
+  background: #bfdbfe;
 }
 
 .orbit-loader--student .orbit-loader__orb--outer {
-  background: linear-gradient(145deg, #fee2e2 0%, #fca5a5 100%);
-}
-
-.orbit-loader--student .orbit-loader__orb--inner {
-  background: linear-gradient(145deg, #fb7185 0%, #ef4444 100%);
+  background: #fecaca;
 }
 
 .orbit-loader__message {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .orbit-loader--calm .orbit-loader__message {
@@ -13778,12 +13730,53 @@ html[data-theme='dark'] {
 
 @media (max-width: 640px) {
   .orbit-loader__system {
-    width: 9.25rem;
-    height: 9.25rem;
+    width: 5.5rem;
+    height: 5.5rem;
   }
 
   .orbit-loader__message {
     font-size: 0.85rem;
+  }
+}
+
+.dashboard-route-skeleton {
+  width: 100%;
+  opacity: 0;
+}
+
+.dashboard-route-skeleton--delayed {
+  animation: dashboard-route-skeleton-reveal 120ms ease-out 150ms forwards;
+}
+
+@keyframes dashboard-route-skeleton-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-route-skeleton--delayed {
+    animation: dashboard-route-skeleton-reveal-static 1ms linear 150ms forwards;
+  }
+
+  .dashboard-route-skeleton .animate-pulse {
+    animation: none;
+  }
+}
+
+@keyframes dashboard-route-skeleton-reveal-static {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 /* Library workspace redesign - compact shared layout for teacher/admin */

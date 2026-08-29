@@ -172,6 +172,21 @@ describe('DashboardLayout role-path enforcement', () => {
     expect(screen.getByText('content')).toBeInTheDocument();
   });
 
+  it('keeps the dashboard shell mounted around route-loading content', () => {
+    usePathnameMock.mockReturnValue('/dashboard/student/courses');
+
+    render(
+      <DashboardLayout>
+        <div data-testid="route-loading-content" role="status" />
+      </DashboardLayout>,
+    );
+
+    expect(screen.getByTestId('sidebar')).toBeInTheDocument();
+    expect(screen.getByTestId('topbar')).toBeInTheDocument();
+    expect(screen.getByTestId('route-loading-content')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-orbit-loader')).not.toBeInTheDocument();
+  });
+
   it('does not logout on shared dashboard routes', () => {
     usePathnameMock.mockReturnValue('/dashboard/notifications');
 

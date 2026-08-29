@@ -29,24 +29,33 @@ describe('AppOrbitLoader', () => {
     mockedUseReducedMotion.mockReturnValue(false);
   });
 
-  it('renders the two-orbit structure', () => {
+  it('renders one restrained orbit without the old backdrop layer', () => {
     render(<AppOrbitLoader variant="calm" />);
 
     expect(screen.getByTestId('orbit-ring-a')).toBeInTheDocument();
-    expect(screen.getByTestId('orbit-ring-b')).toBeInTheDocument();
+    expect(screen.queryByTestId('orbit-ring-b')).not.toBeInTheDocument();
+    expect(document.querySelector('.orbit-loader__backdrop')).not.toBeInTheDocument();
   });
 
   it('renders student copy and icon for student variant', () => {
     render(<AppOrbitLoader variant="student" />);
 
-    expect(screen.getByText('Wait a minute!')).toBeInTheDocument();
+    expect(screen.getByText('Preparing your learning space…')).toBeInTheDocument();
     expect(screen.getByTestId('orbit-loader-icon')).toBeInTheDocument();
   });
 
   it('renders calm default copy for calm variant', () => {
     render(<AppOrbitLoader variant="calm" />);
 
-    expect(screen.getByText('Loading your portal...')).toBeInTheDocument();
+    expect(screen.getByText('Preparing your workspace…')).toBeInTheDocument();
+  });
+
+  it('has no inline or fullscreen display mode', () => {
+    render(<AppOrbitLoader variant="calm" />);
+
+    const loader = screen.getByTestId('app-orbit-loader');
+    expect(loader).toHaveClass('orbit-loader');
+    expect(loader).not.toHaveClass('orbit-loader--fullscreen');
   });
 
   it('renders static fallback when reduced motion is preferred', () => {
