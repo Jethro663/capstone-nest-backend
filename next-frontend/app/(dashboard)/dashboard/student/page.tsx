@@ -33,7 +33,7 @@ import { StudentAnnouncementBoardDialog } from '@/components/student/StudentAnno
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
 import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
-import type { Lesson } from '@/types/lesson';
+import type { StudentRecentLesson } from '@/types/lesson';
 import type { SchoolEvent } from '@/types/school-event';
 import {
   buildCalendarDayIndex,
@@ -666,7 +666,7 @@ export default function StudentDashboardPage() {
   const { user } = useAuth();
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [recentLessons, setRecentLessons] = useState<StudentRecentLesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [assessmentAttempts, setAssessmentAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
   const [announcementsByClass, setAnnouncementsByClass] = useState<Record<string, Announcement[]>>({});
@@ -703,11 +703,7 @@ export default function StudentDashboardPage() {
       const currentSchoolYear = enrolledClasses[0]?.schoolYear || getCurrentSchoolYearReference();
       const [lessonResults, assessmentResults, announcementResults, schoolEventResults] =
         await Promise.all([
-          Promise.allSettled(
-            classIds
-              .slice(0, 10)
-              .map((classId) => lessonService.getByClass(classId)),
-          ),
+          Promise.allSettled([lessonService.getRecent(4)]),
           Promise.allSettled(
             classIds
               .slice(0, 10)
@@ -727,9 +723,10 @@ export default function StudentDashboardPage() {
         ]);
 
       const failedKinds = new Set<StudentDashboardFeedKind>();
-      const nextLessons = lessonResults.flatMap((result) =>
-        result.status === 'fulfilled' ? result.value.data || [] : [],
-      );
+      const nextLessons =
+        lessonResults[0]?.status === 'fulfilled'
+          ? lessonResults[0].value.data || []
+          : [];
       const nextAssessments = assessmentResults.flatMap((result) =>
         result.status === 'fulfilled' ? result.value.data || [] : [],
       );
@@ -765,8 +762,8 @@ export default function StudentDashboardPage() {
         failedKinds.add('attempts');
       }
 
-      if (lessonResults.length === 0 || nextLessons.length > 0 || !failedKinds.has('lessons')) {
-        setLessons(nextLessons);
+      if (nextLessons.length > 0 || !failedKinds.has('lessons')) {
+        setRecentLessons(nextLessons);
       }
       if (
         assessmentResults.length === 0 ||
@@ -817,7 +814,6 @@ export default function StudentDashboardPage() {
         .slice(0, 4),
     [assessmentAttempts, publishedAssessments],
   );
-  const recentLessons = useMemo(() => lessons.slice(0, 4), [lessons]);
   const todaySchedule = useMemo(() => getScheduleItemsForToday(classes), [classes]);
   const pendingTasksUnavailable =
     failedFeedKinds.includes('assessments') ||
@@ -1016,7 +1012,9 @@ export default function StudentDashboardPage() {
                         <p>Lesson {index + 1}</p>
                       </div>
                     </div>
-                    <Link href={`/dashboard/student/lessons/${lesson.id}`}>
+                    <Link
+                      href={`/dashboard/student/classes/${lesson.classId}/modules/${lesson.moduleId}?lessonId=${lesson.id}`}
+                    >
                       <Button variant="outline" className="student-v2-lesson-item__button">Open</Button>
                     </Link>
                   </article>

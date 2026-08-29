@@ -15,9 +15,18 @@ import type {
   LessonVersion,
   LessonsResponse,
   LessonListQuery,
+  StudentRecentLessonsResponse,
 } from '@/types/lesson';
 
 export const lessonService = {
+  /** GET /lessons/student/recent — Student */
+  async getRecent(limit = 4): Promise<StudentRecentLessonsResponse> {
+    const { data } = await api.get('/lessons/student/recent', {
+      params: { limit },
+    });
+    return data;
+  },
+
   /** GET /lessons/class/:classId — All roles */
   async getByClass(classId: string, query: LessonListQuery = {}): Promise<LessonsResponse> {
     const { data } = await api.get(`/lessons/class/${classId}`, {

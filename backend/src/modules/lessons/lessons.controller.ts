@@ -28,6 +28,15 @@ import {
   BulkLessonIdsDto,
   CreateLessonVersionDto,
 } from './DTO/lesson.dto';
+import { StudentRecentLessonsQueryDto } from './DTO/student-recent-lessons-query.dto';
+
+function isStudentOnly(roles: RoleName[] = []) {
+  return (
+    roles.includes(RoleName.Student) &&
+    !roles.includes(RoleName.Admin) &&
+    !roles.includes(RoleName.Teacher)
+  );
+}
 
 @ApiTags('Lessons')
 @ApiBearerAuth('token')
@@ -38,7 +47,7 @@ export class LessonsController {
 
   /**
    * Get all lessons for a class (ordered).
-   * Students only receive published lessons; Admin/Teacher see all (including drafts).
+   * Students only receive accessible lessons; Admin/Teacher see all (including drafts).
    */
   @Get('class/:classId')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
@@ -50,7 +59,7 @@ export class LessonsController {
     @Query('includeBlocks') includeBlocksQuery: string | undefined,
     @CurrentUser() user: any,
   ) {
-    const filterDrafts: boolean = user.roles.includes(RoleName.Student);
+    const filterDrafts = isStudentOnly(user.roles);
     const page = pageQuery
       ? Math.max(Number.parseInt(pageQuery, 10) || 1, 1)
       : undefined;
@@ -68,6 +77,7 @@ export class LessonsController {
       page,
       pageSize,
       status,
+      studentId: filterDrafts ? user.userId : undefined,
     });
 
     return {
@@ -99,13 +109,34 @@ export class LessonsController {
     };
   }
 
+  @Get('student/recent')
+  @Roles(RoleName.Student)
+  async getRecentLessons(
+    @Query() query: StudentRecentLessonsQueryDto,
+    @CurrentUser() user: any,
+  ) {
+    const data = await this.lessonsService.getRecentLessons(
+      user.userId,
+      query.limit,
+    );
+
+    return {
+      success: true,
+      message: 'Recent lessons retrieved successfully',
+      data,
+      count: data.length,
+    };
+  }
+
   /**
    * Get a single lesson with all content blocks.
    */
   @Get(':id')
   @Roles(RoleName.Admin, RoleName.Teacher, RoleName.Student)
-  async getLessonById(@Param('id') id: string) {
-    const lesson = await this.lessonsService.getLessonById(id);
+  async getLessonById(@Param('id') id: string, @CurrentUser() user: any) {
+    const lesson = isStudentOnly(user.roles)
+      ? await this.lessonsService.getLessonByIdForStudent(user.userId, id)
+      : await this.lessonsService.getLessonById(id);
 
     return {
       success: true,

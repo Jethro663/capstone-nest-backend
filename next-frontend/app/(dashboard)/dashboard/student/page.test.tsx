@@ -22,6 +22,7 @@ jest.mock('@/services/class-service', () => ({
 jest.mock('@/services/lesson-service', () => ({
   lessonService: {
     getByClass: jest.fn(),
+    getRecent: jest.fn(),
   },
 }));
 
@@ -62,6 +63,12 @@ describe('StudentDashboardPage', () => {
         lastName: 'Cruz',
       },
     } as ReturnType<typeof useAuth>);
+    mockedLessonService.getRecent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+      count: 0,
+    });
   });
 
   it('renders pending tasks and recent lessons first without the old summary panels', async () => {
@@ -91,23 +98,20 @@ describe('StudentDashboardPage', () => {
       ],
     });
 
-    mockedLessonService.getByClass.mockResolvedValue({
+    mockedLessonService.getRecent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [
         {
           id: 'lesson-1',
           classId: 'class-1',
+          moduleId: 'module-1',
           title: 'Linear Equations',
           order: 1,
-          isDraft: false,
+          updatedAt: '2026-08-29T04:00:00.000Z',
         },
       ],
       count: 1,
-      total: 1,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -187,6 +191,13 @@ describe('StudentDashboardPage', () => {
     expect(mainSections[0]).toHaveTextContent('Algebra Quiz');
     expect(mainSections[1]).toHaveTextContent('Recent Lessons');
     expect(mainSections[1]).toHaveTextContent('Linear Equations');
+    expect(mockedLessonService.getRecent).toHaveBeenCalledTimes(1);
+    expect(mockedLessonService.getRecent).toHaveBeenCalledWith(4);
+    expect(mockedLessonService.getByClass).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Open' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/classes/class-1/modules/module-1?lessonId=lesson-1',
+    );
 
     expect(screen.getByRole('heading', { name: 'Day Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument();
@@ -241,15 +252,11 @@ describe('StudentDashboardPage', () => {
       ],
     });
 
-    mockedLessonService.getByClass.mockResolvedValue({
+    mockedLessonService.getRecent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [],
       count: 0,
-      total: 0,
-      page: 1,
-      pageSize: 20,
-      totalPages: 0,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({
@@ -362,23 +369,20 @@ describe('StudentDashboardPage', () => {
         },
       ],
     });
-    mockedLessonService.getByClass.mockResolvedValue({
+    mockedLessonService.getRecent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [
         {
           id: 'lesson-1',
           classId: 'class-1',
+          moduleId: 'module-1',
           title: 'Linear Equations',
           order: 1,
-          isDraft: false,
+          updatedAt: '2026-08-29T04:00:00.000Z',
         },
       ],
       count: 1,
-      total: 1,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
     });
     mockedAssessmentService.getByClass.mockRejectedValueOnce(
       new Error('assessment feed detail'),
@@ -408,6 +412,75 @@ describe('StudentDashboardPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows a retryable recent-feed state and recovers without per-class lesson calls', async () => {
+    mockedClassService.getByStudent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          schedules: [],
+        },
+      ],
+    });
+    mockedLessonService.getRecent
+      .mockRejectedValueOnce(new Error('recent lesson detail'))
+      .mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: [
+          {
+            id: 'lesson-1',
+            classId: 'class-1',
+            moduleId: 'module-1',
+            title: 'Linear Equations',
+            order: 1,
+            updatedAt: '2026-08-29T04:00:00.000Z',
+          },
+        ],
+        count: 1,
+      });
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [],
+    });
+
+    render(<StudentDashboardPage />);
+
+    expect(
+      await screen.findByText('Recent lessons are temporarily unavailable.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('recent lesson detail')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /retry dashboard feeds/i }));
+
+    expect(await screen.findByText('Linear Equations')).toBeInTheDocument();
+    expect(mockedLessonService.getRecent).toHaveBeenCalledTimes(2);
+    expect(mockedLessonService.getByClass).not.toHaveBeenCalled();
+  });
+
   it('opens the main dashboard guide, covers every page, and closes it', async () => {
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
@@ -435,23 +508,20 @@ describe('StudentDashboardPage', () => {
       ],
     });
 
-    mockedLessonService.getByClass.mockResolvedValue({
+    mockedLessonService.getRecent.mockResolvedValue({
       success: true,
       message: 'ok',
       data: [
         {
           id: 'lesson-1',
           classId: 'class-1',
+          moduleId: 'module-1',
           title: 'Linear Equations',
           order: 1,
-          isDraft: false,
+          updatedAt: '2026-08-29T04:00:00.000Z',
         },
       ],
       count: 1,
-      total: 1,
-      page: 1,
-      pageSize: 20,
-      totalPages: 1,
     });
 
     mockedAssessmentService.getByClass.mockResolvedValue({

@@ -9,6 +9,7 @@ import { DatabaseService } from '../../database/database.service';
 import { RoleName } from '../auth/decorators/roles.decorator';
 import { AuditService } from '../audit/audit.service';
 import { RagIndexingService } from '../rag/rag-indexing.service';
+import { StudentLessonAccessService } from './student-lesson-access.service';
 
 // ─── Fixture data ────────────────────────────────────────────────────────────
 
@@ -139,9 +140,22 @@ describe('LessonsService', () => {
   const mockAuditService = {
     log: jest.fn().mockResolvedValue(undefined),
   };
+  const mockStudentLessonAccessService = {
+    assertLessonAccessible: jest.fn(),
+    getAccessibleLessonIdsForClass: jest.fn(),
+    getRecentLessons: jest.fn(),
+  };
 
   beforeEach(async () => {
     db = buildMockDb();
+    mockStudentLessonAccessService.assertLessonAccessible.mockResolvedValue({
+      lessonId: LESSON_ID,
+      classId: CLASS_ID,
+      moduleId: 'module-1',
+    });
+    mockStudentLessonAccessService.getAccessibleLessonIdsForClass.mockResolvedValue([
+      LESSON_ID,
+    ]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -159,6 +173,10 @@ describe('LessonsService', () => {
           useValue: {
             queueClassReindex: jest.fn(),
           },
+        },
+        {
+          provide: StudentLessonAccessService,
+          useValue: mockStudentLessonAccessService,
         },
       ],
     }).compile();
@@ -209,6 +227,69 @@ describe('LessonsService', () => {
       expect(result.data).toEqual([]);
       expect(result.total).toBe(0);
     });
+
+    it('filters a student class list through the canonical access policy', async () => {
+      db.query.lessons.findMany.mockResolvedValue([MOCK_LESSON]);
+      mockSelectWhere(db, [{ total: 1 }]);
+
+      const result = await service.getLessonsByClass(CLASS_ID, {
+        filterDrafts: true,
+        studentId: STUDENT_ID,
+      });
+
+      expect(
+        mockStudentLessonAccessService.getAccessibleLessonIdsForClass,
+      ).toHaveBeenCalledWith(STUDENT_ID, CLASS_ID);
+      expect(result.data).toEqual([MOCK_LESSON]);
+    });
+
+    it('returns an empty student class list when every lesson is inaccessible', async () => {
+      mockStudentLessonAccessService.getAccessibleLessonIdsForClass.mockResolvedValueOnce(
+        [],
+      );
+
+      const result = await service.getLessonsByClass(CLASS_ID, {
+        filterDrafts: true,
+        studentId: STUDENT_ID,
+      });
+
+      expect(result.data).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(db.query.lessons.findMany).not.toHaveBeenCalled();
+    });
+
+    it('does not apply the student policy to teacher and admin listings', async () => {
+      db.query.lessons.findMany.mockResolvedValue([MOCK_LESSON]);
+      mockSelectWhere(db, [{ total: 1 }]);
+
+      await service.getLessonsByClass(CLASS_ID, { filterDrafts: false });
+
+      expect(
+        mockStudentLessonAccessService.getAccessibleLessonIdsForClass,
+      ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getRecentLessons', () => {
+    it('delegates filtering, ordering, and limiting to the canonical access policy', async () => {
+      const rows = [
+        {
+          id: LESSON_ID,
+          title: MOCK_LESSON.title,
+          classId: CLASS_ID,
+          moduleId: 'module-1',
+          order: 1,
+          updatedAt: '2026-08-29T04:00:00.000Z',
+        },
+      ];
+      mockStudentLessonAccessService.getRecentLessons.mockResolvedValueOnce(rows);
+
+      await expect(service.getRecentLessons(STUDENT_ID, 4)).resolves.toEqual(rows);
+      expect(mockStudentLessonAccessService.getRecentLessons).toHaveBeenCalledWith(
+        STUDENT_ID,
+        4,
+      );
+    });
   });
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -231,6 +312,20 @@ describe('LessonsService', () => {
       await expect(service.getLessonById('nonexistent-id')).rejects.toThrow(
         NotFoundException,
       );
+    });
+
+    it('checks the canonical policy before returning student lesson detail', async () => {
+      db.query.lessons.findFirst.mockResolvedValue(MOCK_LESSON);
+
+      const result = await service.getLessonByIdForStudent(
+        STUDENT_ID,
+        LESSON_ID,
+      );
+
+      expect(
+        mockStudentLessonAccessService.assertLessonAccessible,
+      ).toHaveBeenCalledWith(STUDENT_ID, LESSON_ID);
+      expect(result).toEqual(MOCK_LESSON);
     });
   });
 
@@ -802,6 +897,9 @@ describe('LessonsService', () => {
 
       const result = await service.markLessonComplete(STUDENT_ID, LESSON_ID);
 
+      expect(
+        mockStudentLessonAccessService.assertLessonAccessible,
+      ).toHaveBeenCalledWith(STUDENT_ID, LESSON_ID);
       expect(result.completed).toBe(true);
       expect(result.completedAt).toBe(now);
     });
@@ -860,12 +958,15 @@ describe('LessonsService', () => {
       });
     });
 
-    it('throws BadRequestException when lesson is still a draft', async () => {
-      db.query.lessons.findFirst.mockResolvedValue(MOCK_DRAFT_LESSON);
+    it('returns the generic not-found response when the lesson is inaccessible', async () => {
+      mockStudentLessonAccessService.assertLessonAccessible.mockRejectedValueOnce(
+        new NotFoundException('Lesson not found'),
+      );
 
       await expect(
         service.markLessonComplete(STUDENT_ID, LESSON_ID),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toEqual(new NotFoundException('Lesson not found'));
+      expect(db.insert).not.toHaveBeenCalled();
     });
 
     it('updates existing record on unique constraint violation (error code 23505)', async () => {
@@ -921,6 +1022,9 @@ describe('LessonsService', () => {
 
       const result = await service.isLessonCompleted(STUDENT_ID, LESSON_ID);
 
+      expect(
+        mockStudentLessonAccessService.assertLessonAccessible,
+      ).toHaveBeenCalledWith(STUDENT_ID, LESSON_ID);
       expect(result).toEqual({ completed: false, completedAt: null });
     });
 
@@ -998,6 +1102,21 @@ describe('LessonsService', () => {
       );
 
       expect(result).toEqual([]);
+    });
+
+    it('omits a retained completion after its lesson is relocked', async () => {
+      mockStudentLessonAccessService.getAccessibleLessonIdsForClass.mockResolvedValueOnce(
+        [],
+      );
+
+      const result = await service.getCompletedLessonsForClass(
+        STUDENT_ID,
+        CLASS_ID,
+      );
+
+      expect(result).toEqual([]);
+      expect(db.select).not.toHaveBeenCalled();
+      expect(db.delete).not.toHaveBeenCalled();
     });
   });
 

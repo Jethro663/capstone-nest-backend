@@ -41,6 +41,7 @@ import {
 } from './DTO/lesson.dto';
 import { RoleName } from '../auth/decorators/roles.decorator';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
+import { StudentLessonAccessService } from './student-lesson-access.service';
 
 type LessonStatusFilter = 'all' | 'draft' | 'published';
 type GetLessonsByClassOptions = {
@@ -49,6 +50,7 @@ type GetLessonsByClassOptions = {
   page?: number;
   pageSize?: number;
   status?: LessonStatusFilter;
+  studentId?: string;
 };
 
 @Injectable()
@@ -57,6 +59,7 @@ export class LessonsService {
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
     private readonly ragIndexingService: RagIndexingService,
+    private readonly studentLessonAccessService: StudentLessonAccessService,
   ) {}
 
   private get db() {
@@ -309,8 +312,13 @@ export class LessonsService {
     classId: string,
     filterDrafts: boolean,
     status: LessonStatusFilter,
+    accessibleLessonIds?: string[],
   ) {
     const conditions = [eq(lessons.classId, classId)];
+
+    if (accessibleLessonIds) {
+      conditions.push(inArray(lessons.id, accessibleLessonIds));
+    }
 
     if (filterDrafts) {
       conditions.push(eq(lessons.isDraft, false));
@@ -442,16 +450,36 @@ export class LessonsService {
       page,
       pageSize,
       status = 'all',
+      studentId,
     }: GetLessonsByClassOptions = {},
   ) {
+    const accessibleLessonIds = studentId
+      ? await this.studentLessonAccessService.getAccessibleLessonIdsForClass(
+          studentId,
+          classId,
+        )
+      : undefined;
+    const hasPagination = page !== undefined && pageSize !== undefined;
+    const safePage = Math.max(page ?? 1, 1);
+    const safePageSize = Math.max(pageSize ?? 1, 1);
+
+    if (accessibleLessonIds?.length === 0) {
+      return {
+        data: [],
+        count: 0,
+        total: 0,
+        page: safePage,
+        pageSize: hasPagination ? safePageSize : 1,
+        totalPages: 1,
+      };
+    }
+
     const conditions = this.buildLessonClassConditions(
       classId,
       filterDrafts,
       status,
+      accessibleLessonIds,
     );
-    const hasPagination = page !== undefined && pageSize !== undefined;
-    const safePage = Math.max(page ?? 1, 1);
-    const safePageSize = Math.max(pageSize ?? 1, 1);
     const offset = (safePage - 1) * safePageSize;
 
     const [rows, totalResult] = await Promise.all([
@@ -490,6 +518,10 @@ export class LessonsService {
     };
   }
 
+  async getRecentLessons(studentId: string, limit: number) {
+    return this.studentLessonAccessService.getRecentLessons(studentId, limit);
+  }
+
   /**
    * Get a single lesson by ID with all content blocks and its parent class.
    */
@@ -509,6 +541,14 @@ export class LessonsService {
     }
 
     return lesson;
+  }
+
+  async getLessonByIdForStudent(studentId: string, lessonId: string) {
+    await this.studentLessonAccessService.assertLessonAccessible(
+      studentId,
+      lessonId,
+    );
+    return this.getLessonById(lessonId);
   }
 
   /**
@@ -1418,17 +1458,13 @@ export class LessonsService {
   }
 
   /**
-   * Mark a lesson as complete for a student.
-   * Prevents completing a lesson that is still a draft.
+   * Mark an accessible lesson as complete for a student.
    */
   async markLessonComplete(studentId: string, lessonId: string) {
-    const lesson = await this.getLessonById(lessonId);
-
-    if (lesson.isDraft) {
-      throw new BadRequestException(
-        'Cannot mark a draft lesson as complete. The lesson has not been published yet.',
-      );
-    }
+    await this.studentLessonAccessService.assertLessonAccessible(
+      studentId,
+      lessonId,
+    );
 
     const student = await this.db.query.users.findFirst({
       where: eq(users.id, studentId),
@@ -1509,6 +1545,10 @@ export class LessonsService {
    * Check if a student has completed a specific lesson.
    */
   async isLessonCompleted(studentId: string, lessonId: string) {
+    await this.studentLessonAccessService.assertLessonAccessible(
+      studentId,
+      lessonId,
+    );
     const completion = await this.db.query.lessonCompletions.findFirst({
       where: and(
         eq(lessonCompletions.studentId, studentId),
@@ -1551,6 +1591,16 @@ export class LessonsService {
    * scans over the entire completions table.
    */
   async getCompletedLessonsForClass(studentId: string, classId: string) {
+    const accessibleLessonIds =
+      await this.studentLessonAccessService.getAccessibleLessonIdsForClass(
+        studentId,
+        classId,
+      );
+
+    if (accessibleLessonIds.length === 0) {
+      return [];
+    }
+
     const rows = await this.db
       .select({
         lessonId: lessonCompletions.lessonId,
@@ -1563,6 +1613,7 @@ export class LessonsService {
         and(
           eq(lessonCompletions.studentId, studentId),
           eq(lessons.classId, classId),
+          inArray(lessons.id, accessibleLessonIds),
         ),
       );
 

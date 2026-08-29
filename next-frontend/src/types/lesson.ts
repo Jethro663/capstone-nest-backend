@@ -36,6 +36,22 @@ export interface LessonsResponse {
   totalPages: number;
 }
 
+export interface StudentRecentLesson {
+  id: string;
+  title: string;
+  classId: string;
+  moduleId: string;
+  order: number;
+  updatedAt: string;
+}
+
+export interface StudentRecentLessonsResponse {
+  success: boolean;
+  message: string;
+  data: StudentRecentLesson[];
+  count: number;
+}
+
 export interface ContentBlock {
   id: string;
   lessonId: string;

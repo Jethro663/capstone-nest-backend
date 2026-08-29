@@ -9,6 +9,9 @@ import {
   UpdateContentBlockDto,
   ReorderBlocksDto,
 } from './DTO/lesson.dto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { StudentRecentLessonsQueryDto } from './DTO/student-recent-lessons-query.dto';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -51,8 +54,10 @@ const MOCK_BLOCK = {
 
 const mockLessonsService = {
   getLessonsByClass: jest.fn(),
+  getRecentLessons: jest.fn(),
   getDraftLessons: jest.fn(),
   getLessonById: jest.fn(),
+  getLessonByIdForStudent: jest.fn(),
   createLesson: jest.fn(),
   updateLesson: jest.fn(),
   publishLesson: jest.fn(),
@@ -119,7 +124,7 @@ describe('LessonsController', () => {
       expect(res.data).toEqual([MOCK_LESSON]);
     });
 
-    it('passes filterDrafts=true for a student caller', async () => {
+    it('passes the student id so the canonical access policy filters the class list', async () => {
       mockLessonsService.getLessonsByClass.mockResolvedValue({
         data: [MOCK_LESSON],
         count: 1,
@@ -142,6 +147,7 @@ describe('LessonsController', () => {
         CLASS_ID,
         expect.objectContaining({
           filterDrafts: true,
+          studentId: STUDENT_USER.userId,
         }),
       );
     });
@@ -205,6 +211,53 @@ describe('LessonsController', () => {
     });
   });
 
+  describe('getRecentLessons', () => {
+    it('returns the recent lesson envelope for the authenticated student', async () => {
+      const rows = [
+        {
+          id: LESSON_ID,
+          title: 'Test Lesson',
+          classId: CLASS_ID,
+          moduleId: 'module-1',
+          order: 1,
+          updatedAt: '2026-08-29T04:00:00.000Z',
+        },
+      ];
+      mockLessonsService.getRecentLessons.mockResolvedValue(rows);
+
+      const result = await controller.getRecentLessons(
+        { limit: 4 },
+        STUDENT_USER,
+      );
+
+      expect(mockLessonsService.getRecentLessons).toHaveBeenCalledWith(
+        STUDENT_USER.userId,
+        4,
+      );
+      expect(result).toEqual({
+        success: true,
+        message: 'Recent lessons retrieved successfully',
+        data: rows,
+        count: 1,
+      });
+    });
+
+    it.each([
+      [{}, 4],
+      [{ limit: 1 }, 1],
+      [{ limit: 20 }, 20],
+    ])('accepts a valid limit %#', async (value, expected) => {
+      const dto = plainToInstance(StudentRecentLessonsQueryDto, value);
+      expect(await validate(dto)).toHaveLength(0);
+      expect(dto.limit).toBe(expected);
+    });
+
+    it.each([0, 21, 1.5, 'not-a-number'])('rejects invalid limit %p', async (limit) => {
+      const dto = plainToInstance(StudentRecentLessonsQueryDto, { limit });
+      expect(await validate(dto)).not.toHaveLength(0);
+    });
+  });
+
   // ─── getDraftLessons ────────────────────────────────────────────────────────
 
   describe('getDraftLessons', () => {
@@ -234,7 +287,7 @@ describe('LessonsController', () => {
     it('returns lesson wrapped in success envelope', async () => {
       mockLessonsService.getLessonById.mockResolvedValue(MOCK_LESSON);
 
-      const res = await controller.getLessonById(LESSON_ID);
+      const res = await controller.getLessonById(LESSON_ID, TEACHER_USER);
 
       expect(res).toMatchObject({ success: true, data: MOCK_LESSON });
     });
@@ -242,9 +295,33 @@ describe('LessonsController', () => {
     it('calls service with the correct lessonId', async () => {
       mockLessonsService.getLessonById.mockResolvedValue(MOCK_LESSON);
 
-      await controller.getLessonById(LESSON_ID);
+      await controller.getLessonById(LESSON_ID, TEACHER_USER);
 
       expect(mockLessonsService.getLessonById).toHaveBeenCalledWith(LESSON_ID);
+    });
+
+    it('uses the canonical student lookup for a student caller', async () => {
+      mockLessonsService.getLessonByIdForStudent.mockResolvedValue(MOCK_LESSON);
+
+      await controller.getLessonById(LESSON_ID, STUDENT_USER);
+
+      expect(mockLessonsService.getLessonByIdForStudent).toHaveBeenCalledWith(
+        STUDENT_USER.userId,
+        LESSON_ID,
+      );
+      expect(mockLessonsService.getLessonById).not.toHaveBeenCalled();
+    });
+
+    it('preserves teacher behavior for a caller who also has the student role', async () => {
+      mockLessonsService.getLessonById.mockResolvedValue(MOCK_LESSON);
+
+      await controller.getLessonById(LESSON_ID, {
+        ...TEACHER_USER,
+        roles: [RoleName.Teacher, RoleName.Student],
+      });
+
+      expect(mockLessonsService.getLessonById).toHaveBeenCalledWith(LESSON_ID);
+      expect(mockLessonsService.getLessonByIdForStudent).not.toHaveBeenCalled();
     });
   });
 
