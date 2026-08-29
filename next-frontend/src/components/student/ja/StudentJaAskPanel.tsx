@@ -37,10 +37,14 @@ interface StudentJaAskPanelProps {
   menuOpen: boolean;
   menuRef: RefObject<HTMLDivElement | null>;
   tailRef: RefObject<HTMLDivElement | null>;
+  messagesRef?: RefObject<HTMLDivElement | null>;
+  hasEarlierMessages?: boolean;
+  loadingEarlierMessages?: boolean;
   onSelectLesson: (context: JaAskLessonContextSummary) => void;
   onClearLesson: () => void;
   onToggleMenu: () => void;
   onPreset: (action: StudentJaAnswerAction) => void;
+  onLoadEarlierMessages?: () => void;
 }
 
 function buildLessonContextLabel(context: JaAskLessonContextSummary) {
@@ -79,10 +83,14 @@ export function StudentJaAskPanel({
   menuOpen,
   menuRef,
   tailRef,
+  messagesRef,
+  hasEarlierMessages = false,
+  loadingEarlierMessages = false,
   onSelectLesson,
   onClearLesson,
   onToggleMenu,
   onPreset,
+  onLoadEarlierMessages = () => undefined,
 }: StudentJaAskPanelProps) {
   return (
     <motion.div
@@ -93,7 +101,28 @@ export function StudentJaAskPanel({
       exit={reduceMotion ? {} : { opacity: 0, y: -8 }}
       transition={{ duration: 0.2, ease: "easeOut" }}
     >
-      <div className="ja-thread-messages" aria-live="polite">
+      <div
+        className="ja-thread-messages"
+        aria-live="polite"
+        ref={messagesRef}
+      >
+        {hasEarlierMessages ? (
+          <div className="ja-load-earlier-row">
+            <button
+              type="button"
+              className="ja-load-earlier-button"
+              disabled={loadingEarlierMessages}
+              onClick={onLoadEarlierMessages}
+            >
+              {loadingEarlierMessages ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              {loadingEarlierMessages
+                ? "Loading earlier messages…"
+                : "Load earlier messages"}
+            </button>
+          </div>
+        ) : null}
         <article className="ja-msg-row ja ja-intro-row">
           <JaAssistantAvatar />
           <div className="ja-bubble ja ja-intro-bubble">

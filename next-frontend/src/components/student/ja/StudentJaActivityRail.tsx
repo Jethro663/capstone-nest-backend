@@ -1,6 +1,13 @@
 "use client";
 
-import { CircleDot, Menu, MessageCircleQuestion } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleDot,
+  Loader2,
+  Menu,
+  MessageCircleQuestion,
+} from "lucide-react";
 import { cn } from "@/utils/cn";
 
 export type JaVisibleMode = "ask" | "review";
@@ -48,10 +55,22 @@ interface StudentJaActivityRailProps {
   activities: JaActivityItem[];
   activeActivityKey: string;
   showHome: boolean;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrevious: boolean;
+  };
+  historyLoading?: boolean;
+  historyError?: string;
   onModeChange: (mode: JaVisibleMode) => void;
   onFilterChange: (filter: JaActivityFilter) => void;
   onToggleHistory: () => void;
   onSelectActivity: (item: JaActivityItem) => void;
+  onPageChange?: (page: number) => void;
+  onRetryHistory?: () => void;
 }
 
 export function StudentJaActivityRail({
@@ -61,10 +80,22 @@ export function StudentJaActivityRail({
   activities,
   activeActivityKey,
   showHome,
+  pagination = {
+    page: 1,
+    limit: 8,
+    total: activities.length,
+    totalPages: activities.length > 0 ? 1 : 0,
+    hasNext: false,
+    hasPrevious: false,
+  },
+  historyLoading = false,
+  historyError = "",
   onModeChange,
   onFilterChange,
   onToggleHistory,
   onSelectActivity,
+  onPageChange = () => undefined,
+  onRetryHistory = () => undefined,
 }: StudentJaActivityRailProps) {
   return (
     <aside className="ja-mode-panel ja-sidebar">
@@ -130,8 +161,24 @@ export function StudentJaActivityRail({
         ))}
       </div>
 
-      <div className="ja-saved-list ja-activity-list" aria-live="polite">
-        {activities.length === 0 ? (
+      <div
+        className="ja-saved-list ja-activity-list"
+        aria-live="polite"
+        aria-busy={historyLoading}
+      >
+        {historyLoading ? (
+          <span className="ja-inline-empty ja-history-loading" role="status">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            Loading activity history…
+          </span>
+        ) : historyError ? (
+          <div className="ja-history-error" role="alert">
+            <span>{historyError}</span>
+            <button type="button" onClick={onRetryHistory}>
+              Retry history
+            </button>
+          </div>
+        ) : activities.length === 0 ? (
           <span className="ja-inline-empty">
             No saved JA activity for this filter yet.
           </span>
@@ -166,6 +213,30 @@ export function StudentJaActivityRail({
           ))
         )}
       </div>
+
+      {!historyLoading && !historyError && pagination.totalPages > 0 ? (
+        <nav className="ja-history-pagination" aria-label="Activity history pages">
+          <button
+            type="button"
+            aria-label="Previous history page"
+            disabled={!pagination.hasPrevious}
+            onClick={() => onPageChange(pagination.page - 1)}
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          </button>
+          <span aria-live="polite">
+            Page {pagination.page} of {pagination.totalPages}
+          </span>
+          <button
+            type="button"
+            aria-label="Next history page"
+            disabled={!pagination.hasNext}
+            onClick={() => onPageChange(pagination.page + 1)}
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </nav>
+      ) : null}
     </aside>
   );
 }

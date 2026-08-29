@@ -184,6 +184,9 @@ describe('DashboardLayout role-path enforcement', () => {
     expect(screen.getByTestId('sidebar')).toBeInTheDocument();
     expect(screen.getByTestId('topbar')).toBeInTheDocument();
     expect(screen.getByTestId('route-loading-content')).toBeInTheDocument();
+    expect(screen.getByTestId('route-loading-content').closest('main')).toHaveClass(
+      'min-h-0',
+    );
     expect(screen.queryByTestId('app-orbit-loader')).not.toBeInTheDocument();
   });
 

@@ -152,6 +152,10 @@ export interface JaAskThreadResponse {
     contextSectionTitle?: string | null;
   };
   messages: JaAskMessage[];
+  pageInfo?: {
+    hasMore: boolean;
+    nextCursor: string | null;
+  };
 }
 
 export interface JaAskSendResponse {

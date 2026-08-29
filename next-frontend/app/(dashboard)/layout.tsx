@@ -198,7 +198,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           showStudentDesktopMenu={studentSidebarCollapsed}
         />
         <main
-          className={`flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherShell ? 'teacher-page' : ''} ${isAdminShell ? 'admin-main p-5 lg:p-8' : ''}`}
+          className={`min-h-0 flex-1 overflow-y-auto p-4 md:p-6 ${isTeacherShell ? 'teacher-page' : ''} ${isAdminShell ? 'admin-main p-5 lg:p-8' : ''}`}
         >
           {children}
         </main>

@@ -34,6 +34,7 @@ jest.mock('sonner', () => ({
 jest.mock('@/services/ja-service', () => ({
   jaService: {
     getHub: jest.fn(),
+    getActivityHistory: jest.fn(),
     getAskThread: jest.fn(),
     getSession: jest.fn(),
     getReviewSession: jest.fn(),
@@ -55,6 +56,9 @@ jest.mock('@/services/health-service', () => ({
 }));
 
 const mockedJaService = jaService as jest.Mocked<typeof jaService>;
+const mockedGetActivityHistory = (
+  jaService as unknown as { getActivityHistory: jest.Mock }
+).getActivityHistory;
 const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 
 const hubResponse = {
@@ -191,6 +195,39 @@ describe('StudentJaWorkspace refactored shell', () => {
       },
     });
     mockedJaService.getHub.mockResolvedValue(hubResponse as never);
+    mockedGetActivityHistory.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'thread-1',
+            mode: 'ask',
+            classId: 'class-1',
+            title: 'Fractions explanation',
+            subtitle: 'Ask thread',
+            status: 'ACTIVE',
+            activityAt: '2026-04-25T11:00:00.000Z',
+          },
+          {
+            id: 'review-1',
+            mode: 'review',
+            classId: 'class-1',
+            title: 'Assessment Replay',
+            subtitle: 'COMPLETED - 10/10',
+            status: 'COMPLETED',
+            activityAt: '2026-04-24T09:30:00.000Z',
+          },
+        ],
+        counts: { all: 2, ask: 1, review: 1 },
+        pagination: {
+          page: 1,
+          limit: 8,
+          total: 2,
+          totalPages: 1,
+          hasNext: false,
+          hasPrevious: false,
+        },
+      },
+    });
     mockedJaService.getAskThread.mockResolvedValue({
       data: {
         thread: {
@@ -204,6 +241,7 @@ describe('StudentJaWorkspace refactored shell', () => {
           contextSectionTitle: 'Lesson Set A',
         },
         messages: [],
+        pageInfo: { hasMore: false, nextCursor: null },
       },
     } as never);
     mockedJaService.getReviewSession.mockResolvedValue({
@@ -487,6 +525,44 @@ describe('StudentJaWorkspace refactored shell', () => {
   });
 
   it('renders one unified activity rail across Ask and Replay', async () => {
+    mockedGetActivityHistory.mockImplementation(
+      ({ mode }: { mode: 'all' | 'ask' | 'review' }) => {
+        const items = [
+          {
+            id: 'thread-1',
+            mode: 'ask',
+            classId: 'class-1',
+            title: 'Fractions explanation',
+            subtitle: 'Ask thread',
+            status: 'ACTIVE',
+            activityAt: '2026-04-25T11:00:00.000Z',
+          },
+          {
+            id: 'review-1',
+            mode: 'review',
+            classId: 'class-1',
+            title: 'Assessment Replay',
+            subtitle: 'COMPLETED - 10/10',
+            status: 'COMPLETED',
+            activityAt: '2026-04-24T09:30:00.000Z',
+          },
+        ].filter((item) => mode === 'all' || item.mode === mode);
+        return Promise.resolve({
+          data: {
+            items,
+            counts: { all: 2, ask: 1, review: 1 },
+            pagination: {
+              page: 1,
+              limit: 8,
+              total: items.length,
+              totalPages: items.length ? 1 : 0,
+              hasNext: false,
+              hasPrevious: false,
+            },
+          },
+        });
+      },
+    );
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
     expect(await screen.findByRole('button', { name: /^All$/i })).toBeInTheDocument();
@@ -498,9 +574,135 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Replay$/i }));
     await waitFor(() => {
+      expect(mockedGetActivityHistory).toHaveBeenLastCalledWith(
+        expect.objectContaining({ mode: 'review', page: 1 }),
+      );
       expect(screen.queryByText('Fractions explanation')).not.toBeInTheDocument();
     });
     expect(screen.getByText('Assessment Replay')).toBeInTheDocument();
+  });
+
+  it('loads authoritative activity pages and requests the next page', async () => {
+    mockedGetActivityHistory.mockResolvedValueOnce({
+      data: {
+        items: [],
+        counts: { all: 21, ask: 12, review: 9 },
+        pagination: {
+          page: 1,
+          limit: 8,
+          total: 21,
+          totalPages: 3,
+          hasNext: true,
+          hasPrevious: false,
+        },
+      },
+    });
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    await waitFor(() => {
+      expect(mockedGetActivityHistory).toHaveBeenCalledWith({
+        classId: 'class-1',
+        mode: 'all',
+        page: 1,
+        limit: 8,
+      });
+    });
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Next history page/i }));
+    await waitFor(() => {
+      expect(mockedGetActivityHistory).toHaveBeenLastCalledWith({
+        classId: 'class-1',
+        mode: 'all',
+        page: 2,
+        limit: 8,
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Ask$/i }));
+    await waitFor(() => {
+      expect(mockedGetActivityHistory).toHaveBeenLastCalledWith({
+        classId: 'class-1',
+        mode: 'ask',
+        page: 1,
+        limit: 8,
+      });
+    });
+  });
+
+  it('loads earlier Ask messages through the returned cursor', async () => {
+    let scheduledFrame: FrameRequestCallback | null = null;
+    const originalRequestAnimationFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = jest.fn((callback: FrameRequestCallback) => {
+      scheduledFrame = callback;
+      return 1;
+    });
+    mockedJaService.getAskThread
+      .mockResolvedValueOnce({
+        data: {
+          thread: {
+            id: 'thread-1',
+            classId: 'class-1',
+            title: 'Fractions explanation',
+            status: 'active',
+          },
+          messages: [
+            {
+              id: 'message-new',
+              role: 'assistant',
+              content: 'Newest explanation.',
+              blocked: false,
+            },
+          ],
+          pageInfo: { hasMore: true, nextCursor: 'older-cursor' },
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          thread: {
+            id: 'thread-1',
+            classId: 'class-1',
+            title: 'Fractions explanation',
+            status: 'active',
+          },
+          messages: [
+            {
+              id: 'message-old',
+              role: 'student',
+              content: 'Older question.',
+              blocked: false,
+            },
+          ],
+          pageInfo: { hasMore: false, nextCursor: null },
+        },
+      } as never);
+
+    render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
+
+    expect(await screen.findByText('Newest explanation.')).toBeInTheDocument();
+    const messageContainer = document.querySelector(
+      '.ja-thread-messages',
+    ) as HTMLDivElement;
+    let scrollHeight = 500;
+    Object.defineProperty(messageContainer, 'scrollHeight', {
+      configurable: true,
+      get: () => scrollHeight,
+    });
+    messageContainer.scrollTop = 100;
+    fireEvent.click(screen.getByRole('button', { name: /Load earlier messages/i }));
+
+    expect(await screen.findByText('Older question.')).toBeInTheDocument();
+    expect(mockedJaService.getAskThread).toHaveBeenLastCalledWith('thread-1', {
+      limit: 20,
+      before: 'older-cursor',
+    });
+    scrollHeight = 700;
+    const restoreFrame = scheduledFrame;
+    window.requestAnimationFrame = originalRequestAnimationFrame;
+    expect(restoreFrame).not.toBeNull();
+    (restoreFrame as unknown as FrameRequestCallback)(0);
+    expect(messageContainer.scrollTop).toBe(300);
   });
 
   it('falls back to Ask when practice is passed as the initial mode', async () => {
@@ -1090,7 +1292,7 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(screen.getByText(/view-only/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Replay$/i }));
-    expect(screen.getByText('Assessment Replay')).toBeInTheDocument();
+    expect(await screen.findByText('Assessment Replay')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Ask$/i }));
     expect(screen.getByRole('button', { name: /New chat/i })).toBeDisabled();

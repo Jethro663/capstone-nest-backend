@@ -2,19 +2,12 @@ import StudentJaWorkspace from '@/components/student/ja/StudentJaWorkspace';
 import './ja-hub.css';
 
 interface StudentJaPageProps {
-  searchParams?:
-    | Promise<{
-        mode?: string | string[];
-        classId?: string | string[];
-        entry?: string | string[];
-        returnTo?: string | string[];
-      }>
-    | {
-        mode?: string | string[];
-        classId?: string | string[];
-        entry?: string | string[];
-        returnTo?: string | string[];
-      };
+  searchParams?: Promise<{
+    mode?: string | string[];
+    classId?: string | string[];
+    entry?: string | string[];
+    returnTo?: string | string[];
+  }>;
 }
 
 type JaMode = 'ask' | 'review';
@@ -51,11 +44,13 @@ export default async function StudentJaPage({
   const resolvedSearchParams = await searchParams;
 
   return (
-    <StudentJaWorkspace
-      initialMode={readMode(resolvedSearchParams?.mode)}
-      initialClassId={readSingle(resolvedSearchParams?.classId)}
-      initialEntry={readEntry(resolvedSearchParams?.entry)}
-      returnTo={readSingle(resolvedSearchParams?.returnTo)}
-    />
+    <div className="ja-page-frame">
+      <StudentJaWorkspace
+        initialMode={readMode(resolvedSearchParams?.mode)}
+        initialClassId={readSingle(resolvedSearchParams?.classId)}
+        initialEntry={readEntry(resolvedSearchParams?.entry)}
+        returnTo={readSingle(resolvedSearchParams?.returnTo)}
+      />
+    </div>
   );
 }

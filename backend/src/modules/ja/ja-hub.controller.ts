@@ -17,7 +17,9 @@ import {
   CompleteJaPracticeSessionDto,
   CreateJaAskThreadDto,
   CreateJaReviewSessionDto,
+  JaActivityHistoryQueryDto,
   JaAskBootstrapQueryDto,
+  JaAskThreadQueryDto,
   JaHubQueryDto,
   JaReviewBootstrapQueryDto,
   JaReviewEventDto,
@@ -45,6 +47,21 @@ export class JaHubController {
     return {
       success: true,
       message: 'JA hub loaded',
+      data,
+    };
+  }
+
+  @Get('history')
+  @ApiOperation({ summary: 'Load paginated JA activity history' })
+  async activityHistory(
+    @Query() query: JaActivityHistoryQueryDto,
+    @CurrentUser()
+    user: { id: string; userId?: string; email: string; roles: string[] },
+  ) {
+    const data = await this.jaService.getActivityHistory(user, query);
+    return {
+      success: true,
+      message: 'JA activity history loaded',
       data,
     };
   }
@@ -83,10 +100,11 @@ export class JaHubController {
   @ApiOperation({ summary: 'Load a JA Ask thread with latest messages' })
   async getAskThread(
     @Param('threadId', ParseUUIDPipe) threadId: string,
+    @Query() query: JaAskThreadQueryDto,
     @CurrentUser()
     user: { id: string; userId?: string; email: string; roles: string[] },
   ) {
-    const data = await this.jaService.getAskThread(user, threadId);
+    const data = await this.jaService.getAskThread(user, threadId, query);
     return {
       success: true,
       message: 'JA Ask thread loaded',

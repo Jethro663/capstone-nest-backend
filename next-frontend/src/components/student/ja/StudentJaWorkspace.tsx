@@ -39,6 +39,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { jaService } from "@/services/ja-service";
 import { useAiAvailability } from "@/hooks/use-ai-availability";
 import type {
+  JaActivityHistoryResponse,
   JaAskMessage,
   JaAskLessonContextSummary,
   JaHubResponse,
@@ -62,6 +63,18 @@ const DEFAULT_JA_ASK_GUIDELINES = [
   "Ask for concept help, quick reviews, what to study next, or a short lesson recap.",
   "JA blocks requests that jump to unrelated subjects or ask for direct answer keys.",
 ];
+const EMPTY_ACTIVITY_HISTORY: JaActivityHistoryResponse = {
+  items: [],
+  counts: { all: 0, ask: 0, review: 0 },
+  pagination: {
+    page: 1,
+    limit: 8,
+    total: 0,
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false,
+  },
+};
 
 interface JaAskPresetAction {
   id: string;
@@ -279,15 +292,6 @@ function classLabel(item: { subjectName: string; subjectCode: string }) {
   return `${item.subjectName} (${item.subjectCode})`;
 }
 
-function getSessionSubtitle(session: {
-  status: string;
-  currentIndex: number;
-  questionCount: number;
-}) {
-  const answered = Math.min(session.currentIndex, session.questionCount);
-  return `${session.status.toUpperCase()} - ${answered}/${session.questionCount}`;
-}
-
 function clampProgress(value: number) {
   if (Number.isNaN(value)) return 0;
   return Math.min(100, Math.max(0, value));
@@ -299,11 +303,6 @@ function getBackLabel(entry?: JaEntry) {
   if (entry === "lesson") return "Back to lesson";
   if (entry === "assessment") return "Back to assessment";
   return "Back";
-}
-
-function getActivityTimestamp(value?: string | null) {
-  const timestamp = value ? new Date(value).getTime() : 0;
-  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function splitCoachPrompt(prompt: string) {
@@ -340,7 +339,7 @@ interface StudentJaWorkspaceProps {
   className?: string;
   initialClassId?: string;
   initialEntry?: JaEntry;
-  initialMode?: JaMode;
+  initialMode?: JaVisibleMode;
   returnTo?: string;
 }
 
@@ -375,6 +374,12 @@ export default function StudentJaWorkspace({
   const [classMenuOpen, setClassMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [activityFilter, setActivityFilter] = useState<JaActivityFilter>("all");
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityHistory, setActivityHistory] =
+    useState<JaActivityHistoryResponse>(EMPTY_ACTIVITY_HISTORY);
+  const [activityHistoryLoading, setActivityHistoryLoading] = useState(false);
+  const [activityHistoryError, setActivityHistoryError] = useState("");
+  const [activityHistoryRevision, setActivityHistoryRevision] = useState(0);
   const [activeActivityKey, setActiveActivityKey] = useState("");
 
   const [reviewSession, setReviewSession] =
@@ -388,12 +393,20 @@ export default function StudentJaWorkspace({
   const [askThreadId, setAskThreadId] = useState<string>("");
   const [askThreadClassId, setAskThreadClassId] = useState<string>("");
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
+  const [askPageInfo, setAskPageInfo] = useState<{
+    hasMore: boolean;
+    nextCursor: string | null;
+  }>({ hasMore: false, nextCursor: null });
+  const [loadingEarlierMessages, setLoadingEarlierMessages] = useState(false);
   const [askError, setAskError] = useState("");
   const [selectedLessonContext, setSelectedLessonContext] =
     useState<JaAskLessonContextSummary | null>(null);
   const [askMenuOpen, setAskMenuOpen] = useState(false);
   const [showGuardrailModal, setShowGuardrailModal] = useState(false);
   const askTailRef = useRef<HTMLDivElement | null>(null);
+  const askMessagesRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollAskToBottomRef = useRef(true);
+  const activityHistoryRequestRef = useRef(0);
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const askMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -420,6 +433,7 @@ export default function StudentJaWorkspace({
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
     setAskMessages([]);
+    setAskPageInfo({ hasMore: false, nextCursor: null });
     setAskError("");
     setSelectedLessonContext(null);
     setAskMenuOpen(false);
@@ -427,6 +441,7 @@ export default function StudentJaWorkspace({
     setActiveActivityKey("");
     setMode("ask");
     setShowHome(false);
+    setActivityPage(1);
     setActivityFilter("ask");
   }, [aiUnavailable, selectedClassId]);
 
@@ -488,8 +503,10 @@ export default function StudentJaWorkspace({
           return current || res.data.ask.threads[0]?.id || "";
         });
         if (options?.resetContext) {
+          setActivityPage(1);
           setAskThreadClassId("");
           setAskMessages([]);
+          setAskPageInfo({ hasMore: false, nextCursor: null });
           setAskError("");
           setSelectedLessonContext(null);
           setAskMenuOpen(false);
@@ -508,9 +525,47 @@ export default function StudentJaWorkspace({
     [],
   );
 
+  const loadActivityHistory = useCallback(async () => {
+    if (!selectedClassId) {
+      activityHistoryRequestRef.current += 1;
+      setActivityHistory(EMPTY_ACTIVITY_HISTORY);
+      setActivityHistoryLoading(false);
+      setActivityHistoryError("");
+      return;
+    }
+
+    const requestId = activityHistoryRequestRef.current + 1;
+    activityHistoryRequestRef.current = requestId;
+    setActivityHistoryLoading(true);
+    setActivityHistoryError("");
+    try {
+      const response = await jaService.getActivityHistory({
+        classId: selectedClassId,
+        mode: activityFilter,
+        page: activityPage,
+        limit: 8,
+      });
+      if (requestId !== activityHistoryRequestRef.current) return;
+      setActivityHistory(response.data);
+    } catch (error: unknown) {
+      if (requestId !== activityHistoryRequestRef.current) return;
+      setActivityHistoryError(
+        getApiErrorMessage(error, "Failed to load JA activity history."),
+      );
+    } finally {
+      if (requestId === activityHistoryRequestRef.current) {
+        setActivityHistoryLoading(false);
+      }
+    }
+  }, [activityFilter, activityPage, selectedClassId]);
+
   useEffect(() => {
     void refreshHub(initialClassId);
   }, [initialClassId, refreshHub]);
+
+  useEffect(() => {
+    void loadActivityHistory();
+  }, [activityHistoryRevision, loadActivityHistory]);
 
   useEffect(() => {
     if (isJaMode(initialMode)) {
@@ -520,37 +575,113 @@ export default function StudentJaWorkspace({
   }, [initialMode]);
 
   useEffect(() => {
-    if (mode !== "ask" || !askTailRef.current?.scrollIntoView) return;
+    if (
+      mode !== "ask" ||
+      !shouldScrollAskToBottomRef.current ||
+      !askTailRef.current?.scrollIntoView
+    ) {
+      return;
+    }
     askTailRef.current.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
       block: "end",
     });
-  }, [askMessages, busy, mode, reduceMotion]);
+    shouldScrollAskToBottomRef.current = false;
+  }, [askMessages, mode, reduceMotion]);
 
   useEffect(() => {
     if (!askThreadId || mode !== "ask") return;
+    let cancelled = false;
     void (async () => {
       try {
-        const res = await jaService.getAskThread(askThreadId);
+        const res = await jaService.getAskThread(askThreadId, { limit: 20 });
+        if (cancelled) return;
         if (selectedClassId && res.data.thread.classId !== selectedClassId) {
           setAskThreadId("");
           setAskThreadClassId("");
           setAskMessages([]);
+          setAskPageInfo({ hasMore: false, nextCursor: null });
           setAskError("");
           return;
         }
         setAskThreadClassId(res.data.thread.classId);
+        shouldScrollAskToBottomRef.current = true;
         setAskMessages(res.data.messages);
+        setAskPageInfo(
+          res.data.pageInfo ?? { hasMore: false, nextCursor: null },
+        );
         setSelectedLessonContext(resolveThreadLessonContext(res.data.thread));
       } catch (error: unknown) {
+        if (cancelled) return;
         setAskThreadId("");
         setAskThreadClassId("");
         setAskMessages([]);
+        setAskPageInfo({ hasMore: false, nextCursor: null });
         setAskError(getApiErrorMessage(error, "Failed to load JA Ask thread."));
         toast.error(getApiErrorMessage(error, "Failed to load JA Ask thread."));
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [askThreadId, mode, selectedClassId]);
+
+  const loadEarlierAskMessages = useCallback(async () => {
+    if (
+      !askThreadId ||
+      !askPageInfo.hasMore ||
+      !askPageInfo.nextCursor ||
+      loadingEarlierMessages
+    ) {
+      return;
+    }
+
+    const messageContainer = askMessagesRef.current;
+    const previousScrollHeight = messageContainer?.scrollHeight ?? 0;
+    setLoadingEarlierMessages(true);
+    shouldScrollAskToBottomRef.current = false;
+    try {
+      const response = await jaService.getAskThread(askThreadId, {
+        limit: 20,
+        before: askPageInfo.nextCursor,
+      });
+      setAskMessages((current) => {
+        const existingIds = new Set(current.map((message) => message.id));
+        const earlierMessages = response.data.messages.filter(
+          (message) => !existingIds.has(message.id),
+        );
+        return [...earlierMessages, ...current];
+      });
+      setAskPageInfo(
+        response.data.pageInfo ?? { hasMore: false, nextCursor: null },
+      );
+
+      const restoreScrollPosition = () => {
+        if (!messageContainer) return;
+        messageContainer.scrollTop +=
+          messageContainer.scrollHeight - previousScrollHeight;
+      };
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(restoreScrollPosition);
+      } else {
+        window.setTimeout(restoreScrollPosition, 0);
+      }
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(
+        error,
+        "Failed to load earlier JA messages.",
+      );
+      setAskError(message);
+      toast.error(message);
+    } finally {
+      setLoadingEarlierMessages(false);
+    }
+  }, [
+    askPageInfo.hasMore,
+    askPageInfo.nextCursor,
+    askThreadId,
+    loadingEarlierMessages,
+  ]);
 
   useEffect(() => {
     if (!selectedLessonContext || !hub) return;
@@ -667,12 +798,11 @@ export default function StudentJaWorkspace({
     : 0;
 
   const modeCount = useMemo(() => {
-    if (!hub) return { ask: 0, review: 0 };
     return {
-      ask: hub.ask.threads.length,
-      review: hub.review.sessions?.length ?? 0,
+      ask: activityHistory.counts.ask,
+      review: activityHistory.counts.review,
     };
-  }, [hub]);
+  }, [activityHistory.counts.ask, activityHistory.counts.review]);
 
   const selectedClass = useMemo(
     () => hub?.classes.find((item) => item.id === selectedClassId) ?? null,
@@ -683,42 +813,17 @@ export default function StudentJaWorkspace({
     : "Selected class";
 
   const activityItems = useMemo<JaActivityItem[]>(() => {
-    if (!hub) return [];
     const className = selectedClassLabel;
-    const askItems = hub.ask.threads.map((thread) => ({
-      id: thread.id,
-      mode: "ask" as const,
-      title: thread.title || "Ask thread",
-      subtitle: thread.contextLessonTitle
-        ? `Lesson: ${thread.contextLessonTitle}`
-        : "Ask thread",
+    return activityHistory.items.map((item) => ({
+      id: item.id,
+      mode: item.mode,
+      title: item.title,
+      subtitle: item.subtitle,
       classLabel: className,
-      status: thread.status.toUpperCase(),
-      updatedAt: thread.lastMessageAt || thread.updatedAt,
+      status: item.status,
+      updatedAt: item.activityAt,
     }));
-    const reviewItems = (hub.review.sessions ?? []).map((session) => ({
-      id: session.id,
-      mode: "review" as const,
-      title: "Assessment Replay",
-      subtitle: getSessionSubtitle(session),
-      classLabel: className,
-      status: session.status.toUpperCase(),
-      updatedAt: session.completedAt || session.startedAt,
-    }));
-    return [...askItems, ...reviewItems].sort(
-      (left, right) =>
-        getActivityTimestamp(right.updatedAt) -
-        getActivityTimestamp(left.updatedAt),
-    );
-  }, [hub, selectedClassLabel]);
-
-  const filteredActivityItems = useMemo(
-    () =>
-      activityFilter === "all"
-        ? activityItems
-        : activityItems.filter((item) => item.mode === activityFilter),
-    [activityFilter, activityItems],
-  );
+  }, [activityHistory.items, selectedClassLabel]);
   const activeActivity = useMemo(
     () =>
       activityItems.find(
@@ -767,6 +872,11 @@ export default function StudentJaWorkspace({
     }
   };
 
+  const changeActivityFilter = useCallback((filter: JaActivityFilter) => {
+    setActivityPage(1);
+    setActivityFilter(filter);
+  }, []);
+
   const selectMode = (nextMode: JaVisibleMode) => {
     if (nextMode === "review") {
       resetReviewStage();
@@ -776,13 +886,13 @@ export default function StudentJaWorkspace({
     setAskMenuOpen(false);
     setMode(nextMode);
     setShowHome(false);
-    setActivityFilter(nextMode);
+    changeActivityFilter(nextMode);
   };
 
   const selectActivity = (item: JaActivityItem) => {
     setShowHome(false);
     setMode(item.mode);
-    setActivityFilter(item.mode);
+    changeActivityFilter(item.mode);
     setActiveActivityKey(`${item.mode}:${item.id}`);
     setAskMenuOpen(false);
     if (item.mode === "ask") {
@@ -798,13 +908,14 @@ export default function StudentJaWorkspace({
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
     setAskMessages([]);
+    setAskPageInfo({ hasMore: false, nextCursor: null });
     setAskError("");
     setAskMenuOpen(false);
     setShowGuardrailModal(false);
     setActiveActivityKey("");
     setMode("ask");
     setShowHome(false);
-    setActivityFilter("ask");
+    changeActivityFilter("ask");
   };
 
   const clearAskLessonContext = () => {
@@ -813,6 +924,7 @@ export default function StudentJaWorkspace({
     setAskThreadId("");
     setAskThreadClassId(selectedClassId);
     setAskMessages([]);
+    setAskPageInfo({ hasMore: false, nextCursor: null });
     setAskError("");
     setAskMenuOpen(false);
     setShowGuardrailModal(false);
@@ -841,6 +953,8 @@ export default function StudentJaWorkspace({
       setMode("review");
       setShowHome(false);
       await refreshHub(selectedClassId);
+      setActivityPage(1);
+      setActivityHistoryRevision((current) => current + 1);
       toast.success("Review session started.");
     } catch (error: unknown) {
       toast.error(
@@ -903,6 +1017,7 @@ export default function StudentJaWorkspace({
 
     setBusy(true);
     setAskError("");
+    shouldScrollAskToBottomRef.current = true;
     setAskMessages((prev) => [...prev, studentMessage]);
     try {
       let threadId = askThreadId;
@@ -934,6 +1049,7 @@ export default function StudentJaWorkspace({
         ...response.data.message,
         insufficientEvidence: response.data.insufficientEvidence,
       };
+      shouldScrollAskToBottomRef.current = true;
       setAskMessages((prev) => [
         ...prev.filter((message) => message.id !== localMessageId),
         studentMessage,
@@ -950,6 +1066,8 @@ export default function StudentJaWorkspace({
         response.data.thread,
         assistantMessage.createdAt ?? new Date().toISOString(),
       );
+      setActivityPage(1);
+      setActivityHistoryRevision((current) => current + 1);
     } catch (error: unknown) {
       setAskMessages((prev) =>
         prev.filter((message) => message.id !== localMessageId),
@@ -970,6 +1088,8 @@ export default function StudentJaWorkspace({
       await jaService.completeReviewSession(currentSession.session.id);
       await loadReviewSession(currentSession.session.id);
       await refreshHub(selectedClassId);
+      setActivityPage(1);
+      setActivityHistoryRevision((current) => current + 1);
       toast.success("Session completed.");
     } catch (error: unknown) {
       toast.error(getApiErrorMessage(error, "Unable to complete session."));
@@ -1014,13 +1134,18 @@ export default function StudentJaWorkspace({
           mode={mode}
           modeCount={modeCount}
           activityFilter={activityFilter}
-          activities={filteredActivityItems}
+          activities={activityItems}
           activeActivityKey={activeActivityKey}
           showHome={showHome}
+          pagination={activityHistory.pagination}
+          historyLoading={activityHistoryLoading}
+          historyError={activityHistoryError}
           onModeChange={selectMode}
-          onFilterChange={setActivityFilter}
+          onFilterChange={changeActivityFilter}
           onToggleHistory={() => setHistoryOpen(false)}
           onSelectActivity={selectActivity}
+          onPageChange={setActivityPage}
+          onRetryHistory={() => void loadActivityHistory()}
         />
       ) : null}
 
@@ -1145,10 +1270,14 @@ export default function StudentJaWorkspace({
               menuOpen={askMenuOpen}
               menuRef={askMenuRef}
               tailRef={askTailRef}
+              messagesRef={askMessagesRef}
+              hasEarlierMessages={askPageInfo.hasMore}
+              loadingEarlierMessages={loadingEarlierMessages}
               onSelectLesson={selectAskLessonContext}
               onClearLesson={clearAskLessonContext}
               onToggleMenu={() => setAskMenuOpen((current) => !current)}
               onPreset={(action) => void sendAskPreset(action)}
+              onLoadEarlierMessages={() => void loadEarlierAskMessages()}
             />
           ) : (
             <motion.div

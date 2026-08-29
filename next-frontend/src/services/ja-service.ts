@@ -1,5 +1,6 @@
 import { api } from "@/lib/api-client";
 import type {
+  JaActivityHistoryResponse,
   JaAskResponsePayload,
   JaAskThreadResponse,
   JaHubResponse,
@@ -31,6 +32,16 @@ export const jaService = {
       params: classId ? { classId } : undefined,
     });
     return normalizeEnvelope<JaHubResponse>(data);
+  },
+
+  async getActivityHistory(params: {
+    classId: string;
+    mode?: "all" | "ask" | "review";
+    page?: number;
+    limit?: number;
+  }): Promise<Envelope<JaActivityHistoryResponse>> {
+    const { data } = await api.get("/ai/student/ja/history", { params });
+    return normalizeEnvelope<JaActivityHistoryResponse>(data);
   },
 
   async getBootstrap(
@@ -125,8 +136,13 @@ export const jaService = {
     return normalizeEnvelope<JaAskThreadResponse>(data);
   },
 
-  async getAskThread(threadId: string): Promise<Envelope<JaAskThreadResponse>> {
-    const { data } = await api.get(`/ai/student/ja/ask/threads/${threadId}`);
+  async getAskThread(
+    threadId: string,
+    params?: { limit?: number; before?: string },
+  ): Promise<Envelope<JaAskThreadResponse>> {
+    const { data } = await api.get(`/ai/student/ja/ask/threads/${threadId}`, {
+      params,
+    });
     return normalizeEnvelope<JaAskThreadResponse>(data);
   },
 

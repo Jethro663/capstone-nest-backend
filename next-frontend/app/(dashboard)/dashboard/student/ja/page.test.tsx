@@ -21,7 +21,7 @@ describe('StudentJaPage', () => {
 
     expect(screen.getByTestId('student-ja-workspace')).toBeInTheDocument();
     expect(screen.getByText('JA Workspace')).toBeInTheDocument();
-    expect(container.querySelector('.ja-page-shell')).not.toBeInTheDocument();
+    expect(container.querySelector('.ja-page-frame')).toBeInTheDocument();
   });
 
   it('passes mode and class query params into the standalone workspace', async () => {

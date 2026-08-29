@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentType } from 'react';
 import { StudentJaActivityRail } from './StudentJaActivityRail';
 
 describe('StudentJaActivityRail', () => {
@@ -48,5 +49,81 @@ describe('StudentJaActivityRail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Fractions explanation/i }));
     expect(onSelectActivity).toHaveBeenCalledWith(expect.objectContaining({ id: 'thread-1' }));
+  });
+});
+
+describe('StudentJaActivityRail pagination', () => {
+  it('renders accessible page controls and forwards page changes', () => {
+    const PaginatedRail = StudentJaActivityRail as unknown as ComponentType<any>;
+    const onPageChange = jest.fn();
+
+    render(
+      <PaginatedRail
+        mode="ask"
+        modeCount={{ ask: 12, review: 9 }}
+        activityFilter="all"
+        activities={[]}
+        activeActivityKey=""
+        showHome={false}
+        pagination={{
+          page: 2,
+          limit: 8,
+          total: 21,
+          totalPages: 3,
+          hasNext: true,
+          hasPrevious: true,
+        }}
+        historyLoading={false}
+        historyError=""
+        onModeChange={jest.fn()}
+        onFilterChange={jest.fn()}
+        onToggleHistory={jest.fn()}
+        onSelectActivity={jest.fn()}
+        onPageChange={onPageChange}
+        onRetryHistory={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Page 2 of 3')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Previous history page/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Next history page/i }));
+    expect(onPageChange).toHaveBeenNthCalledWith(1, 1);
+    expect(onPageChange).toHaveBeenNthCalledWith(2, 3);
+  });
+
+  it('keeps history failures local and retryable', () => {
+    const PaginatedRail = StudentJaActivityRail as unknown as ComponentType<any>;
+    const onRetryHistory = jest.fn();
+
+    render(
+      <PaginatedRail
+        mode="ask"
+        modeCount={{ ask: 0, review: 0 }}
+        activityFilter="all"
+        activities={[]}
+        activeActivityKey=""
+        showHome={false}
+        pagination={{
+          page: 1,
+          limit: 8,
+          total: 0,
+          totalPages: 0,
+          hasNext: false,
+          hasPrevious: false,
+        }}
+        historyLoading={false}
+        historyError="History unavailable."
+        onModeChange={jest.fn()}
+        onFilterChange={jest.fn()}
+        onToggleHistory={jest.fn()}
+        onSelectActivity={jest.fn()}
+        onPageChange={jest.fn()}
+        onRetryHistory={onRetryHistory}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('History unavailable.');
+    fireEvent.click(screen.getByRole('button', { name: /Retry history/i }));
+    expect(onRetryHistory).toHaveBeenCalledTimes(1);
   });
 });

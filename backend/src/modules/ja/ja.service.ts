@@ -5,7 +5,18 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  lt,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { AiProxyService } from '../ai-mentor/ai-proxy.service';
@@ -76,6 +87,23 @@ type JaAccessibleAskSources = {
   lessonContexts: JaAskLessonContext[];
 };
 
+type JaActivityHistoryMode = 'all' | 'ask' | 'review';
+
+type JaActivityHistoryItem = {
+  id: string;
+  mode: 'ask' | 'review';
+  classId: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  activityAt: string;
+};
+
+type JaAskMessageCursor = {
+  createdAt: string;
+  id: string;
+};
+
 const JA_QUESTION_COUNT = 10;
 const JA_REVIEW_MAX_ATTEMPTS = 3;
 const JA_SESSION_XP_BASE = 40;
@@ -144,6 +172,46 @@ export class JaService {
     } catch {
       return null;
     }
+  }
+
+  private encodeAskMessageCursor(cursor: JaAskMessageCursor): string {
+    return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+  }
+
+  private decodeAskMessageCursor(cursor: string): JaAskMessageCursor {
+    try {
+      const parsed = JSON.parse(
+        Buffer.from(cursor, 'base64url').toString('utf8'),
+      ) as Partial<JaAskMessageCursor>;
+      if (
+        typeof parsed.createdAt !== 'string' ||
+        Number.isNaN(new Date(parsed.createdAt).getTime()) ||
+        typeof parsed.id !== 'string' ||
+        parsed.id.length === 0
+      ) {
+        throw new Error('Invalid cursor payload');
+      }
+      return { createdAt: parsed.createdAt, id: parsed.id };
+    } catch {
+      throw new BadRequestException('Invalid JA message cursor.');
+    }
+  }
+
+  private toActivityIso(value: Date | string | null | undefined): string {
+    if (!value) return new Date(0).toISOString();
+    return (value instanceof Date ? value : new Date(value)).toISOString();
+  }
+
+  private sortActivityItems(
+    left: JaActivityHistoryItem,
+    right: JaActivityHistoryItem,
+  ): number {
+    const timestampDifference =
+      new Date(right.activityAt).getTime() - new Date(left.activityAt).getTime();
+    if (timestampDifference !== 0) return timestampDifference;
+    const modeDifference = left.mode.localeCompare(right.mode);
+    if (modeDifference !== 0) return modeDifference;
+    return left.id.localeCompare(right.id);
   }
 
   private isTutorItemVisible(item: {
@@ -767,6 +835,139 @@ export class JaService {
     return this.loadPracticeBootstrap(user, classId);
   }
 
+  async getActivityHistory(
+    user: UserContext,
+    query: {
+      classId: string;
+      mode?: JaActivityHistoryMode;
+      page?: number;
+      limit?: number;
+    },
+  ) {
+    const studentId = this.resolveUserId(user);
+    const mode = query.mode ?? 'all';
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 8;
+    const offset = (page - 1) * limit;
+    await this.assertStudentClassAccess(studentId, query.classId);
+
+    const askWhere = and(
+      eq(jaThreads.studentId, studentId),
+      eq(jaThreads.classId, query.classId),
+      eq(jaThreads.status, 'active'),
+    );
+    const reviewWhere = and(
+      eq(jaSessions.studentId, studentId),
+      eq(jaSessions.classId, query.classId),
+      eq(jaSessions.mode, 'review'),
+      inArray(jaSessions.status, ['active', 'completed']),
+    );
+
+    const [askCountRows, reviewCountRows] = await Promise.all([
+      this.db.select({ total: count() }).from(jaThreads).where(askWhere),
+      this.db.select({ total: count() }).from(jaSessions).where(reviewWhere),
+    ]);
+    const askTotal = Number(askCountRows[0]?.total ?? 0);
+    const reviewTotal = Number(reviewCountRows[0]?.total ?? 0);
+    const counts = {
+      all: askTotal + reviewTotal,
+      ask: askTotal,
+      review: reviewTotal,
+    };
+    const requestedTotal = counts[mode];
+    const combinedFetchLimit = offset + limit;
+
+    const [threadRows, sessionRows] = await Promise.all([
+      mode === 'review'
+        ? Promise.resolve([])
+        : this.db.query.jaThreads.findMany({
+            where: askWhere,
+            columns: {
+              id: true,
+              classId: true,
+              title: true,
+              status: true,
+              lastMessageAt: true,
+              updatedAt: true,
+            },
+            orderBy: [
+              desc(
+                sql`coalesce(${jaThreads.lastMessageAt}, ${jaThreads.updatedAt})`,
+              ),
+              asc(jaThreads.id),
+            ],
+            limit: mode === 'all' ? combinedFetchLimit : limit,
+            offset: mode === 'all' ? 0 : offset,
+          }),
+      mode === 'ask'
+        ? Promise.resolve([])
+        : this.db.query.jaSessions.findMany({
+            where: reviewWhere,
+            columns: {
+              id: true,
+              classId: true,
+              status: true,
+              currentIndex: true,
+              questionCount: true,
+              startedAt: true,
+              completedAt: true,
+              updatedAt: true,
+            },
+            orderBy: [
+              desc(
+                sql`coalesce(${jaSessions.completedAt}, ${jaSessions.updatedAt}, ${jaSessions.startedAt})`,
+              ),
+              asc(jaSessions.id),
+            ],
+            limit: mode === 'all' ? combinedFetchLimit : limit,
+            offset: mode === 'all' ? 0 : offset,
+          }),
+    ]);
+
+    const askItems: JaActivityHistoryItem[] = threadRows.map((thread) => ({
+      id: thread.id,
+      mode: 'ask' as const,
+      classId: thread.classId,
+      title: thread.title || 'Ask thread',
+      subtitle: 'Ask thread',
+      status: thread.status.toUpperCase(),
+      activityAt: this.toActivityIso(thread.lastMessageAt ?? thread.updatedAt),
+    }));
+    const reviewItems: JaActivityHistoryItem[] = sessionRows.map((session) => ({
+      id: session.id,
+      mode: 'review' as const,
+      classId: session.classId,
+      title: 'Assessment Replay',
+      subtitle: `${session.status.toUpperCase()} - ${Math.min(session.currentIndex, session.questionCount)}/${session.questionCount}`,
+      status: session.status.toUpperCase(),
+      activityAt: this.toActivityIso(
+        session.completedAt ?? session.updatedAt ?? session.startedAt,
+      ),
+    }));
+    const sortedItems = [...askItems, ...reviewItems].sort((left, right) =>
+      this.sortActivityItems(left, right),
+    );
+    const items =
+      mode === 'all'
+        ? sortedItems.slice(offset, offset + limit)
+        : sortedItems;
+    const totalPages =
+      requestedTotal > 0 ? Math.ceil(requestedTotal / limit) : 0;
+
+    return {
+      items,
+      counts,
+      pagination: {
+        page,
+        limit,
+        total: requestedTotal,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1 && totalPages > 0,
+      },
+    };
+  }
+
   async hub(user: UserContext, classId?: string) {
     const studentId = this.resolveUserId(user);
     const practice = await this.loadPracticeBootstrap(user, classId);
@@ -1078,7 +1279,11 @@ export class JaService {
     };
   }
 
-  async getAskThread(user: UserContext, threadId: string) {
+  async getAskThread(
+    user: UserContext,
+    threadId: string,
+    query?: { limit?: number; before?: string },
+  ) {
     const studentId = this.resolveUserId(user);
     const thread = await this.db.query.jaThreads.findFirst({
       where: and(
@@ -1098,30 +1303,59 @@ export class JaService {
       throw new NotFoundException('JA Ask thread not found.');
     }
 
-    const messages = await this.db.query.jaThreadMessages.findMany({
-      where: eq(jaThreadMessages.threadId, threadId),
-      columns: {
-        id: true,
-        role: true,
-        content: true,
-        citationsJson: true,
-        quickAction: true,
-        blocked: true,
-        createdAt: true,
-      },
-      orderBy: [desc(jaThreadMessages.createdAt)],
-      limit: 40,
-    });
+    const limit = query?.limit ?? 40;
+    const cursor = query?.before
+      ? this.decodeAskMessageCursor(query.before)
+      : null;
+    const cursorCreatedAt = cursor ? new Date(cursor.createdAt) : null;
+    const messageWhere = and(
+      eq(jaThreadMessages.threadId, threadId),
+      ne(jaThreadMessages.role, 'system'),
+      cursor && cursorCreatedAt
+        ? or(
+            lt(jaThreadMessages.createdAt, cursorCreatedAt),
+            and(
+              eq(jaThreadMessages.createdAt, cursorCreatedAt),
+              lt(jaThreadMessages.id, cursor.id),
+            ),
+          )
+        : undefined,
+    );
+    const [messageRows, contextMessage] = await Promise.all([
+      this.db.query.jaThreadMessages.findMany({
+        where: messageWhere,
+        columns: {
+          id: true,
+          role: true,
+          content: true,
+          citationsJson: true,
+          quickAction: true,
+          blocked: true,
+          createdAt: true,
+        },
+        orderBy: [
+          desc(jaThreadMessages.createdAt),
+          desc(jaThreadMessages.id),
+        ],
+        limit: limit + 1,
+      }),
+      this.db.query.jaThreadMessages.findFirst({
+        where: and(
+          eq(jaThreadMessages.threadId, threadId),
+          eq(jaThreadMessages.role, 'system'),
+        ),
+        columns: { content: true },
+        orderBy: [desc(jaThreadMessages.createdAt)],
+      }),
+    ]);
 
-    const selectedLessonContext =
-      messages.reduce<JaAskLessonContext | null>((current, entry) => {
-        if (current) return current;
-        if (entry.role !== 'system') return current;
-        return this.parseAskThreadContextMessage(entry.content);
-      }, null) ?? null;
-    const visibleMessages = [...messages]
-      .reverse()
-      .filter((entry) => entry.role !== 'system');
+    const hasMore = messageRows.length > limit;
+    const pageRows = messageRows.slice(0, limit);
+    const oldestMessage = pageRows.at(-1);
+    const selectedLessonContext = contextMessage
+      ? this.parseAskThreadContextMessage(contextMessage.content)
+      : null;
+    const visibleMessages = [...pageRows].reverse();
 
     return {
       thread: {
@@ -1132,6 +1366,16 @@ export class JaService {
         contextSectionTitle: selectedLessonContext?.sectionTitle ?? null,
       },
       messages: visibleMessages,
+      pageInfo: {
+        hasMore,
+        nextCursor:
+          hasMore && oldestMessage
+            ? this.encodeAskMessageCursor({
+                createdAt: this.toActivityIso(oldestMessage.createdAt),
+                id: oldestMessage.id,
+              })
+            : null,
+      },
     };
   }
   async sendAskMessage(

@@ -69,6 +69,48 @@ export class JaHubQueryDto {
   classId?: string;
 }
 
+export class JaActivityHistoryQueryDto {
+  @ApiProperty()
+  @IsUUID()
+  classId: string;
+
+  @ApiPropertyOptional({ enum: ['all', 'ask', 'review'], default: 'all' })
+  @IsOptional()
+  @IsIn(['all', 'ask', 'review'])
+  mode: 'all' | 'ask' | 'review' = 'all';
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 8, minimum: 1, maximum: 20 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(20)
+  limit = 8;
+}
+
+export class JaAskThreadQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 40 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(40)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: 'Opaque cursor for earlier messages' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  before?: string;
+}
+
 export class CreateJaPracticeSessionDto {
   @ApiProperty()
   @IsUUID()
