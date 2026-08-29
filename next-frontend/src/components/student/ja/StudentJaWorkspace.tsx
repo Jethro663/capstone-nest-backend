@@ -2,46 +2,46 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  AlertCircle,
-  ArrowLeft,
-  BookOpen,
   Check,
-  CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleHelp,
-  CircleDot,
-  LockKeyhole,
   Loader2,
   Menu,
-  MessageCircleQuestion,
-  PlayCircle,
   ShieldAlert,
-  Sparkles,
   X,
 } from "lucide-react";
 import { AiOutageNotice } from "@/components/student/AiOutageNotice";
+import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer";
+import {
+  JA_MODE_META as MODE_META,
+  JA_MODE_ORDER as MODE_ORDER,
+  StudentJaActivityRail,
+  type JaActivityFilter,
+  type JaActivityItem,
+  type JaVisibleMode,
+} from "@/components/student/ja/StudentJaActivityRail";
+import {
+  JA_AVATAR_IMAGES,
+  StudentJaAskPanel,
+} from "@/components/student/ja/StudentJaAskPanel";
 import { StudentJaHubGuideDialog } from "@/components/student/ja/StudentJaHubGuideDialog";
+import { StudentJaReplayPicker } from "@/components/student/ja/StudentJaReplayPicker";
+import { StudentJaWorkspaceHeader } from "@/components/student/ja/StudentJaWorkspaceHeader";
 import { toast } from "sonner";
 import { getMotionProps } from "@/components/student/student-motion";
 import { StudentStatusChip } from "@/components/student/student-primitives";
 import { StudentObjectiveAssessmentSurface } from "@/components/student/assessment/StudentObjectiveAssessmentSurface";
-import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { normalizeRichText } from "@/lib/rich-text";
 import { jaService } from "@/services/ja-service";
 import { useAiAvailability } from "@/hooks/use-ai-availability";
 import type {
   JaAskMessage,
   JaAskLessonContextSummary,
   JaHubResponse,
-  JaMode,
   JaPracticeSessionItem,
   JaPracticeSessionResponse,
   JaAskThreadSummary,
@@ -50,62 +50,13 @@ import { cn } from "@/utils/cn";
 
 type AnswerState = Record<string, string[]>;
 type JaEntry = "sidebar" | "class" | "lxp" | "lesson" | "assessment";
-type JaVisibleMode = Extract<JaMode, "ask" | "review">;
-type JaActivityFilter = "all" | JaVisibleMode;
-
-interface JaActivityItem {
-  id: string;
-  mode: JaVisibleMode;
-  title: string;
-  subtitle: string;
-  classLabel: string;
-  status: string;
-  updatedAt: string;
-}
-
-type JaAssistantTone = "grounded" | "guarded" | "thin-evidence";
-
-const MODE_ORDER: JaVisibleMode[] = ["ask", "review"];
 const JA_INLINE_ACTIONS: JaAskPresetAction[] = [
   { id: "inline-explain-simpler", label: "Explain simpler" },
   { id: "inline-give-analogy", label: "Give analogy" },
   { id: "inline-quiz-me", label: "Quiz me" },
   { id: "inline-study-next", label: "What should I study next?" },
 ];
-const JA_THIN_EVIDENCE_PATTERN =
-  /i do not have enough readable class evidence|i cannot answer that confidently|pick one visible lesson|avoids filling gaps with unsupported guesses|would rather be explicit about weak evidence/i;
-
-const MODE_META: Record<
-  JaVisibleMode,
-  {
-    title: string;
-    subtitle: string;
-    icon: typeof MessageCircleQuestion;
-    kicker: string;
-  }
-> = {
-  ask: {
-    title: "Ask",
-    subtitle: "Class-grounded mentor chat for concept clarity.",
-    icon: MessageCircleQuestion,
-    kicker: "Coach",
-  },
-  review: {
-    title: "Replay",
-    subtitle: "Revisit weak spots from submitted assessments.",
-    icon: CircleDot,
-    kicker: "Replay",
-  },
-};
-
 const JA_COACH_SPLIT_PATTERN = /\s*JA Coach:\s*/i;
-const JA_AVATAR_IMAGES = {
-  default: "/images/JA/ja_wave.png",
-  celebrate: "/images/JA/ja_cheer.png",
-  guarded: "/images/JA/ja_sad.png",
-  surprised: "/images/JA/ja_shock.png",
-  thinking: "/images/JA/ja_thinking.png",
-} as const;
 const DEFAULT_JA_ASK_GUIDELINES = [
   "Pick a visible lesson first when you want a summary, explanation, or study plan.",
   "Ask for concept help, quick reviews, what to study next, or a short lesson recap.",
@@ -324,57 +275,6 @@ function JaAnswerFeedback({
   );
 }
 
-function getAssistantTone(message: JaAskMessage): JaAssistantTone {
-  if (message.blocked) return "guarded";
-  if (
-    message.insufficientEvidence ||
-    (Array.isArray(message.citations) &&
-      message.citations.length === 0 &&
-      JA_THIN_EVIDENCE_PATTERN.test(message.content))
-  ) {
-    return "thin-evidence";
-  }
-  return "grounded";
-}
-
-function getAssistantToneLabel(tone: JaAssistantTone) {
-  if (tone === "guarded") {
-    return {
-      chipTone: "warning" as const,
-      label: "Guarded",
-      subtitle: "Safety first",
-    };
-  }
-  if (tone === "thin-evidence") {
-    return {
-      chipTone: "info" as const,
-      label: "Thin evidence",
-      subtitle: "Needs clearer class material",
-    };
-  }
-  return {
-    chipTone: "success" as const,
-    label: "Grounded",
-    subtitle: "Based on your class",
-  };
-}
-
-function readCitationValue(citation: Record<string, unknown>, keys: string[]) {
-  for (const key of keys) {
-    const value = citation[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
-function formatCitationSource(sourceType: string) {
-  return sourceType
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function classLabel(item: { subjectName: string; subjectCode: string }) {
   return `${item.subjectName} (${item.subjectCode})`;
 }
@@ -415,72 +315,6 @@ function splitCoachPrompt(prompt: string) {
     prompt: parts[0].trim(),
     coach: parts.slice(1).join(" JA Coach: ").trim(),
   };
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function normalizeJaAssistantContent(content: string) {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith("{") || !trimmed.includes('"html"')) {
-    return normalizeRichText(content);
-  }
-
-  try {
-    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return normalizeRichText(content);
-    }
-
-    const heading =
-      typeof parsed.heading === "string" ? parsed.heading.trim() : "";
-    const html =
-      typeof parsed.html === "string"
-        ? parsed.html.trim()
-        : typeof parsed.text === "string"
-          ? parsed.text.trim()
-          : "";
-
-    if (!heading && !html) {
-      return normalizeRichText(content);
-    }
-
-    return normalizeRichText(
-      `${heading ? `<h3>${escapeHtml(heading)}</h3>` : ""}${html}`,
-    );
-  } catch {
-    return normalizeRichText(content);
-  }
-}
-
-function JaAssistantAvatar({
-  mood = "default",
-}: {
-  mood?: keyof typeof JA_AVATAR_IMAGES;
-}) {
-  return (
-    <span className="ja-msg-avatar ja-av" aria-hidden="true">
-      <Image
-        src={JA_AVATAR_IMAGES[mood]}
-        alt=""
-        width={40}
-        height={40}
-        className="ja-msg-avatar__image"
-      />
-    </span>
-  );
-}
-
-function buildLessonContextLabel(context: JaAskLessonContextSummary) {
-  return [context.moduleTitle, context.sectionTitle]
-    .filter(Boolean)
-    .join(" / ");
 }
 
 function resolveThreadLessonContext(
@@ -525,13 +359,6 @@ export default function StudentJaWorkspace({
     () => getMotionProps(reduceMotion),
     [reduceMotion],
   );
-  const conditionalSurfaceMotionProps = reduceMotion
-    ? {}
-    : {
-        initial: { opacity: 0, y: 10 },
-        animate: { opacity: 1, y: 0 },
-        transition: { duration: 0.22, ease: "easeOut" as const },
-      };
 
   const [hub, setHub] = useState<JaHubResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -540,7 +367,7 @@ export default function StudentJaWorkspace({
   );
   const [showHome, setShowHome] = useState(false);
   const [guideResetToken, setGuideResetToken] = useState(0);
-  const [guideOpen, setGuideOpen] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState("");
   const [classSelectorOpen, setClassSelectorOpen] = useState(
     !(initialClassId && initialEntry && initialEntry !== "sidebar"),
@@ -1072,29 +899,7 @@ export default function StudentJaWorkspace({
       quickAction: preset.label,
     };
 
-    if (!selectedLessonContext) {
-      const warningMessageId = `warning-${Date.now()}-lesson-context`;
-      setAskError("");
-      setShowGuardrailModal(false);
-      setAskMessages((prev) => [
-        ...prev,
-        studentMessage,
-        {
-          id: warningMessageId,
-          role: "assistant",
-          content: [
-            "## Main idea",
-            "Select a visible lesson first so JA can keep this help grounded to your class material.",
-            "",
-            "## Try this now",
-            "- Choose one lesson card before asking for a summary, explanation, quiz, or study plan.",
-          ].join("\n"),
-          blocked: false,
-          insufficientEvidence: true,
-        },
-      ]);
-      return;
-    }
+    if (!selectedLessonContext) return;
 
     setBusy(true);
     setAskError("");
@@ -1173,82 +978,6 @@ export default function StudentJaWorkspace({
     }
   };
 
-  const liveJaState = useMemo<{
-    mood: keyof typeof JA_AVATAR_IMAGES;
-    caption: string;
-    key: string;
-    talking: boolean;
-  }>(() => {
-    const latestAssistant =
-      [...askMessages]
-        .reverse()
-        .find((message) => message.role !== "student") ?? null;
-    const latestStudent =
-      [...askMessages]
-        .reverse()
-        .find((message) => message.role === "student") ?? null;
-
-    if (busy) {
-      return {
-        mood: "thinking",
-        caption: "Thinking through your lesson...",
-        key: `thinking-${latestStudent?.id ?? askMessages.length}`,
-        talking: true,
-      };
-    }
-
-    if (latestAssistant?.blocked) {
-      return {
-        mood: "guarded",
-        caption: "Let's keep it safe and class-grounded.",
-        key: `guarded-${latestAssistant.id}`,
-        talking: true,
-      };
-    }
-
-    if (latestAssistant) {
-      const tone = getAssistantTone(latestAssistant);
-      if (tone === "thin-evidence") {
-        return {
-          mood: "surprised",
-          caption: "I need a clearer lesson clue.",
-          key: `thin-${latestAssistant.id}`,
-          talking: true,
-        };
-      }
-      if (tone === "guarded") {
-        return {
-          mood: "guarded",
-          caption: "Let's stay with your class material.",
-          key: `guarded-${latestAssistant.id}`,
-          talking: true,
-        };
-      }
-      return {
-        mood: "celebrate",
-        caption: "Nice, I found a path through it.",
-        key: `celebrate-${latestAssistant.id}`,
-        talking: true,
-      };
-    }
-
-    if (latestStudent) {
-      return {
-        mood: "surprised",
-        caption: "I'm listening. Let's solve it.",
-        key: `listening-${latestStudent.id}`,
-        talking: true,
-      };
-    }
-
-    return {
-      mood: "default",
-      caption: "Choose a lesson, then ask me anything.",
-      key: "idle",
-      talking: false,
-    };
-  }, [askMessages, busy]);
-
   if (loading) {
     return (
       <div className="ja-hub-loading">
@@ -1281,117 +1010,18 @@ export default function StudentJaWorkspace({
       {...motionProps.container}
     >
       {historyOpen ? (
-        <motion.aside
-          className="ja-mode-panel ja-sidebar"
-          {...conditionalSurfaceMotionProps}
-        >
-          <div className="ja-mode-panel__head">
-            <button
-              type="button"
-              className="ja-history-toggle"
-              aria-label="Hide activity history"
-              aria-expanded={historyOpen}
-              onClick={() => setHistoryOpen(false)}
-            >
-              <Menu className="h-4 w-4" />
-            </button>
-            <div>
-              <p className="ja-eyebrow">JA Hub</p>
-              <h2>Activity history</h2>
-            </div>
-          </div>
-
-          <div
-            className="ja-mode-grid"
-            role="tablist"
-            aria-label="JA study modes"
-          >
-            {MODE_ORDER.map((modeKey) => {
-              const details = MODE_META[modeKey];
-              const Icon = details.icon;
-              const isActive = mode === modeKey;
-              return (
-                <button
-                  key={modeKey}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  className={cn(
-                    "ja-mode-card",
-                    `mode-${modeKey}`,
-                    isActive && "active",
-                  )}
-                  onClick={() => selectMode(modeKey)}
-                >
-                  <span className="ja-mode-card__icon">
-                    <Icon />
-                  </span>
-                  <span className="ja-mode-card__copy">
-                    <strong>{details.title}</strong>
-                    <span>{details.subtitle}</span>
-                  </span>
-                  <span className="ja-mode-card__metric">
-                    {modeCount[modeKey]} {details.kicker}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="ja-activity-filters" aria-label="Activity filters">
-            {(["all", ...MODE_ORDER] as JaActivityFilter[]).map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                data-active={activityFilter === filter}
-                onClick={() => setActivityFilter(filter)}
-              >
-                {filter === "all" ? "All" : MODE_META[filter].title}
-              </button>
-            ))}
-          </div>
-
-          <div className="ja-saved-list ja-activity-list" aria-live="polite">
-            {filteredActivityItems.length === 0 ? (
-              <span className="ja-inline-empty">
-                No saved JA activity for this filter yet.
-              </span>
-            ) : (
-              filteredActivityItems.map((item) => (
-                <button
-                  key={`${item.mode}-${item.id}`}
-                  type="button"
-                  onClick={() => selectActivity(item)}
-                  className={cn(
-                    "ja-session-chip",
-                    activeActivityKey === `${item.mode}:${item.id}` &&
-                      !showHome &&
-                      "is-selected",
-                  )}
-                >
-                  <span className="ja-session-chip__top">
-                    <span
-                      className={cn("ja-activity-tag", `mode-${item.mode}`)}
-                    >
-                      {MODE_META[item.mode].title}
-                    </span>
-                    <span className="ja-session-chip__stamp">
-                      {new Date(item.updatedAt).toLocaleDateString()}
-                    </span>
-                  </span>
-                  <strong>{item.title}</strong>
-                  <span className="ja-session-chip__subtitle">
-                    {item.subtitle}
-                  </span>
-                  <span className="ja-session-chip__meta">
-                    <span>{item.classLabel}</span>
-                    <span>{item.status}</span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </motion.aside>
+        <StudentJaActivityRail
+          mode={mode}
+          modeCount={modeCount}
+          activityFilter={activityFilter}
+          activities={filteredActivityItems}
+          activeActivityKey={activeActivityKey}
+          showHome={showHome}
+          onModeChange={selectMode}
+          onFilterChange={setActivityFilter}
+          onToggleHistory={() => setHistoryOpen(false)}
+          onSelectActivity={selectActivity}
+        />
       ) : null}
 
       <motion.section className="ja-center-panel ja-main" {...motionProps.item}>
@@ -1411,107 +1041,31 @@ export default function StudentJaWorkspace({
             <Menu className="h-4 w-4" />
           </button>
         ) : null}
-        <div className="ja-topbar ja-main-header">
-          <div className="ja-topbar__leading">
-            {classSelectorOpen ? (
-              <div className="ja-class-menu" ref={classMenuRef}>
-                <button
-                  type="button"
-                  className="ja-class-menu__trigger"
-                  aria-label="Class selector"
-                  aria-haspopup="listbox"
-                  aria-expanded={classMenuOpen}
-                  onClick={() => setClassMenuOpen((current) => !current)}
-                >
-                  <span>{selectedClassLabel}</span>
-                  <ChevronDown className="h-4 w-4" />
-                </button>
-                {classMenuOpen ? (
-                  <div
-                    className="ja-class-menu__popover"
-                    role="listbox"
-                    aria-label="Class options"
-                  >
-                    {hub.classes.map((item) => {
-                      const isSelected = item.id === selectedClassId;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          role="option"
-                          aria-selected={isSelected}
-                          className="ja-class-menu__option"
-                          onClick={() => {
-                            setClassMenuOpen(false);
-                            void refreshHub(item.id, { resetContext: true });
-                          }}
-                        >
-                          <span>{classLabel(item)}</span>
-                          {isSelected ? <Check className="h-4 w-4" /> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <span className="ja-class-label-static">
-                {selectedClassLabel}
-              </span>
-            )}
-            {aiUnavailable ? (
-              <span className="ja-ai-offline-pill">AI offline</span>
-            ) : null}
-          </div>
-          <div className="ja-topbar__actions">
-            <button
-              type="button"
-              className="ja-head-link ja-guide-trigger"
-              onClick={() => {
-                setGuideResetToken((current) => current + 1);
-                setGuideOpen(true);
-              }}
-            >
-              <CircleHelp className="h-4 w-4" />
-              JA guide
-            </button>
-            {mode === "ask" ? (
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy || aiUnavailable}
-                className="ja-head-link ja-new-chat-button"
-                onClick={startNewAskChat}
-              >
-                <Sparkles className="h-4 w-4" />
-                New chat
-              </Button>
-            ) : null}
-            {returnTo ? (
-              <Link href={returnTo} className="ja-head-link">
-                <ArrowLeft className="h-4 w-4" />
-                {getBackLabel(initialEntry)}
-              </Link>
-            ) : null}
-            {!classSelectorOpen ? (
-              <>
-                <span className="ja-class-lock">
-                  <LockKeyhole className="h-4 w-4" />
-                  Class locked
-                </span>
-                {isContextualEntry ? (
-                  <button
-                    type="button"
-                    className="ja-head-link"
-                    onClick={() => setClassSelectorOpen(true)}
-                  >
-                    Change class
-                  </button>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-        </div>
+        <StudentJaWorkspaceHeader
+          classes={hub.classes}
+          selectedClassId={selectedClassId}
+          selectedClassLabel={selectedClassLabel}
+          classSelectorOpen={classSelectorOpen}
+          classMenuOpen={classMenuOpen}
+          classMenuRef={classMenuRef}
+          aiUnavailable={aiUnavailable}
+          mode={mode}
+          busy={busy}
+          returnTo={returnTo}
+          backLabel={getBackLabel(initialEntry)}
+          isContextualEntry={isContextualEntry}
+          onToggleClassMenu={() => setClassMenuOpen((current) => !current)}
+          onSelectClass={(classId) => {
+            setClassMenuOpen(false);
+            void refreshHub(classId, { resetContext: true });
+          }}
+          onOpenGuide={() => {
+            setGuideResetToken((current) => current + 1);
+            setGuideOpen(true);
+          }}
+          onStartNewChat={startNewAskChat}
+          onEnableClassSelector={() => setClassSelectorOpen(true)}
+        />
 
         {aiUnavailable ? (
           <AiOutageNotice
@@ -1532,41 +1086,22 @@ export default function StudentJaWorkspace({
             >
               <div className="ja-home-hero">
                 <div className="ja-home-copy">
-                  <p className="ja-eyebrow">Pick your study boost</p>
-                  <h2>
-                    Tell JA what feels confusing, then watch the lesson click.
-                  </h2>
+                  <p className="ja-eyebrow">Welcome to JA Hub</p>
+                  <h2>How would you like to study?</h2>
                   <p>
-                    Choose a mode and JA will turn this class into simpler
-                    explanations, sharper review questions, and a study path
-                    that feels easier to start.
+                    Choose Ask for guided lesson help or Replay to practice
+                    mistakes from work you already submitted.
                   </p>
-                  <div
-                    className="ja-home-sparkline"
-                    aria-label="JA study strengths"
-                  >
-                    <span>Explain it simply</span>
-                    <span>Quiz me fast</span>
-                    <span>Find my weak spots</span>
-                  </div>
                 </div>
                 <div className="ja-home-figure" aria-hidden="true">
-                  <span className="ja-home-orb ja-home-orb--one" />
-                  <span className="ja-home-orb ja-home-orb--two" />
                   <Image
                     src={JA_AVATAR_IMAGES.default}
                     alt=""
-                    width={420}
-                    height={420}
+                    width={112}
+                    height={112}
                     className="ja-home-robot"
                     priority
                   />
-                  <span className="ja-home-bubble ja-home-bubble--ask">
-                    Ask me anything
-                  </span>
-                  <span className="ja-home-bubble ja-home-bubble--review">
-                    Replay mistakes
-                  </span>
                 </div>
               </div>
               <div className="ja-home-modes">
@@ -1596,333 +1131,25 @@ export default function StudentJaWorkspace({
               </div>
             </motion.div>
           ) : mode === "ask" ? (
-            <motion.div
-              key="ask-stage"
-              className="ja-thread-shell ja-chat-panel"
-              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-              animate={reduceMotion ? {} : { opacity: 1, y: 0 }}
-              exit={reduceMotion ? {} : { opacity: 0, y: -8 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
-              <div className="ja-thread-messages" aria-live="polite">
-                <article className="ja-msg-row ja ja-intro-row">
-                  <JaAssistantAvatar />
-                  <div className="ja-bubble ja ja-intro-bubble">
-                    <div className="ja-context-empty">
-                      <div className="ja-context-empty__copy">
-                        <p className="ja-eyebrow">Lesson-grounded chat</p>
-                        <h3>Pick a visible lesson, then ask JA for help.</h3>
-                        <p>
-                          JA stays inside the lesson you select so explanations,
-                          summaries, study plans, and review suggestions stay
-                          grounded to what your class can currently access.
-                        </p>
-                      </div>
-
-                      <div
-                        className="ja-context-picker"
-                        aria-label="Available lessons"
-                      >
-                        {askLessonContexts.length > 0 ? (
-                          askLessonContexts.map((context) => {
-                            const isSelected =
-                              selectedLessonContext?.lessonId ===
-                              context.lessonId;
-                            return (
-                              <button
-                                key={context.lessonId}
-                                type="button"
-                                className={cn(
-                                  "ja-context-chip",
-                                  isSelected && "is-selected",
-                                )}
-                                disabled={aiUnavailable}
-                                onClick={() => selectAskLessonContext(context)}
-                              >
-                                <BookOpen className="h-4 w-4" />
-                                <span className="ja-context-chip__copy">
-                                  <strong>{context.title}</strong>
-                                  {buildLessonContextLabel(context) ? (
-                                    <span>
-                                      {buildLessonContextLabel(context)}
-                                    </span>
-                                  ) : null}
-                                </span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="ja-context-empty__notice">
-                            No visible lessons are available for JA Ask yet in
-                            this class.
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="ja-guidelines">
-                        <p className="ja-guidelines__title">
-                          Good prompts for JA
-                        </p>
-                        <ul>
-                          <li>Select one visible lesson card first.</li>
-                          <li>
-                            Use the bottom Ask button to choose one of JA&apos;s
-                            fixed lesson actions.
-                          </li>
-                          {askGuidelines.map((guideline) => (
-                            <li key={guideline}>{guideline}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </article>
-
-                {askMessages.map((msg) => {
-                  const isStudentMessage = msg.role === "student";
-                  const tone = isStudentMessage ? null : getAssistantTone(msg);
-                  const toneMeta = tone ? getAssistantToneLabel(tone) : null;
-                  const citations = Array.isArray(msg.citations)
-                    ? msg.citations
-                    : [];
-                  const inlineActions =
-                    !isStudentMessage && !msg.blocked ? JA_INLINE_ACTIONS : [];
-
-                  return (
-                    <article
-                      key={msg.id}
-                      className={cn(
-                        "ja-msg-row",
-                        isStudentMessage ? "user" : "ja",
-                      )}
-                    >
-                      {isStudentMessage ? (
-                        <span
-                          className="ja-msg-avatar user-av"
-                          aria-hidden="true"
-                        >
-                          ME
-                        </span>
-                      ) : (
-                        <JaAssistantAvatar
-                          mood={msg.blocked ? "guarded" : "default"}
-                        />
-                      )}
-                      <div
-                        className={cn(
-                          "ja-bubble",
-                          isStudentMessage ? "user" : "ja",
-                          isStudentMessage && "ja-bubble--student",
-                          tone === "grounded" && "ja-bubble--grounded",
-                          tone === "thin-evidence" &&
-                            "ja-bubble--thin-evidence",
-                          tone === "guarded" && "ja-bubble--guarded",
-                          msg.blocked && "notice",
-                        )}
-                      >
-                        {isStudentMessage ? (
-                          <p>{msg.content}</p>
-                        ) : (
-                          <>
-                            {toneMeta ? (
-                              <div className="ja-bubble__meta">
-                                <div className="ja-bubble__speaker">
-                                  <span>JA Coach</span>
-                                  <small>{toneMeta.subtitle}</small>
-                                </div>
-                                <StudentStatusChip tone={toneMeta.chipTone}>
-                                  {toneMeta.label}
-                                </StudentStatusChip>
-                              </div>
-                            ) : null}
-
-                            <RichTextRenderer
-                              html={normalizeJaAssistantContent(msg.content)}
-                              className="ja-bubble__content"
-                            />
-
-                            {citations.length > 0 ? (
-                              <div className="ja-bubble__evidence">
-                                <div className="ja-bubble__evidence-head">
-                                  <BookOpen className="h-4 w-4" />
-                                  <span>From your class</span>
-                                </div>
-                                <div className="ja-bubble__evidence-list">
-                                  {citations.map((entry, index) => {
-                                    const citation =
-                                      entry && typeof entry === "object"
-                                        ? (entry as Record<string, unknown>)
-                                        : {};
-                                    const label = readCitationValue(citation, [
-                                      "label",
-                                      "lessonTitle",
-                                      "assessmentTitle",
-                                      "title",
-                                    ]);
-                                    const snippet = readCitationValue(
-                                      citation,
-                                      ["snippet", "chunkText"],
-                                    );
-                                    const sourceType = readCitationValue(
-                                      citation,
-                                      ["sourceType"],
-                                    );
-
-                                    return (
-                                      <article
-                                        key={`${msg.id}-citation-${index}`}
-                                        className="ja-evidence-card"
-                                      >
-                                        <strong>
-                                          {label || "Class material"}
-                                        </strong>
-                                        {snippet ? <p>{snippet}</p> : null}
-                                        {sourceType ? (
-                                          <span>
-                                            {formatCitationSource(sourceType)}
-                                          </span>
-                                        ) : null}
-                                      </article>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {inlineActions.length > 0 ? (
-                              <div
-                                className="ja-bubble__actions"
-                                aria-label="Suggested follow-ups"
-                              >
-                                {inlineActions.map((action) => (
-                                  <button
-                                    key={`${msg.id}-${action.id}`}
-                                    type="button"
-                                    className="ja-bubble__action"
-                                    onClick={() => void sendAskPreset(action)}
-                                    disabled={busy || aiUnavailable}
-                                  >
-                                    {action.label}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    </article>
-                  );
-                })}
-
-                {busy ? (
-                  <article className="ja-msg-row ja is-pending">
-                    <JaAssistantAvatar mood="thinking" />
-                    <div className="ja-bubble ja notice ja-bubble--pending">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Thinking
-                      through your question and grounding it to your class
-                      material...
-                    </div>
-                  </article>
-                ) : null}
-                <div ref={askTailRef} />
-              </div>
-
-              <div
-                key={liveJaState.key}
-                className={cn(
-                  "ja-live-companion",
-                  `is-${liveJaState.mood}`,
-                  liveJaState.talking && "is-talking",
-                  askMessages.length > 0 && "has-chat",
-                )}
-                aria-hidden="true"
-              >
-                <span className="ja-live-companion__halo" />
-                <Image
-                  src={JA_AVATAR_IMAGES[liveJaState.mood]}
-                  alt=""
-                  width={520}
-                  height={520}
-                  sizes="(max-width: 640px) 10rem, (max-width: 920px) 14rem, 24rem"
-                  className="ja-live-companion__image"
-                />
-                <span className="ja-live-companion__caption">
-                  {liveJaState.caption}
-                </span>
-              </div>
-
-              {selectedLessonContext ? (
-                <div className="ja-active-context" aria-live="polite">
-                  <div className="ja-active-context__copy">
-                    <span className="ja-active-context__label">
-                      Current lesson
-                    </span>
-                    <strong>{selectedLessonContext.title}</strong>
-                    {buildLessonContextLabel(selectedLessonContext) ? (
-                      <span>
-                        {buildLessonContextLabel(selectedLessonContext)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="ja-active-context__clear"
-                    onClick={clearAskLessonContext}
-                  >
-                    <X className="h-4 w-4" />
-                    Change lesson
-                  </button>
-                </div>
-              ) : null}
-
-              {askError ? (
-                <div className="ja-ask-error" role="alert">
-                  {askError}
-                </div>
-              ) : null}
-
-              <div className="ja-composer ja-ask-launcher" ref={askMenuRef}>
-                <div
-                  className={cn("ja-ask-menu", askMenuOpen && "is-open")}
-                  role="dialog"
-                  aria-label="Ask JA actions"
-                  aria-hidden={!askMenuOpen}
-                >
-                  {ASK_PRESET_GROUPS.map((group) => (
-                    <section key={group.id} className="ja-ask-menu__group">
-                      <header className="ja-ask-menu__group-head">
-                        <strong>{group.label}</strong>
-                      </header>
-                      <div className="ja-ask-menu__items">
-                        {group.items.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="ja-ask-menu__item"
-                            disabled={aiUnavailable}
-                            onClick={() => void sendAskPreset(item)}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  disabled={busy || aiUnavailable}
-                  className={cn(
-                    "student-button-solid ja-send-button ja-prompt-button",
-                    askMenuOpen && "is-open",
-                  )}
-                  onClick={() => setAskMenuOpen((current) => !current)}
-                >
-                  <MessageCircleQuestion className="h-4 w-4" />
-                  Ask JA about this lesson
-                </Button>
-              </div>
-            </motion.div>
+            <StudentJaAskPanel
+              reduceMotion={reduceMotion}
+              lessonContexts={askLessonContexts}
+              selectedLessonContext={selectedLessonContext}
+              guidelines={askGuidelines}
+              messages={askMessages}
+              presetGroups={ASK_PRESET_GROUPS}
+              inlineActions={JA_INLINE_ACTIONS}
+              busy={busy}
+              aiUnavailable={aiUnavailable}
+              error={askError}
+              menuOpen={askMenuOpen}
+              menuRef={askMenuRef}
+              tailRef={askTailRef}
+              onSelectLesson={selectAskLessonContext}
+              onClearLesson={clearAskLessonContext}
+              onToggleMenu={() => setAskMenuOpen((current) => !current)}
+              onPreset={(action) => void sendAskPreset(action)}
+            />
           ) : (
             <motion.div
               key="session-stage"
@@ -1942,105 +1169,16 @@ export default function StudentJaWorkspace({
                     </p>
                   </div>
 
-                  <div className="ja-review-attempts grid gap-3 sm:grid-cols-1">
-                    {hub.review.eligibleAttempts.length === 0 ? (
-                      <p className="ja-inline-empty text-slate-500 font-medium">
-                        No class assessments found. Take an assessment in your class to unlock JA Replay.
-                      </p>
-                    ) : (
-                      hub.review.eligibleAttempts.map((attempt) => {
-                        const isReplayed = Boolean(attempt.isReplayCompleted);
-                        const isClassSubmitted = Boolean(
-                          (attempt as unknown as Record<string, unknown>).isSubmitted ??
-                          (attempt.submittedAt && attempt.attemptId)
-                        );
-                        return (
-                          <button
-                            key={attempt.attemptId || attempt.assessmentId}
-                            type="button"
-                            disabled={aiUnavailable}
-                            className={cn(
-                              "ja-assessment-card group relative w-full text-left flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-4 transition-all duration-200 shadow-sm",
-                              isReplayed
-                                ? "border-emerald-300/80 bg-gradient-to-r from-emerald-50/90 via-teal-50/30 to-white hover:-translate-y-0.5 hover:border-emerald-500 hover:shadow-md cursor-pointer"
-                                : "border-rose-300/90 bg-gradient-to-r from-rose-50/90 via-amber-50/30 to-white hover:-translate-y-0.5 hover:border-rose-400 hover:shadow-md cursor-pointer"
-                            )}
-                            onClick={() => {
-                              if (isClassSubmitted && attempt.attemptId) {
-                                void startReview(attempt.attemptId);
-                              } else {
-                                toast.info(
-                                  "Please submit this assessment attempt first before opening JA Replay."
-                                );
-                              }
-                            }}
-                          >
-                            <div className="flex items-center gap-3.5">
-                              <div
-                                className={cn(
-                                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs transition-transform duration-200 group-hover:scale-105",
-                                  isReplayed
-                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                                    : "bg-rose-100 text-rose-700 border border-rose-200"
-                                )}
-                              >
-                                {isReplayed ? (
-                                  <CheckCircle2 className="h-6 w-6" />
-                                ) : (
-                                  <AlertCircle className="h-6 w-6" />
-                                )}
-                              </div>
-                              <div>
-                                <h4 className="text-base font-semibold text-[#102744]">
-                                  {attempt.assessmentTitle}
-                                </h4>
-                                <p className="mt-0.5 text-xs font-medium text-slate-500">
-                                  {isReplayed
-                                    ? `Replay Score: ${attempt.replayScore ?? 100}% • Original Class Score: ${attempt.score ?? 0}%`
-                                    : attempt.score !== null
-                                      ? `Original Class Score: ${attempt.score}% • JA Replay Pending`
-                                      : "Not yet retaken in JA Replay"}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <span
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold shadow-2xs",
-                                  isReplayed
-                                    ? "border-emerald-300 bg-emerald-100/90 text-emerald-800"
-                                    : "border-rose-300 bg-rose-100/90 text-rose-800"
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    "h-2 w-2 rounded-full",
-                                    isReplayed ? "bg-emerald-500 animate-pulse" : "bg-rose-500"
-                                  )}
-                                />
-                                {isReplayed
-                                  ? `Replay Score: ${attempt.replayScore ?? 100}%`
-                                  : "Not Retaken Yet"}
-                              </span>
-
-                              <span
-                                className={cn(
-                                  "inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors",
-                                  isReplayed
-                                    ? "bg-emerald-600 group-hover:bg-emerald-700"
-                                    : "bg-rose-600 group-hover:bg-rose-700"
-                                )}
-                              >
-                                <PlayCircle className="mr-1.5 h-4 w-4" />
-                                {isReplayed ? "View Replay Result" : "Start Replay"}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
+                  <StudentJaReplayPicker
+                    attempts={hub.review.eligibleAttempts}
+                    disabled={aiUnavailable}
+                    onSelectAttempt={(attemptId) => void startReview(attemptId)}
+                    onUnavailableAttempt={() =>
+                      toast.info(
+                        "Please submit this assessment attempt first before opening JA Replay.",
+                      )
+                    }
+                  />
                 </div>
               ) : (
                 <div className="ja-session-active student-panel">

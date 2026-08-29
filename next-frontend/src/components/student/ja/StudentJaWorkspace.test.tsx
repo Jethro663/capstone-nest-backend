@@ -364,17 +364,22 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /New chat/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ask JA about this lesson/i })).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/Ask JA anything/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Choose a JA question/i })).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(screen.queryByText(/Explain this topic in simpler words/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Ask/i }).length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Replay/i }).length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /Practice/i })).not.toBeInTheDocument();
   });
 
-  it('auto-opens the JA guide and lets students reopen it from the top bar', async () => {
+  it('keeps the JA guide optional and lets students reopen it from the top bar', async () => {
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
+    expect(
+      screen.queryByRole('heading', { name: /Before you use JA Hub/i }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: /JA guide/i }));
     expect(
       await screen.findByRole('heading', { name: /Before you use JA Hub/i }),
     ).toBeInTheDocument();
@@ -410,16 +415,21 @@ describe('StudentJaWorkspace refactored shell', () => {
     expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
     expect(screen.getByText('Module 1 / Lesson Set A')).toBeInTheDocument();
     expect(screen.getByText('Module 1 / Lesson Set B')).toBeInTheDocument();
-    expect(screen.getByText(/Good prompts for JA/i)).toBeInTheDocument();
+    expect(screen.getByText(/How to use JA Ask/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Pick a visible lesson first when you want a summary, explanation, or study plan/i),
     ).toBeInTheDocument();
+    const launcher = screen.getByRole('button', { name: /Choose a JA question/i });
+    expect(launcher).toBeDisabled();
+    expect(launcher).toHaveAttribute('aria-describedby', 'ja-ask-launcher-help');
+    expect(screen.getByText('Select a lesson to choose a JA question')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Ask JA actions/i })).not.toBeInTheDocument();
   });
 
   it('opens the fixed Ask menu and shows the 9 preset lesson actions', async () => {
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Choose a JA question/i }));
 
     expect(screen.getByText('Explain the lesson')).toBeInTheDocument();
     expect(screen.getByText('Summarize main idea')).toBeInTheDocument();
@@ -442,7 +452,7 @@ describe('StudentJaWorkspace refactored shell', () => {
       />,
     );
 
-    expect(await screen.findByText('Class locked')).toBeInTheDocument();
+    expect(await screen.findByText('Using this class')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to class/i })).toHaveAttribute(
       'href',
       '/dashboard/student/classes/class-1',
@@ -498,7 +508,7 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Generate Practice Run/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('tab', { name: /Practice/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Practice\b/i })).not.toBeInTheDocument();
   });
 
   it('renders replay rich text, extracts coach copy, and navigates between replay items', async () => {
@@ -526,10 +536,10 @@ describe('StudentJaWorkspace refactored shell', () => {
     fireEvent.click(await screen.findByText('Assessment Replay'));
     expect(await screen.findByText(/Question 1 of 2/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Ask Class-grounded mentor chat/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Ask Get help with a lesson/i }));
     expect(await screen.findByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: /Replay Revisit weak spots/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Replay Practice again using mistakes/i }));
     expect(await screen.findByText('Pick an assessment to replay')).toBeInTheDocument();
   });
 
@@ -646,17 +656,13 @@ describe('StudentJaWorkspace refactored shell', () => {
     fireEvent.click(screen.getByRole('option', { name: /Science \(SCI\)/i }));
     await waitFor(() => expect(mockedJaService.getHub).toHaveBeenCalledWith('class-2'));
 
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
-    fireEvent.click(screen.getByText('Explain the lesson'));
-
+    expect(screen.getByRole('button', { name: /Choose a JA question/i })).toBeDisabled();
     expect(mockedJaService.createAskThread).not.toHaveBeenCalled();
     expect(mockedJaService.sendAskMessage).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(/Select a visible lesson first so JA can keep this help grounded/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Select a lesson to choose a JA question')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Explain the lesson'));
 
     await waitFor(() => {
@@ -706,7 +712,7 @@ describe('StudentJaWorkspace refactored shell', () => {
       expect(screen.queryByText('Previous thread response.')).not.toBeInTheDocument();
     });
     expect(screen.getByText(/Pick a visible lesson, then ask JA for help/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ask JA about this lesson/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Choose a JA question/i })).toBeInTheDocument();
     expect(screen.queryByText(/Current lesson/i)).not.toBeInTheDocument();
   });
 
@@ -722,7 +728,7 @@ describe('StudentJaWorkspace refactored shell', () => {
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Explain the lesson'));
 
     await waitFor(() => {
@@ -786,9 +792,8 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Summarize main idea'));
 
     await waitFor(() => {
@@ -807,6 +812,7 @@ describe('StudentJaWorkspace refactored shell', () => {
       .map((node) => node.closest('.ja-bubble'))
       .find((node): node is HTMLElement => node instanceof HTMLElement);
     expect(studentPromptBubble).toHaveClass('ja-bubble--student');
+    expect(document.querySelector('.ja-live-companion')).not.toBeInTheDocument();
     expect(
       await screen.findByText(/Equivalent fractions are different forms of the same value/i),
     ).toBeInTheDocument();
@@ -832,7 +838,7 @@ describe('StudentJaWorkspace refactored shell', () => {
     await screen.findByText(/Pick a visible lesson, then ask JA for help/i);
 
     fireEvent.click(screen.getByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Make a study plan'));
 
     await waitFor(() => {
@@ -924,12 +930,12 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Summarize main idea'));
 
     expect(await screen.findByText('Main idea')).toBeInTheDocument();
+    expect(screen.getByText('Main idea').closest('.ja-answer-surface')).toBeInTheDocument();
     expect(screen.getByText('Break it down')).toBeInTheDocument();
     expect(screen.getByText('Try this now')).toBeInTheDocument();
     expect(screen.queryByText('**Compare** the numerator and denominator together.')).not.toBeInTheDocument();
@@ -996,9 +1002,8 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Summarize main idea'));
 
     expect(await screen.findByText('Watch out')).toBeInTheDocument();
@@ -1050,9 +1055,8 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     render(<StudentJaWorkspace initialMode="ask" initialClassId="class-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Close guide/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Equivalent Fractions/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     fireEvent.click(screen.getByText('Explain the lesson'));
 
     expect(await screen.findByText('Lesson 1: Factoring Polynomials')).toBeInTheDocument();
@@ -1090,10 +1094,10 @@ describe('StudentJaWorkspace refactored shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Ask$/i }));
     expect(screen.getByRole('button', { name: /New chat/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Ask JA about this lesson/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Choose a JA question/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Equivalent Fractions/i })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Ask JA about this lesson/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose a JA question/i }));
     expect(mockedJaService.createAskThread).not.toHaveBeenCalled();
     expect(mockedJaService.sendAskMessage).not.toHaveBeenCalled();
   });
