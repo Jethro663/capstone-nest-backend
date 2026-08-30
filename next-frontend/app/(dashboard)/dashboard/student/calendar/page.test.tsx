@@ -6,6 +6,12 @@ import { assessmentService } from '@/services/assessment-service';
 import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 
+let mockSearchParams = new URLSearchParams();
+
+jest.mock('next/navigation', () => ({
+  useSearchParams: () => mockSearchParams,
+}));
+
 jest.mock('@/providers/AuthProvider', () => ({
   useAuth: jest.fn(),
 }));
@@ -43,6 +49,7 @@ const mockedSchoolEventService = schoolEventService as jest.Mocked<typeof school
 describe('StudentCalendarPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     jest.useFakeTimers().setSystemTime(new Date('2026-05-01T08:00:00.000Z'));
 
     mockedUseAuth.mockReturnValue({
@@ -170,7 +177,7 @@ describe('StudentCalendarPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(await screen.findByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
-    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(2);
+    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(4);
   });
 
   it('keeps fulfilled calendar sources visible and retries only a failed feed', async () => {
@@ -202,7 +209,7 @@ describe('StudentCalendarPage', () => {
   });
 
   it('shows a true no-events state only after every feed succeeds', async () => {
-    mockedClassService.getByStudent.mockResolvedValueOnce({
+    mockedClassService.getByStudent.mockResolvedValue({
       success: true,
       message: '',
       data: [
@@ -245,5 +252,42 @@ describe('StudentCalendarPage', () => {
     expect(
       screen.queryByText("Some calendar items couldn't be loaded"),
     ).not.toBeInTheDocument();
+  });
+
+  it('renders the URL-driven upcoming view with ten items per page and URL pagination', async () => {
+    mockSearchParams = new URLSearchParams('view=upcoming&page=2');
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: '',
+      data: Array.from({ length: 11 }, (_, index) => {
+        const day = String(index + 2).padStart(2, '0');
+        return {
+          id: `event-${index + 1}`,
+          eventType: 'school_event' as const,
+          schoolYear: '2025-2026',
+          title: `Upcoming Event ${index + 1}`,
+          startsAt: `2026-05-${day}T08:00:00.000Z`,
+          endsAt: `2026-05-${day}T12:00:00.000Z`,
+          allDay: false,
+        };
+      }),
+    });
+
+    render(<StudentCalendarPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Upcoming' })).toBeInTheDocument();
+    expect(screen.getByText('Upcoming Event 11')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming Event 10')).not.toBeInTheDocument();
+    expect(screen.queryByText('Quiz room update')).not.toBeInTheDocument();
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Previous' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/calendar?view=upcoming&page=1',
+    );
+    expect(screen.queryByRole('link', { name: 'Next' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Month view' })).toHaveAttribute(
+      'href',
+      '/dashboard/student/calendar',
+    );
   });
 });

@@ -18,7 +18,7 @@ import { classService } from '@/services/class-service';
 import { moduleService } from '@/services/module-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
-import { announcementService } from '@/services/announcement-service';
+import { schoolEventService } from '@/services/school-event-service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,8 @@ import type {
   StudentClassPresentationPreference,
   StudentCourseViewMode,
 } from '@/types/class';
+import type { Assessment } from '@/types/assessment';
+import type { SchoolEvent } from '@/types/school-event';
 import {
   Dialog,
   DialogContent,
@@ -53,10 +55,10 @@ import {
 } from '@/components/student/my-classes/StudentUpcomingEventsCard';
 import {
   type StudentEventTag,
-  type StudentUpcomingEvent,
   toDateKey,
 } from '@/components/student/my-classes/types';
 import { deriveStudentCourseMetrics } from '@/lib/student-course-metrics';
+import { buildStudentUpcomingEvents } from '@/utils/student-upcoming-events';
 
 interface ClassWithProgress extends ClassItem {
   progress: number;
@@ -210,7 +212,7 @@ const studentCoursesGuidePages: Array<{
       },
       {
         action: 'See All',
-        body: 'Tap See All when you want the larger announcements page with more updates.',
+        body: 'Tap See All when you want the full upcoming calendar with more deadlines and events.',
       },
     ],
   },
@@ -219,37 +221,6 @@ const studentCoursesGuidePages: Array<{
 function toPreferenceMap(preferences: StudentClassPresentationPreference[] | undefined) {
   if (!preferences?.length) return {} as Record<string, StudentClassPresentationPreference>;
   return Object.fromEntries(preferences.map((entry) => [entry.classId, entry]));
-}
-
-function parseDate(value?: string | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-}
-
-function resolveAnnouncementTag(title: string, content: string): StudentEventTag {
-  const text = `${title} ${content}`.toLowerCase();
-  if (text.includes('quiz') || text.includes('exam') || text.includes('assessment')) {
-    return 'assessment';
-  }
-  if (text.includes('holiday') || text.includes('break')) {
-    return 'holiday';
-  }
-  if (text.includes('announcement')) {
-    return 'announcement';
-  }
-  return 'event';
-}
-
-function monthLabel(date: Date) {
-  return date.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
-}
-
-function formatTimeLabel(date: Date) {
-  const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0;
-  if (!hasTime) return 'All Day';
-  return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 function shiftMonth(baseDate: Date, monthDelta: number) {
@@ -536,7 +507,8 @@ export default function StudentCoursesPage() {
 
   const [courses, setCourses] = useState<ClassWithProgress[]>([]);
   const [hiddenCourses, setHiddenCourses] = useState<ClassWithProgress[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<StudentUpcomingEvent[]>([]);
+  const [assessmentsByClass, setAssessmentsByClass] = useState<Record<string, Assessment[]>>({});
+  const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PrimaryTab>('all');
@@ -588,14 +560,17 @@ export default function StudentCoursesPage() {
         merged.set(cls.id, { ...cls, isHidden: true });
       }
 
-      const classRows = await Promise.all(
-        Array.from(merged.values()).map(async (cls) => {
-          try {
-            const [modulesRes, completedRes, assessmentsRes, announcementsRes] = await Promise.all([
+      const enrolledClasses = Array.from(merged.values());
+      const schoolYears = Array.from(
+        new Set(enrolledClasses.map((cls) => cls.schoolYear).filter(Boolean)),
+      );
+      const [classRows, schoolEventResults] = await Promise.all([
+        Promise.all(
+          enrolledClasses.map(async (cls) => {
+            const [modulesRes, completedRes, assessmentsRes] = await Promise.all([
               moduleService.getByClass(cls.id).catch(() => ({ data: [] })),
-              lessonService.getCompletedByClass(cls.id),
-              assessmentService.getByClass(cls.id),
-              announcementService.getByClass(cls.id, { limit: 6 }).catch(() => ({ data: [] })),
+              lessonService.getCompletedByClass(cls.id).catch(() => ({ data: [] })),
+              assessmentService.getByClass(cls.id).catch(() => ({ data: [] as Assessment[] })),
             ]);
 
             const {
@@ -613,100 +588,46 @@ export default function StudentCoursesPage() {
             });
             const classmatesCount = Math.max(0, (cls.enrollments?.length ?? 0) - 1);
 
-            const classLabel = cls.subjectName || cls.className || cls.name || 'Class';
-            const sectionLabel = cls.section?.name ? `Section ${cls.section.name}` : 'Class';
-
-            const assessmentEvents: StudentUpcomingEvent[] = (assessmentsRes.data ?? [])
-              .flatMap((assessment) => {
-                const dueDate = parseDate(assessment.dueDate);
-                if (!dueDate) return [];
-                return [
-                  {
-                    id: `assessment-${assessment.id}`,
-                    classId: cls.id,
-                    title: assessment.title,
-                    subtitle: `${classLabel} • Due ${formatTimeLabel(dueDate)}`,
-                    tag: 'assessment' as const,
-                    href: `/dashboard/student/classes/${cls.id}?view=assignments`,
-                    timestamp: dueDate.getTime(),
-                    dateKey: toDateKey(dueDate),
-                    dayLabel: String(dueDate.getDate()).padStart(2, '0'),
-                    monthLabel: monthLabel(dueDate),
-                  },
-                ];
-              });
-
-            const announcementEvents: StudentUpcomingEvent[] = (announcementsRes.data ?? [])
-              .flatMap((announcement) => {
-                const announcementDate = parseDate(announcement.scheduledAt || announcement.createdAt);
-                if (!announcementDate) return [];
-                return [
-                  {
-                    id: `announcement-${announcement.id}`,
-                    classId: cls.id,
-                    title: announcement.title,
-                    subtitle: `${sectionLabel} • ${formatTimeLabel(announcementDate)}`,
-                    tag: resolveAnnouncementTag(announcement.title, announcement.content),
-                    href: `/dashboard/student/classes/${cls.id}?view=announcements`,
-                    timestamp: announcementDate.getTime(),
-                    dateKey: toDateKey(announcementDate),
-                    dayLabel: String(announcementDate.getDate()).padStart(2, '0'),
-                    monthLabel: monthLabel(announcementDate),
-                  },
-                ];
-              });
-
-            const classWithProgress = {
-              ...cls,
-              totalLessons,
-              completedCount,
-              totalAssessments,
-              classmatesCount,
-              pendingCount,
-              progress,
-            } satisfies ClassWithProgress;
-
-            return {
-              course: classWithProgress,
-              events: [...assessmentEvents, ...announcementEvents],
-            };
-          } catch {
             return {
               course: {
                 ...cls,
-                totalLessons: 0,
-                completedCount: 0,
-                totalAssessments: 0,
-                classmatesCount: Math.max(0, (cls.enrollments?.length ?? 0) - 1),
-                pendingCount: 0,
-                progress: 0,
+                totalLessons,
+                completedCount,
+                totalAssessments,
+                classmatesCount,
+                pendingCount,
+                progress,
               } satisfies ClassWithProgress,
-              events: [] as StudentUpcomingEvent[],
+              assessments: assessmentsRes.data ?? [],
             };
-          }
-        }),
-      );
+          }),
+        ),
+        Promise.allSettled(
+          schoolYears.map((schoolYear) => schoolEventService.getAll({ schoolYear })),
+        ),
+      ]);
 
-      const allEvents = classRows
-        .flatMap((entry) => entry.events)
-        .sort((left, right) => left.timestamp - right.timestamp);
-      const uniqueEvents = Array.from(
-        allEvents.reduce<Map<string, StudentUpcomingEvent>>((map, event) => {
-          map.set(event.id, event);
-          return map;
-        }, new Map()).values(),
+      const nextSchoolEvents = Array.from(
+        schoolEventResults
+          .flatMap((result) => (result.status === 'fulfilled' ? result.value.data ?? [] : []))
+          .reduce<Map<string, SchoolEvent>>((map, event) => map.set(event.id, event), new Map())
+          .values(),
       );
 
       setCourses(classRows.map((entry) => entry.course).filter((entry) => !entry.isHidden));
       setHiddenCourses(classRows.map((entry) => entry.course).filter((entry) => entry.isHidden));
-      setUpcomingEvents(uniqueEvents);
+      setAssessmentsByClass(
+        Object.fromEntries(classRows.map((entry) => [entry.course.id, entry.assessments])),
+      );
+      setSchoolEvents(nextSchoolEvents);
       setPresentationByClass(toPreferenceMap(presentationRes.data));
       setViewMode(viewRes.data?.viewMode === 'wide' ? 'wide' : 'card');
     } catch {
       setError('We could not load your classes right now. Please try again.');
       setCourses([]);
       setHiddenCourses([]);
-      setUpcomingEvents([]);
+      setAssessmentsByClass({});
+      setSchoolEvents([]);
     } finally {
       setLoading(false);
     }
@@ -760,19 +681,13 @@ export default function StudentCoursesPage() {
     });
   }, [scopedCourses, searchQuery, tab]);
 
-  const activeCourseIds = useMemo(
-    () => new Set(scopedCourses.map((course) => course.id)),
-    [scopedCourses],
-  );
-
   const sidebarEvents = useMemo(() => {
-    const now = new Date();
-    const nowTs = now.getTime();
-    const scopedEvents = upcomingEvents.filter((event) => activeCourseIds.has(event.classId));
-    const sorted = [...scopedEvents].sort((left, right) => left.timestamp - right.timestamp);
-    const upcomingOnly = sorted.filter((event) => event.timestamp >= nowTs);
-    return (upcomingOnly.length > 0 ? upcomingOnly : sorted).slice(0, 14);
-  }, [activeCourseIds, upcomingEvents]);
+    return buildStudentUpcomingEvents({
+      classes: [...courses, ...hiddenCourses],
+      assessmentsByClass,
+      schoolEvents,
+    });
+  }, [assessmentsByClass, courses, hiddenCourses, schoolEvents]);
 
   const eventTagsByDate = useMemo(() => {
     const map = new Map<string, StudentEventTag[]>();

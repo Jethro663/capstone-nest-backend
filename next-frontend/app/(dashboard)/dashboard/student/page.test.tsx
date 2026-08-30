@@ -232,6 +232,126 @@ describe('StudentDashboardPage', () => {
     expect(screen.getByText('No recent lessons yet.')).toBeInTheDocument();
   });
 
+  it('shows only lifecycle-eligible assessments and school events in Upcoming Events', async () => {
+    mockedClassService.getByStudent.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'class-1',
+          subjectName: 'Mathematics',
+          subjectCode: 'MATH-10',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2025-2026',
+          isActive: true,
+          schedules: [],
+        },
+      ],
+    });
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'assessment-open',
+          classId: 'class-1',
+          title: 'Future Algebra Quiz',
+          type: 'quiz',
+          isPublished: true,
+          dueDate: '2099-06-18T00:00:00.000Z',
+          studentActivity: {
+            hasSubmittedAttempt: false,
+            submittedAttemptCount: 0,
+            ongoingAttemptId: null,
+          },
+        },
+        {
+          id: 'assessment-submitted',
+          classId: 'class-1',
+          title: 'Already Submitted Quiz',
+          type: 'quiz',
+          isPublished: true,
+          dueDate: '2099-06-19T00:00:00.000Z',
+          studentActivity: {
+            hasSubmittedAttempt: true,
+            submittedAttemptCount: 1,
+            ongoingAttemptId: null,
+          },
+        },
+      ],
+      count: 2,
+      total: 2,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+    });
+    mockedAssessmentService.getStudentAttempts.mockImplementation(async (assessmentId: string) => ({
+      success: true,
+      message: 'ok',
+      data:
+        assessmentId === 'assessment-submitted'
+          ? [
+              {
+                id: 'attempt-submitted',
+                assessmentId,
+                studentId: 'student-1',
+                isSubmitted: true,
+              },
+            ]
+          : [],
+      count: assessmentId === 'assessment-submitted' ? 1 : 0,
+    }));
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'announcement-1',
+          classId: 'class-1',
+          title: 'Ordinary Announcement',
+          content: 'This belongs in the announcement feed.',
+          isPinned: false,
+          isArchived: false,
+          createdAt: '2099-06-01T00:00:00.000Z',
+        },
+      ],
+    });
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          id: 'event-1',
+          eventType: 'school_event',
+          schoolYear: '2025-2026',
+          title: 'Future Science Fair',
+          startsAt: '2099-06-20T00:00:00.000Z',
+          endsAt: '2099-06-20T04:00:00.000Z',
+          allDay: false,
+        },
+      ],
+    });
+
+    render(<StudentDashboardPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Upcoming Events' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Future Algebra Quiz/i })).toHaveAttribute(
+      'href',
+      '/dashboard/student/assessments/assessment-open',
+    );
+    expect(screen.getByRole('link', { name: /Future Science Fair/i })).toHaveAttribute(
+      'href',
+      '/dashboard/student/calendar?date=2099-06-20',
+    );
+    expect(screen.queryByText('Already Submitted Quiz')).not.toBeInTheDocument();
+    expect(screen.queryByText('Ordinary Announcement')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /See All/i })).toHaveAttribute(
+      'href',
+      '/dashboard/student/calendar?view=upcoming',
+    );
+  });
+
   it('excludes assessments from pending tasks when all attempts are already used', async () => {
     mockedClassService.getByStudent.mockResolvedValue({
       success: true,
@@ -328,7 +448,7 @@ describe('StudentDashboardPage', () => {
   it('shows a safe retryable class-owner error instead of empty dashboard feeds', async () => {
     mockedClassService.getByStudent
       .mockRejectedValueOnce(new Error('dashboard sql detail'))
-      .mockResolvedValueOnce({ success: true, message: 'ok', data: [] });
+      .mockResolvedValue({ success: true, message: 'ok', data: [] });
     mockedSchoolEventService.getAll.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -349,7 +469,7 @@ describe('StudentDashboardPage', () => {
     expect(
       await screen.findByRole('heading', { name: 'Your Learning Hub' }),
     ).toBeInTheDocument();
-    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(2);
+    expect(mockedClassService.getByStudent).toHaveBeenCalledTimes(4);
   });
 
   it('keeps fulfilled dashboard regions visible during an independent feed outage', async () => {

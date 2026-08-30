@@ -34,6 +34,12 @@ export interface ManualResponseScore {
   pointsEarned: number;
 }
 
+export interface StudentAssessmentActivity {
+  hasSubmittedAttempt: boolean;
+  submittedAttemptCount: number;
+  ongoingAttemptId: string | null;
+}
+
 export interface Assessment {
   id: string;
   title: string;
@@ -83,6 +89,7 @@ export interface Assessment {
   classRecordItemId?: string | null;
   classRecordPlacement?: AssessmentClassRecordPlacement | null;
   questions?: AssessmentQuestion[];
+  studentActivity?: StudentAssessmentActivity;
   createdAt?: string;
   updatedAt?: string;
 }

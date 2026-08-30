@@ -568,6 +568,87 @@ describe('AssessmentsService', () => {
       expect(result.data[0].id).toBe(copiedAssessmentId);
     });
 
+    it('should expose an empty student activity summary when no attempts exist', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: ASSESSMENT_ID,
+          isPublished: true,
+          isCoreTemplateAsset: false,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.data[0].studentActivity).toEqual({
+        hasSubmittedAttempt: false,
+        submittedAttemptCount: 0,
+        ongoingAttemptId: null,
+      });
+    });
+
+    it('should report any submitted attempt even when the latest attempt is still in progress', async () => {
+      db.query.classes.findFirst.mockResolvedValue({
+        id: CLASS_ID,
+        teacherId: 'teacher-1',
+      });
+      db.query.enrollments.findFirst.mockResolvedValue({
+        classId: CLASS_ID,
+        studentId: STUDENT_ID,
+      });
+      db.query.assessments.findMany.mockResolvedValue([
+        {
+          ...MOCK_PUBLISHED_ASSESSMENT,
+          id: ASSESSMENT_ID,
+          isPublished: true,
+          isCoreTemplateAsset: false,
+        },
+      ]);
+      db.query.moduleItems.findMany.mockResolvedValue([]);
+      db.query.assessmentAttempts.findMany.mockResolvedValue([
+        {
+          id: 'attempt-in-progress',
+          assessmentId: ASSESSMENT_ID,
+          studentId: STUDENT_ID,
+          isSubmitted: false,
+        },
+        {
+          id: 'attempt-submitted',
+          assessmentId: ASSESSMENT_ID,
+          studentId: STUDENT_ID,
+          isSubmitted: true,
+          isReturned: true,
+        },
+      ]);
+
+      const result = await service.getAssessmentsByClass(
+        CLASS_ID,
+        { studentId: STUDENT_ID, status: 'all' },
+        { userId: STUDENT_ID, roles: ['student'] },
+      );
+
+      expect(result.data[0].latestAttempt?.id).toBe('attempt-in-progress');
+      expect(result.data[0].studentActivity).toEqual({
+        hasSubmittedAttempt: true,
+        submittedAttemptCount: 1,
+        ongoingAttemptId: 'attempt-in-progress',
+      });
+    });
+
     it('should reject teacher class listing when class ownership metadata is missing', async () => {
       db.query.classes.findFirst.mockResolvedValue({
         id: CLASS_ID,

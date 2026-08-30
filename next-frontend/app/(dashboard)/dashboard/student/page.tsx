@@ -14,7 +14,6 @@ import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
 import { lessonService } from '@/services/lesson-service';
 import { assessmentService } from '@/services/assessment-service';
-import { announcementService } from '@/services/announcement-service';
 import { schoolEventService } from '@/services/school-event-service';
 import { StudentCalendarCard } from '@/components/student/my-classes/StudentCalendarCard';
 import { StudentUpcomingEventsCard } from '@/components/student/my-classes/StudentUpcomingEventsCard';
@@ -31,22 +30,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import { StudentAnnouncementBoardDialog } from '@/components/student/StudentAnnouncementBoardDialog';
 import type { Assessment, AssessmentAttempt } from '@/types/assessment';
-import type { Announcement } from '@/types/announcement';
 import type { ClassItem } from '@/types/class';
 import type { StudentRecentLesson } from '@/types/lesson';
 import type { SchoolEvent } from '@/types/school-event';
 import {
-  buildCalendarDayIndex,
   getCurrentSchoolYearReference,
-  getMarkerKindsForDay,
-  getUpcomingFeedItems,
-  normalizeCalendarFeed,
   shiftMonth,
-  type CalendarFeedItem,
 } from '@/utils/calendar-feed';
 import { getStudentAssessmentHref, getSubmittedAttempts } from '@/utils/student-assessment-routing';
+import { buildStudentUpcomingEvents } from '@/utils/student-upcoming-events';
 import { getTeacherName } from '@/utils/helpers';
-import { toDateKey, type StudentEventTag, type StudentUpcomingEvent } from '@/components/student/my-classes/types';
+import { toDateKey, type StudentEventTag } from '@/components/student/my-classes/types';
 
 const DAY_TO_INDEX: Record<string, number> = {
   SU: 0,
@@ -66,12 +60,10 @@ const DAY_TO_INDEX: Record<string, number> = {
   SAT: 6,
 };
 
-const MARKER_ORDER = ['announcement', 'school_event', 'holiday_break'] as const;
 type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
 type StudentDashboardFeedKind =
   | 'lessons'
   | 'assessments'
-  | 'announcements'
   | 'school-events'
   | 'attempts';
 type StudentDashboardGuideScreen =
@@ -211,7 +203,7 @@ const studentDashboardGuidePages: Array<{
       },
       {
         action: 'Open more',
-        body: 'Use See All when you want the full announcements page with more details.',
+        body: 'Use See All when you want the full upcoming calendar with more deadlines and events.',
       },
     ],
   },
@@ -629,39 +621,6 @@ function getScheduleItemsForToday(classes: ClassItem[], now = new Date()) {
   return rows.sort((left, right) => left.startMinutes - right.startMinutes).slice(0, 4);
 }
 
-function toStudentEventTag(item: CalendarFeedItem): StudentEventTag | null {
-  if (item.kind === 'announcement') return 'announcement';
-  if (item.kind === 'school_event') return 'event';
-  if (item.kind === 'holiday_break') return 'holiday';
-  return null;
-}
-
-function getDashboardCalendarHref(item: CalendarFeedItem) {
-  if (item.kind === 'announcement' && item.classId) {
-    return `/dashboard/student/classes/${item.classId}?view=announcements`;
-  }
-  return '/dashboard/student/announcements';
-}
-
-function toDashboardCalendarEvent(item: CalendarFeedItem): StudentUpcomingEvent | null {
-  const tag = toStudentEventTag(item);
-  if (!tag) return null;
-
-  const itemDate = new Date(item.startsAt);
-  return {
-    id: item.id,
-    classId: item.classId ?? 'all',
-    title: item.title,
-    subtitle: item.description ?? '',
-    tag,
-    href: getDashboardCalendarHref(item),
-    timestamp: itemDate.getTime(),
-    dateKey: toDateKey(itemDate),
-    dayLabel: String(itemDate.getDate()).padStart(2, '0'),
-    monthLabel: itemDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-  };
-}
-
 export default function StudentDashboardPage() {
   const { user } = useAuth();
 
@@ -669,7 +628,6 @@ export default function StudentDashboardPage() {
   const [recentLessons, setRecentLessons] = useState<StudentRecentLesson[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [assessmentAttempts, setAssessmentAttempts] = useState<Record<string, AssessmentAttempt[]>>({});
-  const [announcementsByClass, setAnnouncementsByClass] = useState<Record<string, Announcement[]>>({});
   const [schoolEvents, setSchoolEvents] = useState<SchoolEvent[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date();
@@ -694,32 +652,39 @@ export default function StudentDashboardPage() {
     setStatus('loading');
 
     try {
-      const classRes = await classService.getByStudent(user.id);
-      const enrolledClasses = classRes.data || [];
+      const [visibleClassRes, hiddenClassRes] = await Promise.all([
+        classService.getByStudent(user.id, 'active'),
+        classService.getByStudent(user.id, 'hidden'),
+      ]);
+      const enrolledClassMap = new Map<string, ClassItem>();
+      for (const classItem of [...(visibleClassRes.data || []), ...(hiddenClassRes.data || [])]) {
+        enrolledClassMap.set(classItem.id, classItem);
+      }
+      const enrolledClasses = Array.from(enrolledClassMap.values()).filter(
+        (classItem) => classItem.isActive,
+      );
       setClasses(enrolledClasses);
 
       const classIds = enrolledClasses.map((classItem) => classItem.id);
-
-      const currentSchoolYear = enrolledClasses[0]?.schoolYear || getCurrentSchoolYearReference();
-      const [lessonResults, assessmentResults, announcementResults, schoolEventResults] =
+      const schoolYears = Array.from(
+        new Set(
+          enrolledClasses
+            .map((classItem) => classItem.schoolYear)
+            .filter((schoolYear): schoolYear is string => Boolean(schoolYear)),
+        ),
+      );
+      if (schoolYears.length === 0) {
+        schoolYears.push(getCurrentSchoolYearReference());
+      }
+      const [lessonResults, assessmentResults, schoolEventResults] =
         await Promise.all([
           Promise.allSettled([lessonService.getRecent(4)]),
           Promise.allSettled(
-            classIds
-              .slice(0, 10)
-              .map((classId) => assessmentService.getByClass(classId)),
+            classIds.map((classId) => assessmentService.getByClass(classId)),
           ),
           Promise.allSettled(
-            classIds.slice(0, 10).map(async (classId) => {
-              const result = await announcementService.getByClass(classId, {
-                limit: 8,
-              });
-              return [classId, result.data || []] as const;
-            }),
+            schoolYears.map((schoolYear) => schoolEventService.getAll({ schoolYear })),
           ),
-          Promise.allSettled([
-            schoolEventService.getAll({ schoolYear: currentSchoolYear }),
-          ]),
         ]);
 
       const failedKinds = new Set<StudentDashboardFeedKind>();
@@ -730,20 +695,13 @@ export default function StudentDashboardPage() {
       const nextAssessments = assessmentResults.flatMap((result) =>
         result.status === 'fulfilled' ? result.value.data || [] : [],
       );
-      const announcementEntries = announcementResults.flatMap((result) =>
-        result.status === 'fulfilled' ? [result.value] : [],
-      );
-
       if (lessonResults.some((result) => result.status === 'rejected')) {
         failedKinds.add('lessons');
       }
       if (assessmentResults.some((result) => result.status === 'rejected')) {
         failedKinds.add('assessments');
       }
-      if (announcementResults.some((result) => result.status === 'rejected')) {
-        failedKinds.add('announcements');
-      }
-      if (schoolEventResults[0]?.status === 'rejected') {
+      if (schoolEventResults.some((result) => result.status === 'rejected')) {
         failedKinds.add('school-events');
       }
 
@@ -765,26 +723,15 @@ export default function StudentDashboardPage() {
       if (nextLessons.length > 0 || !failedKinds.has('lessons')) {
         setRecentLessons(nextLessons);
       }
-      if (
-        assessmentResults.length === 0 ||
-        nextAssessments.length > 0 ||
-        !failedKinds.has('assessments')
-      ) {
-        setAssessments(nextAssessments);
-      }
+      setAssessments(nextAssessments);
       if (attemptResults.length === 0 || attemptEntries.length > 0 || !failedKinds.has('attempts')) {
         setAssessmentAttempts(Object.fromEntries(attemptEntries));
       }
-      if (
-        announcementResults.length === 0 ||
-        announcementEntries.length > 0 ||
-        !failedKinds.has('announcements')
-      ) {
-        setAnnouncementsByClass(Object.fromEntries(announcementEntries));
-      }
-      if (schoolEventResults[0]?.status === 'fulfilled') {
-        setSchoolEvents(schoolEventResults[0].value.data || []);
-      }
+      setSchoolEvents(
+        schoolEventResults.flatMap((result) =>
+          result.status === 'fulfilled' ? result.value.data || [] : [],
+        ),
+      );
 
       setFailedFeedKinds(Array.from(failedKinds));
       setStatus(failedKinds.size > 0 ? 'partial' : 'ready');
@@ -831,49 +778,32 @@ export default function StudentDashboardPage() {
     [assessmentAttempts, pendingAssessments],
   );
 
-  const selectedSchoolYear = useMemo(
-    () => classes[0]?.schoolYear || schoolEvents[0]?.schoolYear || getCurrentSchoolYearReference(),
-    [classes, schoolEvents],
-  );
-
-  const calendarFeed = useMemo(
+  const assessmentsByClass = useMemo(
     () =>
-      normalizeCalendarFeed({
-        classes,
-        schoolEvents,
-        assessmentsByClass: {},
-        announcementsByClass,
-        selectedSchoolYear,
-        selectedClassId: 'all',
-        month: calendarMonth,
-      }),
-    [announcementsByClass, calendarMonth, classes, schoolEvents, selectedSchoolYear],
+      assessments.reduce<Record<string, Assessment[]>>((grouped, assessment) => {
+        (grouped[assessment.classId] ??= []).push(assessment);
+        return grouped;
+      }, {}),
+    [assessments],
   );
-  const calendarDayIndex = useMemo(() => buildCalendarDayIndex(calendarFeed), [calendarFeed]);
   const dashboardCalendarEvents = useMemo(
-    () =>
-      getUpcomingFeedItems(calendarFeed)
-        .filter((item) => MARKER_ORDER.includes(item.kind as (typeof MARKER_ORDER)[number]))
-        .map(toDashboardCalendarEvent)
-        .filter((item): item is StudentUpcomingEvent => Boolean(item)),
-    [calendarFeed],
+    () => buildStudentUpcomingEvents({ classes, assessmentsByClass, schoolEvents }),
+    [assessmentsByClass, classes, schoolEvents],
   );
   const activeGuidePage = studentDashboardGuidePages[helpPage] ?? studentDashboardGuidePages[0];
   const eventTagsByDate = useMemo(() => {
     const map = new Map<string, StudentEventTag[]>();
 
-    for (const [dateKey, dayItems] of Object.entries(calendarDayIndex)) {
-      const tags = getMarkerKindsForDay(dayItems)
-        .map((kind) => toStudentEventTag(dayItems.find((item) => item.kind === kind) ?? dayItems[0]))
-        .filter((tag): tag is StudentEventTag => Boolean(tag));
-
-      if (tags.length > 0) {
-        map.set(dateKey, Array.from(new Set(tags)));
+    for (const event of dashboardCalendarEvents) {
+      const tags = map.get(event.dateKey) ?? [];
+      if (!tags.includes(event.tag)) {
+        tags.push(event.tag);
       }
+      map.set(event.dateKey, tags);
     }
 
     return map;
-  }, [calendarDayIndex]);
+  }, [dashboardCalendarEvents]);
 
   if (status === 'loading' && !hasLoadedOnce) {
     return (
@@ -1058,7 +988,6 @@ export default function StudentDashboardPage() {
             <StudentUpcomingEventsCard
               events={dashboardCalendarEvents}
               selectedDateKey={selectedDateKey}
-              seeAllHref="/dashboard/student/announcements"
             />
           </div>
         </aside>

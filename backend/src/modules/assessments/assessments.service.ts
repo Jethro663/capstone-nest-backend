@@ -1517,16 +1517,42 @@ export class AssessmentsService {
           : [];
 
       const attemptMap = new Map<string, (typeof attempts)[number]>();
+      const studentActivityMap = new Map<
+        string,
+        {
+          hasSubmittedAttempt: boolean;
+          submittedAttemptCount: number;
+          ongoingAttemptId: string | null;
+        }
+      >();
       for (const attempt of attempts) {
         if (!attemptMap.has(attempt.assessmentId)) {
           attemptMap.set(attempt.assessmentId, attempt);
         }
+
+        const activity = studentActivityMap.get(attempt.assessmentId) ?? {
+          hasSubmittedAttempt: false,
+          submittedAttemptCount: 0,
+          ongoingAttemptId: null,
+        };
+        if (attempt.isSubmitted) {
+          activity.hasSubmittedAttempt = true;
+          activity.submittedAttemptCount += 1;
+        } else if (!activity.ongoingAttemptId) {
+          activity.ongoingAttemptId = attempt.id;
+        }
+        studentActivityMap.set(attempt.assessmentId, activity);
       }
 
       assessmentList = assessmentList
         .map((assessment) => ({
           ...assessment,
           latestAttempt: attemptMap.get(assessment.id) ?? null,
+          studentActivity: studentActivityMap.get(assessment.id) ?? {
+            hasSubmittedAttempt: false,
+            submittedAttemptCount: 0,
+            ongoingAttemptId: null,
+          },
         }))
         .filter((assessment) => {
           const status = options.status ?? 'all';

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { classService } from '@/services/class-service';
@@ -30,16 +31,18 @@ import {
 } from '@/utils/calendar-feed';
 import type { StudentEventTag } from '@/components/student/my-classes/types';
 import { cn } from '@/utils/cn';
+import { buildStudentUpcomingEvents } from '@/utils/student-upcoming-events';
 
 const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SCHOOL_EVENTS_FEED_KEY = 'school-events';
+const SCHOOL_EVENTS_FEED_KEY_PREFIX = 'school-events:';
+const UPCOMING_PAGE_SIZE = 10;
 
 type StudentPageStatus = 'loading' | 'ready' | 'error' | 'partial';
 
 type CalendarFeedPayload =
   | { kind: 'assessment'; classId: string; data: Assessment[] }
   | { kind: 'announcement'; classId: string; data: Announcement[] }
-  | { kind: 'school-events'; data: SchoolEvent[] };
+  | { kind: 'school-events'; schoolYear: string; data: SchoolEvent[] };
 
 const DETAIL_KIND_ACCENT: Record<CalendarFeedKind, string> = {
   assessment: 'border-[#fecdd3] bg-[#fff1f2] text-[#be123c]',
@@ -127,6 +130,9 @@ function getSupportingCopy(item: CalendarFeedItem) {
 export default function StudentCalendarPage() {
   const { user } = useAuth();
   const userId = user?.id;
+  const searchParams = useSearchParams();
+  const isUpcomingView = searchParams.get('view') === 'upcoming';
+  const requestedDateParam = searchParams.get('date');
 
   const [classStatus, setClassStatus] = useState<StudentPageStatus>('loading');
   const [feedStatus, setFeedStatus] = useState<StudentPageStatus>('loading');
@@ -143,7 +149,11 @@ export default function StudentCalendarPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-  const [selectedDateKey, setSelectedDateKey] = useState(() => toDateKey(new Date()));
+  const [selectedDateKey, setSelectedDateKey] = useState(() => {
+    return requestedDateParam && /^\d{4}-\d{2}-\d{2}$/.test(requestedDateParam)
+      ? requestedDateParam
+      : toDateKey(new Date());
+  });
   const classRequestIdRef = useRef(0);
   const feedRequestIdRef = useRef(0);
   const feedHasFulfilledSourceRef = useRef(false);
@@ -155,15 +165,25 @@ export default function StudentCalendarPage() {
     }
 
     const requestId = ++classRequestIdRef.current;
-    const request = classService.getByStudent(userId);
+    const request = Promise.all([
+      classService.getByStudent(userId, 'active'),
+      classService.getByStudent(userId, 'hidden'),
+    ]);
 
     void Promise.resolve().then(() => {
       if (requestId === classRequestIdRef.current) setClassStatus('loading');
     });
     void request
-      .then((response) => {
+      .then(([visibleResponse, hiddenResponse]) => {
         if (requestId !== classRequestIdRef.current) return;
-        setClasses(response.data || []);
+        const classMap = new Map<string, ClassItem>();
+        for (const classItem of [
+          ...(visibleResponse.data || []),
+          ...(hiddenResponse.data || []),
+        ]) {
+          classMap.set(classItem.id, classItem);
+        }
+        setClasses(Array.from(classMap.values()).filter((classItem) => classItem.isActive));
         setClassStatus('ready');
       })
       .catch(() => {
@@ -208,31 +228,36 @@ export default function StudentCalendarPage() {
     };
   }, [classes, selectedClassId, selectedSchoolYear]);
 
+  useEffect(() => {
+    if (!requestedDateParam || !/^\d{4}-\d{2}-\d{2}$/.test(requestedDateParam)) return;
+    const parsed = new Date(`${requestedDateParam}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setSelectedDateKey(requestedDateParam);
+      setCalendarMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedDateParam]);
+
   const loadCalendarFeed = useCallback(
     (retryKeys?: string[]) => {
       if (classStatus !== 'ready') {
         return;
       }
 
-      if (!selectedSchoolYear) {
-        void Promise.resolve().then(() => {
-          setAssessmentsByClass({});
-          setAnnouncementsByClass({});
-          setSchoolEvents([]);
-          setFailedFeedKeys([]);
-          setFeedStatus('ready');
-        });
-        return;
-      }
-
       const isRetry = Array.isArray(retryKeys);
-      const scopedClasses = classes.filter(
-        (classItem) => classItem.schoolYear === selectedSchoolYear,
+      const scopedClasses = classes.filter((classItem) => classItem.isActive);
+      const schoolYears = Array.from(
+        new Set(scopedClasses.map((classItem) => classItem.schoolYear).filter(Boolean)),
       );
       const allFeedKeys = [
         ...scopedClasses.map((classItem) => `assessment:${classItem.id}`),
         ...scopedClasses.map((classItem) => `announcement:${classItem.id}`),
-        SCHOOL_EVENTS_FEED_KEY,
+        ...schoolYears.map((schoolYear) => `${SCHOOL_EVENTS_FEED_KEY_PREFIX}${schoolYear}`),
       ];
       const targetKeys = retryKeys ?? allFeedKeys;
       const requestId = ++feedRequestIdRef.current;
@@ -246,11 +271,12 @@ export default function StudentCalendarPage() {
 
       void Promise.allSettled(
         targetKeys.map(async (key): Promise<CalendarFeedPayload> => {
-          if (key === SCHOOL_EVENTS_FEED_KEY) {
+          if (key.startsWith(SCHOOL_EVENTS_FEED_KEY_PREFIX)) {
+            const schoolYear = key.slice(SCHOOL_EVENTS_FEED_KEY_PREFIX.length);
             const response = await schoolEventService.getAll({
-              schoolYear: selectedSchoolYear,
+              schoolYear,
             });
-            return { kind: 'school-events', data: response.data || [] };
+            return { kind: 'school-events', schoolYear, data: response.data || [] };
           }
 
           const [kind, classId] = key.split(':');
@@ -290,13 +316,16 @@ export default function StudentCalendarPage() {
                 [payload.classId]: payload.data,
               }));
             } else {
-              setSchoolEvents(payload.data);
+              setSchoolEvents((current) => [
+                ...current.filter((event) => event.schoolYear !== payload.schoolYear),
+                ...payload.data,
+              ]);
             }
           }
         } else {
           const nextAssessments: Record<string, Assessment[]> = {};
           const nextAnnouncements: Record<string, Announcement[]> = {};
-          let nextSchoolEvents: SchoolEvent[] = [];
+          const nextSchoolEvents: SchoolEvent[] = [];
 
           for (const payload of fulfilledPayloads) {
             if (payload.kind === 'assessment') {
@@ -304,7 +333,7 @@ export default function StudentCalendarPage() {
             } else if (payload.kind === 'announcement') {
               nextAnnouncements[payload.classId] = payload.data;
             } else {
-              nextSchoolEvents = payload.data;
+              nextSchoolEvents.push(...payload.data);
             }
           }
 
@@ -326,7 +355,7 @@ export default function StudentCalendarPage() {
         );
       });
     },
-    [classes, classStatus, selectedSchoolYear],
+    [classes, classStatus],
   );
 
   useEffect(() => {
@@ -389,6 +418,21 @@ export default function StudentCalendarPage() {
 
     return map;
   }, [dayIndex]);
+
+  const upcomingEvents = useMemo(
+    () => buildStudentUpcomingEvents({ classes, assessmentsByClass, schoolEvents }),
+    [assessmentsByClass, classes, schoolEvents],
+  );
+  const requestedUpcomingPage = Number.parseInt(searchParams.get('page') ?? '1', 10);
+  const upcomingPageCount = Math.max(1, Math.ceil(upcomingEvents.length / UPCOMING_PAGE_SIZE));
+  const upcomingPage = Math.min(
+    Math.max(Number.isFinite(requestedUpcomingPage) ? requestedUpcomingPage : 1, 1),
+    upcomingPageCount,
+  );
+  const paginatedUpcomingEvents = upcomingEvents.slice(
+    (upcomingPage - 1) * UPCOMING_PAGE_SIZE,
+    upcomingPage * UPCOMING_PAGE_SIZE,
+  );
 
   if (classStatus === 'loading' && classes.length === 0) {
     return (
@@ -482,6 +526,36 @@ export default function StudentCalendarPage() {
         </div>
       </header>
 
+      <nav
+        aria-label="Calendar views"
+        className="inline-flex w-fit rounded-full border border-[#d7dfec] bg-white p-1 shadow-sm"
+      >
+        <Link
+          href="/dashboard/student/calendar"
+          aria-current={isUpcomingView ? undefined : 'page'}
+          className={cn(
+            'rounded-full px-4 py-2 text-sm font-bold transition',
+            isUpcomingView
+              ? 'text-[#5f708d] hover:bg-[#f2f5fa]'
+              : 'bg-[#172b4f] text-white',
+          )}
+        >
+          Month view
+        </Link>
+        <Link
+          href="/dashboard/student/calendar?view=upcoming"
+          aria-current={isUpcomingView ? 'page' : undefined}
+          className={cn(
+            'rounded-full px-4 py-2 text-sm font-bold transition',
+            isUpcomingView
+              ? 'bg-[#ff001f] text-white'
+              : 'text-[#5f708d] hover:bg-[#f2f5fa]',
+          )}
+        >
+          Upcoming
+        </Link>
+      </nav>
+
       {classStatus === 'error' ? (
         <DashboardStatePanel
           kind="unavailable"
@@ -513,6 +587,101 @@ export default function StudentCalendarPage() {
         />
       ) : null}
 
+      {isUpcomingView ? (
+        <section className="rounded-[1.2rem] border border-[#dde3ef] bg-white p-4 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.34)] md:p-5">
+          <div className="flex flex-col gap-2 border-b border-[#e4eaf4] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7e8dab]">
+                Full agenda
+              </p>
+              <h2 className="mt-1 text-[1.4rem] font-black tracking-tight text-[#12274a]">
+                Upcoming
+              </h2>
+              <p className="mt-1 text-sm text-[#6d7f9d]">
+                Unfinished deadlines and current or future school events from all active classes.
+              </p>
+            </div>
+            <p className="text-sm font-semibold text-[#5f708d]">
+              {upcomingEvents.length} upcoming item{upcomingEvents.length === 1 ? '' : 's'}
+            </p>
+          </div>
+
+          {feedStatus === 'loading' ? (
+            <div className="mt-4 space-y-3">
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="h-24 rounded-[1rem]" />
+              ))}
+            </div>
+          ) : paginatedUpcomingEvents.length === 0 ? (
+            <div className="mt-4 rounded-[1rem] border border-dashed border-[#d8e1ef] bg-[#f8fafc] px-4 py-10 text-center">
+              <p className="text-sm font-semibold text-[var(--student-text-strong)]">
+                No upcoming events.
+              </p>
+              <p className="mt-1 text-sm text-[var(--student-text-muted)]">
+                You have no unfinished deadlines or current school events right now.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {paginatedUpcomingEvents.map((event) => (
+                <Link
+                  key={event.id}
+                  href={event.href}
+                  className="flex items-center gap-4 rounded-[1rem] border border-[#dde4ef] bg-[#fbfcfe] p-4 transition hover:border-[#9fb0cc] hover:bg-white"
+                >
+                  <div className="grid h-14 w-14 flex-none place-items-center rounded-[0.9rem] bg-[#172b4f] text-center text-white">
+                    <span className="text-[10px] font-black uppercase tracking-[0.12em]">
+                      {event.monthLabel}
+                    </span>
+                    <strong className="text-lg leading-none">{event.dayLabel}</strong>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#d81b50]">
+                      {event.tag === 'assessment'
+                        ? 'Assessment'
+                        : event.tag === 'holiday'
+                          ? 'Holiday'
+                          : 'School event'}
+                    </p>
+                    <h3 className="truncate text-base font-black text-[#13284a]">{event.title}</h3>
+                    <p className="truncate text-sm text-[#6d7f9d]">{event.subtitle}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 flex items-center justify-between border-t border-[#e4eaf4] pt-4">
+            {upcomingPage > 1 ? (
+              <Link
+                href={`/dashboard/student/calendar?view=upcoming&page=${upcomingPage - 1}`}
+                className="rounded-full border border-[#cfd8e7] px-4 py-2 text-sm font-bold text-[#294467] transition hover:border-[#8fa7cb]"
+              >
+                Previous
+              </Link>
+            ) : (
+              <span className="rounded-full border border-[#e5e9f0] px-4 py-2 text-sm font-bold text-[#a5afbf]">
+                Previous
+              </span>
+            )}
+            <span className="text-sm font-semibold text-[#5f708d]">
+              Page {upcomingPage} of {upcomingPageCount}
+            </span>
+            {upcomingPage < upcomingPageCount ? (
+              <Link
+                href={`/dashboard/student/calendar?view=upcoming&page=${upcomingPage + 1}`}
+                className="rounded-full border border-[#cfd8e7] px-4 py-2 text-sm font-bold text-[#294467] transition hover:border-[#8fa7cb]"
+              >
+                Next
+              </Link>
+            ) : (
+              <span className="rounded-full border border-[#e5e9f0] px-4 py-2 text-sm font-bold text-[#a5afbf]">
+                Next
+              </span>
+            )}
+          </div>
+        </section>
+      ) : (
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_22.5rem]">
         <section className="flex flex-col rounded-[1.2rem] border border-[#dde3ef] bg-[linear-gradient(180deg,#ffffff_0%,#f4f6fb_100%)] p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.38)] md:p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
@@ -723,6 +892,7 @@ export default function StudentCalendarPage() {
           </div>
         </aside>
       </div>
+      )}
     </div>
   );
 }

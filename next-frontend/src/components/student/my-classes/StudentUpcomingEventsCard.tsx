@@ -35,10 +35,12 @@ function tagLabel(tag: StudentEventTag) {
 export function StudentUpcomingEventsCard({
   events,
   selectedDateKey,
-  seeAllHref = '/dashboard/student/announcements',
+  seeAllHref = '/dashboard/student/calendar?view=upcoming',
 }: StudentUpcomingEventsCardProps) {
   const selectedEvents = events.filter((event) => event.dateKey === selectedDateKey);
-  const visibleEvents = (selectedEvents.length > 0 ? selectedEvents : events).slice(0, 6);
+  const sourceEvents = selectedEvents.length > 0 ? selectedEvents : events;
+  const visibleEvents = sourceEvents.slice(0, 5);
+  const remainingCount = Math.max(sourceEvents.length - visibleEvents.length, 0);
 
   return (
     <article className="rounded-[1.4rem] border border-[#e1deeb] bg-[#fbfafe] p-4 shadow-[0_20px_34px_-28px_rgba(22,32,58,0.45)]">
@@ -59,7 +61,7 @@ export function StudentUpcomingEventsCard({
           href={seeAllHref}
           className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-[#d81b50] transition hover:bg-[#ffeaf1]"
         >
-          See All
+          See All{remainingCount > 0 ? ` (${remainingCount} more)` : ''}
           <ChevronRight className="h-4 w-4" />
         </Link>
       </header>
