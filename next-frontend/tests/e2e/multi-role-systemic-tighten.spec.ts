@@ -6,7 +6,6 @@ import {
   type Page,
   type Response,
 } from '@playwright/test';
-import { THEME_OPTIONS, THEME_STORAGE_KEY } from '../../src/lib/themes';
 import { loginAs, missingRoleCredentials, persistSession } from './helpers/auth';
 import {
   resolveStudentLessonUrl,
@@ -518,63 +517,6 @@ test('changed core routes avoid document overflow at mobile, tablet, and desktop
     await persistSession(studentPage, 'student');
     await studentContext.close();
   }
-});
-
-test('all Student themes persist across Dashboard, Learners Path, and lesson detail', async ({
-  page,
-}) => {
-  test.setTimeout(240_000);
-  test.skip(missingRoleCredentials('student'), 'Student browser credentials are required.');
-  const lessonUrl = await resolveStudentLessonUrl();
-  expect(lessonUrl, 'Seed fixture must expose a Student lesson.').toBeTruthy();
-  await loginAs(page, 'student');
-  const runtime = attachRuntimeEvidence(page);
-
-  const selectAndExpectTheme = async (option: (typeof THEME_OPTIONS)[number]) => {
-    await page.getByRole('button', { name: 'Select theme' }).click();
-    await page
-      .getByRole('button', { name: `Use ${option.label} theme`, exact: true })
-      .click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', option.id);
-    expect(
-      await page.evaluate((storageKey) => window.localStorage.getItem(storageKey), THEME_STORAGE_KEY),
-    ).toBe(option.id);
-  };
-
-  await openRoute(page, '/dashboard/student');
-  await dismissLmsReminders(page, 2_000);
-  for (const option of THEME_OPTIONS) {
-    await selectAndExpectTheme(option);
-    await expectHeading(page, 'Your Learning Hub');
-  }
-
-  const persistedTheme = THEME_OPTIONS.at(-1)!;
-  await openRoute(page, '/dashboard/student/lxp');
-  await expect(page.locator('html')).toHaveAttribute('data-theme', persistedTheme.id);
-  await expectHeading(page, 'My Paths');
-  const search = page.getByPlaceholder('Search path, section, or subject code');
-  if (await search.isVisible()) {
-    await search.fill('no-path-for-theme-verification');
-  }
-  const statePanel = page.locator('.dashboard-state-panel').filter({ visible: true }).first();
-  await expect(statePanel).toBeVisible();
-
-  for (const option of THEME_OPTIONS) {
-    await selectAndExpectTheme(option);
-    await expect(statePanel).toBeVisible();
-    expect((await statePanel.innerText()).trim().length).toBeGreaterThan(0);
-  }
-
-  await openRoute(page, lessonUrl!);
-  await expect(page.locator('html')).toHaveAttribute('data-theme', persistedTheme.id);
-
-  for (const option of THEME_OPTIONS) {
-    await selectAndExpectTheme(option);
-    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
-  }
-
-  expectCleanRuntime(runtime);
-  await persistSession(page, 'student');
 });
 
 test('changed primary, filter, segmented, retry, and help controls show keyboard focus', async ({

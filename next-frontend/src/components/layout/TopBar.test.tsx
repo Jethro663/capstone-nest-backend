@@ -18,10 +18,6 @@ jest.mock('@/providers/AuthProvider', () => ({
   }),
 }));
 
-jest.mock('@/components/layout/StudentThemeSwitcher', () => ({
-  StudentThemeSwitcher: () => <button type="button">Select theme</button>,
-}));
-
 jest.mock('./SystemInfoButton', () => ({
   SystemInfoButton: () => <button type="button">System info</button>,
 }));
