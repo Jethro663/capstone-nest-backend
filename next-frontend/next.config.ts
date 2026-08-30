@@ -17,6 +17,10 @@ const DEFAULT_SERVER_API_ORIGIN =
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  outputFileTracingRoot: __dirname,
+  turbopack: {
+    root: __dirname,
+  },
   env: {
     NEXT_PUBLIC_APP_VERSION: process.env.npm_package_version ?? '0.1.0',
     NEXT_PUBLIC_RAILWAY_GIT_COMMIT_SHA: process.env.RAILWAY_GIT_COMMIT_SHA ?? '',
@@ -25,9 +29,6 @@ const nextConfig: NextConfig = {
     '127.0.0.1',
     'localhost',
   ],
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
