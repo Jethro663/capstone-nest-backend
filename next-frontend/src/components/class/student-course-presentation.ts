@@ -2,11 +2,6 @@
 
 import type { CSSProperties } from 'react';
 import type { StudentClassPresentationMode } from '@/types/class';
-import {
-  getFallbackGradient,
-  getGradientOption,
-  type CardGradientId,
-} from './class-card-theme';
 
 export interface StudentCoursePresentationChoice {
   mode: StudentClassPresentationMode;
@@ -21,26 +16,26 @@ const SOLID_CHOICES: StudentCoursePresentationChoice[] = [
   {
     mode: 'solid',
     token: 'solid-blue',
-    label: 'Blue Solid',
-    background: '#3159eb',
-    accent: '#2d50df',
-    buttonTint: 'rgba(24, 46, 172, 0.92)',
+    label: 'Navy Solid',
+    background: '#0c1d3a',
+    accent: '#172944',
+    buttonTint: '#172944',
   },
   {
     mode: 'solid',
     token: 'solid-green',
-    label: 'Green Solid',
-    background: '#0aa781',
-    accent: '#0f9d7c',
-    buttonTint: 'rgba(6, 110, 86, 0.92)',
+    label: 'Campus Red',
+    background: '#d90d1d',
+    accent: '#ff0011',
+    buttonTint: '#0c1d3a',
   },
   {
     mode: 'solid',
     token: 'solid-violet',
-    label: 'Violet Solid',
-    background: '#8a2bef',
-    accent: '#8a20ed',
-    buttonTint: 'rgba(89, 24, 160, 0.92)',
+    label: 'Deep Navy',
+    background: '#172944',
+    accent: '#0c1d3a',
+    buttonTint: '#0c1d3a',
   },
 ];
 
@@ -48,26 +43,26 @@ const GRADIENT_CHOICES: StudentCoursePresentationChoice[] = [
   {
     mode: 'gradient',
     token: 'gradient-blue',
-    label: 'Blue Gradient',
-    background: getGradientOption('oceanic-blue').background,
-    accent: getGradientOption('oceanic-blue').accent,
-    buttonTint: getGradientOption('oceanic-blue').buttonTint,
+    label: 'Navy Gradient',
+    background: 'linear-gradient(135deg, #0c1d3a 0%, #172944 100%)',
+    accent: '#172944',
+    buttonTint: '#0c1d3a',
   },
   {
     mode: 'gradient',
     token: 'gradient-green',
-    label: 'Green Gradient',
-    background: getGradientOption('emerald-wave').background,
-    accent: getGradientOption('emerald-wave').accent,
-    buttonTint: getGradientOption('emerald-wave').buttonTint,
+    label: 'Red to Navy',
+    background: 'linear-gradient(135deg, #d90d1d 0%, #0c1d3a 100%)',
+    accent: '#ff0011',
+    buttonTint: '#0c1d3a',
   },
   {
     mode: 'gradient',
     token: 'gradient-violet',
-    label: 'Violet Gradient',
-    background: getGradientOption('violet-burst').background,
-    accent: getGradientOption('violet-burst').accent,
-    buttonTint: getGradientOption('violet-burst').buttonTint,
+    label: 'Navy to Red',
+    background: 'linear-gradient(135deg, #0c1d3a 0%, #d90d1d 100%)',
+    accent: '#d90d1d',
+    buttonTint: '#0c1d3a',
   },
 ];
 
@@ -75,29 +70,29 @@ const PRESET_CHOICES: StudentCoursePresentationChoice[] = [
   {
     mode: 'preset',
     token: 'preset-blue',
-    label: 'Blueprint',
+    label: 'Navy Stripe',
     background:
-      'linear-gradient(140deg, rgba(36,84,229,1) 0%, rgba(61,99,241,1) 42%, rgba(31,67,196,1) 100%)',
-    accent: '#2d50df',
-    buttonTint: 'rgba(24, 46, 172, 0.92)',
+      'linear-gradient(135deg, #0c1d3a 0%, #0c1d3a 68%, #ff0011 68%, #ff0011 76%, #172944 76%, #172944 100%)',
+    accent: '#ff0011',
+    buttonTint: '#0c1d3a',
   },
   {
     mode: 'preset',
     token: 'preset-green',
-    label: 'Lab Grid',
+    label: 'Red Band',
     background:
-      'linear-gradient(140deg, rgba(10,163,126,1) 0%, rgba(17,182,141,1) 44%, rgba(6,129,102,1) 100%)',
-    accent: '#0f9d7c',
-    buttonTint: 'rgba(6, 110, 86, 0.92)',
+      'linear-gradient(180deg, #d90d1d 0%, #d90d1d 28%, #0c1d3a 28%, #0c1d3a 100%)',
+    accent: '#ff0011',
+    buttonTint: '#0c1d3a',
   },
   {
     mode: 'preset',
     token: 'preset-violet',
-    label: 'Study Glow',
+    label: 'Campus Split',
     background:
-      'linear-gradient(140deg, rgba(133,35,241,1) 0%, rgba(153,68,245,1) 44%, rgba(100,33,190,1) 100%)',
-    accent: '#8a20ed',
-    buttonTint: 'rgba(89, 24, 160, 0.92)',
+      'linear-gradient(110deg, #0c1d3a 0%, #0c1d3a 58%, #d90d1d 58%, #d90d1d 100%)',
+    accent: '#d90d1d',
+    buttonTint: '#0c1d3a',
   },
 ];
 
@@ -110,32 +105,19 @@ export const STUDENT_COURSE_PRESENTATION_OPTIONS: Record<
   preset: PRESET_CHOICES,
 };
 
-const FALLBACK_TOKEN_BY_GRADIENT: Record<CardGradientId, string> = {
-  'oceanic-blue': 'gradient-blue',
-  'emerald-wave': 'gradient-green',
-  'violet-burst': 'gradient-violet',
-  'sunset-orange': 'gradient-blue',
-  'rose-dusk': 'gradient-violet',
-  'slate-night': 'gradient-blue',
-};
-
 export function resolveStudentCoursePresentation(
   mode: StudentClassPresentationMode | undefined,
   token: string | undefined,
   index = 0,
 ): StudentCoursePresentationChoice {
+  void index;
   if (mode && token) {
     const options = STUDENT_COURSE_PRESENTATION_OPTIONS[mode];
     const matched = options.find((entry) => entry.token === token);
     if (matched) return matched;
   }
 
-  const fallbackGradient = getFallbackGradient(index);
-  const fallbackToken = FALLBACK_TOKEN_BY_GRADIENT[fallbackGradient];
-  return (
-    GRADIENT_CHOICES.find((entry) => entry.token === fallbackToken) ??
-    GRADIENT_CHOICES[0]
-  );
+  return GRADIENT_CHOICES[0];
 }
 
 export function toStudentHeroStyle(

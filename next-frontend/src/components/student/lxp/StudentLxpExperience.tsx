@@ -35,12 +35,15 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AiOutageNotice } from '@/components/student/AiOutageNotice';
+import { useAuth } from '@/providers/AuthProvider';
 import {
   resolveStudentCoursePresentation,
   toStudentHeroStyle,
 } from '@/components/class/student-course-presentation';
 import { lxpService } from '@/services/lxp-service';
+import { classService } from '@/services/class-service';
 import { useAiAvailability } from '@/hooks/use-ai-availability';
+import type { StudentClassPresentationPreference } from '@/types/class';
 import type { EligibleClass, LxpPathSummary } from '@/types/lxp';
 import { cn } from '@/utils/cn';
 import './StudentLxpExperience.css';
@@ -387,15 +390,21 @@ function PathListSkeleton() {
 
 function PathGrid({
   paths,
+  presentationByClass,
   onOpenPath,
 }: {
   paths: LxpPathSummary[];
+  presentationByClass: Record<string, StudentClassPresentationPreference>;
   onOpenPath: (classId: string) => void;
 }) {
   return (
     <section className="student-lxp-grid">
-      {paths.map((path, index) => {
-        const choice = resolveStudentCoursePresentation(undefined, undefined, index);
+      {paths.map((path) => {
+        const presentation = presentationByClass[path.classId];
+        const choice = resolveStudentCoursePresentation(
+          presentation?.styleMode,
+          presentation?.styleToken,
+        );
         return (
           <PathCard
             key={`${path.classId}-${path.interventionCaseId ?? 'path'}`}
@@ -413,9 +422,13 @@ function PathGrid({
 export default function StudentLxpExperience() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const aiAvailability = useAiAvailability();
   const aiUnavailable = aiAvailability.status === 'degraded';
   const [paths, setPaths] = useState<LxpPathSummary[]>([]);
+  const [presentationByClass, setPresentationByClass] = useState<
+    Record<string, StudentClassPresentationPreference>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<PrimaryTab>('all');
@@ -454,18 +467,32 @@ export default function StudentLxpExperience() {
     try {
       setLoading(true);
       setError(false);
-      const response = await lxpService.getEligibility();
+      const [response, presentationResponse] = await Promise.all([
+        lxpService.getEligibility(),
+        user?.id
+          ? classService
+              .getStudentPresentationPreferences(user.id)
+              .catch(() => ({ data: [] as StudentClassPresentationPreference[] }))
+          : Promise.resolve({ data: [] as StudentClassPresentationPreference[] }),
+      ]);
       const nextPaths =
         response.data.paths?.length
           ? response.data.paths
           : response.data.eligibleClasses.map(toFallbackPath);
+      const nextPresentations = Object.fromEntries(
+        (presentationResponse.data ?? []).map((preference) => [
+          preference.classId,
+          preference,
+        ]),
+      );
       setPaths(nextPaths);
+      setPresentationByClass(nextPresentations);
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     void fetchPaths();
@@ -626,7 +653,11 @@ export default function StudentLxpExperience() {
           primaryAction={{ label: 'Reset filters', onClick: resetFilters }}
         />
       ) : (
-        <PathGrid paths={filteredPaths} onOpenPath={openPath} />
+        <PathGrid
+          paths={filteredPaths}
+          presentationByClass={presentationByClass}
+          onOpenPath={openPath}
+        />
       )}
 
       <Dialog

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import StudentLxpExperience from './StudentLxpExperience';
 import { lxpService } from '@/services/lxp-service';
+import { classService } from '@/services/class-service';
 import { healthService } from '@/services/health-service';
 
 const push = jest.fn();
@@ -20,6 +21,10 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
+jest.mock('@/providers/AuthProvider', () => ({
+  useAuth: () => ({ user: { id: 'student-1' } }),
+}));
+
 jest.mock('@/services/lxp-service', () => ({
   lxpService: {
     getEligibility: jest.fn(),
@@ -36,8 +41,15 @@ jest.mock('@/services/health-service', () => ({
   },
 }));
 
+jest.mock('@/services/class-service', () => ({
+  classService: {
+    getStudentPresentationPreferences: jest.fn(),
+  },
+}));
+
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
 const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
+const mockedClassService = classService as jest.Mocked<typeof classService>;
 
 const eligibilityResponse = {
   data: {
@@ -147,6 +159,17 @@ describe('StudentLxpExperience path list', () => {
       },
     });
     mockedLxpService.getEligibility.mockResolvedValue(eligibilityResponse as never);
+    mockedClassService.getStudentPresentationPreferences.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: [
+        {
+          classId: 'class-active',
+          styleMode: 'solid',
+          styleToken: 'solid-green',
+        },
+      ],
+    });
   });
 
   it('renders the courses-style Learners Path list without the old class dropdown or JA tab', async () => {
@@ -179,6 +202,14 @@ describe('StudentLxpExperience path list', () => {
     expect(within(counts).getByText('Completed')).toBeInTheDocument();
     expect(counts.querySelectorAll('dt')).toHaveLength(3);
     expect(counts.querySelectorAll('dd')).toHaveLength(3);
+    expect(
+      screen.getByText('Mathematics 7').closest('.student-lxp-card__hero'),
+    ).toHaveStyle({ background: '#d90d1d' });
+    expect(
+      screen.getByText('Science 7').closest('.student-lxp-card__hero'),
+    ).toHaveStyle({
+      background: 'linear-gradient(135deg, #0c1d3a 0%, #172944 100%)',
+    });
   });
 
   it('shows a safe retryable error without exposing the service failure', async () => {
