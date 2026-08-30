@@ -33,7 +33,7 @@ jest.mock('@/services/user-service', () => ({
 const mockedUserService = userService as jest.Mocked<typeof userService>;
 
 function buildResponse(
-  query?: { status?: string; role?: string },
+  query?: { status?: string; role?: string; gradeLevel?: string },
 ): Awaited<ReturnType<typeof userService.getAll>> {
   const status = query?.status ?? 'ACTIVE';
   const users =
@@ -162,6 +162,29 @@ describe('UserManagementPage', () => {
       }),
     );
     expect(screen.getByLabelText(/filter users by role/i)).toHaveValue('teacher');
+  });
+
+  it('requests graduated students from the grade-level filter', async () => {
+    render(<UserManagementPage />);
+
+    await screen.findByRole('heading', { name: 'Users' });
+
+    fireEvent.change(screen.getByLabelText(/filter students by grade level/i), {
+      target: { value: 'graduated' },
+    });
+
+    await waitFor(() =>
+      expect(mockedUserService.getAll).toHaveBeenLastCalledWith({
+        status: 'ACTIVE',
+        role: undefined,
+        gradeLevel: 'graduated',
+        limit: 100,
+        includeStatusCounts: true,
+      }),
+    );
+    expect(
+      screen.getByLabelText(/filter students by grade level/i),
+    ).toHaveValue('graduated');
   });
 
   it('navigates on row-body click and bulk-select excludes the current admin account', async () => {

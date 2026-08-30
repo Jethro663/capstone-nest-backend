@@ -4,6 +4,7 @@ import type { User, CreateUserDto, UpdateUserDto } from '@/types/user';
 export interface UsersQuery {
   role?: string;
   status?: string;
+  gradeLevel?: '7' | '8' | '9' | '10' | 'graduated';
   page?: number;
   limit?: number;
   includeStatusCounts?: boolean;
@@ -63,7 +64,8 @@ export interface ResetUserPasswordResponse {
   emailDeliveryError?: string;
 }
 
-export type BulkUserLifecycleAction = 'suspend' | 'reactivate' | 'archive' | 'purge';
+export type BulkUserLifecycleAction =
+  'suspend' | 'reactivate' | 'archive' | 'purge';
 
 export interface BulkUserLifecycleDto {
   action: BulkUserLifecycleAction;
@@ -102,19 +104,26 @@ export const userService = {
   },
 
   /** GET /users/:id - Admin only */
-  async getById(id: string): Promise<{ success: boolean; data: { user: User } }> {
+  async getById(
+    id: string,
+  ): Promise<{ success: boolean; data: { user: User } }> {
     const { data } = await api.get(`/users/${id}`);
     return data;
   },
 
   /** POST /users/create - Admin only */
-  async create(dto: CreateUserDto): Promise<{ success: boolean; message: string; data: { user: User } }> {
+  async create(
+    dto: CreateUserDto,
+  ): Promise<{ success: boolean; message: string; data: { user: User } }> {
     const { data } = await api.post('/users/create', dto);
     return data;
   },
 
   /** PUT /users/update/:id - Admin only */
-  async update(id: string, dto: UpdateUserDto): Promise<{ success: boolean; message: string; data: { user: User } }> {
+  async update(
+    id: string,
+    dto: UpdateUserDto,
+  ): Promise<{ success: boolean; message: string; data: { user: User } }> {
     const { data } = await api.put(`/users/update/${id}`, dto);
     return data;
   },
@@ -132,20 +141,26 @@ export const userService = {
   },
 
   /** PATCH /users/:id/reactivate - Admin only */
-  async reactivate(id: string): Promise<{ success: boolean; message?: string }> {
+  async reactivate(
+    id: string,
+  ): Promise<{ success: boolean; message?: string }> {
     const { data } = await api.patch(`/users/${id}/reactivate`);
     return data;
   },
 
   /** DELETE /users/:id/soft-delete - Admin only */
-  async softDelete(id: string): Promise<{ success: boolean; message?: string }> {
+  async softDelete(
+    id: string,
+  ): Promise<{ success: boolean; message?: string }> {
     const { data } = await api.delete(`/users/${id}/soft-delete`);
     return data;
   },
 
   /** GET /users/:id/export - Admin only (JSON download) */
   async exportUser(id: string): Promise<Blob> {
-    const { data } = await api.get(`/users/${id}/export`, { responseType: 'blob' });
+    const { data } = await api.get(`/users/${id}/export`, {
+      responseType: 'blob',
+    });
     return data;
   },
 
@@ -156,7 +171,9 @@ export const userService = {
   },
 
   /** POST /users/bulk/lifecycle - Admin only */
-  async bulkLifecycle(dto: BulkUserLifecycleDto): Promise<BulkUserLifecycleResponse> {
+  async bulkLifecycle(
+    dto: BulkUserLifecycleDto,
+  ): Promise<BulkUserLifecycleResponse> {
     const { data } = await api.post('/users/bulk/lifecycle', dto);
     return data;
   },

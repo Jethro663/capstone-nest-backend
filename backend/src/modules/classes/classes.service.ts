@@ -2760,6 +2760,7 @@ export class ClassesService {
 
     whereConditions.push(inArray(users.id, studentRoleSubquery));
     whereConditions.push(ne(users.status, 'DELETED'));
+    whereConditions.push(isNull(studentProfiles.graduatedAt));
 
     if (effectiveGradeLevel) {
       whereConditions.push(
@@ -3008,16 +3009,25 @@ export class ClassesService {
           columns: { id: true, firstName: true, lastName: true, email: true },
           with: {
             profile: {
-              columns: { gradeLevel: true, lrn: true, profilePicture: true },
+              columns: {
+                gradeLevel: true,
+                lrn: true,
+                profilePicture: true,
+                graduatedAt: true,
+              },
             },
           },
         },
       },
     });
 
-    if (!classGradeLevel) return candidates;
+    const eligibleCandidates = candidates.filter(
+      (candidate) => !candidate.student?.profile?.graduatedAt,
+    );
 
-    return candidates.filter(
+    if (!classGradeLevel) return eligibleCandidates;
+
+    return eligibleCandidates.filter(
       (candidate) => candidate.student?.profile?.gradeLevel === classGradeLevel,
     );
   }
@@ -3038,12 +3048,18 @@ export class ClassesService {
       columns: { id: true },
       with: {
         profile: {
-          columns: { gradeLevel: true },
+          columns: { gradeLevel: true, graduatedAt: true },
         },
       },
     });
     if (!student) {
       throw new BadRequestException(`Student with ID "${studentId}" not found`);
+    }
+
+    if (student.profile?.graduatedAt) {
+      throw new BadRequestException(
+        'Graduated students cannot be added to a class',
+      );
     }
 
     if (classGradeLevel && student.profile?.gradeLevel !== classGradeLevel) {

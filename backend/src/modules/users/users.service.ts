@@ -7,7 +7,19 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, count, desc, eq, gt, ilike, inArray, or, SQL } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  SQL,
+} from 'drizzle-orm';
 import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '../../database/database.service';
@@ -39,6 +51,7 @@ import { UserCreatedEvent } from '../../common/events';
 import { PasswordGenerator } from './utils/password-generator';
 
 const VALID_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'DELETED'] as const;
+const VALID_GRADE_LEVEL_FILTERS = ['7', '8', '9', '10', 'graduated'] as const;
 type UserStatus = (typeof VALID_STATUSES)[number];
 
 @Injectable()
@@ -174,6 +187,7 @@ export class UsersService {
   async findAll(filters?: {
     role?: string;
     status?: string;
+    gradeLevel?: string;
     page?: number;
     limit?: number;
     includeStatusCounts?: boolean;
@@ -181,6 +195,14 @@ export class UsersService {
     if (filters?.status && !VALID_STATUSES.includes(filters.status as any)) {
       throw new BadRequestException(
         `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}`,
+      );
+    }
+    if (
+      filters?.gradeLevel &&
+      !VALID_GRADE_LEVEL_FILTERS.includes(filters.gradeLevel as any)
+    ) {
+      throw new BadRequestException(
+        `Invalid grade level. Must be one of: ${VALID_GRADE_LEVEL_FILTERS.join(', ')}`,
       );
     }
     const page = Math.max(1, Number(filters?.page ?? 1) || 1);
@@ -202,6 +224,20 @@ export class UsersService {
         .where(eq(roles.name, filters.role));
       whereConditions.push(inArray(users.id, roleSubquery));
     }
+    if (filters?.gradeLevel) {
+      const profileWhere =
+        filters.gradeLevel === 'graduated'
+          ? isNotNull(studentProfiles.graduatedAt)
+          : and(
+              eq(studentProfiles.gradeLevel, filters.gradeLevel as any),
+              isNull(studentProfiles.graduatedAt),
+            );
+      const profileSubquery = this.db
+        .select({ userId: studentProfiles.userId })
+        .from(studentProfiles)
+        .where(profileWhere);
+      whereConditions.push(inArray(users.id, profileSubquery));
+    }
 
     // Build the query step by step
     const whereClause =
@@ -218,6 +254,7 @@ export class UsersService {
         userRoles: {
           with: { role: true },
         },
+        profile: true,
       },
       orderBy: [desc(users.createdAt)],
       limit,
@@ -448,6 +485,7 @@ export class UsersService {
 
   private async getStatusCounts(filters?: {
     role?: string;
+    gradeLevel?: string;
     includeStatusCounts?: boolean;
   }) {
     const statuses = VALID_STATUSES as readonly UserStatus[];
@@ -462,6 +500,20 @@ export class UsersService {
             .innerJoin(roles, eq(userRoles.roleId, roles.id))
             .where(eq(roles.name, filters.role));
           whereConditions.push(inArray(users.id, roleSubquery));
+        }
+        if (filters?.gradeLevel) {
+          const profileWhere =
+            filters.gradeLevel === 'graduated'
+              ? isNotNull(studentProfiles.graduatedAt)
+              : and(
+                  eq(studentProfiles.gradeLevel, filters.gradeLevel as any),
+                  isNull(studentProfiles.graduatedAt),
+                );
+          const profileSubquery = this.db
+            .select({ userId: studentProfiles.userId })
+            .from(studentProfiles)
+            .where(profileWhere);
+          whereConditions.push(inArray(users.id, profileSubquery));
         }
 
         const [totalRow] = await this.db

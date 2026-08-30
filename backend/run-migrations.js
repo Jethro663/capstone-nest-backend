@@ -55,7 +55,20 @@ async function recordMigration(filename) {
 }
 
 async function ensureVectorExtension() {
-  await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+  try {
+    await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+    return true;
+  } catch (err) {
+    if (process.env.NODE_ENV === 'production') {
+      throw err;
+    }
+
+    console.warn(
+      `⚠️  pgvector is unavailable in this local PostgreSQL instance; ` +
+        `continuing with core migrations. Vector-backed RAG features will remain disabled.`,
+    );
+    return false;
+  }
 }
 
 /**
@@ -232,7 +245,7 @@ async function runMigrations() {
 
     // Create tracking table on first run
     await ensureTrackingTable();
-    await ensureVectorExtension();
+    const vectorExtensionAvailable = await ensureVectorExtension();
 
     // Check what's already been applied
     const applied = await getAppliedMigrations();
@@ -294,6 +307,16 @@ async function runMigrations() {
     for (const filename of allFiles) {
       if (applied.has(filename)) {
         // Already applied — skip silently
+        continue;
+      }
+
+      if (
+        filename === '0003_enable_pgvector.sql' &&
+        !vectorExtensionAvailable
+      ) {
+        console.warn(
+          `⚠️  Skipping ${filename} because pgvector is not installed locally.`,
+        );
         continue;
       }
 

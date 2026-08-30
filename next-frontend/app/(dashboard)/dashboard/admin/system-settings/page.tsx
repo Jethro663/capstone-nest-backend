@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
-import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from '@/components/admin/AdminPageShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +21,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { academicStateService } from '@/services/academic-state-service';
-import type { AcademicStateCurrent, AcademicStateImpactPreview } from '@/types/academic-state';
+import type {
+  AcademicStateCurrent,
+  AcademicStateImpactPreview,
+} from '@/types/academic-state';
 
 function deriveSchoolYearChoices(current: string) {
   const match = current.match(/^(\d{4})-(\d{4})$/);
@@ -36,9 +43,13 @@ export default function AdminSystemSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshingPreview, setRefreshingPreview] = useState(false);
   const [submittingTransition, setSubmittingTransition] = useState(false);
-  const [currentState, setCurrentState] = useState<AcademicStateCurrent | null>(null);
+  const [currentState, setCurrentState] = useState<AcademicStateCurrent | null>(
+    null,
+  );
   const [targetSchoolYear, setTargetSchoolYear] = useState('');
-  const [preview, setPreview] = useState<AcademicStateImpactPreview | null>(null);
+  const [preview, setPreview] = useState<AcademicStateImpactPreview | null>(
+    null,
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [transitionStep, setTransitionStep] = useState<1 | 2>(1);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -153,7 +164,7 @@ export default function AdminSystemSettingsPage() {
       setCurrentState(response.data.state);
       await loadImpactPreview(targetSchoolYear);
       toast.success(
-        `Academic state updated. Archived ${response.data.impact.sectionsArchived} sections and ${response.data.impact.classesArchived} classes, then created ${response.data.impact.reusableSectionsCreated} reusable sections and ${response.data.impact.reusableClassesCreated} reusable classes.`,
+        `Academic state updated. ${response.data.impact.studentsPromoted} promoted, ${response.data.impact.studentsRetained} retained, and ${response.data.impact.studentsGraduated} graduated. Archived ${response.data.impact.sectionsArchived} sections and ${response.data.impact.classesArchived} classes.`,
       );
       setDialogOpen(false);
     } catch {
@@ -176,7 +187,7 @@ export default function AdminSystemSettingsPage() {
     <AdminPageShell
       title="System Settings"
       description="Set the active school year for the whole LMS with a guarded transition flow."
-      stats={(
+      stats={
         <>
           <AdminStatCard
             label="Active School Year"
@@ -193,12 +204,12 @@ export default function AdminSystemSettingsPage() {
             accent="emerald"
           />
         </>
-      )}
+      }
     >
       <AdminSectionCard
         title="Academic State"
         description="Preview impact before transitioning. This requires a second confirmation and admin password."
-        action={(
+        action={
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
@@ -206,7 +217,7 @@ export default function AdminSystemSettingsPage() {
               disabled={notifyingTeachers}
               className="rounded-xl font-bold border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
             >
-              {notifyingTeachers ? 'Notifying...' : 'Notify Teachers to Finalize Grades'}
+              {notifyingTeachers ? 'Notifying...' : 'Notify Teachers'}
             </Button>
             <Button
               onClick={openTransitionDialog}
@@ -216,11 +227,13 @@ export default function AdminSystemSettingsPage() {
               Transition State
             </Button>
           </div>
-        )}
+        }
       >
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2">
-            <span className="text-sm font-black text-[var(--admin-text-strong)]">Target School Year</span>
+            <span className="text-sm font-black text-[var(--admin-text-strong)]">
+              Target School Year
+            </span>
             <select
               value={targetSchoolYear}
               onChange={(event) => setTargetSchoolYear(event.target.value)}
@@ -235,44 +248,82 @@ export default function AdminSystemSettingsPage() {
           </label>
 
           <div className="space-y-2 rounded-xl border border-[var(--admin-outline)] bg-[var(--admin-surface-soft)] p-3">
-            <p className="text-sm font-black text-[var(--admin-text-strong)]">Impact Preview</p>
+            <p className="text-sm font-black text-[var(--admin-text-strong)]">
+              Impact Preview
+            </p>
             {refreshingPreview ? (
-              <p className="text-xs text-[var(--admin-text-muted)]">Calculating transition impact...</p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Calculating transition impact...
+              </p>
             ) : preview ? (
               <div className="grid gap-2 text-sm sm:grid-cols-2">
                 <p className="text-[var(--admin-text-muted)]">
-                  Draft records to finalize: <strong>{preview.impact.classRecordsToFinalize}</strong>
+                  Draft records to finalize:{' '}
+                  <strong>{preview.impact.classRecordsToFinalize}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)]">
-                  Active enrollments to complete: <strong>{preview.impact.enrollmentsToComplete}</strong>
+                  Active enrollments to complete:{' '}
+                  <strong>{preview.impact.enrollmentsToComplete}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)]">
-                  Classes to archive: <strong>{preview.impact.classesToArchive}</strong>
+                  Classes to archive:{' '}
+                  <strong>{preview.impact.classesToArchive}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)]">
-                  Sections to archive: <strong>{preview.impact.sectionsToArchive}</strong>
+                  Sections to archive:{' '}
+                  <strong>{preview.impact.sectionsToArchive}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)]">
-                  Reusable classes to create: <strong>{preview.impact.reusableClassesToCreate}</strong>
+                  Reusable classes to create:{' '}
+                  <strong>{preview.impact.reusableClassesToCreate}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)]">
-                  Reusable sections to create: <strong>{preview.impact.reusableSectionsToCreate}</strong>
+                  Reusable sections to create:{' '}
+                  <strong>{preview.impact.reusableSectionsToCreate}</strong>
                 </p>
                 <p className="text-[var(--admin-text-muted)] sm:col-span-2">
-                  School events to archive: <strong>{preview.impact.schoolEventsToArchive}</strong>
+                  School events to archive:{' '}
+                  <strong>{preview.impact.schoolEventsToArchive}</strong>
                 </p>
-                <div className={`sm:col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
-                  preview.impact.promotionReadiness.transitionBlocked
-                    ? 'border-red-200 bg-red-50 text-red-700'
-                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                }`}>
+                <div
+                  className={`sm:col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                    preview.impact.promotionReadiness.transitionBlocked
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  }`}
+                >
                   {preview.impact.promotionReadiness.transitionBlocked
                     ? preview.impact.promotionReadiness.message
-                    : 'No active students are blocking the transition.'}
-                  {preview.impact.promotionReadiness.studentsMissingFinalizedGrades > 0 ? (
+                    : (preview.impact.promotionReadiness.message ??
+                      'No active students require automatic processing.')}
+                  {!preview.impact.promotionReadiness.transitionBlocked &&
+                  preview.impact.promotionReadiness
+                    .activeStudentsInCurrentYear > 0 ? (
+                    <div className="mt-2 grid gap-1 border-t border-emerald-200 pt-2 sm:grid-cols-3">
+                      <span>
+                        {preview.impact.promotionReadiness.studentsToPromote}{' '}
+                        moving up
+                      </span>
+                      <span>
+                        {preview.impact.promotionReadiness.studentsToRetain}{' '}
+                        retained
+                      </span>
+                      <span>
+                        {preview.impact.promotionReadiness.studentsToGraduate}{' '}
+                        graduating
+                      </span>
+                    </div>
+                  ) : null}
+                  {preview.impact.promotionReadiness
+                    .studentsMissingFinalizedGrades > 0 ? (
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-red-200 pt-2">
                       <span className="block text-xs font-bold text-red-800">
-                        {preview.impact.promotionReadiness.studentsMissingFinalizedGrades} active student(s) still need finalized grades before transitioning.
+                        {
+                          preview.impact.promotionReadiness
+                            .studentsMissingFinalizedGrades
+                        }{' '}
+                        active student(s) still need finalized grades before
+                        transitioning.
                       </span>
                       <Button
                         type="button"
@@ -281,14 +332,18 @@ export default function AdminSystemSettingsPage() {
                         disabled={notifyingTeachers}
                         className="rounded-lg font-black bg-amber-600 text-white hover:bg-amber-700"
                       >
-                        {notifyingTeachers ? 'Sending Notifications...' : 'Notify Unfinalized Teachers'}
+                        {notifyingTeachers
+                          ? 'Sending Notifications...'
+                          : 'Notify Teachers'}
                       </Button>
                     </div>
                   ) : null}
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-[var(--admin-text-muted)]">Unable to load impact preview.</p>
+              <p className="text-xs text-[var(--admin-text-muted)]">
+                Unable to load impact preview.
+              </p>
             )}
           </div>
         </div>
@@ -299,7 +354,10 @@ export default function AdminSystemSettingsPage() {
           <DialogHeader>
             <DialogTitle>Confirm Academic State Transition</DialogTitle>
             <DialogDescription>
-              This archives the old school year, clears active assignments and schedules, then creates reusable classes and sections for the target year while keeping learning content.
+              This automatically processes finalized student outcomes, archives
+              the old school year, and creates clean student rosters for the
+              target year while retaining staff assignments, schedules, rooms,
+              and learning content.
             </DialogDescription>
           </DialogHeader>
 
@@ -312,22 +370,39 @@ export default function AdminSystemSettingsPage() {
                   <p>Target School Year: {targetSchoolYear}</p>
                   <p>Current Quarter: {preview?.current.quarter}</p>
                   <p>
-                    {preview?.impact.classRecordsToFinalize ?? 0} draft class records will be finalized.
+                    {preview?.impact.classRecordsToFinalize ?? 0} draft class
+                    records will be finalized.
                   </p>
                   <p>
-                    {preview?.impact.enrollmentsToComplete ?? 0} active student enrollments will be marked completed so students can be reassigned.
+                    {preview?.impact.enrollmentsToComplete ?? 0} active student
+                    enrollments will be marked completed so students can be
+                    reassigned.
                   </p>
                   <p>
-                    {preview?.impact.sectionsToArchive ?? 0} sections and {preview?.impact.classesToArchive ?? 0} classes will be archived.
+                    {preview?.impact.promotionReadiness.studentsToPromote ?? 0}{' '}
+                    passing student(s) will move up,{' '}
+                    {preview?.impact.promotionReadiness.studentsToRetain ?? 0}{' '}
+                    student(s) with a failing subject will be retained, and{' '}
+                    {preview?.impact.promotionReadiness.studentsToGraduate ?? 0}{' '}
+                    passing Grade 10 student(s) will graduate.
                   </p>
                   <p>
-                    {preview?.impact.reusableSectionsToCreate ?? 0} reusable sections and {preview?.impact.reusableClassesToCreate ?? 0} reusable classes will be created for {targetSchoolYear}.
+                    {preview?.impact.sectionsToArchive ?? 0} sections and{' '}
+                    {preview?.impact.classesToArchive ?? 0} classes will be
+                    archived.
                   </p>
                   <p>
-                    Class rooms and content are retained, but every new class schedule starts blank for fresh editing.
+                    {preview?.impact.reusableSectionsToCreate ?? 0} reusable
+                    sections and {preview?.impact.reusableClassesToCreate ?? 0}{' '}
+                    reusable classes will be created for {targetSchoolYear}.
                   </p>
                   <p>
-                    {preview?.impact.schoolEventsToArchive ?? 0} school events will be archived.
+                    Advisers, teachers, rooms, schedules, and class content will
+                    be retained. New-year student rosters will start empty.
+                  </p>
+                  <p>
+                    {preview?.impact.schoolEventsToArchive ?? 0} school events
+                    will be archived.
                   </p>
                 </div>
               </div>
@@ -373,7 +448,8 @@ export default function AdminSystemSettingsPage() {
                   submittingTransition ||
                   transitionBlocked ||
                   !currentPassword.trim() ||
-                  confirmationText !== (preview?.transitionConfirmationText ?? '')
+                  confirmationText !==
+                    (preview?.transitionConfirmationText ?? '')
                 }
               >
                 {submittingTransition ? 'Applying...' : 'Confirm Transition'}

@@ -64,6 +64,20 @@
       "when": 1787667943398,
       "tag": "0008_far_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788102619962,
+      "tag": "0009_add_student_graduation_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788105310000,
+      "tag": "0010_repair_legacy_assessment_ai_columns",
+      "breakpoints": true
     }
   ]
 }

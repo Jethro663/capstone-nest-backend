@@ -14,6 +14,7 @@ import {
   classModules,
   classRecords,
   classRecordFinalGrades,
+  classSchedules,
   classes,
   enrollments,
   lessonContentBlocks,
@@ -23,6 +24,7 @@ import {
   moduleSections,
   schoolEvents,
   sections,
+  studentProfiles,
   users,
 } from '../../drizzle/schema';
 import { AuditService } from '../audit/audit.service';
@@ -43,8 +45,17 @@ interface AcademicStateRow {
 
 type SectionRow = typeof sections.$inferSelect;
 type ClassRow = typeof classes.$inferSelect;
+type ClassScheduleRow = typeof classSchedules.$inferSelect;
 type ClassCloneSource = ClassRow & {
   section: SectionRow | null;
+  schedules: ClassScheduleRow[];
+};
+
+type AutomaticStudentOutcome = {
+  studentId: string;
+  sourceGradeLevel: string;
+  targetGradeLevel: '7' | '8' | '9' | '10' | null;
+  outcome: 'promoted' | 'retained' | 'graduated';
 };
 
 function getSectionCloneKey(section: Pick<SectionRow, 'name' | 'gradeLevel'>) {
@@ -139,8 +150,52 @@ export class AcademicStateService {
     return {
       activeStudentsInCurrentYear: 0,
       studentsMissingFinalizedGrades: 0,
+      studentsToPromote: 0,
+      studentsToRetain: 0,
+      studentsToGraduate: 0,
       transitionBlocked: false,
       message: null as string | null,
+      studentOutcomes: [] as AutomaticStudentOutcome[],
+    };
+  }
+
+  private classifyStudentOutcome(input: {
+    studentId: string;
+    sourceGradeLevel: '7' | '8' | '9' | '10';
+    subjectFinalGrades: number[][];
+  }): AutomaticStudentOutcome {
+    const hasFailingSubject = input.subjectFinalGrades.some(
+      (grades) =>
+        grades.length === 0 ||
+        grades.reduce((sum, grade) => sum + grade, 0) / grades.length < 75,
+    );
+
+    if (hasFailingSubject) {
+      return {
+        studentId: input.studentId,
+        sourceGradeLevel: input.sourceGradeLevel,
+        targetGradeLevel: input.sourceGradeLevel,
+        outcome: 'retained',
+      };
+    }
+
+    if (input.sourceGradeLevel === '10') {
+      return {
+        studentId: input.studentId,
+        sourceGradeLevel: input.sourceGradeLevel,
+        targetGradeLevel: null,
+        outcome: 'graduated',
+      };
+    }
+
+    return {
+      studentId: input.studentId,
+      sourceGradeLevel: input.sourceGradeLevel,
+      targetGradeLevel: String(Number(input.sourceGradeLevel) + 1) as
+        | '8'
+        | '9'
+        | '10',
+      outcome: 'promoted',
     };
   }
 
@@ -185,6 +240,7 @@ export class AcademicStateService {
     const recordRows = await this.db
       .select({
         sectionId: classes.sectionId,
+        classId: classes.id,
         classRecordId: classRecords.id,
         status: classRecords.status,
       })
@@ -213,8 +269,10 @@ export class AcademicStateService {
     const finalGradeRows = await this.db
       .select({
         sectionId: classes.sectionId,
+        classId: classes.id,
         studentId: classRecordFinalGrades.studentId,
         classRecordId: classRecordFinalGrades.classRecordId,
+        finalPercentage: classRecordFinalGrades.finalPercentage,
       })
       .from(classRecordFinalGrades)
       .innerJoin(
@@ -226,16 +284,35 @@ export class AcademicStateService {
         and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
       );
 
-    const finalGradeRecordIdsBySectionStudent = new Map<string, Set<string>>();
+    const finalGradesBySectionStudent = new Map<
+      string,
+      Array<{
+        classId: string;
+        classRecordId: string;
+        finalPercentage: number;
+      }>
+    >();
     for (const row of finalGradeRows) {
       const key = `${row.sectionId}:${row.studentId}`;
-      const current =
-        finalGradeRecordIdsBySectionStudent.get(key) ?? new Set<string>();
-      current.add(row.classRecordId);
-      finalGradeRecordIdsBySectionStudent.set(key, current);
+      const current = finalGradesBySectionStudent.get(key) ?? [];
+      current.push({
+        classId: row.classId,
+        classRecordId: row.classRecordId,
+        finalPercentage: Number(row.finalPercentage),
+      });
+      finalGradesBySectionStudent.set(key, current);
     }
 
+    const sectionGradeRows = await this.db
+      .select({ id: sections.id, gradeLevel: sections.gradeLevel })
+      .from(sections)
+      .where(inArray(sections.id, sectionIds));
+    const gradeLevelBySectionId = new Map(
+      sectionGradeRows.map((section) => [section.id, section.gradeLevel]),
+    );
+
     const missingFinalizedGradeStudentIds = new Set<string>();
+    const studentOutcomes: AutomaticStudentOutcome[] = [];
     for (const enrollment of uniqueActiveSectionEnrollments) {
       const sectionId = enrollment.sectionId;
       if (!sectionId) continue;
@@ -244,10 +321,13 @@ export class AcademicStateService {
         totalRecords: 0,
         finalizedRecords: 0,
       };
-      const finalGradeRecordCount =
-        finalGradeRecordIdsBySectionStudent.get(
+      const studentFinalGrades =
+        finalGradesBySectionStudent.get(
           `${sectionId}:${enrollment.studentId}`,
-        )?.size ?? 0;
+        ) ?? [];
+      const finalGradeRecordCount = new Set(
+        studentFinalGrades.map((grade) => grade.classRecordId),
+      ).size;
       const isFinalized =
         counts.totalRecords > 0 &&
         counts.finalizedRecords >= counts.totalRecords &&
@@ -255,20 +335,59 @@ export class AcademicStateService {
 
       if (!isFinalized) {
         missingFinalizedGradeStudentIds.add(enrollment.studentId);
+        continue;
       }
+
+      const finalGradesByClassId = new Map<string, number[]>();
+      for (const grade of studentFinalGrades) {
+        const current = finalGradesByClassId.get(grade.classId) ?? [];
+        current.push(grade.finalPercentage);
+        finalGradesByClassId.set(grade.classId, current);
+      }
+      const sourceGradeLevel = gradeLevelBySectionId.get(sectionId);
+      if (
+        !sourceGradeLevel ||
+        !['7', '8', '9', '10'].includes(sourceGradeLevel)
+      ) {
+        missingFinalizedGradeStudentIds.add(enrollment.studentId);
+        continue;
+      }
+
+      studentOutcomes.push(
+        this.classifyStudentOutcome({
+          studentId: enrollment.studentId,
+          sourceGradeLevel: sourceGradeLevel as '7' | '8' | '9' | '10',
+          subjectFinalGrades: Array.from(finalGradesByClassId.values()),
+        }),
+      );
     }
 
     const activeStudentsInCurrentYear = activeStudentIds.size;
     const studentsMissingFinalizedGrades = missingFinalizedGradeStudentIds.size;
+    const studentsToPromote = studentOutcomes.filter(
+      (student) => student.outcome === 'promoted',
+    ).length;
+    const studentsToRetain = studentOutcomes.filter(
+      (student) => student.outcome === 'retained',
+    ).length;
+    const studentsToGraduate = studentOutcomes.filter(
+      (student) => student.outcome === 'graduated',
+    ).length;
 
     return {
       activeStudentsInCurrentYear,
       studentsMissingFinalizedGrades,
-      transitionBlocked: activeStudentsInCurrentYear > 0,
+      studentsToPromote,
+      studentsToRetain,
+      studentsToGraduate,
+      transitionBlocked: studentsMissingFinalizedGrades > 0,
       message:
-        activeStudentsInCurrentYear > 0
-          ? `${activeStudentsInCurrentYear} student(s) are still active in the current school year. Finalize grades, then move up passing students and retain failing students before transitioning.`
-          : null,
+        studentsMissingFinalizedGrades > 0
+          ? `${studentsMissingFinalizedGrades} active student(s) still need complete, finalized subject grades before transitioning.`
+          : activeStudentsInCurrentYear > 0
+            ? `${studentsToPromote} student(s) will move up, ${studentsToRetain} will be retained, and ${studentsToGraduate} will graduate automatically.`
+            : null,
+      studentOutcomes,
     };
   }
 
@@ -336,6 +455,7 @@ export class AcademicStateService {
       ),
       with: {
         section: true,
+        schedules: true,
       },
       orderBy: (classRow, { asc }) => [
         asc(classRow.subjectGradeLevel),
@@ -886,7 +1006,7 @@ export class AcademicStateService {
   async notifyUnfinalizedTeachers(actorId: string) {
     const current = await this.ensureCurrentState();
 
-    const unfinalizedClassRows = await this.db
+    const activeClassRows = await this.db
       .select({
         classId: classes.id,
         subjectName: classes.subjectName,
@@ -895,41 +1015,58 @@ export class AcademicStateService {
         sectionName: sections.name,
         sectionGradeLevel: sections.gradeLevel,
         classRecordId: classRecords.id,
+        classRecordStatus: classRecords.status,
       })
-      .from(classRecords)
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
+      .from(classes)
       .innerJoin(sections, eq(sections.id, classes.sectionId))
+      .leftJoin(classRecords, eq(classRecords.classId, classes.id))
       .where(
         and(
-          eq(classRecords.status, 'draft'),
           eq(classes.schoolYear, current.schoolYear),
           eq(classes.isActive, true),
         ),
       );
 
-    if (unfinalizedClassRows.length === 0) {
+    if (activeClassRows.length === 0) {
       return {
-        message: 'No unfinalized classes found for the active school year.',
+        message: 'No active classes with teacher assignments were found.',
         notifiedClassesCount: 0,
         notifiedTeachersCount: 0,
         details: [],
       };
     }
 
-    const uniqueClassesMap = new Map<
+    const classesById = new Map<
       string,
-      (typeof unfinalizedClassRows)[number]
-    >();
-    for (const row of unfinalizedClassRows) {
-      if (row.teacherId && !uniqueClassesMap.has(row.classId)) {
-        uniqueClassesMap.set(row.classId, row);
+      {
+        classRow: (typeof activeClassRows)[number];
+        statuses: Array<string | null>;
       }
+    >();
+    for (const row of activeClassRows) {
+      if (!row.teacherId) continue;
+      const currentClass = classesById.get(row.classId) ?? {
+        classRow: row,
+        statuses: [],
+      };
+      currentClass.statuses.push(row.classRecordStatus ?? null);
+      classesById.set(row.classId, currentClass);
     }
 
-    const uniqueClasses = Array.from(uniqueClassesMap.values());
+    const uniqueClasses = Array.from(classesById.values()).map(
+      ({ classRow, statuses }) => ({
+        ...classRow,
+        allRecordsFinalized:
+          statuses.length > 0 &&
+          statuses.every(
+            (status) =>
+              status !== null && ['finalized', 'locked'].includes(status),
+          ),
+      }),
+    );
     if (uniqueClasses.length === 0) {
       return {
-        message: 'No active teacher assignments found for unfinalized classes.',
+        message: 'No active teacher assignments found for the school year.',
         notifiedClassesCount: 0,
         notifiedTeachersCount: 0,
         details: [],
@@ -940,22 +1077,24 @@ export class AcademicStateService {
       userId: item.teacherId!,
       type: 'grade_finalization_requested' as const,
       referenceId: item.classId,
-      title: `Finalize Grades: ${item.subjectName}`,
-      body: `School year transition is pending. Please finalize grades for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}).`,
+      title: `Grade Finalization Reminder: ${item.subjectName}`,
+      body: item.allRecordsFinalized
+        ? `Your class records for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}) are finalized. This is a reminder that the school year transition is pending.`
+        : `School year transition is pending. Please complete and finalize all class records for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}).`,
       metadata: {
         classId: item.classId,
         sectionId: item.sectionId,
         subjectName: item.subjectName,
         sectionName: item.sectionName,
         gradeLevel: item.sectionGradeLevel,
+        allRecordsFinalized: item.allRecordsFinalized,
         view: 'class-record',
       },
     }));
 
-    const inserted =
-      await this.notificationsService.createBulkDeduped(notificationInputs);
+    await this.notificationsService.createBulk(notificationInputs);
 
-    for (const n of inserted) {
+    for (const n of notificationInputs) {
       this.notificationsGateway.emitToUser(n.userId, {
         id: `gen-${Date.now()}-${n.referenceId || 'ref'}`,
         type: n.type,
@@ -982,7 +1121,7 @@ export class AcademicStateService {
     });
 
     return {
-      message: `Successfully sent ${inserted.length} notification(s) to ${notifiedTeacherIds.size} teacher(s) across ${uniqueClasses.length} unfinalized subject(s).`,
+      message: `Sent ${notificationInputs.length} reminder(s) to ${notifiedTeacherIds.size} teacher(s) across ${uniqueClasses.length} active subject(s).`,
       notifiedClassesCount: uniqueClasses.length,
       notifiedTeachersCount: notifiedTeacherIds.size,
       details: uniqueClasses.map((item) => ({
@@ -991,6 +1130,7 @@ export class AcademicStateService {
         sectionName: item.sectionName,
         gradeLevel: item.sectionGradeLevel,
         teacherId: item.teacherId,
+        allRecordsFinalized: item.allRecordsFinalized,
       })),
     };
   }
@@ -1027,6 +1167,7 @@ export class AcademicStateService {
     const now = new Date();
     let sectionsCreated = 0;
     let classesCreated = 0;
+    let classSchedulesCloned = 0;
     let learningAssetCounts = {
       assessmentsCreated: 0,
       assessmentQuestionsCreated: 0,
@@ -1039,6 +1180,34 @@ export class AcademicStateService {
     };
 
     await this.db.transaction(async (tx) => {
+      const promotedStudentsByGrade = new Map<'8' | '9' | '10', string[]>();
+      const graduatedStudentIds: string[] = [];
+      for (const student of impactTargets.promotionReadiness.studentOutcomes ??
+        []) {
+        if (student.outcome === 'promoted' && student.targetGradeLevel) {
+          const targetGrade = student.targetGradeLevel as '8' | '9' | '10';
+          const studentIds = promotedStudentsByGrade.get(targetGrade) ?? [];
+          studentIds.push(student.studentId);
+          promotedStudentsByGrade.set(targetGrade, studentIds);
+        } else if (student.outcome === 'graduated') {
+          graduatedStudentIds.push(student.studentId);
+        }
+      }
+
+      for (const [gradeLevel, studentIds] of promotedStudentsByGrade) {
+        await tx
+          .update(studentProfiles)
+          .set({ gradeLevel, graduatedAt: null, updatedAt: now })
+          .where(inArray(studentProfiles.userId, studentIds));
+      }
+
+      if (graduatedStudentIds.length > 0) {
+        await tx
+          .update(studentProfiles)
+          .set({ graduatedAt: now, updatedAt: now })
+          .where(inArray(studentProfiles.userId, graduatedStudentIds));
+      }
+
       if (impactTargets.classRecordIdsToFinalize.length > 0) {
         await tx
           .update(classRecords)
@@ -1075,6 +1244,8 @@ export class AcademicStateService {
           .update(sections)
           .set({
             isActive: false,
+            isArchived: true,
+            archivedAt: now,
             updatedAt: now,
           })
           .where(inArray(sections.id, impactTargets.sectionIdsToArchive));
@@ -1102,8 +1273,11 @@ export class AcademicStateService {
               schoolYear: target.schoolYear,
               capacity: section.capacity,
               roomNumber: section.roomNumber,
+              cardPreset: section.cardPreset,
               cardBannerUrl: section.cardBannerUrl,
-              adviserId: null,
+              adviserId: section.adviserId,
+              isArchived: false,
+              archivedAt: null,
               isActive: true,
               createdAt: now,
               updatedAt: now,
@@ -1175,7 +1349,7 @@ export class AcademicStateService {
               subjectCode: sourceClass.subjectCode,
               subjectGradeLevel: sourceClass.subjectGradeLevel,
               sectionId: targetSectionId,
-              teacherId: null,
+              teacherId: sourceClass.teacherId,
               room: sourceClass.room,
               cardPreset: sourceClass.cardPreset,
               cardBannerUrl: sourceClass.cardBannerUrl,
@@ -1212,6 +1386,26 @@ export class AcademicStateService {
           if (targetClassId) {
             sourceToTargetClassId.set(sourceClass.id, targetClassId);
           }
+        }
+
+        const scheduleValues = classCloneCandidates.flatMap(
+          ({ sourceClass }) => {
+            const targetClassId = sourceToTargetClassId.get(sourceClass.id);
+            if (!targetClassId) return [];
+            return sourceClass.schedules.map((schedule) => ({
+              classId: targetClassId,
+              days: schedule.days,
+              startTime: schedule.startTime,
+              endTime: schedule.endTime,
+              createdAt: now,
+              updatedAt: now,
+            }));
+          },
+        );
+
+        if (scheduleValues.length > 0) {
+          await tx.insert(classSchedules).values(scheduleValues);
+          classSchedulesCloned = scheduleValues.length;
         }
 
         learningAssetCounts = await this.cloneClassLearningAssets(
@@ -1258,8 +1452,11 @@ export class AcademicStateService {
         schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
         reusableSectionsCreated: sectionsCreated,
         reusableClassesCreated: classesCreated,
-        classSchedulesCloned: 0,
-        classSchedulesCleared: true,
+        classSchedulesCloned,
+        classSchedulesCleared: false,
+        studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
+        studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
+        studentsGraduated: impactTargets.promotionReadiness.studentsToGraduate,
         reusableContentCloned: learningAssetCounts,
       },
     });
@@ -1274,8 +1471,11 @@ export class AcademicStateService {
         schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
         reusableSectionsCreated: sectionsCreated,
         reusableClassesCreated: classesCreated,
-        classSchedulesCloned: 0,
-        classSchedulesCleared: true,
+        classSchedulesCloned,
+        classSchedulesCleared: false,
+        studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
+        studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
+        studentsGraduated: impactTargets.promotionReadiness.studentsToGraduate,
         reusableContentCloned: learningAssetCounts,
       },
     };

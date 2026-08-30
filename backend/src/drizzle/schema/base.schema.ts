@@ -343,6 +343,7 @@ export const studentProfiles = pgTable(
     familyContact: text('family_contact'),
     // Student-specific fields
     gradeLevel: gradeLevelEnum('grade_level'),
+    graduatedAt: timestamp('graduated_at'),
     // Learner Reference Number — format: XXXXXXYYZZZZ (6-digit school ID + 2-digit school year + 4-digit student number)
     lrn: varchar('lrn', { length: 12 }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -352,6 +353,9 @@ export const studentProfiles = pgTable(
     userIdx: index('student_profiles_user_id_idx').on(table.userId),
     gradeLevelIdx: index('student_profiles_grade_level_idx').on(
       table.gradeLevel,
+    ),
+    graduatedAtIdx: index('student_profiles_graduated_at_idx').on(
+      table.graduatedAt,
     ),
     lrnIdx: unique('student_profiles_lrn_unique').on(table.lrn),
   }),

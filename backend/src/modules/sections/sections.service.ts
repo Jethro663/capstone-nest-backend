@@ -487,6 +487,7 @@ export class SectionsService {
     // Collect only defined extra conditions — avoids unsafe and(...undefined[]) spread.
     const extraConditions: SQL<unknown>[] = [
       eq(studentProfiles.gradeLevel, section.gradeLevel as any),
+      isNull(studentProfiles.graduatedAt),
     ];
     if (filters?.search) {
       const searchCond = or(
@@ -749,15 +750,24 @@ export class SectionsService {
         .select({
           userId: studentProfiles.userId,
           gradeLevel: studentProfiles.gradeLevel,
+          graduatedAt: studentProfiles.graduatedAt,
         })
         .from(studentProfiles)
         .where(inArray(studentProfiles.userId, dto.studentIds));
 
       const profileByStudentId = new Map(
-        profileRows.map((row) => [row.userId, row.gradeLevel]),
+        profileRows.map((row) => [row.userId, row]),
       );
+      const graduatedIds = dto.studentIds.filter((id) =>
+        Boolean(profileByStudentId.get(id)?.graduatedAt),
+      );
+      if (graduatedIds.length > 0) {
+        throw new BadRequestException(
+          `Graduated students cannot be added to a section: ${graduatedIds.join(', ')}`,
+        );
+      }
       const mismatchedIds = dto.studentIds.filter(
-        (id) => profileByStudentId.get(id) !== section.gradeLevel,
+        (id) => profileByStudentId.get(id)?.gradeLevel !== section.gradeLevel,
       );
       if (mismatchedIds.length > 0) {
         throw new BadRequestException(
@@ -2178,7 +2188,11 @@ export class SectionsService {
 
       await tx
         .update(studentProfiles)
-        .set({ gradeLevel: params.targetGradeLevel as any })
+        .set({
+          gradeLevel: params.targetGradeLevel as any,
+          graduatedAt: null,
+          updatedAt: new Date(),
+        })
         .where(inArray(studentProfiles.userId, uniqueStudentIds));
     });
 
@@ -2574,6 +2588,11 @@ export class SectionsService {
             inArray(enrollments.studentId, uniqueStudentIds),
           ),
         );
+
+      await tx
+        .update(studentProfiles)
+        .set({ graduatedAt: new Date(), updatedAt: new Date() })
+        .where(inArray(studentProfiles.userId, uniqueStudentIds));
     });
 
     await this.auditService.log({

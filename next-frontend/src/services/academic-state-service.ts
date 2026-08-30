@@ -46,6 +46,9 @@ export const academicStateService = {
           reusableClassesCreated: number;
           classSchedulesCloned: number;
           classSchedulesCleared: boolean;
+          studentsPromoted: number;
+          studentsRetained: number;
+          studentsGraduated: number;
           reusableContentCloned: {
             assessmentsCreated: number;
             assessmentQuestionsCreated: number;
@@ -76,6 +79,7 @@ export const academicStateService = {
           sectionName: string;
           gradeLevel: string;
           teacherId: string;
+          allRecordsFinalized: boolean;
         }>;
       };
     };

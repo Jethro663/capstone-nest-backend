@@ -25,6 +25,9 @@ export interface AcademicStateImpactPreview {
     promotionReadiness: {
       activeStudentsInCurrentYear: number;
       studentsMissingFinalizedGrades: number;
+      studentsToPromote: number;
+      studentsToRetain: number;
+      studentsToGraduate: number;
       transitionBlocked: boolean;
       message: string | null;
     };

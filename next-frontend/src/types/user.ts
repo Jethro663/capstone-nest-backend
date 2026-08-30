@@ -22,6 +22,7 @@ export interface User {
   phone?: string;
   address?: string;
   gradeLevel?: string;
+  graduatedAt?: string | null;
   familyName?: string;
   familyRelationship?: string;
   familyContact?: string;

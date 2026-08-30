@@ -95,6 +95,34 @@ describe('UsersController', () => {
     });
   });
 
+  it('passes the optional grade-level filter without shifting pagination arguments', async () => {
+    mockUsersService.findAll.mockResolvedValue({
+      data: [],
+      page: 2,
+      limit: 10,
+      total: 0,
+      totalPages: 1,
+    });
+
+    await controller.getAllUsers(
+      'student',
+      'ACTIVE',
+      2,
+      10,
+      'true',
+      'graduated',
+    );
+
+    expect(mockUsersService.findAll).toHaveBeenCalledWith({
+      role: 'student',
+      status: 'ACTIVE',
+      page: 2,
+      limit: 10,
+      includeStatusCounts: true,
+      gradeLevel: 'graduated',
+    });
+  });
+
   it('getUserById uses sanitized service path', async () => {
     mockUsersService.findPublicById.mockResolvedValue({
       id: 'u1',
