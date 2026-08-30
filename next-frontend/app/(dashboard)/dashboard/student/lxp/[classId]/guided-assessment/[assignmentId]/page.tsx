@@ -376,9 +376,9 @@ export default function StudentGuidedAssessmentPage() {
             Your previous answer: {formatAnswer(question, response?.answer)}
           </p>
           {reviewHint ? (
-            <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3.5 text-sm leading-6 text-[#155e75]">
-              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#0f3f56]">
-                <Lightbulb className="h-4 w-4 text-[#0284c7]" />
+            <div className="mt-3 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3.5 text-sm leading-6 text-[var(--student-navy-soft)]">
+              <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--student-navy)]">
+                <Lightbulb className="h-4 w-4 text-[var(--student-navy-soft)]" />
                 <span>Educational Hint / Concept Context</span>
               </div>
               <p className="mt-1">{reviewHint}</p>
@@ -424,13 +424,13 @@ export default function StudentGuidedAssessmentPage() {
 
         <Card className="student-card">
           <CardContent className="space-y-4 p-6">
-            <div className="flex items-center gap-2 text-[#102744]">
-              <CheckCircle2 className="h-5 w-5 text-[#109c4a]" />
+            <div className="flex items-center gap-2 text-[var(--student-navy)]">
+              <CheckCircle2 className="h-5 w-5 text-[var(--student-success-text)]" />
               <h1 className="text-2xl font-semibold">
                 {session.guidedAssessment.title}
               </h1>
             </div>
-            <p className="text-sm text-[#5f6b84]">
+            <p className="text-sm text-[var(--student-text-muted)]">
               Score: <strong>{result.scorePercent}%</strong> (
               {result.correctCount} correct) | Passing score:{" "}
               <strong>{result.passingScore ?? result.attemptSummary?.passingScore ?? 60}%</strong>
@@ -444,7 +444,7 @@ export default function StudentGuidedAssessmentPage() {
                   return (
                     <span
                       key={index}
-                      className="rounded-full border border-[#cbd9ea] bg-white px-3 py-1 text-xs font-black text-[#30415d]"
+                      className="rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-xs font-black text-[var(--student-navy-soft)]"
                     >
                       Try {index + 1}: {attempt?.scorePercent ?? "--"}%
                     </span>
@@ -458,13 +458,13 @@ export default function StudentGuidedAssessmentPage() {
               </div>
             ) : null}
             {result.scoreComparison ? (
-              <section className="rounded-3xl border border-[#b9d9ff] bg-gradient-to-br from-[#f2f8ff] via-white to-[#eaf7ff] p-4 shadow-[0_18px_38px_rgba(56,116,203,0.13)]">
+              <section className="rounded-3xl border border-[var(--student-outline)] bg-[var(--student-white)] p-4 shadow-[0_18px_38px_color-mix(in_srgb,var(--student-navy)_13%,transparent)]">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#2870c8]">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
                       Before vs after
                     </p>
-                    <h2 className="mt-1 text-lg font-black text-[#102744]">
+                    <h2 className="mt-1 text-lg font-black text-[var(--student-navy)]">
                       {getComparisonCopy(result.scoreComparison.trend)}
                     </h2>
                   </div>
@@ -475,19 +475,19 @@ export default function StudentGuidedAssessmentPage() {
                   </StudentStatusChip>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-[#d8e7f8] bg-white/80 p-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#6b7d96]">
+                  <div className="rounded-2xl border border-[var(--student-surface-soft)] bg-white/80 p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--student-text-muted)]">
                       Previous quiz score
                     </p>
-                    <p className="mt-1 text-2xl font-black text-[#30415d]">
+                    <p className="mt-1 text-2xl font-black text-[var(--student-navy-soft)]">
                       {formatComparisonScore(result.scoreComparison.baselineScorePercent)}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-[#bfefd7] bg-[#f1fff7] p-3">
-                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#198554]">
+                  <div className="rounded-2xl border border-[var(--student-success-border)] bg-[var(--student-success-bg)] p-3">
+                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--student-success-text)]">
                       Current AI quiz score
                     </p>
-                    <p className="mt-1 text-2xl font-black text-[#0f7a45]">
+                    <p className="mt-1 text-2xl font-black text-[var(--student-success-text)]">
                       {formatComparisonScore(result.scoreComparison.currentScorePercent)}
                     </p>
                   </div>
@@ -496,8 +496,8 @@ export default function StudentGuidedAssessmentPage() {
             ) : null}
             {result.formativeSummary &&
             typeof result.formativeSummary === "object" ? (
-              <div className="rounded-2xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm text-[#30415d]">
-                <strong className="block text-[#102744]">
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-navy-soft)]">
+                <strong className="block text-[var(--student-navy)]">
                   Formative summary
                 </strong>
                 {"improvedConcepts" in result.formativeSummary &&
@@ -664,7 +664,7 @@ export default function StudentGuidedAssessmentPage() {
               data-testid="guided-hint-panel"
               className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm text-[var(--student-text-soft)]"
             >
-              <strong className="block text-[#102744]">Hint</strong>
+              <strong className="block text-[var(--student-navy)]">Hint</strong>
               <p className="mt-2">{stripRichText(activeQuestion.hint)}</p>
             </div>
           ) : null
@@ -682,7 +682,7 @@ export default function StudentGuidedAssessmentPage() {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <strong className="block text-base text-[#102744]">
+                  <strong className="block text-base text-[var(--student-navy)]">
                     {currentAnswerCorrect
                       ? "Nice hit. You got it."
                       : "Good try. Here is the answer key."}
@@ -713,13 +713,13 @@ export default function StudentGuidedAssessmentPage() {
                 </StudentStatusChip>
               </div>
               {activeQuestionReviewHint ? (
-                <div className="mt-3 rounded-2xl border border-[#bae6fd] bg-[#f0f9ff] p-3 text-[#155e75]">
-                  <strong className="block text-[#0f3f56]">JA clue</strong>
+                <div className="mt-3 rounded-2xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-3 text-[var(--student-navy-soft)]">
+                  <strong className="block text-[var(--student-navy)]">JA clue</strong>
                   <p className="mt-1">{activeQuestionReviewHint}</p>
                 </div>
               ) : null}
               <div className="guided-answer-feedback__explanation mt-3 rounded-2xl border border-white/70 bg-white/70 p-3">
-                <strong className="block text-[#102744]">Why this works</strong>
+                <strong className="block text-[var(--student-navy)]">Why this works</strong>
                 <p className="mt-2">
                   {stripRichText(activeQuestion?.explanation)}
                   {!currentAnswerCorrect && activeQuestion
@@ -736,7 +736,7 @@ export default function StudentGuidedAssessmentPage() {
               <Lightbulb className="mr-2 h-4 w-4" />
               {hintVisible ? "Hint unlocked" : "Show hint"}
             </Button>
-            <span className="text-xs font-medium text-[#7b8aa5]">
+            <span className="text-xs font-medium text-[var(--student-text-muted)]">
               Optional hints before answer. Explanation appears after you
               respond.
             </span>

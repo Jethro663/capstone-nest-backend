@@ -27,10 +27,10 @@ interface CalendarCell {
 const WEEKDAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 const TAG_COLOR: Record<StudentEventTag, string> = {
-  assessment: 'bg-[#d81b50]',
-  announcement: 'bg-[#f97316]',
-  event: 'bg-[#0284c7]',
-  holiday: 'bg-[#059669]',
+  assessment: 'bg-[var(--student-accent)]',
+  announcement: 'bg-[var(--student-warning-text)]',
+  event: 'bg-[var(--student-navy-soft)]',
+  holiday: 'bg-[var(--student-success-text)]',
 };
 
 function createCalendarCells(
@@ -83,9 +83,9 @@ export function StudentCalendarCard({
   );
 
   return (
-    <article className="rounded-[1.4rem] border border-[#e1deeb] bg-[linear-gradient(180deg,#f3f0fa_0%,#f7f4fb_100%)] p-4 shadow-[0_20px_34px_-28px_rgba(22,32,58,0.45)]">
+    <article className="rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-white)] p-4 shadow-[0_20px_34px_-28px_color-mix(in_srgb,var(--student-navy)_45%,transparent)]">
       <header className="flex items-center justify-between">
-        <h2 className="text-[1.55rem] font-semibold tracking-tight text-[#11192f]">
+        <h2 className="text-[1.55rem] font-semibold tracking-tight text-[var(--student-navy)]">
           {monthLabel}
         </h2>
         <div className="inline-flex items-center gap-1.5">
@@ -93,7 +93,7 @@ export function StudentCalendarCard({
             type="button"
             aria-label="Previous month"
             onClick={onPrevMonth}
-            className="grid h-8 w-8 place-items-center rounded-full border border-[#d8d4e6] bg-white text-[#58617a] transition hover:bg-[#f5f1fb]"
+            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)]"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -101,7 +101,7 @@ export function StudentCalendarCard({
             type="button"
             aria-label="Next month"
             onClick={onNextMonth}
-            className="grid h-8 w-8 place-items-center rounded-full border border-[#d8d4e6] bg-white text-[#58617a] transition hover:bg-[#f5f1fb]"
+            className="grid h-8 w-8 place-items-center rounded-full border border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)]"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -112,7 +112,7 @@ export function StudentCalendarCard({
         {WEEKDAY_LABELS.map((label, index) => (
           <span
             key={`${label}-${index}`}
-            className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#7a8095]"
+            className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--student-text-muted)]"
           >
             {label}
           </span>
@@ -128,10 +128,10 @@ export function StudentCalendarCard({
             className={cn(
               'group relative grid min-h-[2.45rem] place-items-center rounded-xl border text-sm font-semibold transition',
               cell.isSelected
-                ? 'border-[#d81b50] bg-[#d81b50] text-white shadow-[0_16px_24px_-20px_rgba(216,27,80,0.95)]'
-                : 'border-[#e3dfed] bg-white text-[#16203a] hover:border-[#d5d0e3] hover:bg-[#fbfaff]',
-              !cell.inCurrentMonth && !cell.isSelected && 'text-[#b5b2c1]',
-              cell.isToday && !cell.isSelected && 'border-[#f4a0b8]',
+                ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-white shadow-[0_16px_24px_-20px_color-mix(in_srgb,var(--student-red)_95%,transparent)]'
+                : 'border-[var(--student-surface-soft)] bg-white text-[var(--student-navy)] hover:border-[var(--student-outline)] hover:bg-[var(--student-surface-soft)]',
+              !cell.inCurrentMonth && !cell.isSelected && 'text-[var(--student-outline)]',
+              cell.isToday && !cell.isSelected && 'border-[var(--student-danger-border)]',
             )}
           >
             <span>{cell.date.getDate()}</span>

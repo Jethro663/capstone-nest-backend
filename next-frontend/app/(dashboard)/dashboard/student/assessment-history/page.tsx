@@ -97,8 +97,8 @@ export default function StudentAssessmentHistoryPage() {
               className="student-profile-input pl-10"
             />
           </div>
-          <Badge className="h-10 rounded-full bg-sky-100 px-4 py-0 text-sky-700">Submitted: {statusSummary.submitted}</Badge>
-          <Badge className="h-10 rounded-full bg-amber-100 px-4 py-0 text-amber-700">In Progress: {statusSummary.inProgress}</Badge>
+          <Badge className="h-10 rounded-full bg-[var(--student-surface-soft)] px-4 py-0 text-[var(--student-navy-soft)]">Submitted: {statusSummary.submitted}</Badge>
+          <Badge className="h-10 rounded-full bg-[var(--student-warning-bg)] px-4 py-0 text-[var(--student-warning-text)]">In Progress: {statusSummary.inProgress}</Badge>
         </CardContent>
       </Card>
 
@@ -133,7 +133,7 @@ export default function StudentAssessmentHistoryPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge className={`rounded-full px-3 py-1 text-xs font-bold ${row.isSubmitted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                    <Badge className={`rounded-full px-3 py-1 text-xs font-bold ${row.isSubmitted ? 'bg-[var(--student-success-bg)] text-[var(--student-success-text)]' : 'bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]'}`}>
                       {row.isSubmitted ? 'Submitted' : 'In Progress'}
                     </Badge>
                     <Badge variant="outline" className="rounded-full px-3 py-1 text-xs font-bold">

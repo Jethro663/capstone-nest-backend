@@ -804,25 +804,25 @@ export default function StudentCoursesPage() {
 
   return (
     <div className="space-y-5 bg-[var(--student-elevated)] p-4 md:p-6">
-      <section className="rounded-[1.35rem] border border-[#e1deea] bg-white p-3.5 shadow-[0_18px_32px_-30px_rgba(22,32,58,0.5)]">
+      <section className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white p-3.5 shadow-[0_18px_32px_-30px_color-mix(in_srgb,var(--student-navy)_50%,transparent)]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="relative w-full lg:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7e88a1]" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--student-text-muted)]" />
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search class, section, or subject code"
-              className="h-11 rounded-xl border-[#ddd8e9] bg-[#faf8fd] pl-9 text-[#27304a] placeholder:text-[#8a93ad] focus-visible:ring-[#d81b50]/35"
+              className="h-11 rounded-xl border-[var(--student-outline)] bg-[var(--student-surface-soft)] pl-9 text-[var(--student-navy-soft)] placeholder:text-[var(--student-text-muted)] focus-visible:ring-[var(--student-accent)]/35"
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[#e4e0ee] bg-[#f7f5fb] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-[#6f7892]">
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-3 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--student-text-muted)]">
               <SlidersHorizontal className="h-3.5 w-3.5" />
               Filters
             </span>
 
-            <div className="inline-flex rounded-full border border-[#e2deea] bg-[#f7f5fb] p-1">
+            <div className="inline-flex rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-1">
               {PRIMARY_TABS.map((entry) => (
                 <button
                   key={entry.value}
@@ -835,8 +835,8 @@ export default function StudentCoursesPage() {
                   className={cn(
                     'rounded-full px-3.5 py-1.5 text-sm font-semibold transition',
                     !showHiddenOnly && tab === entry.value
-                      ? 'bg-white text-[#11192f] shadow-[0_10px_20px_-16px_rgba(22,32,58,0.5)]'
-                      : 'text-[#5c6782] hover:text-[#11192f]',
+                      ? 'bg-white text-[var(--student-navy)] shadow-[0_10px_20px_-16px_color-mix(in_srgb,var(--student-navy)_50%,transparent)]'
+                      : 'text-[var(--student-navy-soft)] hover:text-[var(--student-navy)]',
                   )}
                 >
                   {entry.label}
@@ -849,21 +849,21 @@ export default function StudentCoursesPage() {
               className={cn(
                 'rounded-full border px-3.5 py-2 text-sm font-semibold transition',
                 showHiddenOnly
-                  ? 'border-[#d81b50] bg-[#d81b50] text-white'
-                  : 'border-[#ddd8e8] bg-white text-[#495875] hover:bg-[#f7f5fb]',
+                  ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-white'
+                  : 'border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] hover:bg-[var(--student-surface-soft)]',
               )}
               onClick={() => setShowHiddenOnly((current) => !current)}
             >
               Hidden ({hiddenCourses.length})
             </button>
 
-            <div className="inline-flex rounded-full border border-[#ddd8e8] bg-[#f7f5fb] p-1">
+            <div className="inline-flex rounded-full border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-1">
               <button
                 type="button"
                 data-active={viewMode === 'card'}
                 className={cn(
-                  'grid h-8 w-8 place-items-center rounded-full text-[#55617c] transition',
-                  viewMode === 'card' && 'bg-white text-[#11192f]',
+                  'grid h-8 w-8 place-items-center rounded-full text-[var(--student-navy-soft)] transition',
+                  viewMode === 'card' && 'bg-white text-[var(--student-navy)]',
                 )}
                 onClick={() => void setAndPersistViewMode('card')}
                 aria-label="Card layout"
@@ -874,8 +874,8 @@ export default function StudentCoursesPage() {
                 type="button"
                 data-active={viewMode === 'wide'}
                 className={cn(
-                  'grid h-8 w-8 place-items-center rounded-full text-[#55617c] transition',
-                  viewMode === 'wide' && 'bg-white text-[#11192f]',
+                  'grid h-8 w-8 place-items-center rounded-full text-[var(--student-navy-soft)] transition',
+                  viewMode === 'wide' && 'bg-white text-[var(--student-navy)]',
                 )}
                 onClick={() => void setAndPersistViewMode('wide')}
                 aria-label="Wide layout"
@@ -886,7 +886,7 @@ export default function StudentCoursesPage() {
 
             <Button
               type="button"
-              className="h-10 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white hover:bg-[#c51647]"
+              className="h-10 rounded-xl bg-[var(--student-red)] px-4 text-sm font-semibold text-white hover:bg-[var(--student-red-hover)]"
               onClick={() => void fetchData()}
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
@@ -910,12 +910,12 @@ export default function StudentCoursesPage() {
       </section>
 
       {error ? (
-        <section className="rounded-[1.25rem] border border-[#f5c8d6] bg-[#fff1f6] p-4">
-          <p className="text-sm font-semibold text-[#9f1c44]">{error}</p>
+        <section className="rounded-[1.25rem] border border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] p-4">
+          <p className="text-sm font-semibold text-[var(--student-accent)]">{error}</p>
           <Button
             type="button"
             variant="outline"
-            className="mt-3 border-[#e9a9be] text-[#9f1c44] hover:bg-[#ffe8ef]"
+            className="mt-3 border-[var(--student-danger-border)] text-[var(--student-accent)] hover:bg-[var(--student-danger-bg)]"
             onClick={() => void fetchData()}
           >
             Try Again
@@ -925,16 +925,16 @@ export default function StudentCoursesPage() {
         <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div>
             {filteredCourses.length === 0 ? (
-              <div className="grid min-h-[18rem] place-items-center rounded-[1.45rem] border border-dashed border-[#d5d1e2] bg-white p-6 text-center">
+              <div className="grid min-h-[18rem] place-items-center rounded-[1.45rem] border border-dashed border-[var(--student-outline)] bg-white p-6 text-center">
                 <div>
-                  <p className="text-xl font-semibold text-[#1e2944]">No classes match this filter.</p>
-                  <p className="mt-1 text-sm text-[#667390]">
+                  <p className="text-xl font-semibold text-[var(--student-navy)]">No classes match this filter.</p>
+                  <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                     Try another search term or switch to a different class status.
                   </p>
                   <Button
                     type="button"
                     variant="outline"
-                    className="mt-4 border-[#ddd8e8] bg-[#faf8fd] text-[#3b4865] hover:bg-[#f4f0fa]"
+                    className="mt-4 border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-navy-soft)] hover:bg-[var(--student-surface-soft)]"
                     onClick={() => {
                       setSearchQuery('');
                       setTab('all');

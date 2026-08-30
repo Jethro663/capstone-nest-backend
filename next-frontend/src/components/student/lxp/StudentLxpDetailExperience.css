@@ -1,7 +1,7 @@
 .student-lxp-checkpoint-card {
-  border: 1px solid #ddd5cd;
+  border: 1px solid var(--student-outline);
   border-radius: 14px;
-  background: #fffdfa;
+  background: var(--student-white);
   padding: 14px 16px;
   display: grid;
   gap: 12px;
@@ -13,12 +13,12 @@
 }
 
 .student-lxp-checkpoint-card--interactive:hover {
-  border-color: #d0c3b8;
-  background: #fff9f4;
+  border-color: var(--student-outline-strong);
+  background: var(--student-white);
 }
 
 .student-lxp-checkpoint-card--interactive:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--student-red);
   outline-offset: 2px;
 }
 
@@ -39,21 +39,21 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #f8ece6;
-  color: #974037;
+  background: var(--student-accent-soft);
+  color: var(--student-red);
   font-size: 0.92rem;
   font-weight: 800;
   flex-shrink: 0;
 }
 
 .student-lxp-checkpoint-card[data-type='replay'] .student-lxp-checkpoint-card__index {
-  background: #f6ece8;
-  color: #7f3b46;
+  background: var(--student-danger-bg);
+  color: var(--student-accent);
 }
 
 .student-lxp-checkpoint-card[data-type='guided'] .student-lxp-checkpoint-card__index {
-  background: #eef3fb;
-  color: #335d9d;
+  background: var(--student-surface-soft);
+  color: var(--student-navy-soft);
 }
 
 .student-lxp-checkpoint-card__copy {
@@ -64,7 +64,7 @@
 
 .student-lxp-checkpoint-card__copy h3 {
   margin: 0;
-  color: #211b1b;
+  color: var(--student-text-strong);
   font-size: clamp(1rem, 1.05vw, 1.12rem);
   line-height: 1.28;
   font-weight: 750;
@@ -82,9 +82,9 @@
   align-items: center;
   min-height: 24px;
   border-radius: 999px;
-  border: 1px solid #e4dad1;
-  background: #fcf7f1;
-  color: #6b5d58;
+  border: 1px solid var(--student-outline);
+  background: var(--student-surface-soft);
+  color: var(--student-text-strong);
   padding: 0 9px;
   font-size: 0.74rem;
   font-weight: 700;
@@ -110,37 +110,37 @@
 }
 
 .student-lxp-checkpoint-card__status--completed {
-  background: #e9f8ee;
-  border-color: #afe5c4;
-  color: #0f7a41;
+  background: var(--student-success-bg);
+  border-color: var(--student-success-border);
+  color: var(--student-success-text);
 }
 
 .student-lxp-checkpoint-card__status--open {
-  background: #fff0f1;
-  border-color: #f3c5ca;
-  color: #b91c2f;
+  background: var(--student-danger-bg);
+  border-color: var(--student-danger-border);
+  color: var(--student-accent);
 }
 
 .student-lxp-checkpoint-card__status--closed {
-  background: #f4f1ec;
-  border-color: #ddd4cb;
-  color: #6a5e59;
+  background: var(--student-warning-bg);
+  border-color: var(--student-warning-border);
+  color: var(--student-text-strong);
 }
 
 .student-lxp-checkpoint-card__status--warning {
-  background: #fff7df;
-  border-color: #f6d783;
-  color: #97620e;
+  background: var(--student-warning-bg);
+  border-color: var(--student-warning-border);
+  color: var(--student-warning-text);
 }
 
 .student-lxp-checkpoint-card__attempts {
-  border: 1px solid #dfe8f8;
+  border: 1px solid var(--student-outline);
   border-radius: 16px;
-  background: linear-gradient(135deg, #f6f9ff 0%, #fff9ef 100%);
+  background: var(--student-surface-soft);
   padding: 12px;
   display: grid;
   gap: 10px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: none;
 }
 
 .student-lxp-checkpoint-card__attempts-summary {
@@ -148,13 +148,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: #42526d;
+  color: var(--student-navy-soft);
   font-size: 0.76rem;
   font-weight: 800;
 }
 
 .student-lxp-checkpoint-card__attempts-summary strong {
-  color: #163f7a;
+  color: var(--student-navy-soft);
   font-size: 0.8rem;
 }
 
@@ -176,85 +176,83 @@
 }
 
 .student-lxp-checkpoint-card__attempt-chip--passed {
-  background: #e7f8ee;
-  border-color: #a9e1bf;
-  color: #10713d;
+  background: var(--student-success-bg);
+  border-color: var(--student-success-border);
+  color: var(--student-success-text);
 }
 
 .student-lxp-checkpoint-card__attempt-chip--failed {
-  background: #fff0f1;
-  border-color: #efbdc4;
-  color: #a91e31;
+  background: var(--student-danger-bg);
+  border-color: var(--student-danger-border);
+  color: var(--student-accent);
 }
 
 .student-lxp-checkpoint-card__attempt-chip--active {
-  background: #eef4ff;
-  border-color: #c7d9fb;
-  color: #2259a5;
+  background: var(--student-surface-soft);
+  border-color: var(--student-outline);
+  color: var(--student-navy-soft);
 }
 
 .student-lxp-checkpoint-card__attempt-chip--empty {
-  background: #ffffff;
-  border-color: #e4dad1;
-  color: #746b66;
+  background: var(--student-white);
+  border-color: var(--student-warning-border);
+  color: var(--student-text-muted);
 }
 
 .student-lxp-checkpoint-card__attempt-note {
   margin: 0;
-  color: #5b6577;
+  color: var(--student-navy-soft);
   font-size: 0.75rem;
   font-weight: 700;
 }
 
-/* GREEN Card Panel for Taken & Passed Quizzes */
+/* Semantic state panels */
 .student-lxp-checkpoint-card--passed-quiz {
-  border: 2px solid #10b981 !important;
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
-  box-shadow: 0 4px 14px -3px rgba(16, 185, 129, 0.18) !important;
+  border: 2px solid var(--student-success-text) !important;
+  background: var(--student-success-bg) !important;
+  box-shadow: none !important;
 }
 
 .student-lxp-checkpoint-card--passed-quiz:hover {
-  border-color: #059669 !important;
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border-color: var(--student-success-text) !important;
+  background: var(--student-success-bg) !important;
 }
 
 .student-lxp-checkpoint-card--passed-quiz .student-lxp-checkpoint-card__index {
-  background: #bbf7d0 !important;
-  color: #14532d !important;
+  background: var(--student-success-border) !important;
+  color: var(--student-success-text) !important;
 }
 
-/* RED Card Panel for Not Taken or Failed Quizzes */
 .student-lxp-checkpoint-card--failed-quiz {
-  border: 2px solid #f43f5e !important;
-  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
-  box-shadow: 0 4px 14px -3px rgba(244, 63, 94, 0.18) !important;
+  border: 2px solid var(--student-accent) !important;
+  background: var(--student-danger-bg) !important;
+  box-shadow: none !important;
 }
 
 .student-lxp-checkpoint-card--failed-quiz:hover {
-  border-color: #e11d48 !important;
-  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+  border-color: var(--student-accent) !important;
+  background: var(--student-danger-bg) !important;
 }
 
 .student-lxp-checkpoint-card--failed-quiz .student-lxp-checkpoint-card__index {
-  background: #fecdd3 !important;
-  color: #881337 !important;
+  background: var(--student-danger-border) !important;
+  color: var(--student-accent) !important;
 }
 
-/* AMBER / YELLOW Card Panel for Ongoing Replay Tasks (1..N-1 completed) */
 .student-lxp-checkpoint-card--ongoing-quiz {
-  border: 2px solid #f59e0b !important;
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%) !important;
-  box-shadow: 0 4px 14px -3px rgba(245, 158, 11, 0.18) !important;
+  border: 2px solid var(--student-warning-text) !important;
+  background: var(--student-warning-bg) !important;
+  box-shadow: none !important;
 }
 
 .student-lxp-checkpoint-card--ongoing-quiz:hover {
-  border-color: #d97706 !important;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  border-color: var(--student-warning-text) !important;
+  background: var(--student-warning-bg) !important;
 }
 
 .student-lxp-checkpoint-card--ongoing-quiz .student-lxp-checkpoint-card__index {
-  background: #fde68a !important;
-  color: #78350f !important;
+  background: var(--student-warning-border) !important;
+  color: var(--student-warning-text) !important;
 }
 
 /* Side Score & Title Row Layout */
@@ -282,24 +280,24 @@
   font-size: 0.8rem;
   font-weight: 850;
   letter-spacing: -0.01em;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: none;
 }
 
 .student-lxp-checkpoint-card__score-badge--passed {
-  background: #059669;
-  color: #ffffff;
-  border: 1px solid #047857;
+  background: var(--student-success-text);
+  color: var(--student-white);
+  border: 1px solid var(--student-success-text);
 }
 
 .student-lxp-checkpoint-card__score-badge--failed {
-  background: #e11d48;
-  color: #ffffff;
-  border: 1px solid #be123c;
+  background: var(--student-accent);
+  color: var(--student-white);
+  border: 1px solid var(--student-accent);
 }
 
 .student-lxp-checkpoint-card__score-badge--none {
-  background: #94a3b8;
-  color: #ffffff;
+  background: var(--student-text-muted);
+  color: var(--student-white);
 }
 
 /* Quiz Status Tags (TAKEN • PASSED / TAKEN • FAILED / NOT TAKEN) */
@@ -318,16 +316,16 @@
 
 .student-lxp-checkpoint-card__quiz-tag--passed,
 .student-lxp-checkpoint-card__result-pill--passed {
-  background: #dcfce7 !important;
-  color: #15803d !important;
-  border: 1.5px solid #86efac !important;
+  background: var(--student-success-bg) !important;
+  color: var(--student-success-text) !important;
+  border: 1.5px solid var(--student-success-border) !important;
 }
 
 .student-lxp-checkpoint-card__quiz-tag--failed,
 .student-lxp-checkpoint-card__result-pill--failed {
-  background: #ffe4e6 !important;
-  color: #be123c !important;
-  border: 1.5px solid #fda4af !important;
+  background: var(--student-danger-bg) !important;
+  color: var(--student-accent) !important;
+  border: 1.5px solid var(--student-danger-border) !important;
 }
 
 .student-lxp-checkpoint-card__actions {
@@ -343,9 +341,9 @@
   align-items: center;
   min-height: 30px;
   border-radius: 999px;
-  border: 1px solid #d6ccc3;
-  background: #fffdfa;
-  color: #5d4e4c;
+  border: 1px solid var(--student-outline);
+  background: var(--student-white);
+  color: var(--student-text-strong);
   padding: 0 11px;
   font-size: 0.78rem;
   font-weight: 700;
@@ -354,23 +352,23 @@
 }
 
 .student-lxp-checkpoint-card__link:hover {
-  border-color: #c9bcb0;
-  background: #faf3ec;
-  color: #392e2d;
+  border-color: var(--student-outline-strong);
+  background: var(--student-accent-soft);
+  color: var(--student-red-hover);
 }
 
 .student-lxp-checkpoint-card__button {
   min-height: 30px;
   border-radius: 999px;
-  background: #cf2027;
-  color: #ffffff;
+  background: var(--student-accent);
+  color: var(--student-white);
   padding-inline: 12px;
   font-size: 0.78rem;
   font-weight: 700;
 }
 
 .student-lxp-checkpoint-card__button:hover {
-  background: #b71b21;
+  background: var(--student-red-hover);
 }
 
 @media (max-width: 720px) {
@@ -400,29 +398,29 @@
   }
 }
 .student-lxp-checkpoint-card--not-taken-quiz {
-  border: 2px solid #f43f5e !important;
-  background: linear-gradient(135deg, #fff1f2 0%, #ffe4e6 100%) !important;
-  box-shadow: 0 4px 14px -3px rgba(244, 63, 94, 0.18) !important;
+  border: 2px solid var(--student-accent) !important;
+  background: var(--student-danger-bg) !important;
+  box-shadow: none !important;
 }
 
 .student-lxp-checkpoint-card--not-taken-quiz:hover {
-  border-color: #e11d48 !important;
-  background: linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%) !important;
+  border-color: var(--student-accent) !important;
+  background: var(--student-danger-bg) !important;
 }
 
 .student-lxp-checkpoint-card--not-taken-quiz .student-lxp-checkpoint-card__index {
-  background: #fecdd3 !important;
-  color: #881337 !important;
+  background: var(--student-danger-border) !important;
+  color: var(--student-accent) !important;
 }
 
 .student-lxp-checkpoint-card__quiz-tag--not-taken {
-  background: #ffe4e6;
-  color: #be123c;
-  border-color: #fecdd3;
+  background: var(--student-danger-bg);
+  color: var(--student-accent);
+  border-color: var(--student-danger-border);
 }
 
 .student-lxp-checkpoint-card__result-pill--not-taken {
-  background: #ffe4e6;
-  color: #be123c;
-  border-color: #fecdd3;
+  background: var(--student-danger-bg);
+  color: var(--student-accent);
+  border-color: var(--student-danger-border);
 }

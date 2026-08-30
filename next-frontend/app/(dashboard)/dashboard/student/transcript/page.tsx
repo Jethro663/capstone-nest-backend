@@ -23,9 +23,9 @@ function formatDate(value?: string) {
 }
 
 function getStatusChip(status: string) {
-  if (status === 'completed') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'enrolled') return 'bg-sky-100 text-sky-700';
-  return 'bg-amber-100 text-amber-700';
+  if (status === 'completed') return 'bg-[var(--student-success-bg)] text-[var(--student-success-text)]';
+  if (status === 'enrolled') return 'bg-[var(--student-surface-soft)] text-[var(--student-navy-soft)]';
+  return 'bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]';
 }
 
 export default function StudentTranscriptPage() {

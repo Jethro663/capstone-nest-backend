@@ -59,10 +59,10 @@ function getStatusLabel(course: StudentClassCardData) {
 }
 
 function getStatusClass(statusLabel: string) {
-  if (statusLabel === 'Completed') return 'border-[#bde9d3] bg-[#effcf4] text-[#047857]';
-  if (statusLabel === 'In Progress') return 'border-[#fdd5e1] bg-[#fff1f6] text-[#be123c]';
-  if (statusLabel === 'Archived') return 'border-[#d5deeb] bg-[#f4f8fd] text-[#4e6182]';
-  return 'border-[#cbdaf8] bg-[#eff5ff] text-[#1d4ed8]';
+  if (statusLabel === 'Completed') return 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]';
+  if (statusLabel === 'In Progress') return 'border-[var(--student-danger-bg)] bg-[var(--student-danger-bg)] text-[var(--student-accent)]';
+  if (statusLabel === 'Archived') return 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-navy-soft)]';
+  return 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]';
 }
 
 function isInteractiveTarget(target: EventTarget | null) {
@@ -111,15 +111,14 @@ export function StudentClassCard({
   return (
     <article
       className={cn(
-        'group overflow-hidden rounded-[1.55rem] border border-[#e2dfeb] bg-white shadow-[0_22px_38px_-30px_rgba(17,25,47,0.55),inset_0_1px_0_rgba(255,255,255,0.9)] transition',
-        'hover:-translate-y-1 hover:border-[#d2cddf] hover:shadow-[0_28px_42px_-30px_rgba(17,25,47,0.55)]',
+        'group overflow-hidden rounded-[1.55rem] border border-[var(--student-outline)] bg-white shadow-[0_22px_38px_-30px_color-mix(in_srgb,var(--student-navy)_55%,transparent)] transition',
+        'hover:border-[var(--student-outline-strong)] hover:shadow-[0_28px_42px_-30px_color-mix(in_srgb,var(--student-navy)_55%,transparent)]',
       )}
     >
       <div
         className="relative min-h-[8.65rem] overflow-hidden px-5 pb-5 pt-4"
         style={heroStyle}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.16)_1px,transparent_0)] [background-size:16px_16px]" />
         <div className="relative flex items-start justify-between gap-3">
           <span
             className={cn(
@@ -145,7 +144,7 @@ export function StudentClassCard({
             <div
               data-open={menuOpen}
               className={cn(
-                'absolute right-0 top-[calc(100%+0.4rem)] z-20 grid min-w-[11rem] gap-1 rounded-xl border border-[#dcd8e8] bg-white p-1.5 shadow-[0_20px_36px_-26px_rgba(17,25,47,0.45)] transition',
+                'absolute right-0 top-[calc(100%+0.4rem)] z-20 grid min-w-[11rem] gap-1 rounded-xl border border-[var(--student-outline)] bg-white p-1.5 shadow-[0_20px_36px_-26px_color-mix(in_srgb,var(--student-navy)_45%,transparent)] transition',
                 menuOpen
                   ? 'pointer-events-auto translate-y-0 opacity-100'
                   : 'pointer-events-none -translate-y-1 opacity-0',
@@ -153,7 +152,7 @@ export function StudentClassCard({
             >
               <button
                 type="button"
-                className="rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#f3f0f9]"
+                className="rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)]"
                 onClick={onOpenCustomize}
               >
                 Customize class
@@ -161,7 +160,7 @@ export function StudentClassCard({
               <button
                 type="button"
                 disabled={toggling}
-                className="rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#f3f0f9] disabled:opacity-50"
+                className="rounded-lg px-2.5 py-2 text-left text-sm font-semibold text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)] disabled:opacity-50"
                 onClick={onToggleHidden}
               >
                 {course.isHidden ? 'Restore class' : 'Hide class'}
@@ -187,51 +186,51 @@ export function StudentClassCard({
         aria-label={`Open ${subjectName}`}
         onClick={handleBodyClick}
         onKeyDown={handleBodyKeyDown}
-        className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d81b50]/40 focus-visible:ring-inset"
+        className="space-y-4 px-5 pb-5 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--student-accent)]/40 focus-visible:ring-inset"
       >
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
-            <p className="text-2xl font-semibold leading-none text-[#11192f]">{studentsCount}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#727d97]">
+          <div className="rounded-2xl border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-2 py-2.5 text-center">
+            <p className="text-2xl font-semibold leading-none text-[var(--student-navy)]">{studentsCount}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--student-text-muted)]">
               Students
             </p>
           </div>
-          <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
-            <p className="text-2xl font-semibold leading-none text-[#11192f]">{course.totalLessons}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#727d97]">
+          <div className="rounded-2xl border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-2 py-2.5 text-center">
+            <p className="text-2xl font-semibold leading-none text-[var(--student-navy)]">{course.totalLessons}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--student-text-muted)]">
               Lessons
             </p>
           </div>
-          <div className="rounded-2xl border border-[#e8e4ef] bg-[#faf9fc] px-2 py-2.5 text-center">
-            <p className="text-2xl font-semibold leading-none text-[#11192f]">{course.pendingCount}</p>
-            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[#727d97]">
+          <div className="rounded-2xl border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-2 py-2.5 text-center">
+            <p className="text-2xl font-semibold leading-none text-[var(--student-navy)]">{course.pendingCount}</p>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-[var(--student-text-muted)]">
               Pending
             </p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#e9e4ef] bg-[#fbf9fd] px-3 py-2.5">
+        <div className="rounded-2xl border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between text-xs font-semibold">
-            <span className="inline-flex items-center gap-1.5 text-[#55617d]">
-              <Sparkles className="h-3.5 w-3.5 text-[#d81b50]" />
+            <span className="inline-flex items-center gap-1.5 text-[var(--student-navy-soft)]">
+              <Sparkles className="h-3.5 w-3.5 text-[var(--student-accent)]" />
               Learning progress
             </span>
-            <span className="text-[#d81b50]">{progress}%</span>
+            <span className="text-[var(--student-accent)]">{progress}%</span>
           </div>
           <Progress
             value={progress}
-            className="h-2.5 bg-[#f2d7e1]"
-            indicatorClassName="bg-gradient-to-r from-[#d81b50] to-[#ef476f]"
+            className="h-2.5 bg-[var(--student-danger-border)]"
+            indicatorClassName="bg-[var(--student-red)]"
           />
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#f2f0f8] px-2.5 py-1 text-xs font-semibold text-[#4b5875]">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[var(--student-surface-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--student-navy-soft)]">
             <BookOpen className="h-3.5 w-3.5" />
             {course.totalAssessments} tasks
           </div>
 
-          <div className="inline-flex items-center gap-1 rounded-full bg-[#eef4ff] px-2.5 py-1 text-xs font-semibold text-[#31518a]">
+          <div className="inline-flex items-center gap-1 rounded-full bg-[var(--student-surface-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--student-navy-soft)]">
             <Users className="h-3.5 w-3.5" />
             {sectionName}
           </div>
@@ -240,7 +239,7 @@ export function StudentClassCard({
         <div className="grid grid-cols-2 gap-2">
           <Link
             href={viewAssignmentsHref}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[#d9d6e7] bg-[#f2f0f9] text-sm font-semibold text-[#2f3f5d] transition hover:bg-[#ebe8f5]"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-sm font-semibold text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)]"
           >
             <ClipboardCheck className="h-4 w-4" />
             View Tasks
@@ -249,7 +248,7 @@ export function StudentClassCard({
           <button
             type="button"
             onClick={openClass}
-            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[#d81b50] px-4 text-sm font-semibold text-white shadow-[0_14px_26px_-20px_rgba(216,27,80,0.95)] transition hover:bg-[#c51647]"
+            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl bg-[var(--student-red)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--student-red-hover)]"
           >
             {ctaLabel}
             <ArrowRight className="h-4 w-4" />
@@ -258,7 +257,7 @@ export function StudentClassCard({
 
         <Link
           href={viewScheduleHref}
-          className="inline-flex w-full items-center justify-center rounded-xl border border-[#e2dfeb] bg-white px-3 py-2.5 text-sm font-semibold text-[#44526f] transition hover:bg-[#f8f6fc]"
+          className="inline-flex w-full items-center justify-center rounded-xl border border-[var(--student-outline)] bg-white px-3 py-2.5 text-sm font-semibold text-[var(--student-navy-soft)] transition hover:bg-[var(--student-surface-soft)]"
         >
           View Schedule
         </Link>

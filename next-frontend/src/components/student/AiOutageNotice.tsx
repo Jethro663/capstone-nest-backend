@@ -24,7 +24,7 @@ export function AiOutageNotice({
   return (
     <section
       className={cn(
-        'flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50/90 p-4 text-amber-950 shadow-sm',
+        'flex items-center gap-4 rounded-2xl border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] p-4 text-[var(--student-warning-text)] shadow-sm',
         className,
       )}
       role="status"
@@ -40,18 +40,18 @@ export function AiOutageNotice({
         />
       </div>
       <div className="min-w-0">
-        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-amber-700">
+        <p className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-warning-text)]">
           <AlertTriangle className="h-3.5 w-3.5" />
           AI offline
         </p>
-        <h2 className="mt-1 text-lg font-bold text-amber-950">
+        <h2 className="mt-1 text-lg font-bold text-[var(--student-warning-text)]">
           {title}
         </h2>
-        <p className="mt-1 text-sm font-semibold leading-6 text-amber-900">
+        <p className="mt-1 text-sm font-semibold leading-6 text-[var(--student-warning-text)]">
           {body}
         </p>
         {message ? (
-          <p className="mt-1 text-xs font-medium text-amber-800">{message}</p>
+          <p className="mt-1 text-xs font-medium text-[var(--student-warning-text)]">{message}</p>
         ) : null}
       </div>
     </section>

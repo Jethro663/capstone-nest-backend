@@ -94,7 +94,7 @@ function StarRating({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="inline-flex flex-wrap gap-1 rounded-full border border-slate-200 bg-slate-50 p-1">
+    <div className="inline-flex flex-wrap gap-1 rounded-full border border-[var(--student-outline)] bg-[var(--student-white)] p-1">
       {[0, 1, 2, 3, 4, 5].map((rating) => (
         <button
           key={rating}
@@ -103,8 +103,8 @@ function StarRating({
           onClick={() => onChange(rating)}
           className={
             value === rating
-              ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-slate-900 px-2.5 text-xs font-semibold text-white shadow-sm'
-              : 'inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2.5 text-xs font-semibold text-slate-600 hover:bg-white hover:text-slate-950'
+              ? 'inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[var(--student-navy)] px-2.5 text-xs font-semibold text-white shadow-sm'
+              : 'inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2.5 text-xs font-semibold text-[var(--student-text-muted)] hover:bg-white hover:text-[var(--student-text-strong)]'
           }
         >
           {rating === 0 ? (
@@ -275,19 +275,19 @@ export function StudentTeacherEvaluationsPage() {
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-4 pb-10 pt-3 text-[var(--student-text-strong)]">
-      <header className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <header className="flex flex-col gap-4 border-b border-[var(--student-outline)] pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
             Evaluation Inbox
           </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">Evaluations</h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--student-text-strong)]">Evaluations</h1>
+          <p className="mt-1 text-sm text-[var(--student-text-muted)]">
             Answer assigned forms for the system, JA Hub, and teachers.
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:items-end">
           {teacherDashboard ? (
-            <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700">
+            <span className="inline-flex w-fit rounded-full border border-[var(--student-outline)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--student-text-strong)]">
               Current quarter {teacherDashboard.currentAcademicState.quarter}
             </span>
           ) : null}
@@ -303,8 +303,8 @@ export function StudentTeacherEvaluationsPage() {
                 }}
                 className={
                   filter === item.value
-                    ? 'rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm'
-                    : 'rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50'
+                    ? 'rounded-full bg-[var(--student-navy)] px-4 py-2 text-sm font-semibold text-white shadow-sm'
+                    : 'rounded-full border border-[var(--student-outline)] bg-white px-4 py-2 text-sm font-semibold text-[var(--student-text-strong)] hover:border-[var(--student-outline)] hover:bg-[var(--student-white)]'
                 }
               >
                 {item.label}
@@ -318,16 +318,16 @@ export function StudentTeacherEvaluationsPage() {
         <aside className="space-y-5">
           <section>
             <div className="mb-3">
-              <h2 className="text-base font-bold text-slate-950">Pending Evaluations</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <h2 className="text-base font-bold text-[var(--student-text-strong)]">Pending Evaluations</h2>
+              <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                 Filters only show assigned forms. They do not create new forms.
               </p>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-white shadow-sm">
               {loading ? (
-                <p className="px-4 py-5 text-sm text-slate-500">Loading pending evaluations...</p>
+                <p className="px-4 py-5 text-sm text-[var(--student-text-muted)]">Loading pending evaluations...</p>
               ) : pendingItems.length === 0 ? (
-                <div className="px-4 py-8 text-sm text-slate-500">
+                <div className="px-4 py-8 text-sm text-[var(--student-text-muted)]">
                   No assigned forms for the selected filter.
                 </div>
               ) : (
@@ -339,8 +339,8 @@ export function StudentTeacherEvaluationsPage() {
                       type="button"
                       onClick={() => setActiveKey(item.id)}
                       className={cn(
-                        'block w-full border-b border-slate-100 px-4 py-4 text-left last:border-b-0',
-                        selected ? 'bg-slate-900 text-white' : 'bg-white hover:bg-slate-50',
+                        'block w-full border-b border-[var(--student-outline)] px-4 py-4 text-left last:border-b-0',
+                        selected ? 'bg-[var(--student-navy)] text-white' : 'bg-white hover:bg-[var(--student-white)]',
                       )}
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -349,7 +349,7 @@ export function StudentTeacherEvaluationsPage() {
                             'rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em]',
                             selected
                               ? 'bg-white/10 text-white'
-                              : 'bg-slate-100 text-slate-600',
+                              : 'bg-[var(--student-white)] text-[var(--student-text-muted)]',
                           )}
                         >
                           {filterLabel(item.filter)}
@@ -357,17 +357,17 @@ export function StudentTeacherEvaluationsPage() {
                         <span
                           className={cn(
                             'text-[11px] font-semibold',
-                            selected ? 'text-slate-300' : 'text-slate-500',
+                            selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]',
                           )}
                         >
                           Open
                         </span>
                       </div>
                       <p className="mt-3 text-sm font-semibold">{item.title}</p>
-                      <p className={cn('mt-1 text-xs', selected ? 'text-slate-300' : 'text-slate-500')}>
+                      <p className={cn('mt-1 text-xs', selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]')}>
                         {item.subtitle}
                       </p>
-                      <p className={cn('mt-2 line-clamp-2 text-sm', selected ? 'text-slate-200' : 'text-slate-600')}>
+                      <p className={cn('mt-2 line-clamp-2 text-sm', selected ? 'text-[var(--student-text-muted)]' : 'text-[var(--student-text-muted)]')}>
                         {item.description}
                       </p>
                     </button>
@@ -379,26 +379,26 @@ export function StudentTeacherEvaluationsPage() {
 
           <section>
             <div className="mb-3">
-              <h2 className="text-base font-bold text-slate-950">Completed Evaluations</h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <h2 className="text-base font-bold text-[var(--student-text-strong)]">Completed Evaluations</h2>
+              <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                 Submitted forms remain visible for your history.
               </p>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-white shadow-sm">
               {completedItems.length === 0 ? (
-                <p className="px-4 py-5 text-sm text-slate-500">No completed evaluations yet.</p>
+                <p className="px-4 py-5 text-sm text-[var(--student-text-muted)]">No completed evaluations yet.</p>
               ) : (
                 completedItems.map((item) => (
                   <div
                     key={item.id}
-                    className="border-b border-slate-100 px-4 py-4 last:border-b-0"
+                    className="border-b border-[var(--student-outline)] px-4 py-4 last:border-b-0"
                   >
-                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-[var(--student-success-text)]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Submitted
                     </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">{item.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.subtitle}</p>
+                    <p className="mt-2 text-sm font-semibold text-[var(--student-text-strong)]">{item.title}</p>
+                    <p className="mt-1 text-xs text-[var(--student-text-muted)]">{item.subtitle}</p>
                   </div>
                 ))
               )}
@@ -406,27 +406,27 @@ export function StudentTeacherEvaluationsPage() {
           </section>
         </aside>
 
-        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+        <section className="mx-auto w-full max-w-4xl rounded-2xl border border-[var(--student-outline)] bg-white shadow-sm">
+          <div className="flex flex-col gap-2 border-b border-[var(--student-outline)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-950">
+              <h2 className="text-lg font-bold text-[var(--student-text-strong)]">
                 {activeItem ? activeItem.title : 'Choose an Evaluation'}
               </h2>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                 {activeItem ? activeItem.subtitle : 'Select a pending form to start rating.'}
               </p>
             </div>
             {activeItem ? (
-              <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-slate-600">
+              <span className="w-fit rounded-full bg-[var(--student-white)] px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-[var(--student-text-muted)]">
                 {filterLabel(activeItem.filter)}
               </span>
             ) : null}
           </div>
           {!activeItem ? (
             <div className="flex min-h-[26rem] items-center justify-center px-6 py-10">
-              <div className="max-w-sm rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center">
-                <p className="text-base font-semibold text-slate-950">No evaluation selected</p>
-                <p className="mt-2 text-sm text-slate-600">
+              <div className="max-w-sm rounded-2xl border border-dashed border-[var(--student-outline)] bg-[var(--student-white)] px-6 py-8 text-center">
+                <p className="text-base font-semibold text-[var(--student-text-strong)]">No evaluation selected</p>
+                <p className="mt-2 text-sm text-[var(--student-text-muted)]">
                   Select one assigned evaluation on the left to open the form.
                 </p>
               </div>
@@ -435,26 +435,26 @@ export function StudentTeacherEvaluationsPage() {
             <div>
               <div className="max-h-[30rem] overflow-auto">
                 <table className="w-full min-w-[720px] border-separate border-spacing-0">
-                  <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <thead className="sticky top-0 z-10 bg-[var(--student-white)] text-left text-xs font-bold uppercase tracking-[0.14em] text-[var(--student-text-muted)]">
                     <tr>
-                      <th className="border-b border-slate-200 px-5 py-3">Question</th>
-                      <th className="w-[19rem] border-b border-slate-200 px-5 py-3">Rating</th>
+                      <th className="border-b border-[var(--student-outline)] px-5 py-3">Question</th>
+                      <th className="w-[19rem] border-b border-[var(--student-outline)] px-5 py-3">Rating</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeItem.questions.map((question, index) => (
-                      <tr key={question.key} className="border-b border-slate-100">
-                        <td className="border-b border-slate-100 px-5 py-4 align-top">
+                      <tr key={question.key} className="border-b border-[var(--student-outline)]">
+                        <td className="border-b border-[var(--student-outline)] px-5 py-4 align-top">
                           <div className="flex gap-3">
-                            <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+                            <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--student-white)] text-xs font-bold text-[var(--student-text-muted)]">
                               {index + 1}
                             </span>
-                            <p className="text-sm font-semibold leading-6 text-slate-950">
+                            <p className="text-sm font-semibold leading-6 text-[var(--student-text-strong)]">
                               {question.label}
                             </p>
                           </div>
                         </td>
-                        <td className="border-b border-slate-100 px-5 py-4 align-top">
+                        <td className="border-b border-[var(--student-outline)] px-5 py-4 align-top">
                           <StarRating
                             questionKey={question.key}
                             value={ratings[question.key] ?? null}
@@ -469,28 +469,28 @@ export function StudentTeacherEvaluationsPage() {
                 </table>
               </div>
 
-              <div className="border-t border-slate-200 px-5 py-4">
+              <div className="border-t border-[var(--student-outline)] px-5 py-4">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Optional comment</p>
+                    <p className="text-sm font-semibold text-[var(--student-text-strong)]">Optional comment</p>
                     <Textarea
                       value={comment}
                       onChange={(event) => setComment(event.target.value)}
                       rows={4}
-                      className="mt-2 border-slate-200 bg-slate-50 focus-visible:ring-slate-300"
+                      className="mt-2 border-[var(--student-outline)] bg-[var(--student-white)] focus-visible:ring-[var(--student-outline)]"
                       placeholder="Share a short comment about this evaluation."
                     />
                   </div>
                   <Button
                     onClick={() => void handleSubmit()}
                     disabled={submitting || hasMissingRating}
-                    className="min-w-[11rem] bg-slate-900 text-white hover:bg-slate-800"
+                    className="min-w-[11rem] bg-[var(--student-red)] text-white hover:bg-[var(--student-red-hover)]"
                   >
                     {submitting ? 'Submitting...' : 'Submit Evaluation'}
                   </Button>
                 </div>
                 {hasMissingRating ? (
-                  <p className="mt-3 text-xs text-slate-500">
+                  <p className="mt-3 text-xs text-[var(--student-text-muted)]">
                     Rate every question before submitting. A 0-star answer is allowed.
                   </p>
                 ) : null}

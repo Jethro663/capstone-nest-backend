@@ -12,17 +12,17 @@ interface StudentUpcomingEventsCardProps {
 }
 
 const TAG_ACCENT_CLASS: Record<StudentEventTag, string> = {
-  assessment: 'bg-[#d81b50]',
-  announcement: 'bg-[#f97316]',
-  event: 'bg-[#0284c7]',
-  holiday: 'bg-[#059669]',
+  assessment: 'bg-[var(--student-accent)]',
+  announcement: 'bg-[var(--student-warning-text)]',
+  event: 'bg-[var(--student-navy-soft)]',
+  holiday: 'bg-[var(--student-success-text)]',
 };
 
 const DATE_BADGE_CLASS: Record<StudentEventTag, string> = {
-  assessment: 'border-[#f7bfd1] bg-[#fff2f7] text-[#b11140]',
-  announcement: 'border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]',
-  event: 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]',
-  holiday: 'border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]',
+  assessment: 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-accent)]',
+  announcement: 'border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] text-[var(--student-accent)]',
+  event: 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
+  holiday: 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]',
 };
 
 function tagLabel(tag: StudentEventTag) {
@@ -43,15 +43,15 @@ export function StudentUpcomingEventsCard({
   const remainingCount = Math.max(sourceEvents.length - visibleEvents.length, 0);
 
   return (
-    <article className="rounded-[1.4rem] border border-[#e1deeb] bg-[#fbfafe] p-4 shadow-[0_20px_34px_-28px_rgba(22,32,58,0.45)]">
+    <article className="rounded-[1.4rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 shadow-[0_20px_34px_-28px_color-mix(in_srgb,var(--student-navy)_45%,transparent)]">
       <header className="mb-3 flex items-center justify-between gap-3">
         <div className="inline-flex items-start gap-2.5">
-          <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[#e2deeb] bg-white text-[#3b4561]">
+          <div className="grid h-10 w-10 place-items-center rounded-2xl border border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)]">
             <CalendarClock className="h-5 w-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#7d8399]">Upcoming</p>
-            <h3 className="text-[1.35rem] font-semibold tracking-tight text-[#11192f]">
+            <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[var(--student-text-muted)]">Upcoming</p>
+            <h3 className="text-[1.35rem] font-semibold tracking-tight text-[var(--student-navy)]">
               {selectedEvents.length > 0 ? 'Events on selected day' : 'Upcoming Events'}
             </h3>
           </div>
@@ -59,7 +59,7 @@ export function StudentUpcomingEventsCard({
 
         <Link
           href={seeAllHref}
-          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-[#d81b50] transition hover:bg-[#ffeaf1]"
+          className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold text-[var(--student-accent)] transition hover:bg-[var(--student-danger-bg)]"
         >
           See All{remainingCount > 0 ? ` (${remainingCount} more)` : ''}
           <ChevronRight className="h-4 w-4" />
@@ -67,9 +67,9 @@ export function StudentUpcomingEventsCard({
       </header>
 
       {visibleEvents.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-[#d7d3e4] bg-white px-4 py-6 text-center">
-          <p className="text-sm font-semibold text-[#27304a]">No events yet.</p>
-          <p className="mt-1 text-xs text-[#7280a0]">Class updates and deadlines will appear here.</p>
+        <div className="rounded-2xl border border-dashed border-[var(--student-outline)] bg-white px-4 py-6 text-center">
+          <p className="text-sm font-semibold text-[var(--student-navy-soft)]">No events yet.</p>
+          <p className="mt-1 text-xs text-[var(--student-text-muted)]">Class updates and deadlines will appear here.</p>
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -77,7 +77,7 @@ export function StudentUpcomingEventsCard({
             <Link
               key={event.id}
               href={event.href}
-              className="group relative block overflow-hidden rounded-2xl border border-[#e2dfeb] bg-white p-3.5 transition hover:-translate-y-0.5 hover:border-[#d3cedf] hover:shadow-[0_18px_28px_-24px_rgba(22,32,58,0.5)]"
+              className="group relative block overflow-hidden rounded-2xl border border-[var(--student-outline)] bg-white p-3.5 transition hover:border-[var(--student-outline-strong)] hover:shadow-[0_18px_28px_-24px_color-mix(in_srgb,var(--student-navy)_50%,transparent)]"
             >
               <i
                 className={cn(
@@ -98,9 +98,9 @@ export function StudentUpcomingEventsCard({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[1.03rem] font-semibold text-[#11192f]">{event.title}</p>
-                  <p className="mt-0.5 truncate text-sm text-[#5f6d8b]">{event.subtitle}</p>
-                  <span className="mt-1.5 inline-flex rounded-full border border-[#e4e2ec] bg-[#f8f7fc] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.09em] text-[#5b6783]">
+                  <p className="truncate text-[1.03rem] font-semibold text-[var(--student-navy)]">{event.title}</p>
+                  <p className="mt-0.5 truncate text-sm text-[var(--student-text-muted)]">{event.subtitle}</p>
+                  <span className="mt-1.5 inline-flex rounded-full border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.09em] text-[var(--student-navy-soft)]">
                     {tagLabel(event.tag)}
                   </span>
                 </div>

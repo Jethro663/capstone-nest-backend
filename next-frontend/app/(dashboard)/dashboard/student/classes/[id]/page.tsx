@@ -171,12 +171,12 @@ const MODULE_STOCK_IMAGES = [
   '/images/modules/module-stock-science.svg',
 ] as const;
 const MODULE_GRADIENT_OPTIONS = [
-  { id: 'oceanic-blue', label: 'Oceanic Blue', background: 'linear-gradient(135deg, #2b4fdd 0%, #3c62f0 100%)' },
-  { id: 'emerald-wave', label: 'Emerald Wave', background: 'linear-gradient(135deg, #089f79 0%, #10b78f 100%)' },
-  { id: 'violet-burst', label: 'Violet Burst', background: 'linear-gradient(135deg, #7f22f0 0%, #9a44f6 100%)' },
-  { id: 'sunset-orange', label: 'Sunset Orange', background: 'linear-gradient(135deg, #d76a1f 0%, #f08d2d 100%)' },
-  { id: 'rose-dusk', label: 'Rose Dusk', background: 'linear-gradient(135deg, #d42756 0%, #ef5f87 100%)' },
-  { id: 'slate-night', label: 'Slate Night', background: 'linear-gradient(135deg, #1d304f 0%, #2e4a73 100%)' },
+  { id: 'oceanic-blue', label: 'Navy', background: 'var(--student-navy)' },
+  { id: 'emerald-wave', label: 'Campus Red', background: 'var(--student-red-hover)' },
+  { id: 'violet-burst', label: 'Deep Navy', background: 'var(--student-navy-soft)' },
+  { id: 'sunset-orange', label: 'Navy to Red', background: 'linear-gradient(135deg, var(--student-navy) 0%, var(--student-red-hover) 100%)' },
+  { id: 'rose-dusk', label: 'Red to Navy', background: 'linear-gradient(135deg, var(--student-red-hover) 0%, var(--student-navy) 100%)' },
+  { id: 'slate-night', label: 'Navy Stripe', background: 'linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy) 72%, var(--student-red) 72%, var(--student-red) 80%, var(--student-navy-soft) 80%, var(--student-navy-soft) 100%)' },
 ] as const;
 const studentClassGuidePages: Array<{
   title: string;
@@ -1999,11 +1999,11 @@ export default function StudentClassDetailPage() {
                         <div
                           className="student-class-module-card__media"
                           style={{
-                            backgroundImage: `linear-gradient(120deg, rgba(8, 23, 44, 0.26), rgba(8, 23, 44, 0.12)), url(${mediaSource})`,
+                            backgroundImage: `linear-gradient(120deg, color-mix(in srgb, var(--student-navy) 26%, transparent), color-mix(in srgb, var(--student-navy) 12%, transparent)), url(${mediaSource})`,
                             backgroundSize: `${imageScale}%`,
                             backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
                             backgroundRepeat: 'no-repeat',
-                            backgroundColor: '#f1f5fb',
+                            backgroundColor: 'var(--student-surface-soft)',
                           }}
                         >
                           <div

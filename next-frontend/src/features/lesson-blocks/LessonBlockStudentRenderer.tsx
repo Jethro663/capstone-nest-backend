@@ -82,7 +82,7 @@ function SecureLessonImage({
 
   if (fileId && failed) {
     return (
-      <div className="rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-6 text-sm font-semibold text-amber-800">
+      <div className="rounded-[1.35rem] border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] px-4 py-6 text-sm font-semibold text-[var(--student-warning-text)]">
         This image could not be loaded. Ask your teacher to reattach it from Nexora Library.
       </div>
     );
@@ -125,12 +125,12 @@ function ObjectiveList({ blockId, items }: { blockId: string; items: Array<{ id:
             onClick={() => setChecked((current) => ({ ...current, [itemId]: !current[itemId] }))}
             className={`flex gap-3 rounded-[1rem] border px-3 py-3 text-left transition ${
               checked[itemId]
-                ? 'border-emerald-200 bg-emerald-50/80'
+                ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)]'
                 : 'border-[var(--student-outline)] bg-white/85 hover:border-[var(--student-outline-strong)]'
             }`}
           >
             <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-              checked[itemId] ? 'bg-emerald-600 text-white' : 'bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]'
+              checked[itemId] ? 'bg-[var(--student-success-text)] text-white' : 'bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]'
             }`}>
               {checked[itemId] ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
             </span>
@@ -219,7 +219,7 @@ function LessonCheckpoint({
       />
 
       {!isConfigured ? (
-        <div className="mt-3 flex gap-2 rounded-[1rem] border border-amber-200 bg-amber-50 px-3 py-3 text-xs font-semibold leading-5 text-amber-800">
+        <div className="mt-3 flex gap-2 rounded-[1rem] border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] px-3 py-3 text-xs font-semibold leading-5 text-[var(--student-warning-text)]">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           This checkpoint has no correct answer configured yet, so it will not block lesson completion.
         </div>
@@ -238,7 +238,7 @@ function LessonCheckpoint({
               onClick={() => selectChoice(choice.id)}
               className={`flex items-start gap-3 rounded-[1rem] border px-3 py-3 text-left transition ${
                 showCorrect
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
+                  ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
                   : showWrong
                     ? 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-danger-text)]'
                     : selected
@@ -248,7 +248,7 @@ function LessonCheckpoint({
             >
               <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-black ${
                 showCorrect
-                  ? 'border-emerald-500 bg-emerald-600 text-white'
+                  ? 'border-[var(--student-success-border)] bg-[var(--student-success-text)] text-white'
                   : showWrong
                     ? 'border-[var(--student-red)] bg-[var(--student-red)] text-white'
                     : selected
@@ -268,7 +268,7 @@ function LessonCheckpoint({
       {hasAttempted && isConfigured ? (
         <div className={`mt-3 rounded-[1rem] border px-3 py-3 text-sm font-semibold ${
           isCorrect
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            ? 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]'
             : 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-danger-text)]'
         }`}>
           {isCorrect ? 'Correct. The completion timer can count this checkpoint.' : 'Not yet. Try another answer before the lesson timer can start.'}
@@ -524,7 +524,7 @@ export function LessonBlockStudentRenderer({
     const embedUrl = getYouTubeEmbedUrl(getBlockUrlValue(normalizedBlock.content));
     if (!embedUrl) {
       return (
-        <div id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-800">
+        <div id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] px-4 py-4 text-sm font-semibold text-[var(--student-warning-text)]">
           Video is unavailable. Ask your teacher to check the YouTube link.
         </div>
       );

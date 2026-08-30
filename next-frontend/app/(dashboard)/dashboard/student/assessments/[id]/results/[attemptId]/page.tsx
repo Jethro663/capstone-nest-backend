@@ -149,10 +149,10 @@ function ResultPill({
   tone?: 'neutral' | 'success' | 'warning' | 'info';
 }) {
   const styles = {
-    neutral: 'border-slate-200 bg-slate-100 text-slate-700',
-    success: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    warning: 'border-amber-200 bg-amber-50 text-amber-700',
-    info: 'border-blue-200 bg-blue-50 text-blue-700',
+    neutral: 'border-[var(--student-outline)] bg-[var(--student-white)] text-[var(--student-text-strong)]',
+    success: 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]',
+    warning: 'border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]',
+    info: 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-navy-soft)]',
   } satisfies Record<string, string>;
 
   return (
@@ -292,7 +292,7 @@ export default function StudentAssessmentResultsPage() {
   }
 
   if (!result) {
-    return <p className="px-4 text-slate-500">Results not found.</p>;
+    return <p className="px-4 text-[var(--student-text-muted)]">Results not found.</p>;
   }
 
   const {
@@ -392,18 +392,18 @@ export default function StudentAssessmentResultsPage() {
           variant="ghost"
           size="sm"
           onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)}
-          className="text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+          className="text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]"
         >
           <ArrowLeft className="mr-1 h-4 w-4" />
           Back
         </Button>
-        <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_34px_-28px_rgba(15,23,42,0.35)]">
+        <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_34px_-28px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
           <div className="flex flex-col items-center gap-3 py-6 text-center">
-            <div className="rounded-full border border-slate-200 bg-slate-50 p-3 text-slate-500">
+            <div className="rounded-full border border-[var(--student-outline)] bg-[var(--student-white)] p-3 text-[var(--student-text-muted)]">
               <Hourglass className="h-5 w-5" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">Awaiting Teacher Review</h2>
-            <p className="max-w-md text-sm text-slate-600">
+            <h2 className="text-xl font-bold text-[var(--student-text-strong)]">Awaiting Teacher Review</h2>
+            <p className="max-w-md text-sm text-[var(--student-text-muted)]">
               Your submission is complete. Your teacher will return the grade and feedback soon.
             </p>
           </div>
@@ -420,7 +420,7 @@ export default function StudentAssessmentResultsPage() {
             variant="ghost"
             size="sm"
             onClick={() => router.push(`/dashboard/student/assessments/${assessmentId}`)}
-            className="text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+            className="text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]"
           >
             <ArrowLeft className="mr-1 h-4 w-4" />
             Back
@@ -428,12 +428,12 @@ export default function StudentAssessmentResultsPage() {
         </div>
 
         <div>
-          <StudentActionCard className="border border-slate-200 bg-white shadow-[0_22px_44px_-34px_rgba(15,23,42,0.4)]">
+          <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_22px_44px_-34px_color-mix(in_srgb,var(--student-navy)_40%,transparent)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assessment Result</p>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-950">{assessmentTitle}</h1>
-                <p className="max-w-2xl text-sm text-slate-600">{resultSummary}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--student-text-muted)]">Assessment Result</p>
+                <h1 className="text-3xl font-bold tracking-tight text-[var(--student-text-strong)]">{assessmentTitle}</h1>
+                <p className="max-w-2xl text-sm text-[var(--student-text-muted)]">{resultSummary}</p>
               </div>
               <ResultPill tone={passed ? 'success' : 'warning'}>
                 {passed ? 'Passed' : 'Needs Improvement'}
@@ -441,25 +441,25 @@ export default function StudentAssessmentResultsPage() {
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Score</p>
-                <p className="mt-2 text-4xl font-black leading-none text-slate-950">{pct}%</p>
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">Score</p>
+                <p className="mt-2 text-4xl font-black leading-none text-[var(--student-text-strong)]">{pct}%</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">
                   {reviewableResponses.length > 0 ? 'Correct' : 'Review'}
                 </p>
-                <p className="mt-2 text-4xl font-black leading-none text-slate-950">
+                <p className="mt-2 text-4xl font-black leading-none text-[var(--student-text-strong)]">
                   {reviewableResponses.length > 0 ? correctCount : 'Locked'}
                 </p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Attempt</p>
-                <p className="mt-2 text-4xl font-black leading-none text-slate-950">#{attemptNumber ?? '?'}</p>
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">Attempt</p>
+                <p className="mt-2 text-4xl font-black leading-none text-[var(--student-text-strong)]">#{attemptNumber ?? '?'}</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Returned</p>
-                <p className="mt-2 text-sm font-semibold leading-snug text-slate-900">
+              <div className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">Returned</p>
+                <p className="mt-2 text-sm font-semibold leading-snug text-[var(--student-text-strong)]">
                   {formatDateTime((result as AttemptResult & { returnedAt?: string }).returnedAt) ?? 'Recorded'}
                 </p>
               </div>
@@ -468,7 +468,7 @@ export default function StudentAssessmentResultsPage() {
         </div>
 
         <div>
-          <div className="inline-flex w-full flex-wrap rounded-2xl border border-slate-200 bg-white p-1 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)] sm:w-auto">
+          <div className="inline-flex w-full flex-wrap rounded-2xl border border-[var(--student-outline)] bg-white p-1 shadow-[0_14px_30px_-28px_color-mix(in_srgb,var(--student-navy)_45%,transparent)] sm:w-auto">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'review', label: 'Review' },
@@ -480,8 +480,8 @@ export default function StudentAssessmentResultsPage() {
                 onClick={() => setActiveTab(tab.id as 'overview' | 'review' | 'next')}
                 className={
                   activeTab === tab.id
-                    ? 'rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white'
-                    : 'rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900'
+                    ? 'rounded-xl bg-[var(--student-navy)] px-4 py-2 text-sm font-semibold text-white'
+                    : 'rounded-xl px-4 py-2 text-sm font-semibold text-[var(--student-text-muted)] transition hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]'
                 }
               >
                 {tab.label}
@@ -492,28 +492,28 @@ export default function StudentAssessmentResultsPage() {
 
         {activeTab === 'overview' ? (
           <div className="space-y-4">
-            <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+            <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
               <StudentSectionHeader
                 title="What You Can See Now"
                 subtitle="This is what is currently visible for this result."
-                className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+                className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
               />
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 {visibilityItems.map((item) => (
-                  <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">{item.value}</p>
+                  <div key={item.label} className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--student-text-muted)]">{item.label}</p>
+                    <p className="mt-2 text-sm font-semibold text-[var(--student-text-strong)]">{item.value}</p>
                   </div>
                 ))}
               </div>
             </StudentActionCard>
 
             {feedbackStatus?.message ? (
-              <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+              <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Result Release</p>
-                    <p className="mt-1 text-sm text-slate-600">{feedbackStatus.message}</p>
+                    <p className="text-sm font-semibold text-[var(--student-text-strong)]">Result Release</p>
+                    <p className="mt-1 text-sm text-[var(--student-text-muted)]">{feedbackStatus.message}</p>
                   </div>
                   <ResultPill tone={getReleaseTone(feedbackStatus)}>
                     {getReleaseLabel(feedbackStatus)}
@@ -523,14 +523,14 @@ export default function StudentAssessmentResultsPage() {
             ) : null}
 
             {teacherFeedback ? (
-              <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+              <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500">
+                  <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] p-2 text-[var(--student-text-muted)]">
                     <FileText className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Teacher Feedback</p>
-                    <p className="mt-1 text-sm text-slate-600">{teacherFeedback}</p>
+                    <p className="text-sm font-semibold text-[var(--student-text-strong)]">Teacher Feedback</p>
+                    <p className="mt-1 text-sm text-[var(--student-text-muted)]">{teacherFeedback}</p>
                   </div>
                 </div>
               </StudentActionCard>
@@ -541,21 +541,21 @@ export default function StudentAssessmentResultsPage() {
         {showReviewTabContent && isFileUpload ? (
           <div>
             <div className="grid gap-4 xl:grid-cols-[1fr_0.92fr]">
-              <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+              <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                 <StudentSectionHeader
                   title="Rubric Breakdown"
                   subtitle="See how your returned score was distributed across the rubric."
-                  className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+                  className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
                 />
                 <div className="mt-4 space-y-3">
                   {rubricRows.length > 0 ? (
                     rubricRows.map(({ criterion, pointsEarned }: { criterion: RubricCriterion; pointsEarned: number }) => (
-                      <div key={criterion.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div key={criterion.id} className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-slate-900">{criterion.title}</p>
+                            <p className="font-semibold text-[var(--student-text-strong)]">{criterion.title}</p>
                             {criterion.description ? (
-                              <p className="mt-1 text-sm text-slate-600">{criterion.description}</p>
+                              <p className="mt-1 text-sm text-[var(--student-text-muted)]">{criterion.description}</p>
                             ) : null}
                           </div>
                           <ResultPill tone="info">
@@ -565,7 +565,7 @@ export default function StudentAssessmentResultsPage() {
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                    <div className="rounded-2xl border border-dashed border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-5 text-sm text-[var(--student-text-muted)]">
                       No rubric breakdown is attached to this result.
                     </div>
                   )}
@@ -573,25 +573,25 @@ export default function StudentAssessmentResultsPage() {
               </StudentActionCard>
 
               <div id="student-results-submission">
-                <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+                <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                   <StudentSectionHeader
                     title="Your Submission"
                     subtitle="Review the files that were included in the returned submission."
-                    className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+                    className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
                     action={<ResultPill tone="info">{submittedFiles.length} file{submittedFiles.length === 1 ? '' : 's'}</ResultPill>}
                   />
                   <div className="mt-4 space-y-3">
                     {submittedFiles.length > 0 ? (
                       submittedFiles.map((file) => (
-                        <div key={file.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                          <p className="font-semibold text-slate-900">{file.originalName}</p>
-                          <p className="mt-1 text-sm text-slate-600">
+                        <div key={file.id} className="rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4">
+                          <p className="font-semibold text-[var(--student-text-strong)]">{file.originalName}</p>
+                          <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                             {file.mimeType} | {(file.sizeBytes / 1024).toFixed(1)} KB
                           </p>
                         </div>
                       ))
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                      <div className="rounded-2xl border border-dashed border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-5 text-sm text-[var(--student-text-muted)]">
                         No submission files were attached to this result.
                       </div>
                     )}
@@ -607,14 +607,14 @@ export default function StudentAssessmentResultsPage() {
             <StudentSectionHeader
               title="Study Hints"
               subtitle="Use these clues first. Full question review will unlock after the release delay."
-              className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+              className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
             />
             <div className="space-y-3">
               {hintResponses.map((response, index) => (
                 <div key={response.questionId}>
-                  <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+                  <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-slate-900">Question {index + 1}</p>
+                      <p className="text-sm font-semibold text-[var(--student-text-strong)]">Question {index + 1}</p>
                       <ResultPill tone="warning">
                         <Lightbulb className="mr-1 h-3.5 w-3.5" />
                         Hint only
@@ -622,9 +622,9 @@ export default function StudentAssessmentResultsPage() {
                     </div>
                     <RichTextRenderer
                       html={response.question?.content ?? '<p>No question content.</p>'}
-                      className="mt-2 font-medium text-slate-900"
+                      className="mt-2 font-medium text-[var(--student-text-strong)]"
                     />
-                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    <div className="mt-3 rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-3 text-sm text-[var(--student-text-muted)]">
                       {response.hint || 'Revisit the lesson and compare your process before checking the full review later.'}
                     </div>
                   </StudentActionCard>
@@ -639,7 +639,7 @@ export default function StudentAssessmentResultsPage() {
             <StudentSectionHeader
               title="Question Review"
               subtitle="Open each item to review your answer, the correct answer, and grounded support."
-              className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+              className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
             />
             <div className="space-y-3">
               {responses.map((response, index) => {
@@ -659,7 +659,7 @@ export default function StudentAssessmentResultsPage() {
 
                 return (
                   <div key={response.questionId}>
-                    <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+                    <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                       <button
                         type="button"
                         onClick={() => setExpandedQuestionIds((current) => {
@@ -674,7 +674,7 @@ export default function StudentAssessmentResultsPage() {
                         className="flex w-full flex-wrap items-center justify-between gap-3 text-left"
                       >
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-slate-900">Question {index + 1}</p>
+                          <p className="text-sm font-semibold text-[var(--student-text-strong)]">Question {index + 1}</p>
                           {response.isCorrect ? (
                             <ResultPill tone="success">
                               <CircleCheckBig className="mr-1 h-3.5 w-3.5" />
@@ -691,13 +691,13 @@ export default function StudentAssessmentResultsPage() {
                           ) : null}
                         </div>
                         <div className="flex items-center gap-3">
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-[var(--student-text-muted)]">
                             {response.pointsEarned ?? 0}/{response.question?.points ?? 0} pts
                           </p>
                           {isExpanded ? (
-                            <ChevronUp className="h-4 w-4 text-slate-500" />
+                            <ChevronUp className="h-4 w-4 text-[var(--student-text-muted)]" />
                           ) : (
-                            <ChevronDown className="h-4 w-4 text-slate-500" />
+                            <ChevronDown className="h-4 w-4 text-[var(--student-text-muted)]" />
                           )}
                         </div>
                       </button>
@@ -706,7 +706,7 @@ export default function StudentAssessmentResultsPage() {
                         <div className="mt-4">
                           <RichTextRenderer
                             html={response.question?.content ?? '<p>No question content.</p>'}
-                            className="font-medium text-slate-900"
+                            className="font-medium text-[var(--student-text-strong)]"
                           />
 
                           {response.question?.imageUrl ? (
@@ -717,31 +717,31 @@ export default function StudentAssessmentResultsPage() {
                                 width={960}
                                 height={540}
                                 unoptimized
-                                className="max-h-48 h-auto w-auto rounded-xl border border-slate-200 object-contain"
+                                className="max-h-48 h-auto w-auto rounded-xl border border-[var(--student-outline)] object-contain"
                               />
                             </div>
                           ) : null}
 
                           <div className="mt-3 space-y-3 text-sm">
                             <p>
-                              <span className="text-slate-500">Your previous answer: </span>
-                              <span className="font-semibold text-slate-900">{answerText ?? 'No answer provided'}</span>
+                              <span className="text-[var(--student-text-muted)]">Your previous answer: </span>
+                              <span className="font-semibold text-[var(--student-text-strong)]">{answerText ?? 'No answer provided'}</span>
                             </p>
 
                             {questionHint ? (
-                              <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3.5 text-amber-900">
-                                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-900">
-                                  <Lightbulb className="h-4 w-4 text-amber-600" />
+                              <div className="rounded-2xl border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] p-3.5 text-[var(--student-warning-text)]">
+                                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[var(--student-warning-text)]">
+                                  <Lightbulb className="h-4 w-4 text-[var(--student-warning-text)]" />
                                   <span>Educational Hint / Concept Context</span>
                                 </div>
-                                <p className="mt-1.5 text-xs leading-relaxed text-amber-800">{questionHint}</p>
+                                <p className="mt-1.5 text-xs leading-relaxed text-[var(--student-warning-text)]">{questionHint}</p>
                               </div>
                             ) : null}
 
                             {correctAnswerText ? (
                               <p>
-                                <span className="text-slate-500">Correct answer: </span>
-                                <span className="font-semibold text-emerald-700">{correctAnswerText}</span>
+                                <span className="text-[var(--student-text-muted)]">Correct answer: </span>
+                                <span className="font-semibold text-[var(--student-success-text)]">{correctAnswerText}</span>
                               </p>
                             ) : null}
                           </div>
@@ -749,7 +749,7 @@ export default function StudentAssessmentResultsPage() {
                           {response.question?.explanation ? (
                             <RichTextRenderer
                               html={response.question.explanation}
-                              className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800"
+                              className="mt-3 rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] p-3 text-sm text-[var(--student-text-strong)]"
                             />
                           ) : null}
 
@@ -758,7 +758,7 @@ export default function StudentAssessmentResultsPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                                className="border-[var(--student-outline)] bg-white text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]"
                                 onClick={() => void handleAskJa(response.questionId)}
                               >
                                 Ask Ja
@@ -777,14 +777,14 @@ export default function StudentAssessmentResultsPage() {
 
         {showReviewTabContent && !isFileUpload && !showQuestionReview && !showHintPreview ? (
           <div>
-            <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+            <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
               <div className="flex items-start gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 text-slate-500">
+                <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] p-2 text-[var(--student-text-muted)]">
                   <Hourglass className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Review Not Available Yet</p>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="text-sm font-semibold text-[var(--student-text-strong)]">Review Not Available Yet</p>
+                  <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                     This result currently shows your score only. Detailed answer review is not available for this release mode.
                   </p>
                 </div>
@@ -795,11 +795,11 @@ export default function StudentAssessmentResultsPage() {
 
         {showNextTabContent ? (
           <div className="space-y-4">
-            <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+            <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
               <StudentSectionHeader
                 title="Next Step"
                 subtitle="Choose one clear action so you know what to do after viewing this result."
-                className="[&_h2]:text-slate-900 [&_p]:text-slate-600"
+                className="[&_h2]:text-[var(--student-text-strong)] [&_p]:text-[var(--student-text-muted)]"
                 action={<ResultPill tone="info">Action Ready</ResultPill>}
               />
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -810,8 +810,8 @@ export default function StudentAssessmentResultsPage() {
                     onClick={step.onClick}
                     className={
                       step.tone === 'primary'
-                        ? 'rounded-2xl border border-slate-900 bg-slate-900 px-4 py-4 text-left text-sm font-semibold text-white transition hover:bg-slate-800'
-                        : 'rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-800 transition hover:bg-white'
+                        ? 'rounded-2xl border border-[var(--student-outline)] bg-[var(--student-navy)] px-4 py-4 text-left text-sm font-semibold text-white transition hover:bg-[var(--student-navy)]'
+                        : 'rounded-2xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4 text-left text-sm font-semibold text-[var(--student-text-strong)] transition hover:bg-white'
                     }
                   >
                     {step.label}
@@ -821,14 +821,14 @@ export default function StudentAssessmentResultsPage() {
             </StudentActionCard>
 
             {!isFileUpload && responses.some((response) => response.isCorrect === false) ? (
-              <StudentActionCard className="border border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+              <StudentActionCard className="border border-[var(--student-outline)] bg-white shadow-[0_18px_36px_-30px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
                 <div className="flex items-start gap-3">
-                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-2 text-blue-600">
+                  <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-2 text-[var(--student-navy-soft)]">
                     <Lightbulb className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Need extra help?</p>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="text-sm font-semibold text-[var(--student-text-strong)]">Need extra help?</p>
+                    <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                       JA can walk you through one missed item step by step without dumping the full answer immediately.
                     </p>
                   </div>
@@ -942,11 +942,11 @@ export default function StudentAssessmentResultsPage() {
                   key={value}
                   type="button"
                   onClick={() => setRating(value)}
-                  className="rounded-md p-1 transition hover:scale-105"
+                  className="rounded-md p-1 transition hover:bg-[var(--student-surface-soft)]"
                   aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
                 >
                   <Star
-                    className={`h-7 w-7 ${rating >= value ? 'fill-yellow-400 text-yellow-400' : 'text-slate-300'}`}
+                    className={`h-7 w-7 ${rating >= value ? 'fill-[var(--student-warning-text)] text-[var(--student-warning-text)]' : 'text-[var(--student-text-muted)]'}`}
                   />
                 </button>
               ))}

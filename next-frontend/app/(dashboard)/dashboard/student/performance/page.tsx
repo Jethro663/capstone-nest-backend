@@ -347,7 +347,7 @@ function QuarterlyTrendChart({
                     key={`${quarter.label}-${subject.key}`}
                     className="sp-trend__bar"
                     style={{
-                      backgroundColor: TREND_COLORS[subjectIndex] || '#94a3b8',
+                      backgroundColor: TREND_COLORS[subjectIndex] || 'var(--student-text-muted)',
                       height: toHeight(subject[quarter.key]),
                     }}
                     initial={reducedMotion ? false : { opacity: 0, height: '0%' }}
@@ -375,7 +375,7 @@ function QuarterlyTrendChart({
           <div key={subject.key} className="sp-trend__legend-item">
             <span
               className="sp-trend__legend-dot"
-              style={{ backgroundColor: TREND_COLORS[index] || '#94a3b8' }}
+              style={{ backgroundColor: TREND_COLORS[index] || 'var(--student-text-muted)' }}
             />
             {subject.label}
           </div>

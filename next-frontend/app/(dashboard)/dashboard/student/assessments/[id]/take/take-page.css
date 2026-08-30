@@ -1,102 +1,54 @@
-.student-assessment-take-theme {
-  --student-page-gradient:
-    radial-gradient(
-      circle at 12% 0%,
-      rgba(148, 163, 184, 0.14),
-      transparent 34%
-    ),
-    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 54%, #f8fafc 100%);
-  --student-surface: #f8fafc;
-  --student-surface-soft: #eef2f7;
-  --student-elevated: #ffffff;
-  --student-glass: rgba(255, 255, 255, 0.92);
-  --student-outline: rgba(148, 163, 184, 0.22);
-  --student-outline-strong: rgba(100, 116, 139, 0.3);
-  --student-border-strong: rgba(148, 163, 184, 0.24);
-  --student-text-strong: #0f172a;
-  --student-text-soft: #475569;
-  --student-text-muted: #64748b;
-  --student-accent: #0f172a;
-  --student-accent-contrast: #ffffff;
-  --student-accent-soft: #e2e8f0;
-  --student-accent-soft-strong: #cbd5e1;
-  --student-success-bg: #ecfdf5;
-  --student-success-border: #a7f3d0;
-  --student-success-text: #047857;
-  --student-danger-bg: #fef2f2;
-  --student-danger-border: #fecaca;
-  --student-danger-text: #b91c1c;
-  --student-shadow: 0 24px 48px -36px rgba(15, 23, 42, 0.28);
-  --student-shadow-hover: 0 28px 54px -34px rgba(15, 23, 42, 0.34);
-}
-
-.student-assessment-take-theme .student-page {
-  background: transparent;
-}
-
-.student-assessment-take-theme .student-button-solid {
-  border-color: transparent;
-  background: #0f172a;
-  box-shadow: 0 18px 32px -24px rgba(15, 23, 42, 0.42);
-}
-
-.student-assessment-take-theme .student-button-solid:hover {
-  background: #1e293b;
-  box-shadow: 0 22px 36px -22px rgba(15, 23, 42, 0.48);
-}
-
-.student-assessment-take-theme .student-card {
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-}
-
+.student-assessment-take-theme,
 .guided-intervention-assessment {
-  --student-page-gradient:
-    radial-gradient(
-      circle at 12% 6%,
-      rgba(56, 189, 248, 0.22),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at 92% 10%,
-      rgba(251, 191, 36, 0.24),
-      transparent 26%
-    ),
-    linear-gradient(135deg, #eff6ff 0%, #fff7ed 44%, #ecfdf5 100%);
-  --student-surface: #f8fbff;
-  --student-surface-soft: #eef7ff;
-  --student-elevated: #ffffff;
-  --student-glass: rgba(255, 255, 255, 0.88);
-  --student-outline: rgba(59, 130, 246, 0.18);
-  --student-outline-strong: rgba(14, 165, 233, 0.34);
-  --student-accent: #2563eb;
-  --student-accent-soft: #dbeafe;
-  --student-accent-soft-strong: #93c5fd;
+  --student-page-gradient: var(--student-white);
+  --student-surface: var(--student-white);
+  --student-surface-soft: color-mix(in srgb, var(--student-navy) 4%, var(--student-white) 96%);
+  --student-elevated: var(--student-white);
+  --student-glass: color-mix(in srgb, var(--student-white) 94%, transparent);
+  --student-outline: color-mix(in srgb, var(--student-navy) 14%, var(--student-white) 86%);
+  --student-outline-strong: color-mix(in srgb, var(--student-navy) 24%, var(--student-white) 76%);
+  --student-border-strong: var(--student-outline-strong);
+  --student-text-strong: var(--student-navy);
+  --student-text-soft: var(--student-text-muted);
+  --student-accent: var(--student-red);
+  --student-accent-contrast: var(--student-white);
+  --student-accent-soft: color-mix(in srgb, var(--student-red) 10%, var(--student-white) 90%);
+  --student-accent-soft-strong: color-mix(in srgb, var(--student-red) 24%, var(--student-white) 76%);
+}
+
+.student-assessment-take-theme .student-page,
+.guided-intervention-assessment .student-page {
+  border: 1px solid var(--student-outline);
+  background: var(--student-white);
+  box-shadow: var(--student-shadow);
+}
+
+.student-assessment-take-theme .student-card,
+.guided-intervention-assessment .student-card,
+.guided-result-question {
+  border-color: var(--student-outline);
+  background: var(--student-white);
+  box-shadow: none;
+}
+
+.student-assessment-take-theme .student-button-solid,
+.guided-intervention-assessment .student-button-solid {
+  border-color: transparent;
+  background: var(--student-red);
+  color: var(--student-white);
+  box-shadow: none;
+}
+
+.student-assessment-take-theme .student-button-solid:hover,
+.guided-intervention-assessment .student-button-solid:hover {
+  background: var(--student-red-hover);
 }
 
 .guided-intervention-assessment::before,
-.guided-intervention-assessment::after {
-  content: "";
-  pointer-events: none;
-  position: absolute;
-  z-index: 0;
-  border-radius: 999px;
-  filter: blur(2px);
-}
-
-.guided-intervention-assessment::before {
-  width: 11rem;
-  height: 11rem;
-  right: -3.4rem;
-  top: 8rem;
-  background: rgba(14, 165, 233, 0.16);
-}
-
-.guided-intervention-assessment::after {
-  width: 8rem;
-  height: 8rem;
-  left: -2.8rem;
-  bottom: 9rem;
-  background: rgba(245, 158, 11, 0.16);
+.guided-intervention-assessment::after,
+.guided-answer-feedback::before,
+.guided-result-question::before {
+  content: none;
 }
 
 .guided-intervention-assessment > * {
@@ -104,91 +56,22 @@
   z-index: 1;
 }
 
-.guided-intervention-assessment .student-page {
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background:
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.86),
-      rgba(239, 246, 255, 0.82)
-    ),
-    var(--student-page-gradient);
-  box-shadow: 0 28px 70px -52px rgba(37, 99, 235, 0.7);
-}
-
-.guided-intervention-assessment .student-card {
-  border-color: rgba(37, 99, 235, 0.16);
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(251, 191, 36, 0.16),
-      transparent 34%
-    ),
-    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow:
-    0 26px 58px -46px rgba(37, 99, 235, 0.62),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.92),
-    inset -1px -1px 0 rgba(37, 99, 235, 0.08);
-}
-
-.guided-intervention-assessment [data-answer-state="correct"],
-.guided-intervention-assessment [data-answer-state="correct-selected"] {
-  transform: translateY(-1px);
-}
-
 .guided-answer-feedback,
 .guided-result-question {
   position: relative;
   overflow: hidden;
-  box-shadow:
-    0 24px 46px -36px rgba(15, 23, 42, 0.58),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.guided-answer-feedback::before,
-.guided-result-question::before {
-  content: "";
-  position: absolute;
-  inset: -5rem -4rem auto auto;
-  width: 11rem;
-  height: 11rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.46);
-  pointer-events: none;
 }
 
 .guided-answer-feedback--correct {
-  border-color: rgba(16, 185, 129, 0.42);
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(16, 185, 129, 0.18),
-      transparent 36%
-    ),
-    linear-gradient(135deg, #ecfdf5, #d1fae5 62%, #f0fdfa);
-  color: #064e3b;
+  border-color: var(--student-success-border);
+  background: var(--student-success-bg);
+  color: var(--student-success-text);
 }
 
 .guided-answer-feedback--review {
-  border-color: rgba(245, 158, 11, 0.44);
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(251, 191, 36, 0.2),
-      transparent 36%
-    ),
-    linear-gradient(135deg, #fffbeb, #fed7aa 72%, #fff7ed);
-  color: #78350f;
-}
-
-.guided-result-question {
-  background:
-    radial-gradient(
-      circle at 100% 0%,
-      rgba(14, 165, 233, 0.12),
-      transparent 34%
-    ),
-    linear-gradient(180deg, #ffffff, #f8fbff);
+  border-color: var(--student-warning-border);
+  background: var(--student-warning-bg);
+  color: var(--student-warning-text);
 }
 
 .guided-answer-feedback__summary {
@@ -197,44 +80,32 @@
 
 .guided-answer-feedback__student,
 .guided-answer-feedback__correct {
-  border: 1px solid rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--student-outline);
   border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--student-white);
   padding: 0.78rem;
   font-weight: 850;
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .guided-answer-feedback__student {
-  color: #102744;
+  color: var(--student-navy);
 }
 
 .guided-answer-feedback__student.is-wrong {
-  border-color: rgba(244, 63, 94, 0.4);
-  background: rgba(255, 241, 242, 0.92);
-  color: #be123c;
+  border-color: var(--student-danger-border);
+  background: var(--student-danger-bg);
+  color: var(--student-danger-text);
 }
 
 .guided-answer-feedback__correct {
-  border-color: rgba(16, 185, 129, 0.42);
-  background: rgba(236, 253, 245, 0.9);
-  color: #047857;
+  border-color: var(--student-success-border);
+  background: var(--student-success-bg);
+  color: var(--student-success-text);
 }
 
 .guided-answer-feedback__explanation {
   position: relative;
-  box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.9),
-    0 14px 28px -26px rgba(15, 23, 42, 0.42);
-}
-
-.guided-intervention-assessment .student-button-solid {
-  background: linear-gradient(135deg, #2563eb, #0ea5e9 54%, #f59e0b);
-  box-shadow: 0 20px 34px -26px rgba(37, 99, 235, 0.75);
-}
-
-.guided-intervention-assessment .student-button-solid:hover {
-  background: linear-gradient(135deg, #1d4ed8, #0284c7 54%, #d97706);
+  box-shadow: none;
 }
 
 .guided-ja-corner {
@@ -245,8 +116,7 @@
   z-index: 20;
   width: min(10rem, 28vw);
   opacity: 0.92;
-  filter: drop-shadow(0 22px 22px rgba(37, 99, 235, 0.22));
-  animation: guidedJaFloat 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 18px 18px color-mix(in srgb, var(--student-navy) 22%, transparent));
 }
 
 .guided-ja-corner--result {
@@ -256,16 +126,6 @@
 .guided-ja-corner img {
   width: 100%;
   height: auto;
-}
-
-@keyframes guidedJaFloat {
-  0%,
-  100% {
-    transform: translateY(0) rotate(-1deg);
-  }
-  50% {
-    transform: translateY(-8px) rotate(1.5deg);
-  }
 }
 
 @media (max-width: 768px) {

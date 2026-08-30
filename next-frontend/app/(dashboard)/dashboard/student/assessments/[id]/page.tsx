@@ -52,18 +52,18 @@ function getAttemptStatus(attempt: AssessmentAttempt): { tone: StatusTone; label
 
 function getToneClasses(tone: StatusTone) {
   if (tone === 'success') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    return 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]';
   }
   if (tone === 'warning') {
-    return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] text-[var(--student-warning-text)]';
   }
   if (tone === 'danger') {
-    return 'border-rose-200 bg-rose-50 text-rose-700';
+    return 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-red-hover)]';
   }
   if (tone === 'info') {
-    return 'border-sky-200 bg-sky-50 text-sky-700';
+    return 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-navy-soft)]';
   }
-  return 'border-slate-200 bg-white text-slate-900';
+  return 'border-[var(--student-outline)] bg-white text-[var(--student-text-strong)]';
 }
 
 function SummaryMetric({
@@ -77,14 +77,14 @@ function SummaryMetric({
 }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">
+      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
         {label}
       </p>
       <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
-        <strong className="block text-[1.35rem] font-black leading-none text-slate-900">
+        <strong className="block text-[1.35rem] font-black leading-none text-[var(--student-text-strong)]">
           {value}
         </strong>
-        {caption ? <span className="block pb-0.5 text-xs text-slate-500">{caption}</span> : null}
+        {caption ? <span className="block pb-0.5 text-xs text-[var(--student-text-muted)]">{caption}</span> : null}
       </div>
     </div>
   );
@@ -239,21 +239,21 @@ export default function StudentAssessmentPage() {
         ? 'danger'
         : 'neutral';
   const pageShellClass = 'mx-auto w-full max-w-6xl space-y-4 pb-8';
-  const heroCardClass = 'overflow-hidden rounded-[1.1rem] border border-slate-200 bg-white shadow-[0_24px_60px_-48px_rgba(15,23,42,0.35)]';
-  const sectionDividerClass = 'divide-y divide-slate-200';
-  const summaryCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)] transition-colors hover:bg-slate-50';
-  const detailCardClass = 'rounded-[1rem] border border-slate-200 bg-white px-4 py-4 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)]';
-  const submittedPillClass = 'rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-semibold text-slate-700 shadow-[0_10px_22px_-20px_rgba(15,23,42,0.18)]';
-  const primaryButtonClass = 'w-full sm:w-auto sm:min-w-[10rem] border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800';
-  const backButtonClass = 'inline-flex h-auto items-center gap-2 px-0 py-0 text-slate-600 hover:bg-transparent hover:text-slate-900';
-  const submittedMutedTextClass = 'text-slate-500';
-  const submittedStrongTextClass = 'text-slate-900';
-  const submittedChipClass = 'inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-700';
-  const submittedEmptyClass = 'grid justify-items-center gap-2 rounded-[0.9rem] border border-dashed border-slate-300 bg-white px-4 py-8 text-center';
-  const submittedEmptyIconClass = 'grid h-12 w-12 place-items-center rounded-full border border-slate-200 bg-slate-50 text-slate-500';
-  const submittedListShellClass = 'overflow-hidden rounded-[0.9rem] border border-slate-200 bg-white';
-  const submittedListRowClass = 'bg-white transition-colors hover:bg-slate-50';
-  const submittedOutlineButtonClass = 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900';
+  const heroCardClass = 'overflow-hidden rounded-[1.1rem] border border-[var(--student-outline)] bg-white shadow-[0_24px_60px_-48px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]';
+  const sectionDividerClass = 'divide-y divide-[var(--student-outline)]';
+  const summaryCardClass = 'rounded-[1rem] border border-[var(--student-outline)] bg-white px-4 py-3 shadow-[0_10px_24px_-20px_color-mix(in_srgb,var(--student-navy)_22%,transparent)] transition-colors hover:bg-[var(--student-white)]';
+  const detailCardClass = 'rounded-[1rem] border border-[var(--student-outline)] bg-white px-4 py-4 shadow-[0_10px_24px_-20px_color-mix(in_srgb,var(--student-navy)_22%,transparent)]';
+  const submittedPillClass = 'rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-sm font-semibold text-[var(--student-text-strong)] shadow-[0_10px_22px_-20px_color-mix(in_srgb,var(--student-navy)_18%,transparent)]';
+  const primaryButtonClass = 'w-full sm:w-auto sm:min-w-[10rem] border border-transparent bg-[var(--student-red)] text-white shadow-none hover:bg-[var(--student-red-hover)]';
+  const backButtonClass = 'inline-flex h-auto items-center gap-2 px-0 py-0 text-[var(--student-text-muted)] hover:bg-transparent hover:text-[var(--student-text-strong)]';
+  const submittedMutedTextClass = 'text-[var(--student-text-muted)]';
+  const submittedStrongTextClass = 'text-[var(--student-text-strong)]';
+  const submittedChipClass = 'inline-flex w-fit items-center rounded-full border border-[var(--student-outline)] bg-[var(--student-white)] px-3 py-1 text-sm font-semibold text-[var(--student-text-strong)]';
+  const submittedEmptyClass = 'grid justify-items-center gap-2 rounded-[0.9rem] border border-dashed border-[var(--student-outline)] bg-white px-4 py-8 text-center';
+  const submittedEmptyIconClass = 'grid h-12 w-12 place-items-center rounded-full border border-[var(--student-outline)] bg-[var(--student-white)] text-[var(--student-text-muted)]';
+  const submittedListShellClass = 'overflow-hidden rounded-[0.9rem] border border-[var(--student-outline)] bg-white';
+  const submittedListRowClass = 'bg-white transition-colors hover:bg-[var(--student-white)]';
+  const submittedOutlineButtonClass = 'border-[var(--student-outline)] bg-white text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]';
 
   return (
     <div className={pageShellClass}>
@@ -273,20 +273,20 @@ export default function StudentAssessmentPage() {
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem_auto] xl:items-start">
                 <div className="space-y-2">
-                  <h1 className="text-[clamp(1.65rem,2.2vw,2.35rem)] font-black leading-tight tracking-[-0.03em] text-slate-900">
+                  <h1 className="text-[clamp(1.65rem,2.2vw,2.35rem)] font-black leading-tight tracking-[-0.03em] text-[var(--student-text-strong)]">
                     {assessment.title}
                   </h1>
                   <p className={`text-sm ${submittedMutedTextClass}`}>{dueDateLabel}</p>
                 </div>
 
                 <dl className="grid gap-3 text-sm lg:pt-1">
-                  <div className="rounded-[1rem] border border-slate-200 bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.22)]">
+                  <div className="rounded-[1rem] border border-[var(--student-outline)] bg-white px-4 py-3 shadow-[0_10px_24px_-20px_color-mix(in_srgb,var(--student-navy)_22%,transparent)]">
                     <dt className={`text-[11px] font-black uppercase tracking-[0.18em] ${submittedMutedTextClass}`}>Points</dt>
                     <dd className={`mt-1 text-base font-semibold ${submittedStrongTextClass}`}>
                       {assessment.totalPoints ?? 0} points possible
                     </dd>
                   </div>
-                  <div className={`rounded-[1rem] border px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.45)] ${getToneClasses(workspaceStatusTone)}`}>
+                  <div className={`rounded-[1rem] border px-4 py-3 shadow-[0_10px_24px_-20px_color-mix(in_srgb,var(--student-navy)_45%,transparent)] ${getToneClasses(workspaceStatusTone)}`}>
                     <dt className="text-[11px] font-black uppercase tracking-[0.18em] opacity-75">Status</dt>
                     <dd className="mt-1 text-base font-semibold">{workspaceStatusLabel}</dd>
                   </div>
@@ -306,7 +306,7 @@ export default function StudentAssessmentPage() {
                         {isAlreadyGraded ? 'Already graded' : 'No attempts remaining'}
                       </Button>
                       {isAlreadyGraded ? (
-                        <p className="max-w-[16rem] text-right text-xs text-slate-500">
+                        <p className="max-w-[16rem] text-right text-xs text-[var(--student-text-muted)]">
                           Retakes are disabled once your teacher has returned a grade.
                         </p>
                       ) : null}
@@ -364,10 +364,10 @@ export default function StudentAssessmentPage() {
                 {assessment.description ? (
                   <RichTextRenderer
                     html={assessment.description}
-                    className="rich-text-renderer text-sm text-slate-700"
+                    className="rich-text-renderer text-sm text-[var(--student-text-strong)]"
                   />
                 ) : (
-                  <p className="text-sm text-slate-700">No instructions provided yet.</p>
+                  <p className="text-sm text-[var(--student-text-strong)]">No instructions provided yet.</p>
                 )}
               </div>
             </section>
@@ -379,8 +379,8 @@ export default function StudentAssessmentPage() {
                     Reference Material
                   </p>
                 </div>
-                <div className="flex items-center gap-3 rounded-[1rem] border border-slate-200 bg-white px-4 py-3 transition-colors hover:bg-slate-50">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[0.85rem] bg-slate-100 text-slate-600">
+                <div className="flex items-center gap-3 rounded-[1rem] border border-[var(--student-outline)] bg-white px-4 py-3 transition-colors hover:bg-[var(--student-white)]">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[0.85rem] bg-[var(--student-white)] text-[var(--student-text-muted)]">
                     <Paperclip className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
@@ -409,7 +409,7 @@ export default function StudentAssessmentPage() {
                     <div
                       key={criterion.id}
                       className={`flex flex-col gap-2 px-4 py-3 md:flex-row md:items-start md:justify-between ${submittedListRowClass} ${
-                        index > 0 ? 'border-t border-slate-200' : ''
+                        index > 0 ? 'border-t border-[var(--student-outline)]' : ''
                       }`}
                     >
                       <div>
@@ -463,7 +463,7 @@ export default function StudentAssessmentPage() {
                       <article
                         key={attempt.id}
                         className={`flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between ${submittedListRowClass} ${
-                          index > 0 ? 'border-t border-slate-200' : ''
+                          index > 0 ? 'border-t border-[var(--student-outline)]' : ''
                         }`}
                       >
                         <div className="space-y-1">

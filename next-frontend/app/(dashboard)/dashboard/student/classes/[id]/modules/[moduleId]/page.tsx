@@ -520,7 +520,7 @@ export default function StudentModuleDetailPage() {
   }
 
   if (!module || !classItem) {
-    return <p className="text-sm text-slate-500">Module not found.</p>;
+    return <p className="text-sm text-[var(--student-text-muted)]">Module not found.</p>;
   }
 
   if (currentMode === 'lesson' && !module.isLocked) {
@@ -855,4 +855,3 @@ export default function StudentModuleDetailPage() {
     </div>
   );
 }
-

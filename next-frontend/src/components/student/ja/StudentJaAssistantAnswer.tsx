@@ -82,7 +82,7 @@ function escapeHtml(value: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/'/g, "&var(--student-navy-soft);");
 }
 
 function normalizeAssistantContent(content: string) {

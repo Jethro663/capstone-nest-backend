@@ -800,16 +800,16 @@ export default function StudentAssessmentTakePage() {
           transition={{ duration: 0.25 }}
           className="mx-auto max-w-6xl space-y-4 px-3 pb-4 sm:px-4"
         >
-          <Card className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_28px_64px_-48px_rgba(15,23,42,0.35)]">
+          <Card className="overflow-hidden rounded-[28px] border border-[var(--student-outline)] bg-white shadow-[0_28px_64px_-48px_color-mix(in_srgb,var(--student-navy)_35%,transparent)]">
             <CardContent className="space-y-4 p-4 sm:p-6">
-              <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6">
+              <div className="sticky top-0 z-20 -mx-4 -mt-4 border-b border-[var(--student-outline)] bg-white/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:-mt-6 sm:px-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <p className="text-lg font-semibold text-slate-900">{assessment.title}</p>
-                    <p className="text-sm text-slate-500">File Upload Assessment</p>
+                    <p className="text-lg font-semibold text-[var(--student-text-strong)]">{assessment.title}</p>
+                    <p className="text-sm text-[var(--student-text-muted)]">File Upload Assessment</p>
                   </div>
                   <div className="flex flex-wrap items-stretch gap-2 lg:justify-end">
-                    <StudentStatusChip tone={isAttemptSubmitted ? 'success' : 'neutral'} className="border-slate-200 bg-white text-slate-700">
+                    <StudentStatusChip tone={isAttemptSubmitted ? 'success' : 'neutral'} className="border-[var(--student-outline)] bg-white text-[var(--student-text-strong)]">
                       {isAttemptSubmitted ? (
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                       ) : (
@@ -818,17 +818,17 @@ export default function StudentAssessmentTakePage() {
                       {submissionStatusLabel}
                     </StudentStatusChip>
                     {fileAttached ? (
-                      <StudentStatusChip tone="neutral" className="border-slate-200 bg-white text-slate-700">
+                      <StudentStatusChip tone="neutral" className="border-[var(--student-outline)] bg-white text-[var(--student-text-strong)]">
                         <FileText className="mr-1 h-3.5 w-3.5" />
                         {attachmentCountLabel}
                       </StudentStatusChip>
                     ) : null}
-                    <StudentStatusChip tone="neutral" className="border-slate-200 bg-white text-slate-700">
+                    <StudentStatusChip tone="neutral" className="border-[var(--student-outline)] bg-white text-[var(--student-text-strong)]">
                       <Clock3 className="mr-1 h-3.5 w-3.5" />
                       {remainingSeconds !== null ? formatTime(remainingSeconds) : formatTime(timeSpentSeconds)}
                     </StudentStatusChip>
                     <Button
-                      className="w-full border border-slate-900 bg-slate-900 text-white shadow-none hover:bg-slate-800 sm:w-auto sm:min-w-[170px]"
+                      className="w-full border border-transparent bg-[var(--student-red)] text-white shadow-none hover:bg-[var(--student-red-hover)] sm:w-auto sm:min-w-[170px]"
                       onClick={handleSubmitFileUpload}
                       disabled={submitting || uploadingFile || isAttemptSubmitted}
                       aria-label="Submit assessment"
@@ -842,32 +842,32 @@ export default function StudentAssessmentTakePage() {
               <div className="space-y-5">
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="space-y-5 min-w-0">
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.22)]">
-                <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Instruction</p>
+              <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] p-4 shadow-[0_12px_32px_-28px_color-mix(in_srgb,var(--student-navy)_22%,transparent)]">
+                <p className="mb-2 text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Instruction</p>
                 {assessment.fileUploadInstructions ? (
                   <RichTextRenderer
                     html={assessment.fileUploadInstructions}
-                    className="text-sm leading-relaxed text-slate-900"
+                    className="text-sm leading-relaxed text-[var(--student-text-strong)]"
                   />
                 ) : (
-                  <p className="text-sm leading-relaxed text-slate-900">
+                  <p className="text-sm leading-relaxed text-[var(--student-text-strong)]">
                     No additional instruction provided.
                   </p>
                 )}
               </div>
 
               {(assessment.rubricCriteria?.length ?? 0) > 0 && (
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Rubric</p>
+                <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4 shadow-[0_12px_32px_-28px_color-mix(in_srgb,var(--student-navy)_35%,transparent)] space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Rubric</p>
                   {assessment.rubricCriteria?.map((criterion) => (
-                    <div key={criterion.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50 px-4 py-3">
+                    <div key={criterion.id} className="flex items-start justify-between gap-3 rounded-lg bg-[var(--student-white)] px-4 py-3">
                       <div>
-                        <p className="text-sm font-medium text-slate-900">{criterion.title}</p>
+                        <p className="text-sm font-medium text-[var(--student-text-strong)]">{criterion.title}</p>
                         {criterion.description && (
-                          <p className="text-xs text-slate-500">{criterion.description}</p>
+                          <p className="text-xs text-[var(--student-text-muted)]">{criterion.description}</p>
                         )}
                       </div>
-                      <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">{criterion.points} pts</span>
+                      <span className="inline-flex items-center rounded-full bg-[var(--student-navy)] px-3 py-1 text-xs font-semibold text-white">{criterion.points} pts</span>
                     </div>
                   ))}
                 </div>
@@ -876,26 +876,26 @@ export default function StudentAssessmentTakePage() {
                 </div>
 
                 <div className="space-y-5 min-w-0">
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Submission Rules</p>
-                <div className="space-y-3 text-sm text-slate-900">
+              <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4 shadow-[0_12px_32px_-28px_color-mix(in_srgb,var(--student-navy)_35%,transparent)] space-y-3">
+                <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Submission Rules</p>
+                <div className="space-y-3 text-sm text-[var(--student-text-strong)]">
                   <div>
                     <p className="font-medium">Allowed formats</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {allowedExtensions.length > 0 ? allowedExtensions.map((ext) => (
-                        <span key={ext} className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase text-slate-700">.{ext}</span>
-                      )) : <span className="text-xs text-slate-500">No format restrictions configured</span>}
+                        <span key={ext} className="inline-flex items-center rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-xs font-semibold uppercase text-[var(--student-text-strong)]">.{ext}</span>
+                      )) : <span className="text-xs text-[var(--student-text-muted)]">No format restrictions configured</span>}
                     </div>
                   </div>
                   <div>
                     <p className="font-medium">Maximum upload size</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-[var(--student-text-muted)]">
                       {(maxUploadSize / (1024 * 1024)).toFixed(0)} MB per attachment
                     </p>
                   </div>
                   <div>
                     <p className="font-medium">Submission mode</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-[var(--student-text-muted)]">
                       You can attach multiple files before submitting. Your latest turned-in state is what the teacher reviews.
                     </p>
                   </div>
@@ -903,17 +903,17 @@ export default function StudentAssessmentTakePage() {
               </div>
 
               {assessment.teacherAttachmentFile && (
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-500">Teacher Reference File</p>
+                <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4 shadow-[0_12px_32px_-28px_color-mix(in_srgb,var(--student-navy)_35%,transparent)] space-y-3">
+                  <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Teacher Reference File</p>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-900">{assessment.teacherAttachmentFile.originalName}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="truncate text-sm font-medium text-[var(--student-text-strong)]">{assessment.teacherAttachmentFile.originalName}</p>
+                    <p className="text-xs text-[var(--student-text-muted)]">
                       {(assessment.teacherAttachmentFile.sizeBytes / (1024 * 1024)).toFixed(2)} MB • {assessment.teacherAttachmentFile.mimeType}
                     </p>
                   </div>
                   <Button
                     variant="outline"
-                    className="w-fit border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                    className="w-fit border-[var(--student-outline)] bg-white text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]"
                     onClick={() => void assessmentService.downloadTeacherAttachment(
                       assessmentId,
                       assessment.teacherAttachmentFile?.originalName || 'teacher-attachment',
@@ -927,17 +927,17 @@ export default function StudentAssessmentTakePage() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.35)] space-y-4">
+              <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4 shadow-[0_12px_32px_-28px_color-mix(in_srgb,var(--student-navy)_35%,transparent)] space-y-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-sm font-medium text-slate-900">Your Submission</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm font-medium text-[var(--student-text-strong)]">Your Submission</p>
+                    <p className="text-xs text-[var(--student-text-muted)]">
                       Add one or more files here. You can remove draft attachments until you submit this assessment.
                     </p>
                   </div>
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">{attachmentCountLabel}</span>
+                  <span className="inline-flex items-center rounded-full border border-[var(--student-outline)] bg-white px-3 py-1 text-xs font-semibold text-[var(--student-text-strong)]">{attachmentCountLabel}</span>
                 </div>
-                <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100">
+                <label className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-5 text-sm font-medium text-[var(--student-text-strong)] transition-colors hover:bg-[var(--student-white)]">
                   <UploadCloud className="h-4 w-4" />
                   {uploadingFile ? 'Uploading...' : fileAttached ? 'Add more files' : 'Attach files'}
                   <input
@@ -955,11 +955,11 @@ export default function StudentAssessmentTakePage() {
                 {submittedFiles.length > 0 ? (
                   <div className="space-y-3">
                     {submittedFiles.map((file, index) => (
-                      <div key={file.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between">
+                      <div key={file.id} className="flex flex-col gap-3 rounded-xl border border-[var(--student-outline)] bg-[var(--student-white)] px-4 py-4 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Attachment {index + 1}</p>
-                          <p className="truncate text-sm font-medium text-slate-900">{file.originalName}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs uppercase tracking-wide text-[var(--student-text-muted)]">Attachment {index + 1}</p>
+                          <p className="truncate text-sm font-medium text-[var(--student-text-strong)]">{file.originalName}</p>
+                          <p className="text-xs text-[var(--student-text-muted)]">
                             {(file.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {file.mimeType}
                           </p>
                         </div>
@@ -981,7 +981,7 @@ export default function StudentAssessmentTakePage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              className="border-[var(--student-outline)] bg-white text-[var(--student-text-strong)] hover:bg-[var(--student-white)] hover:text-[var(--student-text-strong)]"
                               onClick={() => void handleRemoveSubmissionFile(file.id)}
                             >
                               Remove
@@ -992,7 +992,7 @@ export default function StudentAssessmentTakePage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500">
+                  <div className="rounded-2xl border border-dashed border-[var(--student-outline)] px-4 py-6 text-sm text-[var(--student-text-muted)]">
                     No files attached yet.
                   </div>
                 )}

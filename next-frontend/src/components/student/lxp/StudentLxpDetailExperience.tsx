@@ -697,7 +697,7 @@ export default function StudentLxpDetailExperience() {
         <AiOutageNotice
           mode="lxp"
           message={aiAvailability.message}
-          className="mb-4 border-[#f4d192] bg-[#fff8e8]"
+          className="mb-4 border-[var(--student-warning-border)] bg-[var(--student-warning-bg)]"
         />
       ) : null}
 
@@ -715,7 +715,7 @@ export default function StudentLxpDetailExperience() {
             <Button
               type="button"
               variant="outline"
-              className="border-[#d9e3f0] bg-white text-[#2f3f5d]"
+              className="border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)]"
               onClick={() => void fetchDetail()}
             >
               <RefreshCcw className="mr-2 h-4 w-4" />
@@ -723,19 +723,19 @@ export default function StudentLxpDetailExperience() {
             </Button>
           </header>
 
-          <div className="rounded-xl border border-[#d9e3f0] bg-white p-4">
-            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-[#41516f]">
+          <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4">
+            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-[var(--student-navy-soft)]">
               <span>Path progress</span>
               <span>{progressPercent}%</span>
             </div>
             <Progress
               value={progressPercent}
-              className="h-2.5 bg-[#edf2fb]"
-              indicatorClassName="bg-gradient-to-r from-[#315fdf] to-[#e70012]"
+              className="h-2.5 bg-[var(--student-surface-soft)]"
+              indicatorClassName="bg-[var(--student-red)]"
             />
           </div>
 
-          <div className="rounded-xl border border-[#f3d8df] bg-[#fff7f9] p-4 text-sm font-medium text-[#5a6175]">
+          <div className="rounded-xl border border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] p-4 text-sm font-medium text-[var(--student-navy-soft)]">
             These guided review steps help you close the target concept gap before retrying the related assessment.
           </div>
 
@@ -766,7 +766,7 @@ export default function StudentLxpDetailExperience() {
             <p>Complete guided review first, then open JA for the assessment retry.</p>
           </header>
 
-          <div className="rounded-xl border border-[#d9e3f0] bg-[#f8fbff] p-4 text-sm font-medium text-[#4f5d78]">
+          <div className="rounded-xl border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4 text-sm font-medium text-[var(--student-navy-soft)]">
             JA provides guided support, not a new official summative attempt. Use this space to review the failed assessment context with hints and explanations.
           </div>
 
@@ -817,28 +817,28 @@ export default function StudentLxpDetailExperience() {
           </header>
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="rounded-xl border border-[#d9e3f0] bg-white p-4">
-              <h3 className="text-base font-semibold text-[#102744]">Focus Items</h3>
+            <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4">
+              <h3 className="text-base font-semibold text-[var(--student-navy)]">Focus Items</h3>
               <div className="mt-3 grid gap-2">
                 {overview.weakFocusItems.length === 0 ? (
-                  <p className="text-sm font-medium text-[#7b8aa5]">No weak focus items are listed.</p>
+                  <p className="text-sm font-medium text-[var(--student-text-muted)]">No weak focus items are listed.</p>
                 ) : (
                   overview.weakFocusItems.map((item) => (
                     <Link
                       key={item.id}
                       href={item.href}
-                      className="rounded-lg border border-[#e2e9f3] bg-[#f8fbff] p-3 transition hover:bg-[#f2f7ff]"
+                      className="rounded-lg border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] p-3 transition hover:bg-[var(--student-surface-soft)]"
                     >
-                      <strong className="block text-sm text-[#102744]">{item.title}</strong>
-                      <span className="mt-1 block text-xs font-medium text-[#7b8aa5]">{item.subtitle}</span>
+                      <strong className="block text-sm text-[var(--student-navy)]">{item.title}</strong>
+                      <span className="mt-1 block text-xs font-medium text-[var(--student-text-muted)]">{item.subtitle}</span>
                     </Link>
                   ))
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#d9e3f0] bg-white p-4">
-              <h3 className="text-base font-semibold text-[#102744]">Path Summary</h3>
+            <div className="rounded-xl border border-[var(--student-outline)] bg-white p-4">
+              <h3 className="text-base font-semibold text-[var(--student-navy)]">Path Summary</h3>
               <dl className="mt-3 grid gap-2 text-sm">
                 <SummaryRow label="XP" value={playlist.progress.xpTotal} />
                 <SummaryRow label="Stars" value={playlist.progress.starsTotal} />
@@ -858,18 +858,18 @@ export default function StudentLxpDetailExperience() {
 
 function CaseMetric({ label, value }: { label: string; value: string | number }) {
   return (
-    <article className="rounded-xl border border-[#d9e3f0] bg-white p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#8198b8]">{label}</p>
-      <strong className="mt-2 block text-lg font-semibold text-[#102744]">{value}</strong>
+    <article className="rounded-xl border border-[var(--student-outline)] bg-white p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--student-text-muted)]">{label}</p>
+      <strong className="mt-2 block text-lg font-semibold text-[var(--student-navy)]">{value}</strong>
     </article>
   );
 }
 
 function SummaryRow({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-[#f8fbff] px-3 py-2">
-      <dt className="font-semibold text-[#6c7d98]">{label}</dt>
-      <dd className="font-semibold text-[#102744]">{value}</dd>
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--student-surface-soft)] px-3 py-2">
+      <dt className="font-semibold text-[var(--student-text-muted)]">{label}</dt>
+      <dd className="font-semibold text-[var(--student-navy)]">{value}</dd>
     </div>
   );
 }

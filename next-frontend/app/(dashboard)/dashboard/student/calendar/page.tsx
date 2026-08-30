@@ -45,18 +45,18 @@ type CalendarFeedPayload =
   | { kind: 'school-events'; schoolYear: string; data: SchoolEvent[] };
 
 const DETAIL_KIND_ACCENT: Record<CalendarFeedKind, string> = {
-  assessment: 'border-[#fecdd3] bg-[#fff1f2] text-[#be123c]',
-  announcement: 'border-[#fed7aa] bg-[#fff7ed] text-[#c2410c]',
-  school_event: 'border-[#bfdbfe] bg-[#eff6ff] text-[#1d4ed8]',
-  holiday_break: 'border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]',
-  class_schedule: 'border-[#ddd6fe] bg-[#f5f3ff] text-[#6d28d9]',
+  assessment: 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-accent)]',
+  announcement: 'border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] text-[var(--student-accent)]',
+  school_event: 'border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
+  holiday_break: 'border-[var(--student-success-border)] bg-[var(--student-success-bg)] text-[var(--student-success-text)]',
+  class_schedule: 'border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
 };
 
 const MARKER_DOT_CLASS: Record<StudentEventTag, string> = {
-  assessment: 'bg-[#d81b50]',
-  announcement: 'bg-[#f97316]',
-  event: 'bg-[#0284c7]',
-  holiday: 'bg-[#059669]',
+  assessment: 'bg-[var(--student-accent)]',
+  announcement: 'bg-[var(--student-warning-text)]',
+  event: 'bg-[var(--student-navy-soft)]',
+  holiday: 'bg-[var(--student-success-text)]',
 };
 
 function stripHtml(raw?: string | null) {
@@ -459,26 +459,26 @@ export default function StudentCalendarPage() {
 
   return (
     <div className="mx-auto flex max-w-[1520px] flex-col gap-3 rounded-[1.3rem] p-2 sm:rounded-[1.6rem]">
-      <header className="z-20 rounded-[1.1rem] border border-[#223459] bg-[linear-gradient(180deg,#16284a_0%,#182b50_58%,#1d3158_100%)] px-3 py-3 text-white shadow-[0_18px_32px_-24px_rgba(8,16,36,0.75)] sm:px-4">
+      <header className="z-20 rounded-[1.1rem] border border-[var(--student-navy-soft)] bg-[linear-gradient(180deg,var(--student-navy)_0%,var(--student-navy-soft)_58%,var(--student-navy-soft)_100%)] px-3 py-3 text-white shadow-[0_18px_32px_-24px_color-mix(in_srgb,var(--student-navy)_75%,transparent)] sm:px-4">
         <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 space-y-1.5">
             <Link
               href="/dashboard/student/courses"
-              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#cbd7f0] transition hover:text-white"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--student-outline)] transition hover:text-white"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Back to Courses
             </Link>
 
             <div className="flex items-center gap-2.5">
-              <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[0.9rem] bg-[#ff001f] shadow-[0_18px_24px_-18px_rgba(255,0,31,0.9)]">
+              <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-[0.9rem] bg-[var(--student-accent)] shadow-[0_18px_24px_-18px_color-mix(in_srgb,var(--student-red)_90%,transparent)]">
                 <CalendarDays className="h-4.5 w-4.5 text-white" />
               </div>
               <div className="min-w-0">
                 <h1 className="truncate text-[1.6rem] font-black leading-none tracking-tight md:text-[1.8rem]">
                   Calendar
                 </h1>
-                <p className="mt-0.5 text-[13px] font-semibold text-[#8fb0eb]">
+                <p className="mt-0.5 text-[13px] font-semibold text-[var(--student-outline)]">
                   Click a date to inspect every item scheduled for that day.
                 </p>
               </div>
@@ -487,14 +487,14 @@ export default function StudentCalendarPage() {
 
           <div className="grid w-full gap-2 sm:grid-cols-2 xl:min-w-[24rem]">
             <label className="space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#90a9d6]">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-outline)]">
                 School Year
               </span>
               <select
                 value={selectedSchoolYear}
                 onChange={(event) => setSelectedSchoolYear(event.target.value)}
                 aria-label="Filter calendar by school year"
-                className="h-10 w-full rounded-[0.85rem] border border-[#304872] bg-[#21375d] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#88a9e8]"
+                className="h-10 w-full rounded-[0.85rem] border border-[var(--student-navy-soft)] bg-[var(--student-navy-soft)] px-3 text-sm font-semibold text-white outline-none transition focus:border-[var(--student-outline)]"
               >
                 {schoolYearOptions.map((schoolYear) => (
                   <option key={schoolYear} value={schoolYear}>
@@ -505,14 +505,14 @@ export default function StudentCalendarPage() {
             </label>
 
             <label className="space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#90a9d6]">
+              <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-outline)]">
                 Class
               </span>
               <select
                 value={selectedClassId}
                 onChange={(event) => setSelectedClassId(event.target.value)}
                 aria-label="Filter calendar by class"
-                className="h-10 w-full rounded-[0.85rem] border border-[#304872] bg-[#21375d] px-3 text-sm font-semibold text-white outline-none transition focus:border-[#88a9e8]"
+                className="h-10 w-full rounded-[0.85rem] border border-[var(--student-navy-soft)] bg-[var(--student-navy-soft)] px-3 text-sm font-semibold text-white outline-none transition focus:border-[var(--student-outline)]"
               >
                 <option value="all">All classes</option>
                 {classOptions.map((classItem) => (
@@ -528,7 +528,7 @@ export default function StudentCalendarPage() {
 
       <nav
         aria-label="Calendar views"
-        className="inline-flex w-fit rounded-full border border-[#d7dfec] bg-white p-1 shadow-sm"
+        className="inline-flex w-fit rounded-full border border-[var(--student-outline)] bg-white p-1 shadow-sm"
       >
         <Link
           href="/dashboard/student/calendar"
@@ -536,8 +536,8 @@ export default function StudentCalendarPage() {
           className={cn(
             'rounded-full px-4 py-2 text-sm font-bold transition',
             isUpcomingView
-              ? 'text-[#5f708d] hover:bg-[#f2f5fa]'
-              : 'bg-[#172b4f] text-white',
+              ? 'text-[var(--student-text-muted)] hover:bg-[var(--student-surface-soft)]'
+              : 'bg-[var(--student-navy)] text-white',
           )}
         >
           Month view
@@ -548,8 +548,8 @@ export default function StudentCalendarPage() {
           className={cn(
             'rounded-full px-4 py-2 text-sm font-bold transition',
             isUpcomingView
-              ? 'bg-[#ff001f] text-white'
-              : 'text-[#5f708d] hover:bg-[#f2f5fa]',
+              ? 'bg-[var(--student-accent)] text-white'
+              : 'text-[var(--student-text-muted)] hover:bg-[var(--student-surface-soft)]',
           )}
         >
           Upcoming
@@ -588,20 +588,20 @@ export default function StudentCalendarPage() {
       ) : null}
 
       {isUpcomingView ? (
-        <section className="rounded-[1.2rem] border border-[#dde3ef] bg-white p-4 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.34)] md:p-5">
-          <div className="flex flex-col gap-2 border-b border-[#e4eaf4] pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <section className="rounded-[1.2rem] border border-[var(--student-surface-soft)] bg-white p-4 shadow-[0_22px_38px_-30px_color-mix(in_srgb,var(--student-navy)_34%,transparent)] md:p-5">
+          <div className="flex flex-col gap-2 border-b border-[var(--student-surface-soft)] pb-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7e8dab]">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
                 Full agenda
               </p>
-              <h2 className="mt-1 text-[1.4rem] font-black tracking-tight text-[#12274a]">
+              <h2 className="mt-1 text-[1.4rem] font-black tracking-tight text-[var(--student-navy)]">
                 Upcoming
               </h2>
-              <p className="mt-1 text-sm text-[#6d7f9d]">
+              <p className="mt-1 text-sm text-[var(--student-text-muted)]">
                 Unfinished deadlines and current or future school events from all active classes.
               </p>
             </div>
-            <p className="text-sm font-semibold text-[#5f708d]">
+            <p className="text-sm font-semibold text-[var(--student-text-muted)]">
               {upcomingEvents.length} upcoming item{upcomingEvents.length === 1 ? '' : 's'}
             </p>
           </div>
@@ -613,7 +613,7 @@ export default function StudentCalendarPage() {
               ))}
             </div>
           ) : paginatedUpcomingEvents.length === 0 ? (
-            <div className="mt-4 rounded-[1rem] border border-dashed border-[#d8e1ef] bg-[#f8fafc] px-4 py-10 text-center">
+            <div className="mt-4 rounded-[1rem] border border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-10 text-center">
               <p className="text-sm font-semibold text-[var(--student-text-strong)]">
                 No upcoming events.
               </p>
@@ -627,55 +627,55 @@ export default function StudentCalendarPage() {
                 <Link
                   key={event.id}
                   href={event.href}
-                  className="flex items-center gap-4 rounded-[1rem] border border-[#dde4ef] bg-[#fbfcfe] p-4 transition hover:border-[#9fb0cc] hover:bg-white"
+                  className="flex items-center gap-4 rounded-[1rem] border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] p-4 transition hover:border-[var(--student-outline)] hover:bg-white"
                 >
-                  <div className="grid h-14 w-14 flex-none place-items-center rounded-[0.9rem] bg-[#172b4f] text-center text-white">
+                  <div className="grid h-14 w-14 flex-none place-items-center rounded-[0.9rem] bg-[var(--student-navy)] text-center text-white">
                     <span className="text-[10px] font-black uppercase tracking-[0.12em]">
                       {event.monthLabel}
                     </span>
                     <strong className="text-lg leading-none">{event.dayLabel}</strong>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[#d81b50]">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-[var(--student-accent)]">
                       {event.tag === 'assessment'
                         ? 'Assessment'
                         : event.tag === 'holiday'
                           ? 'Holiday'
                           : 'School event'}
                     </p>
-                    <h3 className="truncate text-base font-black text-[#13284a]">{event.title}</h3>
-                    <p className="truncate text-sm text-[#6d7f9d]">{event.subtitle}</p>
+                    <h3 className="truncate text-base font-black text-[var(--student-navy)]">{event.title}</h3>
+                    <p className="truncate text-sm text-[var(--student-text-muted)]">{event.subtitle}</p>
                   </div>
                 </Link>
               ))}
             </div>
           )}
 
-          <div className="mt-5 flex items-center justify-between border-t border-[#e4eaf4] pt-4">
+          <div className="mt-5 flex items-center justify-between border-t border-[var(--student-surface-soft)] pt-4">
             {upcomingPage > 1 ? (
               <Link
                 href={`/dashboard/student/calendar?view=upcoming&page=${upcomingPage - 1}`}
-                className="rounded-full border border-[#cfd8e7] px-4 py-2 text-sm font-bold text-[#294467] transition hover:border-[#8fa7cb]"
+                className="rounded-full border border-[var(--student-outline)] px-4 py-2 text-sm font-bold text-[var(--student-navy-soft)] transition hover:border-[var(--student-text-muted)]"
               >
                 Previous
               </Link>
             ) : (
-              <span className="rounded-full border border-[#e5e9f0] px-4 py-2 text-sm font-bold text-[#a5afbf]">
+              <span className="rounded-full border border-[var(--student-surface-soft)] px-4 py-2 text-sm font-bold text-[var(--student-text-muted)]">
                 Previous
               </span>
             )}
-            <span className="text-sm font-semibold text-[#5f708d]">
+            <span className="text-sm font-semibold text-[var(--student-text-muted)]">
               Page {upcomingPage} of {upcomingPageCount}
             </span>
             {upcomingPage < upcomingPageCount ? (
               <Link
                 href={`/dashboard/student/calendar?view=upcoming&page=${upcomingPage + 1}`}
-                className="rounded-full border border-[#cfd8e7] px-4 py-2 text-sm font-bold text-[#294467] transition hover:border-[#8fa7cb]"
+                className="rounded-full border border-[var(--student-outline)] px-4 py-2 text-sm font-bold text-[var(--student-navy-soft)] transition hover:border-[var(--student-text-muted)]"
               >
                 Next
               </Link>
             ) : (
-              <span className="rounded-full border border-[#e5e9f0] px-4 py-2 text-sm font-bold text-[#a5afbf]">
+              <span className="rounded-full border border-[var(--student-surface-soft)] px-4 py-2 text-sm font-bold text-[var(--student-text-muted)]">
                 Next
               </span>
             )}
@@ -683,13 +683,13 @@ export default function StudentCalendarPage() {
         </section>
       ) : (
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_21rem] 2xl:grid-cols-[minmax(0,1fr)_22.5rem]">
-        <section className="flex flex-col rounded-[1.2rem] border border-[#dde3ef] bg-[linear-gradient(180deg,#ffffff_0%,#f4f6fb_100%)] p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.38)] md:p-3">
+        <section className="flex flex-col rounded-[1.2rem] border border-[var(--student-outline)] bg-[var(--student-white)] p-2.5 shadow-[0_22px_38px_-30px_color-mix(in_srgb,var(--student-navy)_38%,transparent)] md:p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7e8dab]">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
                 Month View
               </p>
-              <h2 className="text-[1.28rem] font-black tracking-tight text-[#12274a] md:text-[1.4rem]">
+              <h2 className="text-[1.28rem] font-black tracking-tight text-[var(--student-navy)] md:text-[1.4rem]">
                 {formatMonthLabel(calendarMonth)}
               </h2>
             </div>
@@ -699,7 +699,7 @@ export default function StudentCalendarPage() {
                 type="button"
                 aria-label="Previous month"
                 onClick={() => setCalendarMonth((current) => shiftMonth(current, -1))}
-                className="grid h-9 w-9 place-items-center rounded-[0.85rem] border border-[#d5deec] bg-white text-[#284267] transition hover:border-[#9ab0d6] hover:text-[#11284c]"
+                className="grid h-9 w-9 place-items-center rounded-[0.85rem] border border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] transition hover:border-[var(--student-outline)] hover:text-[var(--student-navy)]"
               >
                 <ChevronLeft className="h-4.5 w-4.5" />
               </button>
@@ -707,7 +707,7 @@ export default function StudentCalendarPage() {
                 type="button"
                 aria-label="Next month"
                 onClick={() => setCalendarMonth((current) => shiftMonth(current, 1))}
-                className="grid h-9 w-9 place-items-center rounded-[0.85rem] border border-[#d5deec] bg-white text-[#284267] transition hover:border-[#9ab0d6] hover:text-[#11284c]"
+                className="grid h-9 w-9 place-items-center rounded-[0.85rem] border border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] transition hover:border-[var(--student-outline)] hover:text-[var(--student-navy)]"
               >
                 <ChevronRight className="h-4.5 w-4.5" />
               </button>
@@ -718,7 +718,7 @@ export default function StudentCalendarPage() {
             {WEEKDAY_LABELS.map((label) => (
               <div
                 key={label}
-                className="rounded-[0.75rem] px-1 py-1 text-center text-[9px] font-black uppercase tracking-[0.12em] text-[#7f8fad] md:text-[10px]"
+                className="rounded-[0.75rem] px-1 py-1 text-center text-[9px] font-black uppercase tracking-[0.12em] text-[var(--student-text-muted)] md:text-[10px]"
               >
                 {label}
               </div>
@@ -739,10 +739,10 @@ export default function StudentCalendarPage() {
                   className={cn(
                     'flex h-full min-h-0 flex-col justify-between rounded-[0.85rem] border px-1.5 py-1.5 text-left transition',
                     isSelected
-                      ? 'border-[#e11d2d] bg-[#ff001f] text-white shadow-[0_18px_28px_-22px_rgba(255,0,31,0.85)]'
-                      : 'border-[#d9e1ef] bg-white text-[#163153] hover:border-[#8ea8d2] hover:bg-[#f7f9fd]',
-                    !cell.inMonth && !isSelected && 'bg-[#f2f5fa] text-[#a0abbe]',
-                    cell.dateKey === todayKey && !isSelected && 'border-[#9eb8e2] bg-[#edf3ff]',
+                      ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-white shadow-[0_18px_28px_-22px_color-mix(in_srgb,var(--student-red)_85%,transparent)]'
+                      : 'border-[var(--student-outline)] bg-white text-[var(--student-navy-soft)] hover:border-[var(--student-text-muted)] hover:bg-[var(--student-surface-soft)]',
+                    !cell.inMonth && !isSelected && 'bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
+                    cell.dateKey === todayKey && !isSelected && 'border-[var(--student-outline)] bg-[var(--student-surface-soft)]',
                   )}
                   >
                   <div className="flex items-start justify-between gap-2">
@@ -755,7 +755,7 @@ export default function StudentCalendarPage() {
                           'rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.04em]',
                           isSelected
                             ? 'bg-white/18 text-white'
-                            : 'bg-[#eef3fb] text-[#6a7d9d]',
+                            : 'bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]',
                         )}
                       >
                         {dayItems.length}
@@ -795,15 +795,15 @@ export default function StudentCalendarPage() {
           </div>
         </section>
 
-        <aside className="flex min-h-0 flex-col rounded-[1.2rem] border border-[#dde3ef] bg-white p-2.5 shadow-[0_22px_38px_-30px_rgba(29,41,82,0.34)] md:p-3">
-          <div className="border-b border-[#e4eaf4] pb-2.5">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7e8dab]">
+        <aside className="flex min-h-0 flex-col rounded-[1.2rem] border border-[var(--student-surface-soft)] bg-white p-2.5 shadow-[0_22px_38px_-30px_color-mix(in_srgb,var(--student-navy)_34%,transparent)] md:p-3">
+          <div className="border-b border-[var(--student-surface-soft)] pb-2.5">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[var(--student-text-muted)]">
               Selected Date
             </p>
-            <h2 className="mt-1 text-[1.1rem] font-black leading-tight tracking-tight text-[#12274a] md:text-[1.2rem]">
+            <h2 className="mt-1 text-[1.1rem] font-black leading-tight tracking-tight text-[var(--student-navy)] md:text-[1.2rem]">
               {selectedDateLabel}
             </h2>
-            <p className="mt-1 text-[13px] leading-5 text-[#6d7f9d]">
+            <p className="mt-1 text-[13px] leading-5 text-[var(--student-text-muted)]">
               {selectedDayItems.length === 0
                 ? 'Nothing is scheduled for this day.'
                 : selectedDayItems.length === 1
@@ -820,7 +820,7 @@ export default function StudentCalendarPage() {
                 <Skeleton className="h-28 rounded-[1.35rem]" />
               </>
             ) : feedStatus === 'ready' && selectedDayItems.length === 0 ? (
-              <div className="rounded-[1rem] border border-dashed border-[#d8e1ef] bg-[#f8fafc] px-4 py-8 text-center">
+              <div className="rounded-[1rem] border border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-8 text-center">
                 <p className="text-sm font-semibold text-[var(--student-text-strong)]">
                   No events yet.
                 </p>
@@ -835,7 +835,7 @@ export default function StudentCalendarPage() {
                 return (
                   <article
                     key={item.id}
-                    className="rounded-[1rem] border border-[#dde4ef] bg-[#fbfcfe] p-3.5"
+                    className="rounded-[1rem] border border-[var(--student-surface-soft)] bg-[var(--student-surface-soft)] p-3.5"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <span
@@ -852,10 +852,10 @@ export default function StudentCalendarPage() {
                     </div>
 
                     <div className="mt-3 space-y-2">
-                      <h3 className="text-base font-black tracking-tight text-[#13284a]">
+                      <h3 className="text-base font-black tracking-tight text-[var(--student-navy)]">
                         {item.title}
                       </h3>
-                      <p className="text-sm leading-5 text-[#6d7f9d]">
+                      <p className="text-sm leading-5 text-[var(--student-text-muted)]">
                         {getSupportingCopy(item)}
                       </p>
                     </div>
@@ -868,7 +868,7 @@ export default function StudentCalendarPage() {
                           </span>
                         ) : null}
                         {item.location ? (
-                          <span className="rounded-full bg-[#eef6ff] px-2.5 py-1 text-xs font-semibold text-[#1d4ed8]">
+                          <span className="rounded-full bg-[var(--student-surface-soft)] px-2.5 py-1 text-xs font-semibold text-[var(--student-text-muted)]">
                             {item.location}
                           </span>
                         ) : null}
