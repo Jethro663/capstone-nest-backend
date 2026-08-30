@@ -272,11 +272,10 @@ function PathStatusChip({ path }: { path: LxpPathSummary }) {
 interface PathCardProps {
   path: LxpPathSummary;
   heroStyle: CSSProperties;
-  buttonTint: string;
   onOpenPath: (classId: string) => void;
 }
 
-function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
+function PathCard({ path, heroStyle, onOpenPath }: PathCardProps) {
   const progress = clampPercent(path.progress.completionPercent);
   const subjectName = path.class.subjectName || 'Learners Path';
   const sectionLabel = formatSection(path);
@@ -299,10 +298,7 @@ function PathCard({ path, heroStyle, buttonTint, onOpenPath }: PathCardProps) {
   };
 
   return (
-    <article
-      className="student-lxp-card"
-      style={{ '--student-lxp-button-tint': buttonTint } as CSSProperties}
-    >
+    <article className="student-lxp-card">
       <div className="student-lxp-card__hero" style={heroStyle}>
         <div className="student-lxp-card__status-row">
           <PathStatusChip path={path} />
@@ -410,7 +406,6 @@ function PathGrid({
             key={`${path.classId}-${path.interventionCaseId ?? 'path'}`}
             path={path}
             heroStyle={toStudentHeroStyle(choice)}
-            buttonTint={choice.buttonTint}
             onOpenPath={onOpenPath}
           />
         );

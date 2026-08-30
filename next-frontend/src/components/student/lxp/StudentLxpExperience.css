@@ -231,7 +231,7 @@
   display: grid;
   min-height: 8.5rem;
   padding: 1rem 1.2rem 1.15rem;
-  color: #ffffff;
+  color: var(--student-white);
 }
 
 .student-lxp-card__status-row {
@@ -243,10 +243,10 @@
 .student-lxp-card__status {
   display: inline-flex;
   padding: 0.28rem 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.42);
+  border: 1px solid color-mix(in srgb, var(--student-white) 42%, transparent);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.3);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--student-navy) 64%, transparent);
+  color: var(--student-white);
   font-size: 0.7rem;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -280,7 +280,7 @@
 .student-lxp-card__course span {
   display: block;
   margin: 0;
-  color: rgba(255, 255, 255, 0.86);
+  color: color-mix(in srgb, var(--student-white) 86%, transparent);
   font-size: 0.82rem;
 }
 
@@ -414,12 +414,12 @@
 
 .student-lxp-card__primary-action {
   border: 1px solid transparent;
-  background: var(--student-lxp-button-tint, var(--student-accent));
-  color: #ffffff;
+  background: var(--student-red);
+  color: var(--student-white);
 }
 
 .student-lxp-card__primary-action:hover {
-  filter: brightness(0.94);
+  background: var(--student-red-hover);
 }
 
 .student-lxp-card-skeleton {

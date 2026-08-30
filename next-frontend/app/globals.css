@@ -87,6 +87,9 @@
   --student-success-bg: #ecfdf5;
   --student-success-border: #a7f3d0;
   --student-success-text: #047857;
+  --student-warning-bg: #fff8ea;
+  --student-warning-border: #f5e2b2;
+  --student-warning-text: #8a5a09;
   --student-danger-bg: color-mix(in srgb, var(--student-red) 8%, var(--student-white) 92%);
   --student-danger-border: color-mix(in srgb, var(--student-red) 28%, var(--student-white) 72%);
   --student-danger-text: var(--student-red-hover);
@@ -8165,17 +8168,15 @@ body {
 .student-announcements-header {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(15, 32, 61, 0.9);
-  background:
-    radial-gradient(circle at 92% 8%, rgba(255, 255, 255, 0.14), transparent 36%),
-    linear-gradient(135deg, #10213e 0%, #172c4c 100%);
+  border: 1px solid var(--student-navy);
+  background: linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy-soft) 100%);
   border-radius: 0.95rem;
   padding: 1.1rem 1.15rem;
   display: flex;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 0.8rem;
-  box-shadow: 0 18px 36px -28px rgba(15, 23, 42, 0.4);
+  box-shadow: var(--student-shadow);
 }
 
 .student-announcements-header__copy {
@@ -8190,23 +8191,19 @@ body {
   width: 3.1rem;
   height: 3.1rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: linear-gradient(
-    145deg,
-    color-mix(in srgb, var(--student-accent) 92%, white 8%),
-    color-mix(in srgb, var(--student-accent) 78%, #7f1d1d 22%)
-  );
+  border: 1px solid color-mix(in srgb, var(--student-white) 20%, transparent);
+  background: var(--student-red);
   color: var(--student-accent-contrast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 12px 22px -16px rgba(15, 23, 42, 0.62);
+  box-shadow: none;
   flex-shrink: 0;
 }
 
 .student-announcements-header__copy h1 {
   margin: 0;
-  color: #ffffff;
+  color: var(--student-white);
   font-size: clamp(1.55rem, 2.1vw, 2.02rem);
   line-height: 1.05;
   letter-spacing: -0.02em;
@@ -8215,7 +8212,7 @@ body {
 
 .student-announcements-header__copy p {
   margin: 0.32rem 0 0;
-  color: #b7c9e3;
+  color: color-mix(in srgb, var(--student-white) 78%, transparent);
   font-size: 0.93rem;
   line-height: 1.52;
   max-width: 38rem;
@@ -8230,8 +8227,8 @@ body {
 }
 
 .student-announcements-header__stat {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--student-white) 16%, transparent);
+  background: color-mix(in srgb, var(--student-white) 8%, transparent);
   border-radius: 0.8rem;
   padding: 0.55rem 0.68rem;
   display: grid;
@@ -8241,7 +8238,7 @@ body {
 
 .student-announcements-header__stat p {
   margin: 0;
-  color: #c9d6ea;
+  color: color-mix(in srgb, var(--student-white) 76%, transparent);
   font-size: 0.72rem;
   letter-spacing: 0.05em;
   font-weight: 700;
@@ -8250,7 +8247,7 @@ body {
 
 .student-announcements-header__stat strong {
   margin: 0;
-  color: #ffffff;
+  color: var(--student-white);
   font-size: 1rem;
   font-weight: 900;
   line-height: 1.2;
@@ -8264,7 +8261,7 @@ body {
   padding: 1rem;
   display: grid;
   gap: 0.95rem;
-  box-shadow: 0 14px 30px -24px rgba(15, 23, 42, 0.26);
+  box-shadow: var(--student-shadow);
 }
 
 .student-announcements-toolbar {
@@ -8322,7 +8319,7 @@ body {
 .student-announcements-toolbar__toggle-group button[data-active='true'] {
   background: var(--student-elevated);
   color: var(--student-text-strong);
-  box-shadow: 0 8px 18px -16px rgba(15, 23, 42, 0.8);
+  box-shadow: 0 8px 18px -16px color-mix(in srgb, var(--student-navy) 80%, transparent);
 }
 
 .student-announcements-toolbar__subject {
@@ -8368,30 +8365,24 @@ body {
 .student-announcements-item {
   border: 1px solid var(--student-outline);
   border-radius: 1rem;
-  background: linear-gradient(180deg, #ffffff 0%, var(--student-surface) 100%);
+  background: var(--student-white);
   padding: 0.95rem;
   transition:
     border-color 0.16s ease,
     box-shadow 0.2s ease,
-    transform 0.2s ease;
-  box-shadow: 0 18px 32px -30px rgba(15, 23, 42, 0.28);
+    background-color 0.16s ease;
+  box-shadow: var(--student-shadow);
 }
 
 .student-announcements-item:hover {
   border-color: var(--student-outline-strong);
-  transform: translateY(-2px);
-  box-shadow: 0 20px 38px -28px rgba(15, 23, 42, 0.34);
+  box-shadow: var(--student-shadow-hover);
 }
 
 .student-announcements-item--pinned {
-  border-color: color-mix(in srgb, var(--student-accent) 32%, var(--student-outline-strong) 68%);
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--student-accent) 8%, #ffffff 92%),
-      var(--student-surface)
-    ),
-    #ffffff;
+  border-color: color-mix(in srgb, var(--student-red) 48%, var(--student-outline) 52%);
+  background: var(--student-white);
+  box-shadow: inset 4px 0 0 var(--student-red);
 }
 
 .announcement-highlight {
@@ -8400,8 +8391,8 @@ body {
 
 @keyframes announcementHighlightPulse {
   0% {
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5);
-    background-color: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--student-red) 42%, transparent);
+    background-color: var(--student-accent-soft);
   }
   100% {
     box-shadow: none;
@@ -8457,9 +8448,9 @@ body {
 }
 
 .student-announcements-item__pin-label {
-  border: 1px solid color-mix(in srgb, var(--student-accent) 22%, #fecaca 78%);
-  background: color-mix(in srgb, var(--student-accent) 12%, #ffffff 88%);
-  color: color-mix(in srgb, var(--student-accent) 86%, #0f172a 14%);
+  border: 1px solid color-mix(in srgb, var(--student-red) 30%, var(--student-white) 70%);
+  background: var(--student-accent-soft);
+  color: var(--student-red-hover);
   border-radius: 999px;
   padding: 0.24rem 0.58rem;
   display: inline-flex;

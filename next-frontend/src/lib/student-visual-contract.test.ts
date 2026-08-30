@@ -29,4 +29,33 @@ describe('canonical student visual system', () => {
     expect(fs.existsSync(path.join(frontendRoot, 'src/lib/themes.ts'))).toBe(false);
     expect(fs.existsSync(path.join(frontendRoot, 'app/(dashboard)/dashboard/theme-test/page.tsx'))).toBe(false);
   });
+
+  it('keeps the reported module, lesson, LXP, and announcement surfaces on tokens', () => {
+    const moduleCss = read(
+      'app/(dashboard)/dashboard/student/classes/[id]/modules/[moduleId]/student-module-detail.css',
+    );
+    const lessonRenderer = read(
+      'src/features/lesson-blocks/LessonBlockStudentRenderer.tsx',
+    );
+    const lxpCss = read('src/components/student/lxp/StudentLxpExperience.css');
+    const globalCss = read('app/globals.css');
+    const announcementCss = globalCss.slice(
+      globalCss.indexOf('.student-announcements-header'),
+      globalCss.indexOf('.student-announcements-empty'),
+    );
+
+    expect(moduleCss).toContain(
+      'linear-gradient(135deg, var(--student-navy) 0%, var(--student-navy-soft) 100%)',
+    );
+    expect(moduleCss).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(lessonRenderer).not.toMatch(/#[0-9a-f]{3,8}/i);
+    expect(lessonRenderer).not.toMatch(
+      /(?:rose|purple|violet|orange|pink|teal|blue|sky)-\d+/,
+    );
+    expect(lxpCss).not.toMatch(/#[0-9a-f]{3,8}|rgba?\(/i);
+    expect(announcementCss).toContain('background: var(--student-white);');
+    expect(announcementCss).not.toMatch(
+      /#(?:10213e|172c4c|7f1d1d|fecaca|0f172a)|translateY\(-2px\)/i,
+    );
+  });
 });

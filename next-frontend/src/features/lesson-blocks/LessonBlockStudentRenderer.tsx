@@ -74,7 +74,7 @@ function SecureLessonImage({
 
   if (fileId && loading) {
     return (
-      <div className="flex min-h-56 items-center justify-center rounded-[1.35rem] border border-dashed border-[#dfd4ca] bg-[#fff8f1] text-sm font-semibold text-[#75645d]">
+      <div className="flex min-h-56 items-center justify-center rounded-[1.35rem] border border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)] text-sm font-semibold text-[var(--student-text-muted)]">
         Loading secure image...
       </div>
     );
@@ -91,7 +91,7 @@ function SecureLessonImage({
   const src = objectUrl || fallbackUrl;
   if (!src) {
     return (
-      <div className="rounded-[1.35rem] border border-dashed border-[#dfd4ca] bg-[#fff8f1] px-4 py-6 text-sm font-semibold text-[#75645d]">
+      <div className="rounded-[1.35rem] border border-dashed border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-6 text-sm font-semibold text-[var(--student-text-muted)]">
         Image not attached yet.
       </div>
     );
@@ -104,7 +104,7 @@ function SecureLessonImage({
       <img
         src={src}
         alt={alt}
-        className="max-h-[520px] w-full rounded-[1.35rem] border border-[#e1d7ce] bg-[#fbf5ee] object-contain"
+        className="max-h-[520px] w-full rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] object-contain"
         loading="lazy"
       />
     </div>
@@ -126,15 +126,15 @@ function ObjectiveList({ blockId, items }: { blockId: string; items: Array<{ id:
             className={`flex gap-3 rounded-[1rem] border px-3 py-3 text-left transition ${
               checked[itemId]
                 ? 'border-emerald-200 bg-emerald-50/80'
-                : 'border-[#e3d8cf] bg-white/85 hover:border-[#d3c3b8]'
+                : 'border-[var(--student-outline)] bg-white/85 hover:border-[var(--student-outline-strong)]'
             }`}
           >
             <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-              checked[itemId] ? 'bg-emerald-600 text-white' : 'bg-[#f5eee7] text-[#8a655e]'
+              checked[itemId] ? 'bg-emerald-600 text-white' : 'bg-[var(--student-surface-soft)] text-[var(--student-text-muted)]'
             }`}>
               {checked[itemId] ? <CheckCircle2 className="h-4 w-4" /> : index + 1}
             </span>
-            <span className="min-w-0 text-sm leading-6 text-[#2a2322]">
+            <span className="min-w-0 text-sm leading-6 text-[var(--student-text-strong)]">
               <RichTextRenderer html={normalizeRichValue(item.html)} />
             </span>
           </button>
@@ -155,20 +155,20 @@ function ReflectionPrompt({ promptHtml }: { promptHtml: string }) {
         value={response}
         onChange={(event) => setResponse(event.target.value)}
         placeholder="Write a private reflection here. It stays on this device."
-        className="min-h-28 w-full rounded-[1rem] border border-[#dfd4ca] bg-white/85 px-3 py-3 text-sm text-[#2a2322] outline-none transition focus:border-[#cf2027]"
+        className="min-h-28 w-full rounded-[1rem] border border-[var(--student-outline)] bg-white/85 px-3 py-3 text-sm text-[var(--student-text-strong)] outline-none transition focus:border-[var(--student-accent)]"
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-[#7b6d69]">Local only. This is not submitted or sent to AI.</p>
+        <p className="text-xs font-semibold text-[var(--student-text-muted)]">Local only. This is not submitted or sent to AI.</p>
         <button
           type="button"
           onClick={() => setShowGuide((current) => !current)}
-          className="rounded-full border border-[#d8cec4] bg-white px-3 py-1.5 text-xs font-bold text-[#5f4f4b]"
+          className="rounded-full border border-[var(--student-outline)] bg-white px-3 py-1.5 text-xs font-bold text-[var(--student-text-strong)]"
         >
           {showGuide ? 'Hide guide' : 'Need a guide?'}
         </button>
       </div>
       {showGuide ? (
-        <div className="rounded-[1rem] border border-[#e7d4bd] bg-[#fff7ed] px-3 py-3 text-xs leading-5 text-[#875016]">
+        <div className="rounded-[1rem] border border-[var(--student-warning-border)] bg-[var(--student-warning-bg)] px-3 py-3 text-xs leading-5 text-[var(--student-warning-text)]">
           Try starting with: “I noticed...”, “This reminds me of...”, or “One question I still have is...”.
         </div>
       ) : null}
@@ -204,17 +204,17 @@ function LessonCheckpoint({
   };
 
   return (
-    <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#f0b7a7] bg-[#fff0ea] p-4">
+    <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-[#b13b26]">
+        <span className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-accent)]">
           <KeyRound className="h-3.5 w-3.5" />
           Checkpoint
         </span>
-        {model.points > 0 ? <span className="text-xs font-black text-[#9b4a38]">{model.points} pts</span> : null}
+        {model.points > 0 ? <span className="text-xs font-black text-[var(--student-accent)]">{model.points} pts</span> : null}
       </div>
 
       <RichTextRenderer
-        className="text-base font-bold leading-7 text-[#211b1b]"
+        className="text-base font-bold leading-7 text-[var(--student-text-strong)]"
         html={normalizeRichValue(model.prompt || '<p>Answer the checkpoint.</p>')}
       />
 
@@ -240,20 +240,20 @@ function LessonCheckpoint({
                 showCorrect
                   ? 'border-emerald-300 bg-emerald-50 text-emerald-950'
                   : showWrong
-                    ? 'border-rose-300 bg-rose-50 text-rose-950'
+                    ? 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-danger-text)]'
                     : selected
-                      ? 'border-[#cf2027] bg-white text-[#211b1b]'
-                      : 'border-[#f0c7bd] bg-white/75 text-[#211b1b] hover:border-[#e09886]'
+                      ? 'border-[var(--student-accent)] bg-white text-[var(--student-text-strong)]'
+                      : 'border-[var(--student-outline)] bg-white/75 text-[var(--student-text-strong)] hover:border-[var(--student-outline-strong)]'
               } disabled:cursor-not-allowed disabled:opacity-80`}
             >
               <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-black ${
                 showCorrect
                   ? 'border-emerald-500 bg-emerald-600 text-white'
                   : showWrong
-                    ? 'border-rose-500 bg-rose-600 text-white'
+                    ? 'border-[var(--student-red)] bg-[var(--student-red)] text-white'
                     : selected
-                      ? 'border-[#cf2027] bg-[#cf2027] text-white'
-                      : 'border-[#e4c4bb] bg-white text-[#9b4a38]'
+                      ? 'border-[var(--student-accent)] bg-[var(--student-accent)] text-white'
+                      : 'border-[var(--student-outline)] bg-white text-[var(--student-accent)]'
               }`}>
                 {showCorrect ? <CheckCircle2 className="h-4 w-4" /> : showWrong ? <XCircle className="h-4 w-4" /> : null}
               </span>
@@ -269,7 +269,7 @@ function LessonCheckpoint({
         <div className={`mt-3 rounded-[1rem] border px-3 py-3 text-sm font-semibold ${
           isCorrect
             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-            : 'border-rose-200 bg-rose-50 text-rose-800'
+            : 'border-[var(--student-danger-border)] bg-[var(--student-danger-bg)] text-[var(--student-danger-text)]'
         }`}>
           {isCorrect ? 'Correct. The completion timer can count this checkpoint.' : 'Not yet. Try another answer before the lesson timer can start.'}
           {model.explanation ? (
@@ -333,15 +333,15 @@ function LessonFileBlockCard({ block }: { block: ContentBlock }) {
   );
 
   return (
-    <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
+    <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white/85 p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-[#f7eee7] text-[#8a5148]">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1rem] bg-[var(--student-surface-soft)] text-[var(--student-accent)]">
             <FileText className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <p className="truncate font-black text-[#211b1b]">{file.fileName || stripHtml(file.legacyUrl || '') || 'Lesson file'}</p>
-            <p className="text-xs font-semibold text-[#7b6d69]">
+            <p className="truncate font-black text-[var(--student-text-strong)]">{file.fileName || stripHtml(file.legacyUrl || '') || 'Lesson file'}</p>
+            <p className="text-xs font-semibold text-[var(--student-text-muted)]">
               {isDeck ? 'PowerPoint deck' : file.mimeType || 'File'} - {formatFileSize(file.sizeBytes)}
             </p>
           </div>
@@ -392,8 +392,8 @@ export function LessonBlockStudentRenderer({
 
     if (variant === 'objectives') {
       return (
-        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#d9e5d5] bg-[#f3fbf1] p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#30783e]">
+        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-navy-soft)]">
             <Target className="h-4 w-4" />
             {heading || 'Learning objectives'}
           </div>
@@ -404,16 +404,16 @@ export function LessonBlockStudentRenderer({
 
     if (variant === 'key_points') {
       return (
-        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#e1d4c1] bg-[#fff8ee] p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#9b5d12]">
+        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-accent)]">
             <Lightbulb className="h-4 w-4" />
             {heading || 'Key points'}
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             {(content.items ?? []).map((item, index) => (
-              <div key={item.id} className="rounded-[1rem] border border-[#ead9bf] bg-white/80 px-3 py-3">
-                <p className="mb-2 text-[11px] font-black uppercase tracking-[0.1em] text-[#9b5d12]">Point {index + 1}</p>
-                <RichTextRenderer className="text-sm leading-6 text-[#2a2322]" html={normalizeRichValue(item.html)} />
+              <div key={item.id} className="rounded-[1rem] border border-[var(--student-outline)] bg-white/80 px-3 py-3">
+                <p className="mb-2 text-[11px] font-black uppercase tracking-[0.1em] text-[var(--student-accent)]">Point {index + 1}</p>
+                <RichTextRenderer className="text-sm leading-6 text-[var(--student-text-strong)]" html={normalizeRichValue(item.html)} />
               </div>
             ))}
           </div>
@@ -423,29 +423,29 @@ export function LessonBlockStudentRenderer({
 
     if (variant === 'example') {
       return (
-        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#d7dce6] bg-[#f6f8fb] p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#475569]">
+        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-text-muted)]">
             <Lightbulb className="h-4 w-4" />
             {heading || 'Worked example'}
           </div>
           {content.scenarioHtml ? (
-            <div className="rounded-[1rem] border border-[#dfe5ed] bg-white/85 px-3 py-3 text-sm leading-6 text-[#2a2322]">
+            <div className="rounded-[1rem] border border-[var(--student-outline)] bg-white/85 px-3 py-3 text-sm leading-6 text-[var(--student-text-strong)]">
               <RichTextRenderer html={normalizeRichValue(content.scenarioHtml)} />
             </div>
           ) : null}
           <div className="mt-3 grid gap-2">
             {(content.steps ?? []).map((step, index) => (
-              <div key={step.id} className="grid gap-3 rounded-[1rem] border border-[#dfe5ed] bg-white/85 px-3 py-3 md:grid-cols-[110px_minmax(0,1fr)]">
-                <div className="text-xs font-black uppercase tracking-[0.1em] text-[#5f6d7e]">
+              <div key={step.id} className="grid gap-3 rounded-[1rem] border border-[var(--student-outline)] bg-white/85 px-3 py-3 md:grid-cols-[110px_minmax(0,1fr)]">
+                <div className="text-xs font-black uppercase tracking-[0.1em] text-[var(--student-text-muted)]">
                   {step.title || `Step ${index + 1}`}
                 </div>
-                <RichTextRenderer className="text-sm leading-6 text-[#2a2322]" html={normalizeRichValue(step.html)} />
+                <RichTextRenderer className="text-sm leading-6 text-[var(--student-text-strong)]" html={normalizeRichValue(step.html)} />
               </div>
             ))}
           </div>
           {content.answerHtml ? (
-            <div className="mt-3 rounded-[1rem] border border-[#c8ddce] bg-[#f1fbf3] px-3 py-3 text-sm leading-6 text-[#254b2e]">
-              <p className="mb-1 text-xs font-black uppercase tracking-[0.1em] text-[#30783e]">Why it works</p>
+            <div className="mt-3 rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-3 py-3 text-sm leading-6 text-[var(--student-text-strong)]">
+              <p className="mb-1 text-xs font-black uppercase tracking-[0.1em] text-[var(--student-navy-soft)]">Why it works</p>
               <RichTextRenderer html={normalizeRichValue(content.answerHtml)} />
             </div>
           ) : null}
@@ -455,12 +455,12 @@ export function LessonBlockStudentRenderer({
 
     if (variant === 'recap') {
       return (
-        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-[#fffdfa] p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#7b4d46]">
+        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-white)] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-accent)]">
             <RefreshCcw className="h-4 w-4" />
             {heading || 'Recap'}
           </div>
-          <div className="rounded-[1rem] border border-[#e5d9ce] bg-[#fbf4ed] px-4 py-4 text-base font-semibold leading-7 text-[#2a2322]">
+          <div className="rounded-[1rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] px-4 py-4 text-base font-semibold leading-7 text-[var(--student-text-strong)]">
             <RichTextRenderer html={normalizeRichValue(content.takeawayHtml)} />
           </div>
         </article>
@@ -469,8 +469,8 @@ export function LessonBlockStudentRenderer({
 
     if (variant === 'reflection') {
       return (
-        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dad4ea] bg-[#f8f6fd] p-4">
-          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#64527f]">
+        <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-[var(--student-surface-soft)] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-navy-soft)]">
             <MessageSquareText className="h-4 w-4" />
             {heading || 'Reflection'}
           </div>
@@ -480,12 +480,12 @@ export function LessonBlockStudentRenderer({
     }
 
     return (
-      <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
+      <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white/85 p-4">
         {heading ? (
-          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-[#7b6d69]">{heading}</p>
+          <p className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-text-muted)]">{heading}</p>
         ) : null}
         <RichTextRenderer
-          className="prose max-w-none leading-relaxed text-[#2a2322] [&_a]:text-[#cf2027]"
+          className="prose max-w-none leading-relaxed text-[var(--student-text-strong)] [&_a]:text-[var(--student-accent)]"
           html={normalizeRichValue(content.html)}
         />
       </article>
@@ -506,7 +506,7 @@ export function LessonBlockStudentRenderer({
   if (normalizedBlock.type === 'image') {
     const image = getLessonMediaBlockModel(normalizedBlock);
     return (
-      <figure id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
+      <figure id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white/85 p-4">
         <SecureLessonImage
           fileId={image.fileId}
           fallbackUrl={image.legacyUrl}
@@ -514,7 +514,7 @@ export function LessonBlockStudentRenderer({
           displayScale={image.displayScale}
         />
         {image.caption ? (
-          <figcaption className="mt-3 text-center text-sm font-semibold text-[#75645d]">{image.caption}</figcaption>
+          <figcaption className="mt-3 text-center text-sm font-semibold text-[var(--student-text-muted)]">{image.caption}</figcaption>
         ) : null}
       </figure>
     );
@@ -530,12 +530,12 @@ export function LessonBlockStudentRenderer({
       );
     }
     return (
-      <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4">
-        <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[#7b4d46]">
+      <article id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white/85 p-4">
+        <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-[var(--student-accent)]">
           <Video className="h-4 w-4" />
           Watch
         </div>
-        <div className="aspect-video overflow-hidden rounded-[1.25rem] border border-[#e1d7ce] bg-slate-950">
+        <div className="aspect-video overflow-hidden rounded-[1.25rem] border border-[var(--student-outline)] bg-[var(--student-navy)]">
           <iframe
             src={embedUrl}
             className="h-full w-full"
@@ -553,11 +553,11 @@ export function LessonBlockStudentRenderer({
   }
 
   if (normalizedBlock.type === 'divider') {
-    return <hr id={`lesson-block-${block.id}`} className="my-6 border-[#ded2c8]" />;
+    return <hr id={`lesson-block-${block.id}`} className="my-6 border-[var(--student-outline)]" />;
   }
 
   return (
-    <div id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[#dfd4ca] bg-white/85 p-4 text-sm font-semibold text-[#7b6d69]">
+    <div id={`lesson-block-${block.id}`} className="rounded-[1.35rem] border border-[var(--student-outline)] bg-white/85 p-4 text-sm font-semibold text-[var(--student-text-muted)]">
       Unsupported content type: {normalizedBlock.type}
     </div>
   );
