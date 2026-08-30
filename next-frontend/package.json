@@ -12,6 +12,7 @@
     "perf:discussion-smoke": "node scripts/discussion-perf-smoke.js",
     "perf:engine-smoke": "node scripts/engine-perf-smoke.js",
     "build": "next build",
+    "audit:student-palette": "node scripts/check-student-palette.mjs",
     "start": "node scripts/start-standalone.js",
     "lint": "eslint --max-warnings 5",
     "test": "jest",

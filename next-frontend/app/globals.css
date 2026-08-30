@@ -18046,9 +18046,7 @@ body {
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background:
-    conic-gradient(var(--student-text-muted) var(--progress), var(--student-success-text) var(--progress), color-mix(in srgb, var(--student-text-muted) 35%, transparent) 0),
-    var(--student-elevated);
+  background: conic-gradient(var(--student-red) var(--progress), var(--student-navy-soft) var(--progress), var(--student-navy-soft) 0);
   position: relative;
 }
 

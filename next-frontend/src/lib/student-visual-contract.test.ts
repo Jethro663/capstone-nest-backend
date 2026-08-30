@@ -58,4 +58,17 @@ describe('canonical student visual system', () => {
       /#(?:10213e|172c4c|7f1d1d|fecaca|0f172a)|translateY\(-2px\)/i,
     );
   });
+
+  it('keeps the student palette audit available as a package command', () => {
+    const packageJson = JSON.parse(read('package.json')) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.['audit:student-palette']).toBe(
+      'node scripts/check-student-palette.mjs',
+    );
+    expect(
+      fs.existsSync(path.join(frontendRoot, 'scripts/check-student-palette.mjs')),
+    ).toBe(true);
+  });
 });
