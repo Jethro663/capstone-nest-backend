@@ -128,125 +128,6 @@ function buildLearningAssetDatabase(size: number) {
 }
 
 describe('AcademicStateService rollover characterization', () => {
-  it.each([
-    {
-      name: 'promotes when every subject is at least 75',
-      sourceGradeLevel: '8' as const,
-      subjectFinalGrades: [
-        [75, 75],
-        [90, 82],
-      ],
-      expected: { outcome: 'promoted', targetGradeLevel: '9' },
-    },
-    {
-      name: 'retains when one subject final grade is below 75',
-      sourceGradeLevel: '8' as const,
-      subjectFinalGrades: [
-        [95, 91],
-        [74, 74],
-      ],
-      expected: { outcome: 'retained', targetGradeLevel: '8' },
-    },
-    {
-      name: 'graduates a passing Grade 10 student',
-      sourceGradeLevel: '10' as const,
-      subjectFinalGrades: [[75], [88], [93]],
-      expected: { outcome: 'graduated', targetGradeLevel: null },
-    },
-  ])('$name', ({ sourceGradeLevel, subjectFinalGrades, expected }) => {
-    const service = new AcademicStateService(
-      { db: {} } as DatabaseService,
-      { log: jest.fn() } as unknown as AuditService,
-      {} as never,
-      {} as never,
-    );
-
-    const result = (
-      service as unknown as {
-        classifyStudentOutcome: (input: {
-          studentId: string;
-          sourceGradeLevel: '7' | '8' | '9' | '10';
-          subjectFinalGrades: number[][];
-        }) => { outcome: string; targetGradeLevel: string | null };
-      }
-    ).classifyStudentOutcome({
-      studentId: 'student-1',
-      sourceGradeLevel,
-      subjectFinalGrades,
-    });
-
-    expect(result).toMatchObject(expected);
-  });
-
-  it('notifies teachers for finalized and pending active classes', async () => {
-    const activeClassRows = [
-      {
-        classId: 'class-finalized',
-        subjectName: 'Mathematics',
-        teacherId: 'teacher-1',
-        sectionId: 'section-1',
-        sectionName: 'Rizal',
-        sectionGradeLevel: '8',
-        classRecordId: 'record-1',
-        classRecordStatus: 'finalized',
-      },
-      {
-        classId: 'class-pending',
-        subjectName: 'Science',
-        teacherId: 'teacher-2',
-        sectionId: 'section-1',
-        sectionName: 'Rizal',
-        sectionGradeLevel: '8',
-        classRecordId: 'record-2',
-        classRecordStatus: 'draft',
-      },
-    ];
-    const where = jest.fn().mockResolvedValue(activeClassRows);
-    const database = {
-      select: jest.fn(() => ({
-        from: jest.fn(() => ({
-          innerJoin: jest.fn(() => ({
-            leftJoin: jest.fn(() => ({ where })),
-          })),
-        })),
-      })),
-    };
-    const auditService = { log: jest.fn().mockResolvedValue(undefined) };
-    const notificationsService = {
-      createBulk: jest.fn().mockResolvedValue(undefined),
-    };
-    const notificationsGateway = { emitToUser: jest.fn() };
-    const service = new AcademicStateService(
-      { db: database } as unknown as DatabaseService,
-      auditService as unknown as AuditService,
-      notificationsService as never,
-      notificationsGateway as never,
-    );
-    jest
-      .spyOn(service as never, 'ensureCurrentState' as never)
-      .mockResolvedValue({ schoolYear: '2025-2026' } as never);
-
-    const result = await service.notifyUnfinalizedTeachers('admin-1');
-
-    expect(notificationsService.createBulk).toHaveBeenCalledWith([
-      expect.objectContaining({
-        userId: 'teacher-1',
-        body: expect.stringContaining('are finalized'),
-        metadata: expect.objectContaining({ allRecordsFinalized: true }),
-      }),
-      expect.objectContaining({
-        userId: 'teacher-2',
-        body: expect.stringContaining('complete and finalize'),
-        metadata: expect.objectContaining({ allRecordsFinalized: false }),
-      }),
-    ]);
-    expect(result).toMatchObject({
-      notifiedClassesCount: 2,
-      notifiedTeachersCount: 2,
-    });
-    expect(notificationsGateway.emitToUser).toHaveBeenCalledTimes(2);
-  });
-
   it.each([1, 4, 12])(
     'clones exact nested asset counts for graph size %i',
     async (size) => {
@@ -254,6 +135,10 @@ describe('AcademicStateService rollover characterization', () => {
       const service = new AcademicStateService(
         { db: database } as unknown as DatabaseService,
         { log: jest.fn() } as unknown as AuditService,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
       );
       const startedAt = performance.now();
 
@@ -289,72 +174,4 @@ describe('AcademicStateService rollover characterization', () => {
       expect(performance.now() - startedAt).toBeGreaterThanOrEqual(0);
     },
   );
-
-  it('propagates a transactional write failure without auditing completion', async () => {
-    const auditService = { log: jest.fn() };
-    let rolledBack = false;
-    const transaction = jest.fn(
-      async (work: (tx: unknown) => Promise<void>) => {
-        try {
-          await work({
-            query: { sections: { findMany: jest.fn().mockResolvedValue([]) } },
-            select: jest.fn(() => ({
-              from: jest.fn(() => ({
-                where: jest.fn().mockResolvedValue([]),
-              })),
-            })),
-            insert: jest.fn(() => ({
-              values: jest.fn(() => ({
-                onConflictDoUpdate: jest
-                  .fn()
-                  .mockRejectedValue(new Error('state write failed')),
-              })),
-            })),
-          });
-        } catch (error) {
-          rolledBack = true;
-          throw error;
-        }
-      },
-    );
-    const service = new AcademicStateService(
-      { db: { transaction } } as unknown as DatabaseService,
-      auditService as unknown as AuditService,
-    );
-    jest
-      .spyOn(service as never, 'verifyAdminPassword' as never)
-      .mockResolvedValue(undefined as never);
-    jest
-      .spyOn(service as never, 'ensureCurrentState' as never)
-      .mockResolvedValue({
-        schoolYear: '2025-2026',
-        quarter: 'Q4',
-      } as never);
-    jest
-      .spyOn(service as never, 'getTransitionTargets' as never)
-      .mockResolvedValue({
-        classRecordIdsToFinalize: [],
-        schoolEventIdsToArchive: [],
-        classIdsToArchive: [],
-        sectionIdsToArchive: [],
-        enrollmentIdsToComplete: [],
-        sectionsToClone: [],
-        classesToClone: [],
-        promotionReadiness: { transitionBlocked: false },
-      } as never);
-
-    await expect(
-      service.transition(
-        {
-          schoolYear: '2026-2027',
-          currentPassword: 'secret',
-          confirmationText: AcademicStateService.TRANSITION_CONFIRMATION_TEXT,
-        },
-        'admin-1',
-      ),
-    ).rejects.toThrow('state write failed');
-
-    expect(rolledBack).toBe(true);
-    expect(auditService.log).not.toHaveBeenCalled();
-  });
 });

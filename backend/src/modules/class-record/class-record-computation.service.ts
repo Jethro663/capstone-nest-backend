@@ -7,6 +7,9 @@ import {
 import { eq, and, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { TransmutationService } from './transmutation.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { LEGACY_BANDS } from '../academic-state/academic-policy';
+import { calculateStudentRecord } from './class-record-calculation';
 import { TransmutationBand } from '../../drizzle/schema/transmutation.schema';
 import {
   classRecords,
@@ -41,54 +44,7 @@ export interface StudentGradeResult {
   categoryBreakdown: CategoryBreakdown[];
 }
 
-interface DepEdTransmutationBand {
-  minInitialGrade: number;
-  transmutedGrade: number;
-}
-
-const DEPED_TRANSMUTATION_TABLE: readonly DepEdTransmutationBand[] = [
-  { minInitialGrade: 100, transmutedGrade: 100 },
-  { minInitialGrade: 98.4, transmutedGrade: 99 },
-  { minInitialGrade: 96.8, transmutedGrade: 98 },
-  { minInitialGrade: 95.2, transmutedGrade: 97 },
-  { minInitialGrade: 93.6, transmutedGrade: 96 },
-  { minInitialGrade: 92, transmutedGrade: 95 },
-  { minInitialGrade: 90.4, transmutedGrade: 94 },
-  { minInitialGrade: 88.8, transmutedGrade: 93 },
-  { minInitialGrade: 87.2, transmutedGrade: 92 },
-  { minInitialGrade: 85.6, transmutedGrade: 91 },
-  { minInitialGrade: 84, transmutedGrade: 90 },
-  { minInitialGrade: 82.4, transmutedGrade: 89 },
-  { minInitialGrade: 80.8, transmutedGrade: 88 },
-  { minInitialGrade: 79.2, transmutedGrade: 87 },
-  { minInitialGrade: 77.6, transmutedGrade: 86 },
-  { minInitialGrade: 76, transmutedGrade: 85 },
-  { minInitialGrade: 74.4, transmutedGrade: 84 },
-  { minInitialGrade: 72.8, transmutedGrade: 83 },
-  { minInitialGrade: 71.2, transmutedGrade: 82 },
-  { minInitialGrade: 69.6, transmutedGrade: 81 },
-  { minInitialGrade: 68, transmutedGrade: 80 },
-  { minInitialGrade: 66.4, transmutedGrade: 79 },
-  { minInitialGrade: 64.8, transmutedGrade: 78 },
-  { minInitialGrade: 63.2, transmutedGrade: 77 },
-  { minInitialGrade: 61.6, transmutedGrade: 76 },
-  { minInitialGrade: 60, transmutedGrade: 75 },
-  { minInitialGrade: 56, transmutedGrade: 74 },
-  { minInitialGrade: 52, transmutedGrade: 73 },
-  { minInitialGrade: 48, transmutedGrade: 72 },
-  { minInitialGrade: 44, transmutedGrade: 71 },
-  { minInitialGrade: 40, transmutedGrade: 70 },
-  { minInitialGrade: 36, transmutedGrade: 69 },
-  { minInitialGrade: 32, transmutedGrade: 68 },
-  { minInitialGrade: 28, transmutedGrade: 67 },
-  { minInitialGrade: 24, transmutedGrade: 66 },
-  { minInitialGrade: 20, transmutedGrade: 65 },
-  { minInitialGrade: 16, transmutedGrade: 64 },
-  { minInitialGrade: 12, transmutedGrade: 63 },
-  { minInitialGrade: 8, transmutedGrade: 62 },
-  { minInitialGrade: 4, transmutedGrade: 61 },
-  { minInitialGrade: 0, transmutedGrade: 60 },
-];
+const DEPED_TRANSMUTATION_TABLE = LEGACY_BANDS;
 
 @Injectable()
 export class ClassRecordComputationService {
@@ -96,6 +52,7 @@ export class ClassRecordComputationService {
 
   constructor(
     private readonly databaseService: DatabaseService,
+    private readonly academicPolicyService: AcademicPolicyService,
     @Optional() private readonly transmutationService?: TransmutationService,
   ) {}
 
@@ -176,11 +133,12 @@ export class ClassRecordComputationService {
    *   Initial Grade         = sum(WS across all categories)
    *   Quarterly Grade       = DepEd transmuted value from table
    *
-   * Missing scores are treated as 0. Items with no HPS are skipped.
+   * Missing scores block computation. Explicit exemptions exclude individual HPS.
    */
   async computeGrades(
     classRecordId: string,
     tx?: typeof this.db,
+    eligibleStudentIds?: string[],
   ): Promise<Map<string, StudentGradeResult>> {
     const conn = tx ?? this.db;
 
@@ -226,12 +184,12 @@ export class ClassRecordComputationService {
     historicalScoreRows.forEach((entry) => participantIds.add(entry.studentId));
     historicalFinalRows.forEach((entry) => participantIds.add(entry.studentId));
 
-    if (participantIds.size === 0) {
+    if (eligibleStudentIds === undefined && participantIds.size === 0) {
       throw new UnprocessableEntityException(
         'No class-record participants found for this class',
       );
     }
-    const studentIds = [...participantIds];
+    const studentIds = eligibleStudentIds ?? [...participantIds];
 
     // 3. Load categories
     const categories = await conn.query.classRecordCategories.findMany({
@@ -244,101 +202,41 @@ export class ClassRecordComputationService {
       with: { scores: true },
     });
 
-    // Index: categoryId -> items
-    const itemsByCategory = new Map<string, typeof items>();
-    for (const item of items) {
-      if (!itemsByCategory.has(item.categoryId)) {
-        itemsByCategory.set(item.categoryId, []);
-      }
-      itemsByCategory.get(item.categoryId)!.push(item);
-    }
-
-    // 5. Compute per-student grades using DepEd formula and active transmutation table
-    const activeBands = this.transmutationService
-      ? await this.transmutationService.getActiveBands()
-      : undefined;
+    const { policy } = await this.academicPolicyService.forClass(
+      record.classId,
+    );
     const results = new Map<string, StudentGradeResult>();
-
+    const blockers: ReturnType<typeof calculateStudentRecord>['blockers'] = [];
     for (const studentId of studentIds) {
-      const categoryBreakdown: CategoryBreakdown[] = [];
-      let initialGrade = 0;
-
-      for (const category of categories) {
-        const categoryItems = itemsByCategory.get(category.id) ?? [];
-        const weight = parseFloat(category.weightPercentage);
-
-        // Only consider items that have a valid HPS (maxScore > 0)
-        const validItems = categoryItems.filter(
-          (item) => parseFloat(item.maxScore) > 0,
-        );
-
-        if (validItems.length === 0) {
-          categoryBreakdown.push({
-            categoryId: category.id,
-            categoryName: category.name,
-            weightPercentage: weight,
-            totalRaw: 0,
-            totalHPS: 0,
-            percentageScore: 0,
-            weightedScore: 0,
-          });
-          continue;
-        }
-
-        // Sum raw scores and HPS across all items in this category
-        let totalRaw = 0;
-        let totalHPS = 0;
-
-        for (const item of validItems) {
-          const maxScore = parseFloat(item.maxScore);
-          totalHPS += maxScore;
-
-          const scoreRecord = item.scores.find(
-            (s: { studentId: string }) => s.studentId === studentId,
-          );
-          const score = scoreRecord ? parseFloat(scoreRecord.score) : 0;
-          totalRaw += score;
-        }
-
-        // PS = (totalRaw / totalHPS) x 100
-        const percentageScore = totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
-
-        // WS = PS x (weight / 100)
-        const weightedScore = percentageScore * (weight / 100);
-
-        categoryBreakdown.push({
-          categoryId: category.id,
-          categoryName: category.name,
-          weightPercentage: weight,
-          totalRaw: Math.round(totalRaw * 100) / 100,
-          totalHPS: Math.round(totalHPS * 100) / 100,
-          percentageScore: Math.round(percentageScore * 1000) / 1000,
-          weightedScore: Math.round(weightedScore * 1000) / 1000,
-        });
-
-        initialGrade += weightedScore;
+      const computed = calculateStudentRecord(
+        studentId,
+        policy,
+        categories,
+        items,
+      );
+      if (computed.blockers.length) {
+        blockers.push(...computed.blockers);
+        continue;
       }
-
-      initialGrade = Math.round(initialGrade * 1000) / 1000;
-      const quarterlyGrade = this.transmute(initialGrade, activeBands);
-
-      const remarks: 'Passed' | 'For Intervention' =
-        quarterlyGrade < 75 ? 'For Intervention' : 'Passed';
-
       results.set(studentId, {
         studentId,
-        initialGrade,
-        quarterlyGrade,
-        remarks,
-        categoryBreakdown,
+        initialGrade: computed.initialGrade!,
+        quarterlyGrade: computed.quarterlyGrade!,
+        remarks: computed.remarks as 'Passed' | 'For Intervention',
+        categoryBreakdown: computed.categoryBreakdown.map((category) => ({
+          ...category,
+          percentageScore: category.percentageScore!,
+          weightedScore: category.weightedScore!,
+        })),
       });
     }
-
-    this.logger.debug(
-      `Computed grades for ${results.size} students in class record ${classRecordId}. ` +
-        `Intervention: ${[...results.values()].filter((r) => r.remarks === 'For Intervention').length}`,
-    );
-
+    if (blockers.length) {
+      throw new UnprocessableEntityException({
+        message:
+          'Class record is incomplete; resolve required grading evidence',
+        blockers,
+      });
+    }
     return results;
   }
 }

@@ -20,10 +20,14 @@ describe('TeacherEvaluationInsightsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLxpService.getMySystemEvaluations.mockResolvedValue({
+      success: true,
       data: {
         pending: [
           {
             id: 'assignment-system',
+            campaignId: 'campaign-1',
+            audienceRole: 'teacher',
+            classId: null,
             formType: 'system',
             targetModule: 'overall',
             title: 'Teacher System Pulse',
@@ -35,6 +39,9 @@ describe('TeacherEvaluationInsightsPage', () => {
           },
           {
             id: 'assignment-ja',
+            campaignId: 'campaign-1',
+            audienceRole: 'teacher',
+            classId: null,
             formType: 'ja_hub',
             targetModule: 'ai_mentor',
             title: 'Teacher JA Hub Pulse',
@@ -76,7 +83,9 @@ describe('TeacherEvaluationInsightsPage', () => {
     expect(screen.getByText('Teacher System Pulse')).toBeInTheDocument();
 
     await waitFor(() =>
-      expect(screen.queryByText('Teacher JA Hub Pulse')).not.toBeInTheDocument(),
+      expect(
+        screen.queryByText('Teacher JA Hub Pulse'),
+      ).not.toBeInTheDocument(),
     );
   });
 });

@@ -24,7 +24,10 @@ jest.mock('@/components/admin/ScheduleCalendarCreator', () => ({
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
 describe('ClassForm', () => {
-  const baseProps = {
+  const baseProps: Omit<
+    React.ComponentProps<typeof ClassForm>,
+    'initialValues'
+  > = {
     sections: [
       {
         id: 'section-1',
@@ -55,17 +58,25 @@ describe('ClassForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (classService.getAll as jest.Mock).mockResolvedValue({ data: { data: [] } });
+    (classService.getAll as jest.Mock).mockResolvedValue({
+      data: { data: [] },
+    });
   });
 
   const waitForClassLookups = async (expectedCalls = 2) => {
-    await waitFor(() => expect(classService.getAll).toHaveBeenCalledTimes(expectedCalls));
+    await waitFor(() =>
+      expect(classService.getAll).toHaveBeenCalledTimes(expectedCalls),
+    );
     await waitFor(() => {
       expect(
-        screen.queryByText(/Checking subjects already assigned to this section/i),
+        screen.queryByText(
+          /Checking subjects already assigned to this section/i,
+        ),
       ).not.toBeInTheDocument();
       expect(
-        screen.queryByText(/Checking teachers already assigned to this section/i),
+        screen.queryByText(
+          /Checking teachers already assigned to this section/i,
+        ),
       ).not.toBeInTheDocument();
       expect(screen.queryByText(/Checking room/i)).not.toBeInTheDocument();
     });
@@ -292,7 +303,9 @@ describe('ClassForm', () => {
     const createButton = screen.getByRole('button', { name: 'Create Class' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Grade' }));
-    const saveGradingButton = screen.getByRole('button', { name: 'Save Grading' });
+    const saveGradingButton = screen.getByRole('button', {
+      name: 'Save Grading',
+    });
 
     fireEvent.change(writtenWorkInput, { target: { value: '99' } });
     expect(writtenWorkInput).toHaveValue('30');
@@ -356,29 +369,31 @@ describe('ClassForm', () => {
   });
 
   it('disables subjects and teachers already assigned to the selected section', async () => {
-    (classService.getAll as jest.Mock).mockImplementation(async (query?: { sectionId?: string }) => {
-      if (query?.sectionId === 'section-1') {
-        return {
-          data: {
-            data: [
-              {
-                id: 'class-existing',
-                subjectName: 'Science',
-                subjectCode: 'SCI-7',
-                subjectGradeLevel: '7',
-                sectionId: 'section-1',
-                teacherId: 'teacher-1',
-                schoolYear: '2026-2027',
-                room: '201',
-                isActive: true,
-              },
-            ],
-          },
-        };
-      }
+    (classService.getAll as jest.Mock).mockImplementation(
+      async (query?: { sectionId?: string }) => {
+        if (query?.sectionId === 'section-1') {
+          return {
+            data: {
+              data: [
+                {
+                  id: 'class-existing',
+                  subjectName: 'Science',
+                  subjectCode: 'SCI-7',
+                  subjectGradeLevel: '7',
+                  sectionId: 'section-1',
+                  teacherId: 'teacher-1',
+                  schoolYear: '2026-2027',
+                  room: '201',
+                  isActive: true,
+                },
+              ],
+            },
+          };
+        }
 
-      return { data: { data: [] } };
-    });
+        return { data: { data: [] } };
+      },
+    );
 
     render(
       <ClassForm
@@ -408,7 +423,9 @@ describe('ClassForm', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('option', { name: 'Science (already in this section)' }),
+        screen.getByRole('option', {
+          name: 'Science (already in this section)',
+        }),
       ).toBeDisabled(),
     );
 
@@ -419,7 +436,11 @@ describe('ClassForm', () => {
       }),
     ).toBeDisabled();
     expect(screen.getByRole('option', { name: 'Rico Ramos' })).toBeEnabled();
-    expect(screen.getByText('1 subject is already assigned here and disabled.')).toBeInTheDocument();
-    expect(screen.getByText('1 teacher is already assigned here and disabled.')).toBeInTheDocument();
+    expect(
+      screen.getByText('1 subject is already assigned here and disabled.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('1 teacher is already assigned here and disabled.'),
+    ).toBeInTheDocument();
   });
 });

@@ -29,9 +29,6 @@ const nextConfig: NextConfig = {
     '127.0.0.1',
     'localhost',
   ],
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   async rewrites() {
     const apiOrigin = EXPLICIT_API_ORIGIN ?? DEFAULT_SERVER_API_ORIGIN;
 

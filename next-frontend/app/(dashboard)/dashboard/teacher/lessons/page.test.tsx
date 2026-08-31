@@ -47,7 +47,9 @@ describe('TeacherLessonsPage', () => {
   });
 
   it('shows the initial loading state while class ownership is unresolved', () => {
-    mockedClassService.getByTeacher.mockReturnValueOnce(new Promise(() => undefined));
+    mockedClassService.getByTeacher.mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
 
     const { container } = render(<TeacherLessonsPage />);
 
@@ -56,11 +58,15 @@ describe('TeacherLessonsPage', () => {
   });
 
   it('shows a safe retryable owner error instead of an empty state', async () => {
-    mockedClassService.getByTeacher.mockRejectedValueOnce(new Error('network detail'));
+    mockedClassService.getByTeacher.mockRejectedValueOnce(
+      new Error('network detail'),
+    );
 
     render(<TeacherLessonsPage />);
 
-    expect(await screen.findByText("Lessons couldn't be loaded")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Lessons couldn't be loaded"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('No lessons yet')).not.toBeInTheDocument();
     expect(screen.queryByText('network detail')).not.toBeInTheDocument();
 
@@ -72,14 +78,23 @@ describe('TeacherLessonsPage', () => {
   });
 
   it('renders source-empty copy only after successful collection requests', async () => {
-    mockedLessonService.getByClass.mockResolvedValueOnce({ data: [] } as Awaited<
-      ReturnType<typeof lessonService.getByClass>
-    >);
+    mockedLessonService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
+      pageSize: 20,
+      count: 0,
+      total: 0,
+      page: 1,
+      totalPages: 1,
+      data: [],
+    } as Awaited<ReturnType<typeof lessonService.getByClass>>);
 
     render(<TeacherLessonsPage />);
 
     expect(await screen.findByText('No lessons yet')).toBeInTheDocument();
-    expect(screen.queryByText('No lessons match this view')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No lessons match this view'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders populated content and distinguishes filter-empty results', async () => {
@@ -94,9 +109,9 @@ describe('TeacherLessonsPage', () => {
   });
 
   it('keeps fulfilled classes visible when another class request fails', async () => {
-    mockedClassService.getByTeacher.mockResolvedValueOnce({ data: classes } as Awaited<
-      ReturnType<typeof classService.getByTeacher>
-    >);
+    mockedClassService.getByTeacher.mockResolvedValueOnce({
+      data: classes,
+    } as Awaited<ReturnType<typeof classService.getByTeacher>>);
     mockedLessonService.getByClass.mockImplementation(async (classId) => {
       if (classId === 'class-2') throw new Error('science unavailable');
       return {

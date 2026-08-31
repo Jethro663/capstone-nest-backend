@@ -4,7 +4,9 @@ import StudentAssessmentTakePage from './page';
 import { assessmentService } from '@/services/assessment-service';
 
 const replace = jest.fn();
-const studentObjectiveAssessmentSurfaceMock = jest.fn(() => null);
+const studentObjectiveAssessmentSurfaceMock = jest.fn<null, [unknown]>(
+  () => null,
+);
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'assessment-1' }),
@@ -28,12 +30,15 @@ jest.mock('framer-motion', () => ({
   useReducedMotion: () => true,
 }));
 
-jest.mock('@/components/student/assessment/StudentObjectiveAssessmentSurface', () => ({
-  StudentObjectiveAssessmentSurface: (props: unknown) => {
-    studentObjectiveAssessmentSurfaceMock(props);
-    return null;
-  },
-}));
+jest.mock(
+  '@/components/student/assessment/StudentObjectiveAssessmentSurface',
+  () => ({
+    StudentObjectiveAssessmentSurface: (props: unknown) => {
+      studentObjectiveAssessmentSurfaceMock(props);
+      return null;
+    },
+  }),
+);
 
 jest.mock('@/services/assessment-service', () => ({
   assessmentService: {
@@ -51,7 +56,9 @@ jest.mock('@/services/assessment-service', () => ({
   },
 }));
 
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
 
 describe('StudentAssessmentTakePage', () => {
   beforeEach(() => {
@@ -106,7 +113,9 @@ describe('StudentAssessmentTakePage', () => {
     render(<StudentAssessmentTakePage />);
 
     await waitFor(() => {
-      expect(mockedAssessmentService.startAttempt).toHaveBeenCalledWith('assessment-1');
+      expect(mockedAssessmentService.startAttempt).toHaveBeenCalledWith(
+        'assessment-1',
+      );
     });
 
     expect(replace).not.toHaveBeenCalled();
@@ -169,6 +178,8 @@ describe('StudentAssessmentTakePage', () => {
             options: [
               {
                 id: 'option-1',
+                isCorrect: true,
+                order: 1,
                 text: '',
                 imageUrl: '/api/assessments/questions/images/option.png',
                 imageDisplayMode: 'expanded',
@@ -178,6 +189,8 @@ describe('StudentAssessmentTakePage', () => {
               },
               {
                 id: 'option-2',
+                isCorrect: false,
+                order: 2,
                 text: 'Text choice',
               },
             ],
@@ -212,10 +225,9 @@ describe('StudentAssessmentTakePage', () => {
       expect(studentObjectiveAssessmentSurfaceMock).toHaveBeenCalled();
     });
 
-    const lastCall =
-      studentObjectiveAssessmentSurfaceMock.mock.calls[
-        studentObjectiveAssessmentSurfaceMock.mock.calls.length - 1
-      ]?.[0] as {
+    const lastCall = studentObjectiveAssessmentSurfaceMock.mock.calls[
+      studentObjectiveAssessmentSurfaceMock.mock.calls.length - 1
+    ]?.[0] as {
       question: {
         imageUrl?: string;
         imageDisplayMode?: string;
@@ -232,7 +244,9 @@ describe('StudentAssessmentTakePage', () => {
       };
     };
 
-    expect(lastCall.question.imageUrl).toBe('/api/assessments/questions/images/question.png');
+    expect(lastCall.question.imageUrl).toBe(
+      '/api/assessments/questions/images/question.png',
+    );
     expect(lastCall.question.imageDisplayMode).toBe('expanded');
     expect(lastCall.question.imageZoom).toBe(120);
     expect(lastCall.question.imagePositionX).toBe(35);

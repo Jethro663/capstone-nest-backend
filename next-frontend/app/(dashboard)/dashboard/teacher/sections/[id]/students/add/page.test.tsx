@@ -32,7 +32,9 @@ jest.mock('sonner', () => ({
   },
 }));
 
-const mockedSectionService = sectionService as jest.Mocked<typeof sectionService>;
+const mockedSectionService = sectionService as jest.Mocked<
+  typeof sectionService
+>;
 
 function buildCandidates() {
   const available = Array.from({ length: 14 }).map((_, index) => {
@@ -118,6 +120,8 @@ describe('Teacher Add Section Students Page', () => {
     mockedSectionService.getCandidates.mockResolvedValue({
       success: true,
       data: buildCandidates(),
+      page: 1,
+      limit: 20,
       count: 16,
       total: 16,
       totalPages: 1,
@@ -143,7 +147,9 @@ describe('Teacher Add Section Students Page', () => {
     expect(screen.getByText('16 total')).toBeInTheDocument();
     expect(screen.getByText('Carlos Reyes')).toBeInTheDocument();
     expect(screen.getByText('Lia Torres')).toBeInTheDocument();
-    expect(screen.getByText('Already in section Grade 10 - Rizal B')).toBeInTheDocument();
+    expect(
+      screen.getByText('Already in section Grade 10 - Rizal B'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Grade mismatch (9 vs 10)')).toBeInTheDocument();
     expect(screen.getByLabelText('Select Carlos Reyes')).toBeDisabled();
     expect(screen.getByLabelText('Select Lia Torres')).toBeDisabled();
@@ -161,17 +167,24 @@ describe('Teacher Add Section Students Page', () => {
       expect.stringContaining('eligibility=eligible'),
       { scroll: false },
     );
-    expect(replaceMock).toHaveBeenCalledWith(expect.stringContaining('page=1'), { scroll: false });
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.stringContaining('page=1'),
+      { scroll: false },
+    );
   });
 
   it('selects only eligible students on the current page', async () => {
     render(<TeacherAddSectionStudentsPage />);
     await screen.findByText('A01 Student');
 
-    fireEvent.click(screen.getByRole('button', { name: /Select Eligible on Page/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Select Eligible on Page/i }),
+    );
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: /Add 14 Student\(s\)/i }).length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByRole('button', { name: /Add 14 Student\(s\)/i }).length,
+      ).toBeGreaterThan(0);
     });
     expect(screen.getByLabelText('Select Carlos Reyes')).toBeDisabled();
     expect(screen.getByLabelText('Select Lia Torres')).toBeDisabled();
@@ -203,13 +216,17 @@ describe('Teacher Add Section Students Page', () => {
     await screen.findByText('A01 Student');
 
     fireEvent.click(screen.getByLabelText('Select A01 Student'));
-    fireEvent.click(screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0],
+    );
 
     await waitFor(() => {
       expect(mockedSectionService.addStudents).toHaveBeenCalledTimes(2);
     });
 
-    expect(pushMock).toHaveBeenCalledWith('/dashboard/teacher/sections/section-1/roster');
+    expect(pushMock).toHaveBeenCalledWith(
+      '/dashboard/teacher/sections/section-1/roster',
+    );
   });
 
   it('stops after 3 attempts when add keeps returning 429', async () => {
@@ -222,7 +239,9 @@ describe('Teacher Add Section Students Page', () => {
     await screen.findByText('A01 Student');
 
     fireEvent.click(screen.getByLabelText('Select A01 Student'));
-    fireEvent.click(screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /Add 1 Student\(s\)/i })[0],
+    );
 
     await waitFor(
       () => {
@@ -231,7 +250,9 @@ describe('Teacher Add Section Students Page', () => {
       { timeout: 3000 },
     );
 
-    expect(pushMock).not.toHaveBeenCalledWith('/dashboard/teacher/sections/section-1/roster');
+    expect(pushMock).not.toHaveBeenCalledWith(
+      '/dashboard/teacher/sections/section-1/roster',
+    );
     expect(toastErrorMock).toHaveBeenCalled();
   });
 });

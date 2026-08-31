@@ -1,41 +1,29 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Download, RefreshCcw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
-import { TeacherClassRecordWorkbook } from '@/components/teacher/class-record/TeacherClassRecordWorkbook';
-import { dashboardService } from '@/services/dashboard-service';
-import { classRecordService } from '@/services/class-record-service';
-import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
-import type { ClassItem } from '@/types/class';
-import type { GradingPeriod } from '@/utils/constants';
-import { cn } from '@/utils/cn';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Download, RefreshCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardStatePanel } from "@/components/layout/DashboardStatePanel";
+import { TeacherClassRecordWorkbook } from "@/components/teacher/class-record/TeacherClassRecordWorkbook";
+import { dashboardService } from "@/services/dashboard-service";
+import { useTeacherClassRecord } from "@/hooks/use-teacher-class-record";
+import type { ClassItem } from "@/types/class";
+import type { GradingPeriod } from "@/utils/constants";
 
 export default function ClassRecordPage() {
   const searchParams = useSearchParams();
-  const preselectedClassId = searchParams.get('classId') || '';
+  const preselectedClassId = searchParams.get("classId") || "";
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState(preselectedClassId);
-  const [activeTableTitle, setActiveTableTitle] = useState<string>('');
   const [classListStatus, setClassListStatus] = useState<
-    'loading' | 'ready' | 'error'
-  >('loading');
+    "loading" | "ready" | "error"
+  >("loading");
 
   const classRecordState = useTeacherClassRecord(selectedClassId || undefined);
 
-  useEffect(() => {
-    classRecordService.getActiveTransmutationTable()
-      .then((res) => {
-        if (res?.data?.title) {
-          setActiveTableTitle(res.data.title);
-        }
-      })
-      .catch(() => {});
-  }, []);
   const selectedClass = useMemo(
     () => classes.find((classItem) => classItem.id === selectedClassId) ?? null,
     [classes, selectedClassId],
@@ -44,10 +32,12 @@ export default function ClassRecordPage() {
   const spreadsheet = classRecordState.spreadsheet;
 
   const sectionLabel = selectedClass
-    ? `${selectedClass.section?.gradeLevel ? `Grade ${selectedClass.section.gradeLevel}` : 'Grade level not set'} - ${selectedClass.section?.name || 'Section not set'}`
-    : 'Grade and section will appear here';
+    ? `${selectedClass.section?.gradeLevel ? `Grade ${selectedClass.section.gradeLevel}` : "Grade level not set"} - ${selectedClass.section?.name || "Section not set"}`
+    : "Grade and section will appear here";
 
-  const quarterMap: Partial<Record<GradingPeriod, (typeof classRecordState.classRecords)[number]>> = {};
+  const quarterMap: Partial<
+    Record<GradingPeriod, (typeof classRecordState.classRecords)[number]>
+  > = {};
   for (const record of classRecordState.classRecords) {
     quarterMap[record.gradingPeriod] = record;
   }
@@ -64,29 +54,30 @@ export default function ClassRecordPage() {
 
   const statusLabel = selectedRecord?.status
     ? `${selectedRecord.status[0].toUpperCase()}${selectedRecord.status.slice(1)}`
-    : 'Waiting';
+    : "Waiting";
 
   const fetchClasses = useCallback(() => {
     const request = dashboardService.getTeacherClasses();
-    void Promise.resolve().then(() => setClassListStatus('loading'));
+    void Promise.resolve().then(() => setClassListStatus("loading"));
 
     void request
       .then((response) => {
         const nextClasses = response.data || [];
         setClasses(nextClasses);
-        setSelectedClassId((current) =>
-          current || preselectedClassId || nextClasses[0]?.id || '',
+        setSelectedClassId(
+          (current) =>
+            current || preselectedClassId || nextClasses[0]?.id || "",
         );
-        setClassListStatus('ready');
+        setClassListStatus("ready");
       })
-      .catch(() => setClassListStatus('error'));
+      .catch(() => setClassListStatus("error"));
   }, [preselectedClassId]);
 
   useEffect(() => {
     void fetchClasses();
   }, [fetchClasses]);
 
-  if (classListStatus === 'loading' && classes.length === 0) {
+  if (classListStatus === "loading" && classes.length === 0) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-24 rounded-xl" />
@@ -109,8 +100,8 @@ export default function ClassRecordPage() {
   const hasWorkbook = Boolean(selectedRecord && spreadsheet);
   const refreshFailed =
     hasWorkbook &&
-    (classRecordState.recordsStatus === 'error' ||
-      classRecordState.spreadsheetStatus === 'error');
+    (classRecordState.recordsStatus === "error" ||
+      classRecordState.spreadsheetStatus === "error");
 
   return (
     <main className="teacher-class-record-page space-y-3 pb-4">
@@ -118,14 +109,17 @@ export default function ClassRecordPage() {
         <div>
           <div className="flex items-center gap-3 flex-wrap">
             <h1>Class Record</h1>
-            {activeTableTitle && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-800 border border-rose-200 shadow-sm">
-                <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                Table Standard: {activeTableTitle}
+            {classRecordState.policy && (
+              <span className="text-sm">
+                {classRecordState.policy.id} ·{" "}
+                {classRecordState.policy.gradeMethod}
               </span>
             )}
           </div>
-          <p>Review grades, manage quarter records, and export the official workbook.</p>
+          <p>
+            Review grades, manage period records, and export grades with their
+            evidence status.
+          </p>
         </div>
         <Button
           type="button"
@@ -139,14 +133,17 @@ export default function ClassRecordPage() {
         </Button>
       </header>
 
-      {classListStatus === 'error' && classes.length === 0 ? (
+      {classListStatus === "error" && classes.length === 0 ? (
         <DashboardStatePanel
           kind="error"
           title="Classes couldn't be loaded"
           description="Your class list is temporarily unavailable. Try loading it again."
-          primaryAction={{ label: 'Try again', onClick: () => void fetchClasses() }}
+          primaryAction={{
+            label: "Try again",
+            onClick: () => void fetchClasses(),
+          }}
         />
-      ) : classListStatus === 'ready' && classes.length === 0 ? (
+      ) : classListStatus === "ready" && classes.length === 0 ? (
         <DashboardStatePanel
           kind="empty"
           title="No classes assigned yet"
@@ -154,16 +151,22 @@ export default function ClassRecordPage() {
         />
       ) : (
         <>
-          {classListStatus === 'error' ? (
+          {classListStatus === "error" ? (
             <DashboardStatePanel
               kind="unavailable"
               title="Class list refresh failed"
               description="The last loaded class list is still available while you retry."
-              primaryAction={{ label: 'Retry class list', onClick: () => void fetchClasses() }}
+              primaryAction={{
+                label: "Retry class list",
+                onClick: () => void fetchClasses(),
+              }}
             />
           ) : null}
 
-          <section className="teacher-class-record-toolbar" aria-label="Class record controls">
+          <section
+            className="teacher-class-record-toolbar"
+            aria-label="Class record controls"
+          >
             <label className="teacher-class-record-field">
               <span>Class</span>
               <select
@@ -175,19 +178,24 @@ export default function ClassRecordPage() {
                 <option value="">Choose a class</option>
                 {classes.map((classItem) => (
                   <option key={classItem.id} value={classItem.id}>
-                    {classItem.subjectName} - {classItem.section?.name || 'Section not set'}
+                    {classItem.subjectName} -{" "}
+                    {classItem.section?.name || "Section not set"}
                   </option>
                 ))}
               </select>
             </label>
 
             <div className="teacher-class-record-field">
-              <span>Quarter</span>
-              <div className="teacher-class-record-quarters" aria-label="Quarter">
+              <span>Grading period</span>
+              <div
+                className="teacher-class-record-quarters"
+                aria-label="Grading period"
+              >
                 {classRecordState.quarters.map((quarter) => {
                   const quarterRecord = quarterMap[quarter];
                   const isActive = selectedRecord?.gradingPeriod === quarter;
-                  const isLoadingQuarter = classRecordState.generating && !quarterRecord;
+                  const isLoadingQuarter =
+                    classRecordState.generating && !quarterRecord;
 
                   return (
                     <button
@@ -198,7 +206,9 @@ export default function ClassRecordPage() {
                       disabled={!selectedClass || isLoadingQuarter}
                       className="teacher-class-record-quarter"
                     >
-                      {isLoadingQuarter ? '...' : quarter}
+                      {isLoadingQuarter
+                        ? "..."
+                        : classRecordState.periodLabel(quarter)}
                     </button>
                   );
                 })}
@@ -221,35 +231,37 @@ export default function ClassRecordPage() {
             <DashboardStatePanel
               kind="empty"
               title="Choose a class to open its record"
-              description="Select one of your assigned classes to load its quarter records."
+              description="Select one of your assigned classes to load its period records."
             />
-          ) : classRecordState.recordsStatus === 'loading' && !selectedRecord ? (
+          ) : classRecordState.recordsStatus === "loading" &&
+            !selectedRecord ? (
             <Skeleton className="h-[30rem] rounded-xl" />
-          ) : classRecordState.recordsStatus === 'error' && !selectedRecord ? (
+          ) : classRecordState.recordsStatus === "error" && !selectedRecord ? (
             <DashboardStatePanel
               kind="error"
               title="Class record couldn't be loaded"
               description="No record data was replaced. Retry when the service is available."
               primaryAction={{
-                label: 'Retry class record',
+                label: "Retry class record",
                 onClick: () => void classRecordState.refresh(),
               }}
             />
-          ) : classRecordState.recordsStatus === 'ready' && !selectedRecord ? (
+          ) : classRecordState.recordsStatus === "ready" && !selectedRecord ? (
             <DashboardStatePanel
               kind="empty"
               title="No class record exists for this class yet"
-              description="Choose a quarter above to create the first class record."
+              description="Choose a period above to create the first class record."
             />
-          ) : classRecordState.spreadsheetStatus === 'loading' && !spreadsheet ? (
+          ) : classRecordState.spreadsheetStatus === "loading" &&
+            !spreadsheet ? (
             <Skeleton className="h-[30rem] rounded-xl" />
-          ) : classRecordState.spreadsheetStatus === 'error' && !spreadsheet ? (
+          ) : classRecordState.spreadsheetStatus === "error" && !spreadsheet ? (
             <DashboardStatePanel
               kind="error"
               title="Workbook couldn't be loaded"
-              description="The quarter record is available, but its workbook data is not."
+              description="The period record is available, but its workbook data is not."
               primaryAction={{
-                label: 'Retry class record',
+                label: "Retry class record",
                 onClick: () => void classRecordState.refresh(),
               }}
             />
@@ -260,9 +272,12 @@ export default function ClassRecordPage() {
             >
               <div className="teacher-class-record-summary">
                 <div>
-                  <h2>{selectedClass.subjectName || 'Class record'}</h2>
+                  <h2>{selectedClass.subjectName || "Class record"}</h2>
                   <p>
-                    {sectionLabel} · {selectedRecord?.gradingPeriod}
+                    {sectionLabel} ·{" "}
+                    {classRecordState.periodLabel(
+                      selectedRecord?.gradingPeriod ?? "",
+                    )}
                   </p>
                 </div>
                 <dl>
@@ -285,7 +300,7 @@ export default function ClassRecordPage() {
                   title="Class record refresh failed"
                   description="The last complete workbook remains available while you retry."
                   primaryAction={{
-                    label: 'Retry class record',
+                    label: "Retry class record",
                     onClick: () => void classRecordState.refresh(),
                   }}
                 />
@@ -293,11 +308,7 @@ export default function ClassRecordPage() {
 
               <TeacherClassRecordWorkbook
                 state={classRecordState}
-                className={cn(
-                  '[&>div:first-child]:hidden',
-                  selectedRecord && '[&>div:nth-child(2)]:hidden',
-                )}
-                emptyMessage="No workbook rows are available for this quarter."
+                emptyMessage="No workbook rows are available for this period."
               />
             </section>
           ) : (

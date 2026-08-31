@@ -1,8 +1,17 @@
-import type { AssessmentType, QuestionType, FeedbackLevel, GradingPeriod } from '@/utils/constants';
+import type { AcademicCapabilities } from "./academic-grading";
+import type {
+  AssessmentType,
+  QuestionType,
+  FeedbackLevel,
+  GradingPeriod,
+} from "@/utils/constants";
 
-export type ClassRecordCategory = 'written_work' | 'performance_task' | 'quarterly_assessment';
+export type ClassRecordCategory =
+  | "written_work"
+  | "performance_task"
+  | "quarterly_assessment";
 
-export type AssessmentPlacementMode = 'automatic' | 'manual';
+export type AssessmentPlacementMode = "automatic" | "manual";
 
 export interface AssessmentClassRecordPlacement {
   placementMode: AssessmentPlacementMode;
@@ -41,6 +50,7 @@ export interface StudentAssessmentActivity {
 }
 
 export interface Assessment {
+  academicCapabilities?: AcademicCapabilities;
   id: string;
   title: string;
   description?: string;
@@ -59,7 +69,7 @@ export interface Assessment {
   fileUploadInstructions?: string;
   teacherAttachmentFileId?: string | null;
   rubricSourceFileId?: string | null;
-  rubricParseStatus?: 'pending' | 'parsed' | 'reviewed' | 'failed' | null;
+  rubricParseStatus?: "pending" | "parsed" | "reviewed" | "failed" | null;
   rubricSourceFile?: {
     id: string;
     originalName: string;
@@ -104,7 +114,7 @@ export interface AssessmentQuestion {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -118,7 +128,7 @@ export interface QuestionOption {
   isCorrect: boolean;
   order: number;
   imageUrl?: string;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -188,7 +198,7 @@ export interface CreateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -198,7 +208,7 @@ export interface CreateQuestionDto {
     isCorrect: boolean;
     order: number;
     imageUrl?: string;
-    imageDisplayMode?: 'default' | 'expanded';
+    imageDisplayMode?: "default" | "expanded";
     imageZoom?: number;
     imagePositionX?: number;
     imagePositionY?: number;
@@ -212,7 +222,7 @@ export interface UpdateQuestionDto {
   isRequired?: boolean;
   explanation?: string;
   imageUrl?: string;
-  imageDisplayMode?: 'default' | 'expanded';
+  imageDisplayMode?: "default" | "expanded";
   imageZoom?: number;
   imagePositionX?: number;
   imagePositionY?: number;
@@ -222,7 +232,7 @@ export interface UpdateQuestionDto {
     isCorrect: boolean;
     order: number;
     imageUrl?: string;
-    imageDisplayMode?: 'default' | 'expanded';
+    imageDisplayMode?: "default" | "expanded";
     imageZoom?: number;
     imagePositionX?: number;
     imagePositionY?: number;
@@ -298,8 +308,8 @@ export interface AttemptResult {
     studentAnswer?: string;
     selectedOptionId?: string;
     selectedOptionIds?: string[];
-    isCorrect?: boolean;
-    pointsEarned?: number;
+    isCorrect?: boolean | null;
+    pointsEarned?: number | null;
     hint?: string;
     question?: AssessmentQuestion;
   }[];
@@ -384,7 +394,11 @@ export interface AssessmentStats {
   totalEnrolled?: number;
 }
 
-export type SubmissionStatus = 'not_started' | 'in_progress' | 'turned_in' | 'returned';
+export type SubmissionStatus =
+  | "not_started"
+  | "in_progress"
+  | "turned_in"
+  | "returned";
 
 export interface SubmissionTimelineEntry {
   id: string;

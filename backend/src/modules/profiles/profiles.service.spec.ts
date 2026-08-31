@@ -24,7 +24,10 @@ describe('ProfilesService', () => {
     };
 
     service = new ProfilesService(
-      { db: mockDb } as DatabaseService,
+      {
+        db: mockDb,
+        academicTransaction: async (work: () => Promise<unknown>) => work(),
+      } as unknown as DatabaseService,
       mockAuditService as unknown as AuditService,
     );
   });

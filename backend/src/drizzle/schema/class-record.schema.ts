@@ -9,8 +9,9 @@ import {
   numeric,
   date,
   integer,
+  check,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { classes, users, assessments, gradingPeriodEnum } from './base.schema';
 
 // ==========================================
@@ -51,6 +52,16 @@ export const classRecords = pgTable(
     }),
     gradingPeriod: gradingPeriodEnum('grading_period').notNull(),
     status: classRecordStatusEnum('status').notNull().default('draft'),
+    revision: integer('revision').notNull().default(0),
+    rosterConfirmedAt: timestamp('roster_confirmed_at', { withTimezone: true }),
+    rosterConfirmedBy: uuid('roster_confirmed_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    policyExclusionReason: text('policy_exclusion_reason'),
+    policyExcludedAt: timestamp('policy_excluded_at', { withTimezone: true }),
+    policyExcludedBy: uuid('policy_excluded_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
@@ -118,6 +129,7 @@ export const classRecordItems = pgTable(
     maxScore: numeric('max_score', { precision: 8, scale: 2 }).notNull(),
     itemOrder: integer('item_order').notNull().default(0),
     dateGiven: date('date_given'),
+    examComponent: text('exam_component').$type<'ST1' | 'ST2' | 'TE'>(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (table) => ({
@@ -147,11 +159,21 @@ export const classRecordScores = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    score: numeric('score', { precision: 8, scale: 2 }).notNull(),
+    score: numeric('score', { precision: 8, scale: 2 }),
+    status: text('status')
+      .$type<'recorded' | 'excused'>()
+      .notNull()
+      .default('recorded'),
+    reason: text('reason'),
+    sourceAttemptId: uuid('source_attempt_id'),
     recordedAt: timestamp('recorded_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (table) => ({
+    scoreStatusCheck: check(
+      'class_record_score_status_valid',
+      sql`(${table.status} = 'recorded' AND ${table.score} IS NOT NULL AND ${table.score} >= 0) OR (${table.status} = 'excused' AND ${table.score} IS NULL AND length(trim(${table.reason})) > 0 AND ${table.reason} IS NOT NULL)`,
+    ),
     itemStudentUnique: unique('class_record_scores_item_student_unique').on(
       table.classRecordItemId,
       table.studentId,
@@ -177,6 +199,7 @@ export const classRecordFinalGrades = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull().default(0),
     finalPercentage: numeric('final_percentage', {
       precision: 6,
       scale: 3,

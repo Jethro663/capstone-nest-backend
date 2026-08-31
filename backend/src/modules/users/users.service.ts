@@ -1,3 +1,5 @@
+import { AcademicMutation } from '../../database/academic-transaction';
+import { assertGradeLevelChangeAllowed } from '../academic-state/academic-membership-guard';
 import {
   Injectable,
   ConflictException,
@@ -876,59 +878,107 @@ export class UsersService {
     }
 
     try {
-      await this.db.transaction(async (tx) => {
-        if (Object.keys(updateData).length > 0) {
-          await tx
-            .update(users)
-            .set({ ...updateData, updatedAt: new Date() })
-            .where(eq(users.id, id));
-        }
-
-        if (Object.keys(profilePayload).length > 0) {
-          const existingProfile = await tx.query.studentProfiles.findFirst({
-            where: eq(studentProfiles.userId, id),
-          });
-
-          if (existingProfile) {
+      await this.databaseService.academicTransaction(() =>
+        this.db.transaction(async (tx) => {
+          if (Object.keys(updateData).length > 0) {
             await tx
-              .update(studentProfiles)
-              .set({ ...profilePayload, updatedAt: new Date() })
-              .where(eq(studentProfiles.userId, id));
-          } else {
-            await tx.insert(studentProfiles).values({
-              userId: id,
-              ...profilePayload,
-              createdAt: new Date(),
-              updatedAt: new Date(),
+              .update(users)
+              .set({ ...updateData, updatedAt: new Date() })
+              .where(eq(users.id, id));
+          }
+
+          if (Object.keys(profilePayload).length > 0) {
+            const existingProfile = await tx.query.studentProfiles.findFirst({
+              where: eq(studentProfiles.userId, id),
             });
-          }
-        }
 
-        if (updateUserDto.role) {
-          const roleRecord = await tx.query.roles.findFirst({
-            where: eq(roles.name, updateUserDto.role),
-          });
-          if (!roleRecord) {
-            throw new NotFoundException(
-              `Role '${updateUserDto.role}' not found`,
+            await assertGradeLevelChangeAllowed(
+              tx,
+              id,
+              existingProfile?.gradeLevel,
+              updateUserDto.gradeLevel,
             );
+            if (existingProfile) {
+              await tx
+                .update(studentProfiles)
+                .set({ ...profilePayload, updatedAt: new Date() })
+                .where(eq(studentProfiles.userId, id));
+            } else {
+              await tx.insert(studentProfiles).values({
+                userId: id,
+                ...profilePayload,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              });
+            }
           }
 
-          await tx.delete(userRoles).where(eq(userRoles.userId, id));
-          await tx.insert(userRoles).values({
-            userId: id,
-            roleId: roleRecord.id,
-            assignedBy: 'ADMIN',
-          });
+          if (updateUserDto.role) {
+            const roleRecord = await tx.query.roles.findFirst({
+              where: eq(roles.name, updateUserDto.role),
+            });
+            if (!roleRecord) {
+              throw new NotFoundException(
+                `Role '${updateUserDto.role}' not found`,
+              );
+            }
 
-          if (updateUserDto.role === 'teacher') {
+            await tx.delete(userRoles).where(eq(userRoles.userId, id));
+            await tx.insert(userRoles).values({
+              userId: id,
+              roleId: roleRecord.id,
+              assignedBy: 'ADMIN',
+            });
+
+            if (updateUserDto.role === 'teacher') {
+              const existingTeacherProfile = tx.query?.teacherProfiles
+                ? await tx.query.teacherProfiles.findFirst({
+                    where: eq(teacherProfiles.userId, id),
+                  })
+                : null;
+
+              if (!existingTeacherProfile) {
+                await tx.insert(teacherProfiles).values({
+                  userId: id,
+                  employeeId: updateUserDto.employeeId,
+                  contactNumber: updateUserDto.contactNumber,
+                  dateOfBirth: null,
+                  gender: null,
+                  address: null,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                });
+              }
+            }
+          }
+
+          if (
+            updateUserDto.employeeId !== undefined ||
+            updateUserDto.contactNumber !== undefined
+          ) {
             const existingTeacherProfile = tx.query?.teacherProfiles
               ? await tx.query.teacherProfiles.findFirst({
                   where: eq(teacherProfiles.userId, id),
                 })
               : null;
 
-            if (!existingTeacherProfile) {
+            if (existingTeacherProfile) {
+              await tx
+                .update(teacherProfiles)
+                .set({
+                  employeeId:
+                    updateUserDto.employeeId ??
+                    existingTeacherProfile.employeeId,
+                  contactNumber:
+                    updateUserDto.contactNumber ??
+                    existingTeacherProfile.contactNumber,
+                  dateOfBirth: existingTeacherProfile.dateOfBirth,
+                  gender: existingTeacherProfile.gender,
+                  address: existingTeacherProfile.address,
+                  updatedAt: new Date(),
+                })
+                .where(eq(teacherProfiles.userId, id));
+            } else {
               await tx.insert(teacherProfiles).values({
                 userId: id,
                 employeeId: updateUserDto.employeeId,
@@ -941,47 +991,30 @@ export class UsersService {
               });
             }
           }
-        }
+          if (actorId) {
+            const changedFields = [
+              ...Object.keys(updateData),
+              ...Object.keys(profilePayload),
+              ...(updateUserDto.role ? ['role'] : []),
+              ...(updateUserDto.employeeId !== undefined ? ['employeeId'] : []),
+              ...(updateUserDto.contactNumber !== undefined
+                ? ['contactNumber']
+                : []),
+            ];
 
-        if (
-          updateUserDto.employeeId !== undefined ||
-          updateUserDto.contactNumber !== undefined
-        ) {
-          const existingTeacherProfile = tx.query?.teacherProfiles
-            ? await tx.query.teacherProfiles.findFirst({
-                where: eq(teacherProfiles.userId, id),
-              })
-            : null;
-
-          if (existingTeacherProfile) {
-            await tx
-              .update(teacherProfiles)
-              .set({
-                employeeId:
-                  updateUserDto.employeeId ?? existingTeacherProfile.employeeId,
-                contactNumber:
-                  updateUserDto.contactNumber ??
-                  existingTeacherProfile.contactNumber,
-                dateOfBirth: existingTeacherProfile.dateOfBirth,
-                gender: existingTeacherProfile.gender,
-                address: existingTeacherProfile.address,
-                updatedAt: new Date(),
-              })
-              .where(eq(teacherProfiles.userId, id));
-          } else {
-            await tx.insert(teacherProfiles).values({
-              userId: id,
-              employeeId: updateUserDto.employeeId,
-              contactNumber: updateUserDto.contactNumber,
-              dateOfBirth: null,
-              gender: null,
-              address: null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
+            await this.auditService.log({
+              actorId,
+              action: 'user.updated',
+              targetType: 'user',
+              targetId: id,
+              metadata: {
+                previousStatus: existingUser.status,
+                changedFields: Array.from(new Set(changedFields)),
+              },
             });
           }
-        }
-      });
+        }),
+      );
     } catch (err) {
       this.handleUniqueConstraintError(err);
       throw err;
@@ -995,27 +1028,6 @@ export class UsersService {
           requiresOTP: true,
         }),
       );
-    }
-
-    if (actorId) {
-      const changedFields = [
-        ...Object.keys(updateData),
-        ...Object.keys(profilePayload),
-        ...(updateUserDto.role ? ['role'] : []),
-        ...(updateUserDto.employeeId !== undefined ? ['employeeId'] : []),
-        ...(updateUserDto.contactNumber !== undefined ? ['contactNumber'] : []),
-      ];
-
-      await this.auditService.log({
-        actorId,
-        action: 'user.updated',
-        targetType: 'user',
-        targetId: id,
-        metadata: {
-          previousStatus: existingUser.status,
-          changedFields: Array.from(new Set(changedFields)),
-        },
-      });
     }
 
     const updatedUser = await this.findById(id);
@@ -1341,6 +1353,7 @@ export class UsersService {
    * Permanently purge a user from the database.
    * Only works on DELETED users. CASCADE will remove all related records.
    */
+  @AcademicMutation()
   async purgeUser(id: string, adminId: string) {
     if (id === adminId) {
       throw new ForbiddenException('You cannot purge your own account');

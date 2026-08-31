@@ -8,6 +8,7 @@ on:
       - "mobile/**"
       - "ai-service/**"
       - ".github/workflows/**"
+      - ".github/scripts/**"
   push:
     branches: [developement, master]
 
@@ -30,11 +31,16 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: backend/package-lock.json
+      - name: Verify deployment status gating
+        run: node --test ../.github/scripts/wait-railway-deployment.test.cjs
       - run: npm ci
       - name: Run non-mutating lint baseline
         run: npm run lint
       - run: npm run test -- --ci
-      - run: npm run build
+      - name: Verify repeatable production builds
+        run: |
+          npm run build
+          npm run build
 
   backend_e2e:
     name: Backend e2e
@@ -54,21 +60,36 @@ jobs:
       - run: npm run test:e2e -- --ci
 
   migration_bootstrap:
-    name: Migration bootstrap
+    name: Migration and runtime (${{ matrix.postgres }})
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [pg16, pg18]
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:${{ matrix.postgres }}
         env:
-          POSTGRES_DB: capstone
+          POSTGRES_DB: nexora_academic_test_ci
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
         options: >-
-          --health-cmd "pg_isready -U postgres -d capstone"
+          --health-cmd "pg_isready -U postgres -d nexora_academic_test_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
         ports:
           - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_ci
+      ACADEMIC_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_ci
+      REDIS_URL: redis://127.0.0.1:6379
     defaults:
       run:
         working-directory: backend
@@ -81,9 +102,19 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - name: Apply migrations to a fresh pgvector database
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/capstone
         run: node run-migrations.js
+      - name: Verify real academic transactions and lifecycle
+        run: npm run test:academic -- --ci
+      - name: Rehearse a legacy upgrade and migration replay
+        env:
+          ACADEMIC_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/nexora_academic_test_upgrade
+          PGPASSWORD: postgres
+        run: |
+          createdb --host=127.0.0.1 --username=postgres nexora_academic_test_upgrade
+          node test/academic-migration-upgrade.cjs
+      - run: npm run build
+      - name: Verify the production command starts the full application
+        run: npm run test:production-start
 
   frontend:
     name: Frontend
@@ -102,6 +133,7 @@ jobs:
       - run: npm ci
       - name: Run non-mutating lint baseline
         run: npm run lint
+      - run: npm run typecheck
       - run: npm run test -- --ci
       - run: npm run build
 

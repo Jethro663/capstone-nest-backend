@@ -89,6 +89,10 @@ export class ClassGradingProfileDto {
 }
 
 export class CreateClassDto {
+  @IsOptional()
+  @IsIn(['academic', 'practical'])
+  academicWeightProfile?: 'academic' | 'practical';
+
   @IsString({ message: 'subjectName must be a string' })
   @Transform(({ value }: { value?: string }) => trimValue(value))
   @Matches(SUBJECT_NAME_REGEX, {

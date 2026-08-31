@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Logger,
+  ConflictException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AssessmentSubmittedEvent } from '../../common/events';
@@ -11,6 +12,16 @@ import { eq, and, desc, inArray, isNull, sql, count } from 'drizzle-orm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DatabaseService } from '../../database/database.service';
+import {
+  AcademicMutation,
+  AcademicCommittedResponse,
+} from '../../database/academic-transaction';
+import {
+  AcademicPolicyService,
+  AssessmentAcademicAction,
+} from '../academic-state/academic-policy.service';
+import { ClassRecordService } from '../class-record/class-record.service';
+import { assessmentAcademicCapabilities } from '../academic-state/assessment-academic-capabilities';
 import {
   assessments,
   assessmentQuestions,
@@ -228,10 +239,46 @@ export class AssessmentsService {
     private readonly ragIndexingService: RagIndexingService,
     private readonly assessmentNotificationDispatch: AssessmentNotificationDispatchService,
     private readonly assessmentAccessService: AssessmentAccessService,
+    private readonly academicPolicyService: AcademicPolicyService,
+    private readonly classRecordService: ClassRecordService,
   ) {}
 
   private get db() {
     return this.databaseService.db;
+  }
+
+  private async assertAcademicMutation(
+    assessment: { id?: string; classId: string; quarter?: string | null },
+    action: AssessmentAcademicAction,
+    existingAttempt = false,
+  ) {
+    const context = await this.academicPolicyService.assertAssessmentAction(
+      assessment,
+      action,
+      existingAttempt,
+    );
+    const record = await this.db.query.classRecords.findFirst({
+      where: and(
+        eq(classRecords.classId, assessment.classId),
+        eq(classRecords.gradingPeriod, context.period.key),
+      ),
+    });
+    if (record && record.status !== 'draft')
+      throw new ConflictException(
+        'The period workbook is finalized or locked; reopen it before modifying assessment evidence',
+      );
+    return context;
+  }
+
+  private async assertNoAssessmentAttempts(assessmentId: string) {
+    const attempt = await this.db.query.assessmentAttempts.findFirst({
+      where: eq(assessmentAttempts.assessmentId, assessmentId),
+      columns: { id: true },
+    });
+    if (attempt)
+      throw new ConflictException(
+        'This assessment already has an attempt; its grading period, placement, questions and rubric cannot be changed',
+      );
   }
 
   private normalizeSubmittedFiles(raw: unknown): SubmittedAttemptFile[] {
@@ -335,7 +382,7 @@ export class AssessmentsService {
     work: () => Promise<void>,
   ) {
     try {
-      await work();
+      await this.databaseService.afterAcademicCommit(work);
     } catch (error) {
       this.logger.error(
         `Assessment notification sync failed after ${action} for assessment ${assessmentId}: ${
@@ -653,12 +700,9 @@ export class AssessmentsService {
     quarter?: string | null;
     classRecordItemId?: string | null;
   }) {
-    if (
-      (params.classRecordCategory && !params.quarter) ||
-      (!params.classRecordCategory && params.quarter)
-    ) {
+    if (params.classRecordCategory && !params.quarter) {
       throw new BadRequestException(
-        'Quarter and class record category must be set together',
+        'A grading period is required for class-record placement',
       );
     }
 
@@ -697,6 +741,10 @@ export class AssessmentsService {
       orderBy: (items, { asc }) => [asc(items.itemOrder)],
     });
 
+    if (linkedItems.some((item) => item.classRecord.status !== 'draft'))
+      throw new ConflictException(
+        'Assessment evidence in finalized or locked workbooks cannot be changed',
+      );
     if (!params.classRecordCategory || !params.quarter) {
       if (linkedItems.some((item) => item.scores.length > 0)) {
         throw new BadRequestException(
@@ -710,10 +758,12 @@ export class AssessmentsService {
             .update(classRecordItems)
             .set({
               assessmentId: null,
-              title: this.getDefaultClassRecordItemTitle(
-                item.category.name,
-                item.itemOrder,
-              ),
+              title:
+                item.examComponent ??
+                this.getDefaultClassRecordItemTitle(
+                  item.category.name,
+                  item.itemOrder,
+                ),
               maxScore: '0',
             })
             .where(eq(classRecordItems.id, item.id)),
@@ -733,7 +783,7 @@ export class AssessmentsService {
       throw new BadRequestException('Invalid class record quarter');
     }
 
-    const record = await this.db.query.classRecords.findFirst({
+    let record = await this.db.query.classRecords.findFirst({
       where: and(
         eq(classRecords.classId, params.classId),
         eq(classRecords.gradingPeriod, params.quarter),
@@ -741,9 +791,17 @@ export class AssessmentsService {
     });
 
     if (!record) {
-      throw new BadRequestException(
-        `Create the ${params.quarter} class record workbook before assigning this assessment.`,
+      const { cls } = await this.academicPolicyService.forClass(params.classId);
+      if (!cls.teacherId)
+        throw new BadRequestException(
+          'Assign a teacher before creating the class workbook',
+        );
+      const created = await this.classRecordService.generateClassRecord(
+        { classId: params.classId, gradingPeriod: params.quarter },
+        cls.teacherId,
+        ['teacher'],
       );
+      record = created;
     }
 
     if (record.status !== 'draft') {
@@ -837,16 +895,24 @@ export class AssessmentsService {
       );
     }
 
+    if (
+      !currentLinkedItem ||
+      currentLinkedItem.id !== targetItem.id ||
+      displacedLinkedItems.length
+    )
+      await this.assertNoAssessmentAttempts(params.assessmentId);
     await this.db.transaction(async (tx) => {
       for (const item of displacedLinkedItems) {
         await tx
           .update(classRecordItems)
           .set({
             assessmentId: null,
-            title: this.getDefaultClassRecordItemTitle(
-              item.category.name,
-              item.itemOrder,
-            ),
+            title:
+              item.examComponent ??
+              this.getDefaultClassRecordItemTitle(
+                item.category.name,
+                item.itemOrder,
+              ),
             maxScore: '0',
           })
           .where(eq(classRecordItems.id, item.id));
@@ -1449,8 +1515,29 @@ export class AssessmentsService {
       ]);
 
       const totalCount = Number(totalResult[0]?.value ?? 0);
+      const { cls, policy } =
+        await this.academicPolicyService.forClass(classId);
+      const current = await this.academicPolicyService.currentState();
+      const records = await this.db.query.classRecords.findMany({
+        where: eq(classRecords.classId, classId),
+        columns: { gradingPeriod: true, status: true },
+      });
       return {
-        data: assessmentList,
+        data: assessmentList.map((assessment) => ({
+          ...assessment,
+          academicCapabilities: assessmentAcademicCapabilities({
+            policy,
+            schoolYear: cls.schoolYear,
+            activeSchoolYear: current.schoolYear,
+            quarter: assessment.quarter,
+            activeQuarter: current.quarter,
+            classActive: cls.isActive,
+            published: Boolean(assessment.isPublished),
+            workbookStatus: records.find(
+              (r) => r.gradingPeriod === assessment.quarter,
+            )?.status,
+          }),
+        })),
         total: totalCount,
         page,
         limit,
@@ -1488,13 +1575,55 @@ export class AssessmentsService {
       orderBy: (a, { desc }) => [desc(a.createdAt)],
     });
 
+    const { cls, policy } = await this.academicPolicyService.forClass(classId);
+    const current = await this.academicPolicyService.currentState();
+    const studentId = this.getUserId(currentUser)!;
+    options = { ...options, studentId };
+    const ownAttempts = assessmentList.length
+      ? await this.db.query.assessmentAttempts.findMany({
+          where: and(
+            eq(assessmentAttempts.studentId, studentId),
+            inArray(
+              assessmentAttempts.assessmentId,
+              assessmentList.map((a) => a.id),
+            ),
+          ),
+          orderBy: [desc(assessmentAttempts.updatedAt)],
+        })
+      : [];
+    const workbooks = await this.db.query.classRecords.findMany({
+      where: eq(classRecords.classId, classId),
+      columns: { gradingPeriod: true, status: true },
+    });
+    const capabilitiesById = new Map(
+      assessmentList.map((assessment) => [
+        assessment.id,
+        assessmentAcademicCapabilities({
+          policy,
+          schoolYear: cls.schoolYear,
+          activeSchoolYear: current.schoolYear,
+          quarter: assessment.quarter,
+          activeQuarter: current.quarter,
+          classActive: cls.isActive,
+          published: Boolean(assessment.isPublished),
+          workbookStatus: workbooks.find(
+            (r) => r.gradingPeriod === assessment.quarter,
+          )?.status,
+          hasAttempt: ownAttempts.some((a) => a.assessmentId === assessment.id),
+          hasOngoingAttempt: ownAttempts.some(
+            (a) => a.assessmentId === assessment.id && !a.isSubmitted,
+          ),
+        }),
+      ]),
+    );
     const visibleAssessments: typeof assessmentList = [];
     for (const assessment of assessmentList) {
       if (
-        await this.canStudentAccessAssessment(
+        capabilitiesById.get(assessment.id)?.canView &&
+        (await this.canStudentAccessAssessment(
           assessment,
           assessment.moduleItems,
-        )
+        ))
       ) {
         visibleAssessments.push(assessment);
       }
@@ -1502,19 +1631,7 @@ export class AssessmentsService {
     assessmentList = visibleAssessments;
 
     if (options?.studentId) {
-      const assessmentIds = assessmentList.map((assessment) => assessment.id);
-      const attempts =
-        assessmentIds.length > 0
-          ? await this.db.query.assessmentAttempts.findMany({
-              where: and(
-                eq(assessmentAttempts.studentId, options.studentId),
-                inArray(assessmentAttempts.assessmentId, assessmentIds),
-              ),
-              orderBy: (attempt, { desc: descending }) => [
-                descending(attempt.updatedAt),
-              ],
-            })
-          : [];
+      const attempts = ownAttempts;
 
       const attemptMap = new Map<string, (typeof attempts)[number]>();
       const studentActivityMap = new Map<
@@ -1547,6 +1664,7 @@ export class AssessmentsService {
       assessmentList = assessmentList
         .map((assessment) => ({
           ...assessment,
+          academicCapabilities: capabilitiesById.get(assessment.id),
           latestAttempt: attemptMap.get(assessment.id) ?? null,
           studentActivity: studentActivityMap.get(assessment.id) ?? {
             hasSubmittedAttempt: false,
@@ -1643,6 +1761,49 @@ export class AssessmentsService {
       );
     }
 
+    let historicalOwnAttempt = false;
+    let academicCapabilities:
+      | ReturnType<typeof assessmentAcademicCapabilities>
+      | undefined;
+    if (currentUser) {
+      const { cls, policy } = await this.academicPolicyService.forClass(
+        assessment.classId,
+      );
+      const current = await this.academicPolicyService.currentState();
+      const records = await this.db.query.classRecords.findMany({
+        where: eq(classRecords.classId, assessment.classId),
+        columns: { gradingPeriod: true, status: true },
+      });
+      const ownAttempts =
+        this.getUserRole(currentUser) === 'student'
+          ? await this.db.query.assessmentAttempts.findMany({
+              where: and(
+                eq(assessmentAttempts.assessmentId, assessment.id),
+                eq(assessmentAttempts.studentId, this.getUserId(currentUser)!),
+              ),
+              columns: { isSubmitted: true },
+            })
+          : [];
+      historicalOwnAttempt =
+        ownAttempts.length > 0 &&
+        (cls.schoolYear < current.schoolYear ||
+          !cls.isActive ||
+          !policy.periods.some((p) => p.key === assessment.quarter));
+      academicCapabilities = assessmentAcademicCapabilities({
+        policy,
+        schoolYear: cls.schoolYear,
+        activeSchoolYear: current.schoolYear,
+        quarter: assessment.quarter,
+        activeQuarter: current.quarter,
+        classActive: cls.isActive,
+        published: Boolean(assessment.isPublished),
+        workbookStatus: records.find(
+          (r) => r.gradingPeriod === assessment.quarter,
+        )?.status,
+        hasAttempt: ownAttempts.length > 0,
+        hasOngoingAttempt: ownAttempts.some((a) => !a.isSubmitted),
+      });
+    }
     if (currentUser) {
       const { userId, role } = this.assertTeacherClassOwnership(
         assessment.class?.teacherId,
@@ -1650,8 +1811,16 @@ export class AssessmentsService {
         'You do not have access to this assessment',
       );
       if (role === 'student') {
-        await this.ensureStudentEnrolled(assessment.classId, userId);
-        if (!(await this.canStudentAccessAssessment(assessment))) {
+        if (!historicalOwnAttempt)
+          await this.ensureStudentEnrolled(assessment.classId, userId);
+        if (!academicCapabilities?.canView)
+          throw new ForbiddenException(
+            'This grading period is not available to students',
+          );
+        if (
+          !historicalOwnAttempt &&
+          !(await this.canStudentAccessAssessment(assessment))
+        ) {
           throw new ForbiddenException(
             'Students cannot view unavailable assessments',
           );
@@ -1696,6 +1865,7 @@ export class AssessmentsService {
 
     const assessmentWithAttachment = {
       ...assessment,
+      academicCapabilities,
       questions: sanitizedQuestions,
       teacherAttachmentFile,
       rubricSourceFile: rubricSourceFile
@@ -1737,6 +1907,7 @@ export class AssessmentsService {
   /**
    * Create a new assessment
    */
+  @AcademicMutation()
   async createAssessment(
     createAssessmentDto: CreateAssessmentDto,
     currentUser: any,
@@ -1764,6 +1935,19 @@ export class AssessmentsService {
       );
     }
 
+    const state = await this.academicPolicyService.currentState();
+    const { policy } = await this.academicPolicyService.forClass(
+      createAssessmentDto.classId,
+    );
+    const quarter =
+      createAssessmentDto.quarter ??
+      (classRecord.schoolYear === state.schoolYear
+        ? state.quarter
+        : policy.periods[0].key);
+    await this.assertAcademicMutation(
+      { classId: createAssessmentDto.classId, quarter },
+      'prepare',
+    );
     this.ensureValidFileUploadSettings({
       type: createAssessmentDto.type,
       fileUploadInstructions: createAssessmentDto.fileUploadInstructions,
@@ -1838,7 +2022,7 @@ export class AssessmentsService {
         feedbackLevel: createAssessmentDto.feedbackLevel,
         feedbackDelayHours: createAssessmentDto.feedbackDelayHours,
         classRecordCategory: createAssessmentDto.classRecordCategory,
-        quarter: createAssessmentDto.quarter,
+        quarter,
       })
       .returning();
 
@@ -1866,11 +2050,13 @@ export class AssessmentsService {
       },
     });
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_created',
-      actorId,
-      source: 'assessments.createAssessment',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_created',
+        actorId,
+        source: 'assessments.createAssessment',
+      }),
+    );
 
     return assessment;
   }
@@ -1983,6 +2169,16 @@ export class AssessmentsService {
     }
   }
 
+  private async updateLinkedAssessmentHps(
+    assessmentId: string,
+    totalPoints: number,
+  ) {
+    await this.db
+      .update(classRecordItems)
+      .set({ maxScore: String(totalPoints) })
+      .where(eq(classRecordItems.assessmentId, assessmentId));
+  }
+
   /**
    * Recalculate totalPoints from sum of question points
    */
@@ -2001,12 +2197,14 @@ export class AssessmentsService {
       .set({ totalPoints: total, updatedAt: new Date() })
       .where(eq(assessments.id, assessmentId));
 
+    await this.updateLinkedAssessmentHps(assessmentId, total);
     return total;
   }
 
   /**
    * Update an assessment
    */
+  @AcademicMutation()
   async updateAssessment(
     assessmentId: string,
     updateAssessmentDto: UpdateAssessmentDto,
@@ -2026,6 +2224,46 @@ export class AssessmentsService {
       'You can only manage assessments for your own classes',
     );
 
+    await this.assertAcademicMutation(existingAssessment, 'prepare');
+    const nextQuarter =
+      updateAssessmentDto.quarter !== undefined
+        ? updateAssessmentDto.quarter
+        : existingAssessment.quarter;
+    const nextCategory =
+      updateAssessmentDto.classRecordCategory !== undefined
+        ? updateAssessmentDto.classRecordCategory
+        : existingAssessment.classRecordCategory;
+    const placementChanged =
+      nextQuarter !== existingAssessment.quarter ||
+      nextCategory !== existingAssessment.classRecordCategory ||
+      (updateAssessmentDto.classRecordItemId !== undefined &&
+        updateAssessmentDto.classRecordItemId !==
+          (
+            existingAssessment.classRecordPlacement as {
+              itemId?: string | null;
+            } | null
+          )?.itemId);
+    const contentChanged =
+      (updateAssessmentDto.type !== undefined &&
+        updateAssessmentDto.type !== existingAssessment.type) ||
+      (updateAssessmentDto.rubricCriteria !== undefined &&
+        JSON.stringify(
+          this.normalizeRubricCriteria(updateAssessmentDto.rubricCriteria),
+        ) !==
+          JSON.stringify(
+            this.normalizeRubricCriteria(
+              existingAssessment.rubricCriteria ?? [],
+            ),
+          )) ||
+      (updateAssessmentDto.rubricSourceFileId !== undefined &&
+        updateAssessmentDto.rubricSourceFileId !==
+          existingAssessment.rubricSourceFileId);
+    if (placementChanged || contentChanged)
+      await this.assertNoAssessmentAttempts(assessmentId);
+    await this.assertAcademicMutation(
+      { ...existingAssessment, quarter: nextQuarter },
+      updateAssessmentDto.isPublished === true ? 'release' : 'prepare',
+    );
     const nextType = updateAssessmentDto.type ?? existingAssessment.type;
     const nextIsFileUpload = nextType === AssessmentType.FILE_UPLOAD;
     const wasPublished = Boolean(existingAssessment.isPublished);
@@ -2230,13 +2468,15 @@ export class AssessmentsService {
       },
     });
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: assessment.isPublished
-        ? 'assessment_updated_published'
-        : 'assessment_updated',
-      actorId,
-      source: 'assessments.updateAssessment',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: assessment.isPublished
+          ? 'assessment_updated_published'
+          : 'assessment_updated',
+        actorId,
+        source: 'assessments.updateAssessment',
+      }),
+    );
 
     await this.runAssessmentNotificationSideEffects(
       assessment.id,
@@ -2268,6 +2508,7 @@ export class AssessmentsService {
     return assessment;
   }
 
+  @AcademicMutation()
   async releaseCoreAssessment(
     assessmentId: string,
     dto: { isPublished: boolean },
@@ -2280,6 +2521,11 @@ export class AssessmentsService {
     );
 
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(
+      assessment,
+      dto.isPublished ? 'release' : 'prepare',
+    );
+
     this.assertTeacherClassOwnership(
       assessment.class?.teacherId,
       currentUser,
@@ -2342,6 +2588,7 @@ export class AssessmentsService {
   /**
    * Delete an assessment
    */
+  @AcademicMutation()
   async deleteAssessment(assessmentId: string, currentUser: any) {
     const { userId: actorId } = this.assertTeacherClassOwnership(
       null,
@@ -2350,6 +2597,9 @@ export class AssessmentsService {
     );
 
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
+
     this.ensureAssessmentNotCoreTemplateAsset(assessment, 'delete');
     this.assertTeacherClassOwnership(
       assessment.class?.teacherId,
@@ -2370,11 +2620,13 @@ export class AssessmentsService {
       },
     });
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_deleted',
-      actorId,
-      source: 'assessments.deleteAssessment',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_deleted',
+        actorId,
+        source: 'assessments.deleteAssessment',
+      }),
+    );
 
     return { success: true, message: 'Assessment deleted successfully' };
   }
@@ -2382,6 +2634,7 @@ export class AssessmentsService {
   /**
    * Create a question for an assessment
    */
+  @AcademicMutation()
   async createQuestion(createQuestionDto: CreateQuestionDto, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -2394,6 +2647,8 @@ export class AssessmentsService {
     const assessment = await this.getAssessmentById(
       createQuestionDto.assessmentId,
     );
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2449,11 +2704,13 @@ export class AssessmentsService {
     // Recalculate total points
     await this.recalculateTotalPoints(createQuestionDto.assessmentId);
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_question_created',
-      actorId: userId,
-      source: 'assessments.createQuestion',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_question_created',
+        actorId: userId,
+        source: 'assessments.createQuestion',
+      }),
+    );
 
     const createdQuestion = await this.getQuestionById(newQuestion.id);
 
@@ -2496,6 +2753,7 @@ export class AssessmentsService {
   /**
    * Update a question
    */
+  @AcademicMutation()
   async updateQuestion(
     questionId: string,
     updateQuestionDto: UpdateQuestionDto,
@@ -2510,6 +2768,8 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2609,11 +2869,13 @@ export class AssessmentsService {
       await this.recalculateTotalPoints(qRecord.assessmentId);
     }
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_question_updated',
-      actorId: userId,
-      source: 'assessments.updateQuestion',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_question_updated',
+        actorId: userId,
+        source: 'assessments.updateQuestion',
+      }),
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -2631,6 +2893,7 @@ export class AssessmentsService {
     return updatedQuestion;
   }
 
+  @AcademicMutation()
   async updateQuestionOptionImage(
     optionId: string,
     imageUrl: string | null,
@@ -2655,6 +2918,8 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(option.questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2679,11 +2944,13 @@ export class AssessmentsService {
       })
       .where(eq(assessmentQuestionOptions.id, optionId));
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_question_option_updated',
-      actorId: userId,
-      source: 'assessments.updateQuestionOptionImage',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_question_option_updated',
+        actorId: userId,
+        source: 'assessments.updateQuestionOptionImage',
+      }),
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -2703,6 +2970,7 @@ export class AssessmentsService {
   /**
    * Delete a question
    */
+  @AcademicMutation()
   async deleteQuestion(questionId: string, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -2713,6 +2981,8 @@ export class AssessmentsService {
 
     const question = await this.getQuestionById(questionId);
     const assessment = await this.getAssessmentById(question.assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -2735,11 +3005,13 @@ export class AssessmentsService {
       await this.recalculateTotalPoints(qRecord.assessmentId);
     }
 
-    await this.ragIndexingService.queueClassReindex(assessment.classId, {
-      reason: 'assessment_question_deleted',
-      actorId: userId,
-      source: 'assessments.deleteQuestion',
-    });
+    await this.databaseService.afterAcademicCommit(() =>
+      this.ragIndexingService.queueClassReindex(assessment.classId, {
+        reason: 'assessment_question_deleted',
+        actorId: userId,
+        source: 'assessments.deleteQuestion',
+      }),
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -2760,6 +3032,7 @@ export class AssessmentsService {
   /**
    * Start an assessment attempt
    */
+  @AcademicMutation()
   async startAttempt(studentId: string, assessmentId: string) {
     // Verify assessment exists and is published
     const assessment = await this.getAssessmentById(assessmentId, 'student', {
@@ -2781,7 +3054,9 @@ export class AssessmentsService {
         ),
       });
 
+    let completedExistingAttempt = false;
     if (existingUnsubmitted) {
+      await this.assertAcademicMutation(assessment, 'complete', true);
       // Check if time limit exceeded for existing attempt
       if (assessment.timeLimitMinutes) {
         const expiresAt = existingUnsubmitted.expiresAt
@@ -2796,6 +3071,7 @@ export class AssessmentsService {
 
         if (isExpiredByTimeLimit || isExpiredByExpiryAt) {
           await this.autoSubmitExpiredAttempt(assessment, existingUnsubmitted);
+          completedExistingAttempt = true;
           // Fall through to create a new attempt
         } else {
           const syncedAttempt = await this.syncTimedAttemptState(
@@ -2804,7 +3080,7 @@ export class AssessmentsService {
           );
 
           if (!syncedAttempt) {
-            // Timed question state exhausted the attempt and auto-submitted it.
+            completedExistingAttempt = true;
           } else {
             return {
               attempt: syncedAttempt,
@@ -2834,9 +3110,17 @@ export class AssessmentsService {
               assessment.questionTimeLimitSeconds ?? null,
           };
         }
+        completedExistingAttempt = true;
       }
     }
 
+    try {
+      await this.assertAcademicMutation(assessment, 'start');
+    } catch (error) {
+      if (completedExistingAttempt && error instanceof ConflictException)
+        throw new AcademicCommittedResponse(error);
+      throw error;
+    }
     // Check due date only for new attempts.
     // Existing in-progress attempts are allowed to continue/submit.
     if (
@@ -2844,9 +3128,11 @@ export class AssessmentsService {
       assessment.dueDate &&
       new Date(assessment.dueDate) < new Date()
     ) {
-      throw new ForbiddenException(
+      const error = new ForbiddenException(
         'This assessment is closed (due date passed)',
       );
+      if (completedExistingAttempt) throw new AcademicCommittedResponse(error);
+      throw error;
     }
 
     // Count submitted attempts
@@ -2861,9 +3147,11 @@ export class AssessmentsService {
     const maxAttempts = assessment.maxAttempts ?? 1;
     const enforceAttemptCap = assessment.type !== AssessmentType.FILE_UPLOAD;
     if (enforceAttemptCap && submittedAttempts.length >= maxAttempts) {
-      throw new ForbiddenException(
+      const error = new ForbiddenException(
         `Maximum attempts reached (${maxAttempts}). You cannot retake this assessment.`,
       );
+      if (completedExistingAttempt) throw new AcademicCommittedResponse(error);
+      throw error;
     }
 
     // Create new attempt
@@ -2913,6 +3201,7 @@ export class AssessmentsService {
     };
   }
 
+  @AcademicMutation()
   async getOngoingAttempt(studentId: string, assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
 
@@ -2928,6 +3217,8 @@ export class AssessmentsService {
     if (!attempt) {
       return null;
     }
+
+    await this.assertAcademicMutation(assessment, 'complete', true);
 
     if (
       attempt.expiresAt &&
@@ -2965,17 +3256,39 @@ export class AssessmentsService {
           columns: {
             id: true,
             title: true,
+            classId: true,
+            quarter: true,
             timeLimitMinutes: true,
           },
+          with: { class: { columns: { schoolYear: true, isActive: true } } },
         },
       },
       orderBy: (a, { desc: d }) => [d(a.updatedAt)],
     });
 
+    const current = await this.academicPolicyService.currentState();
+    const classIds = [...new Set(ongoing.map((a) => a.assessment.classId))];
+    const records = classIds.length
+      ? await this.db.query.classRecords.findMany({
+          where: inArray(classRecords.classId, classIds),
+          columns: { classId: true, gradingPeriod: true, status: true },
+        })
+      : [];
     const now = Date.now();
     const active = ongoing.filter(
       (attempt) =>
-        !attempt.expiresAt || new Date(attempt.expiresAt).getTime() > now,
+        attempt.assessment.class.isActive &&
+        attempt.assessment.class.schoolYear === current.schoolYear &&
+        current.policy.periods.some(
+          (p) => p.key === attempt.assessment.quarter,
+        ) &&
+        !records.some(
+          (r) =>
+            r.classId === attempt.assessment.classId &&
+            r.gradingPeriod === attempt.assessment.quarter &&
+            r.status !== 'draft',
+        ) &&
+        (!attempt.expiresAt || new Date(attempt.expiresAt).getTime() > now),
     );
 
     return active.map((attempt) => ({
@@ -2989,6 +3302,7 @@ export class AssessmentsService {
     }));
   }
 
+  @AcademicMutation()
   async updateAttemptProgress(
     studentId: string,
     attemptId: string,
@@ -3010,21 +3324,26 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(attempt.assessmentId);
+    await this.assertAcademicMutation(assessment, 'complete', true);
 
     if (
       attempt.expiresAt &&
       new Date(attempt.expiresAt).getTime() <= Date.now()
     ) {
       await this.autoSubmitExpiredAttempt(assessment, attempt);
-      throw new BadRequestException(
-        'Attempt already expired and was auto-submitted',
+      throw new AcademicCommittedResponse(
+        new BadRequestException(
+          'Attempt already expired and was auto-submitted',
+        ),
       );
     }
 
     const syncedAttempt = await this.syncTimedAttemptState(assessment, attempt);
     if (!syncedAttempt) {
-      throw new BadRequestException(
-        'Question timer expired and the attempt was auto-submitted',
+      throw new AcademicCommittedResponse(
+        new BadRequestException(
+          'Question timer expired and the attempt was auto-submitted',
+        ),
       );
     }
 
@@ -3043,8 +3362,10 @@ export class AssessmentsService {
 
       if (nextViolationCount >= 3) {
         await this.autoSubmitExpiredAttempt(assessment, updatedForViolation);
-        throw new ForbiddenException(
-          'Attempt auto-submitted after repeated anti-cheat violations',
+        throw new AcademicCommittedResponse(
+          new ForbiddenException(
+            'Attempt auto-submitted after repeated anti-cheat violations',
+          ),
         );
       }
 
@@ -3108,6 +3429,7 @@ export class AssessmentsService {
   /**
    * Submit assessment with auto-grading for objective questions
    */
+  @AcademicMutation()
   async submitAssessment(
     studentId: string,
     submitAssessmentDto: SubmitAssessmentDto,
@@ -3131,6 +3453,8 @@ export class AssessmentsService {
         'No active attempt found. Please start the assessment first.',
       );
     }
+
+    await this.assertAcademicMutation(assessment, 'complete', true);
 
     // Check time limit enforcement (with 60s grace)
     if (assessment.timeLimitMinutes) {
@@ -3258,6 +3582,7 @@ export class AssessmentsService {
     };
   }
 
+  @AcademicMutation()
   async uploadTeacherAttachment(
     assessmentId: string,
     currentUser: any,
@@ -3271,6 +3596,7 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -3321,6 +3647,58 @@ export class AssessmentsService {
     currentUser: any,
     file: Express.Multer.File,
   ) {
+    const assessment = await this.getAssessmentById(assessmentId);
+    this.assertTeacherClassOwnership(
+      assessment.class?.teacherId,
+      currentUser,
+      'You can only manage rubrics for your own class assessments',
+    );
+    let rubricRawText = '';
+    let rubricCriteria: RubricCriterion[] = [];
+    let rubricParseStatus: 'parsed' | 'failed' = 'parsed';
+    let rubricParseError: string | null = null;
+
+    try {
+      rubricRawText = await this.extractRubricTextFromFile({
+        filePath: file.path.replace(/\\/g, '/'),
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+      });
+      rubricCriteria = this.draftRubricCriteriaFromText(rubricRawText);
+    } catch (error) {
+      rubricParseStatus = 'failed';
+      rubricParseError =
+        error instanceof Error ? error.message : 'Unable to parse rubric file';
+    }
+
+    // File parsing happens outside the academic lock; authorization and lifecycle
+    // are checked again by the committed writer after potentially slow parsing.
+    return this.saveRubricSource(assessmentId, currentUser, file, {
+      rubricRawText,
+      rubricCriteria,
+      rubricParseStatus,
+      rubricParseError,
+    });
+  }
+
+  @AcademicMutation()
+  private async saveRubricSource(
+    assessmentId: string,
+    currentUser: any,
+    file: Express.Multer.File,
+    parsed: {
+      rubricRawText: string;
+      rubricCriteria: RubricCriterion[];
+      rubricParseStatus: 'parsed' | 'failed';
+      rubricParseError: string | null;
+    },
+  ) {
+    const {
+      rubricRawText,
+      rubricCriteria,
+      rubricParseStatus,
+      rubricParseError,
+    } = parsed;
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
 
@@ -3329,6 +3707,8 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -3350,24 +3730,6 @@ export class AssessmentsService {
       })
       .returning();
 
-    let rubricRawText = '';
-    let rubricCriteria: RubricCriterion[] = [];
-    let rubricParseStatus: 'parsed' | 'failed' = 'parsed';
-    let rubricParseError: string | null = null;
-
-    try {
-      rubricRawText = await this.extractRubricTextFromFile({
-        filePath: record.filePath,
-        originalName: record.originalName,
-        mimeType: record.mimeType,
-      });
-      rubricCriteria = this.draftRubricCriteriaFromText(rubricRawText);
-    } catch (error) {
-      rubricParseStatus = 'failed';
-      rubricParseError =
-        error instanceof Error ? error.message : 'Unable to parse rubric file';
-    }
-
     await this.db
       .update(assessments)
       .set({
@@ -3386,6 +3748,10 @@ export class AssessmentsService {
       .where(eq(assessments.id, assessmentId));
 
     const updatedAssessment = await this.getAssessmentById(assessmentId);
+    await this.updateLinkedAssessmentHps(
+      assessmentId,
+      updatedAssessment.totalPoints,
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -3409,6 +3775,7 @@ export class AssessmentsService {
     };
   }
 
+  @AcademicMutation()
   async reviewRubric(
     assessmentId: string,
     currentUser: any,
@@ -3422,6 +3789,8 @@ export class AssessmentsService {
     }
 
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(assessment, 'prepare');
+    await this.assertNoAssessmentAttempts(assessment.id);
 
     if (role === 'teacher' && assessment.class?.teacherId !== userId) {
       throw new ForbiddenException(
@@ -3446,6 +3815,10 @@ export class AssessmentsService {
       })
       .where(eq(assessments.id, assessmentId));
     const updatedAssessment = await this.getAssessmentById(assessmentId);
+    await this.updateLinkedAssessmentHps(
+      assessmentId,
+      updatedAssessment.totalPoints,
+    );
 
     await this.auditService.log({
       actorId: userId,
@@ -3462,8 +3835,10 @@ export class AssessmentsService {
     return updatedAssessment;
   }
 
+  @AcademicMutation()
   async unsubmitFileUploadAssessment(studentId: string, assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
+    await this.assertAcademicMutation(assessment, 'start');
     if (assessment.type !== AssessmentType.FILE_UPLOAD) {
       throw new BadRequestException(
         'Only file upload assessments support unsubmit',
@@ -3540,6 +3915,7 @@ export class AssessmentsService {
     return updatedAttempt;
   }
 
+  @AcademicMutation()
   async uploadStudentSubmissionFile(
     assessmentId: string,
     currentUser: any,
@@ -3656,6 +4032,7 @@ export class AssessmentsService {
     };
   }
 
+  @AcademicMutation()
   async removeStudentSubmissionFile(
     assessmentId: string,
     fileId: string,
@@ -3689,6 +4066,8 @@ export class AssessmentsService {
     if (!attempt) {
       throw new NotFoundException('No active draft submission found');
     }
+
+    await this.assertAcademicMutation(assessment, 'complete', true);
 
     const submittedFiles = this.getAttemptSubmittedFiles(attempt);
     const removedFile =
@@ -4022,6 +4401,7 @@ export class AssessmentsService {
     assessment: any,
     attempt: typeof assessmentAttempts.$inferSelect,
   ) {
+    await this.assertAcademicMutation(assessment, 'complete', true);
     const submissionResponses = this.normalizeProgressResponses(
       attempt.draftResponses,
     );
@@ -4277,17 +4657,19 @@ export class AssessmentsService {
     classRecordCategory?: string,
     quarter?: string,
   ): void {
-    this.eventEmitter.emit(
-      AssessmentSubmittedEvent.eventName,
-      new AssessmentSubmittedEvent({
-        assessmentId,
-        studentId,
-        rawScore,
-        totalPoints,
-        classRecordCategory,
-        quarter,
-      }),
-    );
+    void this.databaseService.afterAcademicCommit(() => {
+      this.eventEmitter.emit(
+        AssessmentSubmittedEvent.eventName,
+        new AssessmentSubmittedEvent({
+          assessmentId,
+          studentId,
+          rawScore,
+          totalPoints,
+          classRecordCategory,
+          quarter,
+        }),
+      );
+    });
   }
 
   private randomizeAssessmentForStudent(assessment: AssessmentView) {
@@ -4700,6 +5082,7 @@ export class AssessmentsService {
    * Return a grade to a student (make score visible)
    */
   /* eslint-disable @typescript-eslint/no-unsafe-enum-comparison */
+  @AcademicMutation()
   async returnGrade(attemptId: string, dto: ReturnGradeDto, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -4722,6 +5105,7 @@ export class AssessmentsService {
               columns: {
                 id: true,
                 points: true,
+                type: true,
               },
             },
           },
@@ -4740,6 +5124,7 @@ export class AssessmentsService {
       throw new NotFoundException(`Attempt with ID "${attemptId}" not found`);
     }
 
+    await this.assertAcademicMutation(attempt.assessment, 'grade');
     if (!attempt.isSubmitted) {
       throw new BadRequestException(
         'Cannot return grade for an unsubmitted attempt',
@@ -4776,6 +5161,24 @@ export class AssessmentsService {
       }
     }
 
+    const manualQuestions = attempt.assessment.questions.filter(
+      (question) => question.type === 'short_answer',
+    );
+    const manualIds = new Set(
+      (dto.manualResponseScores ?? []).map((score) => score.questionId),
+    );
+    const answeredIds = new Set(
+      (attempt.responses ?? []).map((response) => response.questionId),
+    );
+    if (
+      manualQuestions.some(
+        (question) =>
+          answeredIds.has(question.id) && !manualIds.has(question.id),
+      )
+    )
+      throw new BadRequestException(
+        'Enter an explicit score, including zero where appropriate, for every submitted short-answer response',
+      );
     let score = attempt.score;
     let passed = attempt.passed;
     let directScore: number | null = attempt.directScore ?? null;
@@ -4989,6 +5392,7 @@ export class AssessmentsService {
     return updated;
   }
 
+  @AcademicMutation()
   async unreturnGrade(attemptId: string, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -5022,6 +5426,7 @@ export class AssessmentsService {
       );
     }
 
+    await this.assertAcademicMutation(attempt.assessment, 'grade');
     if (!attempt.isReturned) {
       throw new BadRequestException('This attempt has no posted grade to undo');
     }
@@ -5080,6 +5485,7 @@ export class AssessmentsService {
   /**
    * Bulk return grades for multiple attempts
    */
+  @AcademicMutation()
   async bulkReturnGrades(dto: BulkReturnGradesDto, currentUser: any) {
     const userId = this.getUserId(currentUser);
     const role = this.getUserRole(currentUser);
@@ -5093,6 +5499,7 @@ export class AssessmentsService {
       with: {
         assessment: {
           with: {
+            questions: { columns: { type: true } },
             class: {
               columns: { teacherId: true },
             },
@@ -5112,6 +5519,24 @@ export class AssessmentsService {
       );
     }
 
+    const checked = new Set<string>();
+    for (const attempt of selectedAttempts) {
+      if (!attempt.isSubmitted || attempt.isReturned) continue;
+      if (!checked.has(attempt.assessmentId)) {
+        await this.assertAcademicMutation(attempt.assessment, 'grade');
+        checked.add(attempt.assessmentId);
+      }
+      if (
+        attempt.score == null ||
+        attempt.assessment.type === 'file_upload' ||
+        (attempt.assessment.questions ?? []).some(
+          (q) => q.type === 'short_answer',
+        )
+      )
+        throw new BadRequestException(
+          'Manually reviewed or ungraded submissions must be returned individually with explicit grade evidence',
+        );
+    }
     const results = await this.db
       .update(assessmentAttempts)
       .set({
@@ -5302,6 +5727,7 @@ export class AssessmentsService {
   /**
    * Return all submitted (unreturned) grades for an assessment
    */
+  @AcademicMutation()
   async returnAllGrades(
     assessmentId: string,
     teacherFeedback: string | undefined,
@@ -5322,6 +5748,14 @@ export class AssessmentsService {
       );
     }
 
+    await this.assertAcademicMutation(assessment, 'grade');
+    if (
+      assessment.type === AssessmentType.FILE_UPLOAD ||
+      (assessment.questions ?? []).some((q) => q.type === 'short_answer')
+    )
+      throw new BadRequestException(
+        'Manually reviewed submissions must be returned individually with explicit grade evidence',
+      );
     const results = await this.db
       .update(assessmentAttempts)
       .set({
@@ -5334,6 +5768,7 @@ export class AssessmentsService {
           eq(assessmentAttempts.assessmentId, assessmentId),
           eq(assessmentAttempts.isSubmitted, true),
           eq(assessmentAttempts.isReturned, false),
+          sql`${assessmentAttempts.score} IS NOT NULL`,
         ),
       )
       .returning();

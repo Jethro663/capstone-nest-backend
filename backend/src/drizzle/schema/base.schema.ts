@@ -276,6 +276,9 @@ export const classes = pgTable(
     cardPreset: text('card_preset').notNull().default('aurora'),
     cardBannerUrl: text('card_banner_url'),
     schoolYear: text('school_year').notNull(),
+    academicWeightProfile: text('academic_weight_profile').$type<
+      'academic' | 'practical'
+    >(),
     writtenWorkGradingWeight: integer('written_work_grading_weight')
       .notNull()
       .default(30),

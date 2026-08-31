@@ -1,20 +1,10 @@
-'use client';
+"use client";
 
-import { Fragment, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import {
-  BookOpenCheck,
-  ClipboardList,
-  Download,
-  PencilLine,
-  RefreshCcw,
-  Sparkles,
-  TrendingUp,
-  TriangleAlert,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -22,1100 +12,945 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/utils/cn';
-import type { SpreadsheetData, SpreadsheetStudentRow } from '@/types/class-record';
-import type { TeacherClassRecordState } from '@/hooks/use-teacher-class-record';
+} from "@/components/ui/dialog";
+import { useAuth } from "@/providers/AuthProvider";
+import { cn } from "@/utils/cn";
+import { AcademicAnnualSummary } from "./AcademicAnnualSummary";
+import type { TeacherClassRecordState } from "@/hooks/use-teacher-class-record";
+import type { PeriodEligibility } from "@/types/academic-grading";
+import type {
+  SpreadsheetCategory,
+  SpreadsheetStudentRow,
+} from "@/types/class-record";
 
-interface TeacherClassRecordWorkbookProps {
-  state: TeacherClassRecordState;
-  className?: string;
-  emptyMessage?: string;
-}
-
-const WORKBOOK_COLUMN_WIDTHS = [
-  '4.14rem',
-  '6rem',
-  '6rem',
-  '6rem',
-  '6rem',
-  ...Array.from({ length: 10 }, () => '4.43rem'),
-  '6.3rem',
-  '7.1rem',
-  '7.1rem',
-  ...Array.from({ length: 10 }, () => '4.43rem'),
-  '6.3rem',
-  '7.1rem',
-  '7.1rem',
-  '6.3rem',
-  '7.1rem',
-  '7.1rem',
-  '10.29rem',
-  '10.29rem',
-];
-
-function getQuarterTitle(quarter: string) {
-  const titles: Record<string, string> = {
-    Q1: 'FIRST QUARTER',
-    Q2: 'SECOND QUARTER',
-    Q3: 'THIRD QUARTER',
-    Q4: 'FOURTH QUARTER',
-  };
-
-  return titles[quarter] ?? quarter;
-}
-
-function getWorkbookSheetName(header: SpreadsheetData['header']) {
-  const explicitName = header?.workbookSheetName?.trim();
-  if (explicitName) return explicitName;
-
-  const subjectCode = header?.subjectCode?.trim();
-  if (subjectCode) return subjectCode.split('-')[0];
-
-  const subject = header?.subject?.trim();
-  if (subject) {
-    return subject
-      .toUpperCase()
-      .replace(/[^A-Z0-9 ]/g, '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(' ');
-  }
-
-  return 'CLASS RECORD';
-}
-
-function getWorkbookTitle(header: SpreadsheetData['header']) {
-  return header.workbookTitle || 'Class Record';
-}
-
-function getWorkbookSubtitle(header: SpreadsheetData['header']) {
-  return (
-    header.workbookSubtitle || '(Pursuant to DepEd Order 8 series of 2015)'
-  );
-}
-
-function getWorkbookSubjectCode(header: SpreadsheetData['header']) {
-  return header.subjectCode || getWorkbookSheetName(header);
-}
-
-function getCategoryTotalHps(
-  category: SpreadsheetData['categories'][number] | undefined,
-) {
-  if (!category) return 0;
-  return (
-    category.totalHps ??
-    category.items.reduce((sum, item) => sum + (item.hps || 0), 0)
-  );
-}
-
-function getGenderGroups(students: SpreadsheetStudentRow[]) {
-  const activeStudents = students.filter(
-    (student) =>
-      !student.isRemoved && student.enrollmentState !== 'removed',
-  );
-  const removed = students.filter(
-    (student) =>
-      student.isRemoved || student.enrollmentState === 'removed',
-  );
-
-  const male = activeStudents.filter((student) =>
-    ['male', 'm'].includes((student.gender ?? '').trim().toLowerCase()),
-  );
-  const female = activeStudents.filter((student) =>
-    ['female', 'f'].includes((student.gender ?? '').trim().toLowerCase()),
-  );
-  const other = activeStudents.filter(
-    (student) =>
-      !['male', 'm', 'female', 'f'].includes(
-        (student.gender ?? '').trim().toLowerCase(),
-      ),
-  );
-
-  return [
-    { label: 'MALE', students: male },
-    { label: 'FEMALE', students: female },
-    ...(other.length ? [{ label: 'UNSPECIFIED', students: other }] : []),
-    ...(removed.length ? [{ label: 'REMOVED', students: removed }] : []),
-  ];
-}
-
+type Cell = {
+  item: SpreadsheetCategory["items"][number];
+  student: SpreadsheetStudentRow;
+  status: string;
+  reason: string;
+};
+const number = (value: number | null | undefined, digits = 2) =>
+  value == null ? "Incomplete" : Number(value).toFixed(digits);
 export function TeacherClassRecordWorkbook({
   state,
   className,
-  emptyMessage = 'No class record yet. Generate a quarter to start building the class record.',
-}: TeacherClassRecordWorkbookProps) {
-  const [showFinalizeDialog, setShowFinalizeDialog] = useState(false);
-  const [selectedSyncItemId, setSelectedSyncItemId] = useState<string>('');
-  const {
-    classRecords,
-    selectedRecord,
-    spreadsheet,
-    quarters,
-    generating,
-    finalizing,
-    reopening,
-    syncingItemId,
-    editingCell,
-    editValue,
-    editingHpsItemId,
-    hpsValue,
-    editRef,
-    hpsEditRef,
-    setSelectedRecordId,
-    setEditValue,
-    setHpsValue,
-    generateQuarter,
-    finalizeQuarter,
-    reopenQuarter,
-    handleCellClick,
-    handleCellSave,
-    handleCellKeyDown,
-    handleHpsClick,
-    handleHpsSave,
-    handleHpsKeyDown,
-    syncItem,
-    exportSpreadsheet,
-  } = state;
-
-  const stats = useMemo(() => {
-    if (!spreadsheet) {
-      return {
-        learnerCount: 0,
-        interventions: 0,
-        average: 0,
-      };
+  emptyMessage = "No period workbook exists yet. Choose a policy period to create one.",
+}: {
+  state: TeacherClassRecordState;
+  className?: string;
+  emptyMessage?: string;
+}) {
+  const { role } = useAuth();
+  const [tab, setTab] = useState("scores");
+  const [dialog, setDialog] = useState<"finalize" | "reopen" | null>(null);
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [rosterReason, setRosterReason] = useState("");
+  const [decisions, setDecisions] = useState<
+    Record<string, { eligibility: PeriodEligibility | ""; reason: string }>
+  >({});
+  const [cell, setCell] = useState<Cell | null>(null);
+  const [mode, setMode] = useState<"recorded" | "excused">("recorded");
+  const [excuseReason, setExcuseReason] = useState("");
+  const [savingCell, setSavingCell] = useState(false);
+  const { spreadsheet: sheet, selectedRecord: record, loadAnnual, loadHistory } = state;
+  const canGrade =
+    Boolean(sheet?.academicCapabilities?.canGrade) &&
+    state.spreadsheetStatus === "ready";
+  const canPrepare =
+    Boolean(sheet?.academicCapabilities?.canPrepare) &&
+    state.spreadsheetStatus === "ready";
+  const label = (period: string) => state.periodLabel?.(period) ?? period;
+  useEffect(() => {
+    setDecisions(
+      Object.fromEntries(
+        (state.roster?.participants ?? []).map((person) => [
+          person.studentId,
+          {
+            eligibility: person.eligibility ?? "",
+            reason: person.reason ?? "",
+          },
+        ]),
+      ),
+    );
+  }, [state.roster]);
+  useEffect(() => {
+    if (tab === "annual") void loadAnnual();
+    if (tab === "history") void loadHistory();
+  }, [
+    tab,
+    record?.id,
+    sheet?.classRecord.revision,
+    loadAnnual,
+    loadHistory,
+  ]);
+  const openCell = (
+    item: Cell["item"],
+    student: SpreadsheetStudentRow,
+    score: number | null,
+    status: string,
+    reason: string,
+  ) => {
+    if (!canGrade || student.eligibility !== "eligible" || !item.hps) return;
+    setCell({ item, student, status, reason });
+    setMode(status === "excused" ? "excused" : "recorded");
+    setExcuseReason(reason);
+    if (!item.assessmentId)
+      state.handleCellClick(item.id, student.studentId, score, {
+        maxScore: item.hps,
+      });
+  };
+  const saveCell = async () => {
+    if (!cell) return;
+    setSavingCell(true);
+    try {
+      const saved =
+        mode === "excused"
+          ? await state.excuseScore(
+              cell.item.id,
+              cell.student.studentId,
+              excuseReason,
+            )
+          : cell.item.assessmentId && cell.status === "excused"
+            ? await state.restoreAssessmentEvidence(
+                cell.item.id,
+                cell.student.studentId,
+                excuseReason,
+              )
+            : await state.handleCellSave();
+      if (saved) {
+        setCell(null);
+        state.setEditingCell(null);
+      }
+    } finally {
+      setSavingCell(false);
     }
-
-    const learnerCount = spreadsheet.students.length;
-    const interventions = spreadsheet.students.filter(
-      (student) =>
-        student.remarks === 'For Intervention' || student.quarterlyGrade < 75,
-    ).length;
-    const average =
-      learnerCount > 0
-        ? spreadsheet.students.reduce((sum, student) => sum + student.quarterlyGrade, 0) /
-          learnerCount
-        : 0;
-
-    return {
-      learnerCount,
-      interventions,
-      average,
-    };
-  }, [spreadsheet]);
-
-  const syncableItems = useMemo(() => {
-    if (!spreadsheet) {
-      return [];
-    }
-
-    return [...spreadsheet.categories.flatMap((category) => category.items)]
-      .filter((item) => item.assessmentId)
-      .slice(0, 4);
-  }, [spreadsheet]);
-
-  const effectiveSelectedSyncItemId = syncableItems.some(
-    (item) => item.id === selectedSyncItemId,
-  )
-    ? selectedSyncItemId
-    : (syncableItems[0]?.id ?? '');
-  const selectedSyncItem =
-    syncableItems.find((item) => item.id === effectiveSelectedSyncItemId) || null;
-  const syncingItem = syncingItemId ? syncableItems.find((item) => item.id === syncingItemId) : null;
-  const syncDisabled =
-    syncingItemId !== null || !selectedRecord || selectedRecord.status !== 'draft' || !selectedSyncItem;
-
-  const workbookData = useMemo(() => {
-    if (!spreadsheet) {
-      return null;
-    }
-
-    return {
-      writtenCategory: spreadsheet.categories[0],
-      performanceCategory: spreadsheet.categories[1],
-      quarterlyCategory: spreadsheet.categories[2],
-      genderGroups: getGenderGroups(spreadsheet.students),
-    };
-  }, [spreadsheet]);
-
-  const workbookMeta = useMemo(() => {
-    if (!spreadsheet) {
-      return null;
-    }
-
-    return {
-      sheetName: getWorkbookSheetName(spreadsheet.header),
-      title: getWorkbookTitle(spreadsheet.header),
-      subtitle: getWorkbookSubtitle(spreadsheet.header),
-      subjectCode: getWorkbookSubjectCode(spreadsheet.header),
-    };
-  }, [spreadsheet]);
-
+  };
+  const learnerName = (id?: string) => {
+    const person = state.roster?.participants.find((p) => p.studentId === id);
+    return person ? `${person.lastName}, ${person.firstName}` : id;
+  };
+  const tabs = [
+    ["scores", "Scores"],
+    ["roster", "Period eligibility"],
+    ["readiness", "Readiness"],
+    ["annual", "Annual summary"],
+    ["history", "Revision history"],
+  ];
   return (
-    <div className={cn('space-y-5', className)}>
-      <div className="flex flex-wrap items-center gap-2">
-        {quarters.map((quarter) => {
-          const record = classRecords.find((item) => item.gradingPeriod === quarter);
-          if (record) {
-            return (
-              <Button
-                key={quarter}
-                variant={selectedRecord?.id === record.id ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setSelectedRecordId(record.id)}
-                className="gap-2 rounded-full"
-              >
-                {quarter}
-                <Badge variant="secondary" className="rounded-full text-[10px] uppercase tracking-[0.2em]">
-                  {record.status}
-                </Badge>
-              </Button>
-            );
-          }
-
+    <div className={cn("space-y-4", className)}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">
+            {sheet?.header.subject ?? "Class record"}
+            {record ? ` · ${label(record.gradingPeriod)}` : ""}
+          </h2>
+          <p className="text-sm text-slate-600">
+            {state.policy?.schoolYear} · {state.policy?.id}
+            {record
+              ? ` · ${record.status} · revision ${record.revision ?? 0}`
+              : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void state.refresh()}>
+            Refresh workbook
+          </Button>
+          <Button
+            variant="outline"
+            disabled={!sheet || state.spreadsheetStatus === "error"}
+            onClick={() => void state.exportSpreadsheet()}
+          >
+            Export workbook and annual evidence
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2" aria-label="Grading periods">
+        {state.quarters.map((period) => {
+          const existing = state.classRecords.find(
+            (r) => r.gradingPeriod === period,
+          );
           return (
             <Button
-              key={quarter}
-              variant="ghost"
-              size="sm"
-              onClick={() => void generateQuarter(quarter)}
-              disabled={generating}
-              className="rounded-full border border-dashed"
+              key={period}
+              variant={
+                record?.id === existing?.id && existing ? "default" : "outline"
+              }
+              disabled={state.generating}
+              onClick={() =>
+                existing
+                  ? state.setSelectedRecordId(existing.id)
+                  : void state.generateQuarter(period)
+              }
             >
-              + {quarter}
+              {existing ? label(period) : `Create ${label(period)}`}
             </Button>
           );
         })}
+        {state.classRecords
+          .filter((r) => !state.quarters.includes(r.gradingPeriod))
+          .map((r) => (
+            <Button
+              key={r.id}
+              variant="outline"
+              onClick={() => state.setSelectedRecordId(r.id)}
+            >
+              Historical {r.gradingPeriod}
+            </Button>
+          ))}
       </div>
-
-      {!selectedRecord ? (
-        <Card className="border-dashed">
-          <CardContent className="flex min-h-40 flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
-            <ClipboardList className="h-8 w-8 text-primary/70" />
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">Class record not created yet</p>
-              <p className="text-sm">{emptyMessage}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {spreadsheet && selectedRecord && workbookData && workbookMeta ? (
+      {state.spreadsheetStatus === "error" && (
+        <p role="alert" className="text-sm text-red-700">
+          Readiness could not be refreshed. The previous view may be stale;
+          refresh before editing or finalizing.
+        </p>
+      )}
+      {!record ? (
+        <p className="rounded-md border p-4 text-sm">{emptyMessage}</p>
+      ) : !sheet ? (
+        <p role="status">Loading period evidence…</p>
+      ) : (
         <>
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
+          <div className="space-y-2 rounded-md border p-4 text-sm">
+            <p>
+              {sheet.academicCapabilities?.readOnlyReason ??
+                (!canGrade && canPrepare
+                  ? "Future draft: preparation is allowed; scores and finalization wait until this period is active."
+                  : "Blank scores are missing. Enter zero explicitly; exemptions require a reason.")}
+            </p>
+            {!sheet.classRecord.rosterConfirmedAt && (
+              <p className="text-red-700">
+                Period eligibility is unconfirmed. Current enrollment does not
+                establish earlier-period eligibility.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                disabled={
+                  !canGrade ||
+                  !state.readiness?.ready ||
+                  state.finalizing ||
+                  state.spreadsheetStatus !== "ready"
+                }
+                onClick={() => setDialog("finalize")}
+              >
+                Finalize {label(record.gradingPeriod)}
+              </Button>
+              {sheet.canReopen && (
+                <Button
+                  variant="outline"
+                  disabled={state.reopening}
+                  onClick={() => {
+                    setCorrectionReason("");
+                    setDialog("reopen");
+                  }}
+                >
+                  Reopen with reason
+                </Button>
+              )}
+              {!state.readiness?.ready && (
+                <Button variant="outline" onClick={() => setTab("readiness")}>
+                  Review {state.readiness?.blockers.length ?? 0} blockers
+                </Button>
+              )}
+            </div>
+          </div>
+          <div
+            className="flex flex-wrap gap-2 border-b pb-3"
+            role="tablist"
+            aria-label="Academic evidence"
           >
-            <Card className="overflow-hidden border border-white/10 bg-[linear-gradient(180deg,rgba(15,23,42,0.96),rgba(30,41,59,0.92))] shadow-[0_24px_70px_-36px_rgba(15,23,42,0.45)]">
-              <CardContent className="relative overflow-hidden p-0">
-                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))]" />
-                <div className="relative space-y-6 p-6 text-white">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-2">
-                      <Badge className="border-white/12 bg-white/6 text-white backdrop-blur">
-                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        {workbookMeta.sheetName || spreadsheet.header.templateLabel || 'Class Record View'}
-                      </Badge>
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.35em] text-white/70">
-                          {workbookMeta.title}
-                        </p>
-                        <h2 className="mt-2 text-2xl font-black tracking-tight">
-                          {spreadsheet.header.subject || 'Untitled Subject'}
-                        </h2>
-                        <p className="mt-1 max-w-2xl text-sm text-white/80">
-                          Class record with exact sheet grouping, live scoring,
-                          and cleaner day-to-day interaction.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Badge className="border-white/12 bg-white/8 px-3 py-1 text-white backdrop-blur">
-                        {selectedRecord.status.toUpperCase()}
-                      </Badge>
-                      <Badge className="border-white/12 bg-white/8 px-3 py-1 text-white backdrop-blur">
-                        {spreadsheet.header.quarter}
-                      </Badge>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <InfoPanel
-                      label="School"
-                      value={spreadsheet.header.schoolName || 'Gat Andres Bonifacio High School'}
-                      helper={`${spreadsheet.header.schoolYear || 'School Year TBD'} - ${spreadsheet.header.section || 'Section TBD'}`}
-                    />
-                    <InfoPanel
-                      label="Teacher"
-                      value={spreadsheet.header.teacher || 'Unassigned'}
-                      helper={
-                        `${workbookMeta.subjectCode} / ${workbookMeta.sheetName}`
-                      }
-                    />
-                    <InfoPanel
-                      label="Average"
-                      value={spreadsheet.students.length ? stats.average.toFixed(1) : '--'}
-                      helper={`${stats.learnerCount} learner${stats.learnerCount === 1 ? '' : 's'}`}
-                      icon={TrendingUp}
-                    />
-                    <InfoPanel
-                      label="Intervention"
-                      value={String(stats.interventions)}
-                      helper="Students below 75"
-                      icon={TriangleAlert}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 text-sm text-white/85 md:grid-cols-3">
-                    <MetaLine label="Region" value={spreadsheet.header.region || 'Not yet configured'} />
-                    <MetaLine label="Division" value={spreadsheet.header.division || 'Not yet configured'} />
-                    <MetaLine label="District" value={spreadsheet.header.district || 'Not yet configured'} />
-                    <MetaLine
-                      label="Grade & Section"
-                      value={`${spreadsheet.header.gradeLevel ? `Grade ${spreadsheet.header.gradeLevel}` : 'Grade ?'}${spreadsheet.header.section ? ` - ${spreadsheet.header.section}` : ''}`}
-                    />
-                    <MetaLine label="School ID" value={spreadsheet.header.schoolId || 'Pending'} />
-                    <MetaLine
-                      label="Weights"
-                      value={`${Math.round(workbookData.writtenCategory?.weight ?? 0)}/${Math.round(workbookData.performanceCategory?.weight ?? 0)}/${Math.round(workbookData.quarterlyCategory?.weight ?? 0)}`}
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {selectedRecord.status === 'draft' ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setShowFinalizeDialog(true)}
-                        className="gap-2 rounded-full"
-                      >
-                        <BookOpenCheck className="h-4 w-4" />
-                        Finalize Quarter
-                      </Button>
-                    ) : null}
-                    {selectedRecord.status === 'finalized' ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => void reopenQuarter()}
-                        disabled={reopening}
-                        className="gap-2 rounded-full"
-                      >
-                        <RefreshCcw className="h-4 w-4" />
-                        {reopening ? 'Reopening...' : 'Reopen Quarter'}
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => void exportSpreadsheet()}
-                      className="gap-2 rounded-full"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export Class Record
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <Card className="overflow-hidden border-[#c9cfd9] shadow-[0_18px_40px_-32px_rgba(15,23,42,0.5)]">
-            <CardContent className="p-0">
-              <div className="overflow-auto bg-[#f5f6f8] p-3">
-                <table className="min-w-[1480px] border-collapse bg-white text-[11px] [font-family:Arial,Helvetica,sans-serif]">
-                  <colgroup>
-                    {WORKBOOK_COLUMN_WIDTHS.map((width, index) => (
-                      <col key={`col-${index + 1}`} style={{ width }} />
-                    ))}
-                  </colgroup>
-                  <thead>
+            {tabs.map(([key, title]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm",
+                  tab === key ? "bg-slate-900 text-white" : "border bg-white",
+                )}
+                onClick={() => setTab(key)}
+              >
+                {title}
+              </button>
+            ))}
+          </div>
+          {tab === "scores" && (
+            <div role="tabpanel" aria-label="Scores" className="space-y-3">
+              {state.policy?.examComponents.length ? (
+                <p className="text-sm">
+                  Examination components:{" "}
+                  {state.policy.examComponents
+                    .map((c) => `${c.key} ${c.weight}%`)
+                    .join(" · ")}
+                  . The examination PS uses these component weights.
+                </p>
+              ) : null}
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full border-collapse text-sm">
+                  <thead className="bg-slate-50">
                     <tr>
-                      <th
-                        colSpan={36}
-                        className="border-0 px-3 pb-1 pt-3 text-center text-[26px] font-normal text-slate-900"
-                      >
-                        {workbookMeta.title}
+                      <th rowSpan={2} className="min-w-48 border p-2 text-left">
+                        Learner / eligibility
                       </th>
-                    </tr>
-                    <tr>
-                      <th colSpan={36} className="border-0 px-3 pb-3 text-center text-[11px] font-normal text-slate-600">
-                        {workbookMeta.subtitle}
-                      </th>
-                    </tr>
-                    <tr>
-                      <th className="border-0" />
-                      <th colSpan={4} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        REGION
-                      </th>
-                      <th colSpan={4} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.region || ''}
-                      </th>
-                      <th className="border-0" />
-                      <th colSpan={3} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        DIVISION
-                      </th>
-                      <th colSpan={4} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.division || ''}
-                      </th>
-                      <th className="border-0" />
-                      <th colSpan={4} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        DISTRICT
-                      </th>
-                      <th colSpan={5} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.district || ''}
-                      </th>
-                      <th colSpan={9} className="border-0" />
-                    </tr>
-                    <tr>
-                      <th className="border-0" />
-                      <th colSpan={5} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        SCHOOL NAME
-                      </th>
-                      <th colSpan={12} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.schoolName || ''}
-                      </th>
-                      <th className="border-0" />
-                      <th colSpan={4} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        SCHOOL ID
-                      </th>
-                      <th colSpan={6} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.schoolId || ''}
-                      </th>
-                      <th colSpan={3} className="border border-transparent px-2 py-1 text-right font-normal text-slate-700">
-                        SCHOOL YEAR
-                      </th>
-                      <th colSpan={3} className="border border-transparent px-2 py-1 text-left font-normal text-slate-900">
-                        {spreadsheet.header.schoolYear || ''}
-                      </th>
-                      <th className="border-0" />
-                    </tr>
-                    <tr>
-                      <th colSpan={5} className="border border-[#6b7280] px-2 py-1.5 text-center font-normal text-slate-900">
-                        {getQuarterTitle(spreadsheet.header.quarter)}
-                      </th>
-                      <th colSpan={5} className="border border-[#6b7280] px-2 py-1.5 text-right font-normal text-slate-700">
-                        GRADE &amp; SECTION:
-                      </th>
-                      <th colSpan={6} className="border border-[#6b7280] px-2 py-1.5 text-left font-normal text-slate-900">
-                        {spreadsheet.header.gradeLevel ? `GRADE ${spreadsheet.header.gradeLevel}` : ''}
-                        {spreadsheet.header.section ? ` - ${spreadsheet.header.section}` : ''}
-                      </th>
-                      <th colSpan={2} className="border border-[#6b7280] px-2 py-1.5 text-right font-normal text-slate-700">
-                        TEACHER:
-                      </th>
-                      <th colSpan={10} className="border border-[#6b7280] px-2 py-1.5 text-left font-normal text-slate-900">
-                        {spreadsheet.header.teacher || ''}
-                      </th>
-                      <th colSpan={4} className="border border-[#6b7280] px-2 py-1.5 text-right font-normal text-slate-700">
-                        SUBJECT:
-                      </th>
-                      <th colSpan={4} className="border border-[#6b7280] px-2 py-1.5 text-left font-normal uppercase text-slate-900">
-                        {spreadsheet.header.subject || ''}
-                      </th>
-                    </tr>
-                    <tr>
-                      <th className="border border-[#374151] bg-white px-2 py-3 text-center font-normal text-slate-900" />
-                      <th colSpan={4} className="border border-[#374151] bg-[#00b050] px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        LEARNERS&apos; NAMES
-                      </th>
-                      <th colSpan={13} className="border border-[#374151] bg-white px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        {`${workbookData.writtenCategory?.name.toUpperCase() || 'WRITTEN WORKS'} (${Math.round(workbookData.writtenCategory?.weight ?? 0)}%)`}
-                      </th>
-                      <th colSpan={13} className="border border-[#374151] bg-white px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        {`${workbookData.performanceCategory?.name.toUpperCase() || 'PERFORMANCE TASKS'} (${Math.round(workbookData.performanceCategory?.weight ?? 0)}%)`}
-                      </th>
-                      <th colSpan={3} className="border border-[#374151] bg-[#fff200] px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        {`${workbookData.quarterlyCategory?.name.toUpperCase() || 'QUARTERLY ASSESSMENT'} (${Math.round(workbookData.quarterlyCategory?.weight ?? 0)}%)`}
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        Initial
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-3 text-center text-[14px] font-normal text-slate-900">
-                        Quarterly
-                      </th>
-                    </tr>
-                    <tr>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900" />
-                      {Array.from({ length: 4 }).map((_, index) => (
-                        <th key={`blank-name-${index}`} className="border border-[#374151] bg-white px-2 py-1.5" />
-                      ))}
-                      {Array.from({ length: 10 }).map((_, index) => (
-                        <th key={`ww-${index + 1}`} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                          {index + 1}
+                      {sheet.categories.map((category) => (
+                        <th
+                          key={category.id}
+                          colSpan={category.items.length + 3}
+                          className="border p-2"
+                        >
+                          {category.name === "Quarterly Assessment" &&
+                          state.policy?.examComponents.length
+                            ? "Examination"
+                            : category.name}{" "}
+                          · {category.weight}%
                         </th>
                       ))}
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        Total
+                      <th rowSpan={2} className="border p-2">
+                        Initial grade
                       </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        PS
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        WS
-                      </th>
-                      {Array.from({ length: 10 }).map((_, index) => (
-                        <th key={`pt-${index + 1}`} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                          {index + 1}
-                        </th>
-                      ))}
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        Total
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        PS
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        WS
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        1
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        PS
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        WS
-                      </th>
-                      <th rowSpan={2} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        Grade
-                      </th>
-                      <th rowSpan={2} className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        Grade
+                      <th rowSpan={2} className="border p-2">
+                        {record.status === "draft"
+                          ? "Provisional"
+                          : record.revision
+                            ? "Official"
+                            : "Legacy unverified"}{" "}
+                        period grade
                       </th>
                     </tr>
                     <tr>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900" />
-                      <th colSpan={4} className="border border-[#374151] bg-white px-2 py-1.5 text-left font-normal text-slate-900">
-                        HIGHEST POSSIBLE SCORE
+                      {sheet.categories.map((category) => (
+                        <Fragment key={category.id}>
+                          {category.items.map((item) => (
+                            <th key={item.id} className="min-w-24 border p-2">
+                              <span className="block">{item.title}</span>
+                              {item.assessmentId && (
+                                <button
+                                  className="mt-1 text-xs underline"
+                                  disabled={
+                                    !canGrade || state.syncingItemId === item.id
+                                  }
+                                  onClick={() => void state.syncItem(item.id)}
+                                >
+                                  Sync result
+                                </button>
+                              )}
+                            </th>
+                          ))}
+                          <th className="border p-2">Total</th>
+                          <th className="border p-2">PS</th>
+                          <th className="border p-2">WS</th>
+                        </Fragment>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th className="border p-2 text-left">
+                        Highest possible score
                       </th>
-                      {Array.from({ length: 10 }).map((_, index) => {
-                        const item = workbookData.writtenCategory?.items[index];
-                        const isEditingHps = !!item && editingHpsItemId === item.id;
-                        const isEditableHps =
-                          !!item &&
-                          selectedRecord.status === 'draft' &&
-                          !item.assessmentId;
-                        return (
-                          <th
-                            key={`ww-hps-${item?.id ?? index}`}
-                            className={cn(
-                              'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
-                              isEditableHps && 'cursor-pointer hover:bg-sky-100',
-                              item?.assessmentId && 'bg-indigo-50/60 text-indigo-700',
-                            )}
-                            title={
-                              item?.assessmentId
-                                ? 'Linked assessment slot. Edit from assessment settings.'
-                                : isEditableHps
-                                  ? 'Click to set highest possible score'
-                                  : undefined
-                            }
-                            onClick={() =>
-                              item
-                                ? handleHpsClick(item.id, item.hps, item.assessmentId)
-                                : undefined
-                            }
+                      {sheet.categories.map((category) => (
+                        <Fragment key={category.id}>
+                          {category.items.map((item) => (
+                            <td
+                              key={item.id}
+                              className="border p-2 text-center"
+                            >
+                              {state.editingHpsItemId === item.id ? (
+                                <Input
+                                  aria-label={`HPS for ${item.title}`}
+                                  ref={state.hpsEditRef}
+                                  type="number"
+                                  min={0}
+                                  step="0.01"
+                                  value={state.hpsValue}
+                                  onChange={(e) =>
+                                    state.setHpsValue(e.target.value)
+                                  }
+                                  onKeyDown={state.handleHpsKeyDown}
+                                  onBlur={() => void state.handleHpsSave()}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="w-full rounded px-2 py-1 disabled:cursor-default enabled:hover:bg-slate-100"
+                                  disabled={
+                                    !canPrepare || Boolean(item.assessmentId)
+                                  }
+                                  onClick={() =>
+                                    state.handleHpsClick(
+                                      item.id,
+                                      item.hps,
+                                      item.assessmentId,
+                                    )
+                                  }
+                                >
+                                  {item.hps ?? "—"}
+                                </button>
+                              )}
+                            </td>
+                          ))}
+                          <td
+                            colSpan={3}
+                            className="border p-2 text-center text-xs"
                           >
-                            {isEditingHps ? (
-                              <Input
-                                ref={hpsEditRef}
-                                type="number"
-                                min={0}
-                                value={hpsValue}
-                                onChange={(event) => setHpsValue(event.target.value)}
-                                onBlur={() => void handleHpsSave()}
-                                onKeyDown={handleHpsKeyDown}
-                                className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                              />
-                            ) : (
-                              item?.hps || (isEditableHps ? 'Set HPS' : '')
-                            )}
-                          </th>
-                        );
-                      })}
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {getCategoryTotalHps(workbookData.writtenCategory) || ''}
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        100
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {((workbookData.writtenCategory?.weight ?? 0) / 100).toFixed(1)}
-                      </th>
-                      {Array.from({ length: 10 }).map((_, index) => {
-                        const item = workbookData.performanceCategory?.items[index];
-                        const isEditingHps = !!item && editingHpsItemId === item.id;
-                        const isEditableHps =
-                          !!item &&
-                          selectedRecord.status === 'draft' &&
-                          !item.assessmentId;
-                        return (
-                          <th
-                            key={`pt-hps-${item?.id ?? index}`}
-                            className={cn(
-                              'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
-                              isEditableHps && 'cursor-pointer hover:bg-amber-100',
-                              item?.assessmentId && 'bg-indigo-50/60 text-indigo-700',
-                            )}
-                            title={
-                              item?.assessmentId
-                                ? 'Linked assessment slot. Edit from assessment settings.'
-                                : isEditableHps
-                                  ? 'Click to set highest possible score'
-                                  : undefined
-                            }
-                            onClick={() =>
-                              item
-                                ? handleHpsClick(item.id, item.hps, item.assessmentId)
-                                : undefined
-                            }
-                          >
-                            {isEditingHps ? (
-                              <Input
-                                ref={hpsEditRef}
-                                type="number"
-                                min={0}
-                                value={hpsValue}
-                                onChange={(event) => setHpsValue(event.target.value)}
-                                onBlur={() => void handleHpsSave()}
-                                onKeyDown={handleHpsKeyDown}
-                                className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                              />
-                            ) : (
-                              item?.hps || (isEditableHps ? 'Set HPS' : '')
-                            )}
-                          </th>
-                        );
-                      })}
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {getCategoryTotalHps(workbookData.performanceCategory) || ''}
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        100
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {((workbookData.performanceCategory?.weight ?? 0) / 100).toFixed(1)}
-                      </th>
-                      <th
-                        className={cn(
-                          'border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900 transition',
-                          workbookData.quarterlyCategory?.items?.[0] &&
-                            selectedRecord.status === 'draft' &&
-                            !workbookData.quarterlyCategory.items[0].assessmentId &&
-                            'cursor-pointer hover:bg-lime-100',
-                          workbookData.quarterlyCategory?.items?.[0]?.assessmentId &&
-                            'bg-indigo-50/60 text-indigo-700',
-                        )}
-                        title={
-                          workbookData.quarterlyCategory?.items?.[0]?.assessmentId
-                            ? 'Linked assessment slot. Edit from assessment settings.'
-                            : workbookData.quarterlyCategory?.items?.[0]
-                              ? 'Click to set highest possible score'
-                              : undefined
-                        }
-                        onClick={() => {
-                          const item = workbookData.quarterlyCategory?.items?.[0];
-                          if (!item) return;
-                          handleHpsClick(item.id, item.hps, item.assessmentId);
-                        }}
-                      >
-                        {editingHpsItemId === workbookData.quarterlyCategory?.items?.[0]?.id ? (
-                          <Input
-                            ref={hpsEditRef}
-                            type="number"
-                            min={0}
-                            value={hpsValue}
-                            onChange={(event) => setHpsValue(event.target.value)}
-                            onBlur={() => void handleHpsSave()}
-                            onKeyDown={handleHpsKeyDown}
-                            className="mx-auto h-7 w-16 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                          />
-                        ) : (
-                          workbookData.quarterlyCategory?.items?.[0]?.hps ||
-                          (workbookData.quarterlyCategory?.items?.[0] &&
-                          selectedRecord.status === 'draft' &&
-                          !workbookData.quarterlyCategory.items[0].assessmentId
-                            ? 'Set HPS'
-                            : '')
-                        )}
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        100
-                      </th>
-                      <th className="border border-[#374151] bg-white px-2 py-1.5 text-center font-normal text-slate-900">
-                        {((workbookData.quarterlyCategory?.weight ?? 0) / 100).toFixed(1)}
-                      </th>
+                            {category.weight}% category weight
+                          </td>
+                        </Fragment>
+                      ))}
+                      <td colSpan={2} className="border p-2" />
                     </tr>
                   </thead>
                   <tbody>
-                    {workbookData.genderGroups.map((group) => (
-                      <Fragment key={group.label}>
-                        {group.students.length ? (
-                          <tr>
-                            <td className="border border-[#374151] bg-[#fff2cc] px-2 py-1.5" />
-                            <td colSpan={4} className="border border-[#374151] bg-[#fff2cc] px-3 py-1.5 text-left font-semibold tracking-[0.18em] text-slate-900">
-                              {group.label}
-                            </td>
-                            {Array.from({ length: 31 }).map((_, index) => (
-                              <td key={`${group.label}-fill-${index}`} className="border border-[#374151] bg-[#fff2cc] px-2 py-1.5" />
-                            ))}
-                          </tr>
-                        ) : null}
-                        {group.students.map((student, groupIndex) => {
-                          const isRemoved =
-                            student.isRemoved || student.enrollmentState === 'removed';
-                          const globalIndex =
-                            spreadsheet.students.findIndex(
-                              (current) => current.studentId === student.studentId,
-                            ) + 1;
-                          const writtenData = student.categories.find(
-                            (category) => category.categoryId === workbookData.writtenCategory?.id,
+                    {sheet.students.map((student) => (
+                      <tr key={student.studentId}>
+                        <th
+                          scope="row"
+                          className="border p-2 text-left font-normal"
+                        >
+                          {student.lastName}, {student.firstName}
+                          <span className="block text-xs text-slate-500">
+                            {student.eligibility ?? "Unconfirmed"}
+                            {student.isRemoved
+                              ? " · removed from current class"
+                              : ""}
+                          </span>
+                        </th>
+                        {sheet.categories.map((category) => {
+                          const values = student.categories.find(
+                            (c) => c.categoryId === category.id,
                           );
-                          const performanceData = student.categories.find(
-                            (category) =>
-                              category.categoryId === workbookData.performanceCategory?.id,
-                          );
-                          const quarterlyData = student.categories.find(
-                            (category) => category.categoryId === workbookData.quarterlyCategory?.id,
-                          );
-
                           return (
-                            <tr
-                              key={student.studentId}
-                              className={cn(
-                                'transition-colors hover:bg-sky-50/80',
-                                isRemoved && 'bg-slate-100/80 text-slate-500',
-                                (student.remarks === 'For Intervention' || student.quarterlyGrade < 75) &&
-                                  'bg-rose-50/40',
-                              )}
-                            >
-                              <td className="border border-[#374151] px-2 py-1.5 text-center text-slate-900">
-                                {globalIndex || groupIndex + 1}
-                              </td>
-                              <td colSpan={4} className="border border-[#374151] px-3 py-1.5 text-left text-slate-900">
-                                <div className="flex flex-col gap-0.5">
-                                  <span className={cn(isRemoved && 'line-through')}>
-                                    {student.lastName}, {student.firstName}
-                                    {student.middleName ? `, ${student.middleName.charAt(0)}.` : ''}
-                                    {isRemoved ? (
-                                      <Badge
-                                        variant="outline"
-                                        className="ml-2 rounded-full border-slate-300 bg-slate-200 text-[10px] text-slate-700"
-                                      >
-                                        Removed
-                                      </Badge>
-                                    ) : null}
-                                  </span>
-                                  <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
-                                    {student.lrn ? <span>LRN: {student.lrn}</span> : null}
-                                    {student.email ? <span>{student.email}</span> : null}
-                                  </div>
-                                </div>
-                              </td>
-
-                              {Array.from({ length: 10 }).map((_, index) => {
-                                const item = workbookData.writtenCategory?.items[index];
-                                const score = writtenData?.scores[index];
-                                const isEditing =
-                                  !!item &&
-                                  !isRemoved &&
-                                  editingCell?.itemId === item.id &&
-                                  editingCell?.studentId === student.studentId;
-
+                            <Fragment key={category.id}>
+                              {category.items.map((item, index) => {
+                                const score = values?.scores[index] ?? null;
+                                const status =
+                                  values?.scoreStatuses?.[index] ??
+                                  (score == null ? "missing" : "recorded");
+                                const display =
+                                  !item.hps ||
+                                  (student.eligibility &&
+                                    student.eligibility !== "eligible")
+                                    ? "—"
+                                    : status === "excused"
+                                      ? "Excused"
+                                      : (score ?? "Missing");
                                 return (
                                   <td
-                                    key={`${student.studentId}-ww-${item?.id ?? index}`}
-                                    className={cn(
-                                      'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-sky-100',
-                                      item?.assessmentId && 'bg-indigo-50/40',
-                                    )}
-                                    onClick={() =>
-                                      item && !isRemoved
-                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
-                                            maxScore: item.hps,
-                                            assessmentId: item.assessmentId,
-                                          })
-                                        : undefined
-                                    }
+                                    key={item.id}
+                                    className="border p-1 text-center"
                                   >
-                                    {isEditing ? (
-                                      <Input
-                                        ref={editRef}
-                                        type="number"
-                                        min={0}
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        onBlur={() => void handleCellSave()}
-                                        onKeyDown={handleCellKeyDown}
-                                        className="mx-auto h-7 w-14 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                                      />
-                                    ) : (
-                                      <span className={cn(score == null && 'text-slate-300')}>
-                                        {score ?? ''}
-                                      </span>
-                                    )}
+                                    <button
+                                      type="button"
+                                      className="w-full rounded px-2 py-2 text-xs enabled:hover:bg-slate-100 disabled:cursor-default"
+                                      disabled={
+                                        !canGrade ||
+                                        student.eligibility !== "eligible" ||
+                                        !item.hps ||
+                                        state.spreadsheetStatus !== "ready"
+                                      }
+                                      aria-label={`${student.firstName} ${student.lastName}, ${item.title}: ${display}`}
+                                      onClick={() =>
+                                        openCell(
+                                          item,
+                                          student,
+                                          score,
+                                          status,
+                                          values?.scoreReasons?.[index] ?? "",
+                                        )
+                                      }
+                                    >
+                                      {display}
+                                    </button>
                                   </td>
                                 );
                               })}
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {writtenData?.total != null ? writtenData.total.toFixed(1) : ''}
+                              <td className="border p-2 text-center">
+                                {number(values?.total)}
                               </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {writtenData?.ps != null ? writtenData.ps.toFixed(2) : ''}
+                              <td className="border p-2 text-center">
+                                {number(values?.ps)}
                               </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {writtenData?.ws != null ? writtenData.ws.toFixed(2) : ''}
+                              <td className="border p-2 text-center">
+                                {number(values?.ws)}
                               </td>
-
-                              {Array.from({ length: 10 }).map((_, index) => {
-                                const item = workbookData.performanceCategory?.items[index];
-                                const score = performanceData?.scores[index];
-                                const isEditing =
-                                  !!item &&
-                                  !isRemoved &&
-                                  editingCell?.itemId === item.id &&
-                                  editingCell?.studentId === student.studentId;
-
-                                return (
-                                  <td
-                                    key={`${student.studentId}-pt-${item?.id ?? index}`}
-                                    className={cn(
-                                      'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-amber-100',
-                                      item?.assessmentId && 'bg-indigo-50/40',
-                                    )}
-                                    onClick={() =>
-                                      item && !isRemoved
-                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
-                                            maxScore: item.hps,
-                                            assessmentId: item.assessmentId,
-                                          })
-                                        : undefined
-                                    }
-                                  >
-                                    {isEditing ? (
-                                      <Input
-                                        ref={editRef}
-                                        type="number"
-                                        min={0}
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        onBlur={() => void handleCellSave()}
-                                        onKeyDown={handleCellKeyDown}
-                                        className="mx-auto h-7 w-14 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                                      />
-                                    ) : (
-                                      <span className={cn(score == null && 'text-slate-300')}>
-                                        {score ?? ''}
-                                      </span>
-                                    )}
-                                  </td>
-                                );
-                              })}
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {performanceData?.total != null ? performanceData.total.toFixed(1) : ''}
-                              </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {performanceData?.ps != null ? performanceData.ps.toFixed(2) : ''}
-                              </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {performanceData?.ws != null ? performanceData.ws.toFixed(2) : ''}
-                              </td>
-
-                              {(() => {
-                                const item = workbookData.quarterlyCategory?.items[0];
-                                const score = quarterlyData?.scores[0];
-                                const isEditing =
-                                  !!item &&
-                                  !isRemoved &&
-                                  editingCell?.itemId === item.id &&
-                                  editingCell?.studentId === student.studentId;
-
-                                return (
-                                  <td
-                                    className={cn(
-                                      'border border-[#374151] px-1 py-1 text-center transition',
-                                      item && selectedRecord.status === 'draft' && !isRemoved && 'cursor-pointer hover:bg-lime-100',
-                                      item?.assessmentId && 'bg-indigo-50/40',
-                                    )}
-                                    onClick={() =>
-                                      item && !isRemoved
-                                        ? handleCellClick(item.id, student.studentId, score ?? null, {
-                                            maxScore: item.hps,
-                                            assessmentId: item.assessmentId,
-                                          })
-                                        : undefined
-                                    }
-                                  >
-                                    {isEditing ? (
-                                      <Input
-                                        ref={editRef}
-                                        type="number"
-                                        min={0}
-                                        value={editValue}
-                                        onChange={(e) => setEditValue(e.target.value)}
-                                        onBlur={() => void handleCellSave()}
-                                        onKeyDown={handleCellKeyDown}
-                                        className="mx-auto h-7 w-14 border-0 p-0 text-center text-xs focus-visible:ring-1"
-                                      />
-                                    ) : (
-                                      <span className={cn(score == null && 'text-slate-300')}>
-                                        {score ?? ''}
-                                      </span>
-                                    )}
-                                  </td>
-                                );
-                              })()}
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {quarterlyData?.ps != null ? quarterlyData.ps.toFixed(2) : ''}
-                              </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {quarterlyData?.ws != null ? quarterlyData.ws.toFixed(2) : ''}
-                              </td>
-                              <td className="border border-[#374151] px-1 py-1 text-center text-slate-900">
-                                {student.initialGrade != null ? student.initialGrade.toFixed(2) : ''}
-                              </td>
-                              <td
-                                className={cn(
-                                  'border border-[#374151] px-1 py-1 text-center font-semibold',
-                                  student.quarterlyGrade >= 75
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-rose-50 text-rose-700',
-                                )}
-                              >
-                                {student.quarterlyGrade != null ? student.quarterlyGrade : ''}
-                              </td>
-                            </tr>
+                            </Fragment>
                           );
                         })}
-                      </Fragment>
-                    ))}
-
-                    {spreadsheet.students.length === 0 ? (
-                      <tr>
-                        <td colSpan={36} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                          No class record participants yet.
+                        <td className="border p-2 text-center">
+                          {number(student.initialGrade)}
+                        </td>
+                        <td className="border p-2 text-center">
+                          <strong>
+                            {student.quarterlyGrade ??
+                              (student.remarks === "Not graded"
+                                ? "Not graded"
+                                : "Incomplete")}
+                          </strong>
+                          <span className="block text-xs">
+                            {student.gradeProvenance === "legacy_unverified"
+                              ? "Legacy unverified · "
+                              : ""}
+                            {student.remarks}
+                          </span>
                         </td>
                       </tr>
-                    ) : null}
+                    ))}
+                  </tbody>
+                </table>
+                {!sheet.students.length && (
+                  <p className="p-4 text-sm">
+                    No participants. Review and confirm an empty eligibility
+                    register only if this period had no eligible learners.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          {tab === "roster" && (
+            <form
+              role="tabpanel"
+              aria-label="Period eligibility"
+              className="space-y-3"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const saved = await state.confirmRoster({
+                  reason: rosterReason,
+                  participants: (state.roster?.participants ?? []).map(
+                    (person) => ({
+                      studentId: person.studentId,
+                      eligibility: decisions[person.studentId]
+                        .eligibility as PeriodEligibility,
+                      reason: decisions[person.studentId].reason || undefined,
+                    }),
+                  ),
+                });
+                if (saved) setRosterReason("");
+              }}
+            >
+              <p className="text-sm">
+                Confirm each learner’s actual eligibility for{" "}
+                {label(record.gradingPeriod)}. Past scores and membership remain
+                in history when a learner is excluded.
+              </p>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="p-3">Learner</th>
+                      <th className="p-3">Period eligibility</th>
+                      <th className="p-3">Exclusion evidence</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.roster?.participants.map((person) => (
+                      <tr key={person.studentId} className="border-t">
+                        <td className="p-3">
+                          {person.lastName}, {person.firstName}
+                          <span className="block text-xs">
+                            {person.currentlyEnrolled
+                              ? "Currently enrolled"
+                              : "Not currently enrolled"}
+                          </span>
+                        </td>
+                        <td className="p-3">
+                          <select
+                            aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
+                            required
+                            disabled={!canPrepare}
+                            className="h-10 rounded-md border bg-white px-2"
+                            value={
+                              decisions[person.studentId]?.eligibility ?? ""
+                            }
+                            onChange={(e) =>
+                              setDecisions((previous) => ({
+                                ...previous,
+                                [person.studentId]: {
+                                  ...previous[person.studentId],
+                                  eligibility: e.target
+                                    .value as PeriodEligibility,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="">Choose explicitly</option>
+                            <option value="eligible">Eligible</option>
+                            <option value="not_enrolled">
+                              Not enrolled in period
+                            </option>
+                            <option value="transferred">Transferred</option>
+                            <option value="withdrawn">Withdrawn</option>
+                          </select>
+                        </td>
+                        <td className="p-3">
+                          <Input
+                            aria-label={`Eligibility reason for ${person.firstName} ${person.lastName}`}
+                            disabled={!canPrepare}
+                            required={Boolean(
+                              decisions[person.studentId]?.eligibility &&
+                              decisions[person.studentId].eligibility !==
+                                "eligible",
+                            )}
+                            value={decisions[person.studentId]?.reason ?? ""}
+                            onChange={(e) =>
+                              setDecisions((previous) => ({
+                                ...previous,
+                                [person.studentId]: {
+                                  ...previous[person.studentId],
+                                  reason: e.target.value,
+                                },
+                              }))
+                            }
+                          />
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-
-              <div className="border-t border-slate-200 bg-white px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="rounded-full border-emerald-200 bg-emerald-50 text-emerald-700">
-                      Passed: {spreadsheet.students.filter((student) => student.remarks !== 'For Intervention').length}
-                    </Badge>
-                    <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-50 text-rose-700">
-                      For Intervention: {stats.interventions}
-                    </Badge>
-                  </div>
-                  <div className="flex w-full flex-wrap items-center justify-end gap-2">
-                    <label htmlFor="class-record-sync-item" className="sr-only">
-                      Sync assessment
-                    </label>
-                    <select
-                      id="class-record-sync-item"
-                      value={effectiveSelectedSyncItemId}
-                      onChange={(event) => setSelectedSyncItemId(event.target.value)}
-                      disabled={syncDisabled}
-                      className="h-8 min-w-48 rounded-full border border-slate-300 bg-white px-3 py-1 text-sm"
-                    >
-                      {syncableItems.length === 0 ? (
-                        <option value="">No linked assessments</option>
-                      ) : (
-                        syncableItems.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.title}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => selectedSyncItem ? void syncItem(selectedSyncItem.id) : undefined}
-                      disabled={syncDisabled}
-                      className="gap-2 rounded-full"
-                    >
-                      <RefreshCcw className={cn('h-3.5 w-3.5', syncingItem && 'animate-spin')} />
-                      {syncingItem ? `Syncing ${syncingItem.title}` : 'Sync'}
-                    </Button>
-                  </div>
+              <Label htmlFor="roster-confirmation-reason">
+                Register confirmation reason
+              </Label>
+              <Input
+                id="roster-confirmation-reason"
+                required
+                minLength={3}
+                value={rosterReason}
+                onChange={(e) => setRosterReason(e.target.value)}
+                disabled={!canPrepare}
+              />
+              <Button
+                type="submit"
+                disabled={
+                  !canPrepare ||
+                  !state.roster ||
+                  state.savingRoster ||
+                  !rosterReason.trim() ||
+                  state.roster.participants.some(
+                    (person) => !decisions[person.studentId]?.eligibility,
+                  )
+                }
+              >
+                Confirm period eligibility
+              </Button>
+            </form>
+          )}
+          {tab === "readiness" && (
+            <div role="tabpanel" aria-label="Readiness" className="space-y-3">
+              <p className="text-sm">
+                {state.readiness?.ready
+                  ? "All finalization checks pass."
+                  : "Resolve every blocker before finalizing. No missing score is converted to zero."}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => void state.refreshEvidence()}
+              >
+                Refresh readiness
+              </Button>
+              <ul className="space-y-2">
+                {state.readiness?.blockers.map((blocker, index) => (
+                  <li
+                    key={`${blocker.code}-${index}`}
+                    className="rounded-md border p-3 text-sm"
+                  >
+                    {blocker.message}
+                    {blocker.studentId && (
+                      <span className="block text-xs">
+                        {learnerName(blocker.studentId)}
+                      </span>
+                    )}
+                    {blocker.itemId && (
+                      <span className="block text-xs">
+                        {sheet.categories
+                          .flatMap((c) => c.items)
+                          .find((item) => item.id === blocker.itemId)?.title ??
+                          blocker.itemId}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {tab === "annual" && (
+            <div role="tabpanel" aria-label="Annual summary">
+              {state.annualSummary ? (
+                <AcademicAnnualSummary
+                  summary={state.annualSummary}
+                  refresh={state.loadAnnual}
+                />
+              ) : (
+                <div className="space-y-2">
+                  <p>Annual evidence is not loaded.</p>
+                  <Button
+                    variant="outline"
+                    onClick={() => void loadAnnual()}
+                  >
+                    Load annual evidence
+                  </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          )}
+          {tab === "history" && (
+            <div
+              role="tabpanel"
+              aria-label="Revision history"
+              className="space-y-3"
+            >
+              <Button
+                variant="outline"
+                onClick={() => void loadHistory()}
+              >
+                Refresh history
+              </Button>
+              {state.history && (
+                <>
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr>
+                        <th className="p-2">Learner</th>
+                        <th className="p-2">Revision</th>
+                        <th className="p-2">Grade</th>
+                        <th className="p-2">Evidence</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {state.history.revisions.map((version) => (
+                        <tr key={version.id} className="border-t">
+                          <td className="p-2">
+                            {learnerName(version.studentId)}
+                          </td>
+                          <td className="p-2">
+                            {version.revision} ·{" "}
+                            {version.isCurrent ? "current" : "superseded"}
+                          </td>
+                          <td className="p-2">{version.grade}</td>
+                          <td className="p-2">
+                            <span className="block break-all text-xs">
+                              {version.id}
+                            </span>
+                            {new Date(version.computedAt).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {state.history.legacyEvidence.map((legacy) => (
+                    <details
+                      key={legacy.id}
+                      className="rounded-md border p-3 text-sm"
+                    >
+                      <summary className="cursor-pointer">
+                        Unverified legacy evidence ·{" "}
+                        {learnerName(legacy.studentId)} · {legacy.period}
+                      </summary>
+                      <p>
+                        This preserved snapshot is not a trusted annual source.
+                      </p>
+                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">
+                        {JSON.stringify(legacy.sourceSnapshot, null, 2)}
+                      </pre>
+                    </details>
+                  ))}
+                  {!state.history.revisions.length &&
+                    !state.history.legacyEvidence.length && (
+                      <p className="text-sm">
+                        No finalized grade revisions or archived legacy
+                        evidence.
+                      </p>
+                    )}
+                </>
+              )}
+            </div>
+          )}
         </>
-      ) : null}
-
-      <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
+      )}
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => {
+          if (!open && !state.finalizing && !state.reopening) setDialog(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalize quarter class record</DialogTitle>
+            <DialogTitle>
+              {dialog === "reopen"
+                ? "Reopen period with a reason"
+                : "Finalize verified period"}
+            </DialogTitle>
             <DialogDescription>
-              Finalizing saves the computed grades for this quarter and prevents
-              further editing until you reopen it.
+              {dialog === "reopen"
+                ? "Original revisions remain in history. Dependent annual and remediation results are invalidated until the corrected evidence is finalized again."
+                : "The server rechecks the eligibility register, every required score, manual grading and synchronization before recording an immutable revision."}
             </DialogDescription>
           </DialogHeader>
+          {dialog === "reopen" && (
+            <>
+              <Label htmlFor="correction-reason">Correction reason</Label>
+              <Input
+                id="correction-reason"
+                minLength={3}
+                value={correctionReason}
+                onChange={(e) => setCorrectionReason(e.target.value)}
+              />
+            </>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFinalizeDialog(false)}>
+            <Button
+              variant="outline"
+              disabled={state.finalizing || state.reopening}
+              onClick={() => setDialog(null)}
+            >
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                void finalizeQuarter();
-                setShowFinalizeDialog(false);
+              disabled={
+                state.finalizing ||
+                state.reopening ||
+                (dialog === "reopen"
+                  ? !correctionReason.trim()
+                  : !state.readiness?.ready)
+              }
+              onClick={async () => {
+                const saved =
+                  dialog === "reopen"
+                    ? await state.reopenQuarter(correctionReason)
+                    : await state.finalizeQuarter();
+                if (saved) setDialog(null);
               }}
-              disabled={finalizing}
             >
-              {finalizing ? 'Finalizing...' : 'Confirm Finalize'}
+              {dialog === "reopen"
+                ? "Reopen and invalidate dependent results"
+                : "Finalize period"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function InfoPanel({
-  label,
-  value,
-  helper,
-  icon: Icon = PencilLine,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  icon?: typeof PencilLine;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/6 p-4 backdrop-blur">
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-white/65">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </div>
-      <p className="mt-3 text-xl font-black tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-white/70">{helper}</p>
-    </div>
-  );
-}
-
-function MetaLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/6 px-3 py-2 backdrop-blur">
-      <p className="text-[10px] uppercase tracking-[0.22em] text-white/55">{label}</p>
-      <p className="mt-1 font-medium text-white">{value}</p>
+      <Dialog
+        open={cell !== null}
+        onOpenChange={(open) => {
+          if (!open && !savingCell) {
+            setCell(null);
+            state.setEditingCell(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {cell?.student.firstName} {cell?.student.lastName} ·{" "}
+              {cell?.item.title}
+            </DialogTitle>
+            <DialogDescription>
+              Zero is an explicit score. Exemptions exclude this item’s
+              denominator for this learner and require evidence.
+            </DialogDescription>
+          </DialogHeader>
+          <Label htmlFor="score-entry-status">Score status</Label>
+          <select
+            id="score-entry-status"
+            className="h-10 rounded-md border bg-white px-3"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as typeof mode)}
+          >
+            <option value="recorded">Recorded score</option>
+            <option value="excused">Excused with reason</option>
+          </select>
+          {mode === "excused" ? (
+            <>
+              <Label htmlFor="score-exemption-reason">Exemption reason</Label>
+              <Input
+                id="score-exemption-reason"
+                value={excuseReason}
+                onChange={(e) => setExcuseReason(e.target.value)}
+              />
+            </>
+          ) : cell?.item.assessmentId ? (
+            <p className="text-sm">
+              This score comes from a completed, graded assessment.{" "}
+              {role === "teacher" && (
+                <Link
+                  className="underline"
+                  href={`/dashboard/teacher/assessments/${cell.item.assessmentId}/edit`}
+                >
+                  Open assessment
+                </Link>
+              )}
+            </p>
+          ) : (
+            <>
+              <Label htmlFor="manual-score">Score / {cell?.item.hps}</Label>
+              <Input
+                id="manual-score"
+                ref={state.editRef}
+                type="number"
+                min={0}
+                max={cell?.item.hps ?? undefined}
+                step="0.01"
+                value={state.editValue}
+                onChange={(e) => state.setEditValue(e.target.value)}
+              />
+            </>
+          )}
+          {mode === "recorded" &&
+            cell?.item.assessmentId &&
+            cell.status === "excused" && (
+              <>
+                <Label htmlFor="restore-assessment-reason">
+                  Correction reason
+                </Label>
+                <Input
+                  id="restore-assessment-reason"
+                  value={excuseReason}
+                  onChange={(e) => setExcuseReason(e.target.value)}
+                />
+                <p className="text-sm">
+                  Restores completed grading evidence only. An ungraded
+                  assessment becomes missing, not zero.
+                </p>
+              </>
+            )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={savingCell}
+              onClick={() => {
+                setCell(null);
+                state.setEditingCell(null);
+              }}
+            >
+              Cancel
+            </Button>
+            {cell?.item.assessmentId &&
+            mode === "recorded" &&
+            cell.status !== "excused" ? (
+              <Button
+                disabled={!!state.syncingItemId}
+                onClick={async () => {
+                  await state.syncItem(cell.item.id);
+                  setCell(null);
+                }}
+              >
+                Synchronize assessment result
+              </Button>
+            ) : (
+              <Button
+                disabled={
+                  savingCell ||
+                  (mode === "excused" || cell?.item.assessmentId
+                    ? !excuseReason.trim()
+                    : !state.editValue.trim())
+                }
+                onClick={() => void saveCell()}
+              >
+                {cell?.item.assessmentId && mode === "recorded"
+                  ? "Restore assessment evidence"
+                  : "Save score evidence"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

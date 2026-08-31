@@ -9,7 +9,7 @@ import { lessonService } from '@/services/lesson-service';
 const pushMock = jest.fn();
 const replaceMock = jest.fn();
 const routerMock = { push: pushMock, replace: replaceMock };
-const searchParamsMock = { get: jest.fn(() => null) };
+const searchParamsMock = { get: jest.fn<string | null, [string]>(() => null) };
 
 jest.mock('next/image', () => ({
   __esModule: true,
@@ -120,7 +120,9 @@ describe('StudentModuleDetailPage library downloads', () => {
         gradingScaleEntries: [],
       } as never,
     });
-    mockedModuleService.downloadAttachedFile.mockResolvedValue(new Blob(['pdf']));
+    mockedModuleService.downloadAttachedFile.mockResolvedValue(
+      new Blob(['pdf']),
+    );
     mockedLessonService.getById.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -139,6 +141,7 @@ describe('StudentModuleDetailPage library downloads', () => {
     });
     mockedLessonService.complete.mockResolvedValue({
       success: true,
+      message: 'Completed',
       data: { completed: true },
     });
     global.URL.createObjectURL = jest.fn(() => 'blob:module-file');
@@ -152,7 +155,9 @@ describe('StudentModuleDetailPage library downloads', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Download' }));
 
     await waitFor(() => {
-      expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith('item-file-1');
+      expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith(
+        'item-file-1',
+      );
     });
   });
 
@@ -217,7 +222,9 @@ describe('StudentModuleDetailPage library downloads', () => {
     expect(await screen.findByText('Deck Preview')).toBeInTheDocument();
     expect(screen.getAllByText('Quarter 1 Slides.pptx')).toHaveLength(2);
     expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
-    expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith('item-pptx-1');
+    expect(mockedModuleService.downloadAttachedFile).toHaveBeenCalledWith(
+      'item-pptx-1',
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /Download deck/i }));
 
@@ -227,7 +234,9 @@ describe('StudentModuleDetailPage library downloads', () => {
   });
 
   it('requires configured checkpoints to be answered before the lesson completion timer unlocks', async () => {
-    searchParamsMock.get.mockImplementation((key: string) => (key === 'lessonId' ? 'lesson-1' : null));
+    searchParamsMock.get.mockImplementation((key: string) =>
+      key === 'lessonId' ? 'lesson-1' : null,
+    );
     mockedModuleService.getByClassAndModule.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -303,8 +312,12 @@ describe('StudentModuleDetailPage library downloads', () => {
 
     render(<StudentModuleDetailPage />);
 
-    expect(await screen.findByText(/Answer all checkpoints correctly/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Mark Complete' })).toBeDisabled();
+    expect(
+      await screen.findByText(/Answer all checkpoints correctly/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Mark Complete' }),
+    ).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: /3/i }));
     expect(await screen.findByText(/Not yet/i)).toBeInTheDocument();
@@ -314,7 +327,9 @@ describe('StudentModuleDetailPage library downloads', () => {
   });
 
   it('renders lesson description content when the module lesson has no block rows', async () => {
-    searchParamsMock.get.mockImplementation((key: string) => (key === 'lessonId' ? 'lesson-1' : null));
+    searchParamsMock.get.mockImplementation((key: string) =>
+      key === 'lessonId' ? 'lesson-1' : null,
+    );
     mockedModuleService.getByClassAndModule.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -374,11 +389,15 @@ describe('StudentModuleDetailPage library downloads', () => {
 
     expect(await screen.findByText('Panimula')).toBeInTheDocument();
     expect(screen.getByText('Mga Karunungang Bayan')).toBeInTheDocument();
-    expect(screen.queryByText('No lesson content available.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No lesson content available.'),
+    ).not.toBeInTheDocument();
   });
 
   it('does not duplicate the lesson hero when a lesson is opened inside the module route', async () => {
-    searchParamsMock.get.mockImplementation((key: string) => (key === 'lessonId' ? 'lesson-1' : null));
+    searchParamsMock.get.mockImplementation((key: string) =>
+      key === 'lessonId' ? 'lesson-1' : null,
+    );
     mockedModuleService.getByClassAndModule.mockResolvedValue({
       success: true,
       message: 'ok',
@@ -446,6 +465,8 @@ describe('StudentModuleDetailPage library downloads', () => {
     await screen.findByText('What I Need To Know');
 
     expect(screen.getAllByRole('link', { name: 'Back' })).toHaveLength(1);
-    expect(screen.getAllByRole('heading', { name: 'Lesson #1', level: 1 })).toHaveLength(1);
+    expect(
+      screen.getAllByRole('heading', { name: 'Lesson #1', level: 1 }),
+    ).toHaveLength(1);
   });
 });

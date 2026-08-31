@@ -20,7 +20,13 @@ jest.mock('@/services/lxp-service', () => ({
 }));
 
 jest.mock('@/components/shared/rich-text/RichTextRenderer', () => ({
-  RichTextRenderer: ({ html, className }: { html: string; className?: string }) => (
+  RichTextRenderer: ({
+    html,
+    className,
+  }: {
+    html: string;
+    className?: string;
+  }) => (
     <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
   ),
 }));
@@ -31,8 +37,12 @@ describe('StudentGeneratedLessonPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLxpService.getGeneratedLesson.mockResolvedValue({
+      success: true,
       data: {
         assignmentId: 'assignment-1',
+        caseId: 'case-1',
+        status: 'assigned',
+        checkpointLabel: 'AI remedial lesson',
         generatedLesson: {
           id: 'generated-lesson-1',
           title: 'Simplified remedial lesson',
@@ -79,14 +89,26 @@ describe('StudentGeneratedLessonPage', () => {
     const { container } = render(<StudentGeneratedLessonPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Simplified remedial lesson' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', { name: 'Simplified remedial lesson' }),
+      ).toBeInTheDocument();
     });
 
     expect(container.querySelector('.student-module-view')).toBeInTheDocument();
-    expect(container.querySelector('.student-module-view__reader')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'What You Need To Focus On' })).toBeInTheDocument();
-    expect(screen.getByText('Elements are represented by symbols')).toBeInTheDocument();
-    expect(screen.queryByText(/## What You Need To Focus On/)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /mark complete/i })).toBeInTheDocument();
+    expect(
+      container.querySelector('.student-module-view__reader'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'What You Need To Focus On' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Elements are represented by symbols'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/## What You Need To Focus On/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /mark complete/i }),
+    ).toBeInTheDocument();
   });
 });

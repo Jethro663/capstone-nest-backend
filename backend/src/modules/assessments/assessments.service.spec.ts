@@ -1,3 +1,7 @@
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
+import { ClassRecordService } from '../class-record/class-record.service';
+import { AcademicCommittedResponse } from '../../database/academic-transaction';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -41,7 +45,7 @@ const MOCK_ASSESSMENT = {
   feedbackLevel: 'immediate',
   feedbackDelayHours: 0,
   classRecordCategory: null,
-  quarter: null,
+  quarter: 'Q1',
   createdAt: new Date('2026-01-01'),
   updatedAt: new Date('2026-01-01'),
   questions: [],
@@ -127,10 +131,16 @@ function buildMockDb() {
       assessments: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentQuestions: { findFirst: jest.fn(), findMany: jest.fn() },
       assessmentQuestionOptions: { findFirst: jest.fn(), findMany: jest.fn() },
-      assessmentAttempts: { findFirst: jest.fn(), findMany: jest.fn() },
+      assessmentAttempts: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       assessmentResponses: { findFirst: jest.fn(), findMany: jest.fn() },
       auditLogs: { findMany: jest.fn() },
-      classRecords: { findFirst: jest.fn() },
+      classRecords: {
+        findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       classRecordCategories: { findFirst: jest.fn() },
       classRecordItems: { findFirst: jest.fn(), findMany: jest.fn() },
       classes: { findFirst: jest.fn() },
@@ -224,7 +234,52 @@ describe('AssessmentsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AssessmentsService,
-        { provide: DatabaseService, useValue: { db } },
+        {
+          provide: DatabaseService,
+          useValue: {
+            db,
+            academicTransaction: async (work: () => Promise<unknown>) => {
+              try {
+                return await work();
+              } catch (error) {
+                if (error instanceof AcademicCommittedResponse)
+                  throw error.responseError;
+                throw error;
+              }
+            },
+            afterAcademicCommit: async (effect: () => unknown) => effect(),
+          },
+        },
+        {
+          provide: ClassRecordService,
+          useValue: {
+            generateClassRecord: jest
+              .fn()
+              .mockResolvedValue({ id: 'auto-record', status: 'draft' }),
+          },
+        },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            currentState: jest.fn().mockResolvedValue({
+              schoolYear: '2025-2026',
+              quarter: 'Q1',
+              policy: getDefaultAcademicPolicy('2025-2026'),
+            }),
+            forClass: jest.fn().mockResolvedValue({
+              cls: {
+                id: CLASS_ID,
+                schoolYear: '2025-2026',
+                isActive: true,
+                teacherId: 'teacher-1',
+              },
+              policy: getDefaultAcademicPolicy('2025-2026'),
+            }),
+            assertAssessmentAction: jest
+              .fn()
+              .mockResolvedValue({ period: { key: 'Q1' } }),
+          },
+        },
         AssessmentAccessService,
         { provide: EventEmitter2, useValue: eventEmitter },
         {
@@ -2217,6 +2272,10 @@ describe('AssessmentsService', () => {
         .mockResolvedValueOnce({
           ...MOCK_FILE_UPLOAD_ASSESSMENT,
           class: { teacherId: 'teacher-1' },
+        } as any)
+        .mockResolvedValueOnce({
+          ...MOCK_FILE_UPLOAD_ASSESSMENT,
+          class: { teacherId: 'teacher-1' },
           rubricCriteria: [
             {
               id: 'criterion-1',
@@ -2249,6 +2308,7 @@ describe('AssessmentsService', () => {
       ]);
       mockUpdate(db);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       const result = await service.uploadRubricSource(
         ASSESSMENT_ID,
         { userId: 'teacher-1', roles: ['teacher'] },
@@ -2299,6 +2359,7 @@ describe('AssessmentsService', () => {
         } as any);
       mockUpdate(db);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       const result = await service.reviewRubric(
         ASSESSMENT_ID,
         { userId: 'teacher-1', roles: ['teacher'] },
@@ -2861,6 +2922,7 @@ describe('AssessmentsService', () => {
       // getQuestionById at the end
       db.query.assessmentQuestions.findFirst.mockResolvedValue(MOCK_QUESTION);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       const result = await service.createQuestion(
         {
           assessmentId: ASSESSMENT_ID,
@@ -2955,6 +3017,7 @@ describe('AssessmentsService', () => {
       mockUpdateReturning(db, [{ ...MOCK_ASSESSMENT, totalPoints: 5 }]);
       db.query.assessmentQuestions.findFirst.mockResolvedValue(MOCK_QUESTION);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       await service.createQuestion(
         {
           assessmentId: ASSESSMENT_ID,
@@ -3053,6 +3116,7 @@ describe('AssessmentsService', () => {
         { ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 6 },
       ]);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       const result = await service.updateQuestion(
         QUESTION_ID,
         { content: 'Updated', points: 6 } as any,
@@ -3095,6 +3159,7 @@ describe('AssessmentsService', () => {
         { ...MOCK_PUBLISHED_ASSESSMENT, totalPoints: 0 },
       ]);
 
+      mockUpdate(db); // Linked workbook HPS follows the assessment total.
       const result = await service.deleteQuestion(QUESTION_ID, {
         userId: 'teacher-1',
         roles: ['teacher'],

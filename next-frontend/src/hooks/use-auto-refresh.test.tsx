@@ -15,7 +15,9 @@ describe('useAutoRefresh', () => {
   });
 
   it('does not overlap async refresh executions', async () => {
-    let resolveFirstRun: (() => void) | null = null;
+    let resolveFirstRun: () => void = () => {
+      throw new Error('Refresh did not start');
+    };
     const callback = jest.fn(
       () =>
         new Promise<void>((resolve) => {

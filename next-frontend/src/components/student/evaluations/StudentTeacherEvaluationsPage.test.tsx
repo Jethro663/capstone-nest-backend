@@ -21,10 +21,14 @@ describe('StudentTeacherEvaluationsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedLxpService.getMySystemEvaluations.mockResolvedValue({
+      success: true,
       data: {
         pending: [
           {
             id: 'assignment-system',
+            campaignId: 'campaign-1',
+            audienceRole: 'student',
+            classId: null,
             formType: 'system',
             targetModule: 'overall',
             title: 'System Pulse',
@@ -33,11 +37,30 @@ describe('StudentTeacherEvaluationsPage', () => {
             endsAt: '2026-05-20T00:00:00.000Z',
             status: 'pending',
             questions: [
-              { key: 'system_navigation', label: 'The system is easy to navigate and I can find what I need.' },
-              { key: 'system_features', label: 'The features I use work correctly.' },
-              { key: 'system_speed', label: 'Pages, submissions, and dashboards load fast enough during normal use.' },
-              { key: 'system_efficiency', label: 'The system helps me complete school tasks more efficiently.' },
-              { key: 'system_satisfaction', label: 'Overall, I am satisfied with my experience using the system.' },
+              {
+                key: 'system_navigation',
+                label:
+                  'The system is easy to navigate and I can find what I need.',
+              },
+              {
+                key: 'system_features',
+                label: 'The features I use work correctly.',
+              },
+              {
+                key: 'system_speed',
+                label:
+                  'Pages, submissions, and dashboards load fast enough during normal use.',
+              },
+              {
+                key: 'system_efficiency',
+                label:
+                  'The system helps me complete school tasks more efficiently.',
+              },
+              {
+                key: 'system_satisfaction',
+                label:
+                  'Overall, I am satisfied with my experience using the system.',
+              },
             ],
           },
         ],
@@ -50,7 +73,9 @@ describe('StudentTeacherEvaluationsPage', () => {
         pending: [],
         completed: [],
       },
-    } as Awaited<ReturnType<typeof lxpService.getStudentTeacherEvaluationDashboard>>);
+    } as Awaited<
+      ReturnType<typeof lxpService.getStudentTeacherEvaluationDashboard>
+    >);
     mockedLxpService.submitAssignedSystemEvaluation.mockResolvedValue({
       data: { id: 'evaluation-1' },
     } as Awaited<ReturnType<typeof lxpService.submitAssignedSystemEvaluation>>);
@@ -62,27 +87,36 @@ describe('StudentTeacherEvaluationsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'System' }));
     fireEvent.click(screen.getByRole('button', { name: /System Pulse/i }));
 
-    fireEvent.click(screen.getByRole('button', { name: /system_navigation 0 stars/i }));
-    fireEvent.click(screen.getByRole('button', { name: /system_features 5 stars/i }));
-    fireEvent.click(screen.getByRole('button', { name: /system_speed 5 stars/i }));
-    fireEvent.click(screen.getByRole('button', { name: /system_efficiency 5 stars/i }));
-    fireEvent.click(screen.getByRole('button', { name: /system_satisfaction 5 stars/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /system_navigation 0 stars/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /system_features 5 stars/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /system_speed 5 stars/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /system_efficiency 5 stars/i }),
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /system_satisfaction 5 stars/i }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Submit Evaluation' }));
 
     await waitFor(() =>
-      expect(mockedLxpService.submitAssignedSystemEvaluation).toHaveBeenCalledWith(
-        'assignment-system',
-        {
-          questionRatings: {
-            system_navigation: 0,
-            system_features: 5,
-            system_speed: 5,
-            system_efficiency: 5,
-            system_satisfaction: 5,
-          },
-          feedback: undefined,
+      expect(
+        mockedLxpService.submitAssignedSystemEvaluation,
+      ).toHaveBeenCalledWith('assignment-system', {
+        questionRatings: {
+          system_navigation: 0,
+          system_features: 5,
+          system_speed: 5,
+          system_efficiency: 5,
+          system_satisfaction: 5,
         },
-      ),
+        feedback: undefined,
+      }),
     );
     expect(mockedLxpService.getMySystemEvaluations).toHaveBeenCalledTimes(2);
   });

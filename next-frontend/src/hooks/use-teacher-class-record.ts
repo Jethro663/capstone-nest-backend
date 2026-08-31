@@ -1,338 +1,43 @@
-'use client';
+"use client";
 
-import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ExcelJS from 'exceljs';
-import { toast } from 'sonner';
-import { classRecordService } from '@/services/class-record-service';
-import { exportClassRecordTemplateWorkbook } from '@/lib/class-record-template-export';
-import { downloadXlsxBuffer } from '@/lib/download-xlsx-buffer';
+import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { classRecordService } from "@/services/class-record-service";
+import { classService } from "@/services/class-service";
+import { academicStateService } from "@/services/academic-state-service";
+import { exportAcademicWorkbook } from "@/lib/academic-workbook-export";
+import { getApiErrorMessage } from "@/lib/api-error";
+import type { ClassRecord, SpreadsheetData } from "@/types/class-record";
 import type {
-  ClassRecord,
-  SpreadsheetData,
-} from '@/types/class-record';
-import type { GradingPeriod } from '@/utils/constants';
+  AcademicPolicy,
+  PeriodReadiness,
+  PeriodRoster,
+  ConfirmPeriodRoster,
+  PeriodHistory,
+  AnnualSummary,
+} from "@/types/academic-grading";
+import type { GradingPeriod } from "@/utils/constants";
 
-const QUARTERS: GradingPeriod[] = ['Q1', 'Q2', 'Q3', 'Q4'];
-
-function getErrorMessage(error: unknown, fallback: string) {
-  return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data
-      ?.message || fallback
-  );
-}
-
-type MergeRange = { s: { r: number; c: number }; e: { r: number; c: number } };
-
-function getWorkbookSheetName(spreadsheet: SpreadsheetData, selectedRecord: ClassRecord) {
-  const explicitName = spreadsheet.header.workbookSheetName?.trim();
-  if (explicitName) return explicitName;
-
-  const subjectCode = spreadsheet.header.subjectCode?.trim();
-  if (subjectCode) {
-    return subjectCode.split('-')[0];
-  }
-
-  const subject = spreadsheet.header.subject?.trim();
-  if (subject) {
-    return subject
-      .toUpperCase()
-      .replace(/[^A-Z0-9 ]/g, '')
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(' ')
-      .slice(0, 31);
-  }
-
-  return selectedRecord.gradingPeriod;
-}
-
-function getWorkbookTitle(spreadsheet: SpreadsheetData) {
-  return spreadsheet.header.workbookTitle || 'Class Record';
-}
-
-function getWorkbookSubtitle(spreadsheet: SpreadsheetData) {
-  return (
-    spreadsheet.header.workbookSubtitle ||
-    '(Pursuant to DepEd Order 8 series of 2015)'
-  );
-}
-
-function getQuarterTitle(quarter: string) {
-  const titles: Record<string, string> = {
-    Q1: 'FIRST QUARTER',
-    Q2: 'SECOND QUARTER',
-    Q3: 'THIRD QUARTER',
-    Q4: 'FOURTH QUARTER',
-  };
-
-  return titles[quarter] ?? quarter;
-}
-
-function getCategoryByName(spreadsheet: SpreadsheetData, token: string) {
-  return spreadsheet.categories.find((category) =>
-    category.name.toLowerCase().includes(token),
-  );
-}
-
-function getCategoryTotalHps(category: SpreadsheetData['categories'][number] | undefined) {
-  if (!category) return '';
-  return (
-    category.totalHps ??
-    category.items.reduce((sum, item) => sum + (item.hps || 0), 0)
-  );
-}
-
-async function exportWorkbook(
-  spreadsheet: SpreadsheetData,
-  selectedRecord: ClassRecord,
-) {
-  const sheetName = getWorkbookSheetName(spreadsheet, selectedRecord);
-  const workbookTitle = getWorkbookTitle(spreadsheet);
-  const workbookSubtitle = getWorkbookSubtitle(spreadsheet);
-  const rows: (string | number)[][] = Array.from({ length: 10 }, () =>
-    Array.from({ length: 36 }, () => ''),
-  );
-
-  rows[0][0] = workbookTitle;
-  rows[2][0] = workbookSubtitle;
-  rows[3][2] = 'REGION';
-  rows[3][6] = spreadsheet.header.region || '';
-  rows[3][11] = 'DIVISION';
-  rows[3][14] = spreadsheet.header.division || '';
-  rows[3][19] = 'DISTRICT';
-  rows[3][23] = spreadsheet.header.district || '';
-  rows[4][1] = 'SCHOOL NAME';
-  rows[4][6] = spreadsheet.header.schoolName || 'Gat Andres Bonifacio High School';
-  rows[4][19] = 'SCHOOL ID';
-  rows[4][23] = spreadsheet.header.schoolId || '';
-  rows[4][29] = 'SCHOOL YEAR';
-  rows[4][32] = spreadsheet.header.schoolYear || '';
-  rows[6][0] = getQuarterTitle(spreadsheet.header.quarter);
-  rows[6][5] = 'GRADE & SECTION:';
-  rows[6][10] = `${spreadsheet.header.gradeLevel ? `GRADE ${spreadsheet.header.gradeLevel}` : ''}${spreadsheet.header.section ? ` - ${spreadsheet.header.section}` : ''}`;
-  rows[6][16] = 'TEACHER:';
-  rows[6][18] = spreadsheet.header.teacher || '';
-  rows[6][28] = 'SUBJECT:';
-  rows[6][32] = spreadsheet.header.subject || '';
-  rows[7][1] = "LEARNERS' NAMES";
-
-  const writtenCategory = getCategoryByName(spreadsheet, 'written');
-  const performanceCategory = getCategoryByName(spreadsheet, 'performance');
-  const quarterlyCategory = getCategoryByName(spreadsheet, 'quarterly');
-
-  rows[7][5] = `${(writtenCategory?.name || 'WRITTEN WORKS').toUpperCase()} (${Math.round(writtenCategory?.weight || 0)}%)`;
-  rows[7][18] = `${(performanceCategory?.name || 'PERFORMANCE TASKS').toUpperCase()} (${Math.round(performanceCategory?.weight || 0)}%)`;
-  rows[7][31] = `${(quarterlyCategory?.name || 'QUARTERLY ASSESSMENT').toUpperCase()} (${Math.round(quarterlyCategory?.weight || 0)}%)`;
-  rows[7][34] = 'Initial';
-  rows[7][35] = 'Quarterly';
-
-  for (let index = 0; index < 10; index++) {
-    rows[8][5 + index] = index + 1;
-    rows[8][18 + index] = index + 1;
-  }
-  rows[8][15] = 'Total';
-  rows[8][16] = 'PS';
-  rows[8][17] = 'WS';
-  rows[8][28] = 'Total';
-  rows[8][29] = 'PS';
-  rows[8][30] = 'WS';
-  rows[8][31] = 1;
-  rows[8][32] = 'PS';
-  rows[8][33] = 'WS';
-
-  rows[9][1] = 'HIGHEST POSSIBLE SCORE';
-  Array.from({ length: 10 }).forEach((_, index) => {
-    rows[9][5 + index] = writtenCategory?.items[index]?.hps ?? '';
-    rows[9][18 + index] = performanceCategory?.items[index]?.hps ?? '';
-  });
-  rows[9][15] = getCategoryTotalHps(writtenCategory);
-  rows[9][16] = 100;
-  rows[9][17] = writtenCategory ? Number((writtenCategory.weight / 100).toFixed(1)) : '';
-  rows[9][28] = getCategoryTotalHps(performanceCategory);
-  rows[9][29] = 100;
-  rows[9][30] = performanceCategory ? Number((performanceCategory.weight / 100).toFixed(1)) : '';
-  rows[9][31] = quarterlyCategory?.items[0]?.hps ?? '';
-  rows[9][32] = 100;
-  rows[9][33] = quarterlyCategory ? Number((quarterlyCategory.weight / 100).toFixed(1)) : '';
-
-  const merges: MergeRange[] = [
-    { s: { r: 0, c: 0 }, e: { r: 1, c: 35 } },
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 35 } },
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 5 } },
-    { s: { r: 3, c: 6 }, e: { r: 3, c: 9 } },
-    { s: { r: 3, c: 11 }, e: { r: 3, c: 13 } },
-    { s: { r: 3, c: 14 }, e: { r: 3, c: 17 } },
-    { s: { r: 3, c: 19 }, e: { r: 3, c: 22 } },
-    { s: { r: 3, c: 23 }, e: { r: 3, c: 27 } },
-    { s: { r: 4, c: 1 }, e: { r: 4, c: 5 } },
-    { s: { r: 4, c: 6 }, e: { r: 4, c: 17 } },
-    { s: { r: 4, c: 19 }, e: { r: 4, c: 22 } },
-    { s: { r: 4, c: 23 }, e: { r: 4, c: 28 } },
-    { s: { r: 4, c: 29 }, e: { r: 4, c: 31 } },
-    { s: { r: 4, c: 32 }, e: { r: 4, c: 34 } },
-    { s: { r: 6, c: 0 }, e: { r: 6, c: 4 } },
-    { s: { r: 6, c: 5 }, e: { r: 6, c: 9 } },
-    { s: { r: 6, c: 10 }, e: { r: 6, c: 15 } },
-    { s: { r: 6, c: 16 }, e: { r: 6, c: 17 } },
-    { s: { r: 6, c: 18 }, e: { r: 6, c: 27 } },
-    { s: { r: 6, c: 28 }, e: { r: 6, c: 31 } },
-    { s: { r: 6, c: 32 }, e: { r: 6, c: 35 } },
-    { s: { r: 7, c: 1 }, e: { r: 7, c: 4 } },
-    { s: { r: 7, c: 5 }, e: { r: 7, c: 17 } },
-    { s: { r: 7, c: 18 }, e: { r: 7, c: 30 } },
-    { s: { r: 7, c: 31 }, e: { r: 7, c: 33 } },
-    { s: { r: 8, c: 34 }, e: { r: 9, c: 34 } },
-    { s: { r: 8, c: 35 }, e: { r: 9, c: 35 } },
-    { s: { r: 9, c: 1 }, e: { r: 9, c: 4 } },
-  ];
-
-  const genderGroups = [
-    {
-      label: 'MALE',
-      students: spreadsheet.students.filter((student) =>
-        ['male', 'm'].includes((student.gender || '').toLowerCase()),
-      ),
-    },
-    {
-      label: 'FEMALE',
-      students: spreadsheet.students.filter((student) =>
-        ['female', 'f'].includes((student.gender || '').toLowerCase()),
-      ),
-    },
-    {
-      label: 'UNSPECIFIED',
-      students: spreadsheet.students.filter(
-        (student) =>
-          !['male', 'm', 'female', 'f'].includes((student.gender || '').toLowerCase()),
-      ),
-    },
-  ].filter((group) => group.students.length > 0);
-
-  let rowIndex = rows.length;
-  let studentCounter = 1;
-
-  genderGroups.forEach((group) => {
-    const groupRow = Array.from({ length: 36 }, () => '') as (string | number)[];
-    groupRow[1] = group.label;
-    rows.push(groupRow);
-    merges.push({ s: { r: rowIndex, c: 1 }, e: { r: rowIndex, c: 4 } });
-    rowIndex += 1;
-
-    group.students.forEach((student) => {
-      const row = Array.from({ length: 36 }, () => '') as (string | number)[];
-      row[0] = studentCounter++;
-      row[1] = `${student.lastName}, ${student.firstName}${student.middleName ? `, ${student.middleName.charAt(0)}.` : ''}`;
-
-      const writtenData = student.categories.find(
-        (category) => category.categoryId === writtenCategory?.id,
-      );
-      const performanceData = student.categories.find(
-        (category) => category.categoryId === performanceCategory?.id,
-      );
-      const quarterlyData = student.categories.find(
-        (category) => category.categoryId === quarterlyCategory?.id,
-      );
-
-      Array.from({ length: 10 }).forEach((_, index) => {
-        row[5 + index] = writtenData?.scores[index] ?? '';
-        row[18 + index] = performanceData?.scores[index] ?? '';
-      });
-
-      row[15] = writtenData?.total ?? '';
-      row[16] = writtenData ? Number(writtenData.ps.toFixed(2)) : '';
-      row[17] = writtenData ? Number(writtenData.ws.toFixed(2)) : '';
-      row[28] = performanceData?.total ?? '';
-      row[29] = performanceData ? Number(performanceData.ps.toFixed(2)) : '';
-      row[30] = performanceData ? Number(performanceData.ws.toFixed(2)) : '';
-      row[31] = quarterlyData?.scores[0] ?? '';
-      row[32] = quarterlyData ? Number(quarterlyData.ps.toFixed(2)) : '';
-      row[33] = quarterlyData ? Number(quarterlyData.ws.toFixed(2)) : '';
-      row[34] = Number(student.initialGrade.toFixed(2));
-      row[35] = student.quarterlyGrade;
-
-      rows.push(row);
-      merges.push({ s: { r: rowIndex, c: 1 }, e: { r: rowIndex, c: 4 } });
-      rowIndex += 1;
-    });
-  });
-
-  if (genderGroups.length === 0) {
-    spreadsheet.students.forEach((student, index) => {
-      const row = Array.from({ length: 36 }, () => '') as (string | number)[];
-      row[0] = index + 1;
-      row[1] = `${student.lastName}, ${student.firstName}${student.middleName ? `, ${student.middleName.charAt(0)}.` : ''}`;
-      rows.push(row);
-      merges.push({ s: { r: rowIndex, c: 1 }, e: { r: rowIndex, c: 4 } });
-      rowIndex += 1;
-    });
-  }
-
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet(sheetName.slice(0, 31));
-  rows.forEach((row) => {
-    worksheet.addRow(row);
-  });
-  merges.forEach((merge) => {
-    worksheet.mergeCells(
-      merge.s.r + 1,
-      merge.s.c + 1,
-      merge.e.r + 1,
-      merge.e.c + 1,
-    );
-  });
-  worksheet.columns = [
-    { wch: 4.14 },
-    { wch: 7 },
-    { wch: 7 },
-    { wch: 7 },
-    { wch: 7 },
-    ...Array.from({ length: 10 }, () => ({ wch: 4.43 })),
-    { wch: 6.29 },
-    { wch: 7.14 },
-    { wch: 7.14 },
-    ...Array.from({ length: 10 }, () => ({ wch: 4.43 })),
-    { wch: 6.29 },
-    { wch: 7.14 },
-    { wch: 7.14 },
-    { wch: 6.29 },
-    { wch: 7.14 },
-    { wch: 7.14 },
-    { wch: 10.29 },
-    { wch: 10.29 },
-  ].map((column) => ({ width: column.wch }));
-  [
-    { hpt: 15 },
-    { hpt: 15 },
-    { hpt: 15 },
-    { hpt: 21 },
-    { hpt: 21.75 },
-    { hpt: 15.75 },
-    { hpt: 23.25 },
-    { hpt: 32 },
-    { hpt: 18 },
-    { hpt: 18 },
-  ].forEach((row, index) => {
-    worksheet.getRow(index + 1).height = row.hpt;
-  });
-  const output = await workbook.xlsx.writeBuffer();
-  downloadXlsxBuffer(
-    output,
-    `class-record-${selectedRecord.gradingPeriod}-${selectedRecord.classId}.xlsx`,
-  );
-}
-
+export type ClassRecordLoadStatus = "idle" | "loading" | "ready" | "error";
 export interface TeacherClassRecordState {
+  classId?: string;
+  policy: AcademicPolicy | null;
   classRecords: ClassRecord[];
   selectedRecord: ClassRecord | null;
   spreadsheet: SpreadsheetData | null;
+  readiness: PeriodReadiness | null;
+  roster: PeriodRoster | null;
+  history: PeriodHistory | null;
+  annualSummary: AnnualSummary | null;
   recordsStatus: ClassRecordLoadStatus;
   spreadsheetStatus: ClassRecordLoadStatus;
   quarters: GradingPeriod[];
+  periodLabel: (period: string) => string;
   generating: boolean;
   finalizing: boolean;
   reopening: boolean;
+  savingRoster: boolean;
   syncingItemId: string | null;
   editingCell: { itemId: string; studentId: string } | null;
   editValue: string;
@@ -345,377 +50,478 @@ export interface TeacherClassRecordState {
   setHpsValue: (value: string) => void;
   setEditingCell: (value: { itemId: string; studentId: string } | null) => void;
   refresh: () => Promise<void>;
-  generateQuarter: (quarter: GradingPeriod) => Promise<void>;
-  finalizeQuarter: () => Promise<void>;
-  reopenQuarter: () => Promise<void>;
+  refreshEvidence: () => Promise<void>;
+  loadHistory: () => Promise<void>;
+  loadAnnual: () => Promise<void>;
+  confirmRoster: (payload: ConfirmPeriodRoster) => Promise<boolean>;
+  restoreAssessmentEvidence: (
+    itemId: string,
+    studentId: string,
+    reason: string,
+  ) => Promise<boolean>;
+  excuseScore: (
+    itemId: string,
+    studentId: string,
+    reason: string,
+  ) => Promise<boolean>;
+  generateQuarter: (period: GradingPeriod) => Promise<void>;
+  finalizeQuarter: () => Promise<boolean>;
+  reopenQuarter: (reason: string) => Promise<boolean>;
   handleCellClick: (
     itemId: string,
     studentId: string,
-    currentScore: number | null,
+    score: number | null,
     options?: { maxScore?: number | null; assessmentId?: string },
   ) => void;
-  handleCellSave: () => Promise<void>;
-  handleCellKeyDown: (e: ReactKeyboardEvent) => void;
+  handleCellSave: () => Promise<boolean>;
+  handleCellKeyDown: (event: ReactKeyboardEvent) => void;
   handleHpsClick: (
     itemId: string,
-    currentHps: number | null,
+    hps: number | null,
     assessmentId?: string,
   ) => void;
   handleHpsSave: () => Promise<void>;
-  handleHpsKeyDown: (e: ReactKeyboardEvent) => void;
+  handleHpsKeyDown: (event: ReactKeyboardEvent) => void;
   syncItem: (itemId: string) => Promise<void>;
   exportSpreadsheet: () => Promise<void>;
 }
 
-export type ClassRecordLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
-
-export function useTeacherClassRecord(classId?: string): TeacherClassRecordState {
+export function useTeacherClassRecord(
+  classId?: string,
+): TeacherClassRecordState {
   const [classRecords, setClassRecords] = useState<ClassRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<AcademicPolicy | null>(null);
   const [spreadsheet, setSpreadsheet] = useState<SpreadsheetData | null>(null);
+  const [readiness, setReadiness] = useState<PeriodReadiness | null>(null);
+  const [roster, setRoster] = useState<PeriodRoster | null>(null);
+  const [history, setHistory] = useState<PeriodHistory | null>(null);
+  const [annualSummary, setAnnualSummary] = useState<AnnualSummary | null>(
+    null,
+  );
   const [recordsStatus, setRecordsStatus] =
-    useState<ClassRecordLoadStatus>('idle');
+    useState<ClassRecordLoadStatus>("idle");
   const [spreadsheetStatus, setSpreadsheetStatus] =
-    useState<ClassRecordLoadStatus>('idle');
-  const [spreadsheetRefreshVersion, setSpreadsheetRefreshVersion] = useState(0);
+    useState<ClassRecordLoadStatus>("idle");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [savingRoster, setSavingRoster] = useState(false);
   const [syncingItemId, setSyncingItemId] = useState<string | null>(null);
-  const [editingCell, setEditingCell] = useState<{ itemId: string; studentId: string } | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [editingCell, setEditingCell] = useState<{
+    itemId: string;
+    studentId: string;
+  } | null>(null);
+  const [editValue, setEditValue] = useState("");
   const [editingHpsItemId, setEditingHpsItemId] = useState<string | null>(null);
-  const [hpsValue, setHpsValue] = useState('');
+  const [hpsValue, setHpsValue] = useState("");
   const editRef = useRef<HTMLInputElement>(null);
   const hpsEditRef = useRef<HTMLInputElement>(null);
-  const recordsClassIdRef = useRef<string | undefined>(undefined);
-  const hasRecordsResultRef = useRef(false);
-  const spreadsheetRecordIdRef = useRef<string | null>(null);
-  const hasSpreadsheetResultRef = useRef(false);
-
+  const recordsRequest = useRef(0);
+  const sheetRequest = useRef(0);
+  const loadedClass = useRef<string | undefined>(undefined);
+  const loadedRecord = useRef<string | null>(null);
   const selectedRecord = useMemo(
     () => classRecords.find((record) => record.id === selectedRecordId) ?? null,
     [classRecords, selectedRecordId],
   );
+  const fail = (error: unknown, fallback: string) =>
+    toast.error(getApiErrorMessage(error, fallback));
 
   const refresh = useCallback(async () => {
-    if (!classId) {
-      recordsClassIdRef.current = undefined;
-      hasRecordsResultRef.current = false;
-      spreadsheetRecordIdRef.current = null;
-      hasSpreadsheetResultRef.current = false;
+    const request = ++recordsRequest.current;
+    if (loadedClass.current !== classId) {
+      loadedClass.current = classId;
+      loadedRecord.current = null;
+      ++sheetRequest.current;
       setClassRecords([]);
       setSelectedRecordId(null);
       setSpreadsheet(null);
-      setRecordsStatus('idle');
-      setSpreadsheetStatus('idle');
-      return;
+      setPolicy(null);
+      setReadiness(null);
+      setRoster(null);
+      setHistory(null);
+      setAnnualSummary(null);
+      setSpreadsheetStatus("idle");
+      setRecordsStatus(classId ? "loading" : "idle");
     }
-
-    if (recordsClassIdRef.current !== classId) {
-      recordsClassIdRef.current = classId;
-      hasRecordsResultRef.current = false;
-      spreadsheetRecordIdRef.current = null;
-      hasSpreadsheetResultRef.current = false;
-      setClassRecords([]);
-      setSelectedRecordId(null);
-      setSpreadsheet(null);
-      setSpreadsheetStatus('idle');
-    }
-
-    if (!hasRecordsResultRef.current) {
-      setRecordsStatus('loading');
-    }
-
+    if (!classId) return;
     try {
-      const res = await classRecordService.getByClass(classId);
-      const records = Array.isArray(res.data) ? res.data : [];
-      hasRecordsResultRef.current = true;
-      setClassRecords(records);
-      setSelectedRecordId((current) => {
-        if (records.length === 0) return null;
-        return records.some((record) => record.id === current)
-          ? current
-          : records[0].id;
-      });
-      if (records.length === 0) {
-        spreadsheetRecordIdRef.current = null;
-        hasSpreadsheetResultRef.current = false;
-        setSpreadsheet(null);
-        setSpreadsheetStatus('idle');
-      } else {
-        setSpreadsheetRefreshVersion((version) => version + 1);
-      }
-      setRecordsStatus('ready');
-    } catch {
-      setRecordsStatus('error');
-      toast.error('Failed to load class records');
+      const [records, cls, active] = await Promise.all([
+        classRecordService.getByClass(classId),
+        classService.getById(classId),
+        academicStateService.getCurrent(),
+      ]);
+      const yearPolicy =
+        cls.data.schoolYear === active.data.schoolYear
+          ? active.data.policy
+          : (await academicStateService.getPolicy(cls.data.schoolYear)).data;
+      if (request !== recordsRequest.current) return;
+      setPolicy(yearPolicy);
+      setClassRecords(records.data);
+      setRecordsStatus("ready");
+      setSelectedRecordId((previous) =>
+        records.data.some((record) => record.id === previous)
+          ? previous
+          : (records.data.find(
+              (record) => record.gradingPeriod === active.data.quarter,
+            )?.id ??
+            records.data[0]?.id ??
+            null),
+      );
+      setRefreshVersion((version) => version + 1);
+    } catch (error) {
+      if (request !== recordsRequest.current) return;
+      setRecordsStatus("error");
+      fail(error, "Class records could not be loaded.");
     }
   }, [classId]);
-
   useEffect(() => {
     setEditingCell(null);
-    setEditValue('');
     setEditingHpsItemId(null);
-    setHpsValue('');
     void refresh();
+    const recordsCounter = recordsRequest;
+    const sheetCounter = sheetRequest;
+    return () => {
+      ++recordsCounter.current;
+      ++sheetCounter.current;
+    };
   }, [refresh]);
 
-  const reloadSelectedSpreadsheet = useCallback(async () => {
+  const refreshEvidence = useCallback(async () => {
+    const request = ++sheetRequest.current;
     if (!selectedRecordId) {
-      spreadsheetRecordIdRef.current = null;
-      hasSpreadsheetResultRef.current = false;
       setSpreadsheet(null);
-      setSpreadsheetStatus('idle');
+      setReadiness(null);
+      setRoster(null);
+      setHistory(null);
+      setSpreadsheetStatus("idle");
       return;
     }
-
-    if (spreadsheetRecordIdRef.current !== selectedRecordId) {
-      spreadsheetRecordIdRef.current = selectedRecordId;
-      hasSpreadsheetResultRef.current = false;
+    if (loadedRecord.current !== selectedRecordId) {
+      loadedRecord.current = selectedRecordId;
       setSpreadsheet(null);
+      setReadiness(null);
+      setRoster(null);
+      setHistory(null);
+      setSpreadsheetStatus("loading");
     }
-
-    if (!hasSpreadsheetResultRef.current) {
-      setSpreadsheetStatus('loading');
-    }
-
     try {
-      const res = await classRecordService.getSpreadsheet(selectedRecordId);
-      hasSpreadsheetResultRef.current = true;
-      setSpreadsheet(res.data);
-      setSpreadsheetStatus('ready');
-    } catch {
-      toast.error('Failed to load spreadsheet');
-      setSpreadsheetStatus('error');
+      const [sheet, ready, register] = await Promise.all([
+        classRecordService.getSpreadsheet(selectedRecordId),
+        classRecordService.readiness(selectedRecordId),
+        classRecordService.roster(selectedRecordId),
+      ]);
+      if (request !== sheetRequest.current) return;
+      setSpreadsheet(sheet.data);
+      setReadiness(ready.data);
+      setRoster(register.data);
+      setSpreadsheetStatus("ready");
+      setHistory(null);
+      setAnnualSummary(null);
+    } catch (error) {
+      if (request !== sheetRequest.current) return;
+      setSpreadsheetStatus("error");
+      fail(error, "The workbook and its readiness could not be loaded.");
     }
   }, [selectedRecordId]);
-
   useEffect(() => {
-    void reloadSelectedSpreadsheet();
-  }, [reloadSelectedSpreadsheet, spreadsheetRefreshVersion]);
-
+    setEditingCell(null);
+    setEditingHpsItemId(null);
+    void refreshEvidence();
+    const sheetCounter = sheetRequest;
+    return () => {
+      ++sheetCounter.current;
+    };
+  }, [refreshEvidence, refreshVersion]);
+  const loadHistory = useCallback(async () => {
+    if (!selectedRecordId) return;
+    const id = selectedRecordId;
+    try {
+      const result = await classRecordService.history(id);
+      if (loadedRecord.current === id) setHistory(result.data);
+    } catch (error) {
+      fail(error, "Revision history could not be loaded.");
+    }
+  }, [selectedRecordId]);
+  const loadAnnual = useCallback(async () => {
+    if (!classId) return;
+    try {
+      const result = await classRecordService.annualSummary(classId);
+      if (loadedClass.current === classId) setAnnualSummary(result.data);
+    } catch (error) {
+      fail(error, "Annual evidence could not be loaded.");
+    }
+  }, [classId]);
   const generateQuarter = useCallback(
-    async (quarter: GradingPeriod) => {
-      if (!classId) return;
-
+    async (period: GradingPeriod) => {
+      if (!classId || !policy?.periods.some((p) => p.key === period)) return;
+      setGenerating(true);
       try {
-        setGenerating(true);
-        await classRecordService.generate({ classId, gradingPeriod: quarter });
-        toast.success(`Class record for ${quarter} generated`);
+        const created = await classRecordService.generate({
+          classId,
+          gradingPeriod: period,
+        });
+        await refresh();
+        setSelectedRecordId(created.data.id);
+        toast.success(
+          "Period workbook created. Confirm its eligibility register before finalizing.",
+        );
       } catch (error) {
-        const status = (error as { response?: { status?: number } })?.response?.status;
-        if (status === 409) {
-          toast.info(`${quarter} record already exists - loading it now`);
-        } else {
-          toast.error(getErrorMessage(error, 'Failed to generate class record'));
-          return;
-        }
+        fail(error, "Workbook generation failed.");
       } finally {
         setGenerating(false);
       }
-
-      try {
-        const refreshed = await classRecordService.getByClass(classId);
-        const records = Array.isArray(refreshed.data) ? refreshed.data : [];
-        setClassRecords(records);
-        const target = records.find((record) => record.gradingPeriod === quarter);
-        setSelectedRecordId(target?.id ?? records[0]?.id ?? null);
-        if (!target && records.length === 0) {
-          setSpreadsheet(null);
-        }
-      } catch {
-        toast.error('Failed to reload class records');
-      }
     },
-    [classId],
+    [classId, policy, refresh],
   );
-
   const finalizeQuarter = useCallback(async () => {
-    if (!selectedRecord) return;
-
+    if (
+      !selectedRecord ||
+      !readiness?.ready ||
+      !spreadsheet?.academicCapabilities?.canGrade
+    )
+      return false;
+    setFinalizing(true);
     try {
-      setFinalizing(true);
       await classRecordService.finalize(selectedRecord.id);
-      toast.success('Quarter finalized');
       await refresh();
-    } catch {
-      toast.error('Failed to finalize class record');
+      toast.success("Period finalized with an immutable grade revision.");
+      return true;
+    } catch (error) {
+      fail(error, "Finalization was rejected. Refresh readiness.");
+      await refreshEvidence();
+      return false;
     } finally {
       setFinalizing(false);
     }
-  }, [refresh, selectedRecord]);
-
-  const reopenQuarter = useCallback(async () => {
-    if (!selectedRecord) return;
-
-    try {
+  }, [selectedRecord, readiness, spreadsheet, refresh, refreshEvidence]);
+  const reopenQuarter = useCallback(
+    async (reason: string) => {
+      if (!selectedRecord || !reason.trim() || !spreadsheet?.canReopen)
+        return false;
       setReopening(true);
-      await classRecordService.reopen(selectedRecord.id);
-      toast.success('Quarter reopened for editing');
-      await refresh();
-    } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to reopen class record'));
-    } finally {
-      setReopening(false);
-    }
-  }, [refresh, selectedRecord]);
-
+      try {
+        await classRecordService.reopen(selectedRecord.id, reason);
+        await refresh();
+        toast.success(
+          "Record reopened. Dependent annual results must be recomputed after correction.",
+        );
+        return true;
+      } catch (error) {
+        fail(error, "Reopening was rejected.");
+        return false;
+      } finally {
+        setReopening(false);
+      }
+    },
+    [selectedRecord, spreadsheet, refresh],
+  );
+  const confirmRoster = useCallback(
+    async (payload: ConfirmPeriodRoster) => {
+      if (!selectedRecordId) return false;
+      setSavingRoster(true);
+      try {
+        await classRecordService.confirmRoster(selectedRecordId, payload);
+        await refreshEvidence();
+        toast.success("Period eligibility confirmed.");
+        return true;
+      } catch (error) {
+        fail(error, "Eligibility confirmation was rejected.");
+        return false;
+      } finally {
+        setSavingRoster(false);
+      }
+    },
+    [selectedRecordId, refreshEvidence],
+  );
+  const excuseScore = useCallback(
+    async (itemId: string, studentId: string, reason: string) => {
+      if (!reason.trim() || !spreadsheet?.academicCapabilities?.canGrade)
+        return false;
+      try {
+        await classRecordService.recordScore(itemId, {
+          studentId,
+          status: "excused",
+          score: null,
+          reason,
+        });
+        await refreshEvidence();
+        return true;
+      } catch (error) {
+        fail(error, "Exemption was rejected.");
+        return false;
+      }
+    },
+    [spreadsheet, refreshEvidence],
+  );
+  const restoreAssessmentEvidence = useCallback(
+    async (itemId: string, studentId: string, reason: string) => {
+      if (!reason.trim() || !spreadsheet?.academicCapabilities?.canGrade)
+        return false;
+      try {
+        await classRecordService.restoreAssessmentEvidence(
+          itemId,
+          studentId,
+          reason,
+        );
+        await refreshEvidence();
+        return true;
+      } catch (error) {
+        fail(error, "Assessment evidence restoration was rejected.");
+        return false;
+      }
+    },
+    [spreadsheet, refreshEvidence],
+  );
   const handleCellClick = useCallback(
     (
       itemId: string,
       studentId: string,
-      currentScore: number | null,
+      score: number | null,
       options?: { maxScore?: number | null; assessmentId?: string },
     ) => {
-      if (selectedRecord?.status !== 'draft') return;
+      if (!spreadsheet?.academicCapabilities?.canGrade) return;
       if (options?.assessmentId) {
-        toast.info('Linked assessment slots must be edited from assessment settings');
+        toast.info("Grade the linked assessment and synchronize its result.");
         return;
       }
       if ((options?.maxScore ?? 0) <= 0) {
-        toast.error('Set highest possible score first');
+        toast.error("Set highest possible score first.");
         return;
       }
-
+      if (
+        roster?.participants.find((p) => p.studentId === studentId)
+          ?.eligibility !== "eligible"
+      ) {
+        toast.error("Confirm this learner as eligible before scoring.");
+        return;
+      }
       setEditingHpsItemId(null);
-      setHpsValue('');
       setEditingCell({ itemId, studentId });
-      setEditValue(currentScore != null ? String(currentScore) : '');
+      setEditValue(score == null ? "" : String(score));
       setTimeout(() => editRef.current?.focus(), 0);
     },
-    [selectedRecord?.status],
+    [spreadsheet, roster],
   );
-
   const handleCellSave = useCallback(async () => {
-    if (!editingCell || !selectedRecordId) return;
-
-    const score = parseFloat(editValue);
-    if (Number.isNaN(score) || score < 0) {
-      toast.error('Invalid score');
-      setEditingCell(null);
-      return;
+    if (!editingCell || !editValue.trim()) return false;
+    const score = Number(editValue);
+    if (!Number.isFinite(score) || score < 0) {
+      toast.error(
+        "Enter a valid score. Blank is missing; zero must be explicit.",
+      );
+      return false;
     }
-
     try {
       await classRecordService.recordScore(editingCell.itemId, {
         studentId: editingCell.studentId,
+        status: "recorded",
         score,
       });
       setEditingCell(null);
-      await reloadSelectedSpreadsheet();
+      await refreshEvidence();
+      return true;
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to save score'));
+      fail(error, "Score was rejected.");
+      return false;
     }
-  }, [editValue, editingCell, reloadSelectedSpreadsheet, selectedRecordId]);
-
+  }, [editingCell, editValue, refreshEvidence]);
   const handleCellKeyDown = useCallback(
-    (e: ReactKeyboardEvent) => {
-      if (e.key === 'Enter') {
+    (event: ReactKeyboardEvent) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
         void handleCellSave();
       }
-      if (e.key === 'Escape') {
-        setEditingCell(null);
-      }
+      if (event.key === "Escape") setEditingCell(null);
     },
     [handleCellSave],
   );
-
   const handleHpsClick = useCallback(
-    (itemId: string, currentHps: number | null, assessmentId?: string) => {
-      if (selectedRecord?.status !== 'draft') return;
+    (itemId: string, hps: number | null, assessmentId?: string) => {
+      if (!spreadsheet?.academicCapabilities?.canPrepare) return;
       if (assessmentId) {
-        toast.info('Linked assessment slots must be edited from assessment settings');
+        toast.info("Edit points in the linked assessment.");
         return;
       }
-
       setEditingCell(null);
-      setEditValue('');
       setEditingHpsItemId(itemId);
-      setHpsValue(currentHps != null && currentHps > 0 ? String(currentHps) : '');
+      setHpsValue(hps == null ? "" : String(hps));
       setTimeout(() => hpsEditRef.current?.focus(), 0);
     },
-    [selectedRecord?.status],
+    [spreadsheet],
   );
-
   const handleHpsSave = useCallback(async () => {
-    if (!editingHpsItemId) return;
-
-    const maxScore = parseFloat(hpsValue);
-    if (Number.isNaN(maxScore) || maxScore < 0) {
-      toast.error('Invalid highest possible score');
-      setEditingHpsItemId(null);
+    if (!editingHpsItemId || !hpsValue.trim()) return;
+    const maxScore = Number(hpsValue);
+    if (!Number.isFinite(maxScore) || maxScore < 0) {
+      toast.error("Enter a valid highest possible score.");
       return;
     }
-
     try {
       await classRecordService.updateItem(editingHpsItemId, { maxScore });
       setEditingHpsItemId(null);
-      await reloadSelectedSpreadsheet();
+      await refreshEvidence();
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Failed to save highest possible score'));
+      fail(error, "Highest possible score was rejected.");
     }
-  }, [editingHpsItemId, hpsValue, reloadSelectedSpreadsheet]);
-
+  }, [editingHpsItemId, hpsValue, refreshEvidence]);
   const handleHpsKeyDown = useCallback(
-    (e: ReactKeyboardEvent) => {
-      if (e.key === 'Enter') {
+    (event: ReactKeyboardEvent) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
         void handleHpsSave();
       }
-      if (e.key === 'Escape') {
-        setEditingHpsItemId(null);
-      }
+      if (event.key === "Escape") setEditingHpsItemId(null);
     },
     [handleHpsSave],
   );
-
   const syncItem = useCallback(
     async (itemId: string) => {
+      if (!spreadsheet?.academicCapabilities?.canGrade) return;
+      setSyncingItemId(itemId);
       try {
-        setSyncingItemId(itemId);
-        const res = await classRecordService.syncScores(itemId);
-        const synced =
-          typeof res.data === 'object' && res.data !== null && 'synced' in res.data
-            ? Number((res.data as { synced?: number }).synced ?? 0)
-            : 0;
-        toast.success(`Synced ${synced} score(s) from assessment`);
-
-        await reloadSelectedSpreadsheet();
-      } catch {
-        toast.error('Failed to sync scores');
+        await classRecordService.syncScores(itemId);
+        await refreshEvidence();
+        toast.success("Completed assessment results synchronized.");
+      } catch (error) {
+        fail(error, "Synchronization was rejected.");
       } finally {
         setSyncingItemId(null);
       }
     },
-    [reloadSelectedSpreadsheet],
+    [spreadsheet, refreshEvidence],
   );
-
   const exportSpreadsheet = useCallback(async () => {
-    if (!selectedRecord || !spreadsheet) return;
-
+    if (!spreadsheet || !classId) return;
     try {
-      await exportClassRecordTemplateWorkbook(spreadsheet, selectedRecord);
-      toast.success('Workbook export downloaded');
-    } catch {
-      try {
-        await exportWorkbook(spreadsheet, selectedRecord);
-        toast.success('Workbook export downloaded');
-      } catch (fallbackError) {
-        toast.error(getErrorMessage(fallbackError, 'Failed to export workbook'));
-      }
+      const summary = await classRecordService.annualSummary(classId);
+      await exportAcademicWorkbook(spreadsheet, summary.data);
+      toast.success("Workbook and annual evidence exported.");
+    } catch (error) {
+      fail(error, "Export could not load complete academic evidence.");
     }
-  }, [selectedRecord, spreadsheet]);
-
+  }, [spreadsheet, classId]);
   return {
+    classId,
+    policy,
     classRecords,
     selectedRecord,
     spreadsheet,
+    readiness,
+    roster,
+    history,
+    annualSummary,
     recordsStatus,
     spreadsheetStatus,
-    quarters: QUARTERS,
+    quarters: policy?.periods.map((p) => p.key) ?? [],
+    periodLabel: (period) =>
+      policy?.periods.find((p) => p.key === period)?.label ?? period,
     generating,
     finalizing,
     reopening,
+    savingRoster,
     syncingItemId,
     editingCell,
     editValue,
@@ -728,6 +534,12 @@ export function useTeacherClassRecord(classId?: string): TeacherClassRecordState
     setHpsValue,
     setEditingCell,
     refresh,
+    refreshEvidence,
+    loadHistory,
+    loadAnnual,
+    confirmRoster,
+    excuseScore,
+    restoreAssessmentEvidence,
     generateQuarter,
     finalizeQuarter,
     reopenQuarter,

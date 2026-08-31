@@ -12,3 +12,6 @@ web-build/
 .env
 .env.local
 .env.*.local
+
+# Local Kotlin compiler session cache
+/android/.kotlin/

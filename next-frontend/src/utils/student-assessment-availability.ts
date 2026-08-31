@@ -1,5 +1,5 @@
-import type { Assessment } from '@/types/assessment';
-import type { ModuleItem } from '@/types/module';
+import type { Assessment } from "@/types/assessment";
+import type { ModuleItem } from "@/types/module";
 
 export interface StudentAssessmentAvailability {
   canStart: boolean;
@@ -16,33 +16,34 @@ function toDateOrNull(value?: string | null): Date | null {
 }
 
 function normalizeErrorMessage(error: unknown): string {
-  if (!error || typeof error !== 'object') return '';
+  if (!error || typeof error !== "object") return "";
   const withResponse = error as {
     response?: { data?: { message?: string | string[] } };
     message?: string;
   };
-  const rawMessage = withResponse.response?.data?.message ?? withResponse.message ?? '';
+  const rawMessage =
+    withResponse.response?.data?.message ?? withResponse.message ?? "";
   if (Array.isArray(rawMessage)) {
-    return rawMessage.find((entry) => typeof entry === 'string') || '';
+    return rawMessage.find((entry) => typeof entry === "string") || "";
   }
-  return typeof rawMessage === 'string' ? rawMessage : '';
+  return typeof rawMessage === "string" ? rawMessage : "";
 }
 
 export function mapAssessmentStartError(error: unknown): string {
   const message = normalizeErrorMessage(error).toLowerCase();
-  if (message.includes('due date passed') || message.includes('closed')) {
-    return 'This assessment is closed because the due date has passed.';
+  if (message.includes("due date passed") || message.includes("closed")) {
+    return "This assessment is closed because the due date has passed.";
   }
-  if (message.includes('maximum attempts reached')) {
-    return 'You already used all allowed attempts for this assessment.';
+  if (message.includes("maximum attempts reached")) {
+    return "You already used all allowed attempts for this assessment.";
   }
-  if (message.includes('not published')) {
-    return 'This assessment is not published yet.';
+  if (message.includes("not published")) {
+    return "This assessment is not published yet.";
   }
-  if (message.includes('not available') || message.includes('not given')) {
-    return 'This assessment is not available yet.';
+  if (message.includes("not available") || message.includes("not given")) {
+    return "This assessment is not available yet.";
   }
-  return 'Unable to start assessment attempt.';
+  return "Unable to start assessment attempt.";
 }
 
 export function getStudentAssessmentAvailability(params: {
@@ -55,7 +56,21 @@ export function getStudentAssessmentAvailability(params: {
   if (!assessment || !item) {
     return {
       canStart: false,
-      blockedReason: 'Assessment is unavailable in this module.',
+      blockedReason: "Assessment is unavailable in this module.",
+      isPastDue: false,
+      hasAttemptsRemaining: false,
+    };
+  }
+
+  if (
+    assessment.academicCapabilities &&
+    !assessment.academicCapabilities.canStart
+  ) {
+    return {
+      canStart: false,
+      blockedReason:
+        assessment.academicCapabilities.readOnlyReason ??
+        "New attempts are available only in the active grading period.",
       isPastDue: false,
       hasAttemptsRemaining: false,
     };
@@ -64,7 +79,7 @@ export function getStudentAssessmentAvailability(params: {
   if (!item.accessible) {
     return {
       canStart: false,
-      blockedReason: 'This assessment is currently locked by your teacher.',
+      blockedReason: "This assessment is currently locked by your teacher.",
       isPastDue: false,
       hasAttemptsRemaining: false,
     };
@@ -73,7 +88,7 @@ export function getStudentAssessmentAvailability(params: {
   if (!item.isGiven) {
     return {
       canStart: false,
-      blockedReason: 'This assessment has not been given yet.',
+      blockedReason: "This assessment has not been given yet.",
       isPastDue: false,
       hasAttemptsRemaining: false,
     };
@@ -82,7 +97,7 @@ export function getStudentAssessmentAvailability(params: {
   if (!assessment.isPublished) {
     return {
       canStart: false,
-      blockedReason: 'This assessment is not published yet.',
+      blockedReason: "This assessment is not published yet.",
       isPastDue: false,
       hasAttemptsRemaining: false,
     };
@@ -90,17 +105,20 @@ export function getStudentAssessmentAvailability(params: {
 
   const dueDate = toDateOrNull(assessment.dueDate ?? null);
   const closesWhenDue = assessment.closeWhenDue ?? true;
-  const isPastDue = Boolean(closesWhenDue && dueDate && dueDate.getTime() < now.getTime());
+  const isPastDue = Boolean(
+    closesWhenDue && dueDate && dueDate.getTime() < now.getTime(),
+  );
   if (isPastDue) {
     return {
       canStart: false,
-      blockedReason: 'This assessment is closed because the due date has passed.',
+      blockedReason:
+        "This assessment is closed because the due date has passed.",
       isPastDue: true,
       hasAttemptsRemaining: false,
     };
   }
 
-  if (assessment.type === 'file_upload') {
+  if (assessment.type === "file_upload") {
     return {
       canStart: true,
       blockedReason: null,

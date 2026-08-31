@@ -1,0 +1,4 @@
+ALTER TABLE "academic_back_subjects" DROP CONSTRAINT "academic_back_subject_status_valid";--> statement-breakpoint
+ALTER TABLE "academic_back_subjects" DROP CONSTRAINT "academic_back_subject_clearance_valid";--> statement-breakpoint
+ALTER TABLE "academic_back_subjects" ADD CONSTRAINT "academic_back_subject_status_valid" CHECK ("academic_back_subjects"."status" IN ('pending','scheduled','cleared','invalidated'));--> statement-breakpoint
+ALTER TABLE "academic_back_subjects" ADD CONSTRAINT "academic_back_subject_clearance_valid" CHECK ("academic_back_subjects"."status" <> 'cleared' OR ("academic_back_subjects"."cleared_grade" IS NOT NULL AND "academic_back_subjects"."cleared_grade" BETWEEN 75 AND 100));

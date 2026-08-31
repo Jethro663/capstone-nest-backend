@@ -16,6 +16,7 @@ permissions:
 jobs:
   deploy_backend:
     name: Deploy backend
+    timeout-minutes: 30
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -41,9 +42,12 @@ jobs:
       - name: Install Railway CLI
         run: npm install --global @railway/cli
 
-      - name: Deploy CI-tested backend
+      - name: Start CI-tested backend deployment
         working-directory: backend
-        run: railway up . --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+        run: railway up . --path-as-root --detach --json --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME" > "$RUNNER_TEMP/backend-deployment.json"
+
+      - name: Wait for this backend deployment to pass its runtime health check
+        run: node .github/scripts/wait-railway-deployment.cjs "$RUNNER_TEMP/backend-deployment.json"
 
       - name: Record deployment provenance
         run: |
@@ -52,6 +56,8 @@ jobs:
 
   deploy_frontend:
     name: Deploy frontend
+    timeout-minutes: 30
+    needs: deploy_backend
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
@@ -77,9 +83,12 @@ jobs:
       - name: Install Railway CLI
         run: npm install --global @railway/cli
 
-      - name: Deploy CI-tested frontend
+      - name: Start CI-tested frontend deployment
         working-directory: next-frontend
-        run: railway up . --path-as-root --ci --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME"
+        run: railway up . --path-as-root --detach --json --project "$RAILWAY_PROJECT_ID" --environment "$RAILWAY_ENVIRONMENT_NAME" --service "$RAILWAY_SERVICE_NAME" > "$RUNNER_TEMP/frontend-deployment.json"
+
+      - name: Wait for this frontend deployment to pass its runtime health check
+        run: node .github/scripts/wait-railway-deployment.cjs "$RUNNER_TEMP/frontend-deployment.json"
 
       - name: Record deployment provenance
         run: |

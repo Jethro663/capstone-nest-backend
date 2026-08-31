@@ -1,6 +1,14 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { User } from '@/types/user';
+
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import type { ReactNode } from 'react';
 import StudentProfilePage from './StudentProfilePage';
 import { profileService } from '@/services/profile-service';
@@ -11,7 +19,7 @@ const refreshAuthMock = jest.fn();
 const refreshMock = jest.fn();
 const pushMock = jest.fn();
 
-let mockUser = {
+let mockUser: Partial<User> = {
   id: 'student-1',
   firstName: 'Jamie',
   lastName: 'Cruz',
@@ -58,19 +66,21 @@ jest.mock('@/components/profile/ProfileSecurityCard', () => ({
   ),
 }));
 
-const mockedProfileService = profileService as jest.Mocked<typeof profileService>;
+const mockedProfileService = profileService as jest.Mocked<
+  typeof profileService
+>;
 type GetMineResponse = Awaited<ReturnType<typeof profileService.getMine>>;
 
 function buildStudentProfile(
   overrides: Partial<StudentProfile> = {},
 ): StudentProfile {
   return {
+    id: 'profile-1',
     userId: 'student-1',
     dateOfBirth: '2008-05-01',
     dob: '2008-05-01',
     gender: 'Male',
     phone: '09123456789',
-    contactNumber: '09123456789',
     address: 'Quezon City',
     familyName: 'Ana Cruz',
     familyRelationship: 'Mother',
@@ -110,7 +120,9 @@ describe('StudentProfilePage', () => {
 
     expect(profileTab).toHaveAttribute('data-state', 'active');
     expect(accountTab).toHaveAttribute('data-state', 'inactive');
-    expect(screen.getByRole('tabpanel', { name: /profile/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('tabpanel', { name: /profile/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Student Identity')).toBeInTheDocument();
     expect(screen.queryByText('Profile Security Card')).not.toBeInTheDocument();
 
@@ -139,31 +151,45 @@ describe('StudentProfilePage', () => {
 
     render(<StudentProfilePage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /profile help/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /profile help/i }),
+    );
 
-    expect(await screen.findByText('Student guide: My Profile')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Student guide: My Profile'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
-    expect(screen.getByText('Get oriented on your profile page')).toBeInTheDocument();
+    expect(
+      screen.getByText('Get oriented on your profile page'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Read')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(screen.getByText('Page 2 of 4')).toBeInTheDocument();
-    expect(screen.getByText('Know which fields you can and cannot change')).toBeInTheDocument();
+    expect(
+      screen.getByText('Know which fields you can and cannot change'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(screen.getByText('Page 3 of 4')).toBeInTheDocument();
-    expect(screen.getByText('Complete your editable profile details')).toBeInTheDocument();
+    expect(
+      screen.getByText('Complete your editable profile details'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /next page/i }));
     expect(screen.getByText('Page 4 of 4')).toBeInTheDocument();
-    expect(screen.getByText('Use the account tools and history shortcuts')).toBeInTheDocument();
+    expect(
+      screen.getByText('Use the account tools and history shortcuts'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /previous page/i }));
     expect(screen.getByText('Page 3 of 4')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /close guide/i }));
     await waitFor(() => {
-      expect(screen.queryByText('Student guide: My Profile')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Student guide: My Profile'),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -185,9 +211,13 @@ describe('StudentProfilePage', () => {
 
     fireEvent.click(alertButton);
 
-    expect(await screen.findByText(/missing required fields/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/missing required fields/i),
+    ).toBeInTheDocument();
     const dialog = screen.getByRole('dialog');
-    const checklist = within(dialog).getByRole('list', { name: /missing student details checklist/i });
+    const checklist = within(dialog).getByRole('list', {
+      name: /missing student details checklist/i,
+    });
     expect(within(checklist).getByText('Home Address')).toBeInTheDocument();
     expect(within(checklist).getByText('Guardian Name')).toBeInTheDocument();
   });
@@ -203,7 +233,9 @@ describe('StudentProfilePage', () => {
     await screen.findByRole('tab', { name: /profile/i });
 
     expect(
-      screen.queryByRole('button', { name: /view .* missing profile field details/i }),
+      screen.queryByRole('button', {
+        name: /view .* missing profile field details/i,
+      }),
     ).not.toBeInTheDocument();
   });
 
@@ -220,7 +252,9 @@ describe('StudentProfilePage', () => {
     expect(screen.getAllByText(/school-managed/i)).toHaveLength(6);
     expect(screen.getByDisplayValue('Jamie')).toHaveAttribute('readonly');
     expect(screen.getByDisplayValue('Cruz')).toHaveAttribute('readonly');
-    expect(screen.getByDisplayValue('jamie@nexora.edu')).toHaveAttribute('readonly');
+    expect(screen.getByDisplayValue('jamie@nexora.edu')).toHaveAttribute(
+      'readonly',
+    );
   });
 
   it('limits student phone typing to an 11-digit local mobile number', async () => {
@@ -261,7 +295,7 @@ describe('StudentProfilePage', () => {
     const guardianInput = textboxes[8];
 
     fireEvent.change(guardianInput, {
-      target: { value: "  Ana@@ Navarro🙂 123 " },
+      target: { value: '  Ana@@ Navarro🙂 123 ' },
     });
     fireEvent.change(homeAddressInput, {
       target: { value: '  Blk. 4, Lot #2 <North>🙂 / Phase 1 ' },

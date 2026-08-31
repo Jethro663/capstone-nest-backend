@@ -1,9 +1,19 @@
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
-import type { SpreadsheetCategory, SpreadsheetData, SpreadsheetStudentRow } from "../../types/class-record";
-import { TeacherActionButton, TeacherEmpty, TeacherPanel, teacherTheme as theme } from "./TeacherMobilePrimitives";
+import type {
+  SpreadsheetCategory,
+  SpreadsheetData,
+  SpreadsheetStudentRow,
+} from "../../types/class-record";
+import {
+  TeacherActionButton,
+  TeacherEmpty,
+  TeacherPanel,
+  teacherTheme as theme,
+} from "./TeacherMobilePrimitives";
 import { toAppError } from "../../api/http";
 
 type Props = {
+  hideExport?: boolean;
   workbook?: SpreadsheetData | null;
   students?: SpreadsheetStudentRow[];
 };
@@ -22,19 +32,31 @@ function formatNumber(value: number | null | undefined, digits = 1) {
 }
 
 function getStudentName(student: SpreadsheetStudentRow) {
-  return [student.lastName, student.firstName].filter(Boolean).join(", ").trim() || "Learner";
+  return (
+    [student.lastName, student.firstName].filter(Boolean).join(", ").trim() ||
+    "Learner"
+  );
 }
 
-function buildCategoryColumns(category: SpreadsheetCategory, categoryIndex: number): SheetColumn[] {
+function buildCategoryColumns(
+  category: SpreadsheetCategory,
+  categoryIndex: number,
+): SheetColumn[] {
   const itemColumns = category.items.map((item, itemIndex) => ({
     key: `${category.id}:${item.id}`,
     label: `${item.title || `Item ${itemIndex + 1}`}\nHPS ${item.hps ?? "--"}`,
     width: 82,
     tone: "score" as const,
     getValue: (student: SpreadsheetStudentRow) => {
-      const categoryScores = student.categories.find((entry) => entry.categoryId === category.id);
+      const categoryScores = student.categories.find(
+        (entry) => entry.categoryId === category.id,
+      );
       const score = categoryScores?.scores?.[itemIndex];
-      return typeof score === "number" ? formatNumber(score, 1) : "--";
+      return categoryScores?.scoreStatuses?.[itemIndex] === "excused"
+        ? "Excused"
+        : typeof score === "number"
+          ? formatNumber(score, 1)
+          : "Missing";
     },
   }));
 
@@ -46,7 +68,9 @@ function buildCategoryColumns(category: SpreadsheetCategory, categoryIndex: numb
       width: 78,
       tone: "summary",
       getValue: (student) => {
-        const categoryScores = student.categories.find((entry) => entry.categoryId === category.id);
+        const categoryScores = student.categories.find(
+          (entry) => entry.categoryId === category.id,
+        );
         return formatNumber(categoryScores?.total, 1);
       },
     },
@@ -56,7 +80,9 @@ function buildCategoryColumns(category: SpreadsheetCategory, categoryIndex: numb
       width: 72,
       tone: "summary",
       getValue: (student) => {
-        const categoryScores = student.categories.find((entry) => entry.categoryId === category.id);
+        const categoryScores = student.categories.find(
+          (entry) => entry.categoryId === category.id,
+        );
         return formatNumber(categoryScores?.ps, 1);
       },
     },
@@ -66,7 +92,9 @@ function buildCategoryColumns(category: SpreadsheetCategory, categoryIndex: numb
       width: 72,
       tone: "summary",
       getValue: (student) => {
-        const categoryScores = student.categories.find((entry) => entry.categoryId === category.id);
+        const categoryScores = student.categories.find(
+          (entry) => entry.categoryId === category.id,
+        );
         return formatNumber(categoryScores?.ws, 1);
       },
     },
@@ -103,7 +131,7 @@ function buildColumns(workbook: SpreadsheetData): SheetColumn[] {
     },
     {
       key: "quarterly-grade",
-      label: "Quarterly\nGrade",
+      label: `${workbook.header.periodLabel ?? workbook.header.quarter}\nGrade`,
       width: 92,
       tone: "summary",
       getValue: (student) => formatNumber(student.quarterlyGrade, 0),
@@ -113,7 +141,8 @@ function buildColumns(workbook: SpreadsheetData): SheetColumn[] {
       label: "Remarks",
       width: 132,
       tone: "warning",
-      getValue: (student) => student.remarks || "--",
+      getValue: (student) =>
+        `${student.gradeProvenance === "legacy_unverified" ? "Legacy unverified: " : student.provisional ? "Provisional: " : ""}${student.remarks || "Incomplete"}`,
     },
   ];
 }
@@ -124,17 +153,25 @@ function getCellTextColor(column: SheetColumn, value: string) {
     if (!Number.isNaN(numeric) && numeric < 75) return theme.amber;
     return theme.green;
   }
-  if (column.tone === "warning" && value.toLowerCase().includes("intervention")) return theme.amber;
+  if (column.tone === "warning" && value.toLowerCase().includes("intervention"))
+    return theme.amber;
   if (column.tone === "summary") return theme.red;
   return theme.text;
 }
 
-export function MobileClassRecordWorkbook({ workbook, students }: Props) {
+export function MobileClassRecordWorkbook({
+  workbook,
+  students,
+  hideExport = false,
+}: Props) {
   const rows = students ?? workbook?.students ?? [];
 
   if (!workbook) {
     return (
-      <TeacherPanel title="Class Record Workbook" subtitle="The spreadsheet view will appear after a record is selected.">
+      <TeacherPanel
+        title="Class Record Workbook"
+        subtitle="The spreadsheet view will appear after a record is selected."
+      >
         <TeacherEmpty
           title="No workbook loaded"
           subtitle="Select or create a class record, then refresh to load the full grade sheet."
@@ -149,35 +186,18 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
 
   const handleExportWorkbook = async () => {
     try {
-      const FileSystem = await import("expo-file-system/legacy");
-      const { openLocalFile } = await import("../../api/services/protected-files");
-
-      const headerRow = columns.map((col) => `"${col.label.replace(/\n/g, " ")}"`).join(",");
-      const dataRows = rows.map((student) =>
-        columns.map((col) => `"${String(col.getValue(student)).replace(/"/g, '""')}"`).join(","),
+      const { classRecordApi } =
+        await import("../../api/services/class-record");
+      const { exportAcademicCsv } =
+        await import("../../lib/academic-workbook-export");
+      const annual = await classRecordApi.annualSummary(
+        workbook.classRecord.classId,
       );
-
-      const csvContent = [headerRow, ...dataRows].join("\n");
-      const fileName = `Class_Record_${workbook.header.subjectCode || "Grade"}_Q${workbook.header.quarter || "1"}.csv`;
-      const baseDir = FileSystem.documentDirectory || FileSystem.cacheDirectory;
-      const fileUri = `${baseDir}${fileName}`;
-
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-
-      const Sharing = await import("expo-sharing");
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: "text/csv",
-          dialogTitle: "Export DepEd Class Record Workbook",
-          UTI: "public.comma-separated-values-text",
-        });
-      } else {
-        await openLocalFile(fileUri);
-      }
-
-      Alert.alert("Workbook Exported Successfully", `The Class Record CSV (${fileName}) has been generated and saved.`);
+      await exportAcademicCsv(workbook, annual);
+      Alert.alert(
+        "Workbook exported",
+        "Includes period and annual evidence, policy, score statuses and source identifiers.",
+      );
     } catch (err) {
       Alert.alert("Export Failed", toAppError(err).message);
     }
@@ -186,14 +206,16 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
   return (
     <TeacherPanel
       title="Class Record Workbook"
-      subtitle="Swipe sideways to inspect item scores, percentage scores, weighted scores, and transmuted grades."
+      subtitle="Swipe sideways to inspect item scores, percentage scores, weighted scores, and policy grades and evidence status."
       action={
-        <TeacherActionButton
-          label="Export Workbook"
-          icon="file-download-outline"
-          tone="green"
-          onPress={() => void handleExportWorkbook()}
-        />
+        hideExport ? undefined : (
+          <TeacherActionButton
+            label="Export Workbook"
+            icon="file-download-outline"
+            tone="green"
+            onPress={() => void handleExportWorkbook()}
+          />
+        )
       }
     >
       <View style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
@@ -206,21 +228,58 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
             padding: 12,
           }}
         >
-          <Text style={{ fontSize: 11, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase", color: "#67E8F9" }}>
+          <Text
+            style={{
+              fontSize: 11,
+              fontWeight: "900",
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              color: "#67E8F9",
+            }}
+          >
             {workbook.header.workbookSheetName || workbook.header.quarter}
           </Text>
-          <Text style={{ marginTop: 4, fontSize: 17, fontWeight: "900", color: theme.text }}>
+          <Text
+            style={{
+              marginTop: 4,
+              fontSize: 17,
+              fontWeight: "900",
+              color: theme.text,
+            }}
+          >
             {workbook.header.workbookTitle || "DepEd Class Record"}
           </Text>
-          <Text style={{ marginTop: 4, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
-            {workbook.header.subject || workbook.header.subjectCode || "Subject"} | {workbook.header.section || "Section"}
+          <Text
+            style={{
+              marginTop: 4,
+              fontSize: 12,
+              lineHeight: 18,
+              color: theme.subtext,
+            }}
+          >
+            {workbook.header.subject ||
+              workbook.header.subjectCode ||
+              "Subject"}{" "}
+            | {workbook.header.section || "Section"}
           </Text>
         </View>
       </View>
 
       {rows.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator style={{ marginHorizontal: 14, marginBottom: 14 }}>
-          <View style={{ width: sheetWidth, borderWidth: 1, borderColor: theme.border, borderRadius: 18, overflow: "hidden" }}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          style={{ marginHorizontal: 14, marginBottom: 14 }}
+        >
+          <View
+            style={{
+              width: sheetWidth,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 18,
+              overflow: "hidden",
+            }}
+          >
             <View style={{ flexDirection: "row", backgroundColor: "#0B2440" }}>
               {columns.map((column) => (
                 <View
@@ -235,7 +294,16 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
                     paddingVertical: 8,
                   }}
                 >
-                  <Text style={{ fontSize: 10, lineHeight: 14, fontWeight: "900", color: "#CDEBFF" }}>{column.label}</Text>
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      lineHeight: 14,
+                      fontWeight: "900",
+                      color: "#CDEBFF",
+                    }}
+                  >
+                    {column.label}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -270,7 +338,11 @@ export function MobileClassRecordWorkbook({ workbook, students }: Props) {
                         style={{
                           fontSize: column.key === "learner" ? 11 : 10,
                           lineHeight: 15,
-                          fontWeight: column.tone === "summary" || column.tone === "warning" ? "900" : "700",
+                          fontWeight:
+                            column.tone === "summary" ||
+                            column.tone === "warning"
+                              ? "900"
+                              : "700",
                           color: getCellTextColor(column, value),
                         }}
                       >

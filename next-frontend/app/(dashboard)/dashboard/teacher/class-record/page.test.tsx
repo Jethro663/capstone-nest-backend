@@ -17,16 +17,20 @@ jest.mock('@/hooks/use-teacher-class-record', () => ({
   useTeacherClassRecord: jest.fn(),
 }));
 
-jest.mock('@/components/teacher/class-record/TeacherClassRecordWorkbook', () => ({
-  TeacherClassRecordWorkbook: () => (
-    <div data-testid="class-record-workbook">Workbook table</div>
-  ),
-}));
+jest.mock(
+  '@/components/teacher/class-record/TeacherClassRecordWorkbook',
+  () => ({
+    TeacherClassRecordWorkbook: () => (
+      <div data-testid="class-record-workbook">Workbook table</div>
+    ),
+  }),
+);
 
-const mockedDashboardService = dashboardService as jest.Mocked<typeof dashboardService>;
-const mockedUseTeacherClassRecord = useTeacherClassRecord as jest.MockedFunction<
-  typeof useTeacherClassRecord
+const mockedDashboardService = dashboardService as jest.Mocked<
+  typeof dashboardService
 >;
+const mockedUseTeacherClassRecord =
+  useTeacherClassRecord as jest.MockedFunction<typeof useTeacherClassRecord>;
 
 const teacherClass = {
   id: 'class-1',
@@ -42,7 +46,8 @@ function buildHookState(overrides: Record<string, unknown> = {}) {
     spreadsheet: null,
     recordsStatus: 'ready',
     spreadsheetStatus: 'idle',
-    quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+    quarters: ['Q1', 'Q2', 'Q3'],
+    periodLabel: (p: string) => p,
     generating: false,
     finalizing: false,
     reopening: false,
@@ -92,7 +97,9 @@ describe('ClassRecordPage', () => {
 
     render(<ClassRecordPage />);
 
-    expect(await screen.findByText("Classes couldn't be loaded")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Classes couldn't be loaded"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('class list detail')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     await waitFor(() => {
@@ -109,7 +116,9 @@ describe('ClassRecordPage', () => {
 
     render(<ClassRecordPage />);
 
-    expect(await screen.findByText('No classes assigned yet')).toBeInTheDocument();
+    expect(
+      await screen.findByText('No classes assigned yet'),
+    ).toBeInTheDocument();
   });
 
   it('shows a safe no-selection state for an unknown class', async () => {
@@ -155,9 +164,15 @@ describe('ClassRecordPage', () => {
 
     const { container } = render(<ClassRecordPage />);
 
-    expect(await screen.findByRole('heading', { name: 'Class Record' })).toBeInTheDocument();
-    expect(container.querySelector('.lucide-file-spreadsheet')).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: /class/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Class Record' }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.lucide-file-spreadsheet'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('combobox', { name: /class/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: /class record workbook/i }),
     ).toBeInTheDocument();
@@ -190,9 +205,13 @@ describe('ClassRecordPage', () => {
 
     render(<ClassRecordPage />);
 
-    expect(await screen.findByText('Class record refresh failed')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Class record refresh failed'),
+    ).toBeInTheDocument();
     expect(screen.getByTestId('class-record-workbook')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /retry class record/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /retry class record/i }),
+    );
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

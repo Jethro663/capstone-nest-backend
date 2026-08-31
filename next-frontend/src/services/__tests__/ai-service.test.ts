@@ -1,4 +1,5 @@
 import { aiService } from '@/services/ai-service';
+import type { LessonPlanStructuredOutput } from '@/types/ai';
 import { api } from '@/lib/api-client';
 
 jest.mock('@/lib/api-client', () => ({
@@ -40,7 +41,10 @@ describe('aiService', () => {
       feedbackLevel: 'standard',
     });
 
-    expect(mockedApi.post).toHaveBeenCalledWith('/ai/teacher/quizzes/jobs', expect.any(Object));
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/ai/teacher/quizzes/jobs',
+      expect.any(Object),
+    );
     expect(result.data.jobId).toBe('job-1');
     expect(result.data.status).toBe('pending');
   });
@@ -156,7 +160,9 @@ describe('aiService', () => {
 
     const result = await aiService.getClassIndexStatus('class-1');
 
-    expect(mockedApi.get).toHaveBeenCalledWith('/ai/index/classes/class-1/status');
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/ai/index/classes/class-1/status',
+    );
     expect(result.data.needsReindex).toBe(true);
     expect(result.data.sourceSummary.lessons.blocked).toBe(1);
   });
@@ -177,7 +183,9 @@ describe('aiService', () => {
 
     const result = await aiService.deleteTeacherJob('job-delete');
 
-    expect(mockedApi.delete).toHaveBeenCalledWith('/ai/teacher/jobs/job-delete');
+    expect(mockedApi.delete).toHaveBeenCalledWith(
+      '/ai/teacher/jobs/job-delete',
+    );
     expect(result.data).toMatchObject({
       jobId: 'job-delete',
       status: 'cancelled',
@@ -255,7 +263,9 @@ describe('aiService', () => {
 
     const result = await aiService.getLessonPlanJobResult('job-lesson-2');
 
-    expect(mockedApi.get).toHaveBeenCalledWith('/ai/teacher/jobs/job-lesson-2/result');
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/ai/teacher/jobs/job-lesson-2/result',
+    );
     expect(result.data.job.jobType).toBe('class_lesson_plan_generation');
     expect(result.data.result.outputType).toBe('class_lesson_plan');
     expect(result.data.result.structuredOutput.header.lessonTitle).toBe(
@@ -264,6 +274,32 @@ describe('aiService', () => {
   });
 
   it('saves edited lesson plan drafts', async () => {
+    const structuredOutput: LessonPlanStructuredOutput = {
+      classProfile: 'struggling',
+      header: { lessonTitle: 'Whole Numbers' },
+      evidenceSummary: '',
+      objectives: [],
+      contentOrSubjectMatter: '',
+      learningResources: [],
+      procedures: {
+        review: [],
+        purpose: [],
+        examples: [],
+        guidedPractice: [],
+        mastery: [],
+        application: [],
+        generalization: [],
+        evaluation: [],
+        remediationOrEnrichment: [],
+      },
+      assessment: [],
+      remarks: '',
+      reflection: '',
+      assignmentOrHomeExtension: '',
+      differentiation: { support: [], core: [], enrichment: [] },
+      safeguards: [],
+    };
+
     mockedApi.patch.mockResolvedValue({
       data: {
         success: true,
@@ -279,23 +315,13 @@ describe('aiService', () => {
     });
 
     const result = await aiService.updateLessonPlanDraft('job-lesson-3', {
-      structuredOutput: {
-        classProfile: 'struggling',
-        header: {
-          lessonTitle: 'Whole Numbers',
-        },
-      },
+      structuredOutput,
     });
 
     expect(mockedApi.patch).toHaveBeenCalledWith(
       '/ai/teacher/lesson-plans/jobs/job-lesson-3/draft',
       {
-        structuredOutput: {
-          classProfile: 'struggling',
-          header: {
-            lessonTitle: 'Whole Numbers',
-          },
-        },
+        structuredOutput,
       },
     );
     expect(result.data.statusMessage).toBe('Draft saved');
@@ -460,7 +486,8 @@ describe('aiService', () => {
       data: {
         success: true,
         degraded: true,
-        message: 'AI job result temporarily unavailable; keep polling job status.',
+        message:
+          'AI job result temporarily unavailable; keep polling job status.',
         data: {
           jobId: 'job-2',
           status: 'processing',
@@ -496,9 +523,9 @@ describe('aiService', () => {
 
     expect(result.data.job.jobId).toBe('job-3');
     expect(result.data.result.outputType).toBe('degraded_unavailable');
-    expect(result.data.result.structuredOutput.aiSummary.teacherActions).toEqual(
-      [],
-    );
+    expect(
+      result.data.result.structuredOutput.aiSummary.teacherActions,
+    ).toEqual([]);
     expect(
       result.data.result.structuredOutput.suggestedAssignmentPayload,
     ).toEqual({

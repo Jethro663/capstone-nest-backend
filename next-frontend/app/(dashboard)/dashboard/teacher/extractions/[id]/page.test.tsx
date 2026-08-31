@@ -1,6 +1,14 @@
 'use client';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { Extraction } from '@/types/extraction';
+
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import ExtractionReviewPage from './page';
 import { extractionService } from '@/services/extraction-service';
 import { toast } from 'sonner';
@@ -35,14 +43,24 @@ jest.mock('@/components/shared/ConfirmationDialog', () => ({
 }));
 
 jest.mock('@/features/lesson-blocks/LessonBlockTeacherEditor', () => ({
-  LessonBlockTeacherPreview: ({ block }: { block: { content?: { html?: string } | string } }) => {
+  LessonBlockTeacherPreview: ({
+    block,
+  }: {
+    block: { content?: { html?: string } | string };
+  }) => {
     const content =
       typeof block.content === 'string'
         ? block.content
-        : block.content && typeof block.content === 'object' && 'html' in block.content
+        : block.content &&
+            typeof block.content === 'object' &&
+            'html' in block.content
           ? block.content.html
           : '';
-    return <div data-testid="lesson-block-preview">{content || 'Empty text block'}</div>;
+    return (
+      <div data-testid="lesson-block-preview">
+        {content || 'Empty text block'}
+      </div>
+    );
   },
   LessonBlockTeacherEditor: ({
     block,
@@ -56,7 +74,9 @@ jest.mock('@/features/lesson-blocks/LessonBlockTeacherEditor', () => ({
     const value =
       typeof block.content === 'string'
         ? block.content
-        : block.content && typeof block.content === 'object' && 'html' in block.content
+        : block.content &&
+            typeof block.content === 'object' &&
+            'html' in block.content
           ? block.content.html || ''
           : '';
     return (
@@ -65,7 +85,8 @@ jest.mock('@/features/lesson-blocks/LessonBlockTeacherEditor', () => ({
         <button
           type="button"
           onClick={(event) => {
-            const textarea = event.currentTarget.parentElement?.querySelector('textarea');
+            const textarea =
+              event.currentTarget.parentElement?.querySelector('textarea');
             onSave({ content: { html: textarea?.value || '' } });
           }}
         >
@@ -79,7 +100,9 @@ jest.mock('@/features/lesson-blocks/LessonBlockTeacherEditor', () => ({
   },
 }));
 
-function buildExtraction(status: 'pending' | 'completed' = 'completed') {
+function buildExtraction(
+  status: 'pending' | 'completed' = 'completed',
+): Extraction {
   return {
     id: 'extraction-1',
     fileId: 'file-1',
@@ -139,7 +162,14 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                   type: 'quiz',
                   passingScore: 60,
                   feedbackLevel: 'standard',
-                  questions: [{ content: 'What is photosynthesis?', type: 'short_answer', points: 1, order: 1 }],
+                  questions: [
+                    {
+                      content: 'What is photosynthesis?',
+                      type: 'short_answer',
+                      points: 1,
+                      order: 1,
+                    },
+                  ],
                 },
               },
             ],
@@ -156,8 +186,12 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
             ],
             audit: {
               coherenceScore: 0.73,
-              coherenceWarnings: ['A short fragment was merged into Section 1.'],
-              repairNotes: ['Coherence cleanup merged a micro-fragment into the previous section.'],
+              coherenceWarnings: [
+                'A short fragment was merged into Section 1.',
+              ],
+              repairNotes: [
+                'Coherence cleanup merged a micro-fragment into the previous section.',
+              ],
               confidenceBreakdown: { overallConfidence: 0.8, warningCount: 1 },
               reviewState: 'needs_review',
               reviewIssues: [
@@ -173,10 +207,19 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
                   resolution: null,
                 },
               ],
-              pipelineStages: ['ingest', 'classify', 'segment', 'structure', 'coherence_cleanup', 'validate', 'persist'],
+              pipelineStages: [
+                'ingest',
+                'classify',
+                'segment',
+                'structure',
+                'coherence_cleanup',
+                'validate',
+                'persist',
+              ],
               requestedSectionCount: 4,
               finalSectionCount: 3,
-              sectionCountAdjustmentReason: 'Source content did not safely support the requested section count.',
+              sectionCountAdjustmentReason:
+                'Source content did not safely support the requested section count.',
             },
           }
         : null,
@@ -189,17 +232,24 @@ function buildExtraction(status: 'pending' | 'completed' = 'completed') {
     createdAt: '2026-04-04T00:00:00.000Z',
     updatedAt: '2026-04-04T00:00:00.000Z',
     originalName: 'module.pdf',
-    repairNotes: ['Coherence cleanup merged a micro-fragment into the previous section.'],
+    repairNotes: [
+      'Coherence cleanup merged a micro-fragment into the previous section.',
+    ],
     confidenceBreakdown: { overallConfidence: 0.8, warningCount: 1 },
   };
 }
 
-const mockedExtractionService = extractionService as jest.Mocked<typeof extractionService>;
+const mockedExtractionService = extractionService as jest.Mocked<
+  typeof extractionService
+>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 
-function hasConsoleMessage(mock: jest.Mock, fragment: string) {
+function hasConsoleMessage(mock: jest.SpyInstance, fragment: string) {
   return mock.mock.calls.some((call) =>
-    call.some((argument) => typeof argument === 'string' && argument.includes(fragment)),
+    call.some(
+      (argument: unknown) =>
+        typeof argument === 'string' && argument.includes(fragment),
+    ),
   );
 }
 
@@ -234,14 +284,29 @@ describe('ExtractionReviewPage', () => {
     expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Content' })).toBeInTheDocument();
-    expect(screen.getByText('Teacher review is still required before apply.')).toBeInTheDocument();
-    expect(screen.getByText('Coherence cleanup merged a micro-fragment into the previous section.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Teacher review is still required before apply.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Coherence cleanup merged a micro-fragment into the previous section.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Requested sections')).toBeInTheDocument();
     expect(screen.getByText('Final sections')).toBeInTheDocument();
-    expect(screen.getByText('Source content did not safely support the requested section count.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Source content did not safely support the requested section count.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Unassigned images')).not.toBeInTheDocument();
     expect(screen.queryByAltText('Extracted visual')).not.toBeInTheDocument();
-    expect(hasConsoleMessage(consoleWarnSpy, "Duplicate extension names found: ['underline']")).toBe(false);
+    expect(
+      hasConsoleMessage(
+        consoleWarnSpy,
+        "Duplicate extension names found: ['underline']",
+      ),
+    ).toBe(false);
   });
 
   it('keeps extraction status summary inside the header without standalone stat cards', async () => {
@@ -262,8 +327,12 @@ describe('ExtractionReviewPage', () => {
     expect(headerSummary).toHaveTextContent('1');
     expect(headerSummary).toHaveTextContent('Questions');
     expect(headerSummary).toHaveTextContent('1');
-    expect(document.querySelector('.teacher-figma-stat')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('text-[#12284a]');
+    expect(
+      document.querySelector('.teacher-figma-stat'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass(
+      'text-[#12284a]',
+    );
   });
 
   it('keeps generated content blocks in a visible scroll region', async () => {
@@ -279,14 +348,17 @@ describe('ExtractionReviewPage', () => {
     fireEvent.mouseDown(contentTab);
     fireEvent.click(contentTab);
 
-    const generatedContentRegion = await screen.findByTestId('extraction-content-scroll-region');
+    const generatedContentRegion = await screen.findByTestId(
+      'extraction-content-scroll-region',
+    );
     expect(generatedContentRegion).toHaveClass('max-h-[calc(100vh-18rem)]');
     expect(generatedContentRegion).toHaveClass('overflow-y-auto');
     expect(generatedContentRegion).toHaveClass('pr-2');
   });
 
   it('renders load error state and retries fetching extraction', async () => {
-    const outageMessage = 'Live extraction updates are temporarily unavailable.';
+    const outageMessage =
+      'Live extraction updates are temporarily unavailable.';
 
     mockedExtractionService.getById
       .mockRejectedValueOnce({
@@ -320,7 +392,8 @@ describe('ExtractionReviewPage', () => {
     mockedExtractionService.getById.mockRejectedValue({
       response: {
         data: {
-          message: 'AI service is unavailable. Start the AI service and try again.',
+          message:
+            'AI service is unavailable. Start the AI service and try again.',
         },
       },
     } as never);
@@ -328,7 +401,9 @@ describe('ExtractionReviewPage', () => {
     render(<ExtractionReviewPage />);
 
     expect(
-      await screen.findByText('AI service is unavailable. Start the AI service and try again.'),
+      await screen.findByText(
+        'AI service is unavailable. Start the AI service and try again.',
+      ),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
@@ -336,7 +411,8 @@ describe('ExtractionReviewPage', () => {
   });
 
   it('stops polling and surfaces warning after repeated status failures', async () => {
-    const outageMessage = 'Live extraction updates are temporarily unavailable.';
+    const outageMessage =
+      'Live extraction updates are temporarily unavailable.';
 
     mockedExtractionService.getById.mockResolvedValue({
       success: true,
@@ -378,7 +454,9 @@ describe('ExtractionReviewPage', () => {
       expect(screen.getByText('Extraction Workspace')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: 'Apply Extraction' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Apply Extraction' }),
+    ).toBeDisabled();
     expect(mockedExtractionService.apply).not.toHaveBeenCalled();
   });
 
@@ -393,13 +471,19 @@ describe('ExtractionReviewPage', () => {
 
     expect(await screen.findByText('Extraction Workspace')).toBeInTheDocument();
     expect(screen.getByText('Review queue')).toBeInTheDocument();
-    expect(screen.getByText('Review Section 1 before applying.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review Section 1 before applying.'),
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /View source for issue-1/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /View source for issue-1/i }),
+    );
     expect(screen.getByText(/Lesson content/i)).toBeInTheDocument();
     expect(screen.getByText(/Page 1/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Mark issue-1 reviewed/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Mark issue-1 reviewed/i }),
+    );
     expect(screen.getByText(/Resolved/i)).toBeInTheDocument();
   });
 
@@ -430,10 +514,14 @@ describe('ExtractionReviewPage', () => {
     fireEvent.mouseDown(contentTab);
     fireEvent.click(contentTab);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Convert block 1 to list/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Convert block 1 to list/i }),
+    );
     expect(screen.getByText(/list/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Split section 1 at block 1/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Split section 1 at block 1/i }),
+    );
     expect(screen.getByText(/Section 1 split/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Remove block 1/i }));
@@ -474,7 +562,9 @@ describe('ExtractionReviewPage', () => {
         lessonsCreated: 1,
         assessmentsCreated: 1,
         blockedReasons: [],
-        sections: [{ title: 'Section 1', lessonBlocks: 2, assessmentQuestions: 1 }],
+        sections: [
+          { title: 'Section 1', lessonBlocks: 2, assessmentQuestions: 1 },
+        ],
       },
     } as never);
     mockedExtractionService.apply.mockResolvedValue({
@@ -489,9 +579,12 @@ describe('ExtractionReviewPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply Extraction' }));
 
     await waitFor(() => {
-      expect(mockedExtractionService.previewApply).toHaveBeenCalledWith('extraction-1', {
-        sectionIndices: [0],
-      });
+      expect(mockedExtractionService.previewApply).toHaveBeenCalledWith(
+        'extraction-1',
+        {
+          sectionIndices: [0],
+        },
+      );
     });
     expect(screen.getByText(/Module Title/i)).toBeInTheDocument();
     expect(screen.getByText(/1 lesson/i)).toBeInTheDocument();
@@ -502,17 +595,24 @@ describe('ExtractionReviewPage', () => {
     });
 
     await waitFor(() => {
-      expect(mockedExtractionService.apply).toHaveBeenCalledWith('extraction-1', {
-        sectionIndices: [0],
-      });
+      expect(mockedExtractionService.apply).toHaveBeenCalledWith(
+        'extraction-1',
+        {
+          sectionIndices: [0],
+        },
+      );
     });
     await waitFor(() => {
       expect(mockedExtractionService.getById).toHaveBeenCalledTimes(2);
     });
     await waitFor(() => {
-      expect(mockedToast.success).toHaveBeenCalledWith('Extraction applied successfully');
+      expect(mockedToast.success).toHaveBeenCalledWith(
+        'Extraction applied successfully',
+      );
     });
-    expect(hasConsoleMessage(consoleErrorSpy, 'not wrapped in act')).toBe(false);
+    expect(hasConsoleMessage(consoleErrorSpy, 'not wrapped in act')).toBe(
+      false,
+    );
   });
 
   it('lets the teacher edit a block and save the extraction draft', async () => {
@@ -521,20 +621,23 @@ describe('ExtractionReviewPage', () => {
       message: 'ok',
       data: buildExtraction('completed'),
     } as never);
-    mockedExtractionService.update.mockImplementation(async (_id, payload) => ({
-      success: true,
-      message: 'saved',
-      data: {
-        ...buildExtraction('completed'),
-        structuredContent: {
-          ...buildExtraction('completed').structuredContent,
-          title: payload.title,
-          description: payload.description,
-          sections: payload.sections,
-          mediaAssets: payload.mediaAssets,
-        },
-      },
-    }) as never);
+    mockedExtractionService.update.mockImplementation(
+      async (_id, payload) =>
+        ({
+          success: true,
+          message: 'saved',
+          data: {
+            ...buildExtraction('completed'),
+            structuredContent: {
+              ...buildExtraction('completed').structuredContent,
+              title: payload.title,
+              description: payload.description,
+              sections: payload.sections,
+              mediaAssets: payload.mediaAssets,
+            },
+          },
+        }) as never,
+    );
 
     render(<ExtractionReviewPage />);
 
@@ -552,10 +655,14 @@ describe('ExtractionReviewPage', () => {
     fireEvent.click(editButton);
 
     const editor = screen.getByLabelText('Mock block editor');
-    fireEvent.change(editor, { target: { value: '<p>Teacher revised content</p>' } });
+    fireEvent.change(editor, {
+      target: { value: '<p>Teacher revised content</p>' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    const saveChangesButton = screen.getByRole('button', { name: 'Save Changes' });
+    const saveChangesButton = screen.getByRole('button', {
+      name: 'Save Changes',
+    });
     expect(saveChangesButton).toBeEnabled();
 
     fireEvent.click(saveChangesButton);

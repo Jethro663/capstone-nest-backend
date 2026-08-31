@@ -1,3 +1,4 @@
+import { AcademicMutation } from '../../database/academic-transaction';
 import { randomUUID } from 'node:crypto';
 import {
   BadRequestException,
@@ -715,6 +716,7 @@ export class ClassTemplatesService {
     return { success: true };
   }
 
+  @AcademicMutation()
   async publish(
     id: string,
     dto: PublishClassTemplateDto,
@@ -735,34 +737,18 @@ export class ClassTemplatesService {
       .where(eq(classTemplates.id, id))
       .returning();
 
-    const [updatedLessons, updatedAssessments] = await Promise.all([
-      this.db
-        .update(lessons)
-        .set({
-          isDraft: status !== ClassTemplateStatus.Published,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(lessons.templateId, id),
-            eq(lessons.isCoreTemplateAsset, true),
-          ),
-        )
-        .returning({ id: lessons.id }),
-      this.db
-        .update(assessments)
-        .set({
-          isPublished: status === ClassTemplateStatus.Published,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(assessments.templateId, id),
-            eq(assessments.isCoreTemplateAsset, true),
-          ),
-        )
-        .returning({ id: assessments.id }),
-    ]);
+    const updatedLessons = await this.db
+      .update(lessons)
+      .set({
+        isDraft: status !== ClassTemplateStatus.Published,
+        updatedAt: now,
+      })
+      .where(
+        and(eq(lessons.templateId, id), eq(lessons.isCoreTemplateAsset, true)),
+      )
+      .returning({ id: lessons.id });
+    // Reusable template publication never releases or withdraws live assessments.
+    // Their destination class/year/period is checked by the assessment release endpoint.
 
     await this.auditService.log({
       actorId,
@@ -772,7 +758,8 @@ export class ClassTemplatesService {
       metadata: {
         status: updated.status,
         updatedCoreLessons: updatedLessons.length,
-        updatedCoreAssessments: updatedAssessments.length,
+        updatedCoreAssessments: 0,
+        assessmentRelease: 'explicit_per_class',
       },
     });
 

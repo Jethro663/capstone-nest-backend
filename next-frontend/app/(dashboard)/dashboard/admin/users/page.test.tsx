@@ -32,9 +32,11 @@ jest.mock('@/services/user-service', () => ({
 
 const mockedUserService = userService as jest.Mocked<typeof userService>;
 
-function buildResponse(
-  query?: { status?: string; role?: string; gradeLevel?: string },
-): Awaited<ReturnType<typeof userService.getAll>> {
+function buildResponse(query?: {
+  status?: string;
+  role?: string;
+  gradeLevel?: string;
+}): Awaited<ReturnType<typeof userService.getAll>> {
   const status = query?.status ?? 'ACTIVE';
   const users =
     query?.role === 'teacher'
@@ -44,7 +46,7 @@ function buildResponse(
             firstName: 'Tina',
             lastName: 'Teacher',
             email: 'teacher@example.com',
-            roles: [{ id: 'role-2', name: 'teacher' }],
+            roles: ['teacher'],
             status,
             isEmailVerified: true,
             createdAt: '2026-03-27T00:00:00.000Z',
@@ -57,7 +59,7 @@ function buildResponse(
             firstName: 'Admin',
             lastName: 'User',
             email: 'admin@example.com',
-            roles: [{ id: 'role-1', name: 'admin' }],
+            roles: ['admin'],
             status,
             isEmailVerified: true,
             createdAt: '2026-03-27T00:00:00.000Z',
@@ -68,7 +70,7 @@ function buildResponse(
             firstName: 'Student',
             lastName: 'User',
             email: 'student@example.com',
-            roles: [{ id: 'role-3', name: 'student' }],
+            roles: ['student'],
             status,
             isEmailVerified: true,
             createdAt: '2026-03-27T00:00:00.000Z',
@@ -96,7 +98,9 @@ describe('UserManagementPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     pushMock.mockReset();
-    mockedUserService.getAll.mockImplementation(async (query) => buildResponse(query));
+    mockedUserService.getAll.mockImplementation(async (query) =>
+      buildResponse(query),
+    );
     mockedUserService.bulkLifecycle.mockResolvedValue({
       success: true,
       message: '1 user suspended.',
@@ -161,7 +165,9 @@ describe('UserManagementPage', () => {
         includeStatusCounts: true,
       }),
     );
-    expect(screen.getByLabelText(/filter users by role/i)).toHaveValue('teacher');
+    expect(screen.getByLabelText(/filter users by role/i)).toHaveValue(
+      'teacher',
+    );
   });
 
   it('requests graduated students from the grade-level filter', async () => {
@@ -193,13 +199,19 @@ describe('UserManagementPage', () => {
     await screen.findByRole('heading', { name: 'Users' });
 
     fireEvent.click(screen.getByText('student@example.com'));
-    expect(pushMock).toHaveBeenCalledWith('/dashboard/admin/users/student-active');
+    expect(pushMock).toHaveBeenCalledWith(
+      '/dashboard/admin/users/student-active',
+    );
 
-    fireEvent.click(screen.getByRole('button', { name: /select all visible/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /select all visible/i }),
+    );
     expect(screen.getByText('1 selected')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /suspend selected/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /suspend users/i }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /suspend users/i }),
+    );
 
     await waitFor(() =>
       expect(mockedUserService.bulkLifecycle).toHaveBeenCalledWith({

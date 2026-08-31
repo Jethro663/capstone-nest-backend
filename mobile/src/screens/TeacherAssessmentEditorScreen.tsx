@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   queryKeys,
   useAssessmentDetail,
@@ -11,6 +11,8 @@ import {
 } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
+import { academicStateService } from "../api/services/academic-state";
+import { classesApi } from "../api/services/classes";
 import type { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import type {
@@ -34,7 +36,10 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherAssessmentEditor">;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "TeacherAssessmentEditor"
+>;
 
 type SupportedQuestionType =
   | "multiple_choice"
@@ -65,14 +70,20 @@ type DraftQuestion = {
   options: DraftOption[];
 };
 
-const ASSESSMENT_TYPE_OPTIONS: Array<{ value: SupportedAssessmentType; label: string }> = [
+const ASSESSMENT_TYPE_OPTIONS: Array<{
+  value: SupportedAssessmentType;
+  label: string;
+}> = [
   { value: "quiz", label: "Quiz" },
   { value: "exam", label: "Exam" },
   { value: "assignment", label: "Assignment" },
   { value: "file_upload", label: "File Upload" },
 ];
 
-const QUESTION_TYPE_OPTIONS: Array<{ value: SupportedQuestionType; label: string }> = [
+const QUESTION_TYPE_OPTIONS: Array<{
+  value: SupportedQuestionType;
+  label: string;
+}> = [
   { value: "multiple_choice", label: "Multiple Choice" },
   { value: "multiple_select", label: "Multiple Select" },
   { value: "true_false", label: "True/False" },
@@ -153,8 +164,16 @@ function createDefaultOptions(type: SupportedQuestionType): DraftOption[] {
 
   if (type === "matching") {
     return [
-      { localId: createLocalId(), text: "Premise 1 -> Option A", isCorrect: true },
-      { localId: createLocalId(), text: "Premise 2 -> Option B", isCorrect: true },
+      {
+        localId: createLocalId(),
+        text: "Premise 1 -> Option A",
+        isCorrect: true,
+      },
+      {
+        localId: createLocalId(),
+        text: "Premise 2 -> Option B",
+        isCorrect: true,
+      },
     ];
   }
 
@@ -185,8 +204,15 @@ function normalizeQuestionType(value?: string | null): SupportedQuestionType {
   return "multiple_choice";
 }
 
-function normalizeAssessmentType(value?: string | null): SupportedAssessmentType {
-  if (value === "quiz" || value === "exam" || value === "assignment" || value === "file_upload") {
+function normalizeAssessmentType(
+  value?: string | null,
+): SupportedAssessmentType {
+  if (
+    value === "quiz" ||
+    value === "exam" ||
+    value === "assignment" ||
+    value === "file_upload"
+  ) {
     return value;
   }
   return "quiz";
@@ -207,13 +233,17 @@ function toDateInputValue(value?: string | null) {
 function parseDateInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  const normalized = trimmed.includes("T") ? trimmed : trimmed.replace(" ", "T");
+  const normalized = trimmed.includes("T")
+    ? trimmed
+    : trimmed.replace(" ", "T");
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) {
     throw new Error("Use due date format YYYY-MM-DD HH:mm");
   }
   if (date.getTime() < Date.now()) {
-    throw new Error("Assessment due date cannot be earlier than the present date and time.");
+    throw new Error(
+      "Assessment due date cannot be earlier than the present date and time.",
+    );
   }
   return date.toISOString();
 }
@@ -224,7 +254,9 @@ function clampInt(raw: string, fallback: number, min: number, max: number) {
   return Math.max(min, Math.min(max, parsed));
 }
 
-function mapQuestionFromAssessment(question: AssessmentQuestion): DraftQuestion {
+function mapQuestionFromAssessment(
+  question: AssessmentQuestion,
+): DraftQuestion {
   const type = normalizeQuestionType(question.type);
   const options = (question.options ?? []).map((entry) => ({
     localId: createLocalId(),
@@ -257,7 +289,9 @@ function ensureRichText(value: string) {
 }
 
 function formatAssessmentTypeLabel(value: SupportedAssessmentType) {
-  return value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export function DatePickerModal({
@@ -273,19 +307,27 @@ export function DatePickerModal({
 }) {
   const initialDate = useMemo(() => {
     if (!value) return new Date();
-    const parsed = new Date(value.includes("T") ? value : value.replace(" ", "T"));
+    const parsed = new Date(
+      value.includes("T") ? value : value.replace(" ", "T"),
+    );
     return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
   }, [value]);
 
   const [currentMonth, setCurrentMonth] = useState(initialDate.getMonth());
   const [currentYear, setCurrentYear] = useState(initialDate.getFullYear());
   const [selectedDay, setSelectedDay] = useState(initialDate.getDate());
-  const [selectedHour, setSelectedHour] = useState(`${initialDate.getHours()}`.padStart(2, "0"));
-  const [selectedMinute, setSelectedMinute] = useState(`${initialDate.getMinutes()}`.padStart(2, "0"));
+  const [selectedHour, setSelectedHour] = useState(
+    `${initialDate.getHours()}`.padStart(2, "0"),
+  );
+  const [selectedMinute, setSelectedMinute] = useState(
+    `${initialDate.getMinutes()}`.padStart(2, "0"),
+  );
 
   useEffect(() => {
     if (visible) {
-      const d = !value ? new Date() : new Date(value.includes("T") ? value : value.replace(" ", "T"));
+      const d = !value
+        ? new Date()
+        : new Date(value.includes("T") ? value : value.replace(" ", "T"));
       const valid = !Number.isNaN(d.getTime()) ? d : new Date();
       setCurrentMonth(valid.getMonth());
       setCurrentYear(valid.getFullYear());
@@ -295,17 +337,34 @@ export function DatePickerModal({
     }
   }, [visible, value]);
 
-  const daysInMonth = useMemo(() => new Date(currentYear, currentMonth + 1, 0).getDate(), [currentYear, currentMonth]);
-  const startDayOfWeek = useMemo(() => new Date(currentYear, currentMonth, 1).getDay(), [currentYear, currentMonth]);
-  const monthName = useMemo(() => new Date(currentYear, currentMonth, 1).toLocaleDateString("en-US", { month: "long" }), [currentYear, currentMonth]);
+  const daysInMonth = useMemo(
+    () => new Date(currentYear, currentMonth + 1, 0).getDate(),
+    [currentYear, currentMonth],
+  );
+  const startDayOfWeek = useMemo(
+    () => new Date(currentYear, currentMonth, 1).getDay(),
+    [currentYear, currentMonth],
+  );
+  const monthName = useMemo(
+    () =>
+      new Date(currentYear, currentMonth, 1).toLocaleDateString("en-US", {
+        month: "long",
+      }),
+    [currentYear, currentMonth],
+  );
 
   const handleApply = () => {
     const y = currentYear;
     const m = `${currentMonth + 1}`.padStart(2, "0");
     const d = `${selectedDay}`.padStart(2, "0");
     const formatted = `${y}-${m}-${d} ${selectedHour}:${selectedMinute}`;
-    const parsedDate = new Date(`${y}-${m}-${d}T${selectedHour}:${selectedMinute}`);
-    if (!Number.isNaN(parsedDate.getTime()) && parsedDate.getTime() < Date.now()) {
+    const parsedDate = new Date(
+      `${y}-${m}-${d}T${selectedHour}:${selectedMinute}`,
+    );
+    if (
+      !Number.isNaN(parsedDate.getTime()) &&
+      parsedDate.getTime() < Date.now()
+    ) {
       Alert.alert(
         "Invalid Due Date",
         "Assessment due date cannot be earlier than the present date and time.",
@@ -327,48 +386,151 @@ export function DatePickerModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 18, gap: 14 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Select Due Date</Text>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: 18,
+            gap: 14,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+            >
+              Select Due Date
+            </Text>
             <Pressable onPress={onClose} style={{ padding: 4 }}>
-              <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={20}
+                color={theme.muted}
+              />
             </Pressable>
           </View>
 
           {/* Quick Presets */}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-            <TeacherChip label="Today" active={false} onPress={() => handleQuickPreset(0)} />
-            <TeacherChip label="Tomorrow" active={false} onPress={() => handleQuickPreset(1)} />
-            <TeacherChip label="+7 Days" active={false} onPress={() => handleQuickPreset(7)} />
-            <TeacherChip label="+30 Days" active={false} onPress={() => handleQuickPreset(30)} />
-            <TeacherChip label="Clear" active={false} onPress={() => { onSelect(""); onClose(); }} />
+            <TeacherChip
+              label="Today"
+              active={false}
+              onPress={() => handleQuickPreset(0)}
+            />
+            <TeacherChip
+              label="Tomorrow"
+              active={false}
+              onPress={() => handleQuickPreset(1)}
+            />
+            <TeacherChip
+              label="+7 Days"
+              active={false}
+              onPress={() => handleQuickPreset(7)}
+            />
+            <TeacherChip
+              label="+30 Days"
+              active={false}
+              onPress={() => handleQuickPreset(30)}
+            />
+            <TeacherChip
+              label="Clear"
+              active={false}
+              onPress={() => {
+                onSelect("");
+                onClose();
+              }}
+            />
           </View>
 
           {/* Month Header */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: theme.active, padding: 10, borderRadius: 10 }}>
-            <Pressable onPress={() => {
-              if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear((y) => y - 1); }
-              else { setCurrentMonth((m) => m - 1); }
-            }}>
-              <MaterialCommunityIcons name="chevron-left" size={22} color={theme.text} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: theme.active,
+              padding: 10,
+              borderRadius: 10,
+            }}
+          >
+            <Pressable
+              onPress={() => {
+                if (currentMonth === 0) {
+                  setCurrentMonth(11);
+                  setCurrentYear((y) => y - 1);
+                } else {
+                  setCurrentMonth((m) => m - 1);
+                }
+              }}
+            >
+              <MaterialCommunityIcons
+                name="chevron-left"
+                size={22}
+                color={theme.text}
+              />
             </Pressable>
-            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text }}>
+            <Text
+              style={{ fontSize: 14, fontWeight: "700", color: theme.text }}
+            >
               {monthName} {currentYear}
             </Text>
-            <Pressable onPress={() => {
-              if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear((y) => y + 1); }
-              else { setCurrentMonth((m) => m + 1); }
-            }}>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={theme.text} />
+            <Pressable
+              onPress={() => {
+                if (currentMonth === 11) {
+                  setCurrentMonth(0);
+                  setCurrentYear((y) => y + 1);
+                } else {
+                  setCurrentMonth((m) => m + 1);
+                }
+              }}
+            >
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={22}
+                color={theme.text}
+              />
             </Pressable>
           </View>
 
           {/* Day Grid Header */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <View
+            style={{ flexDirection: "row", justifyContent: "space-between" }}
+          >
             {["S", "M", "T", "W", "T", "F", "S"].map((day, idx) => (
-              <Text key={idx} style={{ width: 36, textAlign: "center", fontSize: 11, fontWeight: "700", color: theme.muted }}>
+              <Text
+                key={idx}
+                style={{
+                  width: 36,
+                  textAlign: "center",
+                  fontSize: 11,
+                  fontWeight: "700",
+                  color: theme.muted,
+                }}
+              >
                 {day}
               </Text>
             ))}
@@ -377,7 +539,10 @@ export function DatePickerModal({
           {/* Calendar Days */}
           <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
             {Array.from({ length: startDayOfWeek }).map((_, idx) => (
-              <View key={`blank-${idx}`} style={{ width: "14.28%", height: 36 }} />
+              <View
+                key={`blank-${idx}`}
+                style={{ width: "14.28%", height: 36 }}
+              />
             ))}
             {Array.from({ length: daysInMonth }).map((_, idx) => {
               const dayNum = idx + 1;
@@ -393,15 +558,23 @@ export function DatePickerModal({
                     justifyContent: "center",
                   }}
                 >
-                  <View style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    backgroundColor: isSelected ? theme.blue : "transparent",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}>
-                    <Text style={{ fontSize: 12, fontWeight: isSelected ? "800" : "600", color: isSelected ? "#ffffff" : theme.text }}>
+                  <View
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      backgroundColor: isSelected ? theme.blue : "transparent",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: isSelected ? "800" : "600",
+                        color: isSelected ? "#ffffff" : theme.text,
+                      }}
+                    >
                       {dayNum}
                     </Text>
                   </View>
@@ -411,9 +584,24 @@ export function DatePickerModal({
           </View>
 
           {/* Time Selector */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Time (HH:mm)</Text>
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingTop: 8,
+              borderTopWidth: 1,
+              borderTopColor: theme.border,
+            }}
+          >
+            <Text
+              style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+            >
+              Time (HH:mm)
+            </Text>
+            <View
+              style={{ flexDirection: "row", gap: 6, alignItems: "center" }}
+            >
               <TextInput
                 value={selectedHour}
                 onChangeText={(val) => {
@@ -425,9 +613,24 @@ export function DatePickerModal({
                 }}
                 keyboardType="number-pad"
                 maxLength={2}
-                style={{ width: 44, height: 36, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, color: theme.text, textAlign: "center", fontSize: 13, fontWeight: "700" }}
+                style={{
+                  width: 44,
+                  height: 36,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
+                  color: theme.text,
+                  textAlign: "center",
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
               />
-              <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>:</Text>
+              <Text
+                style={{ fontSize: 14, fontWeight: "800", color: theme.text }}
+              >
+                :
+              </Text>
               <TextInput
                 value={selectedMinute}
                 onChangeText={(val) => {
@@ -439,15 +642,41 @@ export function DatePickerModal({
                 }}
                 keyboardType="number-pad"
                 maxLength={2}
-                style={{ width: 44, height: 36, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, color: theme.text, textAlign: "center", fontSize: 13, fontWeight: "700" }}
+                style={{
+                  width: 44,
+                  height: 36,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  backgroundColor: theme.active,
+                  color: theme.text,
+                  textAlign: "center",
+                  fontSize: 13,
+                  fontWeight: "700",
+                }}
               />
             </View>
           </View>
 
           {/* Action Buttons */}
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <TeacherActionButton label="Cancel" tone="neutral" onPress={onClose} />
-            <TeacherActionButton label="Apply Date" tone="blue" onPress={handleApply} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 4,
+            }}
+          >
+            <TeacherActionButton
+              label="Cancel"
+              tone="neutral"
+              onPress={onClose}
+            />
+            <TeacherActionButton
+              label="Apply Date"
+              tone="blue"
+              onPress={handleApply}
+            />
           </View>
         </View>
       </View>
@@ -482,13 +711,51 @@ function TimeLimitDropdownModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <View style={{ width: "100%", maxWidth: 360, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 18, gap: 12 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Select Time Limit</Text>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.6)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 360,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: 18,
+            gap: 12,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+            >
+              Select Time Limit
+            </Text>
             <Pressable onPress={onClose} style={{ padding: 4 }}>
-              <MaterialCommunityIcons name="close" size={20} color={theme.muted} />
+              <MaterialCommunityIcons
+                name="close"
+                size={20}
+                color={theme.muted}
+              />
             </Pressable>
           </View>
 
@@ -505,19 +772,31 @@ function TimeLimitDropdownModal({
                     paddingHorizontal: 14,
                     paddingVertical: 12,
                     borderRadius: 10,
-                    backgroundColor: value === opt.value ? theme.blueSoft : theme.active,
+                    backgroundColor:
+                      value === opt.value ? theme.blueSoft : theme.active,
                     borderWidth: 1,
-                    borderColor: value === opt.value ? theme.blue : theme.border,
+                    borderColor:
+                      value === opt.value ? theme.blue : theme.border,
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: value === opt.value ? theme.blue : theme.text }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "700",
+                      color: value === opt.value ? theme.blue : theme.text,
+                    }}
+                  >
                     {opt.label}
                   </Text>
                   {value === opt.value ? (
-                    <MaterialCommunityIcons name="check" size={16} color={theme.blue} />
+                    <MaterialCommunityIcons
+                      name="check"
+                      size={16}
+                      color={theme.blue}
+                    />
                   ) : null}
                 </Pressable>
               ))}
@@ -536,20 +815,30 @@ function TimeLimitDropdownModal({
                   alignItems: "center",
                 }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: theme.text }}
+                >
                   Custom minutes...
                 </Text>
-                <MaterialCommunityIcons name="pencil-outline" size={16} color={theme.muted} />
+                <MaterialCommunityIcons
+                  name="pencil-outline"
+                  size={16}
+                  color={theme.muted}
+                />
               </Pressable>
             </View>
           ) : (
             <View style={{ gap: 12 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: theme.muted }}>
+              <Text
+                style={{ fontSize: 12, fontWeight: "600", color: theme.muted }}
+              >
                 Enter custom duration in minutes (numbers only):
               </Text>
               <TextInput
                 value={customMinutes}
-                onChangeText={(val) => setCustomMinutes(val.replace(/[^0-9]/g, ""))}
+                onChangeText={(val) =>
+                  setCustomMinutes(val.replace(/[^0-9]/g, ""))
+                }
                 keyboardType="number-pad"
                 placeholder="e.g. 25"
                 placeholderTextColor={theme.dim}
@@ -565,8 +854,18 @@ function TimeLimitDropdownModal({
                   fontWeight: "700",
                 }}
               />
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10 }}>
-                <TeacherActionButton label="Back" tone="neutral" onPress={() => setCustomMode(false)} />
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <TeacherActionButton
+                  label="Back"
+                  tone="neutral"
+                  onPress={() => setCustomMode(false)}
+                />
                 <TeacherActionButton
                   label="Set Minutes"
                   tone="blue"
@@ -614,58 +913,184 @@ function SaveConfirmModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: 20,
+            gap: 14,
+          }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.greenSoft, alignItems: "center", justifyContent: "center" }}>
-              <MaterialCommunityIcons name="content-save-check-outline" size={22} color={theme.green} />
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.greenSoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialCommunityIcons
+                name="content-save-check-outline"
+                size={22}
+                color={theme.green}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Confirm Save Assessment</Text>
-              <Text style={{ fontSize: 11, color: theme.muted }}>Review changes before saving</Text>
+              <Text
+                style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+              >
+                Confirm Save Assessment
+              </Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>
+                Review changes before saving
+              </Text>
             </View>
           </View>
 
-          <View style={{ backgroundColor: theme.active, borderRadius: 12, padding: 12, gap: 8, borderWidth: 1, borderColor: theme.border }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <View
+            style={{
+              backgroundColor: theme.active,
+              borderRadius: 12,
+              padding: 12,
+              gap: 8,
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
               <Text style={{ fontSize: 12, color: theme.muted }}>Title:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: theme.text, flex: 1, textAlign: "right" }} numberOfLines={1}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "800",
+                  color: theme.text,
+                  flex: 1,
+                  textAlign: "right",
+                }}
+                numberOfLines={1}
+              >
                 {title || "Untitled Assessment"}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
               <Text style={{ fontSize: 12, color: theme.muted }}>Class:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{className || "Selected Class"}</Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+              >
+                {className || "Selected Class"}
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
               <Text style={{ fontSize: 12, color: theme.muted }}>Type:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, textTransform: "capitalize" }}>{type.replace("_", " ")}</Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: "700",
+                  color: theme.text,
+                  textTransform: "capitalize",
+                }}
+              >
+                {type.replace("_", " ")}
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: theme.muted }}>Questions:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}>{questionCount} question(s)</Text>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                Questions:
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "800", color: theme.blue }}
+              >
+                {questionCount} question(s)
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: theme.muted }}>Due Date:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{dueDate || "No due date"}</Text>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                Due Date:
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+              >
+                {dueDate || "No due date"}
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: theme.muted }}>Pass % / Max Attempts:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{passScore}% / {maxAttempts} attempt(s)</Text>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                Pass % / Max Attempts:
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+              >
+                {passScore}% / {maxAttempts} attempt(s)
+              </Text>
             </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 12, color: theme.muted }}>Time Limit:</Text>
-              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>{timeLimit ? `${timeLimit} mins` : "No limit"}</Text>
+            <View
+              style={{ flexDirection: "row", justifyContent: "space-between" }}
+            >
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                Time Limit:
+              </Text>
+              <Text
+                style={{ fontSize: 12, fontWeight: "700", color: theme.text }}
+              >
+                {timeLimit ? `${timeLimit} mins` : "No limit"}
+              </Text>
             </View>
           </View>
 
-          <Text style={{ fontSize: 11, color: theme.muted, textAlign: "center" }}>
+          <Text
+            style={{ fontSize: 11, color: theme.muted, textAlign: "center" }}
+          >
             Saving will sync changes immediately across Web & Mobile.
           </Text>
 
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <TeacherActionButton label="Cancel" tone="neutral" disabled={saving} onPress={onClose} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 4,
+            }}
+          >
+            <TeacherActionButton
+              label="Cancel"
+              tone="neutral"
+              disabled={saving}
+              onPress={onClose}
+            />
             <TeacherActionButton
               label={saving ? "Saving..." : "Confirm & Save"}
               icon="check"
@@ -696,25 +1121,85 @@ function DeleteConfirmModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: 20,
+            gap: 14,
+          }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.redSoft, alignItems: "center", justifyContent: "center" }}>
-              <MaterialCommunityIcons name="trash-can-outline" size={22} color={theme.red} />
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.redSoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={22}
+                color={theme.red}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Delete Assessment?</Text>
-              <Text style={{ fontSize: 11, color: theme.muted }}>This action cannot be undone</Text>
+              <Text
+                style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+              >
+                Delete Assessment?
+              </Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>
+                This action cannot be undone
+              </Text>
             </View>
           </View>
 
           <Text style={{ fontSize: 13, color: theme.text, lineHeight: 18 }}>
-            Are you sure you want to delete <Text style={{ fontWeight: "800" }}>"{title || "this assessment"}"</Text>? All student responses, attempts, and grades linked to this assessment will be permanently removed.
+            Are you sure you want to delete{" "}
+            <Text style={{ fontWeight: "800" }}>
+              "{title || "this assessment"}"
+            </Text>
+            ? All student responses, attempts, and grades linked to this
+            assessment will be permanently removed.
           </Text>
 
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <TeacherActionButton label="Cancel" tone="neutral" disabled={deleting} onPress={onClose} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 4,
+            }}
+          >
+            <TeacherActionButton
+              label="Cancel"
+              tone="neutral"
+              disabled={deleting}
+              onPress={onClose}
+            />
             <TeacherActionButton
               label={deleting ? "Deleting..." : "Delete Assessment"}
               icon="trash-can-outline"
@@ -737,14 +1222,21 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   const initialClassId = route.params?.classId;
 
   const classesQuery = useTeacherClasses(teacherId);
-  const [assessmentId, setAssessmentId] = useState<string | undefined>(initialAssessmentId);
+  const [assessmentId, setAssessmentId] = useState<string | undefined>(
+    initialAssessmentId,
+  );
   const assessmentQuery = useAssessmentDetail(assessmentId);
   const hydratedAssessmentIdRef = useRef<string | null>(null);
 
   const [selectedClassId, setSelectedClassId] = useState(initialClassId ?? "");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assessmentType, setAssessmentType] = useState<SupportedAssessmentType>("quiz");
+  const [assessmentType, setAssessmentType] =
+    useState<SupportedAssessmentType>("quiz");
+  const [quarter, setQuarter] = useState<"Q1" | "Q2" | "Q3" | "Q4" | "">("");
+  const [category, setCategory] = useState<
+    "written_work" | "performance_task" | "quarterly_assessment" | ""
+  >("");
   const [status, setStatus] = useState<"draft" | "published">("draft");
   const [dueDateInput, setDueDateInput] = useState("");
   const [passingScoreInput, setPassingScoreInput] = useState("60");
@@ -762,25 +1254,29 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   const deleteMutation = useTeacherDeleteAssessmentMutation(assessmentId);
 
   const handleDeleteAssessmentConfirm = async () => {
-    if (!assessmentId) return;
+    if (!assessmentId || !canPrepare) return;
     try {
       await deleteMutation.mutateAsync();
       setShowDeleteConfirmModal(false);
-      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            if (selectedClassId) {
-              navigation.navigate("TeacherClassDetail", {
-                classId: selectedClassId,
-                initialTab: "assessments",
-              });
-            } else {
-              navigation.goBack();
-            }
+      Alert.alert(
+        "Assessment Deleted",
+        "The assessment has been deleted successfully.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (selectedClassId) {
+                navigation.navigate("TeacherClassDetail", {
+                  classId: selectedClassId,
+                  initialTab: "assessments",
+                });
+              } else {
+                navigation.goBack();
+              }
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (error) {
       Alert.alert("Unable to delete assessment", toAppError(error).message);
     }
@@ -804,10 +1300,14 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
     setDescription(assessment.description ?? "");
     setAssessmentType(normalizeAssessmentType(assessment.type));
     setStatus(assessment.isPublished ? "published" : "draft");
+    setQuarter((assessment.quarter as typeof quarter) || "");
+    setCategory((assessment.classRecordCategory as typeof category) || "");
     setDueDateInput(toDateInputValue(assessment.dueDate));
     setPassingScoreInput(`${assessment.passingScore ?? 60}`);
     setMaxAttemptsInput(`${assessment.maxAttempts ?? 1}`);
-    setTimeLimitInput(assessment.timeLimitMinutes ? `${assessment.timeLimitMinutes}` : "");
+    setTimeLimitInput(
+      assessment.timeLimitMinutes ? `${assessment.timeLimitMinutes}` : "",
+    );
     setFileUploadInstructions(assessment.fileUploadInstructions ?? "");
     setQuestions(
       (assessment.questions ?? [])
@@ -819,19 +1319,46 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   }, [assessmentQuery.data, assessmentId, initialClassId]);
 
   const classOptions = classesQuery.data ?? [];
-  const activeClass = classOptions.find((entry) => entry.id === selectedClassId);
+  const activeClass = classOptions.find(
+    (entry) => entry.id === selectedClassId,
+  );
+  const policyQuery = useQuery({
+    queryKey: ["academic-policy", activeClass?.schoolYear],
+    enabled: Boolean(activeClass),
+    queryFn: async () => {
+      const current = (await academicStateService.getCurrent()).data;
+      return activeClass!.schoolYear === current.schoolYear
+        ? current.policy
+        : (await academicStateService.getPolicy(activeClass!.schoolYear)).data;
+    },
+  });
+  const assessment = assessmentQuery.data;
+  const canPrepare =
+    assessment?.academicCapabilities?.canPrepare ?? !assessmentId;
+  const canRelease = Boolean(
+    assessment?.academicCapabilities?.canRelease &&
+    assessment.academicCapabilities.period === quarter,
+  );
 
   const totalPoints = useMemo(
     () =>
-      questions.reduce((total, question) => total + clampInt(question.points, 1, 1, 999), 0),
+      questions.reduce(
+        (total, question) => total + clampInt(question.points, 1, 1, 999),
+        0,
+      ),
     [questions],
   );
 
   const sortedQuestions = useMemo(() => questions, [questions]);
 
-  const patchQuestion = (localId: string, updater: (current: DraftQuestion) => DraftQuestion) => {
+  const patchQuestion = (
+    localId: string,
+    updater: (current: DraftQuestion) => DraftQuestion,
+  ) => {
     setQuestions((current) =>
-      current.map((entry) => (entry.localId === localId ? updater(entry) : entry)),
+      current.map((entry) =>
+        entry.localId === localId ? updater(entry) : entry,
+      ),
     );
   };
 
@@ -854,7 +1381,9 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
     setQuestions((current) => {
       const target = current.find((entry) => entry.localId === localId);
       if (target?.id) {
-        setRemovedQuestionIds((existing) => (existing.includes(target.id!) ? existing : [...existing, target.id!]));
+        setRemovedQuestionIds((existing) =>
+          existing.includes(target.id!) ? existing : [...existing, target.id!],
+        );
       }
       return current.filter((entry) => entry.localId !== localId);
     });
@@ -862,7 +1391,9 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
 
   const moveQuestion = (localId: string, direction: -1 | 1) => {
     setQuestions((current) => {
-      const currentIndex = current.findIndex((entry) => entry.localId === localId);
+      const currentIndex = current.findIndex(
+        (entry) => entry.localId === localId,
+      );
       if (currentIndex < 0) return current;
       const targetIndex = currentIndex + direction;
       if (targetIndex < 0 || targetIndex >= current.length) return current;
@@ -876,12 +1407,16 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   const validateQuestionPayload = () => {
     if (assessmentType === "file_upload") {
       if (!fileUploadInstructions.trim()) {
-        throw new Error("File upload instructions are required for file upload assessments.");
+        throw new Error(
+          "File upload instructions are required for file upload assessments.",
+        );
       }
       return;
     }
     if (sortedQuestions.length === 0) {
-      throw new Error("No questions entered. Please add at least 1 question to the assessment before saving.");
+      throw new Error(
+        "No questions entered. Please add at least 1 question to the assessment before saving.",
+      );
     }
 
     sortedQuestions.forEach((question, index) => {
@@ -899,7 +1434,9 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
           .map((entry) => entry.text.trim())
           .filter((entry) => entry.length > 0);
         if (answers.length === 0) {
-          throw new Error(`Question ${index + 1} needs at least one accepted answer.`);
+          throw new Error(
+            `Question ${index + 1} needs at least one accepted answer.`,
+          );
         }
         return;
       }
@@ -912,7 +1449,9 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         throw new Error(`Question ${index + 1} has blank answer options.`);
       }
       if (!question.options.some((entry) => entry.isCorrect)) {
-        throw new Error(`Question ${index + 1} needs at least one correct answer.`);
+        throw new Error(
+          `Question ${index + 1} needs at least one correct answer.`,
+        );
       }
     });
   };
@@ -956,16 +1495,32 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
       points: clampInt(question.points, 1, 1, 999),
       order,
       isRequired: question.isRequired,
-      explanation: question.explanation.trim() ? ensureRichText(question.explanation) : undefined,
+      explanation: question.explanation.trim()
+        ? ensureRichText(question.explanation)
+        : undefined,
       options,
     };
   };
 
-  const invalidateAssessmentCaches = async (targetClassId: string, targetAssessmentId: string) => {
+  const invalidateAssessmentCaches = async (
+    targetClassId: string,
+    targetAssessmentId: string,
+  ) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessments(targetClassId) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.assessmentDetail(targetAssessmentId) }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.teacherAssessmentSubmissions(targetAssessmentId) }),
+      queryClient.invalidateQueries({ queryKey: ["academic"] }),
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.assessments(targetClassId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.assessmentDetail(targetAssessmentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.teacherAssessmentSubmissions(targetAssessmentId),
+      }),
     ]);
   };
 
@@ -997,6 +1552,15 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   };
 
   const getAssessmentPayload = () => {
+    if (!canPrepare)
+      throw new Error(
+        assessment?.academicCapabilities?.readOnlyReason ||
+          "This assessment is read-only.",
+      );
+    if (status === "published" && !canRelease)
+      throw new Error(
+        "Save period changes as a draft first. Release requires the active editable period.",
+      );
     const classId = selectedClassId.trim();
     if (!classId) {
       throw new Error("Select a class first.");
@@ -1011,7 +1575,9 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
     const nextType = assessmentType as AssessmentType;
 
     if (nextType === "file_upload" && !fileUploadInstructions.trim()) {
-      throw new Error("File upload instructions are required for file upload assessments.");
+      throw new Error(
+        "File upload instructions are required for file upload assessments.",
+      );
     }
 
     const basePayload: CreateAssessmentDto = {
@@ -1025,18 +1591,22 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
       timeLimitMinutes:
         nextType === "file_upload"
           ? null
-          : (timeLimitInput.trim()
-              ? clampInt(timeLimitInput, 30, 1, 999)
-              : null),
+          : timeLimitInput.trim()
+            ? clampInt(timeLimitInput, 30, 1, 999)
+            : null,
       closeWhenDue: true,
       randomizeQuestions: false,
       timedQuestionsEnabled: false,
       questionTimeLimitSeconds: null,
       strictMode: false,
+      quarter: quarter || undefined,
+      classRecordCategory: category || undefined,
     };
 
     if (nextType === "file_upload") {
-      basePayload.fileUploadInstructions = ensureRichText(fileUploadInstructions);
+      basePayload.fileUploadInstructions = ensureRichText(
+        fileUploadInstructions,
+      );
       basePayload.allowedUploadMimeTypes = DEFAULT_UPLOAD_MIME_TYPES;
       basePayload.allowedUploadExtensions = DEFAULT_UPLOAD_EXTENSIONS;
       basePayload.maxUploadSizeBytes = 100 * 1024 * 1024;
@@ -1064,8 +1634,13 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
       });
       setAssessmentId(created.id);
       hydratedAssessmentIdRef.current = created.id;
+      setQuarter((created.quarter as typeof quarter) || "");
+      setCategory((created.classRecordCategory as typeof category) || "");
       await invalidateAssessmentCaches(created.classId, created.id);
-      Alert.alert("Draft created", "Draft assessment is ready. Continue editing, then save questions.");
+      Alert.alert(
+        "Draft created",
+        "Draft assessment is ready. Continue editing, then save questions.",
+      );
     } catch (error) {
       Alert.alert("Unable to create draft", toAppError(error).message);
     } finally {
@@ -1100,6 +1675,8 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         targetClassId = created.classId;
         setAssessmentId(created.id);
         hydratedAssessmentIdRef.current = created.id;
+        setQuarter((created.quarter as typeof quarter) || "");
+        setCategory((created.classRecordCategory as typeof category) || "");
       } else {
         const updatePayload: UpdateAssessmentDto = {
           title: payload.title,
@@ -1118,6 +1695,8 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
           passingScore: payload.passingScore,
           maxAttempts: payload.maxAttempts,
           timeLimitMinutes: payload.timeLimitMinutes ?? null,
+          quarter: payload.quarter,
+          classRecordCategory: payload.classRecordCategory,
         };
         await assessmentsApi.update(targetAssessmentId, updatePayload);
       }
@@ -1126,31 +1705,42 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         throw new Error("Assessment ID is missing after save.");
       }
 
-      await syncQuestions(targetAssessmentId);
+      if (!assessment?.isCoreTemplateAsset)
+        await syncQuestions(targetAssessmentId);
+      if (publishAfterSave && !canRelease)
+        throw new Error(
+          "Release is available only for the active editable period. Save period changes as a draft first.",
+        );
       await assessmentsApi.update(targetAssessmentId, {
         isPublished: publishAfterSave,
       });
       await invalidateAssessmentCaches(targetClassId, targetAssessmentId);
 
       if (targetClassId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classDetail(targetClassId),
+        });
       }
 
-      Alert.alert("Assessment Saved", "Your assessment changes have been saved successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            if (targetClassId) {
-              navigation.navigate("TeacherClassDetail", {
-                classId: targetClassId,
-                initialTab: "assessments",
-              });
-            } else {
-              navigation.goBack();
-            }
+      Alert.alert(
+        "Assessment Saved",
+        "Your assessment changes have been saved successfully.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              if (targetClassId) {
+                navigation.navigate("TeacherClassDetail", {
+                  classId: targetClassId,
+                  initialTab: "assessments",
+                });
+              } else {
+                navigation.goBack();
+              }
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (error) {
       Alert.alert("Unable to save assessment", toAppError(error).message);
     } finally {
@@ -1159,6 +1749,34 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
   };
 
   const refreshing = classesQuery.isRefetching || assessmentQuery.isRefetching;
+  if (assessment && !canPrepare)
+    return (
+      <TeacherScreen
+        title="Assessment history"
+        subtitle={
+          assessment.academicCapabilities?.readOnlyReason ||
+          "Read-only assessment"
+        }
+        showBackButton
+        onBackPress={() => navigation.goBack()}
+        onRefresh={() => void assessmentQuery.refetch()}
+        refreshing={refreshing}
+      >
+        <View style={{ padding: 16, gap: 12 }}>
+          <Text style={{ color: theme.text, fontSize: 18 }}>
+            {assessment.title}
+          </Text>
+          <Text style={{ color: theme.subtext }}>
+            {assessment.academicCapabilities?.periodLabel}
+          </Text>
+          {assessment.questions?.map((q) => (
+            <Text key={q.id} style={{ color: theme.text }}>
+              {q.content.replace(/<[^>]*>/g, " ")}
+            </Text>
+          ))}
+        </View>
+      </TeacherScreen>
+    );
 
   return (
     <TeacherScreen
@@ -1177,7 +1795,11 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             backgroundColor: theme.redSoft,
           }}
         >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={18}
+            color={theme.red}
+          />
         </Pressable>
       }
       refreshing={refreshing}
@@ -1193,8 +1815,16 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         items={[
           { label: "Questions", value: sortedQuestions.length, tone: "red" },
           { label: "Total Points", value: totalPoints, tone: "blue" },
-          { label: "Status", value: status === "published" ? "Published" : "Draft", tone: status === "published" ? "green" : "amber" },
-          { label: "Type", value: formatAssessmentTypeLabel(assessmentType), tone: "purple" },
+          {
+            label: "Status",
+            value: status === "published" ? "Published" : "Draft",
+            tone: status === "published" ? "green" : "amber",
+          },
+          {
+            label: "Type",
+            value: formatAssessmentTypeLabel(assessmentType),
+            tone: "purple",
+          },
         ]}
       />
 
@@ -1210,10 +1840,25 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
           />
         ) : (
           <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-            <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+            <Text
+              style={{
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
               Class
             </Text>
-            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
               {classOptions.map((entry) => (
                 <TeacherChip
                   key={entry.id}
@@ -1225,11 +1870,21 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             </View>
             {activeClass ? (
               <Text style={{ marginTop: 8, fontSize: 11, color: "#9D9D9D" }}>
-                {activeClass.subjectName} - {activeClass.section?.name || "Section pending"}
+                {activeClass.subjectName} -{" "}
+                {activeClass.section?.name || "Section pending"}
               </Text>
             ) : null}
 
-            <Text style={{ marginTop: 12, fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
               Title
             </Text>
             <TextInput
@@ -1249,7 +1904,16 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               }}
             />
 
-            <Text style={{ marginTop: 12, fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
               Description
             </Text>
             <TextInput
@@ -1272,10 +1936,26 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               }}
             />
 
-            <Text style={{ marginTop: 12, fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
               Assessment type
             </Text>
-            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
               {ASSESSMENT_TYPE_OPTIONS.map((entry) => (
                 <TeacherChip
                   key={entry.value}
@@ -1286,19 +1966,140 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
               ))}
             </View>
 
-            <Text style={{ marginTop: 12, fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
+              Grading period
+            </Text>
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              <TeacherChip
+                label="Unassigned"
+                active={!quarter}
+                onPress={() => canPrepare && setQuarter("")}
+              />
+              {policyQuery.data?.periods.map((period) => (
+                <TeacherChip
+                  key={period.key}
+                  label={period.label}
+                  active={quarter === period.key}
+                  onPress={() => canPrepare && setQuarter(period.key)}
+                />
+              ))}
+            </View>
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
+              Class record category
+            </Text>
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              <TeacherChip
+                label="Unplaced draft"
+                active={!category}
+                onPress={() => canPrepare && setCategory("")}
+              />
+              {(
+                [
+                  ["written_work", "Written work"],
+                  ["performance_task", "Performance task"],
+                  [
+                    "quarterly_assessment",
+                    policyQuery.data?.periods.length === 3
+                      ? "Examination"
+                      : "Quarterly assessment",
+                  ],
+                ] as const
+              ).map(([value, label]) => (
+                <TeacherChip
+                  key={value}
+                  label={label}
+                  active={category === value}
+                  onPress={() => canPrepare && setCategory(value)}
+                />
+              ))}
+            </View>
+            {assessment?.academicCapabilities?.readOnlyReason ? (
+              <Text style={{ marginTop: 8, color: theme.amber }}>
+                {assessment.academicCapabilities.readOnlyReason}. Historical
+                content remains viewable.
+              </Text>
+            ) : quarter && !canRelease ? (
+              <Text style={{ marginTop: 8, color: theme.subtext }}>
+                This period can be prepared as a draft. Release waits until the
+                period is active and the workbook is editable.
+              </Text>
+            ) : null}
+
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 10,
+                fontWeight: "700",
+                color: theme.muted,
+                textTransform: "uppercase",
+                letterSpacing: 0.7,
+              }}
+            >
               Status
             </Text>
-            <View style={{ marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-              <TeacherChip label="Draft" active={status === "draft"} onPress={() => setStatus("draft")} />
+            <View
+              style={{
+                marginTop: 8,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              <TeacherChip
+                label="Draft"
+                active={status === "draft"}
+                onPress={() => setStatus("draft")}
+              />
               <TeacherChip
                 label="Published"
                 active={status === "published"}
                 onPress={() => {
-                  if (assessmentType !== "file_upload" && sortedQuestions.length === 0) {
+                  if (
+                    assessmentType !== "file_upload" &&
+                    sortedQuestions.length === 0
+                  ) {
                     Alert.alert(
                       "Cannot Publish Assessment",
                       "No questions entered. Please add at least 1 question before publishing.",
+                    );
+                    return;
+                  }
+                  if (!canRelease) {
+                    Alert.alert(
+                      "Release unavailable",
+                      "Save period changes as a draft. Release is allowed only for the active editable period.",
                     );
                     return;
                   }
@@ -1309,7 +2110,15 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
 
             <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
                   Due date
                 </Text>
                 <Pressable
@@ -1327,14 +2136,32 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: dueDateInput ? theme.text : theme.dim }} numberOfLines={1}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: dueDateInput ? theme.text : theme.dim,
+                    }}
+                    numberOfLines={1}
+                  >
                     {dueDateInput ? dueDateInput : "No due date (Tap to set)"}
                   </Text>
-                  <MaterialCommunityIcons name="calendar-month-outline" size={16} color={theme.blue} />
+                  <MaterialCommunityIcons
+                    name="calendar-month-outline"
+                    size={16}
+                    color={theme.blue}
+                  />
                 </Pressable>
               </View>
               <View style={{ width: 108 }}>
-                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
                   Pass %
                 </Text>
                 <TextInput
@@ -1345,7 +2172,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                       setPassingScoreInput("");
                       return;
                     }
-                    const num = Math.min(100, Math.max(1, parseInt(cleaned, 10)));
+                    const num = Math.min(
+                      100,
+                      Math.max(1, parseInt(cleaned, 10)),
+                    );
                     setPassingScoreInput(String(num));
                   }}
                   onBlur={() => {
@@ -1370,14 +2200,28 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
 
             <View style={{ marginTop: 12, flexDirection: "row", gap: 8 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
                   Max attempts
                 </Text>
                 <TextInput
                   value={maxAttemptsInput}
-                  onChangeText={(val) => setMaxAttemptsInput(val.replace(/[^0-9]/g, ""))}
+                  onChangeText={(val) =>
+                    setMaxAttemptsInput(val.replace(/[^0-9]/g, ""))
+                  }
                   onBlur={() => {
-                    if (!maxAttemptsInput.trim() || parseInt(maxAttemptsInput, 10) < 1) setMaxAttemptsInput("1");
+                    if (
+                      !maxAttemptsInput.trim() ||
+                      parseInt(maxAttemptsInput, 10) < 1
+                    )
+                      setMaxAttemptsInput("1");
                   }}
                   keyboardType="number-pad"
                   placeholder="1"
@@ -1395,7 +2239,15 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
                   Time limit
                 </Text>
                 <Pressable
@@ -1406,7 +2258,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                     borderRadius: 10,
                     borderWidth: 1,
                     borderColor: theme.border,
-                    backgroundColor: assessmentType === "file_upload" ? theme.surface : theme.active,
+                    backgroundColor:
+                      assessmentType === "file_upload"
+                        ? theme.surface
+                        : theme.active,
                     paddingHorizontal: 12,
                     paddingVertical: 10,
                     flexDirection: "row",
@@ -1414,21 +2269,40 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                     justifyContent: "space-between",
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: timeLimitInput ? theme.text : theme.dim }} numberOfLines={1}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: timeLimitInput ? theme.text : theme.dim,
+                    }}
+                    numberOfLines={1}
+                  >
                     {assessmentType === "file_upload"
                       ? "Not used"
                       : timeLimitInput
                         ? `${timeLimitInput} minutes`
                         : "No limit (Tap to set)"}
                   </Text>
-                  <MaterialCommunityIcons name="clock-outline" size={16} color={theme.blue} />
+                  <MaterialCommunityIcons
+                    name="clock-outline"
+                    size={16}
+                    color={theme.blue}
+                  />
                 </Pressable>
               </View>
             </View>
 
             {assessmentType === "file_upload" ? (
               <>
-                <Text style={{ marginTop: 12, fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                <Text
+                  style={{
+                    marginTop: 12,
+                    fontSize: 10,
+                    fontWeight: "700",
+                    color: theme.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.7,
+                  }}
+                >
                   File upload instructions
                 </Text>
                 <TextInput
@@ -1487,33 +2361,87 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                   gap: 10,
                 }}
               >
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: theme.text,
+                    }}
+                  >
                     Question {index + 1}
                   </Text>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <Pressable
                       onPress={() => moveQuestion(question.localId, -1)}
-                      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.active }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: theme.active,
+                      }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: theme.text }}>Up</Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: theme.text,
+                        }}
+                      >
+                        Up
+                      </Text>
                     </Pressable>
                     <Pressable
                       onPress={() => moveQuestion(question.localId, 1)}
-                      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.active }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: theme.active,
+                      }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: theme.text }}>Down</Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: theme.text,
+                        }}
+                      >
+                        Down
+                      </Text>
                     </Pressable>
                     <Pressable
                       onPress={() => removeQuestion(question.localId)}
-                      style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.redSoft }}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: theme.redSoft,
+                      }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: "700", color: theme.red }}>Delete</Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: theme.red,
+                        }}
+                      >
+                        Delete
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
 
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                <View
+                  style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
+                >
                   {QUESTION_TYPE_OPTIONS.map((entry) => (
                     <TeacherChip
                       key={`${question.localId}-${entry.value}`}
@@ -1525,7 +2453,8 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                           const nextOptions =
                             nextType === "true_false"
                               ? createDefaultOptions("true_false")
-                              : isOptionQuestion(nextType) || nextType === "fill_blank"
+                              : isOptionQuestion(nextType) ||
+                                  nextType === "fill_blank"
                                 ? current.options.length > 0
                                   ? current.options
                                   : createDefaultOptions(nextType)
@@ -1544,7 +2473,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 <TextInput
                   value={question.content}
                   onChangeText={(value) =>
-                    patchQuestion(question.localId, (current) => ({ ...current, content: value }))
+                    patchQuestion(question.localId, (current) => ({
+                      ...current,
+                      content: value,
+                    }))
                   }
                   multiline
                   placeholder="Question prompt"
@@ -1564,13 +2496,24 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
 
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <View style={{ width: 96 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: theme.muted,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.7,
+                      }}
+                    >
                       Points
                     </Text>
                     <TextInput
                       value={question.points}
                       onChangeText={(value) =>
-                        patchQuestion(question.localId, (current) => ({ ...current, points: value }))
+                        patchQuestion(question.localId, (current) => ({
+                          ...current,
+                          points: value,
+                        }))
                       }
                       keyboardType="number-pad"
                       placeholder="1"
@@ -1588,13 +2531,24 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 10, fontWeight: "700", color: theme.muted, textTransform: "uppercase", letterSpacing: 0.7 }}>
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "700",
+                        color: theme.muted,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.7,
+                      }}
+                    >
                       Explanation (optional)
                     </Text>
                     <TextInput
                       value={question.explanation}
                       onChangeText={(value) =>
-                        patchQuestion(question.localId, (current) => ({ ...current, explanation: value }))
+                        patchQuestion(question.localId, (current) => ({
+                          ...current,
+                          explanation: value,
+                        }))
                       }
                       placeholder="Teacher explanation shown in review"
                       placeholderTextColor={theme.dim}
@@ -1612,8 +2566,18 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                   </View>
                 </View>
 
-                {question.type === "short_answer" || question.type === "essay" ? (
-                  <View style={{ borderRadius: 10, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, paddingHorizontal: 12, paddingVertical: 10 }}>
+                {question.type === "short_answer" ||
+                question.type === "essay" ? (
+                  <View
+                    style={{
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      backgroundColor: theme.active,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                    }}
+                  >
                     <Text style={{ fontSize: 11, color: "#9D9D9D" }}>
                       {question.type === "essay"
                         ? "Essay questions accept long-form text responses and require manual teacher scoring."
@@ -1623,24 +2587,40 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                 ) : (
                   <View style={{ gap: 8 }}>
                     {question.options.map((option, optionIndex) => (
-                      <View key={option.localId} style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                      <View
+                        key={option.localId}
+                        style={{
+                          flexDirection: "row",
+                          gap: 8,
+                          alignItems: "center",
+                        }}
+                      >
                         <Pressable
                           onPress={() =>
                             patchQuestion(question.localId, (current) => {
-                              const next = current.options.map((entry, entryIndex) => {
-                                if (entryIndex !== optionIndex) {
-                                  if (current.type === "multiple_choice" || current.type === "true_false" || current.type === "dropdown") {
-                                    return { ...entry, isCorrect: false };
+                              const next = current.options.map(
+                                (entry, entryIndex) => {
+                                  if (entryIndex !== optionIndex) {
+                                    if (
+                                      current.type === "multiple_choice" ||
+                                      current.type === "true_false" ||
+                                      current.type === "dropdown"
+                                    ) {
+                                      return { ...entry, isCorrect: false };
+                                    }
+                                    return entry;
                                   }
-                                  return entry;
-                                }
 
-                                if (current.type === "multiple_select") {
-                                  return { ...entry, isCorrect: !entry.isCorrect };
-                                }
+                                  if (current.type === "multiple_select") {
+                                    return {
+                                      ...entry,
+                                      isCorrect: !entry.isCorrect,
+                                    };
+                                  }
 
-                                return { ...entry, isCorrect: true };
-                              });
+                                  return { ...entry, isCorrect: true };
+                                },
+                              );
                               return { ...current, options: next };
                             })
                           }
@@ -1649,14 +2629,22 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                             height: 28,
                             borderRadius: 14,
                             borderWidth: 1,
-                            borderColor: option.isCorrect ? theme.redLine : theme.border,
-                            backgroundColor: option.isCorrect ? theme.redSoft : theme.surface,
+                            borderColor: option.isCorrect
+                              ? theme.redLine
+                              : theme.border,
+                            backgroundColor: option.isCorrect
+                              ? theme.redSoft
+                              : theme.surface,
                             alignItems: "center",
                             justifyContent: "center",
                           }}
                         >
                           {option.isCorrect ? (
-                            <MaterialCommunityIcons name="check" size={14} color={theme.red} />
+                            <MaterialCommunityIcons
+                              name="check"
+                              size={14}
+                              color={theme.red}
+                            />
                           ) : null}
                         </Pressable>
                         <TextInput
@@ -1665,8 +2653,11 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                           onChangeText={(value) =>
                             patchQuestion(question.localId, (current) => ({
                               ...current,
-                              options: current.options.map((entry, entryIndex) =>
-                                entryIndex === optionIndex ? { ...entry, text: value } : entry,
+                              options: current.options.map(
+                                (entry, entryIndex) =>
+                                  entryIndex === optionIndex
+                                    ? { ...entry, text: value }
+                                    : entry,
                               ),
                             }))
                           }
@@ -1681,7 +2672,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                             borderRadius: 10,
                             borderWidth: 1,
                             borderColor: theme.border,
-                            backgroundColor: question.type === "true_false" ? theme.surface : theme.active,
+                            backgroundColor:
+                              question.type === "true_false"
+                                ? theme.surface
+                                : theme.active,
                             color: theme.text,
                             paddingHorizontal: 12,
                             paddingVertical: 10,
@@ -1691,11 +2685,16 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                           <Pressable
                             onPress={() =>
                               patchQuestion(question.localId, (current) => {
-                                const canRemove = current.options.length > (current.type === "fill_blank" ? 1 : 2);
+                                const canRemove =
+                                  current.options.length >
+                                  (current.type === "fill_blank" ? 1 : 2);
                                 if (!canRemove) return current;
                                 return {
                                   ...current,
-                                  options: current.options.filter((_, entryIndex) => entryIndex !== optionIndex),
+                                  options: current.options.filter(
+                                    (_, entryIndex) =>
+                                      entryIndex !== optionIndex,
+                                  ),
                                 };
                               })
                             }
@@ -1708,7 +2707,11 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
                               justifyContent: "center",
                             }}
                           >
-                            <MaterialCommunityIcons name="close" size={14} color={theme.text} />
+                            <MaterialCommunityIcons
+                              name="close"
+                              size={14}
+                              color={theme.text}
+                            />
                           </Pressable>
                         ) : null}
                       </View>
@@ -1716,13 +2719,24 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
 
                     {question.type !== "true_false" ? (
                       <TeacherActionButton
-                        label={question.type === "fill_blank" ? "Add answer key" : "Add option"}
+                        label={
+                          question.type === "fill_blank"
+                            ? "Add answer key"
+                            : "Add option"
+                        }
                         icon="plus"
                         tone="neutral"
                         onPress={() =>
                           patchQuestion(question.localId, (current) => ({
                             ...current,
-                            options: [...current.options, { localId: createLocalId(), text: "", isCorrect: current.type === "fill_blank" }],
+                            options: [
+                              ...current.options,
+                              {
+                                localId: createLocalId(),
+                                text: "",
+                                isCorrect: current.type === "fill_blank",
+                              },
+                            ],
                           }))
                         }
                       />
@@ -1733,7 +2747,15 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
             ))
           )}
 
-          <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <View
+            style={{
+              paddingHorizontal: 14,
+              paddingBottom: 14,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
             {QUESTION_TYPE_OPTIONS.map((entry) => (
               <TeacherActionButton
                 key={`add-${entry.value}`}
@@ -1750,7 +2772,15 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
         title="Save and open"
         subtitle="Keep this editor error-free by saving metadata and question updates in one pass."
       >
-        <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        <View
+          style={{
+            paddingHorizontal: 14,
+            paddingBottom: 14,
+            flexDirection: "row",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
           {!assessmentId ? (
             <TeacherActionButton
               label={creatingDraft ? "Creating draft..." : "Create draft now"}
@@ -1809,7 +2839,10 @@ export function TeacherAssessmentEditorScreen({ navigation, route }: Props) {
       <SaveConfirmModal
         visible={showSaveConfirmModal}
         title={title}
-        className={classOptions.find((c) => c.id === selectedClassId)?.subjectName || selectedClassId}
+        className={
+          classOptions.find((c) => c.id === selectedClassId)?.subjectName ||
+          selectedClassId
+        }
         type={assessmentType}
         questionCount={sortedQuestions.length}
         dueDate={dueDateInput}

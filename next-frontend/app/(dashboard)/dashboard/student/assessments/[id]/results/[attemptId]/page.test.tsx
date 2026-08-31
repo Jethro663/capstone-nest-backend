@@ -29,7 +29,9 @@ jest.mock('@/services/lxp-service', () => ({
   },
 }));
 
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
 const mockedAiService = aiService as jest.Mocked<typeof aiService>;
 const mockedLxpService = lxpService as jest.Mocked<typeof lxpService>;
 
@@ -56,8 +58,18 @@ describe('StudentAssessmentResultsPage', () => {
               points: 1,
               order: 1,
               options: [
-                { id: 'option-right', text: 'x=2 or x=3', isCorrect: true, order: 1 },
-                { id: 'option-wrong', text: 'x=1 or x=6', isCorrect: false, order: 2 },
+                {
+                  id: 'option-right',
+                  text: 'x=2 or x=3',
+                  isCorrect: true,
+                  order: 1,
+                },
+                {
+                  id: 'option-wrong',
+                  text: 'x=1 or x=6',
+                  isCorrect: false,
+                  order: 2,
+                },
               ],
             },
           },
@@ -69,7 +81,13 @@ describe('StudentAssessmentResultsPage', () => {
       data: {
         reply: 'You mixed up factors.',
         modelUsed: 'seed-model',
-        citations: [{ chunkId: 'chunk-1', sourceType: 'lesson', label: 'Quadratic lesson' }],
+        citations: [
+          {
+            chunkId: 'chunk-1',
+            sourceType: 'lesson',
+            label: 'Quadratic lesson',
+          },
+        ],
         suggestedNext: { label: 'Review factoring patterns.' },
         analysisPacket: {
           mistakeSummary: 'Wrong factor pair selected.',
@@ -80,16 +98,18 @@ describe('StudentAssessmentResultsPage', () => {
       },
     } as Awaited<ReturnType<typeof aiService.explainMistake>>);
 
-    mockedLxpService.submitEvaluation.mockResolvedValue(
-      { data: { id: 'eval-1' } } as Awaited<ReturnType<typeof lxpService.submitEvaluation>>,
-    );
+    mockedLxpService.submitEvaluation.mockResolvedValue({
+      data: { id: 'eval-1' },
+    } as Awaited<ReturnType<typeof lxpService.submitEvaluation>>);
   });
 
   it('opens rating modal after Ask Ja and submits ai mentor evaluation metadata', async () => {
     render(<StudentAssessmentResultsPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Review' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Review' }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
@@ -101,7 +121,9 @@ describe('StudentAssessmentResultsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /question 1/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /ask ja/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /ask ja/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /ask ja/i }));
@@ -135,6 +157,8 @@ describe('StudentAssessmentResultsPage', () => {
 
   it('shows result release messaging and hides question review when only the score is available', async () => {
     mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
       data: {
         score: 88,
         passed: true,
@@ -143,7 +167,8 @@ describe('StudentAssessmentResultsPage', () => {
         feedbackStatus: {
           level: 'immediate',
           unlocked: true,
-          message: 'You can see your score. Detailed feedback not available for immediate assessments.',
+          message:
+            'You can see your score. Detailed feedback not available for immediate assessments.',
         },
         responses: [
           {
@@ -167,13 +192,19 @@ describe('StudentAssessmentResultsPage', () => {
     render(<StudentAssessmentResultsPage />);
 
     expect(await screen.findByText('Result Release')).toBeInTheDocument();
-    expect(screen.getAllByText(/Detailed feedback not available for immediate assessments/i)).toHaveLength(2);
+    expect(
+      screen.getAllByText(
+        /Detailed feedback not available for immediate assessments/i,
+      ),
+    ).toHaveLength(2);
     expect(screen.getByText('Score only')).toBeInTheDocument();
     expect(screen.queryByText('Question Review')).not.toBeInTheDocument();
   });
 
   it('renders the new results and next step structure for score-only results', async () => {
     mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
       data: {
         score: 88,
         passed: true,
@@ -183,7 +214,8 @@ describe('StudentAssessmentResultsPage', () => {
         feedbackStatus: {
           level: 'immediate',
           unlocked: true,
-          message: 'You can see your score. Detailed feedback not available for immediate assessments.',
+          message:
+            'You can see your score. Detailed feedback not available for immediate assessments.',
         },
         assessment: {
           id: 'assessment-1',
@@ -200,14 +232,20 @@ describe('StudentAssessmentResultsPage', () => {
     expect(await screen.findByText('What You Can See Now')).toBeInTheDocument();
     expect(screen.getByText('Practice Quiz')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next Step' }));
-    expect(screen.getByRole('button', { name: /Go to Class Assignments/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Go to Class Assignments/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Go to Class Assignments/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Go to Class Assignments/i }),
+    ).toBeInTheDocument();
     expect(document.querySelector('.student-page')).not.toBeInTheDocument();
     expect(screen.queryByText('Question Review')).not.toBeInTheDocument();
   });
 
   it('shows rubric and submitted file sections for file upload results', async () => {
     mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
       data: {
         score: 92,
         passed: true,

@@ -1,17 +1,15 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowRightLeft, CalendarClock } from 'lucide-react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { toast } from "sonner";
 import {
   AdminPageShell,
   AdminSectionCard,
-  AdminStatCard,
-} from '@/components/admin/AdminPageShell';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
+} from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -19,442 +17,469 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { academicStateService } from '@/services/academic-state-service';
+} from "@/components/ui/dialog";
+import { AcademicBackSubjectsPanel } from "@/components/admin/AcademicBackSubjectsPanel";
+import { AcademicRecoveryPanel } from "@/components/admin/AcademicRecoveryPanel";
+import { academicStateService } from "@/services/academic-state-service";
+import { getApiErrorMessage } from "@/lib/api-error";
 import type {
   AcademicStateCurrent,
   AcademicStateImpactPreview,
-} from '@/types/academic-state';
-
-function deriveSchoolYearChoices(current: string) {
-  const match = current.match(/^(\d{4})-(\d{4})$/);
-  if (!match) {
-    const now = new Date().getFullYear();
-    return [`${now - 1}-${now}`, `${now}-${now + 1}`, `${now + 1}-${now + 2}`];
-  }
-
-  const start = Number(match[1]);
-  return [start - 1, start, start + 1, start + 2].map(
-    (year) => `${year}-${year + 1}`,
-  );
-}
+  AcademicActivationPreview,
+  AcademicQuarter,
+} from "@/types/academic-state";
 
 export default function AdminSystemSettingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [refreshingPreview, setRefreshingPreview] = useState(false);
-  const [submittingTransition, setSubmittingTransition] = useState(false);
-  const [currentState, setCurrentState] = useState<AcademicStateCurrent | null>(
-    null,
-  );
-  const [targetSchoolYear, setTargetSchoolYear] = useState('');
+  const [current, setCurrent] = useState<AcademicStateCurrent | null>(null);
   const [preview, setPreview] = useState<AcademicStateImpactPreview | null>(
     null,
   );
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [transitionStep, setTransitionStep] = useState<1 | 2>(1);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [confirmationText, setConfirmationText] = useState('');
-
-  const [notifyingTeachers, setNotifyingTeachers] = useState(false);
-
-  const handleNotifyTeachers = async () => {
+  const [activation, setActivation] =
+    useState<AcademicActivationPreview | null>(null);
+  const [targetPeriod, setTargetPeriod] = useState<AcademicQuarter>("Q1");
+  const [activationPassword, setActivationPassword] = useState("");
+  const [reason, setReason] = useState("");
+  const [override, setOverride] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [transitionOpen, setTransitionOpen] = useState(false);
+  const [transitionPassword, setTransitionPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const request = useRef<{ signature: string; id: string } | null>(null);
+  const load = useCallback(async () => {
+    setError(null);
     try {
-      setNotifyingTeachers(true);
-      const res = await academicStateService.notifyTeachers();
-      toast.success(res.data.message || 'Teachers notified successfully');
-    } catch {
-      toast.error('Failed to dispatch teacher notifications');
-    } finally {
-      setNotifyingTeachers(false);
-    }
-  };
-
-  const schoolYearOptions = useMemo(
-    () => deriveSchoolYearChoices(currentState?.schoolYear ?? ''),
-    [currentState?.schoolYear],
-  );
-
-  const promotionReadiness = preview?.impact.promotionReadiness ?? null;
-  const transitionBlocked = Boolean(promotionReadiness?.transitionBlocked);
-  const loadCurrentState = useCallback(async () => {
-    const response = await academicStateService.getCurrent();
-    const current = response.data;
-    setCurrentState(current);
-    setTargetSchoolYear((prev) => prev || current.schoolYear);
-  }, []);
-
-  const loadImpactPreview = useCallback(async (schoolYear: string) => {
-    setRefreshingPreview(true);
-    try {
-      const response = await academicStateService.getImpactPreview({
-        schoolYear,
+      const { data: state } = await academicStateService.getCurrent();
+      setCurrent(state);
+      const index = state.periods.findIndex((p) => p.key === state.quarter);
+      setTargetPeriod(
+        state.periods[Math.min(index + 1, state.periods.length - 1)].key,
+      );
+      const start = Number(state.schoolYear.slice(0, 4));
+      const { data: next } = await academicStateService.getImpactPreview({
+        schoolYear: `${start + 1}-${start + 2}`,
       });
-      setPreview(response.data);
-    } catch {
-      toast.error('Failed to compute transition impact preview');
+      setPreview(next);
+    } catch (err) {
       setPreview(null);
-    } finally {
-      setRefreshingPreview(false);
+      setError(getApiErrorMessage(err, "Academic state could not be loaded."));
     }
   }, []);
-
   useEffect(() => {
-    const run = async () => {
-      try {
-        setLoading(true);
-        await loadCurrentState();
-      } catch {
-        toast.error('Failed to load academic system state');
-      } finally {
-        setLoading(false);
-      }
+    void load();
+  }, [load]);
+  const readiness = preview?.impact.promotionReadiness;
+  const activeLabel =
+    current?.periods.find((p) => p.key === current.quarter)?.label ??
+    current?.quarter;
+  const changePeriod = async () => {
+    if (!activation || !activationPassword || activation.alreadyActive) return;
+    const payload = {
+      expectedSchoolYear: activation.state.schoolYear,
+      expectedQuarter: activation.state.quarter,
+      expectedVersion: activation.state.version,
+      targetQuarter: activation.target.key,
+      override: activation.overrideRequired && override,
+      reason: reason.trim() || undefined,
     };
-    void run();
-  }, [loadCurrentState]);
-
-  useEffect(() => {
-    if (!targetSchoolYear) return;
-    void loadImpactPreview(targetSchoolYear);
-  }, [loadImpactPreview, targetSchoolYear]);
-
-  const openTransitionDialog = () => {
-    if (!preview) {
-      toast.error('Impact preview is not ready yet. Try again in a moment.');
-      return;
-    }
-    if (transitionBlocked) {
-      toast.error(
-        promotionReadiness?.message ??
-          'Resolve active student finalization, promotion, and retention first.',
-      );
-      return;
-    }
-
-    setTransitionStep(1);
-    setCurrentPassword('');
-    setConfirmationText('');
-    setDialogOpen(true);
-  };
-
-  const runTransition = async () => {
-    if (!currentState || !preview) return;
-    if (!currentPassword.trim()) {
-      toast.error('Enter your password to continue.');
-      return;
-    }
-    if (confirmationText !== preview.transitionConfirmationText) {
-      toast.error('Confirmation text does not match.');
-      return;
-    }
-    if (transitionBlocked) {
-      toast.error(
-        promotionReadiness?.message ??
-          'Resolve active student finalization, promotion, and retention first.',
-      );
-      return;
-    }
-
+    const signature = JSON.stringify(payload);
+    if (request.current?.signature !== signature)
+      request.current = { signature, id: crypto.randomUUID() };
+    setBusy("activate");
     try {
-      setSubmittingTransition(true);
-      const response = await academicStateService.transition({
-        schoolYear: targetSchoolYear,
-        currentPassword,
-        confirmationText,
+      await academicStateService.activatePeriod({
+        ...payload,
+        requestId: request.current.id,
+        currentPassword: activationPassword,
       });
-      setCurrentState(response.data.state);
-      await loadImpactPreview(targetSchoolYear);
+      setActivationPassword("");
+      setActivation(null);
+      setOverride(false);
+      setReason("");
       toast.success(
-        `Academic state updated. ${response.data.impact.studentsPromoted} promoted, ${response.data.impact.studentsRetained} retained, and ${response.data.impact.studentsGraduated} graduated. Archived ${response.data.impact.sectionsArchived} sections and ${response.data.impact.classesArchived} classes.`,
+        `${activation.target.label} is active. Existing records were not finalized or reopened.`,
       );
-      setDialogOpen(false);
-    } catch {
-      toast.error('Failed to transition academic state');
+      await load();
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          "Period activation failed. Refresh if the state changed.",
+        ),
+      );
     } finally {
-      setSubmittingTransition(false);
+      setBusy(null);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-32 rounded-[1.25rem]" />
-        <Skeleton className="h-80 rounded-[1.25rem]" />
-      </div>
-    );
-  }
-
+  const transition = async () => {
+    if (
+      !preview ||
+      readiness?.transitionBlocked ||
+      !transitionPassword ||
+      confirmation !== preview.transitionConfirmationText
+    )
+      return;
+    setBusy("transition");
+    try {
+      await academicStateService.transition({
+        schoolYear: preview.target.schoolYear,
+        expectedSchoolYear: preview.current.schoolYear,
+        expectedQuarter: preview.current.quarter,
+        expectedVersion: preview.current.version,
+        currentPassword: transitionPassword,
+        confirmationText: confirmation,
+      });
+      setTransitionOpen(false);
+      setTransitionPassword("");
+      setConfirmation("");
+      setActivation(null);
+      toast.success(
+        "Year transition completed. New class rosters remain empty until explicitly assigned.",
+      );
+      await load();
+    } catch (err) {
+      toast.error(
+        getApiErrorMessage(
+          err,
+          "Transition failed. Refresh readiness before trying again.",
+        ),
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
   return (
     <AdminPageShell
       title="System Settings"
-      description="Set the active school year for the whole LMS with a guarded transition flow."
-      stats={
-        <>
-          <AdminStatCard
-            label="Active School Year"
-            value={currentState?.schoolYear ?? '--'}
-            caption="System-wide default context"
-            icon={CalendarClock}
-            accent="sky"
-          />
-          <AdminStatCard
-            label="Active Quarter"
-            value={currentState?.quarter ?? '--'}
-            caption="Informational only"
-            icon={ArrowRightLeft}
-            accent="emerald"
-          />
-        </>
+      description="Manage active periods and verified year-end transitions."
+      actions={
+        <Button
+          variant="outline"
+          disabled={!!busy}
+          onClick={() => {
+            setActivation(null);
+            void load();
+          }}
+        >
+          Refresh academic state
+        </Button>
       }
     >
-      <AdminSectionCard
-        title="Academic State"
-        description="Preview impact before transitioning. This requires a second confirmation and admin password."
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleNotifyTeachers}
-              disabled={notifyingTeachers}
-              className="rounded-xl font-bold border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
-            >
-              {notifyingTeachers ? 'Notifying...' : 'Notify Teachers'}
-            </Button>
-            <Button
-              onClick={openTransitionDialog}
-              className="admin-button-solid rounded-xl font-black"
-              disabled={refreshingPreview || !preview || transitionBlocked}
-            >
-              Transition State
-            </Button>
-          </div>
-        }
-      >
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-2">
-            <span className="text-sm font-black text-[var(--admin-text-strong)]">
-              Target School Year
-            </span>
-            <select
-              value={targetSchoolYear}
-              onChange={(event) => setTargetSchoolYear(event.target.value)}
-              className="admin-input h-11 w-full rounded-xl"
-            >
-              {schoolYearOptions.map((schoolYear) => (
-                <option key={schoolYear} value={schoolYear}>
-                  {schoolYear}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <div className="space-y-2 rounded-xl border border-[var(--admin-outline)] bg-[var(--admin-surface-soft)] p-3">
-            <p className="text-sm font-black text-[var(--admin-text-strong)]">
-              Impact Preview
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {!current ? (
+        <p role="status">Loading academic state…</p>
+      ) : (
+        <>
+          <AdminSectionCard
+            title={`${current.schoolYear} · ${activeLabel}`}
+            description={`Policy ${current.policy.id}. State version ${current.version}. Last updated ${new Date(current.updatedAt).toLocaleString()}.`}
+          >
+            <p className="text-sm text-slate-600">
+              The active period controls release and new student attempts.
+              Teachers may prepare future drafts and finish grading earlier
+              periods in the active school year.
             </p>
-            {refreshingPreview ? (
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                Calculating transition impact...
-              </p>
-            ) : preview ? (
-              <div className="grid gap-2 text-sm sm:grid-cols-2">
-                <p className="text-[var(--admin-text-muted)]">
-                  Draft records to finalize:{' '}
-                  <strong>{preview.impact.classRecordsToFinalize}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)]">
-                  Active enrollments to complete:{' '}
-                  <strong>{preview.impact.enrollmentsToComplete}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)]">
-                  Classes to archive:{' '}
-                  <strong>{preview.impact.classesToArchive}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)]">
-                  Sections to archive:{' '}
-                  <strong>{preview.impact.sectionsToArchive}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)]">
-                  Reusable classes to create:{' '}
-                  <strong>{preview.impact.reusableClassesToCreate}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)]">
-                  Reusable sections to create:{' '}
-                  <strong>{preview.impact.reusableSectionsToCreate}</strong>
-                </p>
-                <p className="text-[var(--admin-text-muted)] sm:col-span-2">
-                  School events to archive:{' '}
-                  <strong>{preview.impact.schoolEventsToArchive}</strong>
-                </p>
-                <div
-                  className={`sm:col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
-                    preview.impact.promotionReadiness.transitionBlocked
-                      ? 'border-red-200 bg-red-50 text-red-700'
-                      : 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  }`}
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="target-period">Target period</Label>
+                <select
+                  id="target-period"
+                  className="h-10 rounded-md border bg-white px-3 text-sm"
+                  value={targetPeriod}
+                  disabled={!!busy}
+                  onChange={(e) => {
+                    setTargetPeriod(e.target.value as AcademicQuarter);
+                    setActivation(null);
+                    setActivationPassword("");
+                    setOverride(false);
+                  }}
                 >
-                  {preview.impact.promotionReadiness.transitionBlocked
-                    ? preview.impact.promotionReadiness.message
-                    : (preview.impact.promotionReadiness.message ??
-                      'No active students require automatic processing.')}
-                  {!preview.impact.promotionReadiness.transitionBlocked &&
-                  preview.impact.promotionReadiness
-                    .activeStudentsInCurrentYear > 0 ? (
-                    <div className="mt-2 grid gap-1 border-t border-emerald-200 pt-2 sm:grid-cols-3">
-                      <span>
-                        {preview.impact.promotionReadiness.studentsToPromote}{' '}
-                        moving up
-                      </span>
-                      <span>
-                        {preview.impact.promotionReadiness.studentsToRetain}{' '}
-                        retained
-                      </span>
-                      <span>
-                        {preview.impact.promotionReadiness.studentsToGraduate}{' '}
-                        graduating
-                      </span>
+                  {current.periods.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button
+                variant="outline"
+                disabled={!!busy}
+                onClick={async () => {
+                  setBusy("preview");
+                  setActivation(null);
+                  try {
+                    setActivation(
+                      (
+                        await academicStateService.previewActivation(
+                          targetPeriod,
+                        )
+                      ).data,
+                    );
+                  } catch (err) {
+                    toast.error(
+                      getApiErrorMessage(err, "Period preview failed."),
+                    );
+                  } finally {
+                    setBusy(null);
+                  }
+                }}
+              >
+                Preview period change
+              </Button>
+            </div>
+            {activation && (
+              <div className="mt-4 space-y-3 border-t pt-4">
+                <p>{activation.message}</p>
+                <p className="text-sm text-slate-600">
+                  {activation.currentOpenRecords} open or missing current
+                  records · {activation.targetMissingRecords} missing target
+                  records · {activation.ongoingAttempts} unfinished attempts
+                </p>
+                {activation.alreadyActive ? (
+                  <p>This period is already active.</p>
+                ) : (
+                  <>
+                    {activation.overrideRequired && (
+                      <div className="space-y-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={override}
+                            onChange={(e) => setOverride(e.target.checked)}
+                          />
+                          I authorize this backward or skipped-period
+                          correction.
+                        </label>
+                        <Label htmlFor="activation-reason">
+                          Correction reason
+                        </Label>
+                        <Input
+                          id="activation-reason"
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          maxLength={2000}
+                        />
+                      </div>
+                    )}
+                    <div className="max-w-sm space-y-1">
+                      <Label htmlFor="activation-password">
+                        Password for period activation
+                      </Label>
+                      <Input
+                        id="activation-password"
+                        type="password"
+                        autoComplete="current-password"
+                        value={activationPassword}
+                        onChange={(e) => setActivationPassword(e.target.value)}
+                      />
                     </div>
-                  ) : null}
-                  {preview.impact.promotionReadiness
-                    .studentsMissingFinalizedGrades > 0 ? (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-red-200 pt-2">
-                      <span className="block text-xs font-bold text-red-800">
-                        {
-                          preview.impact.promotionReadiness
-                            .studentsMissingFinalizedGrades
-                        }{' '}
-                        active student(s) still need finalized grades before
-                        transitioning.
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleNotifyTeachers}
-                        disabled={notifyingTeachers}
-                        className="rounded-lg font-black bg-amber-600 text-white hover:bg-amber-700"
-                      >
-                        {notifyingTeachers
-                          ? 'Sending Notifications...'
-                          : 'Notify Teachers'}
-                      </Button>
-                    </div>
-                  ) : null}
+                    <Button
+                      disabled={
+                        !!busy ||
+                        !activationPassword ||
+                        (activation.overrideRequired &&
+                          (!override || !reason.trim()))
+                      }
+                      onClick={() => void changePeriod()}
+                    >
+                      Activate {activation.target.label}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+          </AdminSectionCard>
+          <AdminSectionCard
+            title={`Year transition${preview ? ` to ${preview.target.schoolYear}` : ""}`}
+            description="The server verifies all required periods, annual learning-area grades, remediation and current state before committing."
+          >
+            {readiness ? (
+              <div className="space-y-4">
+                <p
+                  role="status"
+                  className={
+                    readiness.transitionBlocked
+                      ? "text-red-700"
+                      : "text-slate-800"
+                  }
+                >
+                  {readiness.message}
+                </p>
+                <p className="text-sm">
+                  {readiness.finalizedPeriodRecords} of{" "}
+                  {readiness.expectedPeriodRecords} required period records
+                  finalized; {readiness.expectedAnnualGrades} annual subject
+                  results required.
+                </p>
+                {!readiness.transitionBlocked && (
+                  <p className="text-sm">
+                    {readiness.studentsToPromote} promoted ·{" "}
+                    {readiness.studentsToRetain} retained ·{" "}
+                    {readiness.studentsToGraduate} graduated ·{" "}
+                    {readiness.studentsToConditionallyPromote} conditionally
+                    promoted · {readiness.studentsPendingCompletion} pending
+                    completion
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    disabled={!!busy || readiness.transitionBlocked}
+                    onClick={() => {
+                      setTransitionPassword("");
+                      setConfirmation("");
+                      setTransitionOpen(true);
+                    }}
+                  >
+                    Review year transition
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={!!busy}
+                    onClick={async () => {
+                      setBusy("notify");
+                      try {
+                        const response =
+                          await academicStateService.notifyTeachers();
+                        toast.success(response.data.message);
+                      } catch (err) {
+                        toast.error(
+                          getApiErrorMessage(err, "Teacher reminders failed."),
+                        );
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    Notify teachers of blockers
+                  </Button>
                 </div>
+                {readiness.blockers.length > 0 && (
+                  <div className="max-h-96 overflow-auto rounded-md border">
+                    <table className="w-full text-left text-sm">
+                      <thead className="sticky top-0 bg-slate-50">
+                        <tr>
+                          <th className="p-3">Issue</th>
+                          <th className="p-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {readiness.blockers.map((blocker, index) => (
+                          <tr
+                            key={`${blocker.code}-${index}`}
+                            className="border-t"
+                          >
+                            <td className="p-3">
+                              {blocker.message}
+                              {blocker.studentId && (
+                                <span className="block text-xs text-slate-500">
+                                  Learner {blocker.studentId}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {blocker.classId ? (
+                                <Link
+                                  className="underline"
+                                  href={`/dashboard/admin/academic-records/${blocker.classId}`}
+                                >
+                                  Open workbook
+                                </Link>
+                              ) : (
+                                <span>See academic audit below</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             ) : (
-              <p className="text-xs text-[var(--admin-text-muted)]">
-                Unable to load impact preview.
-              </p>
+              <p>Transition preview is unavailable. Refresh academic state.</p>
             )}
-          </div>
-        </div>
-      </AdminSectionCard>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent variant="admin" className="max-w-lg">
+          </AdminSectionCard>
+        </>
+      )}
+      {current && (
+        <AcademicBackSubjectsPanel current={current} onChanged={load} />
+      )}
+      <AcademicRecoveryPanel
+        schoolYear={current?.schoolYear}
+        classes={readiness?.classReadiness}
+        onChanged={load}
+      />
+      <Dialog
+        open={transitionOpen}
+        onOpenChange={(open) => {
+          if (!busy) {
+            setTransitionOpen(open);
+            if (!open) setTransitionPassword("");
+          }
+        }}
+      >
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Academic State Transition</DialogTitle>
+            <DialogTitle>Confirm year transition</DialogTitle>
             <DialogDescription>
-              This automatically processes finalized student outcomes, archives
-              the old school year, and creates clean student rosters for the
-              target year while retaining staff assignments, schedules, rooms,
-              and learning content.
+              Archive the current year and record the verified student outcomes.
+              New rosters start empty. This does not automatically finalize any
+              workbook.
             </DialogDescription>
           </DialogHeader>
-
-          {transitionStep === 1 ? (
-            <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-700" />
-                <div className="space-y-1 text-sm text-amber-900">
-                  <p>Current School Year: {preview?.current.schoolYear}</p>
-                  <p>Target School Year: {targetSchoolYear}</p>
-                  <p>Current Quarter: {preview?.current.quarter}</p>
-                  <p>
-                    {preview?.impact.classRecordsToFinalize ?? 0} draft class
-                    records will be finalized.
-                  </p>
-                  <p>
-                    {preview?.impact.enrollmentsToComplete ?? 0} active student
-                    enrollments will be marked completed so students can be
-                    reassigned.
-                  </p>
-                  <p>
-                    {preview?.impact.promotionReadiness.studentsToPromote ?? 0}{' '}
-                    passing student(s) will move up,{' '}
-                    {preview?.impact.promotionReadiness.studentsToRetain ?? 0}{' '}
-                    student(s) with a failing subject will be retained, and{' '}
-                    {preview?.impact.promotionReadiness.studentsToGraduate ?? 0}{' '}
-                    passing Grade 10 student(s) will graduate.
-                  </p>
-                  <p>
-                    {preview?.impact.sectionsToArchive ?? 0} sections and{' '}
-                    {preview?.impact.classesToArchive ?? 0} classes will be
-                    archived.
-                  </p>
-                  <p>
-                    {preview?.impact.reusableSectionsToCreate ?? 0} reusable
-                    sections and {preview?.impact.reusableClassesToCreate ?? 0}{' '}
-                    reusable classes will be created for {targetSchoolYear}.
-                  </p>
-                  <p>
-                    Advisers, teachers, rooms, schedules, and class content will
-                    be retained. New-year student rosters will start empty.
-                  </p>
-                  <p>
-                    {preview?.impact.schoolEventsToArchive ?? 0} school events
-                    will be archived.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="font-black">Admin Password</Label>
-                <Input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(event) => setCurrentPassword(event.target.value)}
-                  placeholder="Re-enter your password"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-black">Confirmation Text</Label>
-                <Input
-                  value={confirmationText}
-                  onChange={(event) => setConfirmationText(event.target.value)}
-                  placeholder={preview?.transitionConfirmationText ?? ''}
-                />
-                <p className="text-xs text-[var(--admin-text-muted)]">
-                  Type exactly: {preview?.transitionConfirmationText ?? ''}
-                </p>
-              </div>
-            </div>
+          {preview && (
+            <p className="text-sm">
+              {preview.current.schoolYear} → {preview.target.schoolYear}.
+              Archive {preview.impact.classesToArchive} classes and{" "}
+              {preview.impact.sectionsToArchive} sections; complete{" "}
+              {preview.impact.enrollmentsToComplete} enrollments. Clone{" "}
+              {preview.impact.reusableClassesToCreate} classes and{" "}
+              {preview.impact.reusableSectionsToCreate} sections.
+            </p>
           )}
-
+          <Label htmlFor="transition-password">Admin password</Label>
+          <Input
+            id="transition-password"
+            type="password"
+            autoComplete="current-password"
+            value={transitionPassword}
+            onChange={(e) => setTransitionPassword(e.target.value)}
+          />
+          <Label htmlFor="transition-confirmation">
+            Type {preview?.transitionConfirmationText}
+          </Label>
+          <Input
+            id="transition-confirmation"
+            value={confirmation}
+            onChange={(e) => setConfirmation(e.target.value)}
+            autoComplete="off"
+          />
           <DialogFooter>
-            {transitionStep === 1 ? (
-              <Button
-                className="rounded-xl bg-red-600 font-black text-white hover:bg-red-700"
-                onClick={() => setTransitionStep(2)}
-              >
-                Continue
-              </Button>
-            ) : (
-              <Button
-                className="rounded-xl bg-red-600 font-black text-white hover:bg-red-700 disabled:bg-red-300 disabled:text-white"
-                onClick={() => void runTransition()}
-                disabled={
-                  submittingTransition ||
-                  transitionBlocked ||
-                  !currentPassword.trim() ||
-                  confirmationText !==
-                    (preview?.transitionConfirmationText ?? '')
-                }
-              >
-                {submittingTransition ? 'Applying...' : 'Confirm Transition'}
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              disabled={!!busy}
+              onClick={() => {
+                setTransitionOpen(false);
+                setTransitionPassword("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !!busy ||
+                !transitionPassword ||
+                confirmation !== preview?.transitionConfirmationText ||
+                readiness?.transitionBlocked
+              }
+              onClick={() => void transition()}
+            >
+              Confirm year transition
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

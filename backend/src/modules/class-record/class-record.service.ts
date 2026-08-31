@@ -1,3 +1,6 @@
+import { assessmentAcademicCapabilities } from '../academic-state/assessment-academic-capabilities';
+import { preserveLegacyGradeEvidence } from '../academic-state/academic-legacy-evidence';
+import { captureObservedPeriodParticipants } from '../academic-state/academic-roster-observation';
 import {
   Injectable,
   NotFoundException,
@@ -5,12 +8,24 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { AcademicMutation } from '../../database/academic-transaction';
+import { ClassRecordReadinessService } from './class-record-readiness.service';
+import { ClassRecordRosterService } from './class-record-roster.service';
+import { AnnualGradesService } from '../academic-state/annual-grades.service';
+import {
+  getSubjectWeights,
+  normalizeSubjectCode,
+} from '../academic-state/academic-policy';
 import {
   classRecords,
+  classRecordParticipants,
+  academicPeriodGradeRevisions,
+  academicLegacyGradeEvidence,
   classRecordCategories,
   classRecordItems,
   classRecordScores,
@@ -28,6 +43,8 @@ import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
 import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
 import { AuditService } from '../audit/audit.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { calculateStudentRecord } from './class-record-calculation';
 
 /** DepEd default category configuration and fallback profile */
 const DEFAULT_DEPED_PROFILE = {
@@ -65,6 +82,10 @@ export class ClassRecordService {
     private readonly syncService: ClassRecordSyncService,
     private readonly eventEmitter: EventEmitter2,
     private readonly auditService: AuditService,
+    private readonly academicPolicyService: AcademicPolicyService,
+    private readonly readinessService: ClassRecordReadinessService,
+    private readonly rosterService: ClassRecordRosterService,
+    private readonly annualGradesService: AnnualGradesService,
   ) {}
 
   private get db() {
@@ -139,26 +160,29 @@ export class ClassRecordService {
    * Auto-creates 3 fixed categories (WW 30%, PT 50%, QA 20%) with
    * pre-allocated item slots (10 for WW, 10 for PT, 1 for QA).
    */
+  @AcademicMutation()
   async generateClassRecord(
     dto: CreateClassRecordDto,
     userId: string,
     roles: string[],
   ) {
-    // Verify class exists & teacher owns it
-    const cls = await this.db.query.classes.findFirst({
-      where: eq(classes.id, dto.classId),
-      columns: {
-        id: true,
-        teacherId: true,
-        writtenWorkGradingWeight: true,
-        performanceTaskGradingWeight: true,
-        quarterlyAssessmentGradingWeight: true,
-      },
-    });
-
-    if (!cls) {
-      throw new NotFoundException(`Class "${dto.classId}" not found`);
-    }
+    await this.academicPolicyService.assertAssessmentAction(
+      { classId: dto.classId, quarter: dto.gradingPeriod },
+      'prepare',
+    );
+    const { cls, policy } = await this.academicPolicyService.forClass(
+      dto.classId,
+    );
+    const policyWeights = getSubjectWeights(
+      policy,
+      cls.subjectCode,
+      cls.subjectName,
+      cls.academicWeightProfile,
+    );
+    if (policy.gradeMethod !== 'legacy_transmutation' && !policyWeights)
+      throw new BadRequestException(
+        'Admin must classify this subject grading profile before generating a workbook',
+      );
 
     if (!this.isAdmin(roles) && cls.teacherId !== userId) {
       throw new ForbiddenException(
@@ -191,16 +215,33 @@ export class ClassRecordService {
       })
       .returning();
 
+    const currentState = await this.academicPolicyService.currentState();
+    if (
+      cls.schoolYear === currentState.schoolYear &&
+      dto.gradingPeriod === currentState.quarter
+    )
+      await captureObservedPeriodParticipants(this.db, {
+        schoolYear: cls.schoolYear,
+        period: dto.gradingPeriod,
+        actorId: userId,
+        source: 'record_creation',
+        classRecordId: record.id,
+      });
+
     const gradingProfile = {
       writtenWork: Number(
-        cls.writtenWorkGradingWeight ?? DEFAULT_DEPED_PROFILE.writtenWork,
+        policyWeights?.writtenWork ??
+          cls.writtenWorkGradingWeight ??
+          DEFAULT_DEPED_PROFILE.writtenWork,
       ),
       performanceTask: Number(
-        cls.performanceTaskGradingWeight ??
+        policyWeights?.performanceTask ??
+          cls.performanceTaskGradingWeight ??
           DEFAULT_DEPED_PROFILE.performanceTask,
       ),
       quarterlyAssessment: Number(
-        cls.quarterlyAssessmentGradingWeight ??
+        policyWeights?.examination ??
+          cls.quarterlyAssessmentGradingWeight ??
           DEFAULT_DEPED_PROFILE.quarterlyAssessment,
       ),
     };
@@ -225,7 +266,7 @@ export class ClassRecordService {
       {
         name: 'Quarterly Assessment',
         prefix: 'QA',
-        slots: 1,
+        slots: policy.examComponents.length || 1,
         weight: Number.isFinite(gradingProfile.quarterlyAssessment)
           ? gradingProfile.quarterlyAssessment
           : DEFAULT_DEPED_PROFILE.quarterlyAssessment,
@@ -246,7 +287,14 @@ export class ClassRecordService {
       const itemValues = Array.from({ length: cat.slots }, (_, i) => ({
         classRecordId: record.id,
         categoryId: category.id,
-        title: `${cat.prefix}${i + 1}`,
+        title:
+          cat.prefix === 'QA' && policy.examComponents.length
+            ? policy.examComponents[i].key
+            : `${cat.prefix}${i + 1}`,
+        examComponent:
+          cat.prefix === 'QA' && policy.examComponents.length
+            ? policy.examComponents[i].key
+            : null,
         maxScore: '0',
         itemOrder: i + 1,
       }));
@@ -271,6 +319,88 @@ export class ClassRecordService {
     });
 
     return this.getClassRecord(record.id, userId, roles);
+  }
+
+  /** Keep observed membership before removable enrollment rows disappear; do not infer earlier periods. */
+  @AcademicMutation()
+  async captureClassEnrollment(
+    classId: string,
+    studentIds: string[],
+    event: 'joined' | 'left',
+    actorId: string,
+    roles: string[],
+  ) {
+    await this.assertClassOwnership(classId, actorId, roles);
+    const { cls, policy } = await this.academicPolicyService.forClass(classId);
+    const state = await this.academicPolicyService.currentState();
+    const period =
+      cls.schoolYear === state.schoolYear
+        ? state.quarter
+        : policy.periods[0].key;
+    await this.academicPolicyService.assertAssessmentAction(
+      { classId, quarter: period },
+      'prepare',
+    );
+    let current = await this.db.query.classRecords.findFirst({
+      where: and(
+        eq(classRecords.classId, classId),
+        eq(classRecords.gradingPeriod, period),
+      ),
+    });
+    if (!current)
+      current = await this.generateClassRecord(
+        { classId, gradingPeriod: period },
+        actorId,
+        roles,
+      );
+    this.assertEditable(current);
+    const records = await this.db.query.classRecords.findMany({
+      where: eq(classRecords.classId, classId),
+    });
+    const affected = records.filter(
+      (record) =>
+        policy.periods.findIndex((p) => p.key === record.gradingPeriod) >=
+        policy.periods.findIndex((p) => p.key === period),
+    );
+    for (const record of affected) {
+      this.assertEditable(record);
+      if (record.gradingPeriod === period || event === 'joined') {
+        for (const studentId of [...new Set(studentIds)]) {
+          await this.db
+            .insert(classRecordParticipants)
+            .values({
+              classRecordId: record.id,
+              studentId,
+              eligibility: 'eligible',
+              source: `enrollment_${event}`,
+              reason: `Class enrollment ${event} during ${period}; teacher confirmation required`,
+              updatedBy: actorId,
+            })
+            .onConflictDoNothing();
+        }
+      }
+      await this.db
+        .update(classRecords)
+        .set({
+          rosterConfirmedAt: null,
+          rosterConfirmedBy: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(classRecords.id, record.id));
+    }
+    await this.auditService.log({
+      actorId,
+      action: `class_record.enrollment.${event}`,
+      targetType: 'class_record',
+      targetId: current.id,
+      metadata: {
+        classId,
+        schoolYear: cls.schoolYear,
+        period,
+        studentIds,
+        affectedRecordIds: affected.map((record) => record.id),
+      },
+    });
   }
 
   // ── Class Record CRUD ────────────────────────────────────────────────────
@@ -433,6 +563,8 @@ export class ClassRecordService {
       },
     });
 
+    if (!cls) throw new NotFoundException('Class not found');
+
     // Load active class participants (alphabetical by lastName, firstName)
     const activeStudents = await this.db
       .select({
@@ -470,12 +602,17 @@ export class ClassRecordService {
       .from(classRecordFinalGrades)
       .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
 
+    const periodParticipants =
+      await this.db.query.classRecordParticipants.findMany({
+        where: eq(classRecordParticipants.classRecordId, classRecordId),
+      });
     const activeStudentIdSet = new Set(
       activeStudents.map((student) => student.studentId),
     );
     const removedStudentIds = [
       ...new Set(
         [
+          ...periodParticipants.map((entry) => entry.studentId),
           ...historicalScoreRows.map((entry) => entry.studentId),
           ...historicalFinalRows.map((entry) => entry.studentId),
         ].filter((studentId) => !activeStudentIdSet.has(studentId)),
@@ -529,84 +666,111 @@ export class ClassRecordService {
       },
     });
 
-    // Build spreadsheet data per student
+    const { policy } = await this.academicPolicyService.forClass(
+      record.classId,
+    );
+    const items = categories.flatMap((category) =>
+      category.items.map((item) => ({ ...item, categoryId: category.id })),
+    );
     const studentRows = participants.map((student) => {
-      const categoryData = categories.map((category) => {
-        const weight = parseFloat(category.weightPercentage);
-        const items = category.items;
-
-        let totalRaw = 0;
-        let totalHPS = 0;
-
-        const itemScores = items.map((item) => {
-          const maxScore = parseFloat(item.maxScore);
-          const scoreRecord = item.scores.find(
-            (s) => s.studentId === student.studentId,
-          );
-          const score = scoreRecord ? parseFloat(scoreRecord.score) : null;
-
-          if (maxScore > 0) {
-            totalHPS += maxScore;
-            totalRaw += score ?? 0;
-          }
-
-          return {
-            itemId: item.id,
-            score,
-          };
-        });
-
-        const percentageScore = totalHPS > 0 ? (totalRaw / totalHPS) * 100 : 0;
-        const weightedScore = percentageScore * (weight / 100);
-
-        return {
-          categoryId: category.id,
-          scores: itemScores.map((s) => s.score),
-          total: Math.round(totalRaw * 100) / 100,
-          ps: Math.round(percentageScore * 1000) / 1000,
-          ws: Math.round(weightedScore * 1000) / 1000,
-        };
-      });
-
-      const initialGrade = categoryData.reduce((sum, c) => sum + c.ws, 0);
-      const computedQuarterlyGrade =
-        this.computationService.transmute(initialGrade);
-      const historicalFinal = finalGradeByStudentId.get(student.studentId);
-      const hasHistoricalQuarterly =
-        historicalFinal && Number.isFinite(historicalFinal.finalPercentage);
-      const quarterlyGrade =
-        student.enrollmentState === 'removed' && hasHistoricalQuarterly
-          ? historicalFinal.finalPercentage
-          : computedQuarterlyGrade;
-      const remarks =
-        student.enrollmentState === 'removed' && hasHistoricalQuarterly
-          ? historicalFinal.remarks
-          : quarterlyGrade < 75
-            ? ('For Intervention' as const)
-            : ('Passed' as const);
-
+      const calculation = calculateStudentRecord(
+        student.studentId,
+        policy,
+        categories,
+        items,
+      );
+      const snapshot = finalGradeByStudentId.get(student.studentId);
+      const eligibility =
+        periodParticipants.find((p) => p.studentId === student.studentId)
+          ?.eligibility ?? null;
+      const excluded = eligibility !== null && eligibility !== 'eligible';
+      const official = record.status !== 'draft' && snapshot;
       return {
         studentId: student.studentId,
         firstName: student.firstName,
         lastName: student.lastName,
         middleName: student.middleName,
         email: student.email ?? undefined,
+        eligibility,
+        eligibilityReason:
+          periodParticipants.find((p) => p.studentId === student.studentId)
+            ?.reason ?? null,
         isRemoved: student.enrollmentState === 'removed',
         enrollmentState: student.enrollmentState,
-        categories: categoryData,
-        initialGrade: Math.round(initialGrade * 1000) / 1000,
-        quarterlyGrade,
-        remarks,
+        categories: categories.map((category) => {
+          const breakdown = calculation.categoryBreakdown.find(
+            (c) => c.categoryId === category.id,
+          )!;
+          const scoreRows = category.items.map((item) =>
+            item.scores.find((score) => score.studentId === student.studentId),
+          );
+          return {
+            categoryId: category.id,
+            scores: scoreRows.map((row) =>
+              row?.score == null ? null : Number(row.score),
+            ),
+            scoreStatuses: scoreRows.map((row) => row?.status ?? 'missing'),
+            scoreReasons: scoreRows.map((row) => row?.reason ?? null),
+            total: breakdown.totalRaw,
+            ps: breakdown.percentageScore,
+            ws: breakdown.weightedScore,
+          };
+        }),
+        initialGrade: excluded ? null : calculation.initialGrade,
+        quarterlyGrade: official
+          ? snapshot.finalPercentage
+          : excluded
+            ? null
+            : calculation.quarterlyGrade,
+        remarks: official
+          ? snapshot.remarks
+          : excluded
+            ? 'Not graded'
+            : calculation.remarks,
+        provisional: !official,
+        gradeProvenance: official
+          ? record.revision > 0
+            ? 'verified_revision'
+            : 'legacy_unverified'
+          : 'provisional',
+        blockers: excluded ? [] : calculation.blockers,
       };
     });
 
+    const current = await this.academicPolicyService.currentState();
+    const academicCapabilities = assessmentAcademicCapabilities({
+      policy,
+      schoolYear: cls.schoolYear,
+      activeSchoolYear: current.schoolYear,
+      quarter: record.gradingPeriod,
+      activeQuarter: current.quarter,
+      classActive: cls.isActive,
+      workbookStatus: record.status,
+      published: false,
+    });
     return {
       classRecord: {
         id: record.id,
+        classId: record.classId,
         gradingPeriod: record.gradingPeriod,
         status: record.status,
+        revision: record.revision,
+        rosterConfirmedAt: record.rosterConfirmedAt,
       },
+      policy,
+      academicCapabilities,
+      canReopen:
+        record.status === 'finalized' &&
+        cls.isActive &&
+        cls.schoolYear === current.schoolYear &&
+        policy.periods.some((p) => p.key === record.gradingPeriod) &&
+        policy.periods.findIndex((p) => p.key === record.gradingPeriod) <=
+          policy.periods.findIndex((p) => p.key === current.quarter),
       header: {
+        schoolYear: cls?.schoolYear,
+        periodLabel:
+          policy.periods.find((period) => period.key === record.gradingPeriod)
+            ?.label ?? record.gradingPeriod,
         quarter: record.gradingPeriod as string,
         gradeLevel: cls?.section?.gradeLevel ?? undefined,
         section: cls?.section?.name ?? undefined,
@@ -625,6 +789,7 @@ export class ClassRecordService {
           hps: parseFloat(item.maxScore),
           assessmentId: item.assessmentId ?? undefined,
           order: item.itemOrder,
+          examComponent: item.examComponent,
         })),
       })),
       students: studentRows,
@@ -633,6 +798,7 @@ export class ClassRecordService {
 
   // ── Scores ────────────────────────────────────────────────────────────────
 
+  @AcademicMutation()
   async updateClassRecordItem(
     itemId: string,
     dto: UpdateClassRecordItemDto,
@@ -658,6 +824,13 @@ export class ClassRecordService {
     await this.assertClassOwnership(item.classRecord.classId, userId, roles);
 
     this.assertEditable(item.classRecord);
+    await this.academicPolicyService.assertAssessmentAction(
+      {
+        classId: item.classRecord.classId,
+        quarter: item.classRecord.gradingPeriod,
+      },
+      'prepare',
+    );
 
     if (item.assessmentId) {
       throw new BadRequestException(
@@ -665,11 +838,24 @@ export class ClassRecordService {
       );
     }
 
+    const existingScores = await this.db.query.classRecordScores.findMany({
+      where: eq(classRecordScores.classRecordItemId, itemId),
+    });
+    if (
+      existingScores.some(
+        (score) => score.score !== null && Number(score.score) > dto.maxScore,
+      )
+    )
+      throw new BadRequestException(
+        'Highest possible score cannot be lower than an existing recorded score',
+      );
     const [updated] = await this.db
       .update(classRecordItems)
       .set({
         maxScore: dto.maxScore.toString(),
-        title: getDefaultItemTitle(item.category.name, item.itemOrder),
+        title:
+          item.examComponent ??
+          getDefaultItemTitle(item.category.name, item.itemOrder),
       })
       .where(eq(classRecordItems.id, itemId))
       .returning();
@@ -689,126 +875,94 @@ export class ClassRecordService {
     return updated;
   }
 
+  @AcademicMutation()
   async recordScore(
     itemId: string,
     dto: RecordScoreDto,
     userId: string,
     roles: string[],
   ) {
-    const item = await this.db.query.classRecordItems.findFirst({
-      where: eq(classRecordItems.id, itemId),
-      with: { classRecord: true },
-    });
-
-    if (!item) {
-      throw new NotFoundException(`Class record item "${itemId}" not found`);
-    }
-
-    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
-
-    this.assertEditable(item.classRecord);
-
-    const maxScore = parseFloat(item.maxScore);
-    if (maxScore <= 0) {
-      throw new BadRequestException(
-        'Set highest possible score first before recording student scores',
-      );
-    }
-    if (dto.score > maxScore) {
-      throw new BadRequestException(
-        `Score ${dto.score} exceeds max score of ${maxScore}`,
-      );
-    }
-
-    const [score] = await this.db
-      .insert(classRecordScores)
-      .values({
-        classRecordItemId: itemId,
-        studentId: dto.studentId,
-        score: dto.score.toString(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [
-          classRecordScores.classRecordItemId,
-          classRecordScores.studentId,
-        ],
-        set: {
-          score: dto.score.toString(),
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-
-    this.eventEmitter.emit(
-      ClassRecordScoresUpdatedEvent.eventName,
-      new ClassRecordScoresUpdatedEvent({
-        classId: item.classRecord.classId,
-        studentIds: [dto.studentId],
-        triggerSource: 'manual_single',
-      }),
+    const result = await this.bulkRecordScores(
+      itemId,
+      { scores: [dto] },
+      userId,
+      roles,
+      'manual_single',
     );
-
-    await this.auditService.log({
-      actorId: userId,
-      action: 'class_record.score.recorded',
-      targetType: 'class_record_item',
-      targetId: itemId,
-      metadata: {
-        studentId: dto.studentId,
-        classRecordId: item.classRecord.id,
-        classId: item.classRecord.classId,
-        score: dto.score,
-      },
-    });
-
-    return score;
+    return result.scores[0];
   }
 
+  @AcademicMutation()
   async bulkRecordScores(
     itemId: string,
     dto: BulkRecordScoresDto,
     userId: string,
     roles: string[],
+    triggerSource: 'manual_single' | 'manual_bulk' = 'manual_bulk',
   ) {
     const item = await this.db.query.classRecordItems.findFirst({
       where: eq(classRecordItems.id, itemId),
       with: { classRecord: true },
     });
-
-    if (!item) {
-      throw new NotFoundException(`Class record item "${itemId}" not found`);
-    }
-
+    if (!item) throw new NotFoundException('Class record item not found');
     await this.assertClassOwnership(item.classRecord.classId, userId, roles);
-
     this.assertEditable(item.classRecord);
-
-    const maxScore = parseFloat(item.maxScore);
-    if (maxScore <= 0) {
+    await this.academicPolicyService.assertAssessmentAction(
+      {
+        classId: item.classRecord.classId,
+        quarter: item.classRecord.gradingPeriod,
+      },
+      'grade',
+    );
+    await this.rosterService.assertEligible(
+      item.classRecord.id,
+      dto.scores.map((s) => s.studentId),
+    );
+    const maxScore = Number(item.maxScore);
+    if (maxScore <= 0)
       throw new BadRequestException(
         'Set highest possible score first before recording student scores',
       );
-    }
-    for (const entry of dto.scores) {
-      if (entry.score > maxScore) {
+    if (
+      !dto.scores.length ||
+      new Set(dto.scores.map((s) => s.studentId)).size !== dto.scores.length
+    )
+      throw new BadRequestException('Provide one score per student');
+    const values = dto.scores.map((entry) => {
+      const status = entry.status ?? 'recorded';
+      if (status === 'excused') {
+        if (entry.score != null || !entry.reason?.trim())
+          throw new BadRequestException(
+            'Excused items require a reason and no numeric score',
+          );
+      } else if (
+        status !== 'recorded' ||
+        entry.score == null ||
+        !Number.isFinite(entry.score) ||
+        entry.score < 0 ||
+        entry.score > maxScore
+      ) {
         throw new BadRequestException(
-          `Score ${entry.score} for student "${entry.studentId}" exceeds max score of ${maxScore}`,
+          `Recorded score must be between 0 and max score of ${maxScore}`,
         );
       }
-    }
-
-    const updatedAt = new Date();
+      if (item.assessmentId && status === 'recorded')
+        throw new BadRequestException(
+          'Grade linked assessments in assessment grading, then synchronize the result',
+        );
+      return {
+        classRecordItemId: itemId,
+        studentId: entry.studentId,
+        score: status === 'excused' ? null : String(entry.score),
+        status,
+        reason: entry.reason?.trim() || null,
+        sourceAttemptId: null,
+        updatedAt: new Date(),
+      };
+    });
     const results = await this.db
       .insert(classRecordScores)
-      .values(
-        dto.scores.map((entry) => ({
-          classRecordItemId: itemId,
-          studentId: entry.studentId,
-          score: entry.score.toString(),
-          updatedAt,
-        })),
-      )
+      .values(values)
       .onConflictDoUpdate({
         target: [
           classRecordScores.classRecordItemId,
@@ -816,20 +970,13 @@ export class ClassRecordService {
         ],
         set: {
           score: sql`excluded.score`,
+          status: sql`excluded.status`,
+          reason: sql`excluded.reason`,
+          sourceAttemptId: null,
           updatedAt: sql`excluded.updated_at`,
         },
       })
       .returning();
-
-    this.eventEmitter.emit(
-      ClassRecordScoresUpdatedEvent.eventName,
-      new ClassRecordScoresUpdatedEvent({
-        classId: item.classRecord.classId,
-        studentIds: [...new Set(dto.scores.map((entry) => entry.studentId))],
-        triggerSource: 'manual_bulk',
-      }),
-    );
-
     await this.auditService.log({
       actorId: userId,
       action: 'class_record.scores.bulk_recorded',
@@ -838,14 +985,23 @@ export class ClassRecordService {
       metadata: {
         classRecordId: item.classRecord.id,
         classId: item.classRecord.classId,
-        studentIds: [...new Set(dto.scores.map((entry) => entry.studentId))],
-        saved: results.length,
+        scores: values,
       },
     });
-
+    await this.databaseService.afterAcademicCommit(() => {
+      this.eventEmitter.emit(
+        ClassRecordScoresUpdatedEvent.eventName,
+        new ClassRecordScoresUpdatedEvent({
+          classId: item.classRecord.classId,
+          studentIds: values.map((v) => v.studentId),
+          triggerSource,
+        }),
+      );
+    });
     return { saved: results.length, scores: results };
   }
 
+  @AcademicMutation()
   async syncScoresFromAssessment(
     itemId: string,
     userId: string,
@@ -884,13 +1040,86 @@ export class ClassRecordService {
     return result;
   }
 
+  @AcademicMutation()
+  async restoreAssessmentEvidence(
+    itemId: string,
+    studentId: string,
+    reason: string,
+    userId: string,
+    roles: string[],
+  ) {
+    const item = await this.db.query.classRecordItems.findFirst({
+      where: eq(classRecordItems.id, itemId),
+      with: { classRecord: true },
+    });
+    if (!item) throw new NotFoundException('Class record item not found');
+    await this.assertClassOwnership(item.classRecord.classId, userId, roles);
+    this.assertEditable(item.classRecord);
+    await this.academicPolicyService.assertAssessmentAction(
+      {
+        classId: item.classRecord.classId,
+        quarter: item.classRecord.gradingPeriod,
+      },
+      'grade',
+    );
+    await this.rosterService.assertEligible(item.classRecord.id, [studentId]);
+    if (!item.assessmentId || !reason.trim())
+      throw new BadRequestException(
+        'A linked assessment and correction reason are required',
+      );
+    const previous = await this.db.query.classRecordScores.findFirst({
+      where: and(
+        eq(classRecordScores.classRecordItemId, itemId),
+        eq(classRecordScores.studentId, studentId),
+      ),
+    });
+    if (previous?.status !== 'excused')
+      throw new BadRequestException(
+        'Only an excused assessment score can be restored',
+      );
+    await this.db
+      .delete(classRecordScores)
+      .where(eq(classRecordScores.id, previous.id));
+    const result = await this.syncScoresFromAssessment(itemId, userId, roles);
+    await this.auditService.log({
+      actorId: userId,
+      action: 'class_record.exemption.restored_assessment',
+      targetType: 'class_record_item',
+      targetId: itemId,
+      metadata: {
+        classRecordId: item.classRecord.id,
+        studentId,
+        reason: reason.trim(),
+        previous,
+        synced: result.synced,
+      },
+    });
+    await this.databaseService.afterAcademicCommit(() => {
+      this.eventEmitter.emit(
+        ClassRecordScoresUpdatedEvent.eventName,
+        new ClassRecordScoresUpdatedEvent({
+          classId: item.classRecord.classId,
+          studentIds: [studentId],
+          triggerSource: 'manual_sync',
+        }),
+      );
+    });
+    return { restored: true, synced: result.synced };
+  }
+
   // ── Grade Preview & Finalization ──────────────────────────────────────────
 
   async previewGrades(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);
-    const results = await this.computationService.computeGrades(classRecordId);
+    const readiness = await this.readinessService.getReadiness(classRecordId);
+    const results = await this.computationService.computeGrades(
+      classRecordId,
+      undefined,
+      readiness.eligibleStudentIds,
+    );
     return {
       classRecordId,
+      readiness,
       preview: [...results.values()],
       interventionCount: [...results.values()].filter(
         (r) => r.remarks === 'For Intervention',
@@ -898,58 +1127,102 @@ export class ClassRecordService {
     };
   }
 
+  async getReadiness(classRecordId: string, userId: string, roles: string[]) {
+    await this.assertClassRecord(classRecordId, userId, roles);
+    return this.readinessService.getReadiness(classRecordId);
+  }
+
+  @AcademicMutation()
   async finalizeClassRecord(
     classRecordId: string,
     userId: string,
     roles: string[],
   ) {
     const record = await this.assertClassRecord(classRecordId, userId, roles);
-
-    if (record.status === 'locked') {
-      throw new ConflictException('Class record is already locked');
-    }
-    if (record.status === 'finalized') {
-      throw new ConflictException('Class record is already finalized');
-    }
-
-    const result = await this.db.transaction(async (tx) => {
-      await this.computationService.validateCategoryWeights(
-        classRecordId,
-        tx as any,
-      );
-
-      const grades = await this.computationService.computeGrades(
-        classRecordId,
-        tx as any,
-      );
-
-      await tx
-        .delete(classRecordFinalGrades)
-        .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
-
-      const insertValues = [...grades.values()].map((g) => ({
-        classRecordId,
-        studentId: g.studentId,
-        finalPercentage: g.quarterlyGrade.toString(),
-        remarks: g.remarks,
-        computedAt: new Date(),
-      }));
-
-      await tx.insert(classRecordFinalGrades).values(insertValues);
-
-      const [updated] = await tx
-        .update(classRecords)
-        .set({ status: 'finalized', updatedAt: new Date() })
-        .where(eq(classRecords.id, classRecordId))
-        .returning();
-
-      return { classRecord: updated, gradeCount: grades.size };
-    });
-
-    this.logger.log(
-      `Class record "${classRecordId}" finalized. ${result.gradeCount} grades computed.`,
+    this.assertEditable(record);
+    const readiness = await this.readinessService.getReadiness(classRecordId);
+    if (!readiness.ready)
+      throw new UnprocessableEntityException({
+        message: 'Class record is incomplete; resolve the listed blockers',
+        ...readiness,
+      });
+    const { policy, cls } = await this.academicPolicyService.forClass(
+      record.classId,
     );
-
+    const gradeLevel = cls.subjectGradeLevel ?? cls.section?.gradeLevel;
+    if (!gradeLevel || !['7', '8', '9', '10'].includes(gradeLevel))
+      throw new BadRequestException('Class grade level must be 7 to 10');
+    const participants = await this.db.query.classRecordParticipants.findMany({
+      where: eq(classRecordParticipants.classRecordId, classRecordId),
+    });
+    const categories = await this.db.query.classRecordCategories.findMany({
+      where: eq(classRecordCategories.classRecordId, classRecordId),
+      with: { items: { with: { scores: true } } },
+    });
+    const items = categories.flatMap((category) => category.items);
+    const revision = record.revision + 1;
+    const grades = readiness.eligibleStudentIds.map((studentId) =>
+      calculateStudentRecord(studentId, policy, categories, items),
+    );
+    // This compatibility projection is replaceable; immutable revisions below are the source of truth.
+    await preserveLegacyGradeEvidence(this.db, classRecordId);
+    await this.db
+      .delete(classRecordFinalGrades)
+      .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+    if (grades.length) {
+      await this.db.insert(academicPeriodGradeRevisions).values(
+        grades.map((grade) => ({
+          classRecordId,
+          classId: record.classId,
+          studentId: grade.studentId,
+          schoolYear: cls.schoolYear,
+          subjectCode: normalizeSubjectCode(cls.subjectCode),
+          gradeLevel,
+          period: record.gradingPeriod,
+          revision,
+          grade: grade.quarterlyGrade!,
+          computedBy: userId,
+          evidence: {
+            policy,
+            initialGrade: grade.initialGrade,
+            categories: categories.map((category) => ({
+              ...category,
+              items: category.items.map((item) => ({
+                ...item,
+                scores: item.scores.filter(
+                  (s) => s.studentId === grade.studentId,
+                ),
+              })),
+            })),
+            participant: participants.find(
+              (p) => p.studentId === grade.studentId,
+            )!,
+          },
+        })),
+      );
+      await this.db.insert(classRecordFinalGrades).values(
+        grades.map((grade) => ({
+          classRecordId,
+          studentId: grade.studentId,
+          finalPercentage: String(grade.quarterlyGrade),
+          remarks:
+            grade.quarterlyGrade! < policy.passingGrade
+              ? ('For Intervention' as const)
+              : ('Passed' as const),
+          revision,
+          computedAt: new Date(),
+        })),
+      );
+    }
+    const [updated] = await this.db
+      .update(classRecords)
+      .set({ status: 'finalized', revision, updatedAt: new Date() })
+      .where(eq(classRecords.id, classRecordId))
+      .returning();
+    const annual = await this.annualGradesService.refreshForClass(
+      record.classId,
+      userId,
+    );
     await this.auditService.log({
       actorId: userId,
       action: 'class_record.finalized',
@@ -957,44 +1230,47 @@ export class ClassRecordService {
       targetId: classRecordId,
       metadata: {
         classId: record.classId,
-        gradeCount: result.gradeCount,
+        revision,
+        gradeCount: grades.length,
+        policyId: policy.id,
+        eligibleStudentIds: readiness.eligibleStudentIds,
       },
     });
-
-    return result;
+    return { classRecord: updated, gradeCount: grades.length, annual };
   }
 
+  @AcademicMutation()
   async reopenClassRecord(
     classRecordId: string,
     userId: string,
     roles: string[],
+    reason: string,
   ) {
     const record = await this.assertClassRecord(classRecordId, userId, roles);
-
-    if (record.status === 'locked') {
-      throw new ConflictException('Locked class records cannot be reopened');
-    }
-
-    if (record.status !== 'finalized') {
+    if (!reason?.trim())
+      throw new BadRequestException('A correction reason is required');
+    if (record.status !== 'finalized')
       throw new ConflictException(
-        'Only finalized class records can be reopened',
+        'Only finalized class records can be reopened; locked records cannot be reopened',
       );
-    }
-
-    const result = await this.db.transaction(async (tx) => {
-      await tx
-        .delete(classRecordFinalGrades)
-        .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
-
-      const [updated] = await tx
-        .update(classRecords)
-        .set({ status: 'draft', updatedAt: new Date() })
-        .where(eq(classRecords.id, classRecordId))
-        .returning();
-
-      return updated;
-    });
-
+    await this.academicPolicyService.assertAssessmentAction(
+      { classId: record.classId, quarter: record.gradingPeriod },
+      'grade',
+    );
+    await this.annualGradesService.invalidateRecordSources(
+      classRecordId,
+      userId,
+      reason,
+    );
+    await preserveLegacyGradeEvidence(this.db, classRecordId);
+    await this.db
+      .delete(classRecordFinalGrades)
+      .where(eq(classRecordFinalGrades.classRecordId, classRecordId));
+    const [updated] = await this.db
+      .update(classRecords)
+      .set({ status: 'draft', updatedAt: new Date() })
+      .where(eq(classRecords.id, classRecordId))
+      .returning();
     await this.auditService.log({
       actorId: userId,
       action: 'class_record.reopened',
@@ -1002,15 +1278,34 @@ export class ClassRecordService {
       targetId: classRecordId,
       metadata: {
         classId: record.classId,
-        previousStatus: 'finalized',
-        nextStatus: 'draft',
+        reason,
+        revision: record.revision,
+        previousStatus: record.status,
       },
     });
-
-    return result;
+    return updated;
   }
 
   // ── Final Grade Reads ─────────────────────────────────────────────────────
+
+  async getPeriodHistory(
+    classRecordId: string,
+    userId: string,
+    roles: string[],
+  ) {
+    await this.assertClassRecord(classRecordId, userId, roles);
+    const revisions = await this.db.query.academicPeriodGradeRevisions.findMany(
+      {
+        where: eq(academicPeriodGradeRevisions.classRecordId, classRecordId),
+        orderBy: (r, { desc }) => [desc(r.revision), desc(r.computedAt)],
+      },
+    );
+    const legacyEvidence =
+      await this.db.query.academicLegacyGradeEvidence.findMany({
+        where: eq(academicLegacyGradeEvidence.classRecordId, classRecordId),
+      });
+    return { revisions, legacyEvidence };
+  }
 
   async getFinalGrades(classRecordId: string, userId: string, roles: string[]) {
     await this.assertClassRecord(classRecordId, userId, roles);

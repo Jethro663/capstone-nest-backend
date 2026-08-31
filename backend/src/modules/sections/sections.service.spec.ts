@@ -5,6 +5,8 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { AcademicTransitionReadinessService } from '../academic-state/academic-transition-readiness.service';
 import { SectionsService } from './sections.service';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
@@ -115,7 +117,7 @@ describe('SectionsService', () => {
         findFirst: jest.fn(),
         findMany: jest.fn(),
       },
-      classes: { findMany: jest.fn() },
+      classes: { findFirst: jest.fn(), findMany: jest.fn() },
       users: { findFirst: jest.fn() },
       enrollments: { findFirst: jest.fn(), findMany: jest.fn() },
     },
@@ -126,7 +128,12 @@ describe('SectionsService', () => {
     transaction: jest.fn(),
   };
 
-  const mockDatabaseService = { db: mockDb };
+  const mockDatabaseService = {
+    db: mockDb,
+    academicTransaction: jest.fn(async (work: () => Promise<unknown>) =>
+      work(),
+    ),
+  };
   const mockAuditService = { log: jest.fn() };
   const mockClassRecordService = {
     generateClassRecord: jest.fn(),
@@ -134,6 +141,8 @@ describe('SectionsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockDb.query.enrollments.findFirst.mockReset();
+    mockDb.query.classes.findFirst.mockReset();
     mockAuditService.log.mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -142,6 +151,18 @@ describe('SectionsService', () => {
         { provide: DatabaseService, useValue: mockDatabaseService },
         { provide: AuditService, useValue: mockAuditService },
         { provide: ClassRecordService, useValue: mockClassRecordService },
+        {
+          provide: AcademicTransitionReadinessService,
+          useValue: { getReadiness: jest.fn() },
+        },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            currentState: jest
+              .fn()
+              .mockResolvedValue({ schoolYear: SCHOOL_YEAR }),
+          },
+        },
       ],
     }).compile();
 
@@ -1061,7 +1082,7 @@ describe('SectionsService', () => {
   // =========================================================================
 
   describe('deleteSection', () => {
-    it('archives the section, clears people assignments, and completes active enrollments', async () => {
+    it('archives an empty section while preserving historical people assignments', async () => {
       mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
       const txUpdateChain = makeUpdateChain();
       const tx = { update: jest.fn().mockReturnValue(txUpdateChain) };
@@ -1079,12 +1100,12 @@ describe('SectionsService', () => {
         status: 'completed',
       });
       expect(txUpdateChain.set.mock.calls[1][0]).toEqual(
-        expect.objectContaining({ isActive: false, teacherId: null }),
+        expect.objectContaining({ isActive: false }),
       );
 
       const sectionSetArgs = txUpdateChain.set.mock.calls[2][0];
       expect(sectionSetArgs.isActive).toBe(false);
-      expect(sectionSetArgs.adviserId).toBeNull();
+      expect(sectionSetArgs).not.toHaveProperty('adviserId');
       expect(sectionSetArgs).toHaveProperty('updatedAt');
       expect(mockAuditService.log).toHaveBeenCalledWith({
         actorId: ADMIN_USER.userId,
@@ -1094,9 +1115,9 @@ describe('SectionsService', () => {
         metadata: {
           actorRole: 'admin',
           previousIsActive: true,
-          removedAdviserId: ADVISER_ID,
+          preservedAdviserId: ADVISER_ID,
           completedEnrollmentStatus: 'completed',
-          linkedClassTeacherStatus: 'cleared',
+          linkedClassTeacherStatus: 'preserved_for_history',
         },
       });
     });
@@ -1479,5 +1500,35 @@ describe('SectionsService', () => {
         }),
       ).rejects.toThrow(BadRequestException);
     });
+  });
+  it.each(['moveUpStudents', 'failStudents', 'graduateStudents'] as const)(
+    'routes the legacy %s action through verified academic transition',
+    async (method) => {
+      await expect(
+        service[method](
+          {
+            fromSectionId: SECTION_ID,
+            targetSectionId: 'next-section',
+            studentIds: [STUDENT_ID],
+          },
+          ADMIN_USER.userId,
+          ADMIN_USER.roles,
+        ),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'academic_transition_required',
+        }),
+      });
+      expect(mockDb.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('blocks archival while an active student still belongs to the section', async () => {
+    mockDb.query.sections.findFirst.mockResolvedValue(makeSection());
+    mockDb.query.enrollments.findFirst.mockResolvedValue(makeEnrollment());
+    await expect(
+      service.archiveSection(SECTION_ID, ADMIN_USER.userId, ADMIN_USER.roles),
+    ).rejects.toThrow('active students');
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 });

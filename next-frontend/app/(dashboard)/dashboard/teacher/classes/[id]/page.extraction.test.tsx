@@ -109,12 +109,22 @@ jest.mock('@/services/module-service', () => ({
   },
 }));
 
-const mockedAnnouncementService = announcementService as jest.Mocked<typeof announcementService>;
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
-const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
+const mockedAnnouncementService = announcementService as jest.Mocked<
+  typeof announcementService
+>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
+const mockedClassRecordService = classRecordService as jest.Mocked<
+  typeof classRecordService
+>;
 const mockedClassService = classService as jest.Mocked<typeof classService>;
-const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<typeof discussionBoardService>;
-const mockedExtractionService = extractionService as jest.Mocked<typeof extractionService>;
+const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
+  typeof discussionBoardService
+>;
+const mockedExtractionService = extractionService as jest.Mocked<
+  typeof extractionService
+>;
 const mockedFileService = fileService as jest.Mocked<typeof fileService>;
 const mockedHealthService = healthService as jest.Mocked<typeof healthService>;
 const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
@@ -133,25 +143,45 @@ describe('TeacherClassDetailPage extraction view', () => {
       },
     });
     mockedClassService.getById.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: {
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        isActive: true,
         id: classId,
         subjectName: 'Science',
         subjectCode: 'SCI-7',
         subjectGradeLevel: '7',
         room: '201',
         schedules: [],
-        section: {
-          name: 'Rizal',
-          gradeLevel: '7',
-        },
+        section: { id: 'section-1', name: 'Rizal', gradeLevel: '7' },
         enrollments: [],
       },
     } as Awaited<ReturnType<typeof classService.getById>>);
     mockedClassService.getEnrollments.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
       data: [],
     } as Awaited<ReturnType<typeof classService.getEnrollments>>);
-    mockedModuleService.getByClass.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof moduleService.getByClass>>);
-    mockedAssessmentService.getByClass.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
+    mockedModuleService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
+      data: [],
+    } as Awaited<ReturnType<typeof moduleService.getByClass>>);
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+      data: [],
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
     mockedExtractionService.listByClass.mockResolvedValue({
       data: [
         {
@@ -187,10 +217,23 @@ describe('TeacherClassDetailPage extraction view', () => {
         },
       ],
     } as Awaited<ReturnType<typeof extractionService.listByClass>>);
-    mockedAnnouncementService.getByClass.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof announcementService.getByClass>>);
-    mockedClassRecordService.getByClass.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof classRecordService.getByClass>>);
-    mockedClassRecordService.getFinalGrades.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof classRecordService.getFinalGrades>>);
-    mockedDiscussionBoardService.listThreads.mockResolvedValue({ data: [] } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      data: [],
+    } as Awaited<ReturnType<typeof announcementService.getByClass>>);
+    mockedClassRecordService.getByClass.mockResolvedValue({
+      data: [],
+    } as Awaited<ReturnType<typeof classRecordService.getByClass>>);
+    mockedClassRecordService.getFinalGrades.mockResolvedValue({
+      success: true,
+      data: [],
+    } as Awaited<ReturnType<typeof classRecordService.getFinalGrades>>);
+    mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      data: { items: [], page: 1, limit: 20, total: 0 },
+    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
   });
 
   it('shows the AI outage rail, disables PDF extraction upload, and keeps extraction history readable', async () => {
@@ -207,8 +250,14 @@ describe('TeacherClassDetailPage extraction view', () => {
     render(<TeacherClassDetailPage />);
 
     expect(await screen.findByText(/AI tools are paused/i)).toBeInTheDocument();
-    expect(screen.getByText(/AI service returned HTTP 503/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Drop a PDF here to extract module/i })).toBeDisabled();
+    expect(
+      screen.getByText(/AI service returned HTTP 503/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', {
+        name: /Drop a PDF here to extract module/i,
+      }),
+    ).toBeDisabled();
     expect(screen.getByText('Cells and Systems')).toBeInTheDocument();
     expect(screen.getByText('Needs review')).toBeInTheDocument();
     expect(screen.getByText(/Requested sections: 4/i)).toBeInTheDocument();
@@ -217,7 +266,11 @@ describe('TeacherClassDetailPage extraction view', () => {
       '/dashboard/teacher/extractions/extraction-1',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Drop a PDF here to extract module/i }));
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /Drop a PDF here to extract module/i,
+      }),
+    );
     expect(mockedFileService.upload).not.toHaveBeenCalled();
     expect(mockedExtractionService.extractModule).not.toHaveBeenCalled();
   });
@@ -233,7 +286,9 @@ describe('TeacherClassDetailPage extraction view', () => {
     expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /View/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Delete Cells and Systems/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Delete Cells and Systems/i }),
+    );
 
     expect(
       await screen.findByRole('heading', { name: 'Delete Extraction' }),
@@ -258,16 +313,25 @@ describe('TeacherClassDetailPage extraction view', () => {
 
     expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
 
-    const selector = screen.getByRole('combobox', { name: 'Target section count' });
+    const selector = screen.getByRole('combobox', {
+      name: 'Target section count',
+    });
     expect(selector).toHaveValue('4');
 
     fireEvent.change(selector, { target: { value: '5' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Extraction style' }), {
-      target: { value: 'student_friendly' },
-    });
+    fireEvent.change(
+      screen.getByRole('combobox', { name: 'Extraction style' }),
+      {
+        target: { value: 'student_friendly' },
+      },
+    );
 
-    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
-    const file = new File(['module'], 'module.pdf', { type: 'application/pdf' });
+    const input = document.querySelector(
+      'input[type="file"]',
+    ) as HTMLInputElement;
+    const file = new File(['module'], 'module.pdf', {
+      type: 'application/pdf',
+    });
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => {
@@ -279,7 +343,9 @@ describe('TeacherClassDetailPage extraction view', () => {
     });
 
     const tracked = JSON.parse(
-      window.localStorage.getItem(getTrackedExtractionNotificationStorageKey(classId)) || '[]',
+      window.localStorage.getItem(
+        getTrackedExtractionNotificationStorageKey(classId),
+      ) || '[]',
     );
     expect(tracked).toEqual(
       expect.arrayContaining([
@@ -312,17 +378,26 @@ describe('TeacherClassDetailPage extraction view', () => {
     expect(await screen.findByText('Cells and Systems')).toBeInTheDocument();
     expect(screen.getByText(/Style: faithful/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Retry Cells and Systems/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Retry Cells and Systems/i }),
+    );
     await waitFor(() => {
-      expect(mockedExtractionService.retry).toHaveBeenCalledWith('extraction-1', {
-        extractionStyle: 'clean',
-        targetSectionCount: 4,
-      });
+      expect(mockedExtractionService.retry).toHaveBeenCalledWith(
+        'extraction-1',
+        {
+          extractionStyle: 'clean',
+          targetSectionCount: 4,
+        },
+      );
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Cancel Forces and Motion/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Cancel Forces and Motion/i }),
+    );
     await waitFor(() => {
-      expect(mockedExtractionService.cancel).toHaveBeenCalledWith('extraction-2');
+      expect(mockedExtractionService.cancel).toHaveBeenCalledWith(
+        'extraction-2',
+      );
     });
   });
 });

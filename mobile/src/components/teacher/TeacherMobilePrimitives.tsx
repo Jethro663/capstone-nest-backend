@@ -11,6 +11,7 @@ export { theme as teacherTheme, stripRichText };
 
 export function TeacherScreen({
   title,
+  workspaceLabel = "Teacher workspace",
   subtitle,
   icon,
   showBackButton = false,
@@ -21,6 +22,7 @@ export function TeacherScreen({
   onRefresh,
   children,
 }: PropsWithChildren<{
+  workspaceLabel?: string;
   title: string;
   subtitle?: string;
   icon?: IconName;
@@ -81,7 +83,7 @@ export function TeacherScreen({
             ) : null}
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 10, fontWeight: "600", letterSpacing: 0.7, textTransform: "uppercase", color: theme.muted }}>
-                Teacher workspace
+                {workspaceLabel}
               </Text>
               <Text style={{ marginTop: 4, fontSize: 24, fontWeight: "900", color: theme.text }}>{title}</Text>
             </View>

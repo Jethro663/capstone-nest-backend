@@ -1,26 +1,32 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, School2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import ClassForm, { createEmptyClassForm, type ClassFormValues } from '@/components/admin/ClassForm';
-import { AdminPageShell, AdminSectionCard } from '@/components/admin/AdminPageShell';
-import { classService } from '@/services/class-service';
-import { academicStateService } from '@/services/academic-state-service';
-import { classTemplateService } from '@/services/class-template-service';
-import { sectionService } from '@/services/section-service';
-import { userService } from '@/services/user-service';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowLeft, School2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import ClassForm, {
+  createEmptyClassForm,
+  type ClassFormValues,
+} from "@/components/admin/ClassForm";
+import {
+  AdminPageShell,
+  AdminSectionCard,
+} from "@/components/admin/AdminPageShell";
+import { classService } from "@/services/class-service";
+import { academicStateService } from "@/services/academic-state-service";
+import { classTemplateService } from "@/services/class-template-service";
+import { sectionService } from "@/services/section-service";
+import { userService } from "@/services/user-service";
 import {
   isTemplateCompatibleWithClass,
   matchesTemplateToSubject,
-} from '@/lib/class-template-compat';
-import { getApiErrorMessage } from '@/lib/api-error';
-import type { Section } from '@/types/section';
-import type { ClassTemplate } from '@/types/class-template';
-import type { User } from '@/types/user';
-import { toast } from 'sonner';
+} from "@/lib/class-template-compat";
+import { getApiErrorMessage } from "@/lib/api-error";
+import type { Section } from "@/types/section";
+import type { ClassTemplate } from "@/types/class-template";
+import type { User } from "@/types/user";
+import { toast } from "sonner";
 
 type TemplateSeed = {
   templateId: string;
@@ -40,12 +46,15 @@ export default function CreateClassPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeSchoolYear, setActiveSchoolYear] = useState<string | null>(null);
-  const templateSeed = useMemo<TemplateSeed>(() => ({
-    templateId: searchParams.get('templateId')?.trim() ?? '',
-    subjectName: searchParams.get('subjectName')?.trim() ?? '',
-    subjectCode: searchParams.get('subjectCode')?.trim() ?? '',
-    subjectGradeLevel: searchParams.get('subjectGradeLevel')?.trim() ?? '',
-  }), [searchParams]);
+  const templateSeed = useMemo<TemplateSeed>(
+    () => ({
+      templateId: searchParams.get("templateId")?.trim() ?? "",
+      subjectName: searchParams.get("subjectName")?.trim() ?? "",
+      subjectCode: searchParams.get("subjectCode")?.trim() ?? "",
+      subjectGradeLevel: searchParams.get("subjectGradeLevel")?.trim() ?? "",
+    }),
+    [searchParams],
+  );
 
   const schoolYears = useMemo(
     () => [activeSchoolYear || getFallbackSchoolYear()],
@@ -54,12 +63,17 @@ export default function CreateClassPage() {
 
   const initialValues = useMemo(
     () => ({
-      ...createEmptyClassForm(schoolYears[0] || ''),
-      subjectName: templateSeed.subjectName || '',
-      subjectCode: templateSeed.subjectCode || '',
-      subjectGradeLevel: templateSeed.subjectGradeLevel || '7',
+      ...createEmptyClassForm(schoolYears[0] || ""),
+      subjectName: templateSeed.subjectName || "",
+      subjectCode: templateSeed.subjectCode || "",
+      subjectGradeLevel: templateSeed.subjectGradeLevel || "7",
     }),
-    [schoolYears, templateSeed.subjectCode, templateSeed.subjectGradeLevel, templateSeed.subjectName],
+    [
+      schoolYears,
+      templateSeed.subjectCode,
+      templateSeed.subjectGradeLevel,
+      templateSeed.subjectName,
+    ],
   );
 
   const [sections, setSections] = useState<Section[]>([]);
@@ -68,11 +82,14 @@ export default function CreateClassPage() {
   const [saving, setSaving] = useState(false);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [formValues, setFormValues] = useState<ClassFormValues>(initialValues);
-  const [compatibleTemplates, setCompatibleTemplates] = useState<ClassTemplate[]>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [compatibleTemplates, setCompatibleTemplates] = useState<
+    ClassTemplate[]
+  >([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   const templateSelectionReady = useMemo(
-    () => Boolean(formValues.subjectName.trim() && formValues.subjectGradeLevel),
+    () =>
+      Boolean(formValues.subjectName.trim() && formValues.subjectGradeLevel),
     [formValues.subjectGradeLevel, formValues.subjectName],
   );
 
@@ -81,7 +98,7 @@ export default function CreateClassPage() {
       setLoading(true);
       const [sectionsRes, teachersRes] = await Promise.all([
         sectionService.getAll(),
-        userService.getAll({ role: 'teacher', limit: 200 }),
+        userService.getAll({ role: "teacher", limit: 200 }),
       ]);
       setSections(sectionsRes.data || []);
       setTeachers(teachersRes.users || []);
@@ -92,7 +109,7 @@ export default function CreateClassPage() {
         setActiveSchoolYear(null);
       }
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to load class form data'));
+      toast.error(getApiErrorMessage(error, "Failed to load class form data"));
     } finally {
       setLoading(false);
     }
@@ -109,7 +126,7 @@ export default function CreateClassPage() {
   useEffect(() => {
     if (!templateSelectionReady) {
       setCompatibleTemplates([]);
-      setSelectedTemplateId('');
+      setSelectedTemplateId("");
       return;
     }
 
@@ -124,7 +141,7 @@ export default function CreateClassPage() {
         if (!mounted) return;
         const filtered = (response.data || []).filter(
           (template) =>
-            template.status === 'published' &&
+            template.status === "published" &&
             template.subjectGradeLevel === formValues.subjectGradeLevel &&
             matchesTemplateToSubject(
               template,
@@ -137,7 +154,9 @@ export default function CreateClassPage() {
       } catch (error) {
         if (mounted) {
           setCompatibleTemplates([]);
-          toast.error(getApiErrorMessage(error, 'Failed to load compatible templates'));
+          toast.error(
+            getApiErrorMessage(error, "Failed to load compatible templates"),
+          );
         }
       } finally {
         if (mounted) {
@@ -161,9 +180,11 @@ export default function CreateClassPage() {
   useEffect(() => {
     if (!selectedTemplateId) return;
     if (templatesLoading) return;
-    const selectedStillCompatible = compatibleTemplates.some((template) => template.id === selectedTemplateId);
+    const selectedStillCompatible = compatibleTemplates.some(
+      (template) => template.id === selectedTemplateId,
+    );
     if (!selectedStillCompatible) {
-      setSelectedTemplateId('');
+      setSelectedTemplateId("");
     }
   }, [compatibleTemplates, selectedTemplateId, templatesLoading]);
 
@@ -187,7 +208,8 @@ export default function CreateClassPage() {
       let validatedTemplateId: string | undefined;
 
       if (selectedTemplateId) {
-        const selectedTemplateResponse = await classTemplateService.getById(selectedTemplateId);
+        const selectedTemplateResponse =
+          await classTemplateService.getById(selectedTemplateId);
         const selectedTemplate = selectedTemplateResponse.data;
         const isValidTemplateSelection =
           selectedTemplate &&
@@ -199,7 +221,7 @@ export default function CreateClassPage() {
 
         if (!isValidTemplateSelection) {
           toast.error(
-            'Selected template is no longer compatible or unpublished. Publish a compatible template before creating this class.',
+            "Selected template is no longer compatible or unpublished. Publish a compatible template before creating this class.",
           );
           return;
         }
@@ -212,6 +234,7 @@ export default function CreateClassPage() {
         subjectCode: values.subjectCode,
         subjectGradeLevel: values.subjectGradeLevel,
         gradingProfile: values.gradingProfile,
+        academicWeightProfile: values.academicWeightProfile,
         sectionId: values.sectionId,
         teacherId: values.teacherId,
         schoolYear: values.schoolYear,
@@ -219,10 +242,10 @@ export default function CreateClassPage() {
         templateId: validatedTemplateId,
         schedules: values.schedules,
       });
-      toast.success('Class created');
-      router.push('/dashboard/admin/classes');
+      toast.success("Class created");
+      router.push("/dashboard/admin/classes");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to create class'));
+      toast.error(getApiErrorMessage(error, "Failed to create class"));
     } finally {
       setSaving(false);
     }
@@ -244,17 +267,17 @@ export default function CreateClassPage() {
       description="Create a class from a tighter setup flow with the assignment and schedule in one clear workspace."
       icon={School2}
       variant="compact-form"
-      actions={(
+      actions={
         <Button
           variant="outline"
           className="admin-button-outline rounded-xl font-black"
-          onClick={() => router.push('/dashboard/admin/classes')}
+          onClick={() => router.push("/dashboard/admin/classes")}
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Classes
         </Button>
-      )}
-      meta={(
+      }
+      meta={
         <>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">Sections</span>
@@ -266,10 +289,10 @@ export default function CreateClassPage() {
           </div>
           <div className="admin-compact-meta__item">
             <span className="admin-compact-meta__label">School Year</span>
-            {schoolYears[0] || '-'}
+            {schoolYears[0] || "-"}
           </div>
         </>
-      )}
+      }
     >
       <AdminSectionCard
         title="Class Details"
@@ -291,7 +314,7 @@ export default function CreateClassPage() {
           showGradingProfile
           submitLabel="Create Class"
           onSubmit={handleSubmit}
-          onCancel={() => router.push('/dashboard/admin/classes')}
+          onCancel={() => router.push("/dashboard/admin/classes")}
         />
       </AdminSectionCard>
     </AdminPageShell>

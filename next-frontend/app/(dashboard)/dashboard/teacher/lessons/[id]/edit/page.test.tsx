@@ -76,6 +76,7 @@ describe('LessonEditorPage', () => {
     });
 
     mockedLessonService.getVersions.mockResolvedValue({
+      count: 1,
       success: true,
       message: 'ok',
       data: [
@@ -105,12 +106,33 @@ describe('LessonEditorPage', () => {
       } as never,
     });
 
-    mockedLessonService.createVersion.mockResolvedValue({ success: true, message: 'ok', data: {} as never });
-    mockedLessonService.restoreVersion.mockResolvedValue({ success: true, message: 'ok', data: {} as never });
-    mockedLessonService.createBlock.mockResolvedValue({ success: true, message: 'ok', data: { id: 'block-1' } as never });
-    mockedLessonService.updateBlock.mockResolvedValue({ success: true, message: 'ok', data: {} as never });
-    mockedLessonService.reorderBlocks.mockResolvedValue({ success: true, message: 'ok', data: {} as never });
-    mockedLessonService.deleteBlock.mockResolvedValue({ success: true, message: 'ok' });
+    mockedLessonService.createVersion.mockResolvedValue({
+      count: 0,
+      success: true,
+      message: 'ok',
+      data: {} as never,
+    });
+    mockedLessonService.restoreVersion.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {} as never,
+    });
+    mockedLessonService.createBlock.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: { id: 'block-1' } as never,
+    });
+    mockedLessonService.updateBlock.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {} as never,
+    });
+    mockedLessonService.reorderBlocks.mockResolvedValue({
+      success: true,
+      message: 'ok',
+      data: {} as never,
+    });
+    mockedLessonService.deleteBlock.mockResolvedValue(undefined);
 
     Object.defineProperty(window, 'IntersectionObserver', {
       writable: true,
@@ -129,9 +151,13 @@ describe('LessonEditorPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /lesson help/i }));
 
-    expect(await screen.findByText('Teacher guide: Lesson Editor Workspace')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Teacher guide: Lesson Editor Workspace'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
-    expect(screen.getByText('Start from the lesson header')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start from the lesson header'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Finish lesson details')).toBeInTheDocument();
@@ -140,12 +166,16 @@ describe('LessonEditorPage', () => {
     expect(screen.getByText('Build your content flow')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
-    expect(screen.getByText('Take snapshots before publish')).toBeInTheDocument();
+    expect(
+      screen.getByText('Take snapshots before publish'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Teacher guide: Lesson Editor Workspace')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Teacher guide: Lesson Editor Workspace'),
+      ).not.toBeInTheDocument();
     });
   });
 });

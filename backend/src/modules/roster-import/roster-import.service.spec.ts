@@ -68,6 +68,14 @@ function createDbStub() {
     sections: { findFirst: jest.fn() },
     users: { findFirst: jest.fn() },
     pendingRoster: { findFirst: jest.fn() },
+    studentProfiles: {
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { userId: STUDENT_USER_ID, gradeLevel: '7', graduatedAt: null },
+        ]),
+    },
+    enrollments: { findMany: jest.fn().mockResolvedValue([]) },
   };
   return stub;
 }
@@ -78,8 +86,17 @@ let dbStub: any;
 beforeEach(() => {
   jest.clearAllMocks();
   dbStub = createDbStub();
-  const databaseService = { db: dbStub } as unknown as DatabaseService;
-  service = new RosterImportService(databaseService);
+  const databaseService = {
+    db: dbStub,
+    academicTransaction: async (work: () => Promise<unknown>) => work(),
+  } as unknown as DatabaseService;
+  service = new RosterImportService(
+    databaseService,
+    {
+      currentState: jest.fn().mockResolvedValue({ schoolYear: '2026-2027' }),
+    } as never,
+    { log: jest.fn() } as never,
+  );
 });
 
 // --- parseAndPreview tests ------------------------------------------------
@@ -101,6 +118,7 @@ describe('parseAndPreview', () => {
       gradeLevel: '8',
       name: 'STEM',
       isActive: true,
+      schoolYear: '2026-2027',
     });
     (parseCsv as jest.Mock).mockReturnValue([['GRADE_7 HUMSS-A'], HEADER_ROW]);
     await expect(
@@ -118,6 +136,7 @@ describe('parseAndPreview', () => {
       gradeLevel: '7',
       name: 'HUMSS-A',
       isActive: true,
+      schoolYear: '2026-2027',
     });
     (parseCsv as jest.Mock).mockReturnValue([
       SECTION_HEADER,
@@ -165,6 +184,7 @@ describe('commitRoster', () => {
       gradeLevel: '7',
       name: 'HUMSS',
       isActive: true,
+      schoolYear: '2026-2027',
     });
     const dto = {
       sectionId: OTHER_SECTION_ID,
@@ -193,6 +213,7 @@ describe('commitRoster', () => {
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
       isActive: true,
+      schoolYear: '2026-2027',
       adviserId: 'other',
       gradeLevel: '7',
       name: 'HUMSS',
@@ -207,6 +228,7 @@ describe('commitRoster', () => {
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
       isActive: true,
+      schoolYear: '2026-2027',
       gradeLevel: '7',
       name: 'HUMSS',
       capacity: 1,
@@ -249,6 +271,7 @@ describe('commitRoster', () => {
     dbStub.query.sections.findFirst.mockResolvedValue({
       id: SECTION_ID,
       isActive: true,
+      schoolYear: '2026-2027',
       gradeLevel: '7',
       name: 'HUMSS',
       capacity: 10,
@@ -288,6 +311,8 @@ describe('commitRoster', () => {
         select: dbStub.select,
         update: dbStub.update,
         query: {
+          studentProfiles: dbStub.query.studentProfiles,
+          enrollments: dbStub.query.enrollments,
           roles: {
             findFirst: jest.fn().mockResolvedValue({ id: 'student-role-id' }),
           },

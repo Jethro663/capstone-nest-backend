@@ -5,13 +5,24 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { MainTabParamList } from "../../navigation/types";
-import { colors, gradients, modernAcademic, skillStream } from "../../theme/tokens";
+import {
+  colors,
+  gradients,
+  modernAcademic,
+  skillStream,
+} from "../../theme/tokens";
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 type TabRouteItem = { name: string; key: string };
 
-const studentTabOrder: Array<keyof MainTabParamList> = ["Dashboard", "Classes", "JA", "Assessments", "Profile"];
+const studentTabOrder: Array<keyof MainTabParamList> = [
+  "Dashboard",
+  "Classes",
+  "JA",
+  "Assessments",
+  "Profile",
+];
 const teacherTabOrder: Array<keyof MainTabParamList> = [
   "Home",
   "Assessments",
@@ -24,6 +35,11 @@ const routeConfig: Record<
   keyof MainTabParamList,
   { label: string; activeIcon: IconName; inactiveIcon: IconName }
 > = {
+  Academic: {
+    label: "Academic",
+    activeIcon: "school",
+    inactiveIcon: "school-outline",
+  },
   Home: {
     label: "Home",
     activeIcon: "view-dashboard",
@@ -86,15 +102,25 @@ const routeConfig: Record<
   },
 };
 
-function orderRouteByName(routes: TabRouteItem[], routeOrder: Array<keyof MainTabParamList>) {
+function orderRouteByName(
+  routes: TabRouteItem[],
+  routeOrder: Array<keyof MainTabParamList>,
+) {
   return [...routes].sort((a, b) => {
     const leftIndex = routeOrder.indexOf(a.name as keyof MainTabParamList);
     const rightIndex = routeOrder.indexOf(b.name as keyof MainTabParamList);
-    return (leftIndex < 0 ? Number.MAX_SAFE_INTEGER : leftIndex) - (rightIndex < 0 ? Number.MAX_SAFE_INTEGER : rightIndex);
+    return (
+      (leftIndex < 0 ? Number.MAX_SAFE_INTEGER : leftIndex) -
+      (rightIndex < 0 ? Number.MAX_SAFE_INTEGER : rightIndex)
+    );
   });
 }
 
-export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function BottomTabBar({
+  state,
+  descriptors,
+  navigation,
+}: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const activeRouteKey = state.routes[state.index]?.key;
   const isStudentTabSet = state.routes.some((route) => route.name === "JA");
@@ -175,7 +201,9 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={focused ? { selected: true } : {}}
-                  accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel}
+                  accessibilityLabel={
+                    descriptors[route.key].options.tabBarAccessibilityLabel
+                  }
                   onPress={onPress}
                   onLongPress={onLongPress}
                   style={{ alignItems: "center", width: "100%" }}
@@ -186,7 +214,10 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                         ? isTeacherCenter
                           ? gradients.classes
                           : gradients.ja
-                        : [modernAcademic.primary, modernAcademic.primaryContainer]
+                        : [
+                            modernAcademic.primary,
+                            modernAcademic.primaryContainer,
+                          ]
                     }
                     style={{
                       width: 72,
@@ -199,7 +230,11 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                       borderColor: skillStream.background,
                     }}
                   >
-                  <MaterialCommunityIcons name={config.activeIcon} size={30} color={colors.white} />
+                    <MaterialCommunityIcons
+                      name={config.activeIcon}
+                      size={30}
+                      color={colors.white}
+                    />
                   </LinearGradient>
                   <Text
                     style={{
@@ -222,10 +257,19 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               key={route.key}
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel}
+              accessibilityLabel={
+                descriptors[route.key].options.tabBarAccessibilityLabel
+              }
               onPress={onPress}
               onLongPress={onLongPress}
-              style={{ flex: 1, minHeight: 56, alignItems: "center", justifyContent: "flex-end", paddingBottom: 14, gap: 3 }}
+              style={{
+                flex: 1,
+                minHeight: 56,
+                alignItems: "center",
+                justifyContent: "flex-end",
+                paddingBottom: 14,
+                gap: 3,
+              }}
             >
               <MaterialCommunityIcons
                 name={focused ? config.activeIcon : config.inactiveIcon}

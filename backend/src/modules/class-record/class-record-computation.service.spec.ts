@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ClassRecordComputationService } from './class-record-computation.service';
 import { DatabaseService } from '../../database/database.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
 
 function buildMockDb() {
   return {
@@ -35,6 +37,14 @@ describe('ClassRecordComputationService', () => {
       providers: [
         ClassRecordComputationService,
         { provide: DatabaseService, useValue: { db } },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            forClass: jest.fn().mockResolvedValue({
+              policy: getDefaultAcademicPolicy('2025-2026'),
+            }),
+          },
+        },
       ],
     }).compile();
 
@@ -100,5 +110,39 @@ describe('ClassRecordComputationService', () => {
     await expect(service.computeGrades('record-1')).rejects.toThrow(
       'No class-record participants found for this class',
     );
+  });
+});
+
+// Missing work must not be silently converted to zero at the service boundary.
+describe('class record completeness regression', () => {
+  it('rejects final computation when a participant lacks a required score', async () => {
+    const db = buildMockDb();
+    db.query.classRecords.findFirst.mockResolvedValue({ classId: 'class-1' });
+    mockSelect(db, [{ studentId: 's' }]);
+    mockSelect(db, [], true);
+    mockSelect(db, []);
+    db.query.classRecordCategories.findMany.mockResolvedValue([
+      { id: 'cat', name: 'Written Works', weightPercentage: '100' },
+    ]);
+    db.query.classRecordItems.findMany.mockResolvedValue([
+      { id: 'item', categoryId: 'cat', maxScore: '100', scores: [] },
+    ]);
+    const module = await Test.createTestingModule({
+      providers: [
+        ClassRecordComputationService,
+        { provide: DatabaseService, useValue: { db } },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            forClass: jest.fn().mockResolvedValue({
+              policy: getDefaultAcademicPolicy('2025-2026'),
+            }),
+          },
+        },
+      ],
+    }).compile();
+    await expect(
+      module.get(ClassRecordComputationService).computeGrades('record'),
+    ).rejects.toThrow('incomplete');
   });
 });

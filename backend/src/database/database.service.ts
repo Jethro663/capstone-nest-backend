@@ -7,13 +7,30 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
+import {
+  afterAcademicCommit,
+  getAcademicConnection,
+  runAcademicTransaction,
+} from './academic-transaction';
 import * as schema from '../drizzle/schema';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
-  public db: ReturnType<typeof drizzle<typeof schema>>;
+  private readonly rootDb: ReturnType<typeof drizzle<typeof schema>>;
+
+  get db(): ReturnType<typeof drizzle<typeof schema>> {
+    return getAcademicConnection(this, this.rootDb);
+  }
+
+  academicTransaction<T>(work: () => Promise<T>): Promise<T> {
+    return runAcademicTransaction(this, this.rootDb, work);
+  }
+
+  afterAcademicCommit(effect: () => unknown): Promise<void> {
+    return afterAcademicCommit(this, effect);
+  }
 
   constructor(private configService: ConfigService) {
     this.pool = new Pool({
@@ -27,7 +44,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     });
 
     // Pass the full schema object to drizzle
-    this.db = drizzle(this.pool, {
+    this.rootDb = drizzle(this.pool, {
       schema, // ← This now includes otpVerifications, roles, users, etc.
       logger: this.configService.get('NODE_ENV') === 'development',
     });

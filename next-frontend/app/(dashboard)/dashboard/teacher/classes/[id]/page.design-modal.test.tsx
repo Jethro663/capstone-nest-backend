@@ -117,16 +117,27 @@ jest.mock('@/lib/module-cover-images', () => ({
   createCroppedModuleCoverBlob: jest.fn(),
 }));
 
-const mockedAnnouncementService = announcementService as jest.Mocked<typeof announcementService>;
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
-const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
-const mockedClassService = classService as jest.Mocked<typeof classService>;
-const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<typeof discussionBoardService>;
-const mockedExtractionService = extractionService as jest.Mocked<typeof extractionService>;
-const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
-const mockedValidateModuleCoverFile = validateModuleCoverFile as jest.MockedFunction<
-  typeof validateModuleCoverFile
+const mockedAnnouncementService = announcementService as jest.Mocked<
+  typeof announcementService
 >;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
+const mockedClassRecordService = classRecordService as jest.Mocked<
+  typeof classRecordService
+>;
+const mockedClassService = classService as jest.Mocked<typeof classService>;
+const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
+  typeof discussionBoardService
+>;
+const mockedExtractionService = extractionService as jest.Mocked<
+  typeof extractionService
+>;
+const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
+const mockedValidateModuleCoverFile =
+  validateModuleCoverFile as jest.MockedFunction<
+    typeof validateModuleCoverFile
+  >;
 const mockedCreateCroppedModuleCoverBlob =
   createCroppedModuleCoverBlob as jest.MockedFunction<
     typeof createCroppedModuleCoverBlob
@@ -139,24 +150,33 @@ describe('TeacherClassDetailPage design modal', () => {
     URL.revokeObjectURL = jest.fn();
 
     mockedClassService.getById.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: {
+        sectionId: 'section-1',
+        teacherId: 'teacher-1',
+        schoolYear: '2026-2027',
+        isActive: true,
         id: classId,
         subjectName: 'Science',
         subjectCode: 'SCI-7',
         subjectGradeLevel: '7',
         room: '201',
         schedules: [],
-        section: {
-          name: 'Rizal',
-          gradeLevel: '7',
-        },
+        section: { id: 'section-1', name: 'Rizal', gradeLevel: '7' },
         enrollments: [],
       },
     } as Awaited<ReturnType<typeof classService.getById>>);
     mockedClassService.getEnrollments.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
       data: [],
     } as Awaited<ReturnType<typeof classService.getEnrollments>>);
     mockedModuleService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 1,
       data: [
         {
           id: 'module-1',
@@ -172,24 +192,41 @@ describe('TeacherClassDetailPage design modal', () => {
       ],
     } as Awaited<ReturnType<typeof moduleService.getByClass>>);
     mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
       data: [],
     } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
     mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: [],
     } as Awaited<ReturnType<typeof announcementService.getByClass>>);
     mockedClassRecordService.getByClass.mockResolvedValue({
       data: [],
     } as Awaited<ReturnType<typeof classRecordService.getByClass>>);
     mockedClassRecordService.getFinalGrades.mockResolvedValue({
+      success: true,
       data: [],
     } as Awaited<ReturnType<typeof classRecordService.getFinalGrades>>);
     mockedDiscussionBoardService.listThreads.mockResolvedValue({
-      data: [],
+      success: true,
+      message: 'Fixture response',
+      data: { items: [], page: 1, limit: 20, total: 0 },
     } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
     mockedExtractionService.listByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: [],
     } as Awaited<ReturnType<typeof extractionService.listByClass>>);
-    mockedValidateModuleCoverFile.mockResolvedValue({ width: 1280, height: 720 });
+    mockedValidateModuleCoverFile.mockResolvedValue({
+      width: 1280,
+      height: 720,
+    });
     mockedCreateCroppedModuleCoverBlob.mockResolvedValue(
       new Blob(['cover'], { type: 'image/png' }),
     );
@@ -222,25 +259,35 @@ describe('TeacherClassDetailPage design modal', () => {
       await screen.findByRole('button', { name: /customize module design/i }),
     );
 
-    expect(await screen.findByText('Customize Module Design')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Upload custom image')).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Customize Module Design'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Upload custom image'),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Image' }));
     const uploadInput = screen.getByLabelText('Upload custom image');
     expect(uploadInput).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Gradient' }));
-    expect(screen.queryByLabelText('Upload custom image')).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText('Upload custom image'),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Image' }));
-    const file = new File(['cover'], 'science-cover.png', { type: 'image/png' });
+    const file = new File(['cover'], 'science-cover.png', {
+      type: 'image/png',
+    });
     fireEvent.change(screen.getByLabelText('Upload custom image'), {
       target: { files: [file] },
     });
 
     expect(mockedValidateModuleCoverFile).toHaveBeenCalledWith(file);
     expect(mockedModuleService.uploadCover).not.toHaveBeenCalled();
-    expect(await screen.findByTestId('module-cover-cropper')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('module-cover-cropper'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /save design/i }));
     await waitFor(() =>
@@ -252,14 +299,20 @@ describe('TeacherClassDetailPage design modal', () => {
     render(<TeacherClassDetailPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /module help/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /module help/i }),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /module help/i }));
 
-    expect(await screen.findByText('Teacher guide: Class Workspace')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Teacher guide: Class Workspace'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Start at the top of the class workspace')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start at the top of the class workspace'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 2 of 8')).toBeInTheDocument();
@@ -267,38 +320,54 @@ describe('TeacherClassDetailPage design modal', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 3 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Use assignment filters and assignment actions')).toBeInTheDocument();
+    expect(
+      screen.getByText('Use assignment filters and assignment actions'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 4 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Run AI extraction when you need fast lesson input')).toBeInTheDocument();
+    expect(
+      screen.getByText('Run AI extraction when you need fast lesson input'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 5 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Keep class communication in one workflow')).toBeInTheDocument();
+    expect(
+      screen.getByText('Keep class communication in one workflow'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 6 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Review students from one tab')).toBeInTheDocument();
+    expect(
+      screen.getByText('Review students from one tab'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 7 of 8')).toBeInTheDocument();
-    expect(screen.getByText('View class record and progress summaries')).toBeInTheDocument();
+    expect(
+      screen.getByText('View class record and progress summaries'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Page 8 of 8')).toBeInTheDocument();
-    expect(screen.getByText('Plan with the class calendar')).toBeInTheDocument();
+    expect(
+      screen.getByText('Plan with the class calendar'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
     expect(screen.getByText('Page 7 of 8')).toBeInTheDocument();
-    expect(screen.getByText('View class record and progress summaries')).toBeInTheDocument();
+    expect(
+      screen.getByText('View class record and progress summaries'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Close guide')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Teacher guide: Class Workspace')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Teacher guide: Class Workspace'),
+      ).not.toBeInTheDocument();
     });
   });
 });

@@ -1,384 +1,163 @@
-# Academic Quarter Lifecycle and Annual Grading Analysis
+# Academic Period Lifecycle and Annual Grading
 
-## Document purpose
+## Status and scope
 
-This document analyzes the current implementation against the requested academic-quarter workflow and proposes a safe implementation plan. It is based on the current local source tree. No application source code, database schema, migration, or configuration was changed as part of this analysis.
+Revised 2026-08-31 after source review and verification of current DepEd issuances. This supersedes the original four-quarter-only proposal. The user authorized architectural decisions, implementation, and verification in the existing worktree. The implementation is present in the existing worktree across backend, web, and mobile. Verification and remaining deployment limitations are recorded in [the delivery evidence](academic-period-lifecycle-verification.md). The release review fixed production startup and CI gaps, cleared web type errors/test teardown, and rehearsed PostgreSQL 16/18 upgrades and a read-only production snapshot locally. The copied current year still has 53 academic-readiness findings requiring evidenced school decisions; this is not an unconditional green light to push to an auto-deploying branch. The implementation plan and OpenSpec checklist are retained; this is not a claim of production deployment.
 
-## Executive assessment
+Nexora supports Grades 7–10. Backend owns academic policy, authorization, official records, and transition. Web and mobile consume the same `/api` contracts. AI does not determine or mutate official grades. Production deployment is separate from implementation and local rehearsal.
 
-The reported gap is real. The system has a persisted global `schoolYear` and `quarter`, but the admin can only view the quarter. Teachers are then forced by the assessment editor to use that quarter, even though the assessment API and database already support any quarter.
+## Original defects addressed
 
-The larger risk is in year-end grading. The class-record module computes and stores one grade snapshot per student, subject, and quarter. It does not compute or expose an official annual subject grade. The transition service independently averages whatever quarterly snapshots are available for a subject. Because it does not require the full Q1-Q4 matrix to exist, fewer than four quarters can be treated as a complete year.
+These findings describe the pre-change behavior and motivated the implementation below.
 
-The recommended design is one consistent lifecycle:
+- Admin can read but cannot activate the persisted academic quarter.
+- Assessment editor overwrites the saved quarter with global state. Creation can omit quarter, and placement is coupled to category even for drafts.
+- Quarterly computation treats absent score rows as zero; finalization validates weights but not a complete eligible roster or pending grading.
+- Finalization/reopen delete existing grade rows; spreadsheet sometimes recomputes finalized grades rather than using their snapshots.
+- Score synchronization may write into finalized records and converts null attempt grades to zero.
+- Transition readiness counts existing records, so missing periods/subjects can escape detection; promotion averages however many period grades exist.
+- Transition computes its plan outside the write transaction, directly finalizes drafts, and carries the old quarter into the target year.
+- There is no annual subject snapshot, recorded remediation result, or period-specific eligibility history.
 
-1. The admin explicitly activates Q1, Q2, Q3, or Q4 in System Settings.
-2. Teachers may prepare draft assessments for any quarter, defaulting to the active quarter.
-3. Only assessments in the active quarter may be released to students or accept new attempts/scores.
-4. Each quarterly class record must pass a completeness check before finalization.
-5. After all four quarterly records are finalized, the system creates an auditable annual subject-grade snapshot.
-6. School-year transition is enabled only in Q4 when every required Q1-Q4 record and annual subject grade is complete.
-7. Transition consumes annual subject grades, never auto-finalizes drafts, and starts the new school year in Q1.
+## Policy evidence and selected defaults
 
-## Source review findings
+Primary sources, retrieved 2026-08-31:
 
-| Area | Current source | Current behavior | Gap or risk |
+- [DepEd Order 8, s. 2015](https://www.deped.gov.ph/wp-content/uploads/2015/04/DO_s2015_08.pdf): historical four-quarter grading, annual averaging, and remediation.
+- [DepEd three-term calendar clarification, May 4, 2026](https://www.deped.gov.ph/2026/05/04/deped-binigyang-diin-ang-istruktura-at-layunin-ng-three-term-school-calendar-bago-ang-implementasyon/): three grading periods in public schools from SY 2026–2027.
+- [DepEd Order 015, s. 2026](https://www.deped.gov.ph/wp-content/uploads/DO_s2026_015r.pdf), sections 44–53 and 67, Annex D: revised weights, exam components, transmutation, final-grade rounding, and remediation/conditional promotion. The scanned PDF was OCR-extracted and the relevant tables and section 67 visually checked.
+
+| School year | Periods | Term-grade calculation | Promotion policy |
 | --- | --- | --- | --- |
-| Persisted academic state | `backend/src/drizzle/schema/academic-state.schema.ts` | Stores global `schoolYear`, `quarter`, updater, and timestamps. Defaults to Q1. | The data exists, but there is no update-quarter workflow. |
-| Academic-state API | `backend/src/modules/academic-state/academic-state.controller.ts` | Exposes current state, transition preview, teacher notification, and school-year transition. | No admin endpoint activates a quarter. |
-| System Settings | `next-frontend/app/(dashboard)/dashboard/admin/system-settings/page.tsx` | Displays Active Quarter with the caption `Informational only`. | The admin cannot select or activate a quarter. |
-| Frontend academic-state client | `next-frontend/src/services/academic-state-service.ts` and `next-frontend/src/types/academic-state.ts` | Supports reads, transition preview, transition, and notifications. | No quarter-readiness or quarter-activation operation exists. |
-| Assessment API model | `backend/src/modules/assessments/DTO/assessment.dto.ts` | `CreateAssessmentDto` and `UpdateAssessmentDto` already accept optional Q1-Q4 values. | Backend input already supports the requested selection, but lifecycle rules are missing. |
-| Assessment creation | `backend/src/modules/assessments/assessments.service.ts` | Persists the supplied quarter and syncs placement into that quarter's class record. | It does not default to or validate against the active quarter, and it does not enforce future-quarter release restrictions. |
-| Teacher class page | `next-frontend/app/(dashboard)/dashboard/teacher/classes/[id]/page.tsx` | Creates an untitled assessment with only `title` and `classId`. | No quarter is selected at creation time. |
-| Assessment editor | `next-frontend/app/(dashboard)/dashboard/teacher/assessments/[id]/edit/page.tsx` | Fetches the active quarter, overwrites the assessment quarter with it, disables the quarter selector, and says the quarter is locked. | Teachers cannot prepare an assessment for another quarter. Existing assessment quarter data can also be unintentionally redirected to the active quarter in the editor. |
-| Quarterly grade calculation | `backend/src/modules/class-record/class-record-computation.service.ts` | Calculates category percentage scores, weighted scores, initial grade, transmuted quarterly grade, and remarks for one class record. | This is a quarterly computation only. A missing score row is treated as zero, so missing work and an intentional score of zero are indistinguishable during computation. |
-| Quarterly finalization | `backend/src/modules/class-record/class-record.service.ts` | Validates category weights, calculates grades, stores `class_record_final_grades`, and marks the record finalized. | It does not require a score or an explicit exemption for every expected student-item pair. |
-| Final-grade storage | `backend/src/drizzle/schema/class-record.schema.ts` | Stores one final percentage per student per quarterly class record. | There is no annual subject-grade entity or immutable Q1-Q4 annual snapshot. |
-| Teacher workbook | `next-frontend/src/components/teacher/class-record/TeacherClassRecordWorkbook.tsx`, `next-frontend/src/hooks/use-teacher-class-record.ts`, and `next-frontend/src/types/class-record.ts` | Displays and exports Initial Grade and Quarterly Grade for the selected Q1-Q4 record. | Q4 has no annual summary or final subject-grade indicator. |
-| Promotion calculation | `backend/src/modules/academic-state/academic-state.service.ts`, `classifyStudentOutcome()` | Groups available quarterly final-grade rows by subject and averages each group. A subject average below 75 retains the student. | It averages however many quarters happen to exist; it does not require exactly Q1, Q2, Q3, and Q4. |
-| Transition readiness | `backend/src/modules/academic-state/academic-state.service.ts`, `getPromotionTransitionReadiness()` | Counts class records that exist and checks whether those records are finalized/locked and have grade rows. | A missing quarter is not counted as missing. For example, finalized Q1 records alone can satisfy the current record-count comparison. |
-| Transition execution | `backend/src/modules/academic-state/academic-state.service.ts`, `transition()` | Directly changes selected draft records to `finalized`, archives/clones the year, and carries `current.quarter` into the target year. | Direct status changes bypass normal grade computation. The new school year should start at Q1, not inherit Q4. |
-| Teacher reminders | `backend/src/modules/academic-state/academic-state.service.ts`, `notifyUnfinalizedTeachers()` | Notifies assigned teachers and reports whether all existing records are finalized. | It cannot identify a missing quarter because absent records are not part of the status list. |
+| Through 2025–2026 | Q1–Q4 | Historical class weights and captured approved transmutation bands | All subjects pass: promote; 1–2 failures: SRC required, retained if still failing after SRC; 3+ failures: retain |
+| 2026–2027 | Term 1–3 | DO 015 adjusted table; raw 70 maps to 75 | All subjects pass: promote; 1–2 failures: SRC required; persistent failures after SRC: conditional promotion with back subjects; 3+ failures: retain |
+| From 2027–2028 | Term 1–3 | Weighted initial grade rounded to a whole number, without transmutation | DO 015 remediation and conditional-promotion rules |
 
-## Proposed business rules
+Persist a policy identifier and complete policy snapshot per school year. Do not derive historical policy from today's date or silently replace an existing year's policy. Keep the database/API `Q1`–`Q4` identifiers for compatibility: in a three-term year `Q1`–`Q3` are storage keys labeled Term 1–3; `Q4` is invalid for new work. Clients render server labels and allowed periods. Historic Q4 data is never renamed, deleted, or folded into Term 3; incompatible existing data appears in the repair report.
 
-### 1. Active quarter ownership
+For DO 015 Grades 7–10, WW/PT/EX weights are 20/50/30 for academic subjects and 20/60/20 for TLE/EPP/MAPEH. EX consists of ST1/ST2/TE with internal weights 30/30/40, independently of their highest possible scores. Subject classification uses normalized subject code/name; unknown classifications require an explicit admin choice before finalization. Existing historical class weights remain unchanged. Existing modern records with incompatible weights/items require repair, never silent recomputation of finalized grades.
 
-- The active quarter is a single system-wide state controlled by an admin.
-- System Settings must provide a Q1-Q4 selector, current-quarter indicator, readiness summary, and explicit Activate action.
-- Changing the active quarter must never finalize class records or transition the school year.
-- The operation must require the admin password or equivalent step-up authentication because it changes student-facing system behavior.
-- Every change must be audited with previous quarter, new quarter, school year, actor, timestamp, and optional reason.
-- The request should include the expected current quarter so two admins cannot silently overwrite each other's changes from stale screens.
-- Normal use should move sequentially. A backward or skipped-quarter activation should show a strong warning and require an explicit elevated override if the school decides that emergency correction is necessary.
+Initial grade is retained to three decimals; adjusted-table lookup uses the actual threshold lower bound (no rounding across 70 before lookup). Whole-number term and annual grades use positive half-up rounding. Annual computation uses every required period exactly once and never divides by available periods. Store raw annual average to six decimals and retain integer source grades, their sum, and divisor to reproduce the exact rational value. Pass/fail uses the official rounded final grade.
 
-Recommended state meanings:
+## Period activation and permissions
 
-| Quarter relationship | Teacher activity allowed |
+Admin activates a period with password verification, expected school year, expected period, and expected state version. A monotonic integer version prevents stale updates and the Q1→Q2→Q1 ABA case. Activation records actor, reason, old/new state, and timestamp in the same transaction. Normal movement is sequential. Backward/skipped movement requires `override: true` and a nonempty reason; this does not reopen/finalize records or erase attempts. Same-state retry returns current state without duplicate audit.
+
+Separate two concepts:
+
+- **Release period:** one current period. New publication, core-assessment release, new attempts, and new file submissions require the current school year and active period.
+- **Grading state:** draft/open records in active or past periods accept grading, score sync, and finalization. Future records accept planning/placement but not scores or finalization. Finalized/locked records reject all score/item/question changes that affect official results. Authorized reopen is explicit, audited with a reason, and invalidates dependent annual results immediately.
+
+Already-started attempts can complete after period advancement, subject to existing due-date/expiry rules. Published past work and returned results remain viewable; future work stays hidden. Backward activation does not stop a previously started attempt from completing. Closed-year attempts are rejected except through an explicit academic repair operation. Assessment quarter becomes immutable after any attempt, submission, recorded score, or finalized placement. A published assessment cannot move periods until unpublished and only if no such evidence exists.
+
+Drafts default to active period when their class is in the active year; future-year drafts default to the first period of that year's policy. Category/slot is optional for a draft, independent of quarter. Selecting a category creates/reuses a draft record and available slot for that period. Publication retains existing rubric/content/placement validation and adds lifecycle validation. Template content stays reusable but release is always checked against the destination class and year.
+
+## Roster and completeness
+
+Persist `class_record_participants` with student, eligibility, reason, and provenance. Capture participants when an active record is created, at period activation for existing records, and when students join the active period. Future draft records do not freeze today's enrollment as their future roster. Past-period enrollment is never inferred from current enrollment alone. Existing score/final-grade participants are preserved. Historical records without a confirmed roster require an audited roster confirmation before being used for newly generated official annual results.
+
+Teacher/admin can reconcile an owned draft roster with a reason. `eligible` participants require grades. `not_enrolled`, `transferred`, and `withdrawn` are explicit roster decisions, not score values. Removing a participant does not delete scores or prior grade revisions. Active students still require a complete annual set; roster exclusion is not a bypass for missing transfer grades.
+
+Each configured item with HPS > 0 is required; unused HPS=0 slots are not. Each nonzero-weight category requires at least one item. Modern EX requires ST1, ST2, and TE. Each eligible student requires a numeric score (including explicit zero) or `excused` with reason. Excused items are removed from that student's numerator and denominator; modern exam weights are renormalized over non-excused components. A whole excused/empty required category blocks finalization rather than inventing a grade or redistributing category weights.
+
+Missing stays null and visibly Missing. A grade preview with missing required evidence is provisional and cannot be finalized. No finalization while linked attempts are ongoing, require manual review, have a null result, or have unsynchronized results. Sync selects the latest submitted attempt deterministically, requires returned/reviewed results where manual grading is involved, preserves explicit exemptions, and never turns null into zero. Finalization can reconcile completed auto-grades under the transaction lock before checking completeness.
+
+An explicitly confirmed empty roster can finalize to zero grade rows; empty insert operations are skipped. No active eligible student may be omitted. Finalization returns precise blocker codes, student/item identifiers, counts, and teacher ownership.
+
+## Immutable grade history and annual results
+
+Keep `class_record_final_grades` as the compatible current-period projection, but also append immutable period grade revisions containing policy, source item/score/roster evidence, actor, time, and a revision number. Reopen invalidates current projections without deleting revision history; previously issued annual versions remain available as superseded records.
+
+Annual identity is `(schoolYear, studentId, subjectCode, gradeLevel)`, not `classId`: transfers between sections must not fragment one learning area. Snapshot components reference immutable period revision IDs or verified external-grade evidence. Different classes with the same logical learning area can supply different periods. Conflicting same-period contributions block until an admin explicitly selects the verified source. Case/whitespace normalization cannot silently merge different subject codes.
+
+External transfer grades require admin authorization, school/source reference, period, whole-number grade, and reason. They are append-only, supersedable, and cannot overwrite an internal grade silently. They satisfy annual completeness but do not fabricate class-record item scores. Every expected current-year subject for each active section student must have one contribution for every required period. Withdrawn students' historical results remain readable without forcing an annual outcome for students no longer enrolled.
+
+Append annual revisions with all period components, raw average, official grade, remarks, policy version, source fingerprint, actor/time, and validity state. Repeated generation with unchanged sources is idempotent. Reopening any contributing record or replacing transfer evidence invalidates affected annual results in the same transaction. Reports, workbook export, annual UI, and transition use this result rather than recalculate independently.
+
+## Remediation and year outcomes
+
+Failing one or two learning areas produces `pending_remediation`, not immediate retention. Admin records an evidenced SRC result for each failed annual snapshot, with RCM 0–100, source/reference, and reason. Preserve original annual grade; store `(FG + RCM) / 2` and its official rounded RFG separately. A changed annual source invalidates its remediation decision.
+
+- All required subjects pass, including accepted RFGs: promote Grades 7–9, complete Grade 10 (`graduated` is retained as the existing storage identifier; UI says JHS completed).
+- Three or more original failing learning areas: retain.
+- One/two failures without completed SRC evidence: block transition for that student.
+- Legacy year, failed SRC: retain.
+- DO 015 year, failed SRC: conditionally promote Grades 7–9 with persistent back-subject obligations. For Grade 10, do not set `graduatedAt` while deficiencies remain; preserve a pending-completion status/obligation.
+
+Back-subject obligations survive transition, link to the original annual/SRC evidence, allow at most one active back subject per learner per target-year period, and clear only on an evidenced passing recomputed grade. Back-subject work does not mutate the original finalized annual result. A Grade 10 learner with a persisted `pending_completion` year-end outcome can graduate later only through an admin completion action that verifies all linked annual/SRC/clearance evidence and no remaining obligations or active enrollment. The action appends completion evidence and updates the student profile without rewriting the original year-end outcome. Legacy per-student move-up, retain, and graduate commands return `academic_transition_required`: official outcomes are recorded by the verified year transition, followed by explicit next-year section assignment. This prevents an early profile/roster move from removing a student from the expected year-end matrix. The ordinary next-year roster remains empty; conditional promotion must not silently enroll a learner in passed or failed subjects.
+
+## Concurrency and transition
+
+All academic mutations participating in these invariants share one PostgreSQL transaction advisory lock. The lock is acquired before reading policy/state/readiness, and the same transaction connection is used by nested operations, auditing, score synchronization, finalization, and transition. Enrollment and class/subject membership writes participate so the expected matrix cannot change mid-transition. Ordinary enrollment changes apply only to the active year. Archival cannot remove classes/sections with active section membership from that matrix, and preserves teacher/adviser ownership for historical access. A class with academic workbooks cannot be purged or silently reassigned to another subject, section, or year. Concurrent unrelated request context must not leak a transaction. Nested operations reuse the outer transaction; rollback removes all academic changes and audits. External notifications are dispatched only after commit.
+
+Transition requires:
+
+1. Expected current school year and state version match.
+2. Active period is the last required period for that year's policy.
+3. Every active class has all expected period records; each is finalized/locked with confirmed eligibility and complete snapshots, or a documented empty roster.
+4. Every active student has a complete annual grade for every expected learning area; missing classes/subjects, transfer evidence conflicts, pending sync, reopened sources, and pending remediation are blockers.
+5. All promotion/retention/conditional outcomes are determined from valid annual/remediation evidence.
+6. Target is the immediate next school year with no conflicting sections/classes. Recovery to arbitrary years is not part of ordinary transition.
+7. Readiness and clone targets are rebuilt inside the locked transaction. No draft is auto-finalized.
+
+Transition archives existing year data, persists outcomes/obligations, clones the established section/class/teacher/adviser/room/schedule/reusable-content structure, and resets active state to the new year's first period. Rosters remain empty. Incompatible cloned content remains draft and requires an explicit valid-period choice; it is not relabeled into a different period automatically.
+
+Notify Teachers uses the same readiness matrix, groups each teacher's classes/periods into one notification, includes actionable destinations, and deduplicates identical reminder runs in a short persisted time window. Missing records must produce reminders, not an all-finalized message.
+
+## API and client contract
+
+Preserve `success/message/data` and existing `quarter`/`gradingPeriod` keys. Add policy/period labels, capabilities, state version, and structured blockers.
+
+| Operation | Contract |
 | --- | --- |
-| Past quarter | View finalized data; edit only after an authorized reopen. |
-| Active quarter | Create, edit, publish, accept attempts, record scores, and finalize. |
-| Future quarter | Create and edit drafts, questions, rubrics, class-record slots, and schedules; do not release or accept student attempts yet. |
-
-This preserves the admin's control of the live quarter while allowing teachers to prepare early.
-
-### 2. Teacher assessment quarter selection
-
-- Add a quarter selector to the create-assessment flow and keep the selector enabled in the editor.
-- Default a new assessment to the active quarter for convenience, but do not force it after the teacher chooses another quarter.
-- Clearly label future-quarter assessments as Draft for Qn.
-- Permit saving and editing an assessment assigned to any Q1-Q4 quarter.
-- Permit publishing or giving the assessment only when `assessment.quarter === activeQuarter`.
-- Apply the release rule in the backend, not only the UI, so a direct API request cannot bypass it.
-- Student listing, opening, starting an attempt, submitting, and score synchronization should all enforce the same active-quarter rule.
-- Lock quarter changes after the assessment has attempts, submissions, manual scores, or a finalized class-record link. Moving historical results between quarters must be a separate audited migration operation, not a normal dropdown edit.
-- When a teacher chooses a future quarter and class-record category, create or reuse that quarter's draft class-record placement. It may be prepared but cannot be finalized until the quarter is active.
-
-### 3. Quarterly class-record completeness
-
-`finalized` must mean both calculated and complete. Before finalization, validate all of the following:
-
-- Category weights total 100 percent.
-- Every required grading category has the required configured items, according to school policy.
-- Every eligible student has either a recorded score or an explicit non-score status for every required item.
-- A real zero must be stored explicitly as `0`; absence of a score row must remain Missing and block finalization.
-- Supported non-score statuses should be explicit, such as Excused, Not Enrolled Yet, Transferred, or Not Applicable, with an audit reason where appropriate.
-- Auto-graded assessments have finished score synchronization.
-- No assessment linked to the record has unresolved grading or pending manual review.
-- Grade computation creates one final-grade row for every eligible student in that quarter.
-
-The UI should show blocking counts and the exact students/items requiring action before enabling Finalize.
-
-### 4. Annual subject grade
-
-Do not replace the Q4 quarterly grade. Q4 remains the grade for the fourth quarter. Add a separate Annual Subject Grade calculated only after Q1-Q4 are all finalized.
-
-Recommended formula:
-
-```text
-rawAnnualAverage = (Q1 + Q2 + Q3 + Q4) / 4
-officialFinalGrade = round(rawAnnualAverage)
-remarks = officialFinalGrade >= 75 ? "Passed" : "Failed"
-```
-
-Store both values:
-
-- `rawAnnualAverage`, retained to at least three decimal places for traceability.
-- `officialFinalGrade`, the whole-number grade displayed and used for pass/fail.
-
-Using the rounded official grade for the 75 threshold is the recommended rule because it keeps reports, UI indicators, and promotion decisions consistent. This rounding policy should be confirmed by the school before implementation. If the school instead requires the unrounded average for pass/fail, that one rule must be applied everywhere.
-
-Recommended annual snapshot entity: `subject_annual_grades`.
-
-| Field | Purpose |
-| --- | --- |
-| `id` | Primary key. |
-| `schoolYear` | Prevents cross-year grade mixing. |
-| `classId` | Identifies the subject and section context. |
-| `studentId` | Identifies the student. |
-| `q1Grade`, `q2Grade`, `q3Grade`, `q4Grade` | Immutable components used in the calculation. |
-| `rawAnnualAverage` | Exact arithmetic average. |
-| `officialFinalGrade` | Rounded official grade. |
-| `remarks` | Passed or Failed. |
-| `computedAt`, `computedBy` | Audit information. |
-| source snapshot/version fields | Identify the four quarterly final-grade rows used. |
-
-Use a unique constraint on `(schoolYear, classId, studentId)`. If any quarterly record is reopened, invalidate the affected annual snapshots and block transition until the quarter is re-finalized and annual grades are regenerated.
-
-### 5. Q4 class-record indicator
-
-When Q4 is selected, add an Annual Summary section without overcrowding the quarterly workbook. It should contain:
-
-| Student | Q1 | Q2 | Q3 | Q4 | Raw Average | Final Grade | Remarks |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-
-Behavior:
-
-- Before all four quarters are finalized, show `Pending` and identify the missing/unfinalized quarters.
-- After all four are finalized, show the computed annual result.
-- Use the same annual endpoint and calculation source for the screen, export, reports, and transition preview.
-- Extend workbook export with an Annual Summary worksheet or clearly separated annual columns.
-- Never calculate a partial-year annual grade by silently dividing by the number of available quarters.
-
-### 6. School-year transition gate
-
-Transition must use a server-generated readiness matrix for every active class and every required student.
-
-For each active class in the current school year, require:
-
-- Exactly one Q1, Q2, Q3, and Q4 class record.
-- All four records have status `finalized` or `locked`.
-- Every record has a quarterly final-grade snapshot for every eligible student.
-- Every student has a valid annual subject-grade snapshot for that class.
-- No reopened, missing, pending-sync, or unresolved manual-grading work remains.
-
-Global requirements:
-
-- The active quarter is Q4.
-- The target school year is valid and is the immediate next school year unless a separately authorized recovery flow is used.
-- The target year does not already contain conflicting active sections/classes.
-- Readiness is recalculated inside the transition transaction to prevent a stale preview from being used.
-
-The transition button should remain disabled while any blocker exists. The preview should report blockers by quarter, class, teacher, and count, for example:
-
-```text
-Q1: 0 missing, 0 draft
-Q2: 0 missing, 1 draft - Mathematics 8 / Section Rizal
-Q3: 2 missing - Science 9 / Section Mabini, English 7 / Section Bonifacio
-Q4: 0 missing, 3 pending manual grades
-Annual subject grades: 14 missing
-```
-
-Critically, transition must not change a draft record's status to finalized. Teachers or an authorized grade-finalization workflow must run validation and grade computation first.
-
-After a successful transition:
-
-- Promotions, retentions, and Grade 10 graduations use the stored annual subject grades.
-- A student is retained if at least one official annual subject grade is below 75.
-- A passing Grade 10 student is marked graduated.
-- Existing archive/clone behavior for sections, classes, teachers, advisers, rooms, schedules, and reusable learning content can remain, subject to regression tests.
-- New-year class rosters remain empty.
-- The new academic state is always the target school year with `quarter = Q1`.
-
-### 7. Notify Teachers improvements
-
-The existing notification concept is useful, but it should consume the same readiness matrix as transition.
-
-- Notify each teacher once per reminder run, with a grouped list of their affected classes and quarters.
-- Distinguish Missing Record, Draft Record, Missing Scores, Pending Manual Grading, and Missing Annual Grade.
-- Teachers with no blockers may receive an All records finalized confirmation if the admin chooses to notify everyone.
-- Include a direct class-record destination and school-year/quarter metadata.
-- Make bulk runs idempotent for a reasonable window to avoid notification spam.
-- Return admin-facing counts for notified teachers, complete teachers, blocked classes, and blockers by quarter.
-
-## Proposed API changes
-
-Exact route names can follow the repository's conventions, but the behavior should be separated as follows.
-
-| Method and route | Purpose |
-| --- | --- |
-| `GET /academic-state/current` | Continue returning active school year and quarter. |
-| `GET /academic-state/quarter-readiness?targetQuarter=Q2` | Preview warnings/blockers for quarter activation. |
-| `POST /academic-state/activate-quarter` | Activate a selected quarter with expected-current-state and step-up confirmation. |
-| `GET /academic-state/transition-readiness?schoolYear=...` | Return the full Q1-Q4 and annual-grade blocker matrix. |
-| `POST /academic-state/transition` | Revalidate and transition only when readiness is clean. |
-| `GET /class-record/by-class/:classId/annual-summary?schoolYear=...` | Return Q1-Q4 and annual results for the subject. |
-| `GET /class-record/:id/finalization-readiness` | Return missing scores, pending grading, and other blockers. |
-
-Assessment create/update DTOs already accept `quarter`; retain that contract and add backend lifecycle validation to publish, attempt, submit, grade, and quarter-change operations.
-
-## Suggested response model for readiness
-
-```ts
-type QuarterReadiness = {
-  quarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
-  expectedClassRecords: number;
-  existingClassRecords: number;
-  missingClassRecords: number;
-  draftClassRecords: number;
-  finalizedClassRecords: number;
-  missingStudentGrades: number;
-  pendingManualGrades: number;
-  blockers: Array<{
-    classId: string;
-    className: string;
-    sectionName: string;
-    teacherId: string | null;
-    reason: string;
-  }>;
-};
-
-type TransitionReadiness = {
-  ready: boolean;
-  activeQuarter: 'Q1' | 'Q2' | 'Q3' | 'Q4';
-  quarters: QuarterReadiness[];
-  missingAnnualSubjectGrades: number;
-  annualGradeBlockers: Array<{
-    classId: string;
-    studentId: string;
-    missingQuarters: Array<'Q1' | 'Q2' | 'Q3' | 'Q4'>;
-  }>;
-};
-```
-
-## Implementation plan
-
-### Phase 1: Lock the grading rules
-
-1. Confirm annual-grade rounding and whether the threshold uses the rounded or raw average.
-2. Define eligible students for each quarter, including transfers, late enrollment, withdrawals, and exemptions.
-3. Define required categories/items and explicit non-score statuses.
-4. Confirm whether emergency backward/skipped-quarter activation is permitted and who can perform it.
-
-### Phase 2: Backend quarter lifecycle
-
-1. Add quarter readiness and activate-quarter DTOs, service methods, controller routes, guards, step-up confirmation, optimistic state check, and audit records.
-2. Add a shared policy service that decides whether an assessment can be edited, published, attempted, submitted, or scored based on its quarter and state.
-3. Reuse this policy from every relevant assessment endpoint and score-sync path.
-4. Add unit tests for current, past, future, backward, skipped, stale, and unauthorized quarter changes.
-
-### Phase 3: Assessment UI
-
-1. Add quarter selection to assessment creation and default it to the active quarter.
-2. Remove the unconditional editor effect that overwrites and disables the assessment quarter.
-3. Lock quarter editing only after attempts/scores/finalized placement exist.
-4. Show future-quarter draft state and disable release actions with a precise reason.
-5. Replace the existing tests that assert permanent system-quarter locking with tests for selectable drafts and active-quarter release rules.
-
-### Phase 4: Class-record completeness and annual grades
-
-1. Add finalization-readiness validation and explicit missing/non-score handling.
-2. Add the annual-grade snapshot schema and migration.
-3. Generate annual snapshots only when all four quarterly records are finalized.
-4. Invalidate and regenerate annual snapshots when a quarter is reopened and re-finalized.
-5. Add the annual-summary endpoint, Q4 UI, types, and export.
-6. Add deterministic calculation, rounding-boundary, missing-quarter, transfer, and reopen tests.
-
-### Phase 5: Transition hardening
-
-1. Replace record-count readiness with the expected class x Q1-Q4 matrix.
-2. Remove transition's direct draft-to-finalized update.
-3. Consume official annual subject-grade snapshots for promotion, retention, and graduation.
-4. Require Q4 active and zero readiness blockers.
-5. Revalidate readiness inside the transition transaction.
-6. Reset the target academic state to Q1.
-7. Preserve and regression-test the existing archive, clone, empty-roster, teacher/adviser, room, schedule, and learning-content behavior.
-
-### Phase 6: Admin UI and notifications
-
-1. Add the active-quarter control and activation confirmation to System Settings.
-2. Replace `Informational only` with status, readiness, and last-updated information.
-3. Show quarter-by-quarter transition blockers and direct navigation to affected records.
-4. Update Notify Teachers to use grouped readiness details.
-5. Keep Transition State disabled until the server reports `ready: true`.
-
-### Phase 7: Migration and rollout
-
-1. Run a read-only audit report before migration: classes missing quarters, duplicate/invalid records, finalized records missing grade rows, and students missing expected subject records.
-2. Do not fabricate missing quarterly grades during backfill.
-3. Backfill annual snapshots only where exactly Q1-Q4 finalized grade rows exist.
-4. Leave incomplete historical rows blocked and provide an admin repair report.
-5. Deploy backend lifecycle enforcement before enabling the new frontend controls.
-6. Test on a database copy, then perform a supervised production rollout with a rollback plan.
-
-## Acceptance criteria
-
-### Active quarter
-
-- An admin can see and activate Q1-Q4 from System Settings.
-- Unauthorized users cannot activate a quarter.
-- The change is audited and protected against stale concurrent updates.
-- School-year transition and quarter activation are separate operations.
-
-### Assessments
-
-- A teacher can create and save a Q4 assessment while Q2 is active.
-- The Q4 draft is not visible or attemptable by students while Q2 is active.
-- The same assessment becomes publishable when Q4 is activated.
-- An assessment with attempts or scores cannot be casually moved to another quarter.
-- Direct API calls cannot bypass these restrictions.
-
-### Quarterly records
-
-- Missing score rows are shown as Missing, not calculated as implicit zero.
-- An intentional zero is valid only when explicitly recorded.
-- Finalization is blocked for missing required data or unresolved manual grading.
-- Finalization creates one quarterly grade per eligible student.
-
-### Annual grade
-
-- No annual grade is produced from fewer than four finalized quarter grades.
-- Q4 remains visible as a separate quarterly grade.
-- The annual summary displays Q1-Q4, raw average, official final grade, and remarks.
-- UI, export, reports, and transition return the same result at rounding boundaries.
-- Reopening a quarter invalidates the annual result until re-finalization.
-
-### Transition
-
-- Missing Q1, Q2, Q3, or Q4 records block transition even if every existing record is finalized.
-- Any draft/reopened record, missing student grade, or missing annual subject grade blocks transition.
-- Transition never marks a draft record finalized without computation.
-- Promotion/retention uses exactly four quarterly grades per subject through the annual snapshot.
-- A student with any subject final grade below 75 is retained.
-- A passing Grade 10 student is graduated.
-- A successful transition starts the new year in Q1 and retains the established archive/clone behavior.
-- Any failure rolls back the entire transaction.
-
-## High-priority regression tests
-
-1. Q1-only records finalized: transition must remain blocked.
-2. Q1-Q4 records exist but one Q3 record is draft: transition must remain blocked.
-3. All records finalized but one student lacks one quarterly grade row: transition must remain blocked.
-4. Four subject grades `75, 75, 75, 74`: verify the approved rounding rule and use it consistently.
-5. One subject fails while all others pass: retain the student.
-6. Grade 10 passes all subjects: graduate the student.
-7. Reopen a finalized Q2 record after annual snapshots exist: invalidate affected annual grades and block transition.
-8. Prepare a Q4 assessment while Q2 is active: save succeeds, publication and attempts fail.
-9. Activate Q4: the prepared Q4 assessment becomes eligible for publication but is not auto-published.
-10. Transition from Q4: target state becomes the next school year in Q1.
-11. Simulate an error during archive/clone: all student, grade, class, section, enrollment, and state changes roll back.
-12. Run Notify Teachers with a missing Q2 record: the responsible teacher receives a Q2-specific blocker.
-
-## Risks and safeguards
-
-- **Historical ambiguity:** Existing missing score rows may mean zero, absence, or unentered work. Do not infer values during migration; produce a repair report.
-- **Rounding disagreement:** A one-point boundary can change promotion. Approve one rule and centralize it in a single grade-policy service.
-- **Roster changes:** Eligibility must be tied to the relevant quarter, not only today's enrollment state.
-- **Stale readiness:** Always recheck inside the transition transaction.
-- **Frontend-only controls:** Every publish, attempt, scoring, finalization, activation, and transition rule must be enforced by the backend.
-- **Notification noise:** Group reminders and use deduplication/idempotency.
-- **Large transition:** Keep the transition atomic and test timeout/performance with production-sized data.
-
-## Recommended implementation order
-
-Do not begin with the dropdown alone. Implement in this order:
-
-1. Approve grading, rounding, eligibility, and exception rules.
-2. Add backend quarter activation and assessment lifecycle enforcement.
-3. Add class-record completeness and annual subject grades.
-4. Harden transition readiness and reset-to-Q1 behavior.
-5. Add the admin and teacher UI changes.
-6. Run migration audits, automated tests, and full transition rehearsal on a database copy.
-
-This order prevents a new admin control from exposing inconsistent behavior before the grade and transition rules are safe.
+| Current academic state | `GET /academic-state/current` includes `policy`, `periods`, `version` |
+| Class-year policy | `GET /academic-state/policy?schoolYear=...` |
+| Activation preview / action | `GET /academic-state/quarter-readiness?targetQuarter=...`; `POST /academic-state/activate-period` |
+| Transition readiness / action | `GET /academic-state/transition-readiness`; existing `POST /academic-state/transition` with expected state |
+| Finalization blockers | `GET /class-record/:id/readiness` |
+| Roster reconciliation | `GET /class-record/:id/roster`; `POST /class-record/:id/roster/confirm` with explicit decisions and reason |
+| Scores / exemptions | Existing score endpoint accepts numeric score or `status: excused` plus reason; audited restoration of linked results at `POST /class-record/items/:itemId/scores/:studentId/restore-assessment` |
+| Preview / history / correction | `GET /class-record/:id/preview-grades` returns `{classRecordId, readiness, preview, interventionCount}`; `GET /class-record/:id/history`; `POST /class-record/:id/reopen` requires reason |
+| Annual results | `GET /class-record/by-class/:classId/annual-summary` with current and historical revisions |
+| Transfer evidence | Admin `POST /academic-grading/classes/:classId/external-period-grades`; source selection at `POST /academic-grading/classes/:classId/source-selection` |
+| SRC evidence | Admin `POST /academic-grading/annual-grades/:id/remediation` |
+| Back subjects | Admin `GET /academic-grading/back-subjects`; `POST /academic-grading/back-subjects/:id/schedule`; `POST /academic-grading/back-subjects/:id/clear` |
+| Grade 10 completion | Admin `GET /academic-grading/grade-10-completions`; evidenced `POST /academic-grading/students/:studentId/complete-grade-10` |
+| Historical repair audit | Admin `GET /academic-state/audit`; read-only `npm run academic:audit` |
+| Archive legacy evidence / initialize policy | Admin `POST /academic-state/repair/preserve-legacy`; `POST /academic-state/repair/policies/:schoolYear/initialize` |
+| Classification / workbook configuration | Admin `POST /academic-state/repair/classes/:id/profile`; `POST /academic-state/repair/records/:id/policy` with explicit examination mapping |
+| Preserve incompatible periods | Admin `POST /academic-state/repair/records/:id/exclude-historical-period`; `POST /academic-state/repair/assessments/:id/exclude-historical-period`; neither relabels or deletes evidence |
+| Placement / duplicates / state | Admin `POST /academic-state/repair/assessments/:id/period`; `POST /academic-state/repair/classes/:id/retire-duplicate`; password/version-protected `POST /academic-state/repair/state` |
+
+Web System Settings shows active period, readiness, audit metadata, safe activation confirmation, and blocked transitions. Teacher creation/editor permits future drafts and shows server policy labels/capabilities. Workbook shows readiness, roster decisions, Missing/Excused, period grades, and a separate Annual Summary (available for all periods, emphasized at the final period). Exports include policy, all required periods, annual official grades, remediation status, and source revision identifiers. Mobile implements the same affected actions, labels, summaries, and errors; older clients receive structured actionable errors and cannot bypass backend policy.
+
+## Migration, rollout, and repair
+
+Use additive schema and migrations generated through Drizzle. Do not reinterpret historical grades or infer zeros/exemptions. Seed year policy by school year, preserve final projections as legacy revisions, report unknown period rosters, incompatible modern Q4/weights, null assessment periods, duplicate logical subjects, missing grades, and unreviewed grading.
+
+Provide explicit repair operations for roster confirmation, period/source selection, and verified transfer grades. Backfill annual results only from a complete policy-sized, unambiguous set of trusted period revisions. Migration itself must not declare a legacy missing-score computation newly trustworthy. Read-only audit runs before repair/backfill. Legacy values are archived exactly, including fractional values, in a separate untrusted evidence table. Admin recovery supports explicit examination mapping and policy-weight repair of reopened draft records, preservation of incompatible historical periods without moving their results, subject classification, duplicate-state repair with step-up authentication, and duplicate-class retirement only after canonical enrollment is in place. Subject identity uses the same canonical normalization as class creation. New client controls and backend enforcement are one coordinated release; schema is additive so previous binaries can be rolled back before new official writes. After new official writes, rollback retains data and uses forward repair instead of dropping grade history.
+
+Rehearse fresh migration, upgrade with legacy fixtures, audit, repair, and full successful/failed/concurrent transitions on an isolated local test database. Do not change production as part of verification. Record production-sized synthetic rehearsal timing, browser evidence, mobile type/tests/bundle checks, and any unavailable device-only testing honestly.
+
+## Acceptance and verification matrix
+
+- Policies: legacy four periods; 2026 three terms/adjusted bands; 2027 zero-based; same stored grade never changes because current year changes.
+- Activation: sequential, override with reason, unauthorized, wrong password, stale year/version including ABA, identical retry, and concurrent requests.
+- Assessments: future draft save; future listing/start/release blocked; past results readable; in-flight completion allowed; quarter move with results blocked; core/public/upload/automatic submission paths covered.
+- Completeness: missing vs explicit zero; excused denominator; all-excused category; unused slots; modern ST1/ST2/TE weighting; current vs historical eligibility; late/transfer/withdrawn learners; empty confirmed roster; unresolved grading/sync.
+- Annual: incomplete period set blocked; same-subject section transfer; external evidence; conflicting source; exact half rounding; source revision idempotency; reopen invalidation; no history deletion; UI/export/report parity.
+- Outcomes: all-pass; 1/2 failures pending SRC; 3 failures retained; SRC pass; legacy SRC fail; modern conditional promotion; Grade 10 unresolved deficiencies never completed; back-subject scheduling and clearance.
+- Transition: missing class/period/student/annual/SRC blocks; final-period gate; immediate-next-year gate; empty rosters; complete archive/clone behavior; rollback and concurrent reopen/enrollment/score changes; first-period reset.
+- Notifications: missing-period teacher receives grouped blocker, duplicate run is idempotent, no notification escapes a rolled-back transaction.
+- Delivery: migration integrity, fresh/upgrade rehearsal, backend build/lint/tests, web lint/type/build/tests and browser flows, mobile type/tests/export, and requirement-by-requirement completion audit.
+
+## Implementation sequence
+
+1. Policy functions and regression fixtures.
+2. Schema, transaction boundary, and generated migration.
+3. Roster/completeness/score semantics and immutable period revisions.
+4. Annual grades, transfer evidence, SRC, and back-subject obligations.
+5. Assessment lifecycle guards and future draft placement.
+6. Locked transition, readiness, notifications, audit/repair CLI.
+7. Web/mobile controls, workbooks, annual exports, and recovery messages.
+8. Migration/runtime rehearsal, full regression verification, and completion audit.

@@ -1,6 +1,5 @@
 'use client';
 
-import { render } from '@testing-library/react';
 import { redirect } from 'next/navigation';
 import StudentChatbotRedirectPage from './page';
 
@@ -16,9 +15,11 @@ describe('StudentChatbotRedirectPage', () => {
   });
 
   it('redirects to the standalone JA ask route', () => {
-    render(<StudentChatbotRedirectPage />);
+    StudentChatbotRedirectPage();
 
     expect(mockedRedirect).toHaveBeenCalledTimes(1);
-    expect(mockedRedirect).toHaveBeenCalledWith('/dashboard/student/ja?mode=ask');
+    expect(mockedRedirect).toHaveBeenCalledWith(
+      '/dashboard/student/ja?mode=ask',
+    );
   });
 });

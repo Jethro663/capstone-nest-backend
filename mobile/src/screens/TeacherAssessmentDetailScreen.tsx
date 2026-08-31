@@ -22,7 +22,10 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherAssessmentDetail">;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "TeacherAssessmentDetail"
+>;
 
 function formatDate(value?: string | null) {
   if (!value) return "No due date";
@@ -47,25 +50,83 @@ function DeleteConfirmModal({
   if (!visible) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }}>
-        <View style={{ width: "100%", maxWidth: 380, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 14 }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: 20,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            backgroundColor: theme.surface,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: theme.border,
+            padding: 20,
+            gap: 14,
+          }}
+        >
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.redSoft, alignItems: "center", justifyContent: "center" }}>
-              <MaterialCommunityIcons name="trash-can-outline" size={22} color={theme.red} />
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.redSoft,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={22}
+                color={theme.red}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Delete Assessment?</Text>
-              <Text style={{ fontSize: 11, color: theme.muted }}>This action cannot be undone</Text>
+              <Text
+                style={{ fontSize: 16, fontWeight: "800", color: theme.text }}
+              >
+                Delete Assessment?
+              </Text>
+              <Text style={{ fontSize: 11, color: theme.muted }}>
+                This action cannot be undone
+              </Text>
             </View>
           </View>
 
           <Text style={{ fontSize: 13, color: theme.text, lineHeight: 18 }}>
-            Are you sure you want to delete <Text style={{ fontWeight: "800" }}>"{title}"</Text>? All student responses, attempts, and grades linked to this assessment will be permanently removed.
+            Are you sure you want to delete{" "}
+            <Text style={{ fontWeight: "800" }}>"{title}"</Text>? All student
+            responses, attempts, and grades linked to this assessment will be
+            permanently removed.
           </Text>
 
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <TeacherActionButton label="Cancel" tone="neutral" disabled={deleting} onPress={onClose} />
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: 10,
+              marginTop: 4,
+            }}
+          >
+            <TeacherActionButton
+              label="Cancel"
+              tone="neutral"
+              disabled={deleting}
+              onPress={onClose}
+            />
             <TeacherActionButton
               label={deleting ? "Deleting..." : "Delete Assessment"}
               icon="trash-can-outline"
@@ -95,10 +156,13 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
   const handleBatchReleaseGrades = async () => {
     if (!submissions?.submissions || releasingGrades) return;
     const unreturnedSubmissions = submissions.submissions.filter(
-      (s) => s.latestAttemptId && !s.latestAttemptReturnedAt
+      (s) => s.latestAttemptId && !s.latestAttemptReturnedAt,
     );
     if (!unreturnedSubmissions.length) {
-      Alert.alert("No unreturned grades", "All submitted attempts have already been released.");
+      Alert.alert(
+        "No unreturned grades",
+        "All submitted attempts have already been released.",
+      );
       return;
     }
     try {
@@ -109,7 +173,10 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
         }
       }
       await submissionsQuery.refetch();
-      Alert.alert("Success", `Released grades for ${unreturnedSubmissions.length} student submission(s).`);
+      Alert.alert(
+        "Success",
+        `Released grades for ${unreturnedSubmissions.length} student submission(s).`,
+      );
     } catch (err) {
       Alert.alert("Unable to release grades", toAppError(err).message);
     } finally {
@@ -119,6 +186,17 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
 
   const togglePublished = async () => {
     if (!assessment) return;
+    if (
+      !assessment.academicCapabilities?.canPrepare ||
+      (!assessment.isPublished && !assessment.academicCapabilities?.canRelease)
+    ) {
+      Alert.alert(
+        "Academic period restriction",
+        assessment.academicCapabilities?.readOnlyReason ||
+          "Release requires the active editable period.",
+      );
+      return;
+    }
     if (
       !assessment.isPublished &&
       assessment.type !== "file_upload" &&
@@ -131,7 +209,9 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
       return;
     }
     try {
-      await updateMutation.mutateAsync({ isPublished: !assessment.isPublished });
+      await updateMutation.mutateAsync({
+        isPublished: !assessment.isPublished,
+      });
       Alert.alert(
         "Publish status updated",
         assessment.isPublished
@@ -150,63 +230,111 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     try {
       await deleteMutation.mutateAsync();
       setShowDeleteConfirmModal(false);
-      Alert.alert("Assessment Deleted", "The assessment has been deleted successfully.", [
-        {
-          text: "OK",
-          onPress: () => {
-            const targetClassId = classId || assessment?.classId;
-            if (targetClassId) {
-              navigation.navigate("TeacherClassDetail", {
-                classId: targetClassId,
-                initialTab: "assessments",
-              });
-            } else {
-              navigation.goBack();
-            }
+      Alert.alert(
+        "Assessment Deleted",
+        "The assessment has been deleted successfully.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              const targetClassId = classId || assessment?.classId;
+              if (targetClassId) {
+                navigation.navigate("TeacherClassDetail", {
+                  classId: targetClassId,
+                  initialTab: "assessments",
+                });
+              } else {
+                navigation.goBack();
+              }
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (error) {
       Alert.alert("Unable to delete assessment", toAppError(error).message);
     }
   };
 
   const latestSubmissions = useMemo(
-    () => submissions?.submissions.slice().sort((left, right) => new Date(right.latestAttemptSubmittedAt || 0).getTime() - new Date(left.latestAttemptSubmittedAt || 0).getTime()) ?? [],
+    () =>
+      submissions?.submissions
+        .slice()
+        .sort(
+          (left, right) =>
+            new Date(right.latestAttemptSubmittedAt || 0).getTime() -
+            new Date(left.latestAttemptSubmittedAt || 0).getTime(),
+        ) ?? [],
     [submissions?.submissions],
   );
 
   return (
     <TeacherScreen
       title={assessment?.title || "Assessment detail"}
-      subtitle={assessment?.description ? stripRichText(assessment.description) : "Review submissions and return grades from the current mobile shell."}
+      subtitle={
+        assessment?.description
+          ? stripRichText(assessment.description)
+          : "Review submissions and return grades from the current mobile shell."
+      }
       icon="clipboard-check-outline"
       rightAction={
         <Pressable
           onPress={() => navigation.goBack()}
-          style={{ width: 44, height: 44, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: theme.redSoft }}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 10,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.redSoft,
+          }}
         >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={18}
+            color={theme.red}
+          />
         </Pressable>
       }
       refreshing={assessmentQuery.isRefetching || submissionsQuery.isRefetching}
       onRefresh={() => {
-        void Promise.all([assessmentQuery.refetch(), submissionsQuery.refetch()]);
+        void Promise.all([
+          assessmentQuery.refetch(),
+          submissionsQuery.refetch(),
+        ]);
       }}
     >
       {assessment ? (
         <>
           <TeacherStats
             items={[
-              { label: "Questions", value: assessment.questions?.length ?? 0, tone: "red" },
+              {
+                label: "Questions",
+                value: assessment.questions?.length ?? 0,
+                tone: "red",
+              },
               { label: "Turned In", value: turnedIn, tone: "amber" },
               { label: "Returned", value: returned, tone: "green" },
-              { label: "Due", value: formatDate(assessment.dueDate), tone: "blue" },
+              {
+                label: "Due",
+                value: formatDate(assessment.dueDate),
+                tone: "blue",
+              },
             ]}
           />
 
-          <TeacherPanel title="Assessment controls" subtitle="Keep publish state management available at the top of the teacher detail page.">
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <TeacherPanel
+            title="Assessment controls"
+            subtitle="Keep publish state management available at the top of the teacher detail page."
+          >
+            <View
+              style={{
+                paddingHorizontal: 14,
+                paddingBottom: 14,
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: 8,
+              }}
+            >
               <TeacherActionButton
                 label="Edit assessment"
                 icon="pencil-outline"
@@ -219,18 +347,29 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                 }
               />
               <TeacherActionButton
-                label={assessment.isPublished ? "Move to draft" : "Publish assessment"}
+                label={
+                  assessment.isPublished
+                    ? "Move to draft"
+                    : "Publish assessment"
+                }
                 icon={assessment.isPublished ? "file-hidden" : "publish"}
                 tone={assessment.isPublished ? "amber" : "green"}
                 onPress={() => void togglePublished()}
-                disabled={updateMutation.isPending}
+                disabled={
+                  updateMutation.isPending ||
+                  !assessment.academicCapabilities?.canPrepare ||
+                  (!assessment.isPublished &&
+                    !assessment.academicCapabilities?.canRelease)
+                }
               />
               <TeacherActionButton
                 label={releasingGrades ? "Releasing..." : "Release grades"}
                 icon="send-outline"
                 tone="green"
                 onPress={() => void handleBatchReleaseGrades()}
-                disabled={releasingGrades}
+                disabled={
+                  releasingGrades || !assessment.academicCapabilities?.canGrade
+                }
               />
               <TeacherActionButton
                 label="Delete assessment"
@@ -247,7 +386,8 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                   onPress={() =>
                     void assessmentsApi.openTeacherAttachment(
                       assessment.id,
-                      assessment.teacherAttachmentFile?.originalName || "teacher-attachment",
+                      assessment.teacherAttachmentFile?.originalName ||
+                        "teacher-attachment",
                     )
                   }
                 />
@@ -255,14 +395,40 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
             </View>
           </TeacherPanel>
 
-          <TeacherPanel title="Overview" subtitle="Core assessment details students are also reacting to on their mobile side.">
-            <TeacherRow title="Status" subtitle={assessment.isPublished ? "Published and visible to students." : "Draft only; students cannot open it yet."} />
-            <TeacherRow title="Assessment type" subtitle={assessment.type.replace(/_/g, " ")} />
-            <TeacherRow title="Due date" subtitle={formatDate(assessment.dueDate)} />
-            <TeacherRow title="Passing score" subtitle={assessment.passingScore != null ? `${assessment.passingScore}%` : "Not set"} />
+          <TeacherPanel
+            title="Overview"
+            subtitle="Core assessment details students are also reacting to on their mobile side."
+          >
+            <TeacherRow
+              title="Status"
+              subtitle={
+                assessment.isPublished
+                  ? "Published and visible to students."
+                  : "Draft only; students cannot open it yet."
+              }
+            />
+            <TeacherRow
+              title="Assessment type"
+              subtitle={assessment.type.replace(/_/g, " ")}
+            />
+            <TeacherRow
+              title="Due date"
+              subtitle={formatDate(assessment.dueDate)}
+            />
+            <TeacherRow
+              title="Passing score"
+              subtitle={
+                assessment.passingScore != null
+                  ? `${assessment.passingScore}%`
+                  : "Not set"
+              }
+            />
           </TeacherPanel>
 
-          <TeacherPanel title="Submissions" subtitle="Open an attempt to review answers, give feedback, and return or unreturn grades.">
+          <TeacherPanel
+            title="Submissions"
+            subtitle="Open an attempt to review answers, give feedback, and return or unreturn grades."
+          >
             {latestSubmissions.length ? (
               latestSubmissions.map((submission) => (
                 <TeacherRow
@@ -272,32 +438,59 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                   onPress={
                     submission.latestAttemptId
                       ? () =>
-                          navigation.navigate("TeacherAssessmentAttemptResult", {
-                            attemptId: submission.latestAttemptId!,
-                            assessmentId,
-                            classId,
-                          })
+                          navigation.navigate(
+                            "TeacherAssessmentAttemptResult",
+                            {
+                              attemptId: submission.latestAttemptId!,
+                              assessmentId,
+                              classId,
+                            },
+                          )
                       : undefined
                   }
                   right={
                     <View style={{ alignItems: "flex-end" }}>
-                      <Text style={{ fontSize: 12, fontWeight: "700", color: submission.status === "returned" ? theme.green : submission.status === "turned_in" ? theme.amber : theme.muted }}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "700",
+                          color:
+                            submission.status === "returned"
+                              ? theme.green
+                              : submission.status === "turned_in"
+                                ? theme.amber
+                                : theme.muted,
+                        }}
+                      >
                         {submission.status.replace(/_/g, " ")}
                       </Text>
                       <Text style={{ fontSize: 10, color: theme.muted }}>
-                        {submission.directScore ?? submission.latestAttemptScore ?? "--"}
+                        {submission.directScore ??
+                          submission.latestAttemptScore ??
+                          "--"}
                       </Text>
                     </View>
                   }
                 />
               ))
             ) : (
-              <TeacherEmpty title="No submissions yet" subtitle="Students have not started or turned in attempts for this assessment yet." icon="file-document-outline" />
+              <TeacherEmpty
+                title="No submissions yet"
+                subtitle="Students have not started or turned in attempts for this assessment yet."
+                icon="file-document-outline"
+              />
             )}
           </TeacherPanel>
         </>
       ) : (
-        <TeacherPanel title="Assessment unavailable" subtitle={assessmentQuery.error ? toAppError(assessmentQuery.error).message : "Loading assessment"} />
+        <TeacherPanel
+          title="Assessment unavailable"
+          subtitle={
+            assessmentQuery.error
+              ? toAppError(assessmentQuery.error).message
+              : "Loading assessment"
+          }
+        />
       )}
 
       <DeleteConfirmModal

@@ -1,0 +1,2 @@
+DROP INDEX "academic_back_subject_schedule_unique";--> statement-breakpoint
+CREATE UNIQUE INDEX "academic_back_subject_schedule_unique" ON "academic_back_subjects" USING btree ("student_id","scheduled_school_year","scheduled_period") WHERE "academic_back_subjects"."status" IN ('scheduled','cleared');

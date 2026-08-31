@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   FileUp,
   CheckCircle2,
@@ -11,11 +11,15 @@ import {
   Eye,
   ShieldCheck,
   FileSpreadsheet,
-} from 'lucide-react';
-import { AdminPageShell, AdminSectionCard, AdminStatCard } from '@/components/admin/AdminPageShell';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+} from "lucide-react";
+import {
+  AdminPageShell,
+  AdminSectionCard,
+  AdminStatCard,
+} from "@/components/admin/AdminPageShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -23,24 +27,30 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { classRecordService } from '@/services/class-record-service';
+} from "@/components/ui/dialog";
+import { classRecordService } from "@/services/class-record-service";
 import type {
   TransmutationTableRecord,
   TransmutationPreviewResult as PreviewPayload,
-} from '@/types/class-record';
+} from "@/types/class-record";
 
 export default function AdminClassRecordTransmutationPage() {
-  const [activeTable, setActiveTable] = useState<TransmutationTableRecord | null>(null);
-  const [historyTables, setHistoryTables] = useState<TransmutationTableRecord[]>([]);
+  const [activeTable, setActiveTable] =
+    useState<TransmutationTableRecord | null>(null);
+  const [historyTables, setHistoryTables] = useState<
+    TransmutationTableRecord[]
+  >([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [applying, setApplying] = useState<boolean>(false);
   const [, setSelectedFile] = useState<File | null>(null);
   const [previewData, setPreviewData] = useState<PreviewPayload | null>(null);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [statusMessage, setStatusMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -61,7 +71,7 @@ export default function AdminClassRecordTransmutationPage() {
         setHistoryTables(resAll.data || []);
       }
     } catch (err) {
-      console.error('Failed to load transmutation tables:', err);
+      console.error("Failed to load transmutation tables:", err);
     } finally {
       setLoading(false);
     }
@@ -79,8 +89,10 @@ export default function AdminClassRecordTransmutationPage() {
     setPreviewOpen(false);
     setPreviewData(null);
     setSelectedFile(null);
-    const fileInput = document.getElementById('transmutation-pdf-input') as HTMLInputElement | null;
-    if (fileInput) fileInput.value = '';
+    const fileInput = document.getElementById(
+      "transmutation-pdf-input",
+    ) as HTMLInputElement | null;
+    if (fileInput) fileInput.value = "";
   };
 
   const handleUploadAndPreview = async (file: File) => {
@@ -89,16 +101,18 @@ export default function AdminClassRecordTransmutationPage() {
     try {
       const res = await classRecordService.previewTransmutationTable(file);
       if (!res.success || !res.data) {
-        throw new Error('Failed to parse transmutation table PDF');
+        throw new Error("Failed to parse transmutation table PDF");
       }
 
       setPreviewData(res.data);
       setPreviewOpen(true);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
-        err?.response?.data?.message || err.message || 'Error processing PDF file.';
-      setStatusMessage({ type: 'error', text: errorMsg });
+        err?.response?.data?.message ||
+        err.message ||
+        "Error processing PDF file.";
+      setStatusMessage({ type: "error", text: errorMsg });
     } finally {
       setUploading(false);
     }
@@ -115,23 +129,25 @@ export default function AdminClassRecordTransmutationPage() {
       });
 
       if (!res.success) {
-        throw new Error('Failed to activate new transmutation table');
+        throw new Error("Failed to activate new transmutation table");
       }
 
       setStatusMessage({
-        type: 'success',
-        text: `Successfully applied "${previewData.title}" system-wide! All class records now use this computation.`,
+        type: "success",
+        text: `Successfully applied "${previewData.title}" as the default for newly initialized legacy school-year policies. Frozen policies and existing evidence remain unchanged.`,
       });
 
       setPreviewOpen(false);
       setPreviewData(null);
       setSelectedFile(null);
       await fetchData();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
-        err?.response?.data?.message || err.message || 'Failed to apply transmutation table.';
-      setStatusMessage({ type: 'error', text: errorMsg });
+        err?.response?.data?.message ||
+        err.message ||
+        "Failed to apply transmutation table.";
+      setStatusMessage({ type: "error", text: errorMsg });
     } finally {
       setApplying(false);
     }
@@ -141,18 +157,20 @@ export default function AdminClassRecordTransmutationPage() {
     setApplying(true);
     try {
       const res = await classRecordService.activateTransmutationTable(id);
-      if (!res.success) throw new Error('Failed to reactivate table');
+      if (!res.success) throw new Error("Failed to reactivate table");
 
       setStatusMessage({
-        type: 'success',
+        type: "success",
         text: `Successfully reactivated "${title}" system-wide!`,
       });
       await fetchData();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       const errorMsg =
-        err?.response?.data?.message || err.message || 'Failed to reactivate table.';
-      setStatusMessage({ type: 'error', text: errorMsg });
+        err?.response?.data?.message ||
+        err.message ||
+        "Failed to reactivate table.";
+      setStatusMessage({ type: "error", text: errorMsg });
     } finally {
       setApplying(false);
     }
@@ -161,7 +179,7 @@ export default function AdminClassRecordTransmutationPage() {
   const filteredBands = (activeTable?.bands || []).filter((band) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    const range = `${band.minInitialGrade} ${band.maxInitialGrade ?? ''} ${band.transmutedGrade}`;
+    const range = `${band.minInitialGrade} ${band.maxInitialGrade ?? ""} ${band.transmutedGrade}`;
     return range.toLowerCase().includes(q);
   });
 
@@ -169,10 +187,16 @@ export default function AdminClassRecordTransmutationPage() {
     <AdminPageShell
       badge="Academic Grading Standard"
       title="Class Record Transmutation Settings"
-      description="Upload adaptive transmutation tables (PDF/Text) to update initial-to-quarterly grade conversions system-wide across all subjects."
+      description="Manage transmutation defaults for legacy school-year policies. Each academic year freezes its policy; modern term policies use their prescribed calculation."
       actions={
-        <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2 rounded-xl">
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchData}
+          disabled={loading}
+          className="gap-2 rounded-xl"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           Refresh Table
         </Button>
       }
@@ -180,8 +204,10 @@ export default function AdminClassRecordTransmutationPage() {
         <>
           <AdminStatCard
             label="Active Table"
-            value={activeTable?.isSystemDefault ? 'DepEd Default' : 'Custom Active'}
-            caption={activeTable?.title || 'System Default'}
+            value={
+              activeTable?.isSystemDefault ? "DepEd Default" : "Custom Active"
+            }
+            caption={activeTable?.title || "System Default"}
             accent="emerald"
           />
           <AdminStatCard
@@ -199,7 +225,7 @@ export default function AdminClassRecordTransmutationPage() {
           <AdminStatCard
             label="System Protection"
             value="Active Sync"
-            caption="Applies dynamically to all class records"
+            caption="Default for new legacy policy snapshots"
             accent="rose"
           />
         </>
@@ -209,20 +235,25 @@ export default function AdminClassRecordTransmutationPage() {
       {statusMessage && (
         <div
           className={`flex items-center justify-between gap-3 rounded-xl border p-4 text-sm font-medium shadow-sm transition-all ${
-            statusMessage.type === 'success'
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-              : 'border-rose-200 bg-rose-50 text-rose-900'
+            statusMessage.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+              : "border-rose-200 bg-rose-50 text-rose-900"
           }`}
         >
           <div className="flex items-center gap-2">
-            {statusMessage.type === 'success' ? (
+            {statusMessage.type === "success" ? (
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
             ) : (
               <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
             )}
             <span>{statusMessage.text}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setStatusMessage(null)} className="h-7 text-xs">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setStatusMessage(null)}
+            className="h-7 text-xs"
+          >
             Dismiss
           </Button>
         </div>
@@ -247,12 +278,20 @@ export default function AdminClassRecordTransmutationPage() {
                   className="absolute inset-0 cursor-pointer opacity-0"
                 />
                 <div className="rounded-full bg-rose-100 p-3 text-rose-600">
-                  {uploading ? <RefreshCw className="h-6 w-6 animate-spin" /> : <FileUp className="h-6 w-6" />}
+                  {uploading ? (
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                  ) : (
+                    <FileUp className="h-6 w-6" />
+                  )}
                 </div>
                 <p className="mt-3 text-sm font-bold text-slate-800">
-                  {uploading ? 'Parsing PDF contents...' : 'Click or drop PDF table file here'}
+                  {uploading
+                    ? "Parsing PDF contents..."
+                    : "Click or drop PDF table file here"}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">Supports PDF, CSV, or TXT formats</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Supports PDF, CSV, or TXT formats
+                </p>
               </div>
 
               {/* Sample Files Links */}
@@ -286,7 +325,9 @@ export default function AdminClassRecordTransmutationPage() {
                   <span>Adaptive Calculation Sync</span>
                 </div>
                 <p className="text-xs text-emerald-800 leading-relaxed">
-                  Activating a new table updates grade conversions system-wide for all classes and subjects without affecting raw scores.
+                  Activating a table changes the default for future legacy
+                  policy initialization. It does not alter frozen school-year
+                  policies, raw scores, or finalized revisions.
                 </p>
               </div>
             </div>
@@ -297,7 +338,10 @@ export default function AdminClassRecordTransmutationPage() {
         <div className="md:col-span-7 space-y-6">
           <AdminSectionCard
             title="Active Transmutation Table"
-            description={activeTable?.title || 'DepEd Order No. 8 s. 2015 Transmutation Table'}
+            description={
+              activeTable?.title ||
+              "DepEd Order No. 8 s. 2015 Transmutation Table"
+            }
             action={
               <div className="relative w-48">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
@@ -334,13 +378,19 @@ export default function AdminClassRecordTransmutationPage() {
                   <tbody className="divide-y divide-slate-200 text-slate-800 font-medium">
                     {loading ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
+                        <td
+                          colSpan={3}
+                          className="px-4 py-8 text-center text-slate-500"
+                        >
                           Loading active transmutation bands...
                         </td>
                       </tr>
                     ) : filteredBands.length === 0 ? (
                       <tr>
-                        <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
+                        <td
+                          colSpan={3}
+                          className="px-4 py-8 text-center text-slate-500"
+                        >
                           No matching range found.
                         </td>
                       </tr>
@@ -349,12 +399,17 @@ export default function AdminClassRecordTransmutationPage() {
                         const rangeStr =
                           band.minInitialGrade === band.maxInitialGrade
                             ? `${band.minInitialGrade.toFixed(2)}%`
-                            : `${band.minInitialGrade.toFixed(2)}% – ${band.maxInitialGrade ? band.maxInitialGrade.toFixed(2) : '100'}%`;
+                            : `${band.minInitialGrade.toFixed(2)}% – ${band.maxInitialGrade ? band.maxInitialGrade.toFixed(2) : "100"}%`;
                         const isPassing = band.transmutedGrade >= 75;
 
                         return (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-4 py-2.5 font-mono font-bold text-slate-900">{rangeStr}</td>
+                          <tr
+                            key={idx}
+                            className="hover:bg-slate-50 transition-colors"
+                          >
+                            <td className="px-4 py-2.5 font-mono font-bold text-slate-900">
+                              {rangeStr}
+                            </td>
                             <td className="px-4 py-2.5 font-extrabold text-sm text-slate-900">
                               {band.transmutedGrade}
                             </td>
@@ -362,11 +417,11 @@ export default function AdminClassRecordTransmutationPage() {
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                                   isPassing
-                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    : "bg-rose-100 text-rose-800 border border-rose-300"
                                 }`}
                               >
-                                {isPassing ? 'Passed' : 'For Intervention'}
+                                {isPassing ? "Passed" : "For Intervention"}
                               </span>
                             </td>
                           </tr>
@@ -385,7 +440,7 @@ export default function AdminClassRecordTransmutationPage() {
       {historyTables.length > 0 && (
         <AdminSectionCard
           title="Transmutation Table Presets & History"
-          description="Previously loaded transmutation tables that can be reactivated system-wide."
+          description="Previously loaded tables available as defaults for new legacy policy snapshots."
         >
           <div className="grid gap-3 md:grid-cols-2">
             {historyTables.map((tbl) => (
@@ -393,22 +448,29 @@ export default function AdminClassRecordTransmutationPage() {
                 key={tbl.id}
                 className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                   tbl.isActive
-                    ? 'border-emerald-300 bg-emerald-50/50 shadow-sm'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                    ? "border-emerald-300 bg-emerald-50/50 shadow-sm"
+                    : "border-slate-200 bg-white hover:border-slate-300"
                 }`}
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-sm text-slate-900">{tbl.title}</p>
+                    <p className="font-bold text-sm text-slate-900">
+                      {tbl.title}
+                    </p>
                     {tbl.isActive && (
                       <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px]">
                         Active
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-600 mt-0.5">{tbl.description || 'Custom table'}</p>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    {tbl.description || "Custom table"}
+                  </p>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Bands: {tbl.bands.length} | Created: {tbl.createdAt ? new Date(tbl.createdAt).toLocaleDateString() : 'N/A'}
+                    Bands: {tbl.bands.length} | Created:{" "}
+                    {tbl.createdAt
+                      ? new Date(tbl.createdAt).toLocaleDateString()
+                      : "N/A"}
                   </p>
                 </div>
 
@@ -430,15 +492,27 @@ export default function AdminClassRecordTransmutationPage() {
       )}
 
       {/* Roster-Import Style Preview Modal */}
-      <Dialog open={previewOpen} onOpenChange={(open) => { if (!open) handleCancelPreview(); }}>
-        <DialogContent variant="admin" className="max-w-3xl max-h-[90vh] flex flex-col bg-white border-slate-200 text-slate-900 shadow-2xl rounded-2xl">
+      <Dialog
+        open={previewOpen}
+        onOpenChange={(open) => {
+          if (!open) handleCancelPreview();
+        }}
+      >
+        <DialogContent
+          variant="admin"
+          className="max-w-3xl max-h-[90vh] flex flex-col bg-white border-slate-200 text-slate-900 shadow-2xl rounded-2xl"
+        >
           <DialogHeader className="border-b border-slate-200 pb-4">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-900">
               <Eye className="h-5 w-5 text-rose-600" />
               Transmutation Table Preview
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-600">
-              Review extracted grade conversion bands from <strong className="text-slate-900">{previewData?.filename}</strong> before applying system-wide.
+              Review extracted grade conversion bands from{" "}
+              <strong className="text-slate-900">
+                {previewData?.filename}
+              </strong>{" "}
+              before applying system-wide.
             </DialogDescription>
           </DialogHeader>
 
@@ -446,14 +520,18 @@ export default function AdminClassRecordTransmutationPage() {
             <div className="space-y-4 py-4 overflow-y-auto flex-1 pr-1">
               <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4 border border-slate-200">
                 <div>
-                  <p className="text-sm font-bold text-slate-900">{previewData.title}</p>
-                  <p className="text-xs text-slate-600 mt-0.5">{previewData.validationMessage}</p>
+                  <p className="text-sm font-bold text-slate-900">
+                    {previewData.title}
+                  </p>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    {previewData.validationMessage}
+                  </p>
                 </div>
                 <Badge
                   className={
                     previewData.isValid
-                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold'
-                      : 'bg-amber-100 text-amber-800 border-amber-300 font-semibold'
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold"
+                      : "bg-amber-100 text-amber-800 border-amber-300 font-semibold"
                   }
                 >
                   {previewData.bandCount} Ranges Extracted
@@ -474,12 +552,17 @@ export default function AdminClassRecordTransmutationPage() {
                       const rangeStr =
                         band.minInitialGrade === band.maxInitialGrade
                           ? `${band.minInitialGrade.toFixed(2)}%`
-                          : `${band.minInitialGrade.toFixed(2)}% – ${band.maxInitialGrade ? band.maxInitialGrade.toFixed(2) : '100'}%`;
+                          : `${band.minInitialGrade.toFixed(2)}% – ${band.maxInitialGrade ? band.maxInitialGrade.toFixed(2) : "100"}%`;
                       const isPassing = band.transmutedGrade >= 75;
 
                       return (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-2.5 font-mono font-bold text-slate-900">{rangeStr}</td>
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50 transition-colors"
+                        >
+                          <td className="px-4 py-2.5 font-mono font-bold text-slate-900">
+                            {rangeStr}
+                          </td>
                           <td className="px-4 py-2.5 font-extrabold text-sm text-slate-900">
                             {band.transmutedGrade}
                           </td>
@@ -487,11 +570,11 @@ export default function AdminClassRecordTransmutationPage() {
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                                 isPassing
-                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                  : "bg-rose-100 text-rose-800 border border-rose-300"
                               }`}
                             >
-                              {isPassing ? 'Passed' : 'For Intervention'}
+                              {isPassing ? "Passed" : "For Intervention"}
                             </span>
                           </td>
                         </tr>

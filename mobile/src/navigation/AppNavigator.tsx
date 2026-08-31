@@ -1,8 +1,27 @@
-import { Component, type ComponentProps, type ComponentType, type ReactNode, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, Text, View } from "react-native";
+import { AdminAcademicScreen } from "../screens/AdminAcademicScreen";
+import {
+  Component,
+  type ComponentProps,
+  type ComponentType,
+  type ReactNode,
+  useState,
+} from "react";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
-import { createBottomTabNavigator, type BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { createNativeStackNavigator, type NativeStackScreenProps } from "@react-navigation/native-stack";
+import {
+  createBottomTabNavigator,
+  type BottomTabScreenProps,
+} from "@react-navigation/bottom-tabs";
+import {
+  createNativeStackNavigator,
+  type NativeStackScreenProps,
+} from "@react-navigation/native-stack";
 import { useAuth } from "../providers/AuthProvider";
 import { BottomTabBar } from "../components/ui/BottomTabBar";
 import { DashboardScreen } from "../screens/DashboardScreen";
@@ -77,7 +96,11 @@ import {
   type StudentSupportRouteName,
   type StudentTabRouteName,
 } from "./student-route-manifest";
-import type { AuthStackParamList, MainTabParamList, RootStackParamList } from "./types";
+import type {
+  AuthStackParamList,
+  MainTabParamList,
+  RootStackParamList,
+} from "./types";
 import { resolveMobileRole } from "./role-resolver";
 import { rootNavigationRef } from "./navigation-ref";
 
@@ -85,9 +108,23 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 
-function StudentRoutePlaceholder({ title, subtitle }: { title: string; subtitle: string }) {
+function StudentRoutePlaceholder({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, paddingHorizontal: 24 }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.surface,
+        paddingHorizontal: 24,
+      }}
+    >
       <View
         style={{
           maxWidth: 360,
@@ -99,9 +136,29 @@ function StudentRoutePlaceholder({ title, subtitle }: { title: string; subtitle:
           padding: 24,
         }}
       >
-        <Text style={{ fontSize: 12, fontWeight: "900", color: colors.indigo }}>Student parity route</Text>
-        <Text style={{ marginTop: 10, fontSize: 22, fontWeight: "900", color: colors.text }}>{title}</Text>
-        <Text style={{ marginTop: 8, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>{subtitle}</Text>
+        <Text style={{ fontSize: 12, fontWeight: "900", color: colors.indigo }}>
+          Student parity route
+        </Text>
+        <Text
+          style={{
+            marginTop: 10,
+            fontSize: 22,
+            fontWeight: "900",
+            color: colors.text,
+          }}
+        >
+          {title}
+        </Text>
+        <Text
+          style={{
+            marginTop: 8,
+            fontSize: 13,
+            lineHeight: 20,
+            color: colors.textSecondary,
+          }}
+        >
+          {subtitle}
+        </Text>
       </View>
     </View>
   );
@@ -111,9 +168,9 @@ type TabScreenComponent<Name extends StudentTabRouteName> = ComponentType<
   BottomTabScreenProps<MainTabParamList, Name>
 >;
 
-type StackScreenComponent<Name extends StudentStackRouteName | StudentSupportRouteName> = ComponentType<
-  NativeStackScreenProps<RootStackParamList, Name>
->;
+type StackScreenComponent<
+  Name extends StudentStackRouteName | StudentSupportRouteName,
+> = ComponentType<NativeStackScreenProps<RootStackParamList, Name>>;
 
 function createTabPlaceholderScreen<Name extends StudentTabRouteName>(
   title: string,
@@ -124,46 +181,80 @@ function createTabPlaceholderScreen<Name extends StudentTabRouteName>(
   };
 }
 
-function createStackPlaceholderScreen<Name extends StudentStackRouteName | StudentSupportRouteName>(
-  title: string,
-  subtitle: string,
-): StackScreenComponent<Name> {
+function createStackPlaceholderScreen<
+  Name extends StudentStackRouteName | StudentSupportRouteName,
+>(title: string, subtitle: string): StackScreenComponent<Name> {
   return function StackPlaceholderScreen(_props) {
     return <StudentRoutePlaceholder title={title} subtitle={subtitle} />;
   };
 }
 
-function ClassesRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Classes">) {
+function ClassesRouteScreen(
+  props: BottomTabScreenProps<MainTabParamList, "Classes">,
+) {
   return <ClassesScreen {...(props as ComponentProps<typeof ClassesScreen>)} />;
 }
 
-function DashboardRouteScreen(props: BottomTabScreenProps<MainTabParamList, "Dashboard">) {
-  return <DashboardScreen {...(props as ComponentProps<typeof DashboardScreen>)} />;
+function DashboardRouteScreen(
+  props: BottomTabScreenProps<MainTabParamList, "Dashboard">,
+) {
+  return (
+    <DashboardScreen {...(props as ComponentProps<typeof DashboardScreen>)} />
+  );
 }
 
 function JaRouteScreen(props: BottomTabScreenProps<MainTabParamList, "JA">) {
   return <JaScreen {...(props as ComponentProps<typeof JaScreen>)} />;
 }
 
-function ChatbotRouteScreen(props: NativeStackScreenProps<RootStackParamList, "Chatbot">) {
-  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "ask", classId: props.route.params?.classId } }} />;
-}
-
-function LxpRouteScreen(props: NativeStackScreenProps<RootStackParamList, "LXP">) {
+function ChatbotRouteScreen(
+  props: NativeStackScreenProps<RootStackParamList, "Chatbot">,
+) {
   return (
     <JaScreen
       navigation={props.navigation as never}
-      route={{ params: { panel: "lxp", lxpClassId: props.route.params?.classId, lxpTab: props.route.params?.tab } }}
+      route={{ params: { panel: "ask", classId: props.route.params?.classId } }}
     />
   );
 }
 
-function LessonsRouteScreen(props: NativeStackScreenProps<RootStackParamList, "Lessons">) {
-  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "lxp" } }} />;
+function LxpRouteScreen(
+  props: NativeStackScreenProps<RootStackParamList, "LXP">,
+) {
+  return (
+    <JaScreen
+      navigation={props.navigation as never}
+      route={{
+        params: {
+          panel: "lxp",
+          lxpClassId: props.route.params?.classId,
+          lxpTab: props.route.params?.tab,
+        },
+      }}
+    />
+  );
 }
 
-function AiTutorRouteScreen(props: NativeStackScreenProps<RootStackParamList, "AiTutor">) {
-  return <JaScreen navigation={props.navigation as never} route={{ params: { panel: "ask", classId: props.route.params?.classId } }} />;
+function LessonsRouteScreen(
+  props: NativeStackScreenProps<RootStackParamList, "Lessons">,
+) {
+  return (
+    <JaScreen
+      navigation={props.navigation as never}
+      route={{ params: { panel: "lxp" } }}
+    />
+  );
+}
+
+function AiTutorRouteScreen(
+  props: NativeStackScreenProps<RootStackParamList, "AiTutor">,
+) {
+  return (
+    <JaScreen
+      navigation={props.navigation as never}
+      route={{ params: { panel: "ask", classId: props.route.params?.classId } }}
+    />
+  );
 }
 
 const studentTabScreens = {
@@ -202,59 +293,187 @@ const [classWorkspaceRouteName, aiTutorRouteName] = studentSupportRouteNames;
 function renderStudentTabScreen(name: StudentTabRouteName) {
   switch (name) {
     case "Dashboard":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.Dashboard} />;
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.Dashboard}
+        />
+      );
     case "Classes":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.Classes} />;
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.Classes}
+        />
+      );
     case "Assessments":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.Assessments} />;
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.Assessments}
+        />
+      );
     case "JA":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.JA} />;
+      return (
+        <Tab.Screen key={name} name={name} component={studentTabScreens.JA} />
+      );
     case "Announcements":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.Announcements} />;
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.Announcements}
+        />
+      );
     case "Profile":
-      return <Tab.Screen key={name} name={name} component={studentTabScreens.Profile} />;
+      return (
+        <Tab.Screen
+          key={name}
+          name={name}
+          component={studentTabScreens.Profile}
+        />
+      );
   }
 }
 
 function renderStudentStackScreen(name: StudentStackRouteName) {
   switch (name) {
     case "ClassDetail":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.ClassDetail} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.ClassDetail}
+        />
+      );
     case "ModuleDetail":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.ModuleDetail} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.ModuleDetail}
+        />
+      );
     case "Calendar":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Calendar} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Calendar}
+        />
+      );
     case "Courses":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Courses} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Courses}
+        />
+      );
     case "Lessons":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Lessons} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Lessons}
+        />
+      );
     case "LessonDetail":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.LessonDetail} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.LessonDetail}
+        />
+      );
     case "AssessmentDetail":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentDetail} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.AssessmentDetail}
+        />
+      );
     case "AssessmentTake":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentTake} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.AssessmentTake}
+        />
+      );
     case "AssessmentResults":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentResults} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.AssessmentResults}
+        />
+      );
     case "AssessmentHistory":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.AssessmentHistory} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.AssessmentHistory}
+        />
+      );
     case "Chatbot":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Chatbot} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Chatbot}
+        />
+      );
     case "Performance":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Performance} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Performance}
+        />
+      );
     case "Transcript":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.Transcript} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.Transcript}
+        />
+      );
     case "LXP":
-      return <RootStack.Screen key={name} name={name} component={studentStackScreens.LXP} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentStackScreens.LXP}
+        />
+      );
   }
 }
 
 function renderStudentSupportScreen(name: StudentSupportRouteName) {
   switch (name) {
     case "ClassWorkspace":
-      return <RootStack.Screen key={name} name={name} component={studentSupportScreens.ClassWorkspace} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentSupportScreens.ClassWorkspace}
+        />
+      );
     case "AiTutor":
-      return <RootStack.Screen key={name} name={name} component={studentSupportScreens.AiTutor} />;
+      return (
+        <RootStack.Screen
+          key={name}
+          name={name}
+          component={studentSupportScreens.AiTutor}
+        />
+      );
   }
 }
 
@@ -272,7 +491,15 @@ const navigationTheme = {
 
 function RootFallback() {
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, paddingHorizontal: 24 }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.surface,
+        paddingHorizontal: 24,
+      }}
+    >
       <View
         style={{
           width: 86,
@@ -287,8 +514,24 @@ function RootFallback() {
       >
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
-      <Text style={{ marginTop: 14, fontSize: 14, fontWeight: "900", color: colors.text }}>Warming up Nexora...</Text>
-      <Text style={{ marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
+      <Text
+        style={{
+          marginTop: 14,
+          fontSize: 14,
+          fontWeight: "900",
+          color: colors.text,
+        }}
+      >
+        Warming up Nexora...
+      </Text>
+      <Text
+        style={{
+          marginTop: 4,
+          fontSize: 12,
+          fontWeight: "700",
+          color: colors.textSecondary,
+        }}
+      >
         Syncing classes, JA, and announcements
       </Text>
     </View>
@@ -304,7 +547,10 @@ type NavigationErrorBoundaryState = {
   error: Error | null;
 };
 
-class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, NavigationErrorBoundaryState> {
+class NavigationErrorBoundary extends Component<
+  NavigationErrorBoundaryProps,
+  NavigationErrorBoundaryState
+> {
   state: NavigationErrorBoundaryState = {
     error: null,
   };
@@ -314,7 +560,10 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
   }
 
   componentDidUpdate(prevProps: NavigationErrorBoundaryProps) {
-    if (this.state.error && prevProps.currentRouteName !== this.props.currentRouteName) {
+    if (
+      this.state.error &&
+      prevProps.currentRouteName !== this.props.currentRouteName
+    ) {
       this.setState({ error: null });
     }
   }
@@ -325,7 +574,14 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
     }
 
     return (
-      <View style={{ flex: 1, justifyContent: "center", padding: 20, backgroundColor: colors.surface }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          padding: 20,
+          backgroundColor: colors.surface,
+        }}
+      >
         <View
           style={{
             borderRadius: 28,
@@ -335,11 +591,27 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
             padding: 20,
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: "900", color: colors.red }}>Screen Render Error</Text>
-          <Text style={{ marginTop: 8, fontSize: 22, fontWeight: "900", color: colors.text }}>
+          <Text style={{ fontSize: 12, fontWeight: "900", color: colors.red }}>
+            Screen Render Error
+          </Text>
+          <Text
+            style={{
+              marginTop: 8,
+              fontSize: 22,
+              fontWeight: "900",
+              color: colors.text,
+            }}
+          >
             {this.props.currentRouteName}
           </Text>
-          <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: colors.textSecondary }}>
+          <Text
+            style={{
+              marginTop: 10,
+              fontSize: 13,
+              lineHeight: 20,
+              color: colors.textSecondary,
+            }}
+          >
             {this.state.error.message || "This screen failed to render."}
           </Text>
           <Pressable
@@ -348,12 +620,16 @@ class NavigationErrorBoundary extends Component<NavigationErrorBoundaryProps, Na
               marginTop: 18,
               alignItems: "center",
               borderRadius: 16,
-                backgroundColor: colors.primary,
-                minHeight: 48,
-                paddingVertical: 14,
+              backgroundColor: colors.primary,
+              minHeight: 48,
+              paddingVertical: 14,
             }}
           >
-            <Text style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}>Try rendering again</Text>
+            <Text
+              style={{ color: colors.white, fontSize: 13, fontWeight: "800" }}
+            >
+              Try rendering again
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -366,15 +642,26 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="VerifyEmail" component={VerifyEmailScreen} />
-      <AuthStack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <AuthStack.Screen
+        name="ForgotPassword"
+        component={ForgotPasswordScreen}
+      />
       <AuthStack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-      <AuthStack.Screen name="SetInitialPassword" component={SetInitialPasswordScreen} />
+      <AuthStack.Screen
+        name="SetInitialPassword"
+        component={SetInitialPasswordScreen}
+      />
     </AuthStack.Navigator>
   );
 }
 
 function StudentTabs() {
-  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
+  const tabBar =
+    Platform.OS === "web"
+      ? undefined
+      : (props: Parameters<typeof BottomTabBar>[0]) => (
+          <BottomTabBar {...props} />
+        );
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       {studentTabRouteNames.map(renderStudentTabScreen)}
@@ -388,16 +675,30 @@ function StudentNavigator() {
       <RootStack.Screen name="MainTabs" component={StudentTabs} />
       {renderStudentSupportScreen(classWorkspaceRouteName)}
       {studentStackRouteNames.map(renderStudentStackScreen)}
-      <RootStack.Screen name="StudentGuidedAssessment" component={StudentGuidedAssessmentScreen} />
-      <RootStack.Screen name="StudentJaReviewAssessment" component={StudentJaReviewAssessmentScreen} />
-      <RootStack.Screen name="StudentEvaluations" component={StudentEvaluationsScreen} />
+      <RootStack.Screen
+        name="StudentGuidedAssessment"
+        component={StudentGuidedAssessmentScreen}
+      />
+      <RootStack.Screen
+        name="StudentJaReviewAssessment"
+        component={StudentJaReviewAssessmentScreen}
+      />
+      <RootStack.Screen
+        name="StudentEvaluations"
+        component={StudentEvaluationsScreen}
+      />
       {renderStudentSupportScreen(aiTutorRouteName)}
     </RootStack.Navigator>
   );
 }
 
 function TeacherTabs() {
-  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
+  const tabBar =
+    Platform.OS === "web"
+      ? undefined
+      : (props: Parameters<typeof BottomTabBar>[0]) => (
+          <BottomTabBar {...props} />
+        );
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       <Tab.Screen name="Home" component={TeacherHomeScreen} />
@@ -414,33 +715,114 @@ function TeacherNavigator() {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={TeacherTabs} />
-      <RootStack.Screen name="TeacherClassDetail" component={TeacherClassDetailScreen} />
-      <RootStack.Screen name="TeacherModuleDetail" component={TeacherModuleDetailScreen} />
-      <RootStack.Screen name="TeacherModuleFileDetail" component={TeacherModuleFileDetailScreen} />
-      <RootStack.Screen name="TeacherLessonDetail" component={TeacherLessonDetailScreen} />
-      <RootStack.Screen name="TeacherLessonEditor" component={TeacherLessonEditorScreen} />
-      <RootStack.Screen name="TeacherAssessmentDetail" component={TeacherAssessmentDetailScreen} />
-      <RootStack.Screen name="TeacherAssessmentEditor" component={TeacherAssessmentEditorScreen} />
-      <RootStack.Screen name="TeacherAssessmentReview" component={TeacherAssessmentReviewScreen} />
-      <RootStack.Screen name="TeacherAssessmentAttemptResult" component={TeacherAssessmentAttemptResultScreen} />
-      <RootStack.Screen name="TeacherCalendar" component={TeacherCalendarScreen} />
-      <RootStack.Screen name="TeacherCreateModule" component={TeacherCreateModuleScreen} />
-      <RootStack.Screen name="TeacherCreateAssessment" component={TeacherCreateAssessmentScreen} />
-      <RootStack.Screen name="TeacherClassAddStudents" component={TeacherClassAddStudentsScreen} />
-      <RootStack.Screen name="TeacherClassStudentOverview" component={TeacherClassStudentOverviewScreen} />
-      <RootStack.Screen name="TeacherSectionDetail" component={TeacherSectionDetailScreen} />
-      <RootStack.Screen name="TeacherSectionAddStudents" component={TeacherSectionAddStudentsScreen} />
-      <RootStack.Screen name="TeacherSectionStudentProfile" component={TeacherSectionStudentProfileScreen} />
-      <RootStack.Screen name="TeacherExtractionDetail" component={TeacherExtractionDetailScreen} />
-      <RootStack.Screen name="TeacherAiDraft" component={TeacherAiDraftScreen} />
-      <RootStack.Screen name="TeacherInterventionDetail" component={TeacherInterventionDetailScreen} />
-      <RootStack.Screen name="TeacherLibrary" component={TeacherLibraryScreen} />
-      <RootStack.Screen name="TeacherClassRecord" component={TeacherClassRecordScreen} />
-      <RootStack.Screen name="TeacherReports" component={TeacherReportsScreen} />
-      <RootStack.Screen name="TeacherInterventions" component={TeacherInterventionsScreen} />
-      <RootStack.Screen name="TeacherPerformance" component={TeacherPerformanceScreen} />
-      <RootStack.Screen name="TeacherEvaluations" component={TeacherEvaluationsScreen} />
-      <RootStack.Screen name="TeacherAnnouncements" component={TeacherAnnouncementsScreen} />
+      <RootStack.Screen
+        name="TeacherClassDetail"
+        component={TeacherClassDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherModuleDetail"
+        component={TeacherModuleDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherModuleFileDetail"
+        component={TeacherModuleFileDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLessonDetail"
+        component={TeacherLessonDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLessonEditor"
+        component={TeacherLessonEditorScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentDetail"
+        component={TeacherAssessmentDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentEditor"
+        component={TeacherAssessmentEditorScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentReview"
+        component={TeacherAssessmentReviewScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAssessmentAttemptResult"
+        component={TeacherAssessmentAttemptResultScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCalendar"
+        component={TeacherCalendarScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCreateModule"
+        component={TeacherCreateModuleScreen}
+      />
+      <RootStack.Screen
+        name="TeacherCreateAssessment"
+        component={TeacherCreateAssessmentScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassAddStudents"
+        component={TeacherClassAddStudentsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassStudentOverview"
+        component={TeacherClassStudentOverviewScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionDetail"
+        component={TeacherSectionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionAddStudents"
+        component={TeacherSectionAddStudentsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherSectionStudentProfile"
+        component={TeacherSectionStudentProfileScreen}
+      />
+      <RootStack.Screen
+        name="TeacherExtractionDetail"
+        component={TeacherExtractionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAiDraft"
+        component={TeacherAiDraftScreen}
+      />
+      <RootStack.Screen
+        name="TeacherInterventionDetail"
+        component={TeacherInterventionDetailScreen}
+      />
+      <RootStack.Screen
+        name="TeacherLibrary"
+        component={TeacherLibraryScreen}
+      />
+      <RootStack.Screen
+        name="TeacherClassRecord"
+        component={TeacherClassRecordScreen}
+      />
+      <RootStack.Screen
+        name="TeacherReports"
+        component={TeacherReportsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherInterventions"
+        component={TeacherInterventionsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherPerformance"
+        component={TeacherPerformanceScreen}
+      />
+      <RootStack.Screen
+        name="TeacherEvaluations"
+        component={TeacherEvaluationsScreen}
+      />
+      <RootStack.Screen
+        name="TeacherAnnouncements"
+        component={TeacherAnnouncementsScreen}
+      />
       <RootStack.Screen name="TeacherMore" component={TeacherMoreScreen} />
     </RootStack.Navigator>
   );
@@ -451,15 +833,29 @@ function RoleTabs({ role }: { role: "teacher" | "admin" }) {
     return <TeacherNavigator />;
   }
 
-  const tabBar = Platform.OS === "web" ? undefined : ((props: Parameters<typeof BottomTabBar>[0]) => <BottomTabBar {...props} />);
+  const tabBar =
+    Platform.OS === "web"
+      ? undefined
+      : (props: Parameters<typeof BottomTabBar>[0]) => (
+          <BottomTabBar {...props} />
+        );
 
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
-      <Tab.Screen name="Home">{() => <RoleWorkspaceScreen role={role} section="overview" />}</Tab.Screen>
-      <Tab.Screen name="Classes">{() => <RoleWorkspaceScreen role={role} section="classes" />}</Tab.Screen>
-      <Tab.Screen name="Assessments">{() => <RoleWorkspaceScreen role={role} section="assessments" />}</Tab.Screen>
+      <Tab.Screen name="Home">
+        {() => <RoleWorkspaceScreen role={role} section="overview" />}
+      </Tab.Screen>
+      <Tab.Screen name="Classes">
+        {() => <RoleWorkspaceScreen role={role} section="classes" />}
+      </Tab.Screen>
+      <Tab.Screen name="Assessments">
+        {() => <RoleWorkspaceScreen role={role} section="assessments" />}
+      </Tab.Screen>
       <Tab.Screen name="Announcements" component={NotificationsInboxScreen} />
-      <Tab.Screen name="Profile">{() => <RoleWorkspaceScreen role={role} section="profile" />}</Tab.Screen>
+      <Tab.Screen name="Academic" component={AdminAcademicScreen} />
+      <Tab.Screen name="Profile">
+        {() => <RoleWorkspaceScreen role={role} section="profile" />}
+      </Tab.Screen>
     </Tab.Navigator>
   );
 }

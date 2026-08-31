@@ -1,6 +1,12 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import StudentGuidedAssessmentPage from './page';
 import { lxpService } from '@/services/lxp-service';
 
@@ -27,7 +33,13 @@ jest.mock('@/services/lxp-service', () => ({
 }));
 
 jest.mock('@/components/shared/rich-text/RichTextRenderer', () => ({
-  RichTextRenderer: ({ html, className }: { html: string; className?: string }) => (
+  RichTextRenderer: ({
+    html,
+    className,
+  }: {
+    html: string;
+    className?: string;
+  }) => (
     <div className={className} dangerouslySetInnerHTML={{ __html: html }} />
   ),
 }));
@@ -45,7 +57,8 @@ const guidedAssessment = {
       type: 'multiple_choice' as const,
       stem: 'Elements are represented by symbols.',
       hint: 'Look for the option that names how elements are written in science.',
-      explanation: 'Element symbols use one capital letter and sometimes one lowercase letter.',
+      explanation:
+        'Element symbols use one capital letter and sometimes one lowercase letter.',
       weakConceptTag: 'Element symbols',
       options: [
         { id: 'a', text: 'Element symbols', isCorrect: true },
@@ -57,7 +70,8 @@ const guidedAssessment = {
       type: 'multiple_choice' as const,
       stem: 'Pure substances are made of one kind of atom.',
       hint: 'Think about the term for one kind of atom.',
-      reviewHint: 'Review Module 2 and focus on the example about one kind of atom.',
+      reviewHint:
+        'Review Module 2 and focus on the example about one kind of atom.',
       explanation: 'Elements are pure substances made of one type of atom.',
       weakConceptTag: 'Elements',
       options: [
@@ -101,7 +115,11 @@ function mockInProgressSession() {
     },
   } as Awaited<ReturnType<typeof lxpService.startGuidedAssessment>>);
   mockedLxpService.updateGuidedAssessmentProgress.mockResolvedValue({
+    success: true,
     data: {
+      assignmentId: 'assignment-1',
+      guidedAssessment,
+      attemptSummary,
       attempt: {
         id: 'attempt-1',
         status: 'in_progress',
@@ -160,8 +178,18 @@ function mockSubmittedSession() {
       scorePercent: 50,
       correctCount: 1,
       responses: [
-        { questionId: 'q1', answer: 'a', isCorrect: true, weakConceptTag: 'Element symbols' },
-        { questionId: 'q2', answer: 'd', isCorrect: false, weakConceptTag: 'Elements' },
+        {
+          questionId: 'q1',
+          answer: 'a',
+          isCorrect: true,
+          weakConceptTag: 'Element symbols',
+        },
+        {
+          questionId: 'q2',
+          answer: 'd',
+          isCorrect: false,
+          weakConceptTag: 'Elements',
+        },
       ],
       hintedQuestionIds: ['q2'],
       formativeSummary: {
@@ -183,12 +211,18 @@ describe('StudentGuidedAssessmentPage', () => {
     const { container } = render(<StudentGuidedAssessmentPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('Simplified guided assessment: Module 2 Quiz')).toBeInTheDocument();
+      expect(
+        screen.getByText('Simplified guided assessment: Module 2 Quiz'),
+      ).toBeInTheDocument();
     });
 
-    expect(container.querySelector('.student-assessment-take-theme')).toBeInTheDocument();
+    expect(
+      container.querySelector('.student-assessment-take-theme'),
+    ).toBeInTheDocument();
     expect(screen.getByText('0/2 answered')).toBeInTheDocument();
-    expect(screen.queryByText(/lxp-only guided attempt/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/lxp-only guided attempt/i),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/saving progress/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /show hint/i }));
@@ -202,16 +236,38 @@ describe('StudentGuidedAssessmentPage', () => {
     render(<StudentGuidedAssessmentPage />);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Simplified guided assessment: Module 2 Quiz' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('heading', {
+          name: 'Simplified guided assessment: Module 2 Quiz',
+        }),
+      ).toBeInTheDocument();
     });
 
-    const correctSection = screen.getByRole('region', { name: /correct answers/i });
-    const reviewSection = screen.getByRole('region', { name: /review these answers/i });
+    const correctSection = screen.getByRole('region', {
+      name: /correct answers/i,
+    });
+    const reviewSection = screen.getByRole('region', {
+      name: /review these answers/i,
+    });
 
-    expect(within(correctSection).getByText(/Elements are represented by symbols/i)).toBeInTheDocument();
-    expect(within(reviewSection).getByText(/Pure substances are made of one kind of atom/i)).toBeInTheDocument();
-    expect(within(reviewSection).getByText(/Your previous answer: Compounds/i)).toBeInTheDocument();
-    expect(within(reviewSection).getByText(/Correct answer: Elements/i)).toBeInTheDocument();
-    expect(within(reviewSection).getByText(/Review Module 2 and focus on the example/i)).toBeInTheDocument();
+    expect(
+      within(correctSection).getByText(/Elements are represented by symbols/i),
+    ).toBeInTheDocument();
+    expect(
+      within(reviewSection).getByText(
+        /Pure substances are made of one kind of atom/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(reviewSection).getByText(/Your previous answer: Compounds/i),
+    ).toBeInTheDocument();
+    expect(
+      within(reviewSection).getByText(/Correct answer: Elements/i),
+    ).toBeInTheDocument();
+    expect(
+      within(reviewSection).getByText(
+        /Review Module 2 and focus on the example/i,
+      ),
+    ).toBeInTheDocument();
   });
 });

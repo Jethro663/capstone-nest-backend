@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import dynamic from 'next/dynamic';
-import Cropper from 'react-easy-crop';
-import Image from 'next/image';
+import dynamic from "next/dynamic";
+import Cropper from "react-easy-crop";
+import Image from "next/image";
 import {
   useCallback,
   useEffect,
@@ -12,10 +12,10 @@ import {
   type CSSProperties,
   type ChangeEvent,
   type MouseEvent as ReactMouseEvent,
-} from 'react';
-import type { Area, Point } from 'react-easy-crop';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+} from "react";
+import type { Area, Point } from "react-easy-crop";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   BookOpen,
@@ -45,37 +45,47 @@ import {
   ThumbsUp,
   Trash2,
   Users,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { classService } from '@/services/class-service';
-import { moduleService } from '@/services/module-service';
-import { announcementService } from '@/services/announcement-service';
-import { discussionBoardService } from '@/services/discussion-board-service';
-import { assessmentService } from '@/services/assessment-service';
-import { extractionService } from '@/services/extraction-service';
-import { classRecordService } from '@/services/class-record-service';
-import { fileService } from '@/services/file-service';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+} from "lucide-react";
+import { toast } from "sonner";
+import { classService } from "@/services/class-service";
+import { moduleService } from "@/services/module-service";
+import { announcementService } from "@/services/announcement-service";
+import { discussionBoardService } from "@/services/discussion-board-service";
+import { assessmentService } from "@/services/assessment-service";
+import { extractionService } from "@/services/extraction-service";
+import { classRecordService } from "@/services/class-record-service";
+import { fileService } from "@/services/file-service";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ClassWorkspaceShell } from '@/components/class/workspace/ClassWorkspaceShell';
-import { ConfirmationDialog, type ConfirmationDialogConfig } from '@/components/shared/ConfirmationDialog';
-import { AiOutageNotice } from '@/components/student/AiOutageNotice';
-import { AiDraftJobsPanel } from '@/components/teacher/assessment/AiDraftJobsPanel';
-import { useTeacherClassRecord } from '@/hooks/use-teacher-class-record';
-import { useAiAvailability } from '@/hooks/use-ai-availability';
-import { useAuth } from '@/providers/AuthProvider';
-import { normalizeRichText } from '@/lib/rich-text';
-import { upsertTrackedExtractionNotification } from '@/lib/extraction-notification-tracker';
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ClassWorkspaceShell } from "@/components/class/workspace/ClassWorkspaceShell";
+import {
+  ConfirmationDialog,
+  type ConfirmationDialogConfig,
+} from "@/components/shared/ConfirmationDialog";
+import { AiOutageNotice } from "@/components/student/AiOutageNotice";
+import { AiDraftJobsPanel } from "@/components/teacher/assessment/AiDraftJobsPanel";
+import { useTeacherClassRecord } from "@/hooks/use-teacher-class-record";
+import { useAiAvailability } from "@/hooks/use-ai-availability";
+import { useAuth } from "@/providers/AuthProvider";
+import { normalizeRichText } from "@/lib/rich-text";
+import { upsertTrackedExtractionNotification } from "@/lib/extraction-notification-tracker";
 import {
   createCroppedModuleCoverBlob,
   DEFAULT_MODULE_GRADIENT,
@@ -83,33 +93,33 @@ import {
   MODULE_STOCK_IMAGE_OPTIONS,
   sanitizeModuleCoverUploadName,
   validateModuleCoverFile,
-} from '@/lib/module-cover-images';
+} from "@/lib/module-cover-images";
 import {
   hasCoreAssessmentPlacementForPublish,
   resolveAssessmentForPublishValidation,
-} from '@/lib/core-assessment-publish';
-import type { Announcement } from '@/types/announcement';
-import type { Assessment } from '@/types/assessment';
-import type { ClassItem } from '@/types/class';
-import type { ClassRecord } from '@/types/class-record';
+} from "@/lib/core-assessment-publish";
+import type { Announcement } from "@/types/announcement";
+import type { Assessment } from "@/types/assessment";
+import type { ClassItem } from "@/types/class";
+import type { ClassRecord } from "@/types/class-record";
 import type {
   DiscussionAuthor,
   DiscussionCommentReportReason,
   DiscussionThreadDetail,
   DiscussionThreadSummary,
-} from '@/types/discussion';
-import type { Extraction, ExtractionStyle } from '@/types/extraction';
-import type { LibraryGradeLevel, LibrarySubjectKey } from '@/types/file';
-import type { ClassModule } from '@/types/module';
-import './workspace.css';
+} from "@/types/discussion";
+import type { Extraction, ExtractionStyle } from "@/types/extraction";
+import type { LibraryGradeLevel, LibrarySubjectKey } from "@/types/file";
+import type { ClassModule } from "@/types/module";
+import "./workspace.css";
 import {
   sortDiscussionThreads,
   useTeacherDiscussionWorkspace,
-} from './use-teacher-discussion-workspace';
+} from "./use-teacher-discussion-workspace";
 
 const RichTextEditor = dynamic(
   () =>
-    import('@/components/shared/rich-text/RichTextEditor').then(
+    import("@/components/shared/rich-text/RichTextEditor").then(
       (mod) => mod.RichTextEditor,
     ),
   {
@@ -119,7 +129,7 @@ const RichTextEditor = dynamic(
 
 const RichTextRenderer = dynamic(
   () =>
-    import('@/components/shared/rich-text/RichTextRenderer').then(
+    import("@/components/shared/rich-text/RichTextRenderer").then(
       (mod) => mod.RichTextRenderer,
     ),
   {
@@ -129,7 +139,7 @@ const RichTextRenderer = dynamic(
 
 const TeacherClassRecordWorkbook = dynamic(
   () =>
-    import('@/components/teacher/class-record/TeacherClassRecordWorkbook').then(
+    import("@/components/teacher/class-record/TeacherClassRecordWorkbook").then(
       (mod) => mod.TeacherClassRecordWorkbook,
     ),
   {
@@ -137,13 +147,27 @@ const TeacherClassRecordWorkbook = dynamic(
   },
 );
 
-type WorkspaceTab = 'modules' | 'assignments' | 'extraction' | 'announcements' | 'discussion' | 'class-record' | 'students' | 'calendar';
-type AssignmentFilter = 'all' | 'written' | 'performance' | 'quarterly' | 'discussion' | 'drafts';
-type CalendarKind = 'assessment' | 'event' | 'holiday';
-type CalendarViewMode = 'calendar' | 'upcoming';
-type ModuleViewMode = 'wide' | 'compact';
+type WorkspaceTab =
+  | "modules"
+  | "assignments"
+  | "extraction"
+  | "announcements"
+  | "discussion"
+  | "class-record"
+  | "students"
+  | "calendar";
+type AssignmentFilter =
+  | "all"
+  | "written"
+  | "performance"
+  | "quarterly"
+  | "discussion"
+  | "drafts";
+type CalendarKind = "assessment" | "event" | "holiday";
+type CalendarViewMode = "calendar" | "upcoming";
+type ModuleViewMode = "wide" | "compact";
 type ExtractionTargetSectionCount = 3 | 4 | 5;
-type ModuleThemeKind = 'gradient' | 'image';
+type ModuleThemeKind = "gradient" | "image";
 
 interface ModulePresentationDraft {
   themeKind: ModuleThemeKind;
@@ -192,54 +216,59 @@ interface ModuleDeadlineCardItem {
   isUrgent: boolean;
 }
 
-type TeacherDiscussionComment = DiscussionThreadDetail['comments'][number];
+type TeacherDiscussionComment = DiscussionThreadDetail["comments"][number];
 
-const CLASS_TABS: Array<{ key: WorkspaceTab; label: string; icon: typeof BookOpen }> = [
-  { key: 'modules', label: 'Modules', icon: BookOpen },
-  { key: 'assignments', label: 'Assignments', icon: ClipboardList },
-  { key: 'extraction', label: 'Extraction', icon: Radar },
-  { key: 'announcements', label: 'Announcements', icon: Megaphone },
-  { key: 'discussion', label: 'Discussion Board', icon: MessageSquare },
-  { key: 'class-record', label: 'Class Record', icon: FileSpreadsheet },
-  { key: 'students', label: 'Students', icon: Users },
-  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+const CLASS_TABS: Array<{
+  key: WorkspaceTab;
+  label: string;
+  icon: typeof BookOpen;
+}> = [
+  { key: "modules", label: "Modules", icon: BookOpen },
+  { key: "assignments", label: "Assignments", icon: ClipboardList },
+  { key: "extraction", label: "Extraction", icon: Radar },
+  { key: "announcements", label: "Announcements", icon: Megaphone },
+  { key: "discussion", label: "Discussion Board", icon: MessageSquare },
+  { key: "class-record", label: "Class Record", icon: FileSpreadsheet },
+  { key: "students", label: "Students", icon: Users },
+  { key: "calendar", label: "Calendar", icon: CalendarDays },
 ];
 
 const ASSIGNMENT_FILTERS: Array<{ key: AssignmentFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'written', label: 'Written Work' },
-  { key: 'performance', label: 'Performance Task' },
-  { key: 'quarterly', label: 'Quarterly Assessment' },
-  { key: 'discussion', label: 'Discussion' },
-  { key: 'drafts', label: 'Drafts' },
+  { key: "all", label: "All" },
+  { key: "written", label: "Written Work" },
+  { key: "performance", label: "Performance Task" },
+  { key: "quarterly", label: "Quarterly Assessment" },
+  { key: "discussion", label: "Discussion" },
+  { key: "drafts", label: "Drafts" },
 ];
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const STORAGE_KEY_MODULES_VIEW = 'teacher-class-detail-modules-view-v1';
-const STORAGE_KEY_CALENDAR_VIEW = 'teacher-class-detail-calendar-view-v1';
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const STORAGE_KEY_MODULES_VIEW = "teacher-class-detail-modules-view-v1";
+const STORAGE_KEY_CALENDAR_VIEW = "teacher-class-detail-calendar-view-v1";
 type TeacherClassGuideScreen =
-  | 'header'
-  | 'modules'
-  | 'assignments'
-  | 'extraction'
-  | 'community'
-  | 'students'
-  | 'class-record'
-  | 'calendar';
+  | "header"
+  | "modules"
+  | "assignments"
+  | "extraction"
+  | "community"
+  | "students"
+  | "class-record"
+  | "calendar";
 type GuidePinProps = {
   children: string;
-  lineSide: 'left' | 'right';
+  lineSide: "left" | "right";
   lineWidth: string;
   style: CSSProperties;
 };
 
 const teacherClassGuideDialogStyle = {
-  '--intervention-border': '#dbe2ec',
-  '--intervention-border-soft': '#edf1f6',
-  '--intervention-muted': '#637083',
-  '--intervention-strong': '#111827',
-  '--intervention-red': '#a32d2d',
-  '--intervention-red-soft': '#fcebeb',
+  "--intervention-border": "#dbe2ec",
+  "--intervention-border-soft": "#edf1f6",
+  "--intervention-muted": "#637083",
+  "--intervention-strong": "#111827",
+  "--intervention-red": "#a32d2d",
+  "--intervention-red-soft": "#fcebeb",
 } as CSSProperties;
 
 const teacherClassGuidePages: Array<{
@@ -250,188 +279,194 @@ const teacherClassGuidePages: Array<{
   steps: Array<{
     action: string;
     body: string;
-    tone?: 'caution';
+    tone?: "caution";
   }>;
 }> = [
   {
-    title: 'Start at the top of the class workspace',
+    title: "Start at the top of the class workspace",
     description:
-      'Use the header to confirm where you are, how many learners are enrolled, and where the current class tab points.',
-    screen: 'header',
-    reminder: 'Keep this header in view while moving between tabs so actions always map to the right class.',
-    steps: [
-      {
-        action: 'Read',
-        body: 'Check the class title, section details, room, and schedule from the title card.',
-      },
-      {
-        action: 'Go back',
-        body: 'Use Back to Classes if you want to return to your class list safely.',
-      },
-      {
-        action: 'Open tabs',
-        body: 'Move across Modules, Assignments, Extraction, and other sections using the tab row.',
-      },
-      {
-        action: 'Open help',
-        body: 'Tap this guide button again anytime you need these instructions while working.',
-      },
-    ],
-  },
-  {
-    title: 'Manage class modules first',
-    description:
-      'Modules are the learning map for the class. The tab is where you build learning flow and check lesson progress.',
-    screen: 'modules',
+      "Use the header to confirm where you are, how many learners are enrolled, and where the current class tab points.",
+    screen: "header",
     reminder:
-      'Switch to Compact or Wide view when you compare module quality and progress at a glance.',
+      "Keep this header in view while moving between tabs so actions always map to the right class.",
     steps: [
       {
-        action: 'Create',
-        body: 'Open Add Module to create a new unit before posting assignments or discussions.',
+        action: "Read",
+        body: "Check the class title, section details, room, and schedule from the title card.",
       },
       {
-        action: 'Rearrange',
-        body: 'Use Select All and Delete Selected only when you intentionally want bulk changes.',
+        action: "Go back",
+        body: "Use Back to Classes if you want to return to your class list safely.",
       },
       {
-        action: 'Review',
-        body: 'Inspect each module card for lesson count, assignment count, and progress indicator.',
+        action: "Open tabs",
+        body: "Move across Modules, Assignments, Extraction, and other sections using the tab row.",
       },
       {
-        action: 'Edit style',
-        body: 'Use Design if you want a custom cover and gradient on a module.',
+        action: "Open help",
+        body: "Tap this guide button again anytime you need these instructions while working.",
       },
     ],
   },
   {
-    title: 'Use assignment filters and assignment actions',
+    title: "Manage class modules first",
     description:
-      'Assignments can be filtered by timing and type so you can move quickly from overdue to draft or graded work.',
-    screen: 'assignments',
-    reminder: 'For new classes, start with All and then narrow to Written Work or Discussion.',
-    steps: [
-      {
-        action: 'Filter',
-        body: 'Use All, Written Work, Performance, or Quarterly to narrow the assignment list.',
-      },
-      {
-        action: 'Check status',
-        body: 'Look at Published and Draft tags to avoid editing items that are already live.',
-      },
-      {
-        action: 'Select',
-        body: 'Use row selection when multiple items need the same action.',
-      },
-      {
-        action: 'Open',
-        body: 'Open assignment cards to review title, points, and due date details.',
-      },
-    ],
-  },
-  {
-    title: 'Run AI extraction when you need fast lesson input',
-    description:
-      'The extraction tab is for uploading a PDF and turning it into a structured draft for module work.',
-    screen: 'extraction',
-    reminder: 'Extraction can pause when AI is unavailable; the notice and upload state will reflect that.',
-    steps: [
-      {
-        action: 'Drop PDF',
-        body: 'Use the extraction dropzone to start converting source material.',
-      },
-      {
-        action: 'Track',
-        body: 'Review extraction status text to see Completed, Failed, or images that still need review.',
-      },
-      {
-        action: 'Open result',
-        body: 'Open an extraction row to inspect parsed title, sections, and assignment suggestions.',
-      },
-    ],
-  },
-  {
-    title: 'Keep class communication in one workflow',
-    description:
-      'Announcements and Discussion sit near each other so notices and student questions stay on the same class page.',
-    screen: 'community',
+      "Modules are the learning map for the class. The tab is where you build learning flow and check lesson progress.",
+    screen: "modules",
     reminder:
-      'If students need immediate visibility, post to Announcements first and then link to a discussion for questions.',
+      "Switch to Compact or Wide view when you compare module quality and progress at a glance.",
     steps: [
       {
-        action: 'Create',
-        body: 'Use New Announcement for formal class-wide updates.',
+        action: "Create",
+        body: "Open Add Module to create a new unit before posting assignments or discussions.",
       },
       {
-        action: 'Start thread',
-        body: 'Use New Thread to start a discussion area with comments and attachments.',
+        action: "Rearrange",
+        body: "Use Select All and Delete Selected only when you intentionally want bulk changes.",
       },
       {
-        action: 'Pin wisely',
-        body: 'Pin posts and threads only for high-priority information.',
+        action: "Review",
+        body: "Inspect each module card for lesson count, assignment count, and progress indicator.",
+      },
+      {
+        action: "Edit style",
+        body: "Use Design if you want a custom cover and gradient on a module.",
       },
     ],
   },
   {
-    title: 'Review students from one tab',
+    title: "Use assignment filters and assignment actions",
     description:
-      'The students tab is where you view class members, open profiles, and remove people who no longer belong.',
-    screen: 'students',
-    reminder: 'Removing a student happens intentionally. Confirm before finalizing any deletion.',
+      "Assignments can be filtered by timing and type so you can move quickly from overdue to draft or graded work.",
+    screen: "assignments",
+    reminder:
+      "For new classes, start with All and then narrow to Written Work or Discussion.",
     steps: [
       {
-        action: 'Add',
-        body: 'Use Add Student when enrolling new learners for this class.',
+        action: "Filter",
+        body: "Use All, Written Work, Performance, or Quarterly to narrow the assignment list.",
       },
       {
-        action: 'Open profile',
-        body: 'Open a student row to inspect contact details and performance history.',
+        action: "Check status",
+        body: "Look at Published and Draft tags to avoid editing items that are already live.",
       },
       {
-        action: 'Read grade',
-        body: 'Use the Grade % column to identify quickly who may need a follow-up.',
+        action: "Select",
+        body: "Use row selection when multiple items need the same action.",
       },
       {
-        action: 'Remove',
-        body: 'Use Remove only when enrollment has truly changed.',
+        action: "Open",
+        body: "Open assignment cards to review title, points, and due date details.",
       },
     ],
   },
   {
-    title: 'View class record and progress summaries',
+    title: "Run AI extraction when you need fast lesson input",
     description:
-      'Class Record gives one view for workbook data, category points, and the current progress snapshot.',
-    screen: 'class-record',
-    reminder: 'Keep student privacy in mind and open workbook entries only for official grading workflows.',
+      "The extraction tab is for uploading a PDF and turning it into a structured draft for module work.",
+    screen: "extraction",
+    reminder:
+      "Extraction can pause when AI is unavailable; the notice and upload state will reflect that.",
     steps: [
       {
-        action: 'Open',
-        body: 'Use this tab to open the class record workbook inside the class context.',
+        action: "Drop PDF",
+        body: "Use the extraction dropzone to start converting source material.",
       },
       {
-        action: 'Read trends',
-        body: 'Check the summary before making new grade edits or posting extra remediation.',
+        action: "Track",
+        body: "Review extraction status text to see Completed, Failed, or images that still need review.",
+      },
+      {
+        action: "Open result",
+        body: "Open an extraction row to inspect parsed title, sections, and assignment suggestions.",
       },
     ],
   },
   {
-    title: 'Plan with the class calendar',
+    title: "Keep class communication in one workflow",
     description:
-      'The calendar keeps assessments, announcements, and events in one quick schedule view.',
-    screen: 'calendar',
-    reminder: 'Check Upcoming before Calendar view when you only need short-term deadlines.',
+      "Announcements and Discussion sit near each other so notices and student questions stay on the same class page.",
+    screen: "community",
+    reminder:
+      "If students need immediate visibility, post to Announcements first and then link to a discussion for questions.",
     steps: [
       {
-        action: 'Choose',
-        body: 'Pick Calendar for date blocks or Upcoming for a simple list workflow.',
+        action: "Create",
+        body: "Use New Announcement for formal class-wide updates.",
       },
       {
-        action: 'Select date',
-        body: 'In Calendar view, click a date to review events for that day.',
+        action: "Start thread",
+        body: "Use New Thread to start a discussion area with comments and attachments.",
       },
       {
-        action: 'Open full calendar',
-        body: 'Use Full Calendar when you need a cross-class schedule check.',
+        action: "Pin wisely",
+        body: "Pin posts and threads only for high-priority information.",
+      },
+    ],
+  },
+  {
+    title: "Review students from one tab",
+    description:
+      "The students tab is where you view class members, open profiles, and remove people who no longer belong.",
+    screen: "students",
+    reminder:
+      "Removing a student happens intentionally. Confirm before finalizing any deletion.",
+    steps: [
+      {
+        action: "Add",
+        body: "Use Add Student when enrolling new learners for this class.",
+      },
+      {
+        action: "Open profile",
+        body: "Open a student row to inspect contact details and performance history.",
+      },
+      {
+        action: "Read grade",
+        body: "Use the Grade % column to identify quickly who may need a follow-up.",
+      },
+      {
+        action: "Remove",
+        body: "Use Remove only when enrollment has truly changed.",
+      },
+    ],
+  },
+  {
+    title: "View class record and progress summaries",
+    description:
+      "Class Record gives one view for workbook data, category points, and the current progress snapshot.",
+    screen: "class-record",
+    reminder:
+      "Keep student privacy in mind and open workbook entries only for official grading workflows.",
+    steps: [
+      {
+        action: "Open",
+        body: "Use this tab to open the class record workbook inside the class context.",
+      },
+      {
+        action: "Read trends",
+        body: "Check the summary before making new grade edits or posting extra remediation.",
+      },
+    ],
+  },
+  {
+    title: "Plan with the class calendar",
+    description:
+      "The calendar keeps assessments, announcements, and events in one quick schedule view.",
+    screen: "calendar",
+    reminder:
+      "Check Upcoming before Calendar view when you only need short-term deadlines.",
+    steps: [
+      {
+        action: "Choose",
+        body: "Pick Calendar for date blocks or Upcoming for a simple list workflow.",
+      },
+      {
+        action: "Select date",
+        body: "In Calendar view, click a date to review events for that day.",
+      },
+      {
+        action: "Open full calendar",
+        body: "Use Full Calendar when you need a cross-class schedule check.",
       },
     ],
   },
@@ -448,17 +483,21 @@ function GuidePin({ children, lineSide, lineWidth, style }: GuidePinProps) {
       <span
         className="absolute top-1/2 h-px -translate-y-1/2 bg-[#a32d2d]"
         style={
-          lineSide === 'right'
-            ? { left: 'calc(100% - 0.05rem)', width: lineWidth }
-            : { right: 'calc(100% - 0.05rem)', width: lineWidth }
+          lineSide === "right"
+            ? { left: "calc(100% - 0.05rem)", width: lineWidth }
+            : { right: "calc(100% - 0.05rem)", width: lineWidth }
         }
       />
     </em>
   );
 }
 
-function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScreen }) {
-  if (screen === 'header') {
+function TeacherClassGuideScreenshot({
+  screen,
+}: {
+  screen: TeacherClassGuideScreen;
+}) {
+  if (screen === "header") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -475,8 +514,12 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
               <small className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#c4d0e2]">
                 Teacher Class Detail
               </small>
-              <strong className="mt-1 block text-[1.1rem] font-black leading-tight text-white">Science 7</strong>
-              <p className="mt-1.5 text-sm text-[#b6c8df]">Grade 7 - Rizal - Schedule TBA - Room 201</p>
+              <strong className="mt-1 block text-[1.1rem] font-black leading-tight text-white">
+                Science 7
+              </strong>
+              <p className="mt-1.5 text-sm text-[#b6c8df]">
+                Grade 7 - Rizal - Schedule TBA - Room 201
+              </p>
             </div>
             <span className="rounded-full border border-[#284269] bg-[#17345d] px-3 py-1 text-[0.62rem] font-black">
               ? Help
@@ -487,28 +530,48 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
               Back to Classes
             </a>
             <div className="flex flex-wrap gap-2 text-[0.62rem] font-black">
-              <span className="rounded-full bg-[#f0f5ff] px-2 py-1 text-[#10254a]">Modules</span>
-              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Assignments</span>
-              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Extraction</span>
-              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">Students</span>
+              <span className="rounded-full bg-[#f0f5ff] px-2 py-1 text-[#10254a]">
+                Modules
+              </span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">
+                Assignments
+              </span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">
+                Extraction
+              </span>
+              <span className="rounded-full bg-[#1c2f4f] px-2 py-1 text-[#c5d2e8]">
+                Students
+              </span>
             </div>
           </div>
         </div>
 
-        <GuidePin lineSide="left" lineWidth="6.2rem" style={{ right: '1rem', top: '1.95rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="6.2rem"
+          style={{ right: "1rem", top: "1.95rem" }}
+        >
           Help button
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1.2rem', top: '8.2rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="6rem"
+          style={{ left: "1.2rem", top: "8.2rem" }}
+        >
           Back to Classes
         </GuidePin>
-        <GuidePin lineSide="right" lineWidth="8rem" style={{ left: '1.2rem', top: '9.8rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="8rem"
+          style={{ left: "1.2rem", top: "9.8rem" }}
+        >
           Module tabs
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'modules') {
+  if (screen === "modules") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -517,8 +580,12 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <small className="text-[0.64rem] font-black uppercase tracking-[0.08em] text-[#647083]">Course Modules</small>
-              <strong className="text-lg font-black text-[#111827]">3 modules</strong>
+              <small className="text-[0.64rem] font-black uppercase tracking-[0.08em] text-[#647083]">
+                Course Modules
+              </small>
+              <strong className="text-lg font-black text-[#111827]">
+                3 modules
+              </strong>
             </div>
             <div className="inline-flex items-center gap-2">
               <span className="inline-flex h-8 min-w-16 items-center justify-center rounded-full border border-[#d2ddec] bg-[#f7fafe] text-[0.72rem] font-black text-[#4f6694]">
@@ -534,12 +601,16 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
           </div>
           <div className="mt-2 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
             <div className="mb-2 flex items-center justify-between">
-              <strong className="text-sm font-black text-[#143155]">Week 1: Foundations</strong>
+              <strong className="text-sm font-black text-[#143155]">
+                Week 1: Foundations
+              </strong>
               <span className="rounded-full bg-[#fff1f5] px-2 py-1 text-[0.56rem] font-black text-[#9f2342]">
                 Locked
               </span>
             </div>
-            <p className="text-sm text-[#60789a]">3 lessons - 2 assessments - 40% complete</p>
+            <p className="text-sm text-[#60789a]">
+              3 lessons - 2 assessments - 40% complete
+            </p>
             <div className="mt-2 inline-flex gap-2">
               <span className="rounded-full border border-[#d2ddec] px-2 py-1 text-[0.62rem] font-black text-[#4a648a]">
                 Preview
@@ -550,20 +621,32 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
             </div>
           </div>
         </div>
-        <GuidePin lineSide="right" lineWidth="4.7rem" style={{ left: '1rem', top: '1.2rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="4.7rem"
+          style={{ left: "1rem", top: "1.2rem" }}
+        >
           Add module / filters
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="4.5rem" style={{ right: '1rem', top: '2.6rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="4.5rem"
+          style={{ right: "1rem", top: "2.6rem" }}
+        >
           View style
         </GuidePin>
-        <GuidePin lineSide="right" lineWidth="5.2rem" style={{ left: '1rem', top: '7.9rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="5.2rem"
+          style={{ left: "1rem", top: "7.9rem" }}
+        >
           Module card
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'assignments') {
+  if (screen === "assignments") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -572,21 +655,35 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <strong className="text-lg font-black text-[#111827]">Assignments</strong>
+              <strong className="text-lg font-black text-[#111827]">
+                Assignments
+              </strong>
               <p className="text-sm text-[#647083]">8 total</p>
             </div>
             <div className="inline-flex rounded-full border border-[#d2ddec] bg-[#f7fafe] p-1">
-              <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">All</span>
-              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Written</span>
-              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Discussion</span>
+              <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">
+                All
+              </span>
+              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">
+                Written
+              </span>
+              <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">
+                Discussion
+              </span>
             </div>
           </div>
           <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
             <div className="flex items-center justify-between">
               <div>
-                <small className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#7a8ea8]">Published</small>
-                <strong className="mt-0.5 block text-[#111827]">Seatwork 1 Quiz</strong>
-                <p className="mt-1 text-sm text-[#60789a]">Due Apr 10, 2026 - 20 pts</p>
+                <small className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#7a8ea8]">
+                  Published
+                </small>
+                <strong className="mt-0.5 block text-[#111827]">
+                  Seatwork 1 Quiz
+                </strong>
+                <p className="mt-1 text-sm text-[#60789a]">
+                  Due Apr 10, 2026 - 20 pts
+                </p>
               </div>
               <div className="inline-flex gap-1">
                 <span className="rounded-full border border-[#e7edf5] px-2 py-1 text-[0.56rem] font-black text-[#4f6694]">
@@ -599,17 +696,25 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
             </div>
           </div>
         </div>
-        <GuidePin lineSide="left" lineWidth="6.1rem" style={{ left: '1rem', top: '1.1rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="6.1rem"
+          style={{ left: "1rem", top: "1.1rem" }}
+        >
           Filter chips
         </GuidePin>
-        <GuidePin lineSide="right" lineWidth="5.8rem" style={{ right: '1rem', top: '6rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="5.8rem"
+          style={{ right: "1rem", top: "6rem" }}
+        >
           Assignment actions
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'extraction') {
+  if (screen === "extraction") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -617,17 +722,27 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
       >
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
           <div className="mb-2">
-            <strong className="text-lg font-black text-[#111827]">AI Extractions</strong>
-            <p className="text-sm text-[#647083]">Upload a PDF to extract lesson content.</p>
+            <strong className="text-lg font-black text-[#111827]">
+              AI Extractions
+            </strong>
+            <p className="text-sm text-[#647083]">
+              Upload a PDF to extract lesson content.
+            </p>
           </div>
           <div className="rounded-lg border border-[#d6e3f3] bg-[#f7fbff] px-3 py-4 text-center">
-            <strong className="text-sm text-[#143155]">Drop a PDF here to extract module</strong>
+            <strong className="text-sm text-[#143155]">
+              Drop a PDF here to extract module
+            </strong>
             <p className="mt-1 text-sm text-[#647083]">or click to browse</p>
           </div>
           <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
             <div className="mb-2 flex items-center justify-between">
-              <strong className="text-sm text-[#111827]">Cells and Systems</strong>
-              <span className="rounded-full border border-[#cce3f7] px-2 py-1 text-xs font-black text-[#2862a6]">Ready</span>
+              <strong className="text-sm text-[#111827]">
+                Cells and Systems
+              </strong>
+              <span className="rounded-full border border-[#cce3f7] px-2 py-1 text-xs font-black text-[#2862a6]">
+                Ready
+              </span>
             </div>
             <p className="text-xs text-[#677f9e]">2026-04-30</p>
             <span className="mt-2 inline-flex rounded-full border border-[#d2ddec] px-2 py-1 text-xs font-black text-[#4f6694]">
@@ -635,17 +750,25 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
             </span>
           </div>
         </div>
-        <GuidePin lineSide="right" lineWidth="4.6rem" style={{ left: '1rem', top: '1.1rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="4.6rem"
+          style={{ left: "1rem", top: "1.1rem" }}
+        >
           PDF dropzone
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="5rem" style={{ right: '1rem', top: '7.4rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="5rem"
+          style={{ right: "1rem", top: "7.4rem" }}
+        >
           Extraction history
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'community') {
+  if (screen === "community") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -654,7 +777,9 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
-              <strong className="text-base font-black text-[#111827]">Announcements</strong>
+              <strong className="text-base font-black text-[#111827]">
+                Announcements
+              </strong>
               <p className="text-sm text-[#647083]">6 posts</p>
             </div>
             <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
@@ -665,12 +790,16 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
             <span className="rounded-full border border-[#e6a8b4] bg-[#fff2f5] px-2 py-1 text-[0.56rem] font-black text-[#8f1f45]">
               Pinned
             </span>
-            <strong className="mt-1 block text-sm text-[#111827]">Science Fair Reminder</strong>
+            <strong className="mt-1 block text-sm text-[#111827]">
+              Science Fair Reminder
+            </strong>
           </div>
           <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
-                <strong className="text-base font-black text-[#111827]">Discussion Board</strong>
+                <strong className="text-base font-black text-[#111827]">
+                  Discussion Board
+                </strong>
                 <p className="text-sm text-[#647083]">2 threads</p>
               </div>
               <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
@@ -681,21 +810,31 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
               <small className="text-[0.56rem] font-black uppercase tracking-[0.08em] text-[#7a8ea8]">
                 Discussion thread
               </small>
-              <strong className="mt-0.5 block text-sm text-[#111827]">How to solve slope questions?</strong>
+              <strong className="mt-0.5 block text-sm text-[#111827]">
+                How to solve slope questions?
+              </strong>
             </div>
           </div>
         </div>
-        <GuidePin lineSide="left" lineWidth="6.3rem" style={{ left: '1rem', top: '1.05rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="6.3rem"
+          style={{ left: "1rem", top: "1.05rem" }}
+        >
           New Announcement
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="6rem" style={{ left: '1rem', top: '9.25rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="6rem"
+          style={{ left: "1rem", top: "9.25rem" }}
+        >
           New Thread
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'students') {
+  if (screen === "students") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
@@ -703,58 +842,94 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
       >
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <strong className="text-lg font-black text-[#111827]">Students (18)</strong>
+            <strong className="text-lg font-black text-[#111827]">
+              Students (18)
+            </strong>
             <span className="rounded-full border border-[#d2ddec] bg-[#f7fafe] px-3 py-1 text-xs font-black text-[#4f6694]">
               + Add Student
             </span>
           </div>
           <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
             <div className="mb-1 flex items-center justify-between">
-              <span className="rounded-full bg-[#d5e3f7] p-2 text-xs font-black text-[#1f3d66]">LN</span>
+              <span className="rounded-full bg-[#d5e3f7] p-2 text-xs font-black text-[#1f3d66]">
+                LN
+              </span>
               <strong className="text-sm text-[#111827]">Liam Navarro</strong>
               <span className="text-sm text-[#4f6694]">88.0%</span>
             </div>
-            <p className="text-xs text-[#647083]">student71@lms.local - 17-11-0011</p>
+            <p className="text-xs text-[#647083]">
+              student71@lms.local - 17-11-0011
+            </p>
           </div>
           <div className="mt-2 rounded-lg border border-[#f0d8db] bg-[#fff2f5] px-3 py-2 text-right">
             <span className="text-xs font-black text-[#9f1e3d]">Delete</span>
           </div>
         </div>
-        <GuidePin lineSide="right" lineWidth="4.8rem" style={{ left: '1rem', top: '1.35rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="4.8rem"
+          style={{ left: "1rem", top: "1.35rem" }}
+        >
           Add Student
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="4.4rem" style={{ right: '1rem', top: '6.4rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="4.4rem"
+          style={{ right: "1rem", top: "6.4rem" }}
+        >
           Student row
         </GuidePin>
       </div>
     );
   }
 
-  if (screen === 'class-record') {
+  if (screen === "class-record") {
     return (
       <div
         className="teacher-intervention-workspace__manual-shot relative rounded-xl border border-[#dbe2ec] bg-[#f8fafc] px-4 pb-4 pt-12 shadow-inner"
         aria-label="class record screenshot"
       >
         <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
-          <strong className="text-lg font-black text-[#111827]">Class Record Workspace</strong>
-          <p className="text-sm text-[#647083]">Track grade summaries and workbook milestones.</p>
+          <strong className="text-lg font-black text-[#111827]">
+            Class Record Workspace
+          </strong>
+          <p className="text-sm text-[#647083]">
+            Track grade summaries and workbook milestones.
+          </p>
           <div className="mt-3 rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
             <div className="mb-2 grid gap-1">
-              <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#647083]">Summary</span>
-              <strong className="text-2xl font-black text-[#111827]">92/140</strong>
-              <span className="text-sm text-[#647083]">Written Work | Performance | Quarterly</span>
+              <span className="text-[0.62rem] font-black uppercase tracking-[0.08em] text-[#647083]">
+                Summary
+              </span>
+              <strong className="text-2xl font-black text-[#111827]">
+                92/140
+              </strong>
+              <span className="text-sm text-[#647083]">
+                Written Work | Performance | Quarterly
+              </span>
             </div>
             <div className="grid gap-2">
-              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">Written Work: 93%</span>
-              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">Performance Task: 90%</span>
+              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">
+                Written Work: 93%
+              </span>
+              <span className="rounded-full bg-[#f1f5fb] px-2 py-1 text-xs font-black text-[#405f88]">
+                Performance Task: 90%
+              </span>
             </div>
           </div>
         </div>
-        <GuidePin lineSide="right" lineWidth="5.4rem" style={{ left: '1rem', top: '1.05rem' }}>
+        <GuidePin
+          lineSide="right"
+          lineWidth="5.4rem"
+          style={{ left: "1rem", top: "1.05rem" }}
+        >
           Class Record tab
         </GuidePin>
-        <GuidePin lineSide="left" lineWidth="4.5rem" style={{ right: '1rem', top: '6rem' }}>
+        <GuidePin
+          lineSide="left"
+          lineWidth="4.5rem"
+          style={{ right: "1rem", top: "6rem" }}
+        >
           Score snapshot
         </GuidePin>
       </div>
@@ -769,12 +944,20 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
       <div className="rounded-xl border border-[#e4ecf4] bg-white p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
-            <strong className="text-lg font-black text-[#111827]">Class Calendar</strong>
-            <p className="text-sm text-[#647083]">Upcoming events and assessments</p>
+            <strong className="text-lg font-black text-[#111827]">
+              Class Calendar
+            </strong>
+            <p className="text-sm text-[#647083]">
+              Upcoming events and assessments
+            </p>
           </div>
           <div className="inline-flex rounded-full border border-[#d2ddec] bg-[#f7fafe] p-1">
-            <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">Calendar</span>
-            <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">Upcoming</span>
+            <span className="rounded-full bg-[#e70012] px-2 py-1 text-xs font-black text-white">
+              Calendar
+            </span>
+            <span className="rounded-full px-2 py-1 text-xs font-black text-[#4f6694]">
+              Upcoming
+            </span>
           </div>
         </div>
         <div className="rounded-lg border border-[#e2e9f4] bg-[#f8fbfe] p-3">
@@ -784,14 +967,24 @@ function TeacherClassGuideScreenshot({ screen }: { screen: TeacherClassGuideScre
               Assessment
             </span>
           </div>
-          <strong className="text-sm font-black text-[#111827]">Quarter Examination</strong>
+          <strong className="text-sm font-black text-[#111827]">
+            Quarter Examination
+          </strong>
           <p className="text-xs text-[#647083]">Mathematics 7</p>
         </div>
       </div>
-      <GuidePin lineSide="right" lineWidth="5rem" style={{ left: '1rem', top: '1.4rem' }}>
+      <GuidePin
+        lineSide="right"
+        lineWidth="5rem"
+        style={{ left: "1rem", top: "1.4rem" }}
+      >
         View switch
       </GuidePin>
-      <GuidePin lineSide="left" lineWidth="4.8rem" style={{ right: '1rem', top: '8.1rem' }}>
+      <GuidePin
+        lineSide="left"
+        lineWidth="4.8rem"
+        style={{ right: "1rem", top: "8.1rem" }}
+      >
         Event row
       </GuidePin>
     </div>
@@ -810,31 +1003,31 @@ function toTimestamp(value?: string) {
 
 function isWorkspaceTab(value: string | null): value is WorkspaceTab {
   return (
-    value === 'modules' ||
-    value === 'assignments' ||
-    value === 'extraction' ||
-    value === 'announcements' ||
-    value === 'discussion' ||
-    value === 'class-record' ||
-    value === 'students' ||
-    value === 'calendar'
+    value === "modules" ||
+    value === "assignments" ||
+    value === "extraction" ||
+    value === "announcements" ||
+    value === "discussion" ||
+    value === "class-record" ||
+    value === "students" ||
+    value === "calendar"
   );
 }
 
 function formatDateYmd(value?: string | null) {
-  if (!value) return '--';
+  if (!value) return "--";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
+  if (Number.isNaN(date.getTime())) return "--";
   return date.toISOString().slice(0, 10);
 }
 
 function formatRelativeTime(value?: string | null) {
-  if (!value) return 'Unknown';
+  if (!value) return "Unknown";
   const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'Unknown';
+  if (!Number.isFinite(timestamp)) return "Unknown";
   const diffMs = Date.now() - timestamp;
   const minutes = Math.max(0, Math.floor(diffMs / 60000));
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return "Just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -842,9 +1035,13 @@ function formatRelativeTime(value?: string | null) {
 }
 
 function getExtractionStatusLabel(extraction: Extraction) {
-  if (extraction.extractionStatus === 'failed') return 'Failed';
-  if (extraction.reviewRequired) return 'Needs review';
-  if (extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'applied') return 'Ready';
+  if (extraction.extractionStatus === "failed") return "Failed";
+  if (extraction.reviewRequired) return "Needs review";
+  if (
+    extraction.extractionStatus === "completed" ||
+    extraction.extractionStatus === "applied"
+  )
+    return "Ready";
   return extraction.extractionStatus;
 }
 
@@ -852,20 +1049,32 @@ function normalizeLibrarySubjectKey(
   subjectCode?: string | null,
   subjectName?: string | null,
 ): LibrarySubjectKey | undefined {
-  const raw = `${subjectCode ?? ''} ${subjectName ?? ''}`.toLowerCase();
-  if (raw.includes('science') || raw.includes('sci')) return 'science';
-  if (raw.includes('math')) return 'math';
-  if (raw.includes('english') || raw.includes('eng')) return 'english';
-  if (raw.includes('filipino') || raw.includes('fil')) return 'filipino';
-  if (raw.includes('araling') || raw.includes('panlipunan') || /\bap\b/.test(raw)) return 'ap';
-  if (raw.includes('tle')) return 'tle';
-  if (raw.includes('mapeh')) return 'mapeh';
-  if (raw.includes('esp') || raw.includes('values') || raw.includes('pagpapakatao')) return 'esp';
+  const raw = `${subjectCode ?? ""} ${subjectName ?? ""}`.toLowerCase();
+  if (raw.includes("science") || raw.includes("sci")) return "science";
+  if (raw.includes("math")) return "math";
+  if (raw.includes("english") || raw.includes("eng")) return "english";
+  if (raw.includes("filipino") || raw.includes("fil")) return "filipino";
+  if (
+    raw.includes("araling") ||
+    raw.includes("panlipunan") ||
+    /\bap\b/.test(raw)
+  )
+    return "ap";
+  if (raw.includes("tle")) return "tle";
+  if (raw.includes("mapeh")) return "mapeh";
+  if (
+    raw.includes("esp") ||
+    raw.includes("values") ||
+    raw.includes("pagpapakatao")
+  )
+    return "esp";
   return undefined;
 }
 
-function normalizeLibraryGradeLevel(value?: string | null): LibraryGradeLevel | undefined {
-  const match = String(value ?? '').match(/\b(7|8|9|10)\b/);
+function normalizeLibraryGradeLevel(
+  value?: string | null,
+): LibraryGradeLevel | undefined {
+  const match = String(value ?? "").match(/\b(7|8|9|10)\b/);
   if (!match) return undefined;
   return match[1] as LibraryGradeLevel;
 }
@@ -873,14 +1082,14 @@ function normalizeLibraryGradeLevel(value?: string | null): LibraryGradeLevel | 
 function formatEventBadgeDate(date: Date) {
   return {
     day: String(date.getDate()),
-    month: date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+    month: date.toLocaleString("en-US", { month: "short" }).toUpperCase(),
   };
 }
 
 function formatDateKey(date: Date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -890,11 +1099,14 @@ function getMonthStart(date: Date) {
 
 function summarizeModule(module: ClassModule) {
   const lessons = module.sections.reduce(
-    (sum, section) => sum + section.items.filter((item) => item.itemType === 'lesson').length,
+    (sum, section) =>
+      sum + section.items.filter((item) => item.itemType === "lesson").length,
     0,
   );
   const assessments = module.sections.reduce(
-    (sum, section) => sum + section.items.filter((item) => item.itemType === 'assessment').length,
+    (sum, section) =>
+      sum +
+      section.items.filter((item) => item.itemType === "assessment").length,
     0,
   );
   return { lessons, assessments };
@@ -903,69 +1115,84 @@ function summarizeModule(module: ClassModule) {
 function deriveAssignmentFilter(assessment: Assessment): AssignmentFilter {
   const title = assessment.title.toLowerCase();
   const type = assessment.type.toLowerCase();
-  if (!assessment.isPublished) return 'drafts';
-  if (title.includes('project') || title.includes('performance')) return 'performance';
-  if (title.includes('quarter') || title.includes('exam')) return 'quarterly';
-  if (title.includes('discussion')) return 'discussion';
-  if (type.includes('assignment') || type.includes('file_upload')) return 'written';
-  return 'written';
+  if (!assessment.isPublished) return "drafts";
+  if (title.includes("project") || title.includes("performance"))
+    return "performance";
+  if (title.includes("quarter") || title.includes("exam")) return "quarterly";
+  if (title.includes("discussion")) return "discussion";
+  if (type.includes("assignment") || type.includes("file_upload"))
+    return "written";
+  return "written";
 }
 
 function assignmentTagLabel(filter: AssignmentFilter) {
-  if (filter === 'written') return 'Written Work';
-  if (filter === 'performance') return 'Performance Task';
-  if (filter === 'quarterly') return 'Quarterly Assessment';
-  if (filter === 'discussion') return 'Discussion';
-  return 'Assessment';
+  if (filter === "written") return "Written Work";
+  if (filter === "performance") return "Performance Task";
+  if (filter === "quarterly") return "Quarterly Assessment";
+  if (filter === "discussion") return "Discussion";
+  return "Assessment";
 }
 
 function calendarKindLabel(kind: CalendarKind) {
-  if (kind === 'assessment') return 'Assessment';
-  if (kind === 'holiday') return 'Holiday';
-  return 'Class Event';
+  if (kind === "assessment") return "Assessment";
+  if (kind === "holiday") return "Holiday";
+  return "Class Event";
 }
 
-function inferCalendarKindFromAnnouncement(announcement: Announcement): CalendarKind {
+function inferCalendarKindFromAnnouncement(
+  announcement: Announcement,
+): CalendarKind {
   const content = `${announcement.title} ${announcement.content}`.toLowerCase();
-  if (content.includes('quiz') || content.includes('exam') || content.includes('assessment')) return 'assessment';
-  if (content.includes('holiday') || content.includes('break')) return 'holiday';
-  return 'event';
+  if (
+    content.includes("quiz") ||
+    content.includes("exam") ||
+    content.includes("assessment")
+  )
+    return "assessment";
+  if (content.includes("holiday") || content.includes("break"))
+    return "holiday";
+  return "event";
 }
 
 function gradeTone(value: number | null) {
-  if (value === null) return 'neutral';
-  if (value >= 85) return 'good';
-  if (value >= 75) return 'warn';
-  return 'bad';
+  if (value === null) return "neutral";
+  if (value >= 85) return "good";
+  if (value >= 75) return "warn";
+  return "bad";
 }
 
 function safeInitials(firstName?: string, lastName?: string) {
-  const a = (firstName || '').trim().charAt(0);
-  const b = (lastName || '').trim().charAt(0);
-  return `${a}${b}`.toUpperCase() || 'NA';
+  const a = (firstName || "").trim().charAt(0);
+  const b = (lastName || "").trim().charAt(0);
+  return `${a}${b}`.toUpperCase() || "NA";
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {
   return (
-    (error as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-    fallback
+    (error as { response?: { data?: { message?: string } } })?.response?.data
+      ?.message || fallback
   );
 }
 
 function getDiscussionAttachmentHref(
   attachment:
-    | DiscussionThreadSummary['attachments'][number]
-    | DiscussionThreadDetail['comments'][number]['attachments'][number],
+    | DiscussionThreadSummary["attachments"][number]
+    | DiscussionThreadDetail["comments"][number]["attachments"][number],
 ) {
-  return attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || '#';
+  return (
+    attachment.inlineUrl || attachment.downloadUrl || attachment.linkUrl || "#"
+  );
 }
 
 function isDiscussionImageAttachment(
   attachment:
-    | DiscussionThreadSummary['attachments'][number]
-    | DiscussionThreadDetail['comments'][number]['attachments'][number],
+    | DiscussionThreadSummary["attachments"][number]
+    | DiscussionThreadDetail["comments"][number]["attachments"][number],
 ) {
-  return attachment.type === 'image' || Boolean(attachment.mimeType?.startsWith('image/'));
+  return (
+    attachment.type === "image" ||
+    Boolean(attachment.mimeType?.startsWith("image/"))
+  );
 }
 
 const DISCUSSION_REPORT_REASON_OPTIONS: Array<{
@@ -974,42 +1201,43 @@ const DISCUSSION_REPORT_REASON_OPTIONS: Array<{
   hint: string;
 }> = [
   {
-    value: 'inappropriate',
-    label: 'Inappropriate',
-    hint: 'Rude, explicit, or not suitable for class.',
+    value: "inappropriate",
+    label: "Inappropriate",
+    hint: "Rude, explicit, or not suitable for class.",
   },
   {
-    value: 'harassment',
-    label: 'Harassment',
-    hint: 'Targets or attacks another learner directly.',
+    value: "harassment",
+    label: "Harassment",
+    hint: "Targets or attacks another learner directly.",
   },
   {
-    value: 'spam',
-    label: 'Spam',
-    hint: 'Repeated, irrelevant, or disruptive posting.',
+    value: "spam",
+    label: "Spam",
+    hint: "Repeated, irrelevant, or disruptive posting.",
   },
   {
-    value: 'off_topic',
-    label: 'Off-topic',
-    hint: 'Not related to the lesson or discussion prompt.',
+    value: "off_topic",
+    label: "Off-topic",
+    hint: "Not related to the lesson or discussion prompt.",
   },
   {
-    value: 'academic_dishonesty',
-    label: 'Academic Dishonesty',
-    hint: 'Cheating, answer sharing, or suspicious misconduct.',
+    value: "academic_dishonesty",
+    label: "Academic Dishonesty",
+    hint: "Cheating, answer sharing, or suspicious misconduct.",
   },
 ];
 
 function stripDiscussionHtml(input?: string | null) {
-  return String(input ?? '')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
+  return String(input ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function getDiscussionAuthorName(author?: DiscussionAuthor) {
-  const fullName = `${author?.firstName || ''} ${author?.lastName || ''}`.trim();
-  return fullName || author?.email || 'Unknown user';
+  const fullName =
+    `${author?.firstName || ""} ${author?.lastName || ""}`.trim();
+  return fullName || author?.email || "Unknown user";
 }
 
 function getDiscussionAuthorInitials(author?: DiscussionAuthor) {
@@ -1017,8 +1245,8 @@ function getDiscussionAuthorInitials(author?: DiscussionAuthor) {
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2);
-  if (words.length === 0) return 'NA';
-  return words.map((word) => word.charAt(0).toUpperCase()).join('');
+  if (words.length === 0) return "NA";
+  return words.map((word) => word.charAt(0).toUpperCase()).join("");
 }
 
 function TeacherDiscussionAvatar({ author }: { author?: DiscussionAuthor }) {
@@ -1046,9 +1274,19 @@ function TeacherDiscussionReactionSummary({
   comment: TeacherDiscussionComment;
 }) {
   const reactionItems = [
-    { key: 'like', label: 'Like', icon: ThumbsUp, count: comment.reactions.like },
-    { key: 'heart', label: 'Heart', icon: Heart, count: comment.reactions.heart },
-    { key: 'wow', label: 'Wow', icon: Sparkles, count: comment.reactions.wow },
+    {
+      key: "like",
+      label: "Like",
+      icon: ThumbsUp,
+      count: comment.reactions.like,
+    },
+    {
+      key: "heart",
+      label: "Heart",
+      icon: Heart,
+      count: comment.reactions.heart,
+    },
+    { key: "wow", label: "Wow", icon: Sparkles, count: comment.reactions.wow },
   ].filter((entry) => entry.count > 0);
 
   if (reactionItems.length === 0) {
@@ -1065,7 +1303,10 @@ function TeacherDiscussionReactionSummary({
       {reactionItems.map((entry) => {
         const Icon = entry.icon;
         return (
-          <span key={entry.key} className="teacher-discussion-comment__meta-pill">
+          <span
+            key={entry.key}
+            className="teacher-discussion-comment__meta-pill"
+          >
             <Icon className="h-3.5 w-3.5" />
             {entry.count} {entry.label.toLowerCase()}
           </span>
@@ -1078,7 +1319,7 @@ function TeacherDiscussionReactionSummary({
 function TeacherDiscussionAttachmentGallery({
   attachments,
 }: {
-  attachments: DiscussionThreadSummary['attachments'];
+  attachments: DiscussionThreadSummary["attachments"];
 }) {
   if (attachments.length === 0) return null;
 
@@ -1094,23 +1335,25 @@ function TeacherDiscussionAttachmentGallery({
             target="_blank"
             rel="noreferrer"
             className={`teacher-discussion-media-card${
-              isDiscussionImageAttachment(attachment) && href !== '#'
-                ? ' is-image'
-                : ''
+              isDiscussionImageAttachment(attachment) && href !== "#"
+                ? " is-image"
+                : ""
             }`}
           >
-            {isDiscussionImageAttachment(attachment) && href !== '#' ? (
+            {isDiscussionImageAttachment(attachment) && href !== "#" ? (
               <div className="teacher-discussion-media-card__image">
                 <Image
                   src={href}
-                  alt={attachment.originalName || 'Thread attachment'}
+                  alt={attachment.originalName || "Thread attachment"}
                   fill
                   unoptimized
                   sizes="160px"
                 />
               </div>
             ) : null}
-            <span>{attachment.originalName || attachment.linkLabel || 'Attachment'}</span>
+            <span>
+              {attachment.originalName || attachment.linkLabel || "Attachment"}
+            </span>
           </a>
         );
       })}
@@ -1122,7 +1365,7 @@ function TeacherSelectedDiscussionFilePreviews({ files }: { files: File[] }) {
   const previewItems = useMemo(
     () =>
       files
-        .filter((file) => file.type.startsWith('image/'))
+        .filter((file) => file.type.startsWith("image/"))
         .map((file) => ({
           key: `${file.name}-${file.size}-${file.lastModified}`,
           name: file.name,
@@ -1145,13 +1388,19 @@ function TeacherSelectedDiscussionFilePreviews({ files }: { files: File[] }) {
       {previewItems.map((item) => (
         <div key={item.key} className="teacher-discussion-upload-preview__card">
           <div className="teacher-discussion-upload-preview__image">
-            <Image src={item.url} alt={item.name} fill unoptimized sizes="96px" />
+            <Image
+              src={item.url}
+              alt={item.name}
+              fill
+              unoptimized
+              sizes="96px"
+            />
           </div>
           <span>{item.name}</span>
         </div>
       ))}
       {files
-        .filter((file) => !file.type.startsWith('image/'))
+        .filter((file) => !file.type.startsWith("image/"))
         .map((file) => (
           <div
             key={`${file.name}-${file.size}-${file.lastModified}`}
@@ -1164,16 +1413,24 @@ function TeacherSelectedDiscussionFilePreviews({ files }: { files: File[] }) {
   );
 }
 
-function normalizeModulePresentation(module: ClassModule): ModulePresentationDraft {
+function normalizeModulePresentation(
+  module: ClassModule,
+): ModulePresentationDraft {
   const gradientId =
-    MODULE_GRADIENT_OPTIONS.find((option) => option.id === module.gradientId)?.id ||
-    DEFAULT_MODULE_GRADIENT;
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === module.gradientId)
+      ?.id || DEFAULT_MODULE_GRADIENT;
 
   const coverImageUrl = module.coverImageUrl || null;
-  const themeKind: ModuleThemeKind = module.themeKind === 'image' ? 'image' : 'gradient';
+  const themeKind: ModuleThemeKind =
+    module.themeKind === "image" ? "image" : "gradient";
 
-  const clamp = (value: number | undefined, min: number, max: number, fallback: number) =>
-    typeof value === 'number' ? Math.min(Math.max(value, min), max) : fallback;
+  const clamp = (
+    value: number | undefined,
+    min: number,
+    max: number,
+    fallback: number,
+  ) =>
+    typeof value === "number" ? Math.min(Math.max(value, min), max) : fallback;
 
   return {
     themeKind,
@@ -1192,12 +1449,14 @@ export default function TeacherClassDetailPage() {
   const aiAvailability = useAiAvailability();
   const { isAuthenticated } = useAuth();
   const classIdParam = params.id;
-  const classId = Array.isArray(classIdParam) ? classIdParam[0] : (classIdParam as string) || '';
+  const classId = Array.isArray(classIdParam)
+    ? classIdParam[0]
+    : (classIdParam as string) || "";
   const isClassIdValid = UUID_PATTERN.test(classId);
-  const modulesViewStorageKey = `${STORAGE_KEY_MODULES_VIEW}:${isClassIdValid ? classId : 'invalid'}`;
-  const calendarViewStorageKey = `${STORAGE_KEY_CALENDAR_VIEW}:${isClassIdValid ? classId : 'invalid'}`;
-  const viewParam = searchParams.get('view');
-  const activeTab = isWorkspaceTab(viewParam) ? viewParam : 'modules';
+  const modulesViewStorageKey = `${STORAGE_KEY_MODULES_VIEW}:${isClassIdValid ? classId : "invalid"}`;
+  const calendarViewStorageKey = `${STORAGE_KEY_CALENDAR_VIEW}:${isClassIdValid ? classId : "invalid"}`;
+  const viewParam = searchParams.get("view");
+  const activeTab = isWorkspaceTab(viewParam) ? viewParam : "modules";
 
   const [classItem, setClassItem] = useState<ClassItem | null>(null);
   const [modules, setModules] = useState<ClassModule[]>([]);
@@ -1217,27 +1476,37 @@ export default function TeacherClassDetailPage() {
   } = useTeacherDiscussionWorkspace({
     classId,
     classIdValid: isClassIdValid,
-    enabled: activeTab === 'discussion',
+    enabled: activeTab === "discussion",
   });
-  const [finalGradeByStudentId, setFinalGradeByStudentId] = useState<Record<string, number>>({});
+  const [finalGradeByStudentId, setFinalGradeByStudentId] = useState<
+    Record<string, number>
+  >({});
   const [loading, setLoading] = useState(true);
 
   const [showAddModuleModal, setShowAddModuleModal] = useState(false);
-  const [newModuleTitle, setNewModuleTitle] = useState('');
-  const [newModuleDescription, setNewModuleDescription] = useState('');
+  const [newModuleTitle, setNewModuleTitle] = useState("");
+  const [newModuleDescription, setNewModuleDescription] = useState("");
   const [creatingModule, setCreatingModule] = useState(false);
   const [busyModuleId, setBusyModuleId] = useState<string | null>(null);
-  const [modulesViewMode, setModulesViewMode] = useState<ModuleViewMode>('wide');
+  const [modulesViewMode, setModulesViewMode] =
+    useState<ModuleViewMode>("wide");
   const [modulesViewLoaded, setModulesViewLoaded] = useState(false);
-  const [calendarViewMode, setCalendarViewMode] = useState<CalendarViewMode>('upcoming');
+  const [calendarViewMode, setCalendarViewMode] =
+    useState<CalendarViewMode>("upcoming");
   const [calendarViewLoaded, setCalendarViewLoaded] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(() => getMonthStart(new Date()));
-  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    getMonthStart(new Date()),
+  );
+  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState<
+    string | null
+  >(null);
   const [selectedModuleIds, setSelectedModuleIds] = useState<string[]>([]);
   const [isReorderingModules, setIsReorderingModules] = useState(false);
-  const [customizingModuleId, setCustomizingModuleId] = useState<string | null>(null);
+  const [customizingModuleId, setCustomizingModuleId] = useState<string | null>(
+    null,
+  );
   const [moduleDraft, setModuleDraft] = useState<ModulePresentationDraft>({
-    themeKind: 'gradient',
+    themeKind: "gradient",
     gradientId: DEFAULT_MODULE_GRADIENT,
     coverImageUrl: null,
     imagePositionX: 50,
@@ -1246,47 +1515,69 @@ export default function TeacherClassDetailPage() {
   });
   const [savingModuleDesign, setSavingModuleDesign] = useState(false);
   const [moduleCoverError, setModuleCoverError] = useState<string | null>(null);
-  const [localModuleCoverDraft, setLocalModuleCoverDraft] = useState<LocalModuleCoverDraft | null>(null);
+  const [localModuleCoverDraft, setLocalModuleCoverDraft] =
+    useState<LocalModuleCoverDraft | null>(null);
 
-  const [assignmentFilter, setAssignmentFilter] = useState<AssignmentFilter>('all');
+  const [assignmentFilter, setAssignmentFilter] =
+    useState<AssignmentFilter>("all");
   const [busyAssessmentId, setBusyAssessmentId] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
-  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
+  const [newAssessmentPeriod, setNewAssessmentPeriod] = useState<
+    import("@/utils/constants").GradingPeriod | ""
+  >("");
+  const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>(
+    [],
+  );
 
   const [uploadingExtraction, setUploadingExtraction] = useState(false);
-  const [targetSectionCount, setTargetSectionCount] = useState<ExtractionTargetSectionCount>(4);
-  const [extractionStyle, setExtractionStyle] = useState<ExtractionStyle>('clean');
+  const [targetSectionCount, setTargetSectionCount] =
+    useState<ExtractionTargetSectionCount>(4);
+  const [extractionStyle, setExtractionStyle] =
+    useState<ExtractionStyle>("clean");
   const extractionInputRef = useRef<HTMLInputElement | null>(null);
-  const aiUnavailable = aiAvailability.status === 'degraded';
+  const aiUnavailable = aiAvailability.status === "degraded";
 
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
-  const [announcementTitle, setAnnouncementTitle] = useState('');
-  const [announcementContent, setAnnouncementContent] = useState<string>('');
+  const [announcementTitle, setAnnouncementTitle] = useState("");
+  const [announcementContent, setAnnouncementContent] = useState<string>("");
   const [announcementPinned, setAnnouncementPinned] = useState(false);
   const [creatingAnnouncement, setCreatingAnnouncement] = useState(false);
-  const [busyAnnouncementId, setBusyAnnouncementId] = useState<string | null>(null);
+  const [busyAnnouncementId, setBusyAnnouncementId] = useState<string | null>(
+    null,
+  );
   const [showDiscussionForm, setShowDiscussionForm] = useState(false);
-  const [discussionTitle, setDiscussionTitle] = useState('');
-  const [discussionBody, setDiscussionBody] = useState<string>('');
-  const [discussionCommentLimit, setDiscussionCommentLimit] = useState('1');
+  const [discussionTitle, setDiscussionTitle] = useState("");
+  const [discussionBody, setDiscussionBody] = useState<string>("");
+  const [discussionCommentLimit, setDiscussionCommentLimit] = useState("1");
   const [discussionAllowComments, setDiscussionAllowComments] = useState(true);
   const [discussionPinned, setDiscussionPinned] = useState(false);
-  const [discussionLinksText, setDiscussionLinksText] = useState('');
-  const [discussionAttachmentFiles, setDiscussionAttachmentFiles] = useState<File[]>([]);
+  const [discussionLinksText, setDiscussionLinksText] = useState("");
+  const [discussionAttachmentFiles, setDiscussionAttachmentFiles] = useState<
+    File[]
+  >([]);
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
-  const [busyDiscussionThreadId, setBusyDiscussionThreadId] = useState<string | null>(null);
-  const [busyDiscussionCommentId, setBusyDiscussionCommentId] = useState<string | null>(null);
-  const [reportDialogComment, setReportDialogComment] = useState<TeacherDiscussionComment | null>(null);
+  const [busyDiscussionThreadId, setBusyDiscussionThreadId] = useState<
+    string | null
+  >(null);
+  const [busyDiscussionCommentId, setBusyDiscussionCommentId] = useState<
+    string | null
+  >(null);
+  const [reportDialogComment, setReportDialogComment] =
+    useState<TeacherDiscussionComment | null>(null);
   const [discussionReportReason, setDiscussionReportReason] =
-    useState<DiscussionCommentReportReason>('inappropriate');
-  const [discussionReportNotes, setDiscussionReportNotes] = useState('');
-  const [reportingDiscussionComment, setReportingDiscussionComment] = useState(false);
+    useState<DiscussionCommentReportReason>("inappropriate");
+  const [discussionReportNotes, setDiscussionReportNotes] = useState("");
+  const [reportingDiscussionComment, setReportingDiscussionComment] =
+    useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [helpPage, setHelpPage] = useState(0);
 
   const [busyEnrollmentId, setBusyEnrollmentId] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<ConfirmationDialogConfig | null>(null);
-  const classRecordState = useTeacherClassRecord(isClassIdValid ? classId : undefined);
+  const [confirmation, setConfirmation] =
+    useState<ConfirmationDialogConfig | null>(null);
+  const classRecordState = useTeacherClassRecord(
+    isClassIdValid ? classId : undefined,
+  );
 
   const fetchData = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -1304,7 +1595,7 @@ export default function TeacherClassDetailPage() {
 
     try {
       setLoading(true);
-      const shouldLoadFullWorkspaceData = activeTab !== 'discussion';
+      const shouldLoadFullWorkspaceData = activeTab !== "discussion";
       const [
         classRes,
         modulesRes,
@@ -1322,7 +1613,7 @@ export default function TeacherClassDetailPage() {
           : Promise.resolve({ data: [] as ClassModule[] }),
         shouldLoadFullWorkspaceData
           ? assessmentService
-              .getByClass(classId, { page: 1, limit: 100, status: 'all' })
+              .getByClass(classId, { page: 1, limit: 100, status: "all" })
               .catch(() => ({ data: [] as Assessment[] }))
           : Promise.resolve({ data: [] as Assessment[] }),
         shouldLoadFullWorkspaceData
@@ -1340,39 +1631,57 @@ export default function TeacherClassDetailPage() {
               .getByClass(classId)
               .catch(() => ({ data: [] as ClassRecord[] }))
           : Promise.resolve({ data: [] as ClassRecord[] }),
-        classService.getEnrollments(classId).catch(() => ({ data: [] as ClassItem['enrollments'] })),
+        classService
+          .getEnrollments(classId)
+          .catch(() => ({ data: [] as ClassItem["enrollments"] })),
       ]);
 
       const enrolled = enrollmentsRes.data || classRes.data.enrollments || [];
       setClassItem({ ...classRes.data, enrollments: enrolled });
-      setModules((modulesRes.data || []).slice().sort((a, b) => a.order - b.order));
-      setAssessments((assessmentsRes.data || []).slice().sort((a, b) => {
-        const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
-        const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
-        return bTs - aTs;
-      }));
-      setExtractions((extractionsRes.data || []).slice().sort((a, b) => {
-        const aTs = new Date(a.createdAt || 0).getTime();
-        const bTs = new Date(b.createdAt || 0).getTime();
-        return bTs - aTs;
-      }));
-      setAnnouncements((announcementsRes.data || []).slice().sort((a, b) => {
-        const aTs = new Date(a.createdAt || 0).getTime();
-        const bTs = new Date(b.createdAt || 0).getTime();
-        return bTs - aTs;
-      }));
+      setModules(
+        (modulesRes.data || []).slice().sort((a, b) => a.order - b.order),
+      );
+      setAssessments(
+        (assessmentsRes.data || []).slice().sort((a, b) => {
+          const aTs = new Date(a.updatedAt || a.createdAt || 0).getTime();
+          const bTs = new Date(b.updatedAt || b.createdAt || 0).getTime();
+          return bTs - aTs;
+        }),
+      );
+      setExtractions(
+        (extractionsRes.data || []).slice().sort((a, b) => {
+          const aTs = new Date(a.createdAt || 0).getTime();
+          const bTs = new Date(b.createdAt || 0).getTime();
+          return bTs - aTs;
+        }),
+      );
+      setAnnouncements(
+        (announcementsRes.data || []).slice().sort((a, b) => {
+          const aTs = new Date(a.createdAt || 0).getTime();
+          const bTs = new Date(b.createdAt || 0).getTime();
+          return bTs - aTs;
+        }),
+      );
 
       if (!shouldLoadFullWorkspaceData) {
         setFinalGradeByStudentId({});
       } else {
-        const records = (classRecordsRes.data || []).slice().sort((left, right) => {
-          const leftTs = Math.max(toTimestamp(left.updatedAt), toTimestamp(left.createdAt));
-          const rightTs = Math.max(toTimestamp(right.updatedAt), toTimestamp(right.createdAt));
-          return rightTs - leftTs;
-        });
+        const records = (classRecordsRes.data || [])
+          .slice()
+          .sort((left, right) => {
+            const leftTs = Math.max(
+              toTimestamp(left.updatedAt),
+              toTimestamp(left.createdAt),
+            );
+            const rightTs = Math.max(
+              toTimestamp(right.updatedAt),
+              toTimestamp(right.createdAt),
+            );
+            return rightTs - leftTs;
+          });
         const prioritizedRecord =
-          records.find((record) => record.status === 'finalized') ??
-          records.find((record) => record.status === 'draft') ??
+          records.find((record) => record.status === "finalized") ??
+          records.find((record) => record.status === "draft") ??
           null;
 
         if (!prioritizedRecord?.id) {
@@ -1380,9 +1689,14 @@ export default function TeacherClassDetailPage() {
         } else {
           const finalGradesRes = await classRecordService
             .getFinalGrades(prioritizedRecord.id)
-            .catch(() => ({ data: [] as { studentId: string; finalPercentage: number }[] }));
+            .catch(() => ({
+              data: [] as { studentId: string; finalPercentage: number }[],
+            }));
           const gradeMap = Object.fromEntries(
-            (finalGradesRes.data || []).map((grade) => [grade.studentId, grade.finalPercentage]),
+            (finalGradesRes.data || []).map((grade) => [
+              grade.studentId,
+              grade.finalPercentage,
+            ]),
           );
           setFinalGradeByStudentId(gradeMap);
         }
@@ -1398,102 +1712,130 @@ export default function TeacherClassDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeTab, classId, isAuthenticated, isClassIdValid, resetDiscussionWorkspace]);
+  }, [
+    activeTab,
+    classId,
+    isAuthenticated,
+    isClassIdValid,
+    resetDiscussionWorkspace,
+  ]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
 
   useEffect(() => {
-    if (activeTab !== 'extraction') return;
-    if (!extractions.some((entry) => entry.extractionStatus === 'pending' || entry.extractionStatus === 'processing')) {
+    if (activeTab !== "extraction") return;
+    if (
+      !extractions.some(
+        (entry) =>
+          entry.extractionStatus === "pending" ||
+          entry.extractionStatus === "processing",
+      )
+    ) {
       return;
     }
     const interval = window.setInterval(() => {
-      void extractionService.listByClass(classId).then((res) => {
-        setExtractions((res.data || []).slice().sort((a, b) => {
-          const aTs = new Date(a.createdAt || 0).getTime();
-          const bTs = new Date(b.createdAt || 0).getTime();
-          return bTs - aTs;
-        }));
-      }).catch(() => {});
+      void extractionService
+        .listByClass(classId)
+        .then((res) => {
+          setExtractions(
+            (res.data || []).slice().sort((a, b) => {
+              const aTs = new Date(a.createdAt || 0).getTime();
+              const bTs = new Date(b.createdAt || 0).getTime();
+              return bTs - aTs;
+            }),
+          );
+        })
+        .catch(() => {});
     }, 10_000);
     return () => window.clearInterval(interval);
   }, [activeTab, extractions, classId]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(modulesViewStorageKey);
-    if (raw === 'wide' || raw === 'compact') {
+    if (raw === "wide" || raw === "compact") {
       setModulesViewMode(raw);
     } else {
-      setModulesViewMode('wide');
+      setModulesViewMode("wide");
     }
     setModulesViewLoaded(true);
   }, [modulesViewStorageKey]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !modulesViewLoaded) return;
+    if (typeof window === "undefined" || !modulesViewLoaded) return;
     window.localStorage.setItem(modulesViewStorageKey, modulesViewMode);
   }, [modulesViewLoaded, modulesViewMode, modulesViewStorageKey]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(calendarViewStorageKey);
-    if (raw === 'calendar' || raw === 'upcoming') {
+    if (raw === "calendar" || raw === "upcoming") {
       setCalendarViewMode(raw);
     } else {
-      setCalendarViewMode('upcoming');
+      setCalendarViewMode("upcoming");
     }
     setCalendarViewLoaded(true);
   }, [calendarViewStorageKey]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !calendarViewLoaded) return;
+    if (typeof window === "undefined" || !calendarViewLoaded) return;
     window.localStorage.setItem(calendarViewStorageKey, calendarViewMode);
   }, [calendarViewLoaded, calendarViewMode, calendarViewStorageKey]);
 
   useEffect(() => {
     const moduleIdSet = new Set(modules.map((module) => module.id));
-    setSelectedModuleIds((current) => current.filter((id) => moduleIdSet.has(id)));
+    setSelectedModuleIds((current) =>
+      current.filter((id) => moduleIdSet.has(id)),
+    );
   }, [modules]);
 
   const scheduleLine = useMemo(() => {
     const schedule = classItem?.schedules?.[0];
-    if (!schedule) return 'Schedule TBA';
-    const days = schedule.days.join('/');
+    if (!schedule) return "Schedule TBA";
+    const days = schedule.days.join("/");
     return `${days} ${schedule.startTime}-${schedule.endTime}`;
   }, [classItem]);
 
   const classInfoLine = useMemo(() => {
-    const gradeLevel = classItem?.section?.gradeLevel || classItem?.subjectGradeLevel;
-    const sectionName = classItem?.section?.name?.trim() || 'Section';
+    const gradeLevel =
+      classItem?.section?.gradeLevel || classItem?.subjectGradeLevel;
+    const sectionName = classItem?.section?.name?.trim() || "Section";
     const hasGradeInName = gradeLevel
-      ? sectionName.toLowerCase().includes(`grade ${String(gradeLevel).toLowerCase()}`)
+      ? sectionName
+          .toLowerCase()
+          .includes(`grade ${String(gradeLevel).toLowerCase()}`)
       : false;
     const sectionLabel = gradeLevel
       ? hasGradeInName
         ? sectionName
         : `Grade ${gradeLevel} - ${sectionName}`
       : sectionName;
-    return `${sectionLabel} - ${scheduleLine}${classItem?.room ? ` - Room ${classItem.room}` : ''}`;
-  }, [classItem?.room, classItem?.section?.gradeLevel, classItem?.section?.name, classItem?.subjectGradeLevel, scheduleLine]);
+    return `${sectionLabel} - ${scheduleLine}${classItem?.room ? ` - Room ${classItem.room}` : ""}`;
+  }, [
+    classItem?.room,
+    classItem?.section?.gradeLevel,
+    classItem?.section?.name,
+    classItem?.subjectGradeLevel,
+    scheduleLine,
+  ]);
 
   const studentRows = useMemo<StudentRow[]>(() => {
     const enrollments = classItem?.enrollments || [];
     return enrollments.map((enrollment) => {
-      const firstName = enrollment.student?.firstName?.trim() || '';
-      const lastName = enrollment.student?.lastName?.trim() || '';
-      const fullName = `${firstName} ${lastName}`.trim() || 'Unnamed Student';
-      const profileLrn = enrollment.student?.profile?.lrn || '';
-      const lrn = enrollment.student?.lrn || profileLrn || '--';
+      const firstName = enrollment.student?.firstName?.trim() || "";
+      const lastName = enrollment.student?.lastName?.trim() || "";
+      const fullName = `${firstName} ${lastName}`.trim() || "Unnamed Student";
+      const profileLrn = enrollment.student?.profile?.lrn || "";
+      const lrn = enrollment.student?.lrn || profileLrn || "--";
       return {
         enrollmentId: enrollment.id,
         studentId: enrollment.studentId,
         initials: safeInitials(firstName, lastName),
         profilePicture: enrollment.student?.profile?.profilePicture ?? null,
         fullName,
-        email: enrollment.student?.email || '--',
+        email: enrollment.student?.email || "--",
         lrn,
         gradePercent: finalGradeByStudentId[enrollment.studentId] ?? null,
       };
@@ -1501,8 +1843,10 @@ export default function TeacherClassDetailPage() {
   }, [classItem?.enrollments, finalGradeByStudentId]);
 
   const filteredAssignments = useMemo(() => {
-    if (assignmentFilter === 'all') return assessments;
-    return assessments.filter((assessment) => deriveAssignmentFilter(assessment) === assignmentFilter);
+    if (assignmentFilter === "all") return assessments;
+    return assessments.filter(
+      (assessment) => deriveAssignmentFilter(assessment) === assignmentFilter,
+    );
   }, [assignmentFilter, assessments]);
 
   const assessmentAttachmentMap = useMemo(() => {
@@ -1521,7 +1865,7 @@ export default function TeacherClassDetailPage() {
     for (const classModule of modules) {
       for (const section of classModule.sections || []) {
         for (const item of section.items || []) {
-          if (item.itemType !== 'assessment' || !item.assessmentId) continue;
+          if (item.itemType !== "assessment" || !item.assessmentId) continue;
           const current = map.get(item.assessmentId);
           const gateOpen =
             Boolean(item.isGiven) &&
@@ -1532,8 +1876,12 @@ export default function TeacherClassDetailPage() {
             attached: true,
             given: Boolean(current?.given || item.isGiven),
             visible: Boolean(current?.visible || item.isVisible),
-            moduleVisible: Boolean(current?.moduleVisible || classModule.isVisible),
-            moduleLocked: Boolean(current?.moduleLocked && classModule.isLocked),
+            moduleVisible: Boolean(
+              current?.moduleVisible || classModule.isVisible,
+            ),
+            moduleLocked: Boolean(
+              current?.moduleLocked && classModule.isLocked,
+            ),
             gateOpen: Boolean(current?.gateOpen || gateOpen),
           });
         }
@@ -1547,8 +1895,12 @@ export default function TeacherClassDetailPage() {
     teacherClassGuidePages[helpPage] ?? teacherClassGuidePages[0];
 
   useEffect(() => {
-    const assessmentIdSet = new Set(filteredAssignments.map((assessment) => assessment.id));
-    setSelectedAssessmentIds((current) => current.filter((id) => assessmentIdSet.has(id)));
+    const assessmentIdSet = new Set(
+      filteredAssignments.map((assessment) => assessment.id),
+    );
+    setSelectedAssessmentIds((current) =>
+      current.filter((id) => assessmentIdSet.has(id)),
+    );
   }, [filteredAssignments]);
 
   const calendarItems = useMemo<CalendarEventItem[]>(() => {
@@ -1558,15 +1910,18 @@ export default function TeacherClassDetailPage() {
         const dueDate = new Date(assessment.dueDate as string);
         const hasTime = dueDate.getHours() !== 0 || dueDate.getMinutes() !== 0;
         const dueLabel = hasTime
-          ? dueDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-          : 'All Day';
+          ? dueDate.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "All Day";
 
         return {
           id: `assessment-${assessment.id}`,
           title: assessment.title,
-          subtitle: `${classItem?.subjectName || 'Assessment'} | Due ${dueLabel}`,
+          subtitle: `${classItem?.subjectName || "Assessment"} | Due ${dueLabel}`,
           date: dueDate,
-          kind: 'assessment' as CalendarKind,
+          kind: "assessment" as CalendarKind,
         };
       })
       .filter((item) => !Number.isNaN(item.date.getTime()));
@@ -1575,8 +1930,10 @@ export default function TeacherClassDetailPage() {
       .map((announcement) => ({
         id: `announcement-${announcement.id}`,
         title: announcement.title,
-        subtitle: classItem?.subjectName || 'Class Event',
-        date: new Date(announcement.scheduledAt || announcement.createdAt || ''),
+        subtitle: classItem?.subjectName || "Class Event",
+        date: new Date(
+          announcement.scheduledAt || announcement.createdAt || "",
+        ),
         kind: inferCalendarKindFromAnnouncement(announcement),
       }))
       .filter((item) => !Number.isNaN(item.date.getTime()));
@@ -1615,16 +1972,33 @@ export default function TeacherClassDetailPage() {
 
   const calendarGridDays = useMemo(() => {
     const monthStart = getMonthStart(calendarMonth);
-    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+    const monthEnd = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
+      0,
+    );
     const firstWeekday = monthStart.getDay();
     const daysInMonth = monthEnd.getDate();
-    const prevMonthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth(), 0);
+    const prevMonthEnd = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth(),
+      0,
+    );
     const prevMonthDays = prevMonthEnd.getDate();
 
-    const cells: Array<{ date: Date; key: string; inMonth: boolean; events: CalendarEventItem[] }> = [];
+    const cells: Array<{
+      date: Date;
+      key: string;
+      inMonth: boolean;
+      events: CalendarEventItem[];
+    }> = [];
 
     for (let i = firstWeekday - 1; i >= 0; i -= 1) {
-      const date = new Date(monthStart.getFullYear(), monthStart.getMonth() - 1, prevMonthDays - i);
+      const date = new Date(
+        monthStart.getFullYear(),
+        monthStart.getMonth() - 1,
+        prevMonthDays - i,
+      );
       const key = formatDateKey(date);
       cells.push({
         date,
@@ -1635,7 +2009,11 @@ export default function TeacherClassDetailPage() {
     }
 
     for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+      const date = new Date(
+        monthStart.getFullYear(),
+        monthStart.getMonth(),
+        day,
+      );
       const key = formatDateKey(date);
       cells.push({
         date,
@@ -1647,7 +2025,11 @@ export default function TeacherClassDetailPage() {
 
     while (cells.length % 7 !== 0) {
       const offset = cells.length - (firstWeekday + daysInMonth);
-      const date = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, offset + 1);
+      const date = new Date(
+        monthStart.getFullYear(),
+        monthStart.getMonth() + 1,
+        offset + 1,
+      );
       const key = formatDateKey(date);
       cells.push({
         date,
@@ -1671,18 +2053,24 @@ export default function TeacherClassDetailPage() {
     const now = Date.now();
     const urgentWindowMs = 1000 * 60 * 60 * 72;
 
-    const upcomingOnly = calendarItems.filter((event) => event.date.getTime() >= today.getTime());
-    const source = (upcomingOnly.length > 0 ? upcomingOnly : calendarItems).slice(0, 8);
+    const upcomingOnly = calendarItems.filter(
+      (event) => event.date.getTime() >= today.getTime(),
+    );
+    const source = (
+      upcomingOnly.length > 0 ? upcomingOnly : calendarItems
+    ).slice(0, 8);
 
     return source.map((event) => ({
       id: event.id,
       title: event.title,
       subtitle: event.subtitle,
-      dayLabel: String(event.date.getDate()).padStart(2, '0'),
-      monthLabel: event.date.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
+      dayLabel: String(event.date.getDate()).padStart(2, "0"),
+      monthLabel: event.date
+        .toLocaleString("en-US", { month: "short" })
+        .toUpperCase(),
       kind: event.kind,
       href:
-        event.kind === 'assessment'
+        event.kind === "assessment"
           ? `/dashboard/teacher/classes/${classId}?view=assignments`
           : `/dashboard/teacher/classes/${classId}?view=calendar`,
       isUrgent: event.date.getTime() <= now + urgentWindowMs,
@@ -1690,12 +2078,19 @@ export default function TeacherClassDetailPage() {
   }, [calendarItems, classId]);
 
   const moduleTone = (index: number) => {
-    const tones = ['blue', 'green', 'violet', 'orange', 'rose', 'slate'] as const;
+    const tones = [
+      "blue",
+      "green",
+      "violet",
+      "orange",
+      "rose",
+      "slate",
+    ] as const;
     return tones[index % tones.length];
   };
   const getModuleGradient = (gradientId?: string) =>
-    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)?.background ||
-    MODULE_GRADIENT_OPTIONS[0].background;
+    MODULE_GRADIENT_OPTIONS.find((option) => option.id === gradientId)
+      ?.background || MODULE_GRADIENT_OPTIONS[0].background;
 
   useEffect(() => {
     const objectUrl = localModuleCoverDraft?.objectUrl;
@@ -1721,19 +2116,21 @@ export default function TeacherClassDetailPage() {
     clearLocalModuleCoverDraft();
   }, [clearLocalModuleCoverDraft]);
 
-  const allModulesSelected = modules.length > 0 && selectedModuleIds.length === modules.length;
+  const allModulesSelected =
+    modules.length > 0 && selectedModuleIds.length === modules.length;
   const allFilteredAssessmentsSelected =
-    filteredAssignments.length > 0 && selectedAssessmentIds.length === filteredAssignments.length;
+    filteredAssignments.length > 0 &&
+    selectedAssessmentIds.length === filteredAssignments.length;
 
   const handleCreateModule = async () => {
     if (creatingModule) return;
     const title = newModuleTitle.trim();
     if (!title) {
-      toast.error('Module title is required');
+      toast.error("Module title is required");
       return;
     }
     if (title.length > 120) {
-      toast.error('Module title is too long');
+      toast.error("Module title is too long");
       return;
     }
     try {
@@ -1741,17 +2138,18 @@ export default function TeacherClassDetailPage() {
       await moduleService.create({
         classId,
         title,
-        description: normalizeRichText(newModuleDescription).trim() || undefined,
+        description:
+          normalizeRichText(newModuleDescription).trim() || undefined,
         isVisible: false,
         isLocked: true,
       });
-      toast.success('Module created');
+      toast.success("Module created");
       setShowAddModuleModal(false);
-      setNewModuleTitle('');
-      setNewModuleDescription('');
+      setNewModuleTitle("");
+      setNewModuleDescription("");
       await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to create module'));
+      toast.error(getApiErrorMessage(error, "Failed to create module"));
     } finally {
       setCreatingModule(false);
     }
@@ -1759,12 +2157,16 @@ export default function TeacherClassDetailPage() {
 
   const toggleModuleSelection = (moduleId: string) => {
     setSelectedModuleIds((current) =>
-      current.includes(moduleId) ? current.filter((id) => id !== moduleId) : [...current, moduleId],
+      current.includes(moduleId)
+        ? current.filter((id) => id !== moduleId)
+        : [...current, moduleId],
     );
   };
 
   const toggleSelectAllModules = () => {
-    setSelectedModuleIds(allModulesSelected ? [] : modules.map((module) => module.id));
+    setSelectedModuleIds(
+      allModulesSelected ? [] : modules.map((module) => module.id),
+    );
   };
 
   const applyModuleReorder = async (nextModules: ClassModule[]) => {
@@ -1777,10 +2179,10 @@ export default function TeacherClassDetailPage() {
         classId,
         normalized.map((module) => ({ id: module.id, order: module.order })),
       );
-      toast.success('Module order updated');
+      toast.success("Module order updated");
     } catch (error) {
       setModules(previousModules);
-      toast.error(getApiErrorMessage(error, 'Failed to save module order'));
+      toast.error(getApiErrorMessage(error, "Failed to save module order"));
     } finally {
       setIsReorderingModules(false);
     }
@@ -1806,11 +2208,15 @@ export default function TeacherClassDetailPage() {
     try {
       setBusyModuleId(moduleId);
       await moduleService.delete(moduleId);
-      setModules((current) => current.filter((module) => module.id !== moduleId));
-      setSelectedModuleIds((current) => current.filter((id) => id !== moduleId));
-      toast.success('Module deleted');
+      setModules((current) =>
+        current.filter((module) => module.id !== moduleId),
+      );
+      setSelectedModuleIds((current) =>
+        current.filter((id) => id !== moduleId),
+      );
+      toast.success("Module deleted");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete module'));
+      toast.error(getApiErrorMessage(error, "Failed to delete module"));
     } finally {
       setBusyModuleId(null);
     }
@@ -1818,11 +2224,12 @@ export default function TeacherClassDetailPage() {
 
   const handleDeleteModule = (moduleId: string) => {
     setConfirmation({
-      title: 'Delete Module',
-      description: 'This will permanently remove the module and all of its organization details.',
-      confirmLabel: 'Delete Module',
-      tone: 'danger',
-      details: 'This action cannot be undone.',
+      title: "Delete Module",
+      description:
+        "This will permanently remove the module and all of its organization details.",
+      confirmLabel: "Delete Module",
+      tone: "danger",
+      details: "This action cannot be undone.",
       onConfirm: () => performDeleteModule(moduleId),
     });
   };
@@ -1832,18 +2239,24 @@ export default function TeacherClassDetailPage() {
     const idsToDelete = selectedModuleIds.slice();
     setConfirmation({
       title: `Delete ${idsToDelete.length} Modules`,
-      description: 'Selected modules will be permanently deleted.',
-      confirmLabel: 'Delete Selected',
-      tone: 'danger',
+      description: "Selected modules will be permanently deleted.",
+      confirmLabel: "Delete Selected",
+      tone: "danger",
       details: `You are deleting ${idsToDelete.length} module(s). This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          await Promise.all(idsToDelete.map((moduleId) => moduleService.delete(moduleId)));
-          setModules((current) => current.filter((module) => !idsToDelete.includes(module.id)));
+          await Promise.all(
+            idsToDelete.map((moduleId) => moduleService.delete(moduleId)),
+          );
+          setModules((current) =>
+            current.filter((module) => !idsToDelete.includes(module.id)),
+          );
           setSelectedModuleIds([]);
           toast.success(`${idsToDelete.length} module(s) deleted`);
         } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Failed to delete selected modules'));
+          toast.error(
+            getApiErrorMessage(error, "Failed to delete selected modules"),
+          );
         }
       },
     });
@@ -1868,19 +2281,21 @@ export default function TeacherClassDetailPage() {
       );
       toast.success(
         response.data.isVisible
-          ? 'Core module released to students'
-          : 'Core module hidden from students',
+          ? "Core module released to students"
+          : "Core module hidden from students",
       );
     } catch (error) {
       toast.error(
-        getApiErrorMessage(error, 'Failed to update core module release'),
+        getApiErrorMessage(error, "Failed to update core module release"),
       );
     }
   };
 
-  const handleUploadModuleCover = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleUploadModuleCover = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
-    event.target.value = '';
+    event.target.value = "";
     if (!file) return;
 
     try {
@@ -1897,14 +2312,16 @@ export default function TeacherClassDetailPage() {
       });
       setModuleDraft((current) => ({
         ...current,
-        themeKind: 'image',
+        themeKind: "image",
         imagePositionX: 50,
         imagePositionY: 50,
         imageScale: 120,
       }));
     } catch (error) {
       setModuleCoverError(
-        error instanceof Error ? error.message : 'Failed to prepare cover image.',
+        error instanceof Error
+          ? error.message
+          : "Failed to prepare cover image.",
       );
     }
   };
@@ -1915,7 +2332,7 @@ export default function TeacherClassDetailPage() {
       setSavingModuleDesign(true);
       setModuleCoverError(null);
 
-      if (moduleDraft.themeKind === 'image' && localModuleCoverDraft) {
+      if (moduleDraft.themeKind === "image" && localModuleCoverDraft) {
         const croppedBlob = await createCroppedModuleCoverBlob(
           localModuleCoverDraft.objectUrl,
           localModuleCoverDraft.croppedAreaPixels,
@@ -1923,23 +2340,28 @@ export default function TeacherClassDetailPage() {
         const uploadFile = new File(
           [croppedBlob],
           `${sanitizeModuleCoverUploadName(localModuleCoverDraft.file.name)}.png`,
-          { type: 'image/png' },
+          { type: "image/png" },
         );
-        const uploadResponse = await moduleService.uploadCover(customizingModuleId, uploadFile);
+        const uploadResponse = await moduleService.uploadCover(
+          customizingModuleId,
+          uploadFile,
+        );
         setModules((current) =>
           current.map((module) =>
-            module.id === customizingModuleId ? uploadResponse.data.module : module,
+            module.id === customizingModuleId
+              ? uploadResponse.data.module
+              : module,
           ),
         );
         clearLocalModuleCoverDraft();
         setCustomizingModuleId(null);
-        toast.success('Module design updated');
+        toast.success("Module design updated");
         return;
       }
 
-      if (moduleDraft.themeKind === 'image' && !moduleDraft.coverImageUrl) {
+      if (moduleDraft.themeKind === "image" && !moduleDraft.coverImageUrl) {
         throw new Error(
-          'Choose a stock image or upload a custom image before saving image mode.',
+          "Choose a stock image or upload a custom image before saving image mode.",
         );
       }
 
@@ -1957,9 +2379,12 @@ export default function TeacherClassDetailPage() {
         ),
       );
       closeModuleDesignDialog();
-      toast.success('Module design updated');
+      toast.success("Module design updated");
     } catch (error) {
-      const message = getApiErrorMessage(error, 'Failed to update module design');
+      const message = getApiErrorMessage(
+        error,
+        "Failed to update module design",
+      );
       setModuleCoverError(message);
       toast.error(message);
     } finally {
@@ -1972,13 +2397,14 @@ export default function TeacherClassDetailPage() {
     try {
       setCreatingAssessment(true);
       const response = await assessmentService.create({
-        title: 'Untitled Assessment',
+        title: "Untitled Assessment",
         classId,
+        quarter: newAssessmentPeriod || undefined,
       });
-      toast.success('Assessment created');
+      toast.success("Assessment created");
       router.push(`/dashboard/teacher/assessments/${response.data.id}/edit`);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to create assessment'));
+      toast.error(getApiErrorMessage(error, "Failed to create assessment"));
     } finally {
       setCreatingAssessment(false);
     }
@@ -1986,13 +2412,17 @@ export default function TeacherClassDetailPage() {
 
   const toggleAssessmentSelection = (assessmentId: string) => {
     setSelectedAssessmentIds((current) =>
-      current.includes(assessmentId) ? current.filter((id) => id !== assessmentId) : [...current, assessmentId],
+      current.includes(assessmentId)
+        ? current.filter((id) => id !== assessmentId)
+        : [...current, assessmentId],
     );
   };
 
   const toggleSelectAllFilteredAssessments = () => {
     setSelectedAssessmentIds(
-      allFilteredAssessmentsSelected ? [] : filteredAssignments.map((assessment) => assessment.id),
+      allFilteredAssessmentsSelected
+        ? []
+        : filteredAssignments.map((assessment) => assessment.id),
     );
   };
 
@@ -2001,12 +2431,16 @@ export default function TeacherClassDetailPage() {
     try {
       setBusyAssessmentId(assessmentId);
       await assessmentService.delete(assessmentId);
-      setAssessments((current) => current.filter((assessment) => assessment.id !== assessmentId));
-      setSelectedAssessmentIds((current) => current.filter((id) => id !== assessmentId));
+      setAssessments((current) =>
+        current.filter((assessment) => assessment.id !== assessmentId),
+      );
+      setSelectedAssessmentIds((current) =>
+        current.filter((id) => id !== assessmentId),
+      );
       await fetchData();
-      toast.success('Assessment deleted');
+      toast.success("Assessment deleted");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete assessment'));
+      toast.error(getApiErrorMessage(error, "Failed to delete assessment"));
     } finally {
       setBusyAssessmentId(null);
     }
@@ -2014,11 +2448,11 @@ export default function TeacherClassDetailPage() {
 
   const handleDeleteAssessment = (assessmentId: string) => {
     setConfirmation({
-      title: 'Delete Assignment',
-      description: 'This assignment will be permanently deleted.',
-      confirmLabel: 'Delete Assignment',
-      tone: 'danger',
-      details: 'This action cannot be undone.',
+      title: "Delete Assignment",
+      description: "This assignment will be permanently deleted.",
+      confirmLabel: "Delete Assignment",
+      tone: "danger",
+      details: "This action cannot be undone.",
       onConfirm: () => performDeleteAssessment(assessmentId),
     });
   };
@@ -2028,19 +2462,29 @@ export default function TeacherClassDetailPage() {
     const idsToDelete = selectedAssessmentIds.slice();
     setConfirmation({
       title: `Delete ${idsToDelete.length} Assignments`,
-      description: 'Selected assignments will be permanently deleted.',
-      confirmLabel: 'Delete Selected',
-      tone: 'danger',
+      description: "Selected assignments will be permanently deleted.",
+      confirmLabel: "Delete Selected",
+      tone: "danger",
       details: `You are deleting ${idsToDelete.length} assignment(s). This action cannot be undone.`,
       onConfirm: async () => {
         try {
-          await Promise.all(idsToDelete.map((assessmentId) => assessmentService.delete(assessmentId)));
-          setAssessments((current) => current.filter((assessment) => !idsToDelete.includes(assessment.id)));
+          await Promise.all(
+            idsToDelete.map((assessmentId) =>
+              assessmentService.delete(assessmentId),
+            ),
+          );
+          setAssessments((current) =>
+            current.filter(
+              (assessment) => !idsToDelete.includes(assessment.id),
+            ),
+          );
           setSelectedAssessmentIds([]);
           await fetchData();
           toast.success(`${idsToDelete.length} assignment(s) deleted`);
         } catch (error) {
-          toast.error(getApiErrorMessage(error, 'Failed to delete selected assignments'));
+          toast.error(
+            getApiErrorMessage(error, "Failed to delete selected assignments"),
+          );
         }
       },
     });
@@ -2058,14 +2502,19 @@ export default function TeacherClassDetailPage() {
       if (nextIsPublished && isCoreTemplateAssessment) {
         if (!hasCoreAssessmentPlacementForPublish(assessment)) {
           try {
-            const detailedAssessment = await assessmentService.getById(assessment.id);
+            const detailedAssessment = await assessmentService.getById(
+              assessment.id,
+            );
             validatedAssessment = resolveAssessmentForPublishValidation(
               assessment,
               detailedAssessment.data,
             );
           } catch (error) {
             toast.error(
-              getApiErrorMessage(error, 'Failed to validate class record placement'),
+              getApiErrorMessage(
+                error,
+                "Failed to validate class record placement",
+              ),
             );
             return;
           }
@@ -2078,7 +2527,7 @@ export default function TeacherClassDetailPage() {
         !hasCoreAssessmentPlacementForPublish(validatedAssessment)
       ) {
         toast.warning(
-          'Core assessments must be tagged in a class record category, quarter, and slot before publishing.',
+          "Core assessments must be tagged in a class record category, quarter, and slot before publishing.",
         );
         return;
       }
@@ -2099,12 +2548,15 @@ export default function TeacherClassDetailPage() {
       );
       toast.success(
         response.data.isPublished
-          ? 'Default assessment released to students'
-          : 'Default assessment hidden from students',
+          ? "Default assessment released to students"
+          : "Default assessment hidden from students",
       );
     } catch (error) {
       toast.error(
-        getApiErrorMessage(error, 'Failed to update default assessment release'),
+        getApiErrorMessage(
+          error,
+          "Failed to update default assessment release",
+        ),
       );
     } finally {
       setBusyAssessmentId(null);
@@ -2114,7 +2566,11 @@ export default function TeacherClassDetailPage() {
   const handleAssignmentCardClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>, assessmentId: string) => {
       const target = event.target as HTMLElement;
-      if (target.closest('a,button,input,textarea,select,label,[role="button"],[role="link"]')) {
+      if (
+        target.closest(
+          'a,button,input,textarea,select,label,[role="button"],[role="link"]',
+        )
+      ) {
         return;
       }
       router.push(`/dashboard/teacher/assessments/${assessmentId}`);
@@ -2147,7 +2603,7 @@ export default function TeacherClassDetailPage() {
 
   const handleExtractionFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    event.target.value = '';
+    event.target.value = "";
     if (!file || uploadingExtraction || aiUnavailable) return;
     const subjectKey = normalizeLibrarySubjectKey(
       classItem?.subjectCode,
@@ -2157,14 +2613,16 @@ export default function TeacherClassDetailPage() {
       classItem?.subjectGradeLevel ?? classItem?.section?.gradeLevel,
     );
     if (!subjectKey || !gradeLevel) {
-      toast.error('Unable to resolve class subject and grade for extraction upload.');
+      toast.error(
+        "Unable to resolve class subject and grade for extraction upload.",
+      );
       return;
     }
     try {
       setUploadingExtraction(true);
       const uploadRes = await fileService.upload(file, {
         classId,
-        scope: 'private',
+        scope: "private",
         subjectKey,
         gradeLevel,
         aiEnabled: true,
@@ -2181,15 +2639,15 @@ export default function TeacherClassDetailPage() {
         originalName: file.name,
         targetSectionCount,
         extractionStyle,
-        lastKnownStatus: 'pending',
+        lastKnownStatus: "pending",
         lastKnownProgress: 0,
         updatedAt: null,
         notifiedAt: null,
       });
-      toast.success('Extraction started');
+      toast.success("Extraction started");
       await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to start extraction'));
+      toast.error(getApiErrorMessage(error, "Failed to start extraction"));
     } finally {
       setUploadingExtraction(false);
     }
@@ -2198,20 +2656,23 @@ export default function TeacherClassDetailPage() {
   const performDeleteExtraction = async (extractionId: string) => {
     try {
       await extractionService.delete(extractionId);
-      setExtractions((current) => current.filter((extraction) => extraction.id !== extractionId));
-      toast.success('Extraction deleted');
+      setExtractions((current) =>
+        current.filter((extraction) => extraction.id !== extractionId),
+      );
+      toast.success("Extraction deleted");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete extraction'));
+      toast.error(getApiErrorMessage(error, "Failed to delete extraction"));
     }
   };
 
   const handleDeleteExtraction = (extractionId: string) => {
     setConfirmation({
-      title: 'Delete Extraction',
-      description: 'This extraction draft will be permanently removed from the class workspace.',
-      confirmLabel: 'Delete Extraction',
-      tone: 'danger',
-      details: 'This action cannot be undone.',
+      title: "Delete Extraction",
+      description:
+        "This extraction draft will be permanently removed from the class workspace.",
+      confirmLabel: "Delete Extraction",
+      tone: "danger",
+      details: "This action cannot be undone.",
       onConfirm: () => performDeleteExtraction(extractionId),
     });
   };
@@ -2233,28 +2694,31 @@ export default function TeacherClassDetailPage() {
         extractionId: response.data.extractionId,
         classId,
         createdAt: new Date().toISOString(),
-        originalName: extraction.originalName || extraction.structuredContent?.title || 'Retried extraction',
+        originalName:
+          extraction.originalName ||
+          extraction.structuredContent?.title ||
+          "Retried extraction",
         targetSectionCount: retryTarget,
         extractionStyle: retryStyle,
-        lastKnownStatus: 'pending',
+        lastKnownStatus: "pending",
         lastKnownProgress: 0,
         updatedAt: null,
         notifiedAt: null,
       });
-      toast.success('Extraction retry started');
+      toast.success("Extraction retry started");
       await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to retry extraction'));
+      toast.error(getApiErrorMessage(error, "Failed to retry extraction"));
     }
   };
 
   const handleCancelExtraction = async (extraction: Extraction) => {
     try {
       await extractionService.cancel(extraction.id);
-      toast.success('Extraction cancelled');
+      toast.success("Extraction cancelled");
       await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to cancel extraction'));
+      toast.error(getApiErrorMessage(error, "Failed to cancel extraction"));
     }
   };
 
@@ -2262,11 +2726,11 @@ export default function TeacherClassDetailPage() {
     const safeContent = normalizeRichText(announcementContent).trim();
     if (creatingAnnouncement) return;
     if (!announcementTitle.trim()) {
-      toast.error('Announcement title is required');
+      toast.error("Announcement title is required");
       return;
     }
     if (!safeContent) {
-      toast.error('Announcement content is required');
+      toast.error("Announcement content is required");
       return;
     }
     try {
@@ -2276,14 +2740,14 @@ export default function TeacherClassDetailPage() {
         content: safeContent,
         isPinned: announcementPinned,
       });
-      setAnnouncementTitle('');
-      setAnnouncementContent('');
+      setAnnouncementTitle("");
+      setAnnouncementContent("");
       setAnnouncementPinned(false);
       setShowAnnouncementForm(false);
-      toast.success('Announcement posted');
+      toast.success("Announcement posted");
       await fetchData();
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to post announcement'));
+      toast.error(getApiErrorMessage(error, "Failed to post announcement"));
     } finally {
       setCreatingAnnouncement(false);
     }
@@ -2294,10 +2758,12 @@ export default function TeacherClassDetailPage() {
     try {
       setBusyAnnouncementId(announcementId);
       await announcementService.delete(classId, announcementId);
-      setAnnouncements((current) => current.filter((announcement) => announcement.id !== announcementId));
-      toast.success('Announcement deleted');
+      setAnnouncements((current) =>
+        current.filter((announcement) => announcement.id !== announcementId),
+      );
+      toast.success("Announcement deleted");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to delete announcement'));
+      toast.error(getApiErrorMessage(error, "Failed to delete announcement"));
     } finally {
       setBusyAnnouncementId(null);
     }
@@ -2305,22 +2771,23 @@ export default function TeacherClassDetailPage() {
 
   const handleDeleteAnnouncement = (announcementId: string) => {
     setConfirmation({
-      title: 'Delete Announcement',
-      description: 'This announcement will be permanently removed from the class feed.',
-      confirmLabel: 'Delete Announcement',
-      tone: 'danger',
-      details: 'This action cannot be undone.',
+      title: "Delete Announcement",
+      description:
+        "This announcement will be permanently removed from the class feed.",
+      confirmLabel: "Delete Announcement",
+      tone: "danger",
+      details: "This action cannot be undone.",
       onConfirm: () => performDeleteAnnouncement(announcementId),
     });
   };
 
   const resetDiscussionComposer = () => {
-    setDiscussionTitle('');
-    setDiscussionBody('');
-    setDiscussionCommentLimit('1');
+    setDiscussionTitle("");
+    setDiscussionBody("");
+    setDiscussionCommentLimit("1");
     setDiscussionAllowComments(true);
     setDiscussionPinned(false);
-    setDiscussionLinksText('');
+    setDiscussionLinksText("");
     setDiscussionAttachmentFiles([]);
     setShowDiscussionForm(false);
   };
@@ -2329,17 +2796,17 @@ export default function TeacherClassDetailPage() {
     const safeBody = normalizeRichText(discussionBody).trim();
     if (creatingDiscussion) return;
     if (!discussionTitle.trim()) {
-      toast.error('Discussion title is required');
+      toast.error("Discussion title is required");
       return;
     }
     if (!safeBody) {
-      toast.error('Discussion prompt is required');
+      toast.error("Discussion prompt is required");
       return;
     }
 
     const commentLimit = Number.parseInt(discussionCommentLimit, 10);
     const parsedLinks = discussionLinksText
-      .split('\n')
+      .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((url) => ({ url }));
@@ -2356,7 +2823,7 @@ export default function TeacherClassDetailPage() {
       const created = await discussionBoardService.createThread(classId, {
         title: discussionTitle.trim(),
         bodyHtml: safeBody,
-        themeId: 'classic',
+        themeId: "classic",
         commentLimitPerStudent:
           Number.isFinite(commentLimit) && commentLimit > 0 ? commentLimit : 1,
         allowComments: discussionAllowComments,
@@ -2375,7 +2842,9 @@ export default function TeacherClassDetailPage() {
       }
 
       setDiscussionThreads((current) => {
-        const withoutExisting = current.filter((entry) => entry.id !== nextThread.id);
+        const withoutExisting = current.filter(
+          (entry) => entry.id !== nextThread.id,
+        );
         return sortDiscussionThreads([nextThread, ...withoutExisting]);
       });
       setSelectedDiscussionThreadId(nextThread.id);
@@ -2383,11 +2852,13 @@ export default function TeacherClassDetailPage() {
       resetDiscussionComposer();
       toast.success(
         publishImmediately
-          ? 'Discussion thread published'
-          : 'Discussion thread saved as draft',
+          ? "Discussion thread published"
+          : "Discussion thread saved as draft",
       );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to save discussion thread'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to save discussion thread"),
+      );
     } finally {
       setCreatingDiscussion(false);
     }
@@ -2395,12 +2866,12 @@ export default function TeacherClassDetailPage() {
 
   const handleDiscussionThreadAction = async (
     threadId: string,
-    action: 'publish' | 'close' | 'reopen' | 'archive',
+    action: "publish" | "close" | "reopen" | "archive",
   ) => {
     if (busyDiscussionThreadId) return;
     try {
       setBusyDiscussionThreadId(threadId);
-      if (action === 'archive') {
+      if (action === "archive") {
         await discussionBoardService.archiveThread(classId, threadId);
         setDiscussionThreads((current) =>
           current.filter((entry) => entry.id !== threadId),
@@ -2409,14 +2880,14 @@ export default function TeacherClassDetailPage() {
           setSelectedDiscussionThreadId(null);
           setSelectedDiscussionThread(null);
         }
-        toast.success('Discussion thread archived');
+        toast.success("Discussion thread archived");
         return;
       }
 
       const response =
-        action === 'publish'
+        action === "publish"
           ? await discussionBoardService.publishThread(classId, threadId)
-          : action === 'close'
+          : action === "close"
             ? await discussionBoardService.closeThread(classId, threadId)
             : await discussionBoardService.reopenThread(classId, threadId);
 
@@ -2430,14 +2901,16 @@ export default function TeacherClassDetailPage() {
         setSelectedDiscussionThread(updated);
       }
       toast.success(
-        action === 'publish'
-          ? 'Thread published'
-          : action === 'close'
-            ? 'Thread closed'
-            : 'Thread reopened',
+        action === "publish"
+          ? "Thread published"
+          : action === "close"
+            ? "Thread closed"
+            : "Thread reopened",
       );
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to update discussion thread'));
+      toast.error(
+        getApiErrorMessage(error, "Failed to update discussion thread"),
+      );
     } finally {
       setBusyDiscussionThreadId(null);
     }
@@ -2454,9 +2927,9 @@ export default function TeacherClassDetailPage() {
       );
       await loadDiscussionThreadDetail(selectedDiscussionThread.id);
       await loadDiscussionThreads();
-      toast.success('Comment removed from the discussion');
+      toast.success("Comment removed from the discussion");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to remove comment'));
+      toast.error(getApiErrorMessage(error, "Failed to remove comment"));
     } finally {
       setBusyDiscussionCommentId(null);
     }
@@ -2464,43 +2937,53 @@ export default function TeacherClassDetailPage() {
 
   const handleDeleteDiscussionComment = (comment: TeacherDiscussionComment) => {
     setConfirmation({
-      title: 'Delete Comment',
-      description: 'This reply will be removed from the thread for all students.',
-      confirmLabel: 'Delete Comment',
-      tone: 'danger',
+      title: "Delete Comment",
+      description:
+        "This reply will be removed from the thread for all students.",
+      confirmLabel: "Delete Comment",
+      tone: "danger",
       details: (
         <div className="teacher-discussion-confirmation-copy">
           <strong>{getDiscussionAuthorName(comment.author)}</strong>
-          <p>{stripDiscussionHtml(comment.bodyHtml) || 'Image-only reply'}</p>
+          <p>{stripDiscussionHtml(comment.bodyHtml) || "Image-only reply"}</p>
         </div>
       ),
       onConfirm: () => performDeleteDiscussionComment(comment.id),
     });
   };
 
-  const handleOpenDiscussionReportDialog = (comment: TeacherDiscussionComment) => {
+  const handleOpenDiscussionReportDialog = (
+    comment: TeacherDiscussionComment,
+  ) => {
     setReportDialogComment(comment);
-    setDiscussionReportReason('inappropriate');
-    setDiscussionReportNotes('');
+    setDiscussionReportReason("inappropriate");
+    setDiscussionReportNotes("");
   };
 
-  const handleCopyDiscussionComment = async (comment: TeacherDiscussionComment) => {
+  const handleCopyDiscussionComment = async (
+    comment: TeacherDiscussionComment,
+  ) => {
     const plainText = stripDiscussionHtml(comment.bodyHtml);
     if (!plainText) {
-      toast.error('This reply only contains attachments');
+      toast.error("This reply only contains attachments");
       return;
     }
 
     try {
       await navigator.clipboard.writeText(plainText);
-      toast.success('Reply text copied');
+      toast.success("Reply text copied");
     } catch {
-      toast.error('Failed to copy reply text');
+      toast.error("Failed to copy reply text");
     }
   };
 
   const handleSubmitDiscussionCommentReport = async () => {
-    if (!selectedDiscussionThread || !reportDialogComment || reportingDiscussionComment) return;
+    if (
+      !selectedDiscussionThread ||
+      !reportDialogComment ||
+      reportingDiscussionComment
+    )
+      return;
     try {
       setReportingDiscussionComment(true);
       await discussionBoardService.reportComment(
@@ -2516,15 +2999,18 @@ export default function TeacherClassDetailPage() {
         `${getDiscussionAuthorName(reportDialogComment.author)} was flagged for moderator follow-up`,
       );
       setReportDialogComment(null);
-      setDiscussionReportNotes('');
+      setDiscussionReportNotes("");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to report comment'));
+      toast.error(getApiErrorMessage(error, "Failed to report comment"));
     } finally {
       setReportingDiscussionComment(false);
     }
   };
 
-  const performRemoveStudent = async (enrollmentId: string, studentId: string) => {
+  const performRemoveStudent = async (
+    enrollmentId: string,
+    studentId: string,
+  ) => {
     if (busyEnrollmentId) return;
     try {
       setBusyEnrollmentId(enrollmentId);
@@ -2533,13 +3019,15 @@ export default function TeacherClassDetailPage() {
         current
           ? {
               ...current,
-              enrollments: (current.enrollments || []).filter((enrollment) => enrollment.id !== enrollmentId),
+              enrollments: (current.enrollments || []).filter(
+                (enrollment) => enrollment.id !== enrollmentId,
+              ),
             }
           : current,
       );
-      toast.success('Student removed');
+      toast.success("Student removed");
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Failed to remove student'));
+      toast.error(getApiErrorMessage(error, "Failed to remove student"));
     } finally {
       setBusyEnrollmentId(null);
     }
@@ -2547,11 +3035,12 @@ export default function TeacherClassDetailPage() {
 
   const handleRemoveStudent = (enrollmentId: string, studentId: string) => {
     setConfirmation({
-      title: 'Remove Student',
-      description: 'This student will be removed from the class roster.',
-      confirmLabel: 'Remove Student',
-      tone: 'danger',
-      details: 'Class enrollment and module access for this class will be removed.',
+      title: "Remove Student",
+      description: "This student will be removed from the class roster.",
+      confirmLabel: "Remove Student",
+      tone: "danger",
+      details:
+        "Class enrollment and module access for this class will be removed.",
       onConfirm: () => performRemoveStudent(enrollmentId, studentId),
     });
   };
@@ -2569,7 +3058,7 @@ export default function TeacherClassDetailPage() {
   if (!classItem) {
     return (
       <section className="teacher-class-workspace__not-found">
-        <p>{isClassIdValid ? 'Class not found.' : 'Invalid class link.'}</p>
+        <p>{isClassIdValid ? "Class not found." : "Invalid class link."}</p>
         <Link href="/dashboard/teacher/classes">Back to Classes</Link>
       </section>
     );
@@ -2597,8 +3086,8 @@ export default function TeacherClassDetailPage() {
         title={classItem.subjectName}
         subtitle={classInfoLine}
         metaItems={[
-          { key: 'students', label: `${studentRows.length} students` },
-          { key: 'modules', label: `${modules.length} modules` },
+          { key: "students", label: `${studentRows.length} students` },
+          { key: "modules", label: `${modules.length} modules` },
         ]}
         tabs={workspaceTabs}
         heroActions={
@@ -2616,11 +3105,13 @@ export default function TeacherClassDetailPage() {
           </Button>
         }
       >
-        {activeTab === 'modules' ? (
+        {activeTab === "modules" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
-                <h2 className="teacher-class-workspace__section-title">Course Modules</h2>
+                <h2 className="teacher-class-workspace__section-title">
+                  Course Modules
+                </h2>
                 <p>{modules.length} modules</p>
               </div>
               <div className="teacher-class-workspace__head-actions">
@@ -2633,11 +3124,15 @@ export default function TeacherClassDetailPage() {
                   <Plus className="h-4 w-4" />
                   Add Module
                 </Button>
-                <div className="teacher-class-workspace__view-toggle" role="group" aria-label="Module view style">
+                <div
+                  className="teacher-class-workspace__view-toggle"
+                  role="group"
+                  aria-label="Module view style"
+                >
                   <button
                     type="button"
-                    data-active={modulesViewMode === 'wide'}
-                    onClick={() => setModulesViewMode('wide')}
+                    data-active={modulesViewMode === "wide"}
+                    onClick={() => setModulesViewMode("wide")}
                     aria-label="Wide list view"
                     title="Wide list view"
                   >
@@ -2645,16 +3140,20 @@ export default function TeacherClassDetailPage() {
                   </button>
                   <button
                     type="button"
-                    data-active={modulesViewMode === 'compact'}
-                    onClick={() => setModulesViewMode('compact')}
+                    data-active={modulesViewMode === "compact"}
+                    onClick={() => setModulesViewMode("compact")}
                     aria-label="Compact card view"
                     title="Compact card view"
                   >
                     <Grid2X2 className="h-4 w-4" />
                   </button>
                 </div>
-                <Button type="button" className="teacher-class-workspace__outline" onClick={toggleSelectAllModules}>
-                  {allModulesSelected ? 'Clear Selection' : 'Select All'}
+                <Button
+                  type="button"
+                  className="teacher-class-workspace__outline"
+                  onClick={toggleSelectAllModules}
+                >
+                  {allModulesSelected ? "Clear Selection" : "Select All"}
                 </Button>
                 <Button
                   type="button"
@@ -2669,9 +3168,9 @@ export default function TeacherClassDetailPage() {
             </div>
             <div
               className={
-                modulesViewMode === 'compact'
-                  ? 'teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--compact'
-                  : 'teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--wide'
+                modulesViewMode === "compact"
+                  ? "teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--compact"
+                  : "teacher-class-workspace__modules-grid teacher-class-workspace__modules-grid--wide"
               }
             >
               {modules.map((module, index) => {
@@ -2680,12 +3179,14 @@ export default function TeacherClassDetailPage() {
                 const isCoreModule = Boolean(module.isCoreTemplateAsset);
                 const mediaSource =
                   module.coverImageUrl ||
-                  MODULE_STOCK_IMAGE_OPTIONS[index % MODULE_STOCK_IMAGE_OPTIONS.length].imageUrl;
+                  MODULE_STOCK_IMAGE_OPTIONS[
+                    index % MODULE_STOCK_IMAGE_OPTIONS.length
+                  ].imageUrl;
                 const gradientBackground = getModuleGradient(module.gradientId);
                 const imagePositionX = module.imagePositionX ?? 50;
                 const imagePositionY = module.imagePositionY ?? 50;
                 const imageScale = module.imageScale ?? 120;
-                    return (
+                return (
                   <article
                     key={module.id}
                     className="teacher-class-workspace__module-card"
@@ -2713,7 +3214,9 @@ export default function TeacherClassDetailPage() {
                           type="button"
                           className="teacher-class-workspace__module-action teacher-class-workspace__module-action--design"
                           onClick={() => void moveModuleOneStep(module.id, 1)}
-                          disabled={isReorderingModules || index === modules.length - 1}
+                          disabled={
+                            isReorderingModules || index === modules.length - 1
+                          }
                           aria-label={`Move ${module.title} down`}
                           title="Move module down"
                         >
@@ -2732,8 +3235,8 @@ export default function TeacherClassDetailPage() {
                             backgroundImage: `linear-gradient(120deg, rgba(8, 23, 44, 0.26), rgba(8, 23, 44, 0.12)), url(${mediaSource})`,
                             backgroundSize: `${imageScale}%`,
                             backgroundPosition: `${imagePositionX}% ${imagePositionY}%`,
-                            backgroundRepeat: 'no-repeat',
-                            backgroundColor: '#f1f5fb',
+                            backgroundRepeat: "no-repeat",
+                            backgroundColor: "#f1f5fb",
                           }}
                         >
                           <div
@@ -2743,7 +3246,9 @@ export default function TeacherClassDetailPage() {
                         </div>
                       </div>
                       <header>
-                        <div className="teacher-class-workspace__module-index">{index + 1}</div>
+                        <div className="teacher-class-workspace__module-index">
+                          {index + 1}
+                        </div>
                         <div className="teacher-class-workspace__module-copy">
                           <h3>{module.title}</h3>
                           {isCoreModule ? (
@@ -2751,7 +3256,11 @@ export default function TeacherClassDetailPage() {
                               Core Module
                             </span>
                           ) : null}
-                          {module.description ? <RichTextRenderer html={module.description} /> : <p>Add a short module description.</p>}
+                          {module.description ? (
+                            <RichTextRenderer html={module.description} />
+                          ) : (
+                            <p>Add a short module description.</p>
+                          )}
                         </div>
                       </header>
                       <div className="teacher-class-workspace__module-stats">
@@ -2777,7 +3286,7 @@ export default function TeacherClassDetailPage() {
                           void toggleCoreModuleVisibility(module);
                         }}
                       >
-                        {module.isVisible ? 'Hide Core' : 'Release Core'}
+                        {module.isVisible ? "Hide Core" : "Release Core"}
                       </button>
                     ) : (
                       <div className="teacher-class-workspace__module-actions">
@@ -2806,7 +3315,9 @@ export default function TeacherClassDetailPage() {
                 );
               })}
               {modules.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No modules yet.</div>
+                <div className="teacher-class-workspace__empty">
+                  No modules yet.
+                </div>
               ) : null}
             </div>
 
@@ -2814,9 +3325,15 @@ export default function TeacherClassDetailPage() {
               <div className="teacher-class-workspace__module-deadline-head">
                 <div>
                   <h3>Upcoming Deadlines</h3>
-                  <p>Stay on top of quizzes, events, and announcements for this class.</p>
+                  <p>
+                    Stay on top of quizzes, events, and announcements for this
+                    class.
+                  </p>
                 </div>
-                <Link href={`/dashboard/teacher/classes/${classId}?view=calendar`} className="teacher-class-workspace__outline">
+                <Link
+                  href={`/dashboard/teacher/classes/${classId}?view=calendar`}
+                  className="teacher-class-workspace__outline"
+                >
                   Open Calendar
                   <ChevronRight className="h-4 w-4" />
                 </Link>
@@ -2843,7 +3360,9 @@ export default function TeacherClassDetailPage() {
                         <h4>{deadline.title}</h4>
                         <p>{deadline.subtitle}</p>
                         <span data-urgent={deadline.isUrgent}>
-                          {deadline.isUrgent ? 'Due Soon' : calendarKindLabel(deadline.kind)}
+                          {deadline.isUrgent
+                            ? "Due Soon"
+                            : calendarKindLabel(deadline.kind)}
                         </span>
                       </div>
                       <ChevronRight className="h-4 w-4" />
@@ -2855,7 +3374,7 @@ export default function TeacherClassDetailPage() {
           </div>
         ) : null}
 
-        {activeTab === 'assignments' ? (
+        {activeTab === "assignments" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
@@ -2863,9 +3382,29 @@ export default function TeacherClassDetailPage() {
                 <p>{filteredAssignments.length} assignments</p>
               </div>
               <div className="teacher-class-workspace__head-actions">
-                <Link href={`/dashboard/teacher/classes/${classId}/ai-draft`} className="teacher-class-workspace__outline">
+                <Link
+                  href={`/dashboard/teacher/classes/${classId}/ai-draft`}
+                  className="teacher-class-workspace__outline"
+                >
                   AI Draft
                 </Link>
+                <select
+                  aria-label="New assessment grading period"
+                  className="h-10 rounded-md border bg-white px-3 text-sm"
+                  value={newAssessmentPeriod}
+                  onChange={(e) =>
+                    setNewAssessmentPeriod(
+                      e.target.value as typeof newAssessmentPeriod,
+                    )
+                  }
+                >
+                  <option value="">Active period (server default)</option>
+                  {classRecordState.policy?.periods.map((period) => (
+                    <option key={period.key} value={period.key}>
+                      {period.label}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   type="button"
                   className="teacher-class-workspace__solid"
@@ -2898,14 +3437,18 @@ export default function TeacherClassDetailPage() {
                 {renderSelectionCheckbox({
                   checked: allFilteredAssessmentsSelected,
                   onChange: toggleSelectAllFilteredAssessments,
-                  ariaLabel: 'Select all filtered assignments',
+                  ariaLabel: "Select all filtered assignments",
                 })}
                 <span>Select All (Filtered)</span>
               </label>
               {selectedAssessmentIds.length > 0 ? (
                 <div className="teacher-class-workspace__selection-actions">
                   <span>{selectedAssessmentIds.length} selected</span>
-                  <Button type="button" className="teacher-class-workspace__outline" onClick={() => setSelectedAssessmentIds([])}>
+                  <Button
+                    type="button"
+                    className="teacher-class-workspace__outline"
+                    onClick={() => setSelectedAssessmentIds([])}
+                  >
                     Clear
                   </Button>
                   <Button
@@ -2923,19 +3466,32 @@ export default function TeacherClassDetailPage() {
             <div className="teacher-class-workspace__stack">
               {filteredAssignments.map((assessment) => {
                 const filter = deriveAssignmentFilter(assessment);
-                const isSelected = selectedAssessmentIds.includes(assessment.id);
-                const isCoreAssessment = Boolean(assessment.isCoreTemplateAsset);
-                const attachmentState = assessmentAttachmentMap.get(assessment.id);
+                const isSelected = selectedAssessmentIds.includes(
+                  assessment.id,
+                );
+                const isCoreAssessment = Boolean(
+                  assessment.isCoreTemplateAsset,
+                );
+                const attachmentState = assessmentAttachmentMap.get(
+                  assessment.id,
+                );
                 const moduleGateOpen = Boolean(attachmentState?.gateOpen);
                 return (
-                  <article key={assessment.id} className="teacher-class-workspace__assignment-card" data-selected={isSelected}>
+                  <article
+                    key={assessment.id}
+                    className="teacher-class-workspace__assignment-card"
+                    data-selected={isSelected}
+                  >
                     <div
                       className="teacher-class-workspace__assignment-main"
-                      onClick={(event) => handleAssignmentCardClick(event, assessment.id)}
+                      onClick={(event) =>
+                        handleAssignmentCardClick(event, assessment.id)
+                      }
                     >
                       {renderSelectionCheckbox({
                         checked: isSelected,
-                        onChange: () => toggleAssessmentSelection(assessment.id),
+                        onChange: () =>
+                          toggleAssessmentSelection(assessment.id),
                         ariaLabel: `Select ${assessment.title}`,
                       })}
                       <Link
@@ -2948,21 +3504,27 @@ export default function TeacherClassDetailPage() {
                         <div className="teacher-class-workspace__assignment-copy">
                           <div className="teacher-class-workspace__assignment-tags">
                             <span>{assignmentTagLabel(filter)}</span>
-                            <span data-status={assessment.isPublished ? 'published' : 'draft'}>
-                              {assessment.isPublished ? 'Published' : 'Draft'}
+                            <span
+                              data-status={
+                                assessment.isPublished ? "published" : "draft"
+                              }
+                            >
+                              {assessment.isPublished ? "Published" : "Draft"}
                             </span>
                             {isCoreAssessment ? <span>Default</span> : null}
                             <span>
                               {attachmentState?.attached
                                 ? moduleGateOpen
-                                  ? 'Attached: module-visible'
-                                  : 'Attached: module-gated'
-                                : 'Standalone class assignment'}
+                                  ? "Attached: module-visible"
+                                  : "Attached: module-gated"
+                                : "Standalone class assignment"}
                             </span>
                           </div>
                           <h3>{assessment.title}</h3>
                           <p>
-                            {(assessment.questions?.length ?? 0)} questions - {assessment.totalPoints ?? 0} pts - Due {formatDateYmd(assessment.dueDate)}
+                            {assessment.questions?.length ?? 0} questions -{" "}
+                            {assessment.totalPoints ?? 0} pts - Due{" "}
+                            {formatDateYmd(assessment.dueDate)}
                           </p>
                         </div>
                       </Link>
@@ -2973,24 +3535,36 @@ export default function TeacherClassDetailPage() {
                           <button
                             type="button"
                             className="teacher-class-workspace__outline"
-                            onClick={() => void toggleCoreAssessmentRelease(assessment)}
+                            onClick={() =>
+                              void toggleCoreAssessmentRelease(assessment)
+                            }
                             disabled={busyAssessmentId === assessment.id}
                           >
-                            {assessment.isPublished ? 'Hide Core' : 'Release Core'}
+                            {assessment.isPublished
+                              ? "Hide Core"
+                              : "Release Core"}
                           </button>
-                          <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                          <Link
+                            href={`/dashboard/teacher/assessments/${assessment.id}/edit`}
+                            className="teacher-class-workspace__outline"
+                          >
                             Edit
                           </Link>
                         </>
                       ) : (
                         <>
-                          <Link href={`/dashboard/teacher/assessments/${assessment.id}/edit`} className="teacher-class-workspace__outline">
+                          <Link
+                            href={`/dashboard/teacher/assessments/${assessment.id}/edit`}
+                            className="teacher-class-workspace__outline"
+                          >
                             Edit
                           </Link>
                           <button
                             type="button"
                             className="teacher-class-workspace__ghost-icon"
-                            onClick={() => handleDeleteAssessment(assessment.id)}
+                            onClick={() =>
+                              handleDeleteAssessment(assessment.id)
+                            }
                             disabled={busyAssessmentId === assessment.id}
                             aria-label="Delete assessment"
                           >
@@ -3003,13 +3577,15 @@ export default function TeacherClassDetailPage() {
                 );
               })}
               {filteredAssignments.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No assignments in this filter.</div>
+                <div className="teacher-class-workspace__empty">
+                  No assignments in this filter.
+                </div>
               ) : null}
             </div>
           </div>
         ) : null}
 
-        {activeTab === 'extraction' ? (
+        {activeTab === "extraction" ? (
           <div className="teacher-class-workspace__panel">
             {aiUnavailable ? (
               <AiOutageNotice
@@ -3028,9 +3604,12 @@ export default function TeacherClassDetailPage() {
               <div className="rounded-[1.1rem] border border-[#e3eaf5] bg-[#f8fbfe] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-black text-[#143155]">Lesson structure depth</p>
+                    <p className="text-sm font-black text-[#143155]">
+                      Lesson structure depth
+                    </p>
                     <p className="mt-1 text-xs text-[#647083]">
-                      Choose how many sections the extraction should target. This shapes coherence, not output length.
+                      Choose how many sections the extraction should target.
+                      This shapes coherence, not output length.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3">
@@ -3038,7 +3617,13 @@ export default function TeacherClassDetailPage() {
                       <span>Target</span>
                       <select
                         value={String(targetSectionCount)}
-                        onChange={(event) => setTargetSectionCount(Number(event.target.value) as ExtractionTargetSectionCount)}
+                        onChange={(event) =>
+                          setTargetSectionCount(
+                            Number(
+                              event.target.value,
+                            ) as ExtractionTargetSectionCount,
+                          )
+                        }
                         disabled={uploadingExtraction || aiUnavailable}
                         className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
                         aria-label="Target section count"
@@ -3052,14 +3637,20 @@ export default function TeacherClassDetailPage() {
                       <span>Style</span>
                       <select
                         value={extractionStyle}
-                        onChange={(event) => setExtractionStyle(event.target.value as ExtractionStyle)}
+                        onChange={(event) =>
+                          setExtractionStyle(
+                            event.target.value as ExtractionStyle,
+                          )
+                        }
                         disabled={uploadingExtraction || aiUnavailable}
                         className="rounded-full border border-[#d2ddec] bg-white px-3 py-2 text-sm font-black text-[#143155]"
                         aria-label="Extraction style"
                       >
                         <option value="faithful">Faithful</option>
                         <option value="clean">Clean</option>
-                        <option value="student_friendly">Student friendly</option>
+                        <option value="student_friendly">
+                          Student friendly
+                        </option>
                       </select>
                     </label>
                   </div>
@@ -3072,7 +3663,11 @@ export default function TeacherClassDetailPage() {
                 disabled={uploadingExtraction || aiUnavailable}
               >
                 <Radar className="h-6 w-6" />
-                <strong>{uploadingExtraction ? 'Uploading PDF...' : 'Drop a PDF here to extract module'}</strong>
+                <strong>
+                  {uploadingExtraction
+                    ? "Uploading PDF..."
+                    : "Drop a PDF here to extract module"}
+                </strong>
                 <span>or click to browse</span>
               </button>
               <input
@@ -3085,43 +3680,63 @@ export default function TeacherClassDetailPage() {
               />
               <div className="teacher-class-workspace__stack">
                 {extractions.map((extraction) => (
-                  <article key={extraction.id} className="teacher-class-workspace__extract-item">
+                  <article
+                    key={extraction.id}
+                    className="teacher-class-workspace__extract-item"
+                  >
                     <div>
-                      <h3>{extraction.structuredContent?.title || extraction.originalName || 'PDF Extraction'}</h3>
+                      <h3>
+                        {extraction.structuredContent?.title ||
+                          extraction.originalName ||
+                          "PDF Extraction"}
+                      </h3>
                       <p>
                         {formatDateYmd(extraction.createdAt)}
-                        {typeof extraction.structuredContent?.audit?.requestedSectionCount === 'number'
+                        {typeof extraction.structuredContent?.audit
+                          ?.requestedSectionCount === "number"
                           ? ` · Requested sections: ${extraction.structuredContent.audit.requestedSectionCount}`
-                          : ''}
+                          : ""}
                         {extraction.structuredContent?.audit?.extractionStyle
-                          ? ` - Style: ${extraction.structuredContent.audit.extractionStyle.replace('_', ' ')}`
-                          : ''}
+                          ? ` - Style: ${extraction.structuredContent.audit.extractionStyle.replace("_", " ")}`
+                          : ""}
                       </p>
                     </div>
                     <div className="teacher-class-workspace__extract-item-actions">
-                      <span data-status={extraction.extractionStatus}>{getExtractionStatusLabel(extraction)}</span>
-                      {extraction.extractionStatus === 'processing' || extraction.extractionStatus === 'pending' ? (
+                      <span data-status={extraction.extractionStatus}>
+                        {getExtractionStatusLabel(extraction)}
+                      </span>
+                      {extraction.extractionStatus === "processing" ||
+                      extraction.extractionStatus === "pending" ? (
                         <button
                           type="button"
                           className="teacher-class-workspace__outline"
-                          onClick={() => void handleCancelExtraction(extraction)}
-                          aria-label={`Cancel ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                          onClick={() =>
+                            void handleCancelExtraction(extraction)
+                          }
+                          aria-label={`Cancel ${extraction.structuredContent?.title || extraction.originalName || "extraction"}`}
                         >
                           Cancel
                         </button>
                       ) : null}
-                      {extraction.extractionStatus === 'failed' || extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'applied' ? (
+                      {extraction.extractionStatus === "failed" ||
+                      extraction.extractionStatus === "completed" ||
+                      extraction.extractionStatus === "applied" ? (
                         <button
                           type="button"
                           className="teacher-class-workspace__outline"
                           onClick={() => void handleRetryExtraction(extraction)}
-                          aria-label={`Retry ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                          aria-label={`Retry ${extraction.structuredContent?.title || extraction.originalName || "extraction"}`}
                         >
                           Retry
                         </button>
                       ) : null}
-                      {extraction.extractionStatus === 'completed' || extraction.extractionStatus === 'failed' || extraction.extractionStatus === 'applied' ? (
-                        <Link href={`/dashboard/teacher/extractions/${extraction.id}`} className="teacher-class-workspace__outline">
+                      {extraction.extractionStatus === "completed" ||
+                      extraction.extractionStatus === "failed" ||
+                      extraction.extractionStatus === "applied" ? (
+                        <Link
+                          href={`/dashboard/teacher/extractions/${extraction.id}`}
+                          className="teacher-class-workspace__outline"
+                        >
                           <Eye className="h-4 w-4" />
                           View
                         </Link>
@@ -3130,7 +3745,7 @@ export default function TeacherClassDetailPage() {
                         type="button"
                         className="teacher-class-workspace__outline teacher-class-workspace__outline-danger"
                         onClick={() => handleDeleteExtraction(extraction.id)}
-                        aria-label={`Delete ${extraction.structuredContent?.title || extraction.originalName || 'extraction'}`}
+                        aria-label={`Delete ${extraction.structuredContent?.title || extraction.originalName || "extraction"}`}
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete
@@ -3139,14 +3754,16 @@ export default function TeacherClassDetailPage() {
                   </article>
                 ))}
                 {extractions.length === 0 ? (
-                  <div className="teacher-class-workspace__empty">No extraction history yet.</div>
+                  <div className="teacher-class-workspace__empty">
+                    No extraction history yet.
+                  </div>
                 ) : null}
               </div>
             </div>
           </div>
         ) : null}
 
-        {activeTab === 'announcements' ? (
+        {activeTab === "announcements" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
@@ -3180,7 +3797,9 @@ export default function TeacherClassDetailPage() {
                   <input
                     type="checkbox"
                     checked={announcementPinned}
-                    onChange={(event) => setAnnouncementPinned(event.target.checked)}
+                    onChange={(event) =>
+                      setAnnouncementPinned(event.target.checked)
+                    }
                   />
                   Pin this announcement
                 </label>
@@ -3202,8 +3821,8 @@ export default function TeacherClassDetailPage() {
                     variant="outline"
                     onClick={() => {
                       setShowAnnouncementForm(false);
-                      setAnnouncementTitle('');
-                      setAnnouncementContent('');
+                      setAnnouncementTitle("");
+                      setAnnouncementContent("");
                       setAnnouncementPinned(false);
                     }}
                   >
@@ -3221,7 +3840,11 @@ export default function TeacherClassDetailPage() {
                   data-pinned={announcement.isPinned}
                 >
                   <div>
-                    {announcement.isPinned ? <span className="teacher-class-workspace__pin">Pinned</span> : null}
+                    {announcement.isPinned ? (
+                      <span className="teacher-class-workspace__pin">
+                        Pinned
+                      </span>
+                    ) : null}
                     <h3>{announcement.title}</h3>
                     <RichTextRenderer
                       html={normalizeRichText(announcement.content)}
@@ -3232,7 +3855,9 @@ export default function TeacherClassDetailPage() {
                   <button
                     type="button"
                     className="teacher-class-workspace__ghost-icon"
-                    onClick={() => void handleDeleteAnnouncement(announcement.id)}
+                    onClick={() =>
+                      void handleDeleteAnnouncement(announcement.id)
+                    }
                     disabled={busyAnnouncementId === announcement.id}
                     aria-label="Delete announcement"
                   >
@@ -3241,18 +3866,23 @@ export default function TeacherClassDetailPage() {
                 </article>
               ))}
               {announcements.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No announcements yet.</div>
+                <div className="teacher-class-workspace__empty">
+                  No announcements yet.
+                </div>
               ) : null}
             </div>
           </div>
         ) : null}
 
-        {activeTab === 'discussion' ? (
+        {activeTab === "discussion" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
                 <h2>Discussion Board</h2>
-                <p>{discussionThreads.length} thread{discussionThreads.length === 1 ? '' : 's'}</p>
+                <p>
+                  {discussionThreads.length} thread
+                  {discussionThreads.length === 1 ? "" : "s"}
+                </p>
               </div>
               <Button
                 type="button"
@@ -3283,7 +3913,9 @@ export default function TeacherClassDetailPage() {
                     min={1}
                     max={20}
                     value={discussionCommentLimit}
-                    onChange={(event) => setDiscussionCommentLimit(event.target.value)}
+                    onChange={(event) =>
+                      setDiscussionCommentLimit(event.target.value)
+                    }
                     placeholder="Comment limit per student"
                   />
                   <Input
@@ -3298,13 +3930,18 @@ export default function TeacherClassDetailPage() {
                   />
                 </div>
                 <p className="teacher-discussion-upload-note">
-                  Add images or PDFs here so students can open them directly from the thread.
+                  Add images or PDFs here so students can open them directly
+                  from the thread.
                 </p>
-                <TeacherSelectedDiscussionFilePreviews files={discussionAttachmentFiles} />
+                <TeacherSelectedDiscussionFilePreviews
+                  files={discussionAttachmentFiles}
+                />
                 <textarea
                   className="teacher-module-modal__textarea"
                   value={discussionLinksText}
-                  onChange={(event) => setDiscussionLinksText(event.target.value)}
+                  onChange={(event) =>
+                    setDiscussionLinksText(event.target.value)
+                  }
                   placeholder="Optional links (one URL per line)"
                   rows={3}
                 />
@@ -3323,7 +3960,9 @@ export default function TeacherClassDetailPage() {
                     <input
                       type="checkbox"
                       checked={discussionPinned}
-                      onChange={(event) => setDiscussionPinned(event.target.checked)}
+                      onChange={(event) =>
+                        setDiscussionPinned(event.target.checked)
+                      }
                     />
                     Pin thread
                   </label>
@@ -3376,23 +4015,32 @@ export default function TeacherClassDetailPage() {
                     <div className="teacher-discussion-thread-card__author">
                       <TeacherDiscussionAvatar author={thread.author} />
                       <div className="teacher-discussion-thread-card__identity">
-                        <strong>{getDiscussionAuthorName(thread.author)}</strong>
+                        <strong>
+                          {getDiscussionAuthorName(thread.author)}
+                        </strong>
                         <span>
-                          {formatRelativeTime(thread.publishedAt || thread.createdAt)} •{' '}
-                          {thread.commentCount} comment{thread.commentCount === 1 ? '' : 's'}
+                          {formatRelativeTime(
+                            thread.publishedAt || thread.createdAt,
+                          )}{" "}
+                          • {thread.commentCount} comment
+                          {thread.commentCount === 1 ? "" : "s"}
                         </span>
                       </div>
                     </div>
                     <div className="teacher-discussion-thread-card__badges">
                       {thread.isPinned ? (
-                        <span className="teacher-class-workspace__pin">Pinned</span>
+                        <span className="teacher-class-workspace__pin">
+                          Pinned
+                        </span>
                       ) : null}
                       <span className="teacher-discussion-thread-card__badge">
                         {thread.status.toUpperCase()}
                       </span>
                       <span
                         className="teacher-discussion-thread-card__badge"
-                        data-status={thread.allowComments ? 'published' : 'draft'}
+                        data-status={
+                          thread.allowComments ? "published" : "draft"
+                        }
                       >
                         {thread.commentCount} comments
                       </span>
@@ -3404,11 +4052,14 @@ export default function TeacherClassDetailPage() {
                       html={thread.bodyHtml}
                       className="teacher-discussion-thread-card__rich"
                     />
-                    <TeacherDiscussionAttachmentGallery attachments={thread.attachments} />
+                    <TeacherDiscussionAttachmentGallery
+                      attachments={thread.attachments}
+                    />
                   </div>
                   <div className="teacher-discussion-thread-card__footer">
                     <span className="teacher-discussion-thread-card__date">
-                      {formatDateYmd(thread.publishedAt || thread.createdAt)} • Theme {thread.themeId}
+                      {formatDateYmd(thread.publishedAt || thread.createdAt)} •
+                      Theme {thread.themeId}
                     </span>
                     <div className="teacher-class-workspace__assignment-actions">
                       <button
@@ -3416,39 +4067,50 @@ export default function TeacherClassDetailPage() {
                         className="teacher-class-workspace__outline"
                         onClick={() => setSelectedDiscussionThreadId(thread.id)}
                       >
-                        {selectedDiscussionThreadId === thread.id ? 'Viewing' : 'Open'}
+                        {selectedDiscussionThreadId === thread.id
+                          ? "Viewing"
+                          : "Open"}
                       </button>
-                      {thread.status === 'draft' ? (
+                      {thread.status === "draft" ? (
                         <button
                           type="button"
                           className="teacher-class-workspace__outline"
                           disabled={busyDiscussionThreadId === thread.id}
                           onClick={() =>
-                            void handleDiscussionThreadAction(thread.id, 'publish')
+                            void handleDiscussionThreadAction(
+                              thread.id,
+                              "publish",
+                            )
                           }
                         >
                           Publish
                         </button>
                       ) : null}
-                      {thread.status === 'published' ? (
+                      {thread.status === "published" ? (
                         <button
                           type="button"
                           className="teacher-class-workspace__outline"
                           disabled={busyDiscussionThreadId === thread.id}
                           onClick={() =>
-                            void handleDiscussionThreadAction(thread.id, 'close')
+                            void handleDiscussionThreadAction(
+                              thread.id,
+                              "close",
+                            )
                           }
                         >
                           Close
                         </button>
                       ) : null}
-                      {thread.status === 'closed' ? (
+                      {thread.status === "closed" ? (
                         <button
                           type="button"
                           className="teacher-class-workspace__outline"
                           disabled={busyDiscussionThreadId === thread.id}
                           onClick={() =>
-                            void handleDiscussionThreadAction(thread.id, 'reopen')
+                            void handleDiscussionThreadAction(
+                              thread.id,
+                              "reopen",
+                            )
                           }
                         >
                           Reopen
@@ -3458,7 +4120,10 @@ export default function TeacherClassDetailPage() {
                         type="button"
                         className="teacher-class-workspace__ghost-icon"
                         onClick={() =>
-                          void handleDiscussionThreadAction(thread.id, 'archive')
+                          void handleDiscussionThreadAction(
+                            thread.id,
+                            "archive",
+                          )
                         }
                         disabled={busyDiscussionThreadId === thread.id}
                         aria-label="Archive discussion thread"
@@ -3470,7 +4135,9 @@ export default function TeacherClassDetailPage() {
                 </article>
               ))}
               {discussionThreads.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No discussion threads yet.</div>
+                <div className="teacher-class-workspace__empty">
+                  No discussion threads yet.
+                </div>
               ) : null}
             </div>
 
@@ -3481,7 +4148,9 @@ export default function TeacherClassDetailPage() {
                     <h2>{selectedDiscussionThread.title}</h2>
                     <p>
                       {selectedDiscussionThread.comments.length} comment
-                      {selectedDiscussionThread.comments.length === 1 ? '' : 's'}
+                      {selectedDiscussionThread.comments.length === 1
+                        ? ""
+                        : "s"}
                     </p>
                   </div>
                   <div className="teacher-discussion-focus__moderator">
@@ -3501,22 +4170,32 @@ export default function TeacherClassDetailPage() {
 
                 <article className="teacher-discussion-focus__post">
                   <div className="teacher-discussion-comment__head">
-                    <TeacherDiscussionAvatar author={selectedDiscussionThread.author} />
+                    <TeacherDiscussionAvatar
+                      author={selectedDiscussionThread.author}
+                    />
                     <div className="teacher-discussion-comment__identity">
-                      <strong>{getDiscussionAuthorName(selectedDiscussionThread.author)}</strong>
+                      <strong>
+                        {getDiscussionAuthorName(
+                          selectedDiscussionThread.author,
+                        )}
+                      </strong>
                       <span>
                         {formatRelativeTime(
                           selectedDiscussionThread.publishedAt ||
                             selectedDiscussionThread.createdAt,
-                        )}{' '}
-                        • {selectedDiscussionThread.allowComments ? 'Replies open' : 'Replies closed'}
+                        )}{" "}
+                        •{" "}
+                        {selectedDiscussionThread.allowComments
+                          ? "Replies open"
+                          : "Replies closed"}
                       </span>
                     </div>
                     <div className="teacher-discussion-comment__meta">
                       <span className="teacher-discussion-comment__meta-pill">
                         <MessageSquare className="h-3.5 w-3.5" />
-                        Limit:{' '}
-                        {selectedDiscussionThread.commentLimitPerStudent || 'Open'}
+                        Limit:{" "}
+                        {selectedDiscussionThread.commentLimitPerStudent ||
+                          "Open"}
                       </span>
                       <span className="teacher-discussion-comment__meta-pill">
                         <ShieldAlert className="h-3.5 w-3.5" />
@@ -3535,11 +4214,16 @@ export default function TeacherClassDetailPage() {
 
                 <div className="teacher-discussion-comment-stack">
                   {selectedDiscussionThread.comments.map((comment) => (
-                    <article key={comment.id} className="teacher-discussion-comment-card">
+                    <article
+                      key={comment.id}
+                      className="teacher-discussion-comment-card"
+                    >
                       <div className="teacher-discussion-comment__head">
                         <TeacherDiscussionAvatar author={comment.author} />
                         <div className="teacher-discussion-comment__identity">
-                          <strong>{getDiscussionAuthorName(comment.author)}</strong>
+                          <strong>
+                            {getDiscussionAuthorName(comment.author)}
+                          </strong>
                           <span>{formatRelativeTime(comment.createdAt)}</span>
                         </div>
                         <div className="teacher-discussion-comment__menu-wrap">
@@ -3582,7 +4266,9 @@ export default function TeacherClassDetailPage() {
                                   handleDeleteDiscussionComment(comment);
                                 }}
                                 className="text-[#b42318] focus:text-[#b42318]"
-                                disabled={busyDiscussionCommentId === comment.id}
+                                disabled={
+                                  busyDiscussionCommentId === comment.id
+                                }
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete comment
@@ -3593,10 +4279,14 @@ export default function TeacherClassDetailPage() {
                       </div>
                       <div className="teacher-discussion-comment__body-wrap">
                         <RichTextRenderer
-                          html={comment.bodyHtml || '<p>(Image-only comment)</p>'}
+                          html={
+                            comment.bodyHtml || "<p>(Image-only comment)</p>"
+                          }
                           className="teacher-discussion-comment__body"
                         />
-                        <TeacherDiscussionAttachmentGallery attachments={comment.attachments} />
+                        <TeacherDiscussionAttachmentGallery
+                          attachments={comment.attachments}
+                        />
                       </div>
                       <div className="teacher-discussion-comment__footer">
                         <div className="teacher-discussion-comment__meta">
@@ -3609,7 +4299,9 @@ export default function TeacherClassDetailPage() {
                     </article>
                   ))}
                   {selectedDiscussionThread.comments.length === 0 ? (
-                    <div className="teacher-class-workspace__empty">No comments yet.</div>
+                    <div className="teacher-class-workspace__empty">
+                      No comments yet.
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -3617,25 +4309,28 @@ export default function TeacherClassDetailPage() {
           </div>
         ) : null}
 
-        {activeTab === 'class-record' ? (
+        {activeTab === "class-record" ? (
           <div className="teacher-class-workspace__panel teacher-class-workspace__panel--record">
             <div className="teacher-class-workspace__record-scroll">
               <TeacherClassRecordWorkbook
                 state={classRecordState}
-                emptyMessage="No class record exists yet for this class. Create a quarter workbook to begin."
+                emptyMessage="No class record exists yet for this class. Create a period workbook to begin."
                 className="teacher-class-workspace__record-embed"
               />
             </div>
           </div>
         ) : null}
 
-        {activeTab === 'students' ? (
+        {activeTab === "students" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
                 <h2>Students ({studentRows.length})</h2>
               </div>
-              <Link href={`/dashboard/teacher/classes/${classId}/students/add`} className="teacher-class-workspace__solid">
+              <Link
+                href={`/dashboard/teacher/classes/${classId}/students/add`}
+                className="teacher-class-workspace__solid"
+              >
                 <Plus className="h-4 w-4" />
                 Add Student
               </Link>
@@ -3653,7 +4348,10 @@ export default function TeacherClassDetailPage() {
                 </thead>
                 <tbody>
                   {studentRows.map((student) => (
-                    <tr key={student.enrollmentId} className="teacher-class-workspace__table-row teacher-class-workspace__table-row--clickable">
+                    <tr
+                      key={student.enrollmentId}
+                      className="teacher-class-workspace__table-row teacher-class-workspace__table-row--clickable"
+                    >
                       <td>
                         <Link
                           href={`/dashboard/teacher/classes/${classId}/students/${student.studentId}`}
@@ -3662,7 +4360,10 @@ export default function TeacherClassDetailPage() {
                           <div className="teacher-class-workspace__student-cell">
                             <Avatar className="teacher-class-workspace__avatar">
                               {student.profilePicture ? (
-                                <AvatarImage src={student.profilePicture} alt={student.fullName} />
+                                <AvatarImage
+                                  src={student.profilePicture}
+                                  alt={student.fullName}
+                                />
                               ) : null}
                               <AvatarFallback className="bg-[#f6d9db] text-[0.74rem] font-bold text-[#e70012]">
                                 {student.initials}
@@ -3697,10 +4398,16 @@ export default function TeacherClassDetailPage() {
                             <div className="teacher-class-workspace__grade-track">
                               <div
                                 data-tone={gradeTone(student.gradePercent)}
-                                style={{ width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%` }}
+                                style={{
+                                  width: `${Math.max(0, Math.min(100, student.gradePercent ?? 0))}%`,
+                                }}
                               />
                             </div>
-                            <span>{student.gradePercent != null ? `${Number(student.gradePercent).toFixed(1)}%` : '--'}</span>
+                            <span>
+                              {student.gradePercent != null
+                                ? `${Number(student.gradePercent).toFixed(1)}%`
+                                : "--"}
+                            </span>
                           </div>
                         </Link>
                       </td>
@@ -3710,7 +4417,10 @@ export default function TeacherClassDetailPage() {
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              void handleRemoveStudent(student.enrollmentId, student.studentId);
+                              void handleRemoveStudent(
+                                student.enrollmentId,
+                                student.studentId,
+                              );
                             }}
                             disabled={busyEnrollmentId === student.enrollmentId}
                             aria-label="Remove student"
@@ -3724,25 +4434,33 @@ export default function TeacherClassDetailPage() {
                 </tbody>
               </table>
               {studentRows.length === 0 ? (
-                <div className="teacher-class-workspace__empty">No students enrolled.</div>
+                <div className="teacher-class-workspace__empty">
+                  No students enrolled.
+                </div>
               ) : null}
             </div>
           </div>
         ) : null}
 
-        {activeTab === 'calendar' ? (
+        {activeTab === "calendar" ? (
           <div className="teacher-class-workspace__panel">
             <div className="teacher-class-workspace__panel-head">
               <div>
                 <h2>Class Calendar</h2>
-                <p>Upcoming events and assessments for {classItem.subjectName}</p>
+                <p>
+                  Upcoming events and assessments for {classItem.subjectName}
+                </p>
               </div>
               <div className="teacher-class-workspace__head-actions">
-                <div className="teacher-class-workspace__view-toggle" role="group" aria-label="Calendar view">
+                <div
+                  className="teacher-class-workspace__view-toggle"
+                  role="group"
+                  aria-label="Calendar view"
+                >
                   <button
                     type="button"
-                    data-active={calendarViewMode === 'calendar'}
-                    onClick={() => setCalendarViewMode('calendar')}
+                    data-active={calendarViewMode === "calendar"}
+                    onClick={() => setCalendarViewMode("calendar")}
                     aria-label="Calendar grid view"
                     title="Calendar"
                   >
@@ -3750,26 +4468,33 @@ export default function TeacherClassDetailPage() {
                   </button>
                   <button
                     type="button"
-                    data-active={calendarViewMode === 'upcoming'}
-                    onClick={() => setCalendarViewMode('upcoming')}
+                    data-active={calendarViewMode === "upcoming"}
+                    onClick={() => setCalendarViewMode("upcoming")}
                     aria-label="Upcoming list view"
                     title="Upcoming"
                   >
                     <LayoutPanelTop className="h-4 w-4" />
                   </button>
                 </div>
-                <Link href={`/dashboard/teacher/calendar?classId=${classId}`} className="teacher-class-workspace__outline">
+                <Link
+                  href={`/dashboard/teacher/calendar?classId=${classId}`}
+                  className="teacher-class-workspace__outline"
+                >
                   <CalendarDays className="h-4 w-4" />
                   Full Calendar
                 </Link>
               </div>
             </div>
-            {calendarViewMode === 'upcoming' ? (
+            {calendarViewMode === "upcoming" ? (
               <div className="teacher-class-workspace__stack">
                 {calendarItems.map((event) => {
                   const badge = formatEventBadgeDate(event.date);
                   return (
-                    <article key={event.id} className="teacher-class-workspace__calendar-item" data-kind={event.kind}>
+                    <article
+                      key={event.id}
+                      className="teacher-class-workspace__calendar-item"
+                      data-kind={event.kind}
+                    >
                       <div className="teacher-class-workspace__calendar-date">
                         <strong>{badge.day}</strong>
                         <span>{badge.month}</span>
@@ -3778,12 +4503,16 @@ export default function TeacherClassDetailPage() {
                         <h3>{event.title}</h3>
                         <p>{event.subtitle}</p>
                       </div>
-                      <span className="teacher-class-workspace__calendar-kind">{event.kind}</span>
+                      <span className="teacher-class-workspace__calendar-kind">
+                        {event.kind}
+                      </span>
                     </article>
                   );
                 })}
                 {calendarItems.length === 0 ? (
-                  <div className="teacher-class-workspace__empty">No upcoming events.</div>
+                  <div className="teacher-class-workspace__empty">
+                    No upcoming events.
+                  </div>
                 ) : null}
               </div>
             ) : (
@@ -3793,27 +4522,52 @@ export default function TeacherClassDetailPage() {
                     <button
                       type="button"
                       className="teacher-class-workspace__ghost-icon"
-                      onClick={() => setCalendarMonth((current) => getMonthStart(new Date(current.getFullYear(), current.getMonth() - 1, 1)))}
+                      onClick={() =>
+                        setCalendarMonth((current) =>
+                          getMonthStart(
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() - 1,
+                              1,
+                            ),
+                          ),
+                        )
+                      }
                       aria-label="Previous month"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     <strong>
-                      {calendarMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                      {calendarMonth.toLocaleString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
                     </strong>
                     <button
                       type="button"
                       className="teacher-class-workspace__ghost-icon"
-                      onClick={() => setCalendarMonth((current) => getMonthStart(new Date(current.getFullYear(), current.getMonth() + 1, 1)))}
+                      onClick={() =>
+                        setCalendarMonth((current) =>
+                          getMonthStart(
+                            new Date(
+                              current.getFullYear(),
+                              current.getMonth() + 1,
+                              1,
+                            ),
+                          ),
+                        )
+                      }
                       aria-label="Next month"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
                   <div className="teacher-class-workspace__calendar-grid-weekdays">
-                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((weekday) => (
-                      <span key={weekday}>{weekday}</span>
-                    ))}
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                      (weekday) => (
+                        <span key={weekday}>{weekday}</span>
+                      ),
+                    )}
                   </div>
                   <div className="teacher-class-workspace__calendar-grid">
                     {calendarGridDays.map((cell) => {
@@ -3829,7 +4583,10 @@ export default function TeacherClassDetailPage() {
                         >
                           <strong>{cell.date.getDate()}</strong>
                           {cell.events.length > 0 ? (
-                            <span>{cell.events.length} event{cell.events.length === 1 ? '' : 's'}</span>
+                            <span>
+                              {cell.events.length} event
+                              {cell.events.length === 1 ? "" : "s"}
+                            </span>
                           ) : null}
                         </button>
                       );
@@ -3839,31 +4596,45 @@ export default function TeacherClassDetailPage() {
                 <div className="teacher-class-workspace__calendar-selected">
                   <h3>
                     {selectedCalendarDateKey
-                      ? new Date(`${selectedCalendarDateKey}T00:00:00`).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'long',
-                          day: 'numeric',
-                          year: 'numeric',
+                      ? new Date(
+                          `${selectedCalendarDateKey}T00:00:00`,
+                        ).toLocaleDateString("en-US", {
+                          weekday: "long",
+                          month: "long",
+                          day: "numeric",
+                          year: "numeric",
                         })
-                      : 'Select a date'}
+                      : "Select a date"}
                   </h3>
                   <div className="teacher-class-workspace__stack">
                     {selectedCalendarEvents.length > 0 ? (
                       selectedCalendarEvents.map((event) => (
-                        <article key={event.id} className="teacher-class-workspace__calendar-item" data-kind={event.kind}>
+                        <article
+                          key={event.id}
+                          className="teacher-class-workspace__calendar-item"
+                          data-kind={event.kind}
+                        >
                           <div className="teacher-class-workspace__calendar-date">
                             <strong>{event.date.getDate()}</strong>
-                            <span>{event.date.toLocaleString('en-US', { month: 'short' }).toUpperCase()}</span>
+                            <span>
+                              {event.date
+                                .toLocaleString("en-US", { month: "short" })
+                                .toUpperCase()}
+                            </span>
                           </div>
                           <div className="teacher-class-workspace__calendar-copy">
                             <h3>{event.title}</h3>
                             <p>{event.subtitle}</p>
                           </div>
-                          <span className="teacher-class-workspace__calendar-kind">{event.kind}</span>
+                          <span className="teacher-class-workspace__calendar-kind">
+                            {event.kind}
+                          </span>
                         </article>
                       ))
                     ) : (
-                      <div className="teacher-class-workspace__empty">No events for this date.</div>
+                      <div className="teacher-class-workspace__empty">
+                        No events for this date.
+                      </div>
                     )}
                   </div>
                 </div>
@@ -3878,7 +4649,8 @@ export default function TeacherClassDetailPage() {
           <DialogHeader>
             <DialogTitle>Add Module</DialogTitle>
             <DialogDescription>
-              Create a module title and brief description. You can refine sections and items after creation.
+              Create a module title and brief description. You can refine
+              sections and items after creation.
             </DialogDescription>
           </DialogHeader>
           <div className="teacher-module-modal__fields">
@@ -3904,7 +4676,11 @@ export default function TeacherClassDetailPage() {
             <button
               type="button"
               className="teacher-class-workspace__outline teacher-module-modal__template"
-              onClick={() => toast.info('Quick templates will be available in a later update.')}
+              onClick={() =>
+                toast.info(
+                  "Quick templates will be available in a later update.",
+                )
+              }
             >
               Quick Template
             </button>
@@ -3915,59 +4691,83 @@ export default function TeacherClassDetailPage() {
               variant="outline"
               onClick={() => {
                 setShowAddModuleModal(false);
-                setNewModuleTitle('');
-                setNewModuleDescription('');
+                setNewModuleTitle("");
+                setNewModuleDescription("");
               }}
             >
               Cancel
             </Button>
-            <Button type="button" className="teacher-class-workspace__solid" onClick={() => void handleCreateModule()} disabled={creatingModule}>
-              {creatingModule ? 'Creating...' : 'Create Module'}
+            <Button
+              type="button"
+              className="teacher-class-workspace__solid"
+              onClick={() => void handleCreateModule()}
+              disabled={creatingModule}
+            >
+              {creatingModule ? "Creating..." : "Create Module"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(customizingModuleId)} onOpenChange={(open) => !open && closeModuleDesignDialog()}>
+      <Dialog
+        open={Boolean(customizingModuleId)}
+        onOpenChange={(open) => !open && closeModuleDesignDialog()}
+      >
         <DialogContent className="teacher-module-modal teacher-module-modal--design">
           <DialogHeader>
             <DialogTitle>Customize Module Design</DialogTitle>
             <DialogDescription>
-              Choose the module surface style and media placement. Changes are saved per module.
+              Choose the module surface style and media placement. Changes are
+              saved per module.
             </DialogDescription>
           </DialogHeader>
           <div className="teacher-module-modal__fields">
-            <div className="teacher-module-modal__theme-toggle" role="group" aria-label="Module theme mode">
+            <div
+              className="teacher-module-modal__theme-toggle"
+              role="group"
+              aria-label="Module theme mode"
+            >
               <button
                 type="button"
-                data-active={moduleDraft.themeKind === 'gradient'}
+                data-active={moduleDraft.themeKind === "gradient"}
                 onClick={() => {
                   setModuleCoverError(null);
-                  setModuleDraft((current) => ({ ...current, themeKind: 'gradient' }));
+                  setModuleDraft((current) => ({
+                    ...current,
+                    themeKind: "gradient",
+                  }));
                 }}
               >
                 Gradient
               </button>
               <button
                 type="button"
-                data-active={moduleDraft.themeKind === 'image'}
+                data-active={moduleDraft.themeKind === "image"}
                 onClick={() => {
                   setModuleCoverError(null);
-                  setModuleDraft((current) => ({ ...current, themeKind: 'image' }));
+                  setModuleDraft((current) => ({
+                    ...current,
+                    themeKind: "image",
+                  }));
                 }}
               >
                 Image
               </button>
             </div>
 
-            {moduleDraft.themeKind === 'gradient' ? (
+            {moduleDraft.themeKind === "gradient" ? (
               <div className="teacher-module-modal__palette">
                 {MODULE_GRADIENT_OPTIONS.map((option) => (
                   <button
                     key={option.id}
                     type="button"
                     data-active={moduleDraft.gradientId === option.id}
-                    onClick={() => setModuleDraft((current) => ({ ...current, gradientId: option.id }))}
+                    onClick={() =>
+                      setModuleDraft((current) => ({
+                        ...current,
+                        gradientId: option.id,
+                      }))
+                    }
                     aria-label={option.label}
                     title={option.label}
                     style={{ background: option.background }}
@@ -3981,13 +4781,16 @@ export default function TeacherClassDetailPage() {
                     <button
                       key={option.id}
                       type="button"
-                      data-active={!localModuleCoverDraft && moduleDraft.coverImageUrl === option.imageUrl}
+                      data-active={
+                        !localModuleCoverDraft &&
+                        moduleDraft.coverImageUrl === option.imageUrl
+                      }
                       onClick={() => {
                         setModuleCoverError(null);
                         clearLocalModuleCoverDraft();
                         setModuleDraft((current) => ({
                           ...current,
-                          themeKind: 'image',
+                          themeKind: "image",
                           coverImageUrl: option.imageUrl,
                           imagePositionX: 50,
                           imagePositionY: 50,
@@ -4004,7 +4807,9 @@ export default function TeacherClassDetailPage() {
                 </div>
 
                 <div className="teacher-module-modal__upload">
-                  <label htmlFor="module-cover-upload">Upload custom image</label>
+                  <label htmlFor="module-cover-upload">
+                    Upload custom image
+                  </label>
                   <input
                     id="module-cover-upload"
                     type="file"
@@ -4037,7 +4842,9 @@ export default function TeacherClassDetailPage() {
                         }
                         onCropComplete={(_croppedArea, croppedAreaPixels) =>
                           setLocalModuleCoverDraft((current) =>
-                            current ? { ...current, croppedAreaPixels } : current,
+                            current
+                              ? { ...current, croppedAreaPixels }
+                              : current,
                           )
                         }
                       />
@@ -4054,7 +4861,10 @@ export default function TeacherClassDetailPage() {
                           onChange={(event) =>
                             setLocalModuleCoverDraft((current) =>
                               current
-                                ? { ...current, zoom: Number(event.target.value) }
+                                ? {
+                                    ...current,
+                                    zoom: Number(event.target.value),
+                                  }
                                 : current,
                             )
                           }
@@ -4092,7 +4902,11 @@ export default function TeacherClassDetailPage() {
             ) : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={closeModuleDesignDialog}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={closeModuleDesignDialog}
+            >
               Cancel
             </Button>
             <Button
@@ -4101,7 +4915,7 @@ export default function TeacherClassDetailPage() {
               onClick={() => void handleSaveModuleDesign()}
               disabled={savingModuleDesign}
             >
-              {savingModuleDesign ? 'Saving...' : 'Save Design'}
+              {savingModuleDesign ? "Saving..." : "Save Design"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4116,22 +4930,31 @@ export default function TeacherClassDetailPage() {
           }
         }}
       >
-        <DialogContent className="teacher-intervention-workspace__manual-dialog teacher-class-guide-dialog" style={teacherClassGuideDialogStyle}>
+        <DialogContent
+          className="teacher-intervention-workspace__manual-dialog teacher-class-guide-dialog"
+          style={teacherClassGuideDialogStyle}
+        >
           <DialogHeader>
             <DialogTitle>Teacher guide: Class Workspace</DialogTitle>
             <DialogDescription>
-              Read this guide one page at a time. Each screenshot points to the core controls for this class page.
+              Read this guide one page at a time. Each screenshot points to the
+              core controls for this class page.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="teacher-intervention-workspace__manual-progress" aria-live="polite">
-            <span>Page {helpPage + 1} of {teacherClassGuidePages.length}</span>
+          <div
+            className="teacher-intervention-workspace__manual-progress"
+            aria-live="polite"
+          >
+            <span>
+              Page {helpPage + 1} of {teacherClassGuidePages.length}
+            </span>
             <div>
               {teacherClassGuidePages.map((page, index) => (
                 <button
                   key={page.title}
                   type="button"
-                  className={index === helpPage ? 'is-active' : undefined}
+                  className={index === helpPage ? "is-active" : undefined}
                   onClick={() => setHelpPage(index)}
                   aria-label={`Open guide page ${index + 1}`}
                 />
@@ -4142,7 +4965,9 @@ export default function TeacherClassDetailPage() {
           <div className="teacher-intervention-workspace__manual-layout">
             <TeacherClassGuideScreenshot screen={activeGuidePage.screen} />
             <section className="teacher-intervention-workspace__manual-copy">
-              <p className="teacher-intervention-workspace__manual-kicker">Teacher workspace walkthrough</p>
+              <p className="teacher-intervention-workspace__manual-kicker">
+                Teacher workspace walkthrough
+              </p>
               <h3>{activeGuidePage.title}</h3>
               <p>{activeGuidePage.description}</p>
               <div className="route-guide-steps grid gap-3">
@@ -4150,19 +4975,25 @@ export default function TeacherClassDetailPage() {
                   <div
                     key={`${step.action}-${step.body}`}
                     className={`route-guide-step grid grid-cols-[1.9rem_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[#edf1f6] border-l-[3px] bg-white p-3 shadow-sm ${
-                      step.tone === 'caution' ? 'is-caution' : ''
+                      step.tone === "caution" ? "is-caution" : ""
                     }`}
                   >
                     <span
                       className={`route-guide-step__index inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black text-white ${
-                        step.tone === 'caution' ? 'bg-[#b7791f]' : 'bg-[#a32d2d]'
+                        step.tone === "caution"
+                          ? "bg-[#b7791f]"
+                          : "bg-[#a32d2d]"
                       }`}
                     >
                       {index + 1}
                     </span>
                     <div>
-                      <strong className="block text-sm font-black text-[#111827]">{step.action}</strong>
-                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">{step.body}</p>
+                      <strong className="block text-sm font-black text-[#111827]">
+                        {step.action}
+                      </strong>
+                      <p className="mt-1 text-sm leading-relaxed text-[#637083]">
+                        {step.body}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -4178,7 +5009,9 @@ export default function TeacherClassDetailPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setHelpPage((current) => Math.max(current - 1, 0))}
+                onClick={() =>
+                  setHelpPage((current) => Math.max(current - 1, 0))
+                }
                 disabled={helpPage === 0}
               >
                 Previous page
@@ -4187,7 +5020,9 @@ export default function TeacherClassDetailPage() {
                 <Button
                   type="button"
                   onClick={() =>
-                    setHelpPage((current) => Math.min(current + 1, teacherClassGuidePages.length - 1))
+                    setHelpPage((current) =>
+                      Math.min(current + 1, teacherClassGuidePages.length - 1),
+                    )
                   }
                 >
                   Next page
@@ -4207,7 +5042,7 @@ export default function TeacherClassDetailPage() {
         onOpenChange={(open) => {
           if (!open && !reportingDiscussionComment) {
             setReportDialogComment(null);
-            setDiscussionReportNotes('');
+            setDiscussionReportNotes("");
           }
         }}
       >
@@ -4224,8 +5059,13 @@ export default function TeacherClassDetailPage() {
               <div className="teacher-discussion-report-dialog__comment">
                 <TeacherDiscussionAvatar author={reportDialogComment.author} />
                 <div>
-                  <strong>{getDiscussionAuthorName(reportDialogComment.author)}</strong>
-                  <p>{stripDiscussionHtml(reportDialogComment.bodyHtml) || 'Image-only reply'}</p>
+                  <strong>
+                    {getDiscussionAuthorName(reportDialogComment.author)}
+                  </strong>
+                  <p>
+                    {stripDiscussionHtml(reportDialogComment.bodyHtml) ||
+                      "Image-only reply"}
+                  </p>
                 </div>
               </div>
 
@@ -4248,7 +5088,9 @@ export default function TeacherClassDetailPage() {
                 <span>Moderator notes</span>
                 <textarea
                   value={discussionReportNotes}
-                  onChange={(event) => setDiscussionReportNotes(event.target.value)}
+                  onChange={(event) =>
+                    setDiscussionReportNotes(event.target.value)
+                  }
                   placeholder="Add extra context for admin or discipline follow-up..."
                   rows={4}
                   maxLength={500}
@@ -4264,7 +5106,7 @@ export default function TeacherClassDetailPage() {
               variant="outline"
               onClick={() => {
                 setReportDialogComment(null);
-                setDiscussionReportNotes('');
+                setDiscussionReportNotes("");
               }}
               disabled={reportingDiscussionComment}
             >
@@ -4276,13 +5118,16 @@ export default function TeacherClassDetailPage() {
               onClick={() => void handleSubmitDiscussionCommentReport()}
               disabled={reportingDiscussionComment || !reportDialogComment}
             >
-              {reportingDiscussionComment ? 'Reporting...' : 'Report Comment'}
+              {reportingDiscussionComment ? "Reporting..." : "Report Comment"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <ConfirmationDialog config={confirmation} onClose={() => setConfirmation(null)} />
+      <ConfirmationDialog
+        config={confirmation}
+        onClose={() => setConfirmation(null)}
+      />
     </div>
   );
 }

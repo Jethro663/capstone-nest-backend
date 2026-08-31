@@ -1,3 +1,6 @@
+import { AcademicMutation } from '../../database/academic-transaction';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { AuditService } from '../audit/audit.service';
 import {
   BadRequestException,
   ForbiddenException,
@@ -7,7 +10,7 @@ import {
 import * as fs from 'fs';
 import * as path from 'path';
 import * as bcrypt from 'bcrypt';
-import { and, countDistinct, desc, eq, inArray } from 'drizzle-orm';
+import { and, countDistinct, desc, eq, inArray, ne } from 'drizzle-orm';
 
 import { DatabaseService } from '../../database/database.service';
 import {
@@ -50,7 +53,11 @@ export class RosterImportService {
   private static readonly BULK_STUDENT_PASSWORD = 'Student123!';
   private static readonly PASSWORD_HASH_ROUNDS = 10;
 
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly policyService: AcademicPolicyService,
+    private readonly auditService: AuditService,
+  ) {}
 
   private get db() {
     return this.databaseService.db;
@@ -377,6 +384,27 @@ export class RosterImportService {
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
+    const hashedPassword = dto.pendingRows.length
+      ? await bcrypt.hash(
+          RosterImportService.BULK_STUDENT_PASSWORD,
+          RosterImportService.PASSWORD_HASH_ROUNDS,
+        )
+      : null;
+    return this.commitRosterLocked(
+      sectionId,
+      dto,
+      requestingUser,
+      hashedPassword,
+    );
+  }
+
+  @AcademicMutation()
+  private async commitRosterLocked(
+    sectionId: string,
+    dto: RosterImportCommitDto,
+    requestingUser: RosterRequestingUser,
+    hashedPassword: string | null,
+  ): Promise<RosterImportCommitResponseDto> {
     // 1. Verify section
     const section = await this.db.query.sections.findFirst({
       where: eq(sections.id, sectionId),
@@ -404,6 +432,12 @@ export class RosterImportService {
         `Payload sectionId "${dto.sectionId}" does not match route parameter "${sectionId}"`,
       );
     }
+
+    const state = await this.policyService.currentState();
+    if (section.schoolYear !== state.schoolYear)
+      throw new BadRequestException(
+        'Roster imports can enroll students only in the active school year',
+      );
 
     const enrolledUserIds: string[] = [];
     let alreadyEnrolledSkipped = 0;
@@ -474,6 +508,34 @@ export class RosterImportService {
               `The following users do not have the student role: ${nonStudentIds.join(', ')}`,
             );
           }
+
+          const profiles = await tx.query.studentProfiles.findMany({
+            where: inArray(studentProfiles.userId, newIds),
+            columns: { userId: true, gradeLevel: true, graduatedAt: true },
+          });
+          const profileById = new Map(profiles.map((p) => [p.userId, p]));
+          if (
+            newIds.some(
+              (id) =>
+                profileById.get(id)?.gradeLevel !== section.gradeLevel ||
+                profileById.get(id)?.graduatedAt,
+            )
+          )
+            throw new BadRequestException(
+              'Every imported learner must have a matching grade level and must not have completed JHS',
+            );
+          const otherMembership = await tx.query.enrollments.findMany({
+            where: and(
+              inArray(enrollments.studentId, newIds),
+              eq(enrollments.status, 'enrolled'),
+              ne(enrollments.sectionId, sectionId),
+            ),
+            columns: { studentId: true },
+          });
+          if (otherMembership.length)
+            throw new BadRequestException(
+              'Reconcile existing section membership before importing these learners into another section',
+            );
 
           const inserted = await tx
             .insert(enrollments)
@@ -565,16 +627,16 @@ export class RosterImportService {
             )[0];
 
         if (!studentRole) {
-          try {
-            const createdRoles = await tx
-              .insert(roles)
-              .values({
-                name: 'student',
-                description: 'Auto-created for roster import',
-              })
-              .returning({ id: roles.id });
-            studentRole = createdRoles[0] ?? null;
-          } catch {
+          const createdRoles = await tx
+            .insert(roles)
+            .values({
+              name: 'student',
+              description: 'Auto-created for roster import',
+            })
+            .onConflictDoNothing()
+            .returning({ id: roles.id });
+          studentRole = createdRoles[0] ?? null;
+          if (!studentRole) {
             studentRole = tx.query?.roles
               ? await tx.query.roles.findFirst({
                   where: eq(roles.name, 'student'),
@@ -594,10 +656,10 @@ export class RosterImportService {
           );
         }
 
-        const hashedPassword = await bcrypt.hash(
-          RosterImportService.BULK_STUDENT_PASSWORD,
-          RosterImportService.PASSWORD_HASH_ROUNDS,
-        );
+        if (!hashedPassword)
+          throw new BadRequestException(
+            'Prepared account credentials are missing',
+          );
 
         const createdUsers = await tx
           .insert(users)
@@ -680,6 +742,18 @@ export class RosterImportService {
       }
     });
 
+    await this.auditService.log({
+      actorId: requestingUser.id,
+      action: 'academic.roster.imported',
+      targetType: 'section',
+      targetId: sectionId,
+      metadata: {
+        schoolYear: section.schoolYear,
+        enrolledStudentIds: enrolledUserIds,
+        createdStudentIds: pendingRosterIds,
+        alreadyEnrolledSkipped,
+      },
+    });
     return {
       enrolledUserIds,
       pendingRosterIds,

@@ -1,4 +1,9 @@
-import type { ClassRecord, SpreadsheetData, SpreadsheetStudentRow } from '@/types/class-record';
+import { modernPolicy, openCapabilities } from '@/test/academic-fixtures';
+import type {
+  ClassRecord,
+  SpreadsheetData,
+  SpreadsheetStudentRow,
+} from '@/types/class-record';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import JSZip from 'jszip';
@@ -7,7 +12,9 @@ import {
   exportClassRecordTemplateWorkbook,
 } from './class-record-template-export';
 
-function createStudent(overrides: Partial<SpreadsheetStudentRow> = {}): SpreadsheetStudentRow {
+function createStudent(
+  overrides: Partial<SpreadsheetStudentRow> = {},
+): SpreadsheetStudentRow {
   return {
     studentId: overrides.studentId || 'student-1',
     firstName: overrides.firstName || 'Ana',
@@ -45,6 +52,9 @@ function createStudent(overrides: Partial<SpreadsheetStudentRow> = {}): Spreadsh
 
 function createSpreadsheet(students: SpreadsheetStudentRow[]): SpreadsheetData {
   return {
+    policy: modernPolicy,
+    academicCapabilities: openCapabilities,
+    canReopen: false,
     classRecord: {
       id: 'record-1',
       classId: 'class-1',
@@ -97,15 +107,43 @@ const selectedRecord: ClassRecord = {
 describe('buildTemplateWrites', () => {
   it('maps header values to the INPUT DATA cells used by the MAPEH workbook formulas', () => {
     const spreadsheet = createSpreadsheet([
-      createStudent({ studentId: 'male-1', firstName: 'Ben', lastName: 'Lopez', gender: 'male' }),
-      createStudent({ studentId: 'female-1', firstName: 'Ana', lastName: 'Santos', gender: 'female' }),
+      createStudent({
+        studentId: 'male-1',
+        firstName: 'Ben',
+        lastName: 'Lopez',
+        gender: 'male',
+      }),
+      createStudent({
+        studentId: 'female-1',
+        firstName: 'Ana',
+        lastName: 'Santos',
+        gender: 'female',
+      }),
     ]);
-    const { writes, overflowStartRow } = buildTemplateWrites(spreadsheet, selectedRecord);
+    const { writes, overflowStartRow } = buildTemplateWrites(
+      spreadsheet,
+      selectedRecord,
+    );
 
     expect(overflowStartRow).toBeNull();
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 4, col: 7, value: 'NCR' });
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 4, col: 15, value: 'Manila' });
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 7, col: 1, value: 'FIRST QUARTER' });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 4,
+      col: 7,
+      value: 'NCR',
+    });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 4,
+      col: 15,
+      value: 'Manila',
+    });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 7,
+      col: 1,
+      value: 'FIRST QUARTER',
+    });
     expect(writes).toContainEqual({
       sheet: 'INPUT DATA',
       row: 7,
@@ -128,31 +166,96 @@ describe('buildTemplateWrites', () => {
 
   it('writes learners into fixed male and female template rows and keeps formulas intact', () => {
     const spreadsheet = createSpreadsheet([
-      createStudent({ studentId: 'male-1', firstName: 'Ben', lastName: 'Lopez', gender: 'male' }),
-      createStudent({ studentId: 'female-1', firstName: 'Ana', lastName: 'Santos', gender: 'female' }),
+      createStudent({
+        studentId: 'male-1',
+        firstName: 'Ben',
+        lastName: 'Lopez',
+        gender: 'male',
+      }),
+      createStudent({
+        studentId: 'female-1',
+        firstName: 'Ana',
+        lastName: 'Santos',
+        gender: 'female',
+      }),
     ]);
     const { writes } = buildTemplateWrites(spreadsheet, selectedRecord);
 
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 12, col: 2, value: 'Lopez, Ben' });
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 63, col: 2, value: 'Santos, Ana' });
-    expect(writes).toContainEqual({ sheet: 'MUSIC _Q1', row: 12, col: 6, value: 18 });
-    expect(writes).toContainEqual({ sheet: 'MUSIC _Q1', row: 12, col: 19, value: 25 });
-    expect(writes).toContainEqual({ sheet: 'MUSIC _Q1', row: 12, col: 32, value: 40 });
-    expect(writes).toContainEqual({ sheet: 'MUSIC _Q1', row: 63, col: 6, value: 18 });
-    expect(writes).not.toContainEqual({ sheet: 'MUSIC _Q1', row: 12, col: 16, value: 18 });
-    expect(writes).not.toContainEqual({ sheet: 'MUSIC _Q1', row: 12, col: 35, value: 84.67 });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 12,
+      col: 2,
+      value: 'Lopez, Ben',
+    });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 63,
+      col: 2,
+      value: 'Santos, Ana',
+    });
+    expect(writes).toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 12,
+      col: 6,
+      value: 18,
+    });
+    expect(writes).toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 12,
+      col: 19,
+      value: 25,
+    });
+    expect(writes).toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 12,
+      col: 32,
+      value: 40,
+    });
+    expect(writes).toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 63,
+      col: 6,
+      value: 18,
+    });
+    expect(writes).not.toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 12,
+      col: 16,
+      value: 18,
+    });
+    expect(writes).not.toContainEqual({
+      sheet: 'MUSIC _Q1',
+      row: 12,
+      col: 35,
+      value: 84.67,
+    });
   });
 
   it('selects the matching MAPEH component sheet from the subject text', () => {
     const spreadsheet = createSpreadsheet([
-      createStudent({ studentId: 'female-1', firstName: 'Ana', lastName: 'Santos', gender: 'female' }),
+      createStudent({
+        studentId: 'female-1',
+        firstName: 'Ana',
+        lastName: 'Santos',
+        gender: 'female',
+      }),
     ]);
     spreadsheet.header.subject = 'Health';
 
     const { writes } = buildTemplateWrites(spreadsheet, selectedRecord);
 
-    expect(writes).toContainEqual({ sheet: 'HEALTH _Q1', row: 63, col: 6, value: 18 });
-    expect(writes).toContainEqual({ sheet: 'INPUT DATA', row: 63, col: 2, value: 'Santos, Ana' });
+    expect(writes).toContainEqual({
+      sheet: 'HEALTH _Q1',
+      row: 63,
+      col: 6,
+      value: 18,
+    });
+    expect(writes).toContainEqual({
+      sheet: 'INPUT DATA',
+      row: 63,
+      col: 2,
+      value: 'Santos, Ana',
+    });
   });
 
   it('marks overflow when fixed male or female slots are exceeded', () => {
@@ -165,7 +268,10 @@ describe('buildTemplateWrites', () => {
       }),
     );
     const spreadsheet = createSpreadsheet(students);
-    const { overflowStartRow } = buildTemplateWrites(spreadsheet, selectedRecord);
+    const { overflowStartRow } = buildTemplateWrites(
+      spreadsheet,
+      selectedRecord,
+    );
 
     expect(overflowStartRow).toBe(113);
   });
@@ -173,11 +279,15 @@ describe('buildTemplateWrites', () => {
 
 describe('exportClassRecordTemplateWorkbook', () => {
   it('patches the real MAPEH workbook template without dropping formulas or media', async () => {
-    const template = await fs.readFile(path.join(process.cwd(), 'public/templates/Master.xlsx'));
+    const template = await fs.readFile(
+      path.join(process.cwd(), 'public/templates/Master.xlsx'),
+    );
     let exportedBlob: Blob | null = null;
     const anchor = document.createElement('a');
     const clickSpy = jest.spyOn(anchor, 'click').mockImplementation();
-    const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor);
+    const createElementSpy = jest
+      .spyOn(document, 'createElement')
+      .mockReturnValue(anchor);
     const originalCreateObjectUrl = URL.createObjectURL;
     const originalRevokeObjectUrl = URL.revokeObjectURL;
     const originalFetch = global.fetch;
@@ -194,26 +304,45 @@ describe('exportClassRecordTemplateWorkbook', () => {
 
     await exportClassRecordTemplateWorkbook(
       createSpreadsheet([
-        createStudent({ studentId: 'male-1', firstName: 'Ben', lastName: 'Lopez', gender: 'male' }),
+        createStudent({
+          studentId: 'male-1',
+          firstName: 'Ben',
+          lastName: 'Lopez',
+          gender: 'male',
+        }),
       ]),
       selectedRecord,
     );
 
     expect(clickSpy).toHaveBeenCalled();
     expect(exportedBlob).not.toBeNull();
-    const exportedArrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as ArrayBuffer);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsArrayBuffer(exportedBlob!);
-    });
+    const exportedArrayBuffer = await new Promise<ArrayBuffer>(
+      (resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as ArrayBuffer);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(exportedBlob!);
+      },
+    );
     const outputZip = await JSZip.loadAsync(exportedArrayBuffer);
-    const inputXml = await outputZip.file('xl/worksheets/sheet1.xml')?.async('string');
-    const musicXml = await outputZip.file('xl/worksheets/sheet2.xml')?.async('string');
-    const workbookXml = await outputZip.file('xl/workbook.xml')?.async('string');
-    const workbookRelsXml = await outputZip.file('xl/_rels/workbook.xml.rels')?.async('string');
-    const contentTypesXml = await outputZip.file('[Content_Types].xml')?.async('string');
-    const mediaFiles = Object.keys(outputZip.files).filter((file) => file.startsWith('xl/media/'));
+    const inputXml = await outputZip
+      .file('xl/worksheets/sheet1.xml')
+      ?.async('string');
+    const musicXml = await outputZip
+      .file('xl/worksheets/sheet2.xml')
+      ?.async('string');
+    const workbookXml = await outputZip
+      .file('xl/workbook.xml')
+      ?.async('string');
+    const workbookRelsXml = await outputZip
+      .file('xl/_rels/workbook.xml.rels')
+      ?.async('string');
+    const contentTypesXml = await outputZip
+      .file('[Content_Types].xml')
+      ?.async('string');
+    const mediaFiles = Object.keys(outputZip.files).filter((file) =>
+      file.startsWith('xl/media/'),
+    );
 
     expect(inputXml).toContain('r="B12"');
     expect(inputXml).toContain('Lopez, Ben');

@@ -8,7 +8,12 @@ export type {
   TeacherTabRouteName,
 } from "./teacher-route-manifest";
 
-export type ClassDetailInitialTab = "modules" | "assignments" | "announcements" | "discussion" | "calendar";
+export type ClassDetailInitialTab =
+  | "modules"
+  | "assignments"
+  | "announcements"
+  | "discussion"
+  | "calendar";
 export type JaPanel = "practice" | "ask" | "review" | "lxp";
 export type LxpMobileTab = "paths" | "steps" | "replays" | "case" | "overview";
 export type TeacherClassDetailTab =
@@ -43,7 +48,12 @@ export type RootStackParamList = {
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
   LXP: { classId?: string; tab?: LxpMobileTab } | undefined;
   StudentGuidedAssessment: { classId: string; assignmentId: string };
-  StudentJaReviewAssessment: { classId: string; assessmentId?: string; attemptId?: string; title?: string };
+  StudentJaReviewAssessment: {
+    classId: string;
+    assessmentId?: string;
+    attemptId?: string;
+    title?: string;
+  };
   StudentEvaluations: undefined;
   Chatbot: { classId?: string } | undefined;
   Performance: undefined;
@@ -51,13 +61,28 @@ export type RootStackParamList = {
   AiTutor: { classId?: string } | undefined;
   TeacherClassDetail: { classId: string; initialTab?: TeacherClassDetailTab };
   TeacherModuleDetail: { classId: string; moduleId: string };
-  TeacherModuleFileDetail: { classId: string; moduleId: string; fileId: string; itemId?: string };
+  TeacherModuleFileDetail: {
+    classId: string;
+    moduleId: string;
+    fileId: string;
+    itemId?: string;
+  };
   TeacherLessonDetail: { lessonId: string; classId?: string };
   TeacherLessonEditor: { lessonId: string; classId?: string };
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
-  TeacherAssessmentEditor: { assessmentId?: string; classId?: string } | undefined;
-  TeacherAssessmentReview: { attemptId: string; assessmentId?: string; classId?: string };
-  TeacherAssessmentAttemptResult: { attemptId: string; assessmentId?: string; classId?: string };
+  TeacherAssessmentEditor:
+    | { assessmentId?: string; classId?: string }
+    | undefined;
+  TeacherAssessmentReview: {
+    attemptId: string;
+    assessmentId?: string;
+    classId?: string;
+  };
+  TeacherAssessmentAttemptResult: {
+    attemptId: string;
+    assessmentId?: string;
+    classId?: string;
+  };
   TeacherCalendar: { classId?: string } | undefined;
   TeacherCreateModule: { classId: string };
   TeacherCreateAssessment: { classId: string };
@@ -80,6 +105,7 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
+  Academic: undefined;
   Home: undefined;
   Dashboard: undefined;
   Classes: undefined;

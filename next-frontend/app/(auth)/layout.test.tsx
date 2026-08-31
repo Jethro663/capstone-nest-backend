@@ -9,8 +9,20 @@ jest.mock('next/image', () => ({
     const { priority: _priority, ...imgProps } = props;
 
     // Keep the image render trivial for link/accessibility assertions.
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img {...imgProps} alt={props.alt} />;
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        {...imgProps}
+        src={
+          typeof props.src === 'string'
+            ? props.src
+            : 'default' in props.src
+              ? props.src.default.src
+              : props.src.src
+        }
+        alt={props.alt}
+      />
+    );
   },
 }));
 

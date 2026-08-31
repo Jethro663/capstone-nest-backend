@@ -14,18 +14,17 @@ describe('ClassCard', () => {
       <ClassCard
         classItem={{
           id: 'class-1',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2026-2027',
+          isActive: true,
           subjectName: 'Mathematics',
           subjectCode: 'MATH-07A',
-          section: {
-            name: 'Section A',
-            gradeLevel: '7',
-          },
-          teacher: {
-            firstName: 'Ana',
-            lastName: 'Reyes',
-          },
+          section: { id: 'section-1', name: 'Section A', gradeLevel: '7' },
+          teacher: { id: 'teacher-1', firstName: 'Ana', lastName: 'Reyes' },
           schedules: [
             {
+              id: 'schedule-1',
               days: ['T'],
               startTime: '06:00',
               endTime: '07:00',
@@ -39,10 +38,9 @@ describe('ClassCard', () => {
       />,
     );
 
-    expect(screen.getByRole('link', { name: 'Open Mathematics' })).toHaveAttribute(
-      'href',
-      '/dashboard/teacher/classes/class-1',
-    );
+    expect(
+      screen.getByRole('link', { name: 'Open Mathematics' }),
+    ).toHaveAttribute('href', '/dashboard/teacher/classes/class-1');
     expect(screen.getByRole('link', { name: 'View Lessons' })).toHaveAttribute(
       'href',
       '/dashboard/teacher/classes/class-1?view=modules',

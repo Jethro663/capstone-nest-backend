@@ -27,7 +27,10 @@ describe('ClassTemplatesService', () => {
     update: jest.fn(),
   };
 
-  const mockDatabaseService = { db: mockDb };
+  const mockDatabaseService = {
+    db: mockDb,
+    academicTransaction: async (work: () => Promise<unknown>) => work(),
+  };
   const mockAuditService = { log: jest.fn() };
   const makeUpdateReturningChain = (rows: any[] = []) => ({
     set: jest.fn().mockReturnThis(),
@@ -185,7 +188,7 @@ chunks: []
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('publishes template and cascades core lessons/assessments to published state', async () => {
+  it('publishes reusable template and lessons without releasing class assessments', async () => {
     mockDb.update.mockReset();
     const templateUpdateChain = makeUpdateReturningChain([
       { id: '11111111-1111-1111-1111-111111111111', status: 'published' },
@@ -212,12 +215,10 @@ chunks: []
     expect(lessonUpdateChain.set).toHaveBeenCalledWith(
       expect.objectContaining({ isDraft: false }),
     );
-    expect(assessmentUpdateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ isPublished: true }),
-    );
+    expect(assessmentUpdateChain.set).not.toHaveBeenCalled();
   });
 
-  it('unpublishes template and cascades core lessons/assessments to draft state', async () => {
+  it('unpublishes reusable template without withdrawing released class assessments', async () => {
     mockDb.update.mockReset();
     const templateUpdateChain = makeUpdateReturningChain([
       { id: '11111111-1111-1111-1111-111111111111', status: 'draft' },
@@ -244,8 +245,6 @@ chunks: []
     expect(lessonUpdateChain.set).toHaveBeenCalledWith(
       expect.objectContaining({ isDraft: true }),
     );
-    expect(assessmentUpdateChain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ isPublished: false }),
-    );
+    expect(assessmentUpdateChain.set).not.toHaveBeenCalled();
   });
 });

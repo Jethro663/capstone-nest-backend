@@ -40,7 +40,7 @@ const studentUser = {
   middleName: '',
   lastName: 'Navarro',
   email: 'liam@nexora.edu',
-  roles: [{ id: 'role-student', name: 'student' }],
+  roles: ['student'],
   status: 'ACTIVE',
   isEmailVerified: true,
   lrn: '202407000001',
@@ -118,7 +118,7 @@ describe('AdminUserDetailPage', () => {
       target: { value: '  Blk. 4, Lot #2 <North>🙂 / Phase 1 ' },
     });
     fireEvent.change(guardianName, {
-      target: { value: "  Ana@@ Navarro🙂 123 " },
+      target: { value: '  Ana@@ Navarro🙂 123 ' },
     });
     fireEvent.change(guardianContact, {
       target: { value: '+63 917-987-6543abc' },

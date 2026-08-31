@@ -13,7 +13,11 @@ jest.mock('@react-pdf/renderer', () => ({
   })),
 }));
 
-import type { ClassAverageReport, GradeDistributionReport, InterventionReportRow } from '@/types/class-record';
+import type {
+  ClassAverageReport,
+  GradeDistributionReport,
+  InterventionReportRow,
+} from '@/types/class-record';
 import type {
   AssessmentSummaryRow,
   ClassEnrollmentRow,
@@ -34,11 +38,13 @@ function makeBaseInput(tab: ReportTab) {
   };
 
   const average: ClassAverageReport = {
+    classRecordId: 'record-1',
     average: 88.5,
     count: 12,
     interventionCount: 3,
   };
   const distribution: GradeDistributionReport = {
+    classRecordId: 'record-1',
     total: 12,
     distribution: {
       '90-100': 4,
@@ -50,9 +56,11 @@ function makeBaseInput(tab: ReportTab) {
   };
   const interventions: InterventionReportRow[] = [
     {
+      id: 'grade-1',
+      classRecordId: 'record-1',
       studentId: 'student-1',
       finalPercentage: '72.00',
-      remarks: 'Needs support',
+      remarks: 'For Intervention',
       computedAt: '2026-05-04T08:00:00.000Z',
       student: {
         firstName: 'Luna',
@@ -87,7 +95,12 @@ function makeBaseInput(tab: ReportTab) {
       subjectCode: 'MATH-7',
       schoolYear: '2026-2027',
       section: { id: 'section-1', name: 'Section A', gradeLevel: '7' },
-      teacher: { id: 'teacher-1', firstName: 'Ana', lastName: 'Reyes', email: 'ana@example.com' } as any,
+      teacher: {
+        id: 'teacher-1',
+        firstName: 'Ana',
+        lastName: 'Reyes',
+        email: 'ana@example.com',
+      } as any,
       enrollmentCount: 32,
       students: [],
     },

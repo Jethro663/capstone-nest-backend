@@ -30,9 +30,15 @@ jest.mock('@/services/school-event-service', () => ({
 }));
 
 const mockedClassService = classService as jest.Mocked<typeof classService>;
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
-const mockedAnnouncementService = announcementService as jest.Mocked<typeof announcementService>;
-const mockedSchoolEventService = schoolEventService as jest.Mocked<typeof schoolEventService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
+const mockedAnnouncementService = announcementService as jest.Mocked<
+  typeof announcementService
+>;
+const mockedSchoolEventService = schoolEventService as jest.Mocked<
+  typeof schoolEventService
+>;
 
 const teacherClass = {
   id: 'class-1',
@@ -45,22 +51,35 @@ const teacherClass = {
 describe('TeacherCalendarPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedClassService.getByTeacher.mockResolvedValue({ data: [teacherClass] } as Awaited<
-      ReturnType<typeof classService.getByTeacher>
-    >);
-    mockedAssessmentService.getByClass.mockResolvedValue({ data: [] } as Awaited<
-      ReturnType<typeof assessmentService.getByClass>
-    >);
-    mockedAnnouncementService.getByClass.mockResolvedValue({ data: [] } as Awaited<
-      ReturnType<typeof announcementService.getByClass>
-    >);
-    mockedSchoolEventService.getAll.mockResolvedValue({ data: [] } as Awaited<
-      ReturnType<typeof schoolEventService.getAll>
-    >);
+    mockedClassService.getByTeacher.mockResolvedValue({
+      data: [teacherClass],
+    } as Awaited<ReturnType<typeof classService.getByTeacher>>);
+    mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+      data: [],
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
+    mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      data: [],
+    } as Awaited<ReturnType<typeof announcementService.getByClass>>);
+    mockedSchoolEventService.getAll.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      data: [],
+    } as Awaited<ReturnType<typeof schoolEventService.getAll>>);
   });
 
   it('shows the initial loading state while classes are unresolved', () => {
-    mockedClassService.getByTeacher.mockReturnValueOnce(new Promise(() => undefined));
+    mockedClassService.getByTeacher.mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
 
     const { container } = render(<TeacherCalendarPage />);
 
@@ -68,11 +87,15 @@ describe('TeacherCalendarPage', () => {
   });
 
   it('shows a safe class-list failure and retries only class ownership', async () => {
-    mockedClassService.getByTeacher.mockRejectedValueOnce(new Error('class network detail'));
+    mockedClassService.getByTeacher.mockRejectedValueOnce(
+      new Error('class network detail'),
+    );
 
     render(<TeacherCalendarPage />);
 
-    expect(await screen.findByText("Calendar classes couldn't be loaded")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Calendar classes couldn't be loaded"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('class network detail')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
@@ -101,13 +124,19 @@ describe('TeacherCalendarPage', () => {
     render(<TeacherCalendarPage />);
 
     expect(
-      await screen.findByText('Some calendar items are temporarily unavailable'),
+      await screen.findByText(
+        'Some calendar items are temporarily unavailable',
+      ),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Upcoming' }));
-    expect(await screen.findByText('Future Fractions Quiz')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Future Fractions Quiz'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('announcement detail')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /retry calendar items/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /retry calendar items/i }),
+    );
     await waitFor(() => {
       expect(mockedAssessmentService.getByClass).toHaveBeenCalledTimes(2);
     });

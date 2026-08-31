@@ -23,6 +23,12 @@ import { CreateClassRecordDto } from './DTO/create-class-record.dto';
 import { RecordScoreDto } from './DTO/record-score.dto';
 import { BulkRecordScoresDto } from './DTO/bulk-record-scores.dto';
 import { UpdateClassRecordItemDto } from './DTO/update-class-record-item.dto';
+import {
+  AcademicCorrectionReasonDto,
+  ConfirmPeriodRosterDto,
+} from './DTO/confirm-period-roster.dto';
+import { ClassRecordRosterService } from './class-record-roster.service';
+import { AnnualGradesService } from '../academic-state/annual-grades.service';
 
 @Controller('class-record')
 @UseGuards(RolesGuard)
@@ -31,6 +37,8 @@ export class ClassRecordController {
     private readonly classRecordService: ClassRecordService,
     private readonly syncService: ClassRecordSyncService,
     private readonly transmutationService: TransmutationService,
+    private readonly rosterService: ClassRecordRosterService,
+    private readonly annualGradesService: AnnualGradesService,
   ) {}
 
   // ── Transmutation Management ───────────────────────────────────────────
@@ -170,6 +178,26 @@ export class ClassRecordController {
     return { success: true, data };
   }
 
+  @Post('items/:itemId/scores/:studentId/restore-assessment')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async restoreAssessmentEvidence(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Body() dto: AcademicCorrectionReasonDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      data: await this.classRecordService.restoreAssessmentEvidence(
+        itemId,
+        studentId,
+        dto.reason,
+        user.userId,
+        user.roles,
+      ),
+    };
+  }
+
   @Patch('items/:itemId')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async updateClassRecordItem(
@@ -218,6 +246,67 @@ export class ClassRecordController {
 
   // ── Grades ────────────────────────────────────────────────────────────────
 
+  @Get(':id/readiness')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async readiness(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Period finalization readiness',
+      data: await this.classRecordService.getReadiness(
+        id,
+        user.userId,
+        user.roles,
+      ),
+    };
+  }
+
+  @Get(':id/roster')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async roster(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Period eligibility register',
+      data: await this.rosterService.getRoster(id, user.userId, user.roles),
+    };
+  }
+
+  @Post(':id/roster/confirm')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async confirmRoster(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConfirmPeriodRosterDto,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Period eligibility confirmed',
+      data: await this.rosterService.confirm(id, dto, user.userId, user.roles),
+    };
+  }
+
+  @Get('by-class/:classId/annual-summary')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async annualSummary(
+    @Param('classId', ParseUUIDPipe) classId: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Official annual grades and source evidence',
+      data: await this.annualGradesService.getSummary(
+        classId,
+        user.userId,
+        user.roles,
+      ),
+    };
+  }
+
   @Get(':id/preview-grades')
   @Roles(RoleName.Teacher, RoleName.Admin)
   async previewGrades(
@@ -250,12 +339,14 @@ export class ClassRecordController {
   @Roles(RoleName.Teacher, RoleName.Admin)
   async reopenClassRecord(
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AcademicCorrectionReasonDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
     const data = await this.classRecordService.reopenClassRecord(
       id,
       user.userId,
       user.roles,
+      dto.reason,
     );
     return { success: true, data };
   }
@@ -291,6 +382,23 @@ export class ClassRecordController {
       user.roles,
     );
     return { success: true, data };
+  }
+
+  @Get(':id/history')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async periodHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { userId: string; roles: string[] },
+  ) {
+    return {
+      success: true,
+      message: 'Immutable period grade revisions',
+      data: await this.classRecordService.getPeriodHistory(
+        id,
+        user.userId,
+        user.roles,
+      ),
+    };
   }
 
   @Get(':classRecordId/final-grades/:studentId')

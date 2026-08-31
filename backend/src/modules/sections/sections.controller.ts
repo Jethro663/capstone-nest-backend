@@ -179,16 +179,11 @@ export class SectionsController {
     @Body() dto: MoveUpStudentsDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const data = await this.sectionsService.moveUpStudents(
+    return this.sectionsService.moveUpStudents(
       dto,
       user?.userId,
       user?.roles ?? [],
     );
-    return {
-      success: true,
-      message: `${data.movedCount} student(s) moved up successfully`,
-      data,
-    };
   }
 
   @Post('access-students/fail')
@@ -197,17 +192,11 @@ export class SectionsController {
     @Body() dto: FailStudentsDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const data = await this.sectionsService.failStudents(
+    return this.sectionsService.failStudents(
       dto,
       user?.userId,
       user?.roles ?? [],
     );
-
-    return {
-      success: true,
-      message: `${data.retainedCount} student(s) retained successfully`,
-      data,
-    };
   }
 
   @Post('access-students/graduate')
@@ -216,17 +205,11 @@ export class SectionsController {
     @Body() dto: GraduateStudentsDto,
     @CurrentUser() user: { userId: string; roles: string[] },
   ) {
-    const data = await this.sectionsService.graduateStudents(
+    return this.sectionsService.graduateStudents(
       dto,
       user?.userId,
       user?.roles ?? [],
     );
-
-    return {
-      success: true,
-      message: `${data.graduatedCount} student(s) graduated successfully`,
-      data,
-    };
   }
 
   /**

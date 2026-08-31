@@ -1,3 +1,4 @@
+import type { DemoAiPlanInput } from '@/services/demo-ai-plan-service';
 import { generateDemoAiPlan } from '@/services/demo-ai-plan-service';
 import axios from 'axios';
 
@@ -8,11 +9,11 @@ jest.mock('axios', () => ({
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('generateDemoAiPlan', () => {
-  const baseInput = {
+  const baseInput: DemoAiPlanInput = {
     subjectId: 'science',
     quarterExamScore: 70,
     weakConcepts: ['Cells', 'Scientific method'],
-  } as const;
+  };
 
   beforeEach(() => {
     mockedAxios.post.mockReset();

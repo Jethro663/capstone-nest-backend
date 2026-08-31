@@ -1,3 +1,8 @@
+import { ClassRecordRosterService } from './class-record-roster.service';
+import { ClassRecordReadinessService } from './class-record-readiness.service';
+import { AnnualGradesService } from '../academic-state/annual-grades.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClassRecordService } from './class-record.service';
@@ -11,6 +16,7 @@ function buildMockDb() {
   return {
     query: {
       classRecordItems: { findFirst: jest.fn() },
+      classRecordScores: { findMany: jest.fn().mockResolvedValue([]) },
       classes: { findFirst: jest.fn(), findMany: jest.fn() },
       classRecords: { findMany: jest.fn() },
       sections: { findFirst: jest.fn() },
@@ -43,7 +49,47 @@ describe('ClassRecordService performance events', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ClassRecordService,
-        { provide: DatabaseService, useValue: { db } },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            assertAssessmentAction: jest.fn(),
+            forClass: jest.fn().mockResolvedValue({
+              policy: getDefaultAcademicPolicy('2025-2026'),
+              cls: {
+                id: 'class-1',
+                teacherId: 'teacher-1',
+                schoolYear: '2025-2026',
+                subjectName: 'Mathematics',
+                subjectCode: 'MATH7',
+              },
+            }),
+          },
+        },
+        {
+          provide: DatabaseService,
+          useValue: {
+            db,
+            academicTransaction: async (work: () => Promise<unknown>) => work(),
+            afterAcademicCommit: async (effect: () => unknown) => effect(),
+          },
+        },
+        {
+          provide: ClassRecordRosterService,
+          useValue: { assertEligible: jest.fn() },
+        },
+        {
+          provide: ClassRecordReadinessService,
+          useValue: {
+            getReadiness: jest.fn().mockResolvedValue({
+              ready: false,
+              blockers: [{ code: 'unconfirmed_roster' }],
+            }),
+          },
+        },
+        {
+          provide: AnnualGradesService,
+          useValue: { invalidateRecordSources: jest.fn() },
+        },
         { provide: ClassRecordComputationService, useValue: {} },
         { provide: ClassRecordSyncService, useValue: {} },
         { provide: EventEmitter2, useValue: eventEmitter },

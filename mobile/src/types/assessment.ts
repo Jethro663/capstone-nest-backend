@@ -1,3 +1,4 @@
+import type { AcademicCapabilities } from "./academic-grading";
 export type AssessmentType =
   | "quiz"
   | "exam"
@@ -56,6 +57,8 @@ export interface AssessmentFileRecord {
 }
 
 export interface Assessment {
+  isCoreTemplateAsset?: boolean | null;
+  academicCapabilities?: AcademicCapabilities;
   id: string;
   title: string;
   description?: string;
@@ -99,6 +102,8 @@ export interface CreateAssessmentDto {
   passingScore?: number;
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
+  classRecordCategory?: string | null;
+  quarter?: "Q1" | "Q2" | "Q3" | "Q4" | null;
 }
 
 export interface UpdateAssessmentDto {
@@ -119,6 +124,8 @@ export interface UpdateAssessmentDto {
   maxAttempts?: number;
   timeLimitMinutes?: number | null;
   isPublished?: boolean;
+  classRecordCategory?: string | null;
+  quarter?: "Q1" | "Q2" | "Q3" | "Q4" | null;
 }
 
 export interface QuestionOptionInput {

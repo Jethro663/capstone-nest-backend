@@ -85,11 +85,21 @@ jest.mock('@/services/discussion-board-service', () => ({
 
 const mockedClassService = classService as jest.Mocked<typeof classService>;
 const mockedModuleService = moduleService as jest.Mocked<typeof moduleService>;
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
-const mockedExtractionService = extractionService as jest.Mocked<typeof extractionService>;
-const mockedAnnouncementService = announcementService as jest.Mocked<typeof announcementService>;
-const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
-const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<typeof discussionBoardService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
+const mockedExtractionService = extractionService as jest.Mocked<
+  typeof extractionService
+>;
+const mockedAnnouncementService = announcementService as jest.Mocked<
+  typeof announcementService
+>;
+const mockedClassRecordService = classRecordService as jest.Mocked<
+  typeof classRecordService
+>;
+const mockedDiscussionBoardService = discussionBoardService as jest.Mocked<
+  typeof discussionBoardService
+>;
 
 describe('AdminClassDetailPage', () => {
   beforeEach(() => {
@@ -97,6 +107,8 @@ describe('AdminClassDetailPage', () => {
     jest.clearAllMocks();
 
     mockedClassService.getById.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: {
         id: 'class-1',
         subjectName: 'Mathematics 9',
@@ -132,6 +144,9 @@ describe('AdminClassDetailPage', () => {
     } as Awaited<ReturnType<typeof classService.getEnrollments>>);
 
     mockedModuleService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 1,
       data: [
         {
           id: 'module-1',
@@ -148,6 +163,13 @@ describe('AdminClassDetailPage', () => {
     } as Awaited<ReturnType<typeof moduleService.getByClass>>);
 
     mockedAssessmentService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
+      count: 1,
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
       data: [
         {
           id: 'assessment-1',
@@ -161,10 +183,14 @@ describe('AdminClassDetailPage', () => {
     } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
 
     mockedExtractionService.listByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: [],
     } as Awaited<ReturnType<typeof extractionService.listByClass>>);
 
     mockedAnnouncementService.getByClass.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: [],
     } as Awaited<ReturnType<typeof announcementService.getByClass>>);
 
@@ -173,6 +199,8 @@ describe('AdminClassDetailPage', () => {
     } as Awaited<ReturnType<typeof classRecordService.getByClass>>);
 
     mockedDiscussionBoardService.listThreads.mockResolvedValue({
+      success: true,
+      message: 'Fixture response',
       data: {
         items: [],
         total: 0,
@@ -188,13 +216,16 @@ describe('AdminClassDetailPage', () => {
     render(<AdminClassDetailPage />);
 
     expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Modules' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Modules' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Numbers and Operations')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Back to Classes/i })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Add Class Students/i })).toHaveAttribute(
-      'href',
-      '/dashboard/admin/classes/class-1/students/add',
-    );
+    expect(
+      screen.getByRole('link', { name: /Back to Classes/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Add Class Students/i }),
+    ).toHaveAttribute('href', '/dashboard/admin/classes/class-1/students/add');
   });
 
   it('renders the calendar workspace when view=calendar', async () => {
@@ -203,8 +234,14 @@ describe('AdminClassDetailPage', () => {
     render(<AdminClassDetailPage />);
 
     expect(await screen.findByText('Mathematics 9')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Calendar' })).toBeInTheDocument();
-    expect(screen.getByText('No scheduled class events yet.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Full Calendar/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Calendar' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('No scheduled class events yet.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /Full Calendar/i }),
+    ).toBeInTheDocument();
   });
 });

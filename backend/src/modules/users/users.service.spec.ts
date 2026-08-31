@@ -114,7 +114,13 @@ describe('UsersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
-        { provide: DatabaseService, useValue: { db: mockDb } },
+        {
+          provide: DatabaseService,
+          useValue: {
+            db: mockDb,
+            academicTransaction: async (work: () => Promise<unknown>) => work(),
+          },
+        },
         { provide: OtpService, useValue: mockOtpService },
         { provide: MailService, useValue: mockMailService },
         { provide: ConfigService, useValue: mockConfigService },

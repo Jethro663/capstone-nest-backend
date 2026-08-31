@@ -1,3 +1,8 @@
+import { ClassRecordRosterService } from './class-record-roster.service';
+import { ClassRecordReadinessService } from './class-record-readiness.service';
+import { AnnualGradesService } from '../academic-state/annual-grades.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import { getDefaultAcademicPolicy } from '../academic-state/academic-policy';
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -11,8 +16,10 @@ function buildMockDb() {
   const db: any = {
     query: {
       classRecordItems: { findFirst: jest.fn() },
+      classRecordScores: { findMany: jest.fn().mockResolvedValue([]) },
       classRecords: { findFirst: jest.fn() },
       classRecordCategories: { findMany: jest.fn() },
+      classRecordParticipants: { findMany: jest.fn().mockResolvedValue([]) },
       classes: { findFirst: jest.fn() },
       classRecordFinalGrades: { findFirst: jest.fn(), findMany: jest.fn() },
     },
@@ -76,6 +83,7 @@ describe('ClassRecordService', () => {
 
   beforeEach(async () => {
     db = buildMockDb();
+    db.execute = jest.fn().mockResolvedValue({ rows: [], rowCount: 0 });
     jest.clearAllMocks();
     db.query.classes.findFirst.mockResolvedValue({
       id: 'class-1',
@@ -85,7 +93,47 @@ describe('ClassRecordService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ClassRecordService,
-        { provide: DatabaseService, useValue: { db } },
+        {
+          provide: AcademicPolicyService,
+          useValue: {
+            assertAssessmentAction: jest.fn(),
+            currentState: jest
+              .fn()
+              .mockResolvedValue({ schoolYear: '2025-2026', quarter: 'Q1' }),
+            forClass: jest.fn().mockImplementation(async () => ({
+              policy: getDefaultAcademicPolicy('2025-2026'),
+              cls: {
+                schoolYear: '2025-2026',
+                ...(await db.query.classes.findFirst()),
+              },
+            })),
+          },
+        },
+        {
+          provide: DatabaseService,
+          useValue: {
+            db,
+            academicTransaction: async (work: () => Promise<unknown>) => work(),
+            afterAcademicCommit: async (effect: () => unknown) => effect(),
+          },
+        },
+        {
+          provide: ClassRecordRosterService,
+          useValue: { assertEligible: jest.fn() },
+        },
+        {
+          provide: ClassRecordReadinessService,
+          useValue: {
+            getReadiness: jest.fn().mockResolvedValue({
+              ready: false,
+              blockers: [{ code: 'unconfirmed_roster' }],
+            }),
+          },
+        },
+        {
+          provide: AnnualGradesService,
+          useValue: { invalidateRecordSources: jest.fn() },
+        },
         {
           provide: ClassRecordComputationService,
           useValue: mockComputationService,
@@ -466,83 +514,18 @@ describe('ClassRecordService', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('finalizes class record with computed grades and writes audit metadata', async () => {
+  it('rejects incomplete finalization before writing any grade or audit', async () => {
     db.query.classRecords.findFirst.mockResolvedValue({
       id: 'record-1',
       classId: 'class-1',
-      teacherId: 'teacher-1',
       status: 'draft',
     });
-
-    const grades = new Map([
-      [
-        'student-1',
-        {
-          studentId: 'student-1',
-          quarterlyGrade: 86,
-          remarks: 'Passed',
-        },
-      ],
-      [
-        'student-2',
-        {
-          studentId: 'student-2',
-          quarterlyGrade: 72,
-          remarks: 'For Intervention',
-        },
-      ],
-    ]);
-    mockComputationService.validateCategoryWeights.mockResolvedValue(undefined);
-    mockComputationService.computeGrades.mockResolvedValue(grades);
-
-    const tx = {
-      delete: jest.fn().mockReturnValue({
-        where: jest.fn().mockResolvedValue(undefined),
-      }),
-      insert: jest.fn().mockReturnValue({
-        values: jest.fn().mockResolvedValue(undefined),
-      }),
-      update: jest.fn().mockReturnValue({
-        set: jest.fn().mockReturnValue({
-          where: jest.fn().mockReturnValue({
-            returning: jest
-              .fn()
-              .mockResolvedValue([{ id: 'record-1', status: 'finalized' }]),
-          }),
-        }),
-      }),
-    };
-    db.transaction.mockImplementation(async (handler: (tx: any) => any) =>
-      handler(tx),
-    );
-
-    const result = await service.finalizeClassRecord('record-1', 'teacher-1', [
-      'teacher',
-    ]);
-
-    expect(result).toEqual({
-      classRecord: { id: 'record-1', status: 'finalized' },
-      gradeCount: 2,
-    });
-    expect(mockComputationService.validateCategoryWeights).toHaveBeenCalledWith(
-      'record-1',
-      expect.any(Object),
-    );
-    expect(mockComputationService.computeGrades).toHaveBeenCalledWith(
-      'record-1',
-      expect.any(Object),
-    );
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'teacher-1',
-        action: 'class_record.finalized',
-        targetId: 'record-1',
-        metadata: expect.objectContaining({
-          classId: 'class-1',
-          gradeCount: 2,
-        }),
-      }),
-    );
+    await expect(
+      service.finalizeClassRecord('record-1', 'teacher-1', ['teacher']),
+    ).rejects.toThrow('incomplete');
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+    expect(mockAuditService.log).not.toHaveBeenCalled();
   });
 
   it('reopens finalized class record and writes audit metadata with class context', async () => {
@@ -567,13 +550,15 @@ describe('ClassRecordService', () => {
         }),
       }),
     };
-    db.transaction.mockImplementation(async (handler: (tx: any) => any) =>
-      handler(tx),
-    );
+    db.delete = tx.delete;
+    db.update = tx.update;
 
-    const result = await service.reopenClassRecord('record-1', 'teacher-1', [
-      'teacher',
-    ]);
+    const result = await service.reopenClassRecord(
+      'record-1',
+      'teacher-1',
+      ['teacher'],
+      'Correct recorded scores',
+    );
 
     expect(result).toEqual({ id: 'record-1', status: 'draft' });
     expect(mockAuditService.log).toHaveBeenCalledWith(
@@ -584,7 +569,7 @@ describe('ClassRecordService', () => {
         metadata: expect.objectContaining({
           classId: 'class-1',
           previousStatus: 'finalized',
-          nextStatus: 'draft',
+          reason: 'Correct recorded scores',
         }),
       }),
     );

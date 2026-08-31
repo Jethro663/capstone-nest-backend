@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { useTeacherCreateAssessmentMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
+import { academicStateService } from "../api/services/academic-state";
+import { classesApi } from "../api/services/classes";
 import type { AssessmentType } from "../types/assessment";
 import type { RootStackParamList } from "../navigation/types";
 import {
@@ -15,7 +18,10 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 
-type Props = NativeStackScreenProps<RootStackParamList, "TeacherCreateAssessment">;
+type Props = NativeStackScreenProps<
+  RootStackParamList,
+  "TeacherCreateAssessment"
+>;
 
 const assessmentTypes: AssessmentType[] = [
   "quiz",
@@ -32,10 +38,14 @@ function normalizeDueDate(raw: string): string | undefined {
   const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) {
-    throw new Error("Use a valid date format such as YYYY-MM-DD HH:mm or YYYY-MM-DDTHH:mm.");
+    throw new Error(
+      "Use a valid date format such as YYYY-MM-DD HH:mm or YYYY-MM-DDTHH:mm.",
+    );
   }
   if (parsed.getTime() < Date.now()) {
-    throw new Error("Assessment due date cannot be earlier than the present date and time.");
+    throw new Error(
+      "Assessment due date cannot be earlier than the present date and time.",
+    );
   }
   return parsed.toISOString();
 }
@@ -50,6 +60,21 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
   const [passingScore, setPassingScore] = useState("60");
   const [maxAttempts, setMaxAttempts] = useState("1");
   const [strictMode, setStrictMode] = useState(false);
+  const [quarter, setQuarter] = useState<"Q1" | "Q2" | "Q3" | "Q4" | "">("");
+  const context = useQuery({
+    queryKey: ["create-assessment-policy", classId],
+    queryFn: async () => {
+      const [cls, current] = await Promise.all([
+        classesApi.getById(classId),
+        academicStateService.getCurrent(),
+      ]);
+      const policy =
+        cls.schoolYear === current.data.schoolYear
+          ? current.data.policy
+          : (await academicStateService.getPolicy(cls.schoolYear)).data;
+      return { policy, current: current.data };
+    },
+  });
 
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
@@ -78,21 +103,32 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
         description: description.trim() || undefined,
         type: assessmentType,
         dueDate,
-        passingScore: Number.isFinite(parsedPassing) && parsedPassing > 0 ? parsedPassing : undefined,
-        maxAttempts: Number.isFinite(parsedAttempts) && parsedAttempts > 0 ? parsedAttempts : undefined,
+        passingScore:
+          Number.isFinite(parsedPassing) && parsedPassing > 0
+            ? parsedPassing
+            : undefined,
+        maxAttempts:
+          Number.isFinite(parsedAttempts) && parsedAttempts > 0
+            ? parsedAttempts
+            : undefined,
         strictMode,
+        quarter: quarter || undefined,
       });
-      Alert.alert("Assessment created", "The assessment draft has been created. Please add questions in the editor.", [
-        {
-          text: "Add Questions Now",
-          onPress: () => {
-            navigation.replace("TeacherAssessmentEditor", {
-              assessmentId: created.id,
-              classId,
-            });
+      Alert.alert(
+        "Assessment created",
+        "The assessment draft has been created. Please add questions in the editor.",
+        [
+          {
+            text: "Add Questions Now",
+            onPress: () => {
+              navigation.replace("TeacherAssessmentEditor", {
+                assessmentId: created.id,
+                classId,
+              });
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (error) {
       const appError = toAppError(error);
       Alert.alert("Unable to create assessment", appError.message);
@@ -116,11 +152,18 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             backgroundColor: theme.redSoft,
           }}
         >
-          <MaterialCommunityIcons name="arrow-left" size={18} color={theme.red} />
+          <MaterialCommunityIcons
+            name="arrow-left"
+            size={18}
+            color={theme.red}
+          />
         </Pressable>
       }
     >
-      <TeacherPanel title="Assessment details" subtitle="Title is required. Other fields can be adjusted later from detail screens.">
+      <TeacherPanel
+        title="Assessment details"
+        subtitle="Title is required. Other fields can be adjusted later from detail screens."
+      >
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
           <TeacherInlineField
             label="Assessment title"
@@ -135,6 +178,31 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             placeholder="Assessment instructions"
             multiline
           />
+          <View
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 6,
+            }}
+          >
+            <TeacherChip
+              label="Active period (server default)"
+              active={!quarter}
+              onPress={() => setQuarter("")}
+            />
+            {context.data?.policy.periods.map((period) => (
+              <TeacherChip
+                key={period.key}
+                label={period.label}
+                active={quarter === period.key}
+                onPress={() => setQuarter(period.key)}
+              />
+            ))}
+          </View>
+          <Text style={{ marginTop: 6, color: theme.subtext, fontSize: 12 }}>
+            Future periods create drafts; release waits for activation.
+          </Text>
           <TeacherInlineField
             label="Due date"
             value={dueDateInput}
@@ -153,7 +221,14 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
             onChangeText={setMaxAttempts}
             placeholder="1"
           />
-          <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <View
+            style={{
+              marginTop: 12,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
             {assessmentTypes.map((type) => (
               <TeacherChip
                 key={type}
@@ -163,9 +238,18 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
               />
             ))}
           </View>
-          <View style={{ marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <View
+            style={{
+              marginTop: 10,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
             <TeacherChip
-              label={strictMode ? "Strict mode enabled" : "Strict mode disabled"}
+              label={
+                strictMode ? "Strict mode enabled" : "Strict mode disabled"
+              }
               active={strictMode}
               onPress={() => setStrictMode((value) => !value)}
             />
@@ -178,7 +262,12 @@ export function TeacherCreateAssessmentScreen({ navigation, route }: Props) {
               onPress={() => void handleSubmit()}
               disabled={mutation.isPending}
             />
-            <TeacherActionButton label="Cancel" icon="close" tone="neutral" onPress={() => navigation.goBack()} />
+            <TeacherActionButton
+              label="Cancel"
+              icon="close"
+              tone="neutral"
+              onPress={() => navigation.goBack()}
+            />
           </View>
         </View>
       </TeacherPanel>

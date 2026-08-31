@@ -1,10 +1,17 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { and, desc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { AcademicMutation } from '../../database/academic-transaction';
+import { AcademicPolicyService } from './academic-policy.service';
+import { AcademicTransitionReadinessService } from './academic-transition-readiness.service';
+import { getSubjectWeights } from './academic-policy';
+import type { TransitionBlocker } from './academic-transition-readiness';
+import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import {
   academicSystemStates,
@@ -13,7 +20,8 @@ import {
   assessments,
   classModules,
   classRecords,
-  classRecordFinalGrades,
+  academicStudentYearOutcomes,
+  academicReminderRuns,
   classSchedules,
   classes,
   enrollments,
@@ -34,11 +42,24 @@ import { TransitionAcademicStateDto } from './DTO/transition-academic-state.dto'
 
 type QuarterKey = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 
+export interface AcademicReminderResult {
+  message: string;
+  notifiedTeachersCount: number;
+  notifiedClassesCount: number;
+  details: Array<{
+    teacherId: string;
+    blockers: TransitionBlocker[];
+    classIds: string[];
+  }>;
+  replayed: boolean;
+}
+
 interface AcademicStateRow {
   id: string;
   schoolYear: string;
   quarter: QuarterKey;
   updatedBy: string | null;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -49,13 +70,6 @@ type ClassScheduleRow = typeof classSchedules.$inferSelect;
 type ClassCloneSource = ClassRow & {
   section: SectionRow | null;
   schedules: ClassScheduleRow[];
-};
-
-type AutomaticStudentOutcome = {
-  studentId: string;
-  sourceGradeLevel: string;
-  targetGradeLevel: '7' | '8' | '9' | '10' | null;
-  outcome: 'promoted' | 'retained' | 'graduated';
 };
 
 function getSectionCloneKey(section: Pick<SectionRow, 'name' | 'gradeLevel'>) {
@@ -78,17 +92,12 @@ export class AcademicStateService {
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
     private readonly notificationsGateway: NotificationsGateway,
+    private readonly policyService: AcademicPolicyService,
+    private readonly readinessService: AcademicTransitionReadinessService,
   ) {}
 
   private get db() {
     return this.databaseService.db;
-  }
-
-  private getDefaultSchoolYear() {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const schoolYearStart = now.getMonth() >= 5 ? currentYear : currentYear - 1;
-    return `${schoolYearStart}-${schoolYearStart + 1}`;
   }
 
   private assertValidSchoolYear(schoolYear: string) {
@@ -125,272 +134,6 @@ export class AcademicStateService {
     }
   }
 
-  private async ensureCurrentState(): Promise<AcademicStateRow> {
-    const existing = await this.db.query.academicSystemStates.findFirst({
-      orderBy: [desc(academicSystemStates.updatedAt)],
-    });
-
-    if (existing) {
-      return existing as AcademicStateRow;
-    }
-
-    const [created] = await this.db
-      .insert(academicSystemStates)
-      .values({
-        id: this.singletonStateId,
-        schoolYear: this.getDefaultSchoolYear(),
-        quarter: 'Q1',
-        updatedBy: null,
-      })
-      .returning();
-
-    return created as AcademicStateRow;
-  }
-  private getEmptyPromotionReadiness() {
-    return {
-      activeStudentsInCurrentYear: 0,
-      studentsMissingFinalizedGrades: 0,
-      studentsToPromote: 0,
-      studentsToRetain: 0,
-      studentsToGraduate: 0,
-      transitionBlocked: false,
-      message: null as string | null,
-      studentOutcomes: [] as AutomaticStudentOutcome[],
-    };
-  }
-
-  private classifyStudentOutcome(input: {
-    studentId: string;
-    sourceGradeLevel: '7' | '8' | '9' | '10';
-    subjectFinalGrades: number[][];
-  }): AutomaticStudentOutcome {
-    const hasFailingSubject = input.subjectFinalGrades.some(
-      (grades) =>
-        grades.length === 0 ||
-        grades.reduce((sum, grade) => sum + grade, 0) / grades.length < 75,
-    );
-
-    if (hasFailingSubject) {
-      return {
-        studentId: input.studentId,
-        sourceGradeLevel: input.sourceGradeLevel,
-        targetGradeLevel: input.sourceGradeLevel,
-        outcome: 'retained',
-      };
-    }
-
-    if (input.sourceGradeLevel === '10') {
-      return {
-        studentId: input.studentId,
-        sourceGradeLevel: input.sourceGradeLevel,
-        targetGradeLevel: null,
-        outcome: 'graduated',
-      };
-    }
-
-    return {
-      studentId: input.studentId,
-      sourceGradeLevel: input.sourceGradeLevel,
-      targetGradeLevel: String(Number(input.sourceGradeLevel) + 1) as
-        | '8'
-        | '9'
-        | '10',
-      outcome: 'promoted',
-    };
-  }
-
-  private async getPromotionTransitionReadiness(sectionIds: string[]) {
-    const emptyReadiness = this.getEmptyPromotionReadiness();
-    if (sectionIds.length === 0) {
-      return emptyReadiness;
-    }
-
-    const activeSectionEnrollments = await this.db
-      .select({
-        sectionId: enrollments.sectionId,
-        studentId: enrollments.studentId,
-      })
-      .from(enrollments)
-      .where(
-        and(
-          inArray(enrollments.sectionId, sectionIds),
-          eq(enrollments.status, 'enrolled'),
-        ),
-      );
-
-    const uniqueActiveSectionEnrollments = Array.from(
-      new Map(
-        activeSectionEnrollments
-          .filter((enrollment) => enrollment.sectionId)
-          .map((enrollment) => [
-            enrollment.sectionId + ':' + enrollment.studentId,
-            enrollment,
-          ]),
-      ).values(),
-    );
-
-    const activeStudentIds = new Set(
-      uniqueActiveSectionEnrollments.map((enrollment) => enrollment.studentId),
-    );
-
-    if (activeStudentIds.size === 0) {
-      return emptyReadiness;
-    }
-
-    const recordRows = await this.db
-      .select({
-        sectionId: classes.sectionId,
-        classId: classes.id,
-        classRecordId: classRecords.id,
-        status: classRecords.status,
-      })
-      .from(classRecords)
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
-      );
-
-    const recordCountsBySectionId = new Map<
-      string,
-      { totalRecords: number; finalizedRecords: number }
-    >();
-    for (const row of recordRows) {
-      const current = recordCountsBySectionId.get(row.sectionId) ?? {
-        totalRecords: 0,
-        finalizedRecords: 0,
-      };
-      current.totalRecords += 1;
-      if (['finalized', 'locked'].includes(row.status)) {
-        current.finalizedRecords += 1;
-      }
-      recordCountsBySectionId.set(row.sectionId, current);
-    }
-
-    const finalGradeRows = await this.db
-      .select({
-        sectionId: classes.sectionId,
-        classId: classes.id,
-        studentId: classRecordFinalGrades.studentId,
-        classRecordId: classRecordFinalGrades.classRecordId,
-        finalPercentage: classRecordFinalGrades.finalPercentage,
-      })
-      .from(classRecordFinalGrades)
-      .innerJoin(
-        classRecords,
-        eq(classRecords.id, classRecordFinalGrades.classRecordId),
-      )
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
-      );
-
-    const finalGradesBySectionStudent = new Map<
-      string,
-      Array<{
-        classId: string;
-        classRecordId: string;
-        finalPercentage: number;
-      }>
-    >();
-    for (const row of finalGradeRows) {
-      const key = `${row.sectionId}:${row.studentId}`;
-      const current = finalGradesBySectionStudent.get(key) ?? [];
-      current.push({
-        classId: row.classId,
-        classRecordId: row.classRecordId,
-        finalPercentage: Number(row.finalPercentage),
-      });
-      finalGradesBySectionStudent.set(key, current);
-    }
-
-    const sectionGradeRows = await this.db
-      .select({ id: sections.id, gradeLevel: sections.gradeLevel })
-      .from(sections)
-      .where(inArray(sections.id, sectionIds));
-    const gradeLevelBySectionId = new Map(
-      sectionGradeRows.map((section) => [section.id, section.gradeLevel]),
-    );
-
-    const missingFinalizedGradeStudentIds = new Set<string>();
-    const studentOutcomes: AutomaticStudentOutcome[] = [];
-    for (const enrollment of uniqueActiveSectionEnrollments) {
-      const sectionId = enrollment.sectionId;
-      if (!sectionId) continue;
-
-      const counts = recordCountsBySectionId.get(sectionId) ?? {
-        totalRecords: 0,
-        finalizedRecords: 0,
-      };
-      const studentFinalGrades =
-        finalGradesBySectionStudent.get(
-          `${sectionId}:${enrollment.studentId}`,
-        ) ?? [];
-      const finalGradeRecordCount = new Set(
-        studentFinalGrades.map((grade) => grade.classRecordId),
-      ).size;
-      const isFinalized =
-        counts.totalRecords > 0 &&
-        counts.finalizedRecords >= counts.totalRecords &&
-        finalGradeRecordCount >= counts.totalRecords;
-
-      if (!isFinalized) {
-        missingFinalizedGradeStudentIds.add(enrollment.studentId);
-        continue;
-      }
-
-      const finalGradesByClassId = new Map<string, number[]>();
-      for (const grade of studentFinalGrades) {
-        const current = finalGradesByClassId.get(grade.classId) ?? [];
-        current.push(grade.finalPercentage);
-        finalGradesByClassId.set(grade.classId, current);
-      }
-      const sourceGradeLevel = gradeLevelBySectionId.get(sectionId);
-      if (
-        !sourceGradeLevel ||
-        !['7', '8', '9', '10'].includes(sourceGradeLevel)
-      ) {
-        missingFinalizedGradeStudentIds.add(enrollment.studentId);
-        continue;
-      }
-
-      studentOutcomes.push(
-        this.classifyStudentOutcome({
-          studentId: enrollment.studentId,
-          sourceGradeLevel: sourceGradeLevel as '7' | '8' | '9' | '10',
-          subjectFinalGrades: Array.from(finalGradesByClassId.values()),
-        }),
-      );
-    }
-
-    const activeStudentsInCurrentYear = activeStudentIds.size;
-    const studentsMissingFinalizedGrades = missingFinalizedGradeStudentIds.size;
-    const studentsToPromote = studentOutcomes.filter(
-      (student) => student.outcome === 'promoted',
-    ).length;
-    const studentsToRetain = studentOutcomes.filter(
-      (student) => student.outcome === 'retained',
-    ).length;
-    const studentsToGraduate = studentOutcomes.filter(
-      (student) => student.outcome === 'graduated',
-    ).length;
-
-    return {
-      activeStudentsInCurrentYear,
-      studentsMissingFinalizedGrades,
-      studentsToPromote,
-      studentsToRetain,
-      studentsToGraduate,
-      transitionBlocked: studentsMissingFinalizedGrades > 0,
-      message:
-        studentsMissingFinalizedGrades > 0
-          ? `${studentsMissingFinalizedGrades} active student(s) still need complete, finalized subject grades before transitioning.`
-          : activeStudentsInCurrentYear > 0
-            ? `${studentsToPromote} student(s) will move up, ${studentsToRetain} will be retained, and ${studentsToGraduate} will graduate automatically.`
-            : null,
-      studentOutcomes,
-    };
-  }
-
   private async getTransitionTargets(
     fromState: AcademicStateRow,
     toState: { schoolYear: string; quarter: QuarterKey },
@@ -403,7 +146,9 @@ export class AcademicStateService {
       enrollmentIdsToComplete: [] as string[],
       sectionsToClone: [] as SectionRow[],
       classesToClone: [] as ClassCloneSource[],
-      promotionReadiness: this.getEmptyPromotionReadiness(),
+      promotionReadiness: await this.readinessService.getReadiness(
+        fromState.schoolYear,
+      ),
     };
 
     const noTransition = fromState.schoolYear === toState.schoolYear;
@@ -411,19 +156,8 @@ export class AcademicStateService {
       return emptyTargets;
     }
 
-    const draftRecords = await this.db
-      .select({ id: classRecords.id })
-      .from(classRecords)
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(
-          eq(classRecords.status, 'draft'),
-          eq(classRecords.gradingPeriod, fromState.quarter),
-          eq(classes.schoolYear, fromState.schoolYear),
-        ),
-      );
-
-    const classRecordIdsToFinalize = draftRecords.map((record) => record.id);
+    // Kept in the response for older clients; transition never finalizes drafts.
+    const classRecordIdsToFinalize: string[] = [];
 
     const schoolEventIdsToArchive = (
       await this.db
@@ -465,8 +199,7 @@ export class AcademicStateService {
 
     const sectionIdsToArchive = sourceSections.map((section) => section.id);
     const classIdsToArchive = sourceClasses.map((classRow) => classRow.id);
-    const promotionReadiness =
-      await this.getPromotionTransitionReadiness(sectionIdsToArchive);
+    const promotionReadiness = emptyTargets.promotionReadiness;
 
     const enrollmentScope =
       sectionIdsToArchive.length > 0 && classIdsToArchive.length > 0
@@ -519,6 +252,17 @@ export class AcademicStateService {
       })
       .from(classes)
       .where(eq(classes.schoolYear, toState.schoolYear));
+
+    if (targetSections.length || targetClasses.length) {
+      promotionReadiness.blockers.push({
+        code: 'target_year_conflict',
+        message:
+          'The next school year already has sections or classes. Resolve the conflict before cloning.',
+      });
+      promotionReadiness.transitionBlocked = true;
+      promotionReadiness.message =
+        'Target school-year structures require reconciliation before transition.';
+    }
 
     const targetClassKeys = new Set(
       targetClasses.map((classRow) =>
@@ -798,24 +542,24 @@ export class AcademicStateService {
       ],
     });
     const sourceModuleIds = sourceModules.map((module: any) => module.id);
-    const [sourceModuleSections, sourceScaleEntries] = sourceModuleIds.length
-      ? await Promise.all([
-          database.query.moduleSections.findMany({
-            where: inArray(moduleSections.moduleId, sourceModuleIds),
-            orderBy: (table: typeof moduleSections, { asc }: any) => [
-              asc(table.moduleId),
-              asc(table.order),
-            ],
-          }),
-          database.query.moduleGradingScaleEntries.findMany({
-            where: inArray(moduleGradingScaleEntries.moduleId, sourceModuleIds),
-            orderBy: (
-              table: typeof moduleGradingScaleEntries,
-              { asc }: any,
-            ) => [asc(table.moduleId), asc(table.order)],
-          }),
-        ])
-      : [[], []];
+    const sourceModuleSections = sourceModuleIds.length
+      ? await database.query.moduleSections.findMany({
+          where: inArray(moduleSections.moduleId, sourceModuleIds),
+          orderBy: (table: typeof moduleSections, { asc }: any) => [
+            asc(table.moduleId),
+            asc(table.order),
+          ],
+        })
+      : [];
+    const sourceScaleEntries = sourceModuleIds.length
+      ? await database.query.moduleGradingScaleEntries.findMany({
+          where: inArray(moduleGradingScaleEntries.moduleId, sourceModuleIds),
+          orderBy: (table: typeof moduleGradingScaleEntries, { asc }: any) => [
+            asc(table.moduleId),
+            asc(table.order),
+          ],
+        })
+      : [];
     const sourceModuleSectionIds = sourceModuleSections.map(
       (section: any) => section.id,
     );
@@ -962,30 +706,32 @@ export class AcademicStateService {
   }
 
   async getCurrentState() {
-    const state = await this.ensureCurrentState();
+    const state = await this.policyService.currentState();
     return {
-      schoolYear: state.schoolYear,
-      quarter: state.quarter,
-      updatedAt: state.updatedAt,
-      updatedBy: state.updatedBy,
+      ...state,
       transitionConfirmationText:
         AcademicStateService.TRANSITION_CONFIRMATION_TEXT,
     };
   }
 
+  @AcademicMutation()
   async getImpactPreview(schoolYear: string) {
     this.assertValidSchoolYear(schoolYear);
-    const current = await this.ensureCurrentState();
-    const target = {
-      schoolYear,
-      quarter: current.quarter,
-    };
+    const current = await this.policyService.currentState();
+    const expectedNextYear = `${Number(current.schoolYear.slice(0, 4)) + 1}-${Number(current.schoolYear.slice(0, 4)) + 2}`;
+    if (schoolYear !== expectedNextYear)
+      throw new BadRequestException(
+        'Target must be the immediate next school year',
+      );
+    const targetPolicy = await this.policyService.forYear(schoolYear);
+    const target = { schoolYear, quarter: targetPolicy.periods[0].key };
     const impact = await this.getTransitionTargets(current, target);
 
     return {
       current: {
         schoolYear: current.schoolYear,
         quarter: current.quarter,
+        version: current.version,
       },
       target,
       impact: {
@@ -1003,136 +749,92 @@ export class AcademicStateService {
     };
   }
 
-  async notifyUnfinalizedTeachers(actorId: string) {
-    const current = await this.ensureCurrentState();
-
-    const activeClassRows = await this.db
-      .select({
-        classId: classes.id,
-        subjectName: classes.subjectName,
-        teacherId: classes.teacherId,
-        sectionId: sections.id,
-        sectionName: sections.name,
-        sectionGradeLevel: sections.gradeLevel,
-        classRecordId: classRecords.id,
-        classRecordStatus: classRecords.status,
-      })
-      .from(classes)
-      .innerJoin(sections, eq(sections.id, classes.sectionId))
-      .leftJoin(classRecords, eq(classRecords.classId, classes.id))
-      .where(
-        and(
-          eq(classes.schoolYear, current.schoolYear),
-          eq(classes.isActive, true),
-        ),
-      );
-
-    if (activeClassRows.length === 0) {
-      return {
-        message: 'No active classes with teacher assignments were found.',
-        notifiedClassesCount: 0,
-        notifiedTeachersCount: 0,
-        details: [],
-      };
-    }
-
-    const classesById = new Map<
-      string,
-      {
-        classRow: (typeof activeClassRows)[number];
-        statuses: Array<string | null>;
-      }
-    >();
-    for (const row of activeClassRows) {
-      if (!row.teacherId) continue;
-      const currentClass = classesById.get(row.classId) ?? {
-        classRow: row,
-        statuses: [],
-      };
-      currentClass.statuses.push(row.classRecordStatus ?? null);
-      classesById.set(row.classId, currentClass);
-    }
-
-    const uniqueClasses = Array.from(classesById.values()).map(
-      ({ classRow, statuses }) => ({
-        ...classRow,
-        allRecordsFinalized:
-          statuses.length > 0 &&
-          statuses.every(
-            (status) =>
-              status !== null && ['finalized', 'locked'].includes(status),
-          ),
-      }),
+  @AcademicMutation()
+  async notifyUnfinalizedTeachers(
+    actorId: string,
+  ): Promise<AcademicReminderResult> {
+    const current = await this.policyService.currentState();
+    const readiness = await this.readinessService.getReadiness(
+      current.schoolYear,
     );
-    if (uniqueClasses.length === 0) {
-      return {
-        message: 'No active teacher assignments found for the school year.',
-        notifiedClassesCount: 0,
-        notifiedTeachersCount: 0,
-        details: [],
-      };
+    const groups = new Map<string, typeof readiness.blockers>();
+    for (const blocker of readiness.blockers) {
+      if (!blocker.teacherId || !blocker.classId) continue;
+      const group = groups.get(blocker.teacherId) ?? [];
+      group.push(blocker);
+      groups.set(blocker.teacherId, group);
     }
-
-    const notificationInputs = uniqueClasses.map((item) => ({
-      userId: item.teacherId!,
+    const details = [...groups]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([teacherId, blockers]) => ({
+        teacherId,
+        blockers: blockers.sort((a, b) =>
+          JSON.stringify(a).localeCompare(JSON.stringify(b)),
+        ),
+        classIds: [...new Set(blockers.map((b) => b.classId!))].sort(),
+      }));
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify({ schoolYear: current.schoolYear, details }))
+      .digest('hex');
+    const windowStart = new Date(
+      Math.floor(Date.now() / (15 * 60_000)) * 15 * 60_000,
+    );
+    const previous = await this.db.query.academicReminderRuns.findFirst({
+      where: and(
+        eq(academicReminderRuns.fingerprint, fingerprint),
+        eq(academicReminderRuns.windowStart, windowStart),
+      ),
+    });
+    if (previous)
+      return {
+        ...(previous.result as unknown as AcademicReminderResult),
+        replayed: true,
+      };
+    const notificationInputs = details.map((detail) => ({
+      userId: detail.teacherId,
       type: 'grade_finalization_requested' as const,
-      referenceId: item.classId,
-      title: `Grade Finalization Reminder: ${item.subjectName}`,
-      body: item.allRecordsFinalized
-        ? `Your class records for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}) are finalized. This is a reminder that the school year transition is pending.`
-        : `School year transition is pending. Please complete and finalize all class records for ${item.subjectName} (Grade ${item.sectionGradeLevel} - ${item.sectionName}).`,
+      referenceId: current.id,
+      title: `Academic readiness: ${current.schoolYear}`,
+      body: `${detail.classIds.length} subject(s) require attention before year-end transition. Open the listed workbooks to resolve missing periods, eligibility, grades, or source evidence.`,
       metadata: {
-        classId: item.classId,
-        sectionId: item.sectionId,
-        subjectName: item.subjectName,
-        sectionName: item.sectionName,
-        gradeLevel: item.sectionGradeLevel,
-        allRecordsFinalized: item.allRecordsFinalized,
+        schoolYear: current.schoolYear,
         view: 'class-record',
+        ...detail,
+        destinations: detail.classIds.map((classId) => ({
+          classId,
+          path: `/dashboard/teacher/classes/${classId}?tab=class-record`,
+        })),
       },
     }));
-
     await this.notificationsService.createBulk(notificationInputs);
-
-    for (const n of notificationInputs) {
-      this.notificationsGateway.emitToUser(n.userId, {
-        id: `gen-${Date.now()}-${n.referenceId || 'ref'}`,
-        type: n.type,
-        title: n.title,
-        body: n.body,
-        referenceId: n.referenceId,
-        metadata: n.metadata,
-        createdAt: new Date(),
-      });
-    }
-
-    const notifiedTeacherIds = new Set(uniqueClasses.map((c) => c.teacherId!));
-
+    this.databaseService.afterAcademicCommit(() => {
+      for (const notification of notificationInputs)
+        this.notificationsGateway.emitToUser(notification.userId, {
+          ...notification,
+          id: `academic-${fingerprint}-${notification.userId}`,
+          createdAt: new Date(),
+        });
+    });
+    const result = {
+      message: details.length
+        ? `Sent grouped reminders to ${details.length} teacher(s).`
+        : 'No teacher-actionable readiness issues remain.',
+      notifiedTeachersCount: details.length,
+      notifiedClassesCount: new Set(details.flatMap((d) => d.classIds)).size,
+      details,
+      replayed: false,
+    };
+    await this.db
+      .insert(academicReminderRuns)
+      .values({ fingerprint, windowStart, result, createdBy: actorId });
     await this.auditService.log({
       actorId,
       action: 'academic_state.teachers_notified',
       targetType: 'academic_state',
-      targetId: this.singletonStateId,
-      metadata: {
-        schoolYear: current.schoolYear,
-        notifiedClassesCount: uniqueClasses.length,
-        notifiedTeachersCount: notifiedTeacherIds.size,
-      },
+      targetId: current.id,
+      metadata: { schoolYear: current.schoolYear, fingerprint, ...result },
     });
-
-    return {
-      message: `Sent ${notificationInputs.length} reminder(s) to ${notifiedTeacherIds.size} teacher(s) across ${uniqueClasses.length} active subject(s).`,
-      notifiedClassesCount: uniqueClasses.length,
-      notifiedTeachersCount: notifiedTeacherIds.size,
-      details: uniqueClasses.map((item) => ({
-        classId: item.classId,
-        subjectName: item.subjectName,
-        sectionName: item.sectionName,
-        gradeLevel: item.sectionGradeLevel,
-        teacherId: item.teacherId,
-        allRecordsFinalized: item.allRecordsFinalized,
-      })),
-    };
+    return result;
   }
 
   async transition(dto: TransitionAcademicStateDto, actorId: string) {
@@ -1148,336 +850,395 @@ export class AcademicStateService {
 
     await this.verifyAdminPassword(actorId, dto.currentPassword);
 
-    const current = await this.ensureCurrentState();
-    const target = {
-      schoolYear: dto.schoolYear,
-      quarter: current.quarter,
-    };
-    const impactTargets = await this.getTransitionTargets(current, target);
-
-    if (impactTargets.promotionReadiness.transitionBlocked) {
-      throw new BadRequestException({
-        message:
-          impactTargets.promotionReadiness.message ??
-          'Resolve active student promotion or retention before transitioning the school year.',
-        promotionReadiness: impactTargets.promotionReadiness,
+    return this.databaseService.academicTransaction(async () => {
+      const current = await this.policyService.currentState();
+      const states = await this.db.query.academicSystemStates.findMany({
+        columns: { id: true },
+        limit: 2,
       });
-    }
-
-    const now = new Date();
-    let sectionsCreated = 0;
-    let classesCreated = 0;
-    let classSchedulesCloned = 0;
-    let learningAssetCounts = {
-      assessmentsCreated: 0,
-      assessmentQuestionsCreated: 0,
-      lessonsCreated: 0,
-      lessonBlocksCreated: 0,
-      modulesCreated: 0,
-      moduleSectionsCreated: 0,
-      moduleItemsCreated: 0,
-      moduleGradingScaleEntriesCreated: 0,
-    };
-
-    await this.db.transaction(async (tx) => {
-      const promotedStudentsByGrade = new Map<'8' | '9' | '10', string[]>();
-      const graduatedStudentIds: string[] = [];
-      for (const student of impactTargets.promotionReadiness.studentOutcomes ??
-        []) {
-        if (student.outcome === 'promoted' && student.targetGradeLevel) {
-          const targetGrade = student.targetGradeLevel as '8' | '9' | '10';
-          const studentIds = promotedStudentsByGrade.get(targetGrade) ?? [];
-          studentIds.push(student.studentId);
-          promotedStudentsByGrade.set(targetGrade, studentIds);
-        } else if (student.outcome === 'graduated') {
-          graduatedStudentIds.push(student.studentId);
-        }
-      }
-
-      for (const [gradeLevel, studentIds] of promotedStudentsByGrade) {
-        await tx
-          .update(studentProfiles)
-          .set({ gradeLevel, graduatedAt: null, updatedAt: now })
-          .where(inArray(studentProfiles.userId, studentIds));
-      }
-
-      if (graduatedStudentIds.length > 0) {
-        await tx
-          .update(studentProfiles)
-          .set({ graduatedAt: now, updatedAt: now })
-          .where(inArray(studentProfiles.userId, graduatedStudentIds));
-      }
-
-      if (impactTargets.classRecordIdsToFinalize.length > 0) {
-        await tx
-          .update(classRecords)
-          .set({
-            status: 'finalized',
-            updatedAt: now,
-          })
-          .where(
-            inArray(classRecords.id, impactTargets.classRecordIdsToFinalize),
-          );
-      }
-
-      if (impactTargets.enrollmentIdsToComplete.length > 0) {
-        await tx
-          .update(enrollments)
-          .set({ status: 'completed' })
-          .where(
-            inArray(enrollments.id, impactTargets.enrollmentIdsToComplete),
-          );
-      }
-
-      if (impactTargets.classIdsToArchive.length > 0) {
-        await tx
-          .update(classes)
-          .set({
-            isActive: false,
-            updatedAt: now,
-          })
-          .where(inArray(classes.id, impactTargets.classIdsToArchive));
-      }
-
-      if (impactTargets.sectionIdsToArchive.length > 0) {
-        await tx
-          .update(sections)
-          .set({
-            isActive: false,
-            isArchived: true,
-            archivedAt: now,
-            updatedAt: now,
-          })
-          .where(inArray(sections.id, impactTargets.sectionIdsToArchive));
-      }
-
-      if (impactTargets.schoolEventIdsToArchive.length > 0) {
-        await tx
-          .update(schoolEvents)
-          .set({
-            archivedAt: now,
-            updatedAt: now,
-          })
-          .where(
-            inArray(schoolEvents.id, impactTargets.schoolEventIdsToArchive),
-          );
-      }
-
-      if (impactTargets.sectionsToClone.length > 0) {
-        const insertedSections = await tx
-          .insert(sections)
-          .values(
-            impactTargets.sectionsToClone.map((section) => ({
-              name: section.name,
-              gradeLevel: section.gradeLevel,
-              schoolYear: target.schoolYear,
-              capacity: section.capacity,
-              roomNumber: section.roomNumber,
-              cardPreset: section.cardPreset,
-              cardBannerUrl: section.cardBannerUrl,
-              adviserId: section.adviserId,
-              isArchived: false,
-              archivedAt: null,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now,
-            })),
-          )
-          .onConflictDoNothing()
-          .returning({ id: sections.id });
-
-        sectionsCreated = insertedSections.length;
-      }
-
-      const targetSections = (await tx.query.sections.findMany({
-        where: eq(sections.schoolYear, target.schoolYear),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-        },
-      })) as Array<Pick<SectionRow, 'id' | 'name' | 'gradeLevel'>>;
-
-      const targetSectionIdByKey = new Map(
-        targetSections.map((section) => [
-          getSectionCloneKey(section),
-          section.id,
-        ]),
-      );
-
-      const existingTargetClasses = await tx
-        .select({
-          subjectCode: classes.subjectCode,
-          sectionId: classes.sectionId,
-        })
-        .from(classes)
-        .where(eq(classes.schoolYear, target.schoolYear));
-
-      const reservedClassKeys = new Set(
-        existingTargetClasses.map((classRow) =>
-          getTargetClassCloneKey(classRow.subjectCode, classRow.sectionId),
-        ),
-      );
-
-      const classCloneCandidates = impactTargets.classesToClone.flatMap(
-        (sourceClass) => {
-          const sourceSection = sourceClass.section;
-          if (!sourceSection) return [];
-
-          const targetSectionId = targetSectionIdByKey.get(
-            getSectionCloneKey(sourceSection),
-          );
-          if (!targetSectionId) return [];
-
-          const classKey = getTargetClassCloneKey(
-            sourceClass.subjectCode,
-            targetSectionId,
-          );
-          if (reservedClassKeys.has(classKey)) return [];
-
-          reservedClassKeys.add(classKey);
-          return [{ sourceClass, targetSectionId, classKey }];
-        },
-      );
-
-      if (classCloneCandidates.length > 0) {
-        const insertedClasses = await tx
-          .insert(classes)
-          .values(
-            classCloneCandidates.map(({ sourceClass, targetSectionId }) => ({
-              subjectName: sourceClass.subjectName,
-              subjectCode: sourceClass.subjectCode,
-              subjectGradeLevel: sourceClass.subjectGradeLevel,
-              sectionId: targetSectionId,
-              teacherId: sourceClass.teacherId,
-              room: sourceClass.room,
-              cardPreset: sourceClass.cardPreset,
-              cardBannerUrl: sourceClass.cardBannerUrl,
-              schoolYear: target.schoolYear,
-              writtenWorkGradingWeight: sourceClass.writtenWorkGradingWeight,
-              performanceTaskGradingWeight:
-                sourceClass.performanceTaskGradingWeight,
-              quarterlyAssessmentGradingWeight:
-                sourceClass.quarterlyAssessmentGradingWeight,
-              isActive: true,
-              createdAt: now,
-              updatedAt: now,
-            })),
-          )
-          .onConflictDoNothing()
-          .returning({
-            id: classes.id,
-            subjectCode: classes.subjectCode,
-            sectionId: classes.sectionId,
-          });
-
-        classesCreated = insertedClasses.length;
-
-        const insertedClassIdByKey = new Map(
-          insertedClasses.map((classRow) => [
-            getTargetClassCloneKey(classRow.subjectCode, classRow.sectionId),
-            classRow.id,
-          ]),
+      if (states.length !== 1)
+        throw new ConflictException(
+          'Multiple academic state rows require repair before transition',
         );
+      if (
+        current.schoolYear !== dto.expectedSchoolYear ||
+        current.quarter !== dto.expectedQuarter ||
+        current.version !== dto.expectedVersion
+      )
+        throw new ConflictException(
+          'Academic state changed; refresh readiness before transitioning',
+        );
+      const expectedNextYear = `${Number(current.schoolYear.slice(0, 4)) + 1}-${Number(current.schoolYear.slice(0, 4)) + 2}`;
+      if (dto.schoolYear !== expectedNextYear)
+        throw new BadRequestException(
+          'Target must be the immediate next school year',
+        );
+      const targetPolicy = await this.policyService.forYear(dto.schoolYear);
+      const target = {
+        schoolYear: dto.schoolYear,
+        quarter: targetPolicy.periods[0].key,
+      };
+      const impactTargets = await this.getTransitionTargets(current, target);
 
-        const sourceToTargetClassId = new Map<string, string>();
-        for (const { sourceClass, classKey } of classCloneCandidates) {
-          const targetClassId = insertedClassIdByKey.get(classKey);
-          if (targetClassId) {
-            sourceToTargetClassId.set(sourceClass.id, targetClassId);
+      if (impactTargets.promotionReadiness.transitionBlocked) {
+        throw new BadRequestException({
+          message:
+            impactTargets.promotionReadiness.message ??
+            'Resolve active student promotion or retention before transitioning the school year.',
+          promotionReadiness: impactTargets.promotionReadiness,
+        });
+      }
+
+      const now = new Date();
+      let sectionsCreated = 0;
+      let classesCreated = 0;
+      let classSchedulesCloned = 0;
+      let learningAssetCounts = {
+        assessmentsCreated: 0,
+        assessmentQuestionsCreated: 0,
+        lessonsCreated: 0,
+        lessonBlocksCreated: 0,
+        modulesCreated: 0,
+        moduleSectionsCreated: 0,
+        moduleItemsCreated: 0,
+        moduleGradingScaleEntriesCreated: 0,
+      };
+
+      await this.db.transaction(async (tx) => {
+        const promotedStudentsByGrade = new Map<'8' | '9' | '10', string[]>();
+        const graduatedStudentIds: string[] = [];
+        for (const student of impactTargets.promotionReadiness
+          .studentOutcomes ?? []) {
+          if (
+            ['promoted', 'conditionally_promoted'].includes(student.outcome) &&
+            student.targetGradeLevel
+          ) {
+            const targetGrade = student.targetGradeLevel as '8' | '9' | '10';
+            const studentIds = promotedStudentsByGrade.get(targetGrade) ?? [];
+            studentIds.push(student.studentId);
+            promotedStudentsByGrade.set(targetGrade, studentIds);
+          } else if (student.outcome === 'graduated') {
+            graduatedStudentIds.push(student.studentId);
           }
         }
 
-        const scheduleValues = classCloneCandidates.flatMap(
-          ({ sourceClass }) => {
-            const targetClassId = sourceToTargetClassId.get(sourceClass.id);
-            if (!targetClassId) return [];
-            return sourceClass.schedules.map((schedule) => ({
-              classId: targetClassId,
-              days: schedule.days,
-              startTime: schedule.startTime,
-              endTime: schedule.endTime,
-              createdAt: now,
-              updatedAt: now,
-            }));
-          },
-        );
-
-        if (scheduleValues.length > 0) {
-          await tx.insert(classSchedules).values(scheduleValues);
-          classSchedulesCloned = scheduleValues.length;
+        for (const [gradeLevel, studentIds] of promotedStudentsByGrade) {
+          await tx
+            .update(studentProfiles)
+            .set({ gradeLevel, graduatedAt: null, updatedAt: now })
+            .where(inArray(studentProfiles.userId, studentIds));
         }
 
-        learningAssetCounts = await this.cloneClassLearningAssets(
-          tx,
-          sourceToTargetClassId,
-          now,
-        );
-      }
+        if (graduatedStudentIds.length > 0) {
+          await tx
+            .update(studentProfiles)
+            .set({ graduatedAt: now, updatedAt: now })
+            .where(inArray(studentProfiles.userId, graduatedStudentIds));
+        }
 
-      await tx
-        .insert(academicSystemStates)
-        .values({
-          id: this.singletonStateId,
-          schoolYear: target.schoolYear,
-          quarter: target.quarter,
-          updatedBy: actorId,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: academicSystemStates.id,
-          set: {
+        if (impactTargets.promotionReadiness.studentOutcomes.length) {
+          await tx.insert(academicStudentYearOutcomes).values(
+            impactTargets.promotionReadiness.studentOutcomes.map((student) => ({
+              schoolYear: current.schoolYear,
+              studentId: student.studentId,
+              sourceGradeLevel: student.sourceGradeLevel,
+              targetGradeLevel: student.targetGradeLevel,
+              outcome: student.outcome,
+              evidence: {
+                policy: current.policy,
+                annualGradeIds: student.annualGradeIds,
+                remediationResultIds: student.remediationResultIds,
+                backSubjectIds: student.backSubjectIds,
+                stateVersion: current.version,
+              },
+              recordedBy: actorId,
+            })),
+          );
+        }
+
+        if (impactTargets.enrollmentIdsToComplete.length > 0) {
+          await tx
+            .update(enrollments)
+            .set({ status: 'completed' })
+            .where(
+              inArray(enrollments.id, impactTargets.enrollmentIdsToComplete),
+            );
+        }
+
+        if (impactTargets.classIdsToArchive.length > 0) {
+          await tx
+            .update(classes)
+            .set({
+              isActive: false,
+              updatedAt: now,
+            })
+            .where(inArray(classes.id, impactTargets.classIdsToArchive));
+        }
+
+        if (impactTargets.sectionIdsToArchive.length > 0) {
+          await tx
+            .update(sections)
+            .set({
+              isActive: false,
+              isArchived: true,
+              archivedAt: now,
+              updatedAt: now,
+            })
+            .where(inArray(sections.id, impactTargets.sectionIdsToArchive));
+        }
+
+        if (impactTargets.schoolEventIdsToArchive.length > 0) {
+          await tx
+            .update(schoolEvents)
+            .set({
+              archivedAt: now,
+              updatedAt: now,
+            })
+            .where(
+              inArray(schoolEvents.id, impactTargets.schoolEventIdsToArchive),
+            );
+        }
+
+        if (impactTargets.sectionsToClone.length > 0) {
+          const insertedSections = await tx
+            .insert(sections)
+            .values(
+              impactTargets.sectionsToClone.map((section) => ({
+                name: section.name,
+                gradeLevel: section.gradeLevel,
+                schoolYear: target.schoolYear,
+                capacity: section.capacity,
+                roomNumber: section.roomNumber,
+                cardPreset: section.cardPreset,
+                cardBannerUrl: section.cardBannerUrl,
+                adviserId: section.adviserId,
+                isArchived: false,
+                archivedAt: null,
+                isActive: true,
+                createdAt: now,
+                updatedAt: now,
+              })),
+            )
+            .onConflictDoNothing()
+            .returning({ id: sections.id });
+
+          sectionsCreated = insertedSections.length;
+        }
+
+        const targetSections = (await tx.query.sections.findMany({
+          where: eq(sections.schoolYear, target.schoolYear),
+          columns: {
+            id: true,
+            name: true,
+            gradeLevel: true,
+          },
+        })) as Array<Pick<SectionRow, 'id' | 'name' | 'gradeLevel'>>;
+
+        const targetSectionIdByKey = new Map(
+          targetSections.map((section) => [
+            getSectionCloneKey(section),
+            section.id,
+          ]),
+        );
+
+        const existingTargetClasses = await tx
+          .select({
+            subjectCode: classes.subjectCode,
+            sectionId: classes.sectionId,
+          })
+          .from(classes)
+          .where(eq(classes.schoolYear, target.schoolYear));
+
+        const reservedClassKeys = new Set(
+          existingTargetClasses.map((classRow) =>
+            getTargetClassCloneKey(classRow.subjectCode, classRow.sectionId),
+          ),
+        );
+
+        const classCloneCandidates = impactTargets.classesToClone.flatMap(
+          (sourceClass) => {
+            const sourceSection = sourceClass.section;
+            if (!sourceSection) return [];
+
+            const targetSectionId = targetSectionIdByKey.get(
+              getSectionCloneKey(sourceSection),
+            );
+            if (!targetSectionId) return [];
+
+            const classKey = getTargetClassCloneKey(
+              sourceClass.subjectCode,
+              targetSectionId,
+            );
+            if (reservedClassKeys.has(classKey)) return [];
+
+            reservedClassKeys.add(classKey);
+            return [{ sourceClass, targetSectionId, classKey }];
+          },
+        );
+
+        if (classCloneCandidates.length > 0) {
+          const insertedClasses = await tx
+            .insert(classes)
+            .values(
+              classCloneCandidates.map(({ sourceClass, targetSectionId }) => {
+                const weights = getSubjectWeights(
+                  targetPolicy,
+                  sourceClass.subjectCode,
+                  sourceClass.subjectName,
+                  sourceClass.academicWeightProfile,
+                );
+                return {
+                  subjectName: sourceClass.subjectName,
+                  subjectCode: sourceClass.subjectCode,
+                  subjectGradeLevel: sourceClass.subjectGradeLevel,
+                  sectionId: targetSectionId,
+                  teacherId: sourceClass.teacherId,
+                  room: sourceClass.room,
+                  cardPreset: sourceClass.cardPreset,
+                  cardBannerUrl: sourceClass.cardBannerUrl,
+                  schoolYear: target.schoolYear,
+                  writtenWorkGradingWeight:
+                    weights?.writtenWork ??
+                    sourceClass.writtenWorkGradingWeight,
+                  academicWeightProfile: sourceClass.academicWeightProfile,
+                  performanceTaskGradingWeight:
+                    weights?.performanceTask ??
+                    sourceClass.performanceTaskGradingWeight,
+                  quarterlyAssessmentGradingWeight:
+                    weights?.examination ??
+                    sourceClass.quarterlyAssessmentGradingWeight,
+                  isActive: true,
+                  createdAt: now,
+                  updatedAt: now,
+                };
+              }),
+            )
+            .returning({
+              id: classes.id,
+              subjectCode: classes.subjectCode,
+              sectionId: classes.sectionId,
+            });
+
+          classesCreated = insertedClasses.length;
+
+          const insertedClassIdByKey = new Map(
+            insertedClasses.map((classRow) => [
+              getTargetClassCloneKey(classRow.subjectCode, classRow.sectionId),
+              classRow.id,
+            ]),
+          );
+
+          const sourceToTargetClassId = new Map<string, string>();
+          for (const { sourceClass, classKey } of classCloneCandidates) {
+            const targetClassId = insertedClassIdByKey.get(classKey);
+            if (targetClassId) {
+              sourceToTargetClassId.set(sourceClass.id, targetClassId);
+            }
+          }
+
+          const scheduleValues = classCloneCandidates.flatMap(
+            ({ sourceClass }) => {
+              const targetClassId = sourceToTargetClassId.get(sourceClass.id);
+              if (!targetClassId) return [];
+              return sourceClass.schedules.map((schedule) => ({
+                classId: targetClassId,
+                days: schedule.days,
+                startTime: schedule.startTime,
+                endTime: schedule.endTime,
+                createdAt: now,
+                updatedAt: now,
+              }));
+            },
+          );
+
+          if (scheduleValues.length > 0) {
+            await tx.insert(classSchedules).values(scheduleValues);
+            classSchedulesCloned = scheduleValues.length;
+          }
+
+          learningAssetCounts = await this.cloneClassLearningAssets(
+            tx,
+            sourceToTargetClassId,
+            now,
+          );
+        }
+
+        const [updated] = await tx
+          .update(academicSystemStates)
+          .set({
             schoolYear: target.schoolYear,
             quarter: target.quarter,
+            version: current.version + 1,
             updatedBy: actorId,
             updatedAt: now,
-          },
-        });
-    });
+          })
+          .where(
+            and(
+              eq(academicSystemStates.id, current.id),
+              eq(academicSystemStates.version, current.version),
+            ),
+          )
+          .returning({ id: academicSystemStates.id });
+        if (!updated)
+          throw new ConflictException(
+            'Academic state changed during transition',
+          );
+      });
 
-    await this.auditService.log({
-      actorId,
-      action: 'academic_state.transitioned',
-      targetType: 'academic_state',
-      targetId: this.singletonStateId,
-      metadata: {
-        fromSchoolYear: current.schoolYear,
-        fromQuarter: current.quarter,
-        toSchoolYear: target.schoolYear,
-        toQuarter: target.quarter,
-        classRecordsFinalized: impactTargets.classRecordIdsToFinalize.length,
-        enrollmentsCompleted: impactTargets.enrollmentIdsToComplete.length,
-        classesArchived: impactTargets.classIdsToArchive.length,
-        sectionsArchived: impactTargets.sectionIdsToArchive.length,
-        schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
-        reusableSectionsCreated: sectionsCreated,
-        reusableClassesCreated: classesCreated,
-        classSchedulesCloned,
-        classSchedulesCleared: false,
-        studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
-        studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
-        studentsGraduated: impactTargets.promotionReadiness.studentsToGraduate,
-        reusableContentCloned: learningAssetCounts,
-      },
-    });
+      await this.auditService.log({
+        actorId,
+        action: 'academic_state.transitioned',
+        targetType: 'academic_state',
+        targetId: this.singletonStateId,
+        metadata: {
+          fromSchoolYear: current.schoolYear,
+          fromQuarter: current.quarter,
+          toSchoolYear: target.schoolYear,
+          toQuarter: target.quarter,
+          classRecordsFinalized: impactTargets.classRecordIdsToFinalize.length,
+          enrollmentsCompleted: impactTargets.enrollmentIdsToComplete.length,
+          classesArchived: impactTargets.classIdsToArchive.length,
+          sectionsArchived: impactTargets.sectionIdsToArchive.length,
+          schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
+          reusableSectionsCreated: sectionsCreated,
+          reusableClassesCreated: classesCreated,
+          classSchedulesCloned,
+          classSchedulesCleared: false,
+          studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
+          studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
+          studentsGraduated:
+            impactTargets.promotionReadiness.studentsToGraduate,
+          studentsConditionallyPromoted:
+            impactTargets.promotionReadiness.studentsToConditionallyPromote,
+          studentsPendingCompletion:
+            impactTargets.promotionReadiness.studentsPendingCompletion,
+          reusableContentCloned: learningAssetCounts,
+        },
+      });
 
-    return {
-      state: await this.getCurrentState(),
-      impact: {
-        classRecordsFinalized: impactTargets.classRecordIdsToFinalize.length,
-        enrollmentsCompleted: impactTargets.enrollmentIdsToComplete.length,
-        classesArchived: impactTargets.classIdsToArchive.length,
-        sectionsArchived: impactTargets.sectionIdsToArchive.length,
-        schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
-        reusableSectionsCreated: sectionsCreated,
-        reusableClassesCreated: classesCreated,
-        classSchedulesCloned,
-        classSchedulesCleared: false,
-        studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
-        studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
-        studentsGraduated: impactTargets.promotionReadiness.studentsToGraduate,
-        reusableContentCloned: learningAssetCounts,
-      },
-    };
+      return {
+        state: await this.getCurrentState(),
+        impact: {
+          classRecordsFinalized: impactTargets.classRecordIdsToFinalize.length,
+          enrollmentsCompleted: impactTargets.enrollmentIdsToComplete.length,
+          classesArchived: impactTargets.classIdsToArchive.length,
+          sectionsArchived: impactTargets.sectionIdsToArchive.length,
+          schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
+          reusableSectionsCreated: sectionsCreated,
+          reusableClassesCreated: classesCreated,
+          classSchedulesCloned,
+          classSchedulesCleared: false,
+          studentsPromoted: impactTargets.promotionReadiness.studentsToPromote,
+          studentsRetained: impactTargets.promotionReadiness.studentsToRetain,
+          studentsGraduated:
+            impactTargets.promotionReadiness.studentsToGraduate,
+          studentsConditionallyPromoted:
+            impactTargets.promotionReadiness.studentsToConditionallyPromote,
+          studentsPendingCompletion:
+            impactTargets.promotionReadiness.studentsPendingCompletion,
+          reusableContentCloned: learningAssetCounts,
+        },
+      };
+    });
   }
 }

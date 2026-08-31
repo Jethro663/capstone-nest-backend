@@ -16,7 +16,9 @@ jest.mock('@/services/assessment-service', () => ({
 }));
 
 const mockedClassService = classService as jest.Mocked<typeof classService>;
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
 
 const classes = [
   { id: 'class-1', subjectCode: 'MATH-7', subjectName: 'Mathematics' },
@@ -47,7 +49,9 @@ describe('TeacherAssessmentsPage', () => {
   });
 
   it('shows the initial loading state while class ownership is unresolved', () => {
-    mockedClassService.getByTeacher.mockReturnValueOnce(new Promise(() => undefined));
+    mockedClassService.getByTeacher.mockReturnValueOnce(
+      new Promise(() => undefined),
+    );
 
     const { container } = render(<TeacherAssessmentsPage />);
 
@@ -56,11 +60,15 @@ describe('TeacherAssessmentsPage', () => {
   });
 
   it('shows a safe retryable owner error instead of an empty state', async () => {
-    mockedClassService.getByTeacher.mockRejectedValueOnce(new Error('network detail'));
+    mockedClassService.getByTeacher.mockRejectedValueOnce(
+      new Error('network detail'),
+    );
 
     render(<TeacherAssessmentsPage />);
 
-    expect(await screen.findByText("Assessments couldn't be loaded")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Assessments couldn't be loaded"),
+    ).toBeInTheDocument();
     expect(screen.queryByText('No assessments yet')).not.toBeInTheDocument();
     expect(screen.queryByText('network detail')).not.toBeInTheDocument();
 
@@ -72,14 +80,23 @@ describe('TeacherAssessmentsPage', () => {
   });
 
   it('renders source-empty copy only after successful collection requests', async () => {
-    mockedAssessmentService.getByClass.mockResolvedValueOnce({ data: [] } as Awaited<
-      ReturnType<typeof assessmentService.getByClass>
-    >);
+    mockedAssessmentService.getByClass.mockResolvedValueOnce({
+      success: true,
+      message: 'Fixture response',
+      count: 0,
+      total: 0,
+      page: 1,
+      limit: 20,
+      totalPages: 1,
+      data: [],
+    } as Awaited<ReturnType<typeof assessmentService.getByClass>>);
 
     render(<TeacherAssessmentsPage />);
 
     expect(await screen.findByText('No assessments yet')).toBeInTheDocument();
-    expect(screen.queryByText('No assessments match this view')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No assessments match this view'),
+    ).not.toBeInTheDocument();
   });
 
   it('renders populated content and distinguishes filter-empty results', async () => {
@@ -89,14 +106,16 @@ describe('TeacherAssessmentsPage', () => {
     fireEvent.change(screen.getByPlaceholderText(/search assessments/i), {
       target: { value: 'geometry' },
     });
-    expect(screen.getByText('No assessments match this view')).toBeInTheDocument();
+    expect(
+      screen.getByText('No assessments match this view'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('No assessments yet')).not.toBeInTheDocument();
   });
 
   it('keeps fulfilled classes visible when another class request fails', async () => {
-    mockedClassService.getByTeacher.mockResolvedValueOnce({ data: classes } as Awaited<
-      ReturnType<typeof classService.getByTeacher>
-    >);
+    mockedClassService.getByTeacher.mockResolvedValueOnce({
+      data: classes,
+    } as Awaited<ReturnType<typeof classService.getByTeacher>>);
     mockedAssessmentService.getByClass.mockImplementation(async (classId) => {
       if (classId === 'class-2') throw new Error('science unavailable');
       return {

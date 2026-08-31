@@ -1,223 +1,128 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ClassRecordSyncService } from './class-record-sync.service';
-import { DatabaseService } from '../../database/database.service';
 import {
   AssessmentSubmittedEvent,
   ClassRecordScoresUpdatedEvent,
 } from '../../common/events';
-import { AuditService } from '../audit/audit.service';
 
-function buildMockDb() {
-  return {
-    query: {
-      classRecordItems: { findFirst: jest.fn(), findMany: jest.fn() },
-      assessmentAttempts: { findMany: jest.fn() },
-      assessments: { findFirst: jest.fn() },
-      classRecords: { findFirst: jest.fn() },
-      classRecordCategories: { findFirst: jest.fn() },
-      classes: { findFirst: jest.fn() },
+function fixture() {
+  const item = {
+    id: 'item',
+    classRecordId: 'record',
+    assessmentId: 'assessment',
+    maxScore: '20',
+    classRecord: {
+      id: 'record',
+      classId: 'class',
+      status: 'draft',
+      gradingPeriod: 'Q1',
+      class: { teacherId: 'teacher' },
     },
-    insert: jest.fn(),
-    update: jest.fn(),
   };
-}
-
-function mockScoreUpsert(db: any) {
-  const onConflictDoUpdate = jest.fn().mockResolvedValue(undefined);
-  const values = jest.fn().mockReturnValue({ onConflictDoUpdate });
-  db.insert.mockReturnValueOnce({ values });
-}
-
-function mockItemLinkUpdate(db: any) {
-  const where = jest.fn().mockResolvedValue(undefined);
-  const set = jest.fn().mockReturnValue({ where });
-  db.update.mockReturnValueOnce({ set });
-}
-
-describe('ClassRecordSyncService performance events', () => {
-  let service: ClassRecordSyncService;
-  let db: any;
-  let eventEmitter: EventEmitter2;
-  const mockAuditService = { log: jest.fn() };
-
-  beforeEach(async () => {
-    db = buildMockDb();
-    eventEmitter = { emit: jest.fn() } as any;
-    jest.clearAllMocks();
-    db.query.classes.findFirst.mockResolvedValue({
-      id: 'class-1',
-      teacherId: 'teacher-1',
-    });
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ClassRecordSyncService,
-        { provide: DatabaseService, useValue: { db } },
-        { provide: EventEmitter2, useValue: eventEmitter },
-        { provide: AuditService, useValue: mockAuditService },
-      ],
-    }).compile();
-
-    service = module.get<ClassRecordSyncService>(ClassRecordSyncService);
+  const values = jest.fn().mockReturnValue({
+    onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
   });
-
-  it('syncFromAssessment should emit class-record.scores.updated after sync', async () => {
-    db.query.classRecordItems.findFirst
-      .mockResolvedValueOnce({
-        id: 'item-1',
-        assessmentId: 'assessment-1',
-        classRecord: { classId: 'class-1', status: 'draft' },
-      })
-      .mockResolvedValueOnce({
-        id: 'item-1',
-        maxScore: '20',
-        classRecord: { classId: 'class-1' },
-      });
-
-    db.query.assessmentAttempts.findMany.mockResolvedValue([
-      {
-        studentId: 'student-1',
-        score: 70,
-        submittedAt: new Date('2026-03-07T10:00:00Z'),
+  const db = {
+    query: {
+      classRecordItems: {
+        findFirst: jest.fn().mockResolvedValue(item),
+        findMany: jest.fn().mockResolvedValue([item]),
       },
-    ]);
-
-    mockScoreUpsert(db);
-
-    const result = await service.syncFromAssessment('item-1', 'teacher-1');
-
-    expect(result.synced).toBe(1);
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
+      classes: {
+        findFirst: jest.fn().mockResolvedValue({ teacherId: 'teacher' }),
+      },
+      assessments: {
+        findFirst: jest.fn().mockResolvedValue({ type: 'quiz', questions: [] }),
+      },
+      assessmentAttempts: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'persisted',
+            studentId: 'student',
+            score: 80,
+            isReturned: true,
+          },
+        ]),
+      },
+      classRecordParticipants: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { studentId: 'student', eligibility: 'eligible' },
+          ]),
+      },
+      classRecordScores: { findMany: jest.fn().mockResolvedValue([]) },
+    },
+    insert: jest.fn().mockReturnValue({ values }),
+  };
+  const effects: Array<() => unknown> = [];
+  const database = {
+    db,
+    academicTransaction: async (work: () => Promise<unknown>) => work(),
+    afterAcademicCommit: async (effect: () => unknown) => {
+      effects.push(effect);
+    },
+  };
+  const emitter = { emit: jest.fn() };
+  const audit = { log: jest.fn() };
+  const service = new ClassRecordSyncService(
+    database as never,
+    emitter as never,
+    audit as never,
+    { assertAssessmentAction: jest.fn() } as never,
+  );
+  return { service, db, item, values, effects, emitter, audit };
+}
+describe('class record synchronization delivery', () => {
+  it('defers performance notification until commit', async () => {
+    const f = fixture();
+    expect(await f.service.syncFromAssessment('item', 'teacher')).toEqual({
+      synced: 1,
+    });
+    expect(f.emitter.emit).not.toHaveBeenCalled();
+    for (const effect of f.effects) await effect();
+    expect(f.emitter.emit).toHaveBeenCalledWith(
       ClassRecordScoresUpdatedEvent.eventName,
       expect.objectContaining({
-        classId: 'class-1',
-        studentIds: ['student-1'],
+        classId: 'class',
+        studentIds: ['student'],
         triggerSource: 'manual_sync',
       }),
     );
   });
-
-  it('handleAssessmentSubmitted should audit auto-synced writes', async () => {
-    db.query.assessments.findFirst.mockResolvedValue({
-      id: 'assessment-1',
-      classId: 'class-1',
-      title: 'Quiz 1',
-      totalPoints: 20,
-    });
-    db.query.classRecords.findFirst.mockResolvedValue({
-      id: 'record-1',
-      teacherId: 'teacher-1',
-      status: 'draft',
-    });
-    db.query.classRecordCategories.findFirst.mockResolvedValue({
-      id: 'category-1',
-    });
-    db.query.classRecordItems.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 'item-1',
-      });
-
-    mockItemLinkUpdate(db);
-    mockScoreUpsert(db);
-
-    await service.handleAssessmentSubmitted(
-      new AssessmentSubmittedEvent({
-        assessmentId: 'assessment-1',
-        studentId: 'student-1',
-        rawScore: 16,
-        totalPoints: 20,
-        classRecordCategory: 'written_work',
-        quarter: 'Q1',
-      }),
-    );
-
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      ClassRecordScoresUpdatedEvent.eventName,
-      expect.objectContaining({
-        classId: 'class-1',
-        studentIds: ['student-1'],
-        triggerSource: 'assessment_sync',
-      }),
-    );
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'teacher-1',
-        action: 'class_record.scores.auto_synced_assessment',
-        targetType: 'class_record_item',
-        targetId: 'item-1',
-        metadata: expect.objectContaining({
-          classRecordId: 'record-1',
-          classId: 'class-1',
-          assessmentId: 'assessment-1',
-          studentId: 'student-1',
-          classRecordCategory: 'written_work',
-          quarter: 'Q1',
-          autoLinkedNewItem: true,
+  it.each([true, false])(
+    'reloads persisted evidence and audits tagged/legacy delivery (%s)',
+    async (tagged) => {
+      const f = fixture();
+      await f.service.handleAssessmentSubmitted(
+        new AssessmentSubmittedEvent({
+          assessmentId: 'assessment',
+          studentId: 'student',
+          rawScore: 0,
+          totalPoints: 20,
+          ...(tagged
+            ? { classRecordCategory: 'written_work', quarter: 'Q1' }
+            : {}),
         }),
-      }),
-    );
-  });
-
-  it('handleAssessmentSubmitted should audit legacy sync writes', async () => {
-    db.query.classRecordItems.findMany.mockResolvedValue([
-      {
-        id: 'item-1',
-        classRecord: {
-          id: 'record-1',
-          classId: 'class-1',
-          teacherId: 'teacher-1',
-          status: 'draft',
-        },
-      },
-    ]);
-    db.query.classRecordItems.findFirst.mockResolvedValue({
-      id: 'item-1',
-      maxScore: '20',
-      classRecord: { classId: 'class-1' },
-    });
-    db.query.assessmentAttempts.findMany.mockResolvedValue([
-      {
-        studentId: 'student-1',
-        score: 80,
-        submittedAt: new Date('2026-03-08T10:00:00Z'),
-      },
-    ]);
-
-    mockScoreUpsert(db);
-
-    await service.handleAssessmentSubmitted(
-      new AssessmentSubmittedEvent({
-        assessmentId: 'assessment-1',
-        studentId: 'student-1',
-        rawScore: 16,
-        totalPoints: 20,
-      }),
-    );
-
-    expect(eventEmitter.emit).toHaveBeenCalledWith(
-      ClassRecordScoresUpdatedEvent.eventName,
-      expect.objectContaining({
-        classId: 'class-1',
-        studentIds: ['student-1'],
-        triggerSource: 'assessment_sync',
-      }),
-    );
-    expect(mockAuditService.log).toHaveBeenCalledWith(
-      expect.objectContaining({
-        actorId: 'teacher-1',
-        action: 'class_record.scores.legacy_synced_assessment',
-        targetType: 'class_record_item',
-        targetId: 'item-1',
-        metadata: expect.objectContaining({
-          classRecordId: 'record-1',
-          classId: 'class-1',
-          assessmentId: 'assessment-1',
-          synced: 1,
-          studentIds: ['student-1'],
+      );
+      expect(f.values).toHaveBeenCalledWith(
+        expect.objectContaining({ score: '16', sourceAttemptId: 'persisted' }),
+      );
+      expect(f.audit.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: 'teacher',
+          action: 'class_record.scores.synced_assessment',
+          targetId: 'item',
+          metadata: expect.objectContaining({
+            classRecordId: 'record',
+            studentIds: ['student'],
+          }),
         }),
-      }),
-    );
-  });
+      );
+      for (const effect of f.effects) await effect();
+      expect(f.emitter.emit).toHaveBeenCalledWith(
+        ClassRecordScoresUpdatedEvent.eventName,
+        expect.objectContaining({ triggerSource: 'assessment_sync' }),
+      );
+    },
+  );
 });

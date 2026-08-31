@@ -1,174 +1,113 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import type { HTMLAttributes } from 'react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TeacherClassRecordWorkbook } from './TeacherClassRecordWorkbook';
 import type { TeacherClassRecordState } from '@/hooks/use-teacher-class-record';
-
-jest.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => (
-      <div {...props}>{children}</div>
-    ),
-  },
+import { modernPolicy, openCapabilities } from '@/test/academic-fixtures';
+jest.mock('@/providers/AuthProvider', () => ({
+  useAuth: () => ({ role: 'teacher' }),
 }));
-
+jest.mock('./AcademicAnnualSummary', () => ({
+  AcademicAnnualSummary: () => <div>Annual evidence</div>,
+}));
 function createState(): TeacherClassRecordState {
+  const record = {
+    id: 'record',
+    classId: 'class',
+    gradingPeriod: 'Q1' as const,
+    status: 'draft' as const,
+    revision: 0,
+  };
   return {
-    classRecords: [
-      {
-        id: 'record-1',
-        classId: 'class-1',
-        gradingPeriod: 'Q1',
-        status: 'draft',
-      },
-    ],
-    selectedRecord: {
-      id: 'record-1',
-      classId: 'class-1',
-      gradingPeriod: 'Q1',
-      status: 'draft',
-    },
+    classId: 'class',
+    policy: modernPolicy,
+    classRecords: [record],
+    selectedRecord: record,
     spreadsheet: {
-      classRecord: {
-        id: 'record-1',
-        classId: 'class-1',
-        gradingPeriod: 'Q1',
-        status: 'draft',
-      },
+      classRecord: record,
+      policy: modernPolicy,
+      academicCapabilities: openCapabilities,
+      canReopen: false,
       header: {
-        schoolName: 'Gat Andres Bonifacio High School',
-        schoolYear: '2025-2026',
         quarter: 'Q1',
-        gradeLevel: '7',
-        section: 'Sampaguita',
-        teacher: 'Dela Cruz, Juan',
-        subject: 'Mathematics 7',
-        subjectCode: 'MATH-7',
-        workbookTitle: 'Class Record',
-        workbookSubtitle: '(Pursuant to DepEd Order 8, s. 2015)',
-        templateLabel: 'DepEd Mathematics',
-        workbookSheetName: 'MATH',
+        periodLabel: 'Term 1',
+        subject: 'Mathematics 8',
       },
       categories: [
         {
-          id: 'cat-1',
-          name: 'Written Works',
-          weight: 40,
-          totalHps: 20,
-          items: [
-            {
-              id: 'item-1',
-              title: 'WW1',
-              hps: 20,
-              order: 1,
-              assessmentId: 'assessment-1',
-            },
-          ],
-        },
-        {
-          id: 'cat-2',
-          name: 'Performance Tasks',
-          weight: 40,
-          totalHps: 30,
-          items: [
-            {
-              id: 'item-2',
-              title: 'PT1',
-              hps: 30,
-              order: 1,
-              assessmentId: 'assessment-2',
-            },
-          ],
-        },
-        {
-          id: 'cat-3',
+          id: 'exam',
           name: 'Quarterly Assessment',
-          weight: 20,
-          totalHps: 50,
-          items: [
-            {
-              id: 'item-3',
-              title: 'QA1',
-              hps: 50,
-              order: 1,
-              assessmentId: 'assessment-3',
-            },
-          ],
+          weight: 30,
+          items: modernPolicy.examComponents.map((c, i) => ({
+            id: c.key,
+            title: c.key,
+            hps: 20,
+            order: i + 1,
+            assessmentId: c.key === 'TE' ? 'assessment' : undefined,
+            examComponent: c.key,
+          })),
         },
       ],
       students: [
         {
-          studentId: 'student-1',
+          studentId: 'ana',
           firstName: 'Ana',
           lastName: 'Santos',
-          lrn: '123456789012',
+          eligibility: 'eligible',
           categories: [
             {
-              categoryId: 'cat-1',
-              scores: [18],
-              total: 18,
-              ps: 90,
-              ws: 36,
-            },
-            {
-              categoryId: 'cat-2',
-              scores: [27],
-              total: 27,
-              ps: 90,
-              ws: 36,
-            },
-            {
-              categoryId: 'cat-3',
-              scores: [45],
-              total: 45,
-              ps: 90,
-              ws: 18,
+              categoryId: 'exam',
+              scores: [0, null, null],
+              scoreStatuses: ['recorded', 'missing', 'excused'],
+              scoreReasons: [null, null, 'Medical evidence'],
+              total: null,
+              ps: null,
+              ws: null,
             },
           ],
-          initialGrade: 88,
-          quarterlyGrade: 95,
-          gender: 'female',
-          remarks: 'Passed',
-        },
-        {
-          studentId: 'student-2',
-          firstName: 'Ben',
-          lastName: 'Lopez',
-          email: 'ben.lopez@nexora.edu',
-          categories: [
-            {
-              categoryId: 'cat-1',
-              scores: [14],
-              total: 14,
-              ps: 70,
-              ws: 28,
-            },
-            {
-              categoryId: 'cat-2',
-              scores: [20],
-              total: 20,
-              ps: 66.666,
-              ws: 26.666,
-            },
-            {
-              categoryId: 'cat-3',
-              scores: [30],
-              total: 30,
-              ps: 60,
-              ws: 12,
-            },
-          ],
-          initialGrade: 66.666,
-          quarterlyGrade: 72,
-          remarks: 'For Intervention',
-          isRemoved: true,
-          enrollmentState: 'removed',
+          initialGrade: null,
+          quarterlyGrade: null,
+          provisional: true,
+          remarks: 'Incomplete',
         },
       ],
     },
-    quarters: ['Q1', 'Q2', 'Q3', 'Q4'],
+    readiness: {
+      ready: false,
+      classRecordId: 'record',
+      classId: 'class',
+      period: 'Q1',
+      eligibleStudentIds: ['ana'],
+      blockers: [
+        { code: 'roster_unconfirmed', message: 'Confirm eligibility' },
+      ],
+      counts: {},
+    },
+    roster: {
+      classRecordId: 'record',
+      confirmedAt: null,
+      confirmedBy: null,
+      participants: [
+        {
+          studentId: 'ana',
+          firstName: 'Ana',
+          lastName: 'Santos',
+          eligibility: 'eligible',
+          reason: null,
+          source: 'observed',
+          currentlyEnrolled: true,
+        },
+      ],
+    },
+    history: null,
+    annualSummary: null,
+    recordsStatus: 'ready',
+    spreadsheetStatus: 'ready',
+    quarters: ['Q1', 'Q2', 'Q3'],
+    periodLabel: (p) =>
+      modernPolicy.periods.find((v) => v.key === p)?.label ?? p,
     generating: false,
     finalizing: false,
     reopening: false,
+    savingRoster: false,
     syncingItemId: null,
     editingCell: null,
     editValue: '',
@@ -180,48 +119,97 @@ function createState(): TeacherClassRecordState {
     setEditValue: jest.fn(),
     setHpsValue: jest.fn(),
     setEditingCell: jest.fn(),
-    refresh: jest.fn().mockResolvedValue(undefined),
-    generateQuarter: jest.fn().mockResolvedValue(undefined),
-    finalizeQuarter: jest.fn().mockResolvedValue(undefined),
-    reopenQuarter: jest.fn().mockResolvedValue(undefined),
+    refresh: jest.fn(),
+    refreshEvidence: jest.fn(),
+    loadHistory: jest.fn(),
+    loadAnnual: jest.fn(),
+    confirmRoster: jest.fn(),
+    excuseScore: jest.fn(),
+    restoreAssessmentEvidence: jest.fn().mockResolvedValue(true),
+    generateQuarter: jest.fn(),
+    finalizeQuarter: jest.fn(),
+    reopenQuarter: jest.fn().mockResolvedValue(true),
     handleCellClick: jest.fn(),
-    handleCellSave: jest.fn().mockResolvedValue(undefined),
+    handleCellSave: jest.fn(),
     handleCellKeyDown: jest.fn(),
     handleHpsClick: jest.fn(),
-    handleHpsSave: jest.fn().mockResolvedValue(undefined),
+    handleHpsSave: jest.fn(),
     handleHpsKeyDown: jest.fn(),
-    syncItem: jest.fn().mockResolvedValue(undefined),
-    exportSpreadsheet: jest.fn().mockResolvedValue(undefined),
+    syncItem: jest.fn(),
+    exportSpreadsheet: jest.fn(),
   };
 }
-
-describe('TeacherClassRecordWorkbook', () => {
-  it('renders the workbook-style class record summary and learner grid', () => {
-    render(<TeacherClassRecordWorkbook state={createState()} />);
-
-    expect(
-      screen.getByRole('heading', { name: 'Mathematics 7' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('MATH')).toBeInTheDocument();
-    expect(screen.getByText("LEARNERS' NAMES")).toBeInTheDocument();
-    expect(screen.getByText('Santos, Ana')).toBeInTheDocument();
-    expect(screen.getByText('REMOVED')).toBeInTheDocument();
-    expect(screen.getByText('Lopez, Ben')).toBeInTheDocument();
-    expect(screen.getByText('Removed')).toBeInTheDocument();
-    expect(screen.getByText('Finalize Quarter')).toBeInTheDocument();
+it('renders all three examination components and separates zero, missing and exemptions', () => {
+  render(<TeacherClassRecordWorkbook state={createState()} />);
+  expect(
+    screen.getByRole('button', { name: 'Ana Santos, ST1: 0' }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: 'Ana Santos, ST2: Missing' }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: 'Ana Santos, TE: Excused' }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole('button', { name: 'Finalize Term 1' }),
+  ).toBeDisabled();
+  expect(
+    screen.queryByRole('button', { name: /Q4|Term 4/ }),
+  ).not.toBeInTheDocument();
+});
+it('restores an exempt linked result with evidence instead of overwriting it through ordinary sync', async () => {
+  const state = createState();
+  render(<TeacherClassRecordWorkbook state={state} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Ana Santos, TE: Excused' }),
+  );
+  fireEvent.change(screen.getByLabelText('Score status'), {
+    target: { value: 'recorded' },
   });
-
-  it('offers a sync selector and sync action in one click flow', () => {
-    const state = createState();
-    render(<TeacherClassRecordWorkbook state={state} />);
-
-    expect(screen.getByRole('combobox')).toHaveValue('item-1');
-    expect(screen.getByRole('button', { name: 'Sync' })).toBeEnabled();
-
-    const syncDropdown = screen.getByLabelText('Sync assessment');
-    fireEvent.change(syncDropdown, { target: { value: 'item-2' } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sync' }));
-    expect(state.syncItem).toHaveBeenCalledWith('item-2');
+  fireEvent.change(screen.getByLabelText('Correction reason'), {
+    target: { value: 'Verified submitted quiz' },
   });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Restore assessment evidence' }),
+  );
+  await waitFor(() =>
+    expect(state.restoreAssessmentEvidence).toHaveBeenCalledWith(
+      'TE',
+      'ana',
+      'Verified submitted quiz',
+    ),
+  );
+  expect(state.syncItem).not.toHaveBeenCalled();
+});
+it('requires a reason before reopening and disables writes when evidence is stale', async () => {
+  const state = createState();
+  state.spreadsheet!.canReopen = true;
+  render(<TeacherClassRecordWorkbook state={state} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Reopen with reason' }));
+  expect(
+    screen.getByRole('button', {
+      name: 'Reopen and invalidate dependent results',
+    }),
+  ).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Correction reason'), {
+    target: { value: 'Correct verified score' },
+  });
+  fireEvent.click(
+    screen.getByRole('button', {
+      name: 'Reopen and invalidate dependent results',
+    }),
+  );
+  await waitFor(() =>
+    expect(state.reopenQuarter).toHaveBeenCalledWith('Correct verified score'),
+  );
+});
+it('disables scoring and HPS mutations after a failed readiness refresh', () => {
+  const state = createState();
+  state.spreadsheetStatus = 'error';
+  render(<TeacherClassRecordWorkbook state={state} />);
+  expect(
+    screen.getByRole('button', { name: 'Ana Santos, ST1: 0' }),
+  ).toBeDisabled();
+  for (const button of screen.getAllByRole('button', { name: '20' }))
+    expect(button).toBeDisabled();
 });

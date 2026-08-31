@@ -68,18 +68,17 @@ describe('TeacherClassesPage', () => {
       data: [
         {
           id: 'class-1',
+          sectionId: 'section-1',
+          teacherId: 'teacher-1',
+          schoolYear: '2026-2027',
+          isActive: true,
           subjectName: 'Mathematics',
           subjectCode: 'MATH-07A',
-          section: {
-            name: 'Section A',
-            gradeLevel: '7',
-          },
-          teacher: {
-            firstName: 'Ana',
-            lastName: 'Reyes',
-          },
+          section: { id: 'section-1', name: 'Section A', gradeLevel: '7' },
+          teacher: { id: 'teacher-1', firstName: 'Ana', lastName: 'Reyes' },
           schedules: [
             {
+              id: 'schedule-1',
               days: ['T'],
               startTime: '06:00',
               endTime: '07:00',
@@ -130,9 +129,7 @@ describe('TeacherClassesPage', () => {
     );
 
     expect(screen.getByText('Teacher Workspace')).toBeInTheDocument();
-    expect(
-      screen.queryByText('Student Workspace'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Student Workspace')).not.toBeInTheDocument();
   });
 
   it('opens the helper guide from the question mark button', async () => {
@@ -142,7 +139,9 @@ describe('TeacherClassesPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /module help/i }));
 
-    expect(await screen.findByText('Teacher guide: My Classes')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Teacher guide: My Classes'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
     expect(screen.getByText('Start with the header')).toBeInTheDocument();
     expect(screen.getByText('Refresh button')).toBeInTheDocument();
@@ -165,7 +164,9 @@ describe('TeacherClassesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close guide' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Teacher guide: My Classes')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Teacher guide: My Classes'),
+      ).not.toBeInTheDocument();
     });
   });
 });

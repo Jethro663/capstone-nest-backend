@@ -733,6 +733,7 @@ export class ClassesController {
       classId,
       dto.studentId,
       user?.userId,
+      user?.roles,
     );
 
     return {
@@ -754,7 +755,12 @@ export class ClassesController {
     @Param('studentId') studentId: string,
     @CurrentUser() user: any,
   ) {
-    await this.classesService.removeStudent(classId, studentId, user?.userId);
+    await this.classesService.removeStudent(
+      classId,
+      studentId,
+      user?.userId,
+      user?.roles,
+    );
 
     return {
       success: true,

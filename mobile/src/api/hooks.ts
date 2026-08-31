@@ -17,8 +17,18 @@ import { schoolEventsApi } from "./services/school-events";
 import { sectionsApi } from "./services/sections";
 import type { TeacherSectionCandidateQuery } from "./services/sections";
 import { teacherProfileApi } from "./services/teacher-profile";
-import type { AssessmentHistoryQuery, TeacherReportQuery, TranscriptQuery } from "../types/report";
-import type { CreateDiscussionCommentDto, CreateDiscussionThreadDto, DiscussionReactionType, ReportDiscussionCommentDto, UpdateDiscussionThreadDto } from "../types/discussion";
+import type {
+  AssessmentHistoryQuery,
+  TeacherReportQuery,
+  TranscriptQuery,
+} from "../types/report";
+import type {
+  CreateDiscussionCommentDto,
+  CreateDiscussionThreadDto,
+  DiscussionReactionType,
+  ReportDiscussionCommentDto,
+  UpdateDiscussionThreadDto,
+} from "../types/discussion";
 import type { BulkLessonDraftStateDto } from "../types/lesson";
 import type { UpdateTeacherProfileDto } from "../types/profile";
 import type { SchoolEventQuery } from "../types/school-event";
@@ -33,65 +43,95 @@ export const queryKeys = {
   teacherAiJobs: (classId?: string) =>
     ["teacher-ai-jobs", classId ?? "all"] as const,
   classDetail: (classId: string) => ["class-detail", classId] as const,
-  teacherEnrollments: (classId: string) => ["teacher-enrollments", classId] as const,
+  teacherEnrollments: (classId: string) =>
+    ["teacher-enrollments", classId] as const,
   classModules: (classId: string) => ["class-modules", classId] as const,
-  moduleDetailsByClass: (classId: string) => ["module-detail", classId] as const,
+  moduleDetailsByClass: (classId: string) =>
+    ["module-detail", classId] as const,
   lessons: (classId: string) => ["lessons", classId] as const,
-  lessonCompletions: (classId: string) => ["lesson-completions", classId] as const,
+  lessonCompletions: (classId: string) =>
+    ["lesson-completions", classId] as const,
   lessonCompletionStatus: (lessonId?: string) =>
     ["lesson-completion-status", lessonId ?? "missing"] as const,
-  lessonDetail: (lessonId?: string) => ["lesson-detail", lessonId ?? "missing"] as const,
+  lessonDetail: (lessonId?: string) =>
+    ["lesson-detail", lessonId ?? "missing"] as const,
   assessments: (classId: string) => ["assessments", classId] as const,
-  assessmentDetail: (assessmentId: string) => ["assessment-detail", assessmentId] as const,
-  assessmentAttempts: (assessmentId: string) => ["assessment-attempts", assessmentId] as const,
+  assessmentDetail: (assessmentId: string) =>
+    ["assessment-detail", assessmentId] as const,
+  assessmentAttempts: (assessmentId: string) =>
+    ["assessment-attempts", assessmentId] as const,
   teacherAssessmentSubmissions: (assessmentId: string) =>
     ["teacher-assessment-submissions", assessmentId] as const,
-  assessmentResult: (attemptId: string) => ["assessment-result", attemptId] as const,
+  assessmentResult: (attemptId: string) =>
+    ["assessment-result", attemptId] as const,
   assessmentHistory: (query?: AssessmentHistoryQuery) =>
     ["assessment-history", query ?? "all"] as const,
   announcements: (classId: string) => ["announcements", classId] as const,
   extractionsByClass: (classId: string) => ["extractions", classId] as const,
   classRecordsByClass: (classId: string) => ["class-records", classId] as const,
   teacherClassRecords: (classId: string) => ["class-records", classId] as const,
-  classRecordSpreadsheet: (recordId?: string) => ["class-record-spreadsheet", recordId ?? "missing"] as const,
-  classRecordPreviewGrades: (recordId?: string) => ["class-record-preview-grades", recordId ?? "missing"] as const,
-  classRecordAverageReport: (recordId?: string) => ["class-record-average-report", recordId ?? "missing"] as const,
+  classRecordSpreadsheet: (recordId?: string) =>
+    ["class-record-spreadsheet", recordId ?? "missing"] as const,
+  classRecordPreviewGrades: (recordId?: string) =>
+    ["class-record-preview-grades", recordId ?? "missing"] as const,
+  classRecordAverageReport: (recordId?: string) =>
+    ["class-record-average-report", recordId ?? "missing"] as const,
   classRecordDistributionReport: (recordId?: string) =>
     ["class-record-distribution-report", recordId ?? "missing"] as const,
   classRecordInterventionReport: (recordId?: string) =>
     ["class-record-intervention-report", recordId ?? "missing"] as const,
-  discussionThreads: (classId?: string) => ["discussion-threads", classId ?? "missing"] as const,
+  discussionThreads: (classId?: string) =>
+    ["discussion-threads", classId ?? "missing"] as const,
   discussionThread: (classId?: string, threadId?: string) =>
     ["discussion-thread", classId ?? "missing", threadId ?? "missing"] as const,
-  schoolEvents: (query?: SchoolEventQuery) => ["school-events", query ?? "all"] as const,
-  transcript: (query?: TranscriptQuery) => ["transcript", query ?? "all"] as const,
+  schoolEvents: (query?: SchoolEventQuery) =>
+    ["school-events", query ?? "all"] as const,
+  transcript: (query?: TranscriptQuery) =>
+    ["transcript", query ?? "all"] as const,
   performance: ["performance"] as const,
   lxpEligibility: ["lxp-eligibility"] as const,
   studentInterventionAlerts: ["student-intervention-alerts"] as const,
   lxpPlaylist: (classId: string) => ["lxp-playlist", classId] as const,
-  lxpOverview: (classId?: string) => ["lxp-overview", classId ?? "missing"] as const,
+  lxpOverview: (classId?: string) =>
+    ["lxp-overview", classId ?? "missing"] as const,
   profile: ["profile"] as const,
   teacherProfile: ["teacher-profile"] as const,
-  tutorBootstrap: (classId?: string) => ["tutor-bootstrap", classId ?? "all"] as const,
-  tutorSession: (sessionId?: string) => ["tutor-session", sessionId ?? "missing"] as const,
+  tutorBootstrap: (classId?: string) =>
+    ["tutor-bootstrap", classId ?? "all"] as const,
+  tutorSession: (sessionId?: string) =>
+    ["tutor-session", sessionId ?? "missing"] as const,
   jaHub: (classId?: string) => ["ja-hub", classId ?? "all"] as const,
-  jaAskThread: (threadId?: string) => ["ja-ask-thread", threadId ?? "missing"] as const,
+  jaAskThread: (threadId?: string) =>
+    ["ja-ask-thread", threadId ?? "missing"] as const,
   moduleDetail: (classId?: string, moduleId?: string) =>
     ["module-detail", classId ?? "missing", moduleId ?? "missing"] as const,
   teacherSections: (status: "all" | "active" | "archived" | "hidden" = "all") =>
     ["teacher-sections", status] as const,
-  teacherSectionDetail: (sectionId?: string) => ["teacher-section-detail", sectionId ?? "missing"] as const,
-  teacherSectionRoster: (sectionId?: string) => ["teacher-section-roster", sectionId ?? "missing"] as const,
-  teacherSectionCandidates: (sectionId?: string, query?: TeacherSectionCandidateQuery) =>
-    ["teacher-section-candidates", sectionId ?? "missing", query ?? "all"] as const,
-  teacherSectionSchedule: (sectionId?: string) => ["teacher-section-schedule", sectionId ?? "missing"] as const,
+  teacherSectionDetail: (sectionId?: string) =>
+    ["teacher-section-detail", sectionId ?? "missing"] as const,
+  teacherSectionRoster: (sectionId?: string) =>
+    ["teacher-section-roster", sectionId ?? "missing"] as const,
+  teacherSectionCandidates: (
+    sectionId?: string,
+    query?: TeacherSectionCandidateQuery,
+  ) =>
+    [
+      "teacher-section-candidates",
+      sectionId ?? "missing",
+      query ?? "all",
+    ] as const,
+  teacherSectionSchedule: (sectionId?: string) =>
+    ["teacher-section-schedule", sectionId ?? "missing"] as const,
   teacherClassPerformanceSummary: (classId?: string) =>
     ["teacher-class-performance-summary", classId ?? "missing"] as const,
-  teacherClassAtRisk: (classId?: string) => ["teacher-class-at-risk", classId ?? "missing"] as const,
+  teacherClassAtRisk: (classId?: string) =>
+    ["teacher-class-at-risk", classId ?? "missing"] as const,
   teacherInterventionQuizComparison: (classId?: string) =>
     ["teacher-intervention-quiz-comparison", classId ?? "missing"] as const,
-  teacherInterventionsQueue: (classId?: string) => ["teacher-interventions-queue", classId ?? "missing"] as const,
-  teacherInterventionsHistory: (classId?: string) => ["teacher-interventions-history", classId ?? "missing"] as const,
+  teacherInterventionsQueue: (classId?: string) =>
+    ["teacher-interventions-queue", classId ?? "missing"] as const,
+  teacherInterventionsHistory: (classId?: string) =>
+    ["teacher-interventions-history", classId ?? "missing"] as const,
   teacherInterventionClassReport: (classId?: string) =>
     ["teacher-intervention-class-report", classId ?? "missing"] as const,
   teacherPendingInterventions: ["teacher-pending-interventions"] as const,
@@ -99,7 +139,13 @@ export const queryKeys = {
     evaluationType: TeacherEvaluationType,
     classId?: string,
     gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4",
-  ) => ["teacher-evaluation-summary", evaluationType, classId ?? "all", gradingPeriod ?? "all"] as const,
+  ) =>
+    [
+      "teacher-evaluation-summary",
+      evaluationType,
+      classId ?? "all",
+      gradingPeriod ?? "all",
+    ] as const,
   teacherReportClassEnrollment: (query?: TeacherReportQuery) =>
     ["teacher-report-class-enrollment", query ?? "all"] as const,
   teacherReportStudentPerformance: (query?: TeacherReportQuery) =>
@@ -114,21 +160,27 @@ export const queryKeys = {
 
 export const useStudentClasses = (studentId?: string) =>
   useQuery({
-    queryKey: studentId ? queryKeys.classes(studentId) : ["classes", "anonymous"],
+    queryKey: studentId
+      ? queryKeys.classes(studentId)
+      : ["classes", "anonymous"],
     queryFn: () => classesApi.getStudentClasses(studentId!),
     enabled: !!studentId,
   });
 
 export const useClassDetail = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.classDetail(classId) : ["class-detail", "missing"],
+    queryKey: classId
+      ? queryKeys.classDetail(classId)
+      : ["class-detail", "missing"],
     queryFn: () => classesApi.getById(classId!),
     enabled: !!classId,
   });
 
 export const useTeacherClasses = (teacherId?: string, status = "active") =>
   useQuery({
-    queryKey: teacherId ? queryKeys.teacherClasses(teacherId, status) : ["teacher-classes", "missing", status],
+    queryKey: teacherId
+      ? queryKeys.teacherClasses(teacherId, status)
+      : ["teacher-classes", "missing", status],
     queryFn: () => classesApi.getTeacherClasses(teacherId!, status as never),
     enabled: !!teacherId,
   });
@@ -138,11 +190,12 @@ export const useTeacherAiJobs = (classId?: string) =>
     queryKey: queryKeys.teacherAiJobs(classId),
     queryFn: () => aiApi.listTeacherJobs({ classId, limit: 20 }),
     refetchInterval: (query) =>
-      query.state.data?.some((job) =>
-        job.status === "pending" ||
-        job.status === "queued" ||
-        job.status === "processing" ||
-        job.status === "running"
+      query.state.data?.some(
+        (job) =>
+          job.status === "pending" ||
+          job.status === "queued" ||
+          job.status === "processing" ||
+          job.status === "running",
       )
         ? 10_000
         : false,
@@ -150,7 +203,9 @@ export const useTeacherAiJobs = (classId?: string) =>
 
 export const useTeacherEnrollments = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.teacherEnrollments(classId) : ["teacher-enrollments", "missing"],
+    queryKey: classId
+      ? queryKeys.teacherEnrollments(classId)
+      : ["teacher-enrollments", "missing"],
     queryFn: () => classesApi.getEnrollments(classId!),
     enabled: !!classId,
   });
@@ -178,7 +233,9 @@ export const useLessonCompletionStatus = (lessonId?: string) =>
 
 export const useClassModules = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.classModules(classId) : ["class-modules", "missing"],
+    queryKey: classId
+      ? queryKeys.classModules(classId)
+      : ["class-modules", "missing"],
     queryFn: () => modulesApi.getByClass(classId!),
     enabled: !!classId,
   });
@@ -192,7 +249,9 @@ export const useModuleDetail = (classId?: string, moduleId?: string) =>
 
 export const useLessonCompletions = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.lessonCompletions(classId) : ["lesson-completions", "missing"],
+    queryKey: classId
+      ? queryKeys.lessonCompletions(classId)
+      : ["lesson-completions", "missing"],
     queryFn: () => lessonsApi.getCompletedByClass(classId!),
     enabled: !!classId,
   });
@@ -217,21 +276,27 @@ export const useAssessmentHistory = (query?: AssessmentHistoryQuery) =>
 
 export const useAssessments = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.assessments(classId) : ["assessments", "missing"],
+    queryKey: classId
+      ? queryKeys.assessments(classId)
+      : ["assessments", "missing"],
     queryFn: () => assessmentsApi.getByClass(classId!),
     enabled: !!classId,
   });
 
 export const useAssessmentDetail = (assessmentId?: string) =>
   useQuery({
-    queryKey: assessmentId ? queryKeys.assessmentDetail(assessmentId) : ["assessment-detail", "missing"],
+    queryKey: assessmentId
+      ? queryKeys.assessmentDetail(assessmentId)
+      : ["assessment-detail", "missing"],
     queryFn: () => assessmentsApi.getById(assessmentId!),
     enabled: !!assessmentId,
   });
 
 export const useAssessmentAttempts = (assessmentId?: string) =>
   useQuery({
-    queryKey: assessmentId ? queryKeys.assessmentAttempts(assessmentId) : ["assessment-attempts", "missing"],
+    queryKey: assessmentId
+      ? queryKeys.assessmentAttempts(assessmentId)
+      : ["assessment-attempts", "missing"],
     queryFn: () => assessmentsApi.getStudentAttempts(assessmentId!),
     enabled: !!assessmentId,
   });
@@ -247,28 +312,36 @@ export const useTeacherAssessmentSubmissions = (assessmentId?: string) =>
 
 export const useAssessmentResult = (attemptId?: string) =>
   useQuery({
-    queryKey: attemptId ? queryKeys.assessmentResult(attemptId) : ["assessment-result", "missing"],
+    queryKey: attemptId
+      ? queryKeys.assessmentResult(attemptId)
+      : ["assessment-result", "missing"],
     queryFn: () => assessmentsApi.getAttemptResults(attemptId!),
     enabled: !!attemptId,
   });
 
 export const useAnnouncements = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.announcements(classId) : ["announcements", "missing"],
+    queryKey: classId
+      ? queryKeys.announcements(classId)
+      : ["announcements", "missing"],
     queryFn: () => announcementsApi.getByClass(classId!),
     enabled: !!classId,
   });
 
 export const useExtractionsByClass = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.extractionsByClass(classId) : ["extractions", "missing"],
+    queryKey: classId
+      ? queryKeys.extractionsByClass(classId)
+      : ["extractions", "missing"],
     queryFn: () => extractionsApi.listByClass(classId!),
     enabled: !!classId,
     retry: false,
     refetchInterval: (query) => {
       if (query.state.fetchFailureCount >= 3) return false;
       return query.state.data?.some(
-        (extraction) => extraction.extractionStatus === "pending" || extraction.extractionStatus === "processing",
+        (extraction) =>
+          extraction.extractionStatus === "pending" ||
+          extraction.extractionStatus === "processing",
       )
         ? 10_000
         : false;
@@ -277,7 +350,9 @@ export const useExtractionsByClass = (classId?: string) =>
 
 export const useClassRecordsByClass = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.classRecordsByClass(classId) : ["class-records", "missing"],
+    queryKey: classId
+      ? queryKeys.classRecordsByClass(classId)
+      : ["class-records", "missing"],
     queryFn: () => classRecordApi.getByClass(classId!),
     enabled: !!classId,
   });
@@ -352,7 +427,9 @@ export const useStudentInterventionAlerts = (enabled = true) =>
 
 export const useLxpPlaylist = (classId?: string) =>
   useQuery({
-    queryKey: classId ? queryKeys.lxpPlaylist(classId) : ["lxp-playlist", "missing"],
+    queryKey: classId
+      ? queryKeys.lxpPlaylist(classId)
+      : ["lxp-playlist", "missing"],
     queryFn: () => lxpApi.getPlaylist(classId!),
     enabled: !!classId,
   });
@@ -402,8 +479,9 @@ export const useJaAskThread = (threadId?: string) =>
     enabled: !!threadId,
   });
 
-
-export const useTeacherSections = (status: "all" | "active" | "archived" | "hidden" = "active") =>
+export const useTeacherSections = (
+  status: "all" | "active" | "archived" | "hidden" = "active",
+) =>
   useQuery({
     queryKey: queryKeys.teacherSections(status),
     queryFn: () => sectionsApi.getMy(status),
@@ -423,7 +501,10 @@ export const useTeacherSectionRoster = (sectionId?: string) =>
     enabled: !!sectionId,
   });
 
-export const useTeacherSectionCandidates = (sectionId?: string, query?: TeacherSectionCandidateQuery) =>
+export const useTeacherSectionCandidates = (
+  sectionId?: string,
+  query?: TeacherSectionCandidateQuery,
+) =>
   useQuery({
     queryKey: queryKeys.teacherSectionCandidates(sectionId, query),
     queryFn: () => sectionsApi.getCandidates(sectionId!, query),
@@ -490,7 +571,11 @@ export const useTeacherEvaluationSummary = (
   filters?: { classId?: string; gradingPeriod?: "Q1" | "Q2" | "Q3" | "Q4" },
 ) =>
   useQuery({
-    queryKey: queryKeys.teacherEvaluationSummary(evaluationType, filters?.classId, filters?.gradingPeriod),
+    queryKey: queryKeys.teacherEvaluationSummary(
+      evaluationType,
+      filters?.classId,
+      filters?.gradingPeriod,
+    ),
     queryFn: () =>
       lxpApi.getTeacherEvaluationSummary({
         evaluationType,
@@ -505,7 +590,9 @@ export const useTeacherReportClassEnrollment = (query?: TeacherReportQuery) =>
     queryFn: () => reportsApi.getClassEnrollment(query),
   });
 
-export const useTeacherReportStudentPerformance = (query?: TeacherReportQuery) =>
+export const useTeacherReportStudentPerformance = (
+  query?: TeacherReportQuery,
+) =>
   useQuery({
     queryKey: queryKeys.teacherReportStudentPerformance(query),
     queryFn: () => reportsApi.getStudentPerformance(query),
@@ -517,7 +604,9 @@ export const useTeacherReportAssessmentSummary = (query?: TeacherReportQuery) =>
     queryFn: () => reportsApi.getAssessmentSummary(query),
   });
 
-export const useTeacherReportInterventionParticipation = (query?: TeacherReportQuery) =>
+export const useTeacherReportInterventionParticipation = (
+  query?: TeacherReportQuery,
+) =>
   useQuery({
     queryKey: queryKeys.teacherReportInterventionParticipation(query),
     queryFn: () => reportsApi.getInterventionParticipation(query),
@@ -534,11 +623,21 @@ export function useLessonCompleteMutation(classId?: string) {
     mutationFn: (lessonId: string) => lessonsApi.complete(lessonId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetailsByClass(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.lessonCompletions(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.lessons(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classDetail(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetailsByClass(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.lessonCompletions(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.lessons(classId),
+        });
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.performance });
     },
@@ -551,8 +650,12 @@ export function useAssessmentSubmitMutation(assessmentId?: string) {
     mutationFn: assessmentsApi.submit,
     onSuccess: async () => {
       if (assessmentId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentAttempts(assessmentId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentDetail(assessmentId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessmentAttempts(assessmentId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessmentDetail(assessmentId),
+        });
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.performance });
     },
@@ -562,12 +665,17 @@ export function useAssessmentSubmitMutation(assessmentId?: string) {
 export function useLxpCheckpointMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ assignmentId }: { assignmentId: string }) => lxpApi.completeCheckpoint(classId!, assignmentId),
+    mutationFn: ({ assignmentId }: { assignmentId: string }) =>
+      lxpApi.completeCheckpoint(classId!, assignmentId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.lxpPlaylist(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.lxpPlaylist(classId),
+        });
       }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.lxpEligibility });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.lxpEligibility,
+      });
     },
   });
 }
@@ -575,7 +683,8 @@ export function useLxpCheckpointMutation(classId?: string) {
 export function useProfileUpdateMutation(userId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof profileApi.updateByUserId>[1]) => profileApi.updateByUserId(userId!, payload),
+    mutationFn: (payload: Parameters<typeof profileApi.updateByUserId>[1]) =>
+      profileApi.updateByUserId(userId!, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.profile });
     },
@@ -595,9 +704,12 @@ export function useProfileAvatarMutation() {
 export function useTeacherProfileUpdateMutation(userId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: UpdateTeacherProfileDto) => teacherProfileApi.updateByUserId(userId!, payload),
+    mutationFn: (payload: UpdateTeacherProfileDto) =>
+      teacherProfileApi.updateByUserId(userId!, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.teacherProfile });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.teacherProfile,
+      });
     },
   });
 }
@@ -607,7 +719,9 @@ export function useTeacherProfileAvatarMutation() {
   return useMutation({
     mutationFn: teacherProfileApi.uploadAvatar,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.teacherProfile });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.teacherProfile,
+      });
     },
   });
 }
@@ -627,7 +741,9 @@ export function useTeacherAnnouncementMutation(classId?: string) {
         : announcementsApi.create(classId!, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.announcements(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.announcements(classId),
+        });
       }
     },
   });
@@ -636,23 +752,34 @@ export function useTeacherAnnouncementMutation(classId?: string) {
 export function useTeacherDeleteAnnouncementMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (announcementId: string) => announcementsApi.delete(classId!, announcementId),
+    mutationFn: (announcementId: string) =>
+      announcementsApi.delete(classId!, announcementId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.announcements(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.announcements(classId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleUpdateMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleUpdateMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof modulesApi.update>[1]) => modulesApi.update(moduleId!, payload),
+    mutationFn: (payload: Parameters<typeof modulesApi.update>[1]) =>
+      modulesApi.update(moduleId!, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
@@ -664,33 +791,50 @@ export function useTeacherModuleDeleteMutation(classId?: string) {
     mutationFn: (moduleId: string) => modulesApi.delete(moduleId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleSectionCreateMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleSectionCreateMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof modulesApi.createSection>[1]) => modulesApi.createSection(moduleId!, payload),
+    mutationFn: (payload: Parameters<typeof modulesApi.createSection>[1]) =>
+      modulesApi.createSection(moduleId!, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleSectionDeleteMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleSectionDeleteMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (sectionId: string) => modulesApi.deleteSection(sectionId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
@@ -699,43 +843,69 @@ export function useTeacherModuleSectionDeleteMutation(classId?: string, moduleId
 export function useTeacherModuleReorderMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (moduleIds: string[]) => modulesApi.reorderModules(classId!, moduleIds),
+    mutationFn: (moduleIds: string[]) =>
+      modulesApi.reorderModules(classId!, moduleIds),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleSectionReorderMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleSectionReorderMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (sectionIds: string[]) => modulesApi.reorderSections(moduleId!, sectionIds),
+    mutationFn: (sectionIds: string[]) =>
+      modulesApi.reorderSections(moduleId!, sectionIds),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleItemReorderMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleItemReorderMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ sectionId, itemIds }: { sectionId: string; itemIds: string[] }) =>
-      modulesApi.reorderItems(sectionId, itemIds),
+    mutationFn: ({
+      sectionId,
+      itemIds,
+    }: {
+      sectionId: string;
+      itemIds: string[];
+    }) => modulesApi.reorderItems(sectionId, itemIds),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleItemAttachMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleItemAttachMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -747,41 +917,62 @@ export function useTeacherModuleItemAttachMutation(classId?: string, moduleId?: 
     }) => modulesApi.attachItem(sectionId, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleItemDetachMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleItemDetachMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (itemId: string) => modulesApi.detachItem(itemId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleCoverMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleCoverMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (file: Parameters<typeof modulesApi.uploadCover>[1]) =>
       modulesApi.uploadCover(moduleId!, file),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherModuleItemUpdateMutation(classId?: string, moduleId?: string) {
+export function useTeacherModuleItemUpdateMutation(
+  classId?: string,
+  moduleId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -793,23 +984,35 @@ export function useTeacherModuleItemUpdateMutation(classId?: string, moduleId?: 
     }) => modulesApi.updateItem(itemId, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(classId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.moduleDetail(classId, moduleId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(classId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.moduleDetail(classId, moduleId),
+        });
       }
     },
   });
 }
 
-export function useTeacherLessonDraftStateMutation(classId?: string, lessonId?: string) {
+export function useTeacherLessonDraftStateMutation(
+  classId?: string,
+  lessonId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: BulkLessonDraftStateDto) => lessonsApi.setDraftState(classId!, payload),
+    mutationFn: (payload: BulkLessonDraftStateDto) =>
+      lessonsApi.setDraftState(classId!, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.lessons(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.lessons(classId),
+        });
       }
       if (lessonId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.lessonDetail(lessonId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.lessonDetail(lessonId),
+        });
       }
     },
   });
@@ -818,11 +1021,21 @@ export function useTeacherLessonDraftStateMutation(classId?: string, lessonId?: 
 export function useTeacherAssessmentUpdateMutation(assessmentId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof assessmentsApi.update>[1]) => assessmentsApi.update(assessmentId!, payload),
+    mutationFn: (payload: Parameters<typeof assessmentsApi.update>[1]) =>
+      assessmentsApi.update(assessmentId!, payload),
     onSuccess: async (data) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentDetail(assessmentId!) });
+      await queryClient.invalidateQueries({ queryKey: ["academic"] });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assessmentDetail(assessmentId!),
+      });
       if (data.classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessments(data.classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessments(data.classId),
+        });
       }
     },
   });
@@ -833,53 +1046,86 @@ export function useTeacherDeleteAssessmentMutation(assessmentId?: string) {
   return useMutation({
     mutationFn: () => assessmentsApi.delete(assessmentId!),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentDetail(assessmentId!) });
+      await queryClient.invalidateQueries({ queryKey: ["academic"] });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.assessmentDetail(assessmentId!),
+      });
       await queryClient.invalidateQueries({ queryKey: ["assessments"] });
       await queryClient.invalidateQueries({ queryKey: ["teacherClasses"] });
     },
   });
 }
 
-export function useTeacherReturnGradeMutation(assessmentId?: string, attemptId?: string) {
+export function useTeacherReturnGradeMutation(
+  assessmentId?: string,
+  attemptId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: Parameters<typeof assessmentsApi.returnGrade>[1]) =>
       assessmentsApi.returnGrade(attemptId!, payload),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["academic"] });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      });
       if (assessmentId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherAssessmentSubmissions(assessmentId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherAssessmentSubmissions(assessmentId),
+        });
       }
       if (attemptId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentResult(attemptId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessmentResult(attemptId),
+        });
       }
     },
   });
 }
 
-export function useTeacherUnreturnGradeMutation(assessmentId?: string, attemptId?: string) {
+export function useTeacherUnreturnGradeMutation(
+  assessmentId?: string,
+  attemptId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => assessmentsApi.unreturnGrade(attemptId!),
     onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["academic"] });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      });
       if (assessmentId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherAssessmentSubmissions(assessmentId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherAssessmentSubmissions(assessmentId),
+        });
       }
       if (attemptId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessmentResult(attemptId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessmentResult(attemptId),
+        });
       }
     },
   });
 }
 
-
 export function useTeacherCreateModuleMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof modulesApi.create>[0]) => modulesApi.create(payload),
+    mutationFn: (payload: Parameters<typeof modulesApi.create>[0]) =>
+      modulesApi.create(payload),
     onSuccess: async (data) => {
       const targetClassId = classId || data.classId;
       if (targetClassId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classModules(targetClassId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classModules(targetClassId),
+        });
       }
     },
   });
@@ -888,11 +1134,19 @@ export function useTeacherCreateModuleMutation(classId?: string) {
 export function useTeacherCreateAssessmentMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: Parameters<typeof assessmentsApi.create>[0]) => assessmentsApi.create(payload),
+    mutationFn: (payload: Parameters<typeof assessmentsApi.create>[0]) =>
+      assessmentsApi.create(payload),
     onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["academic"] });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          String(query.queryKey[0]).startsWith("class-record"),
+      });
       const targetClassId = classId || data.classId;
       if (targetClassId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.assessments(targetClassId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.assessments(targetClassId),
+        });
       }
     },
   });
@@ -901,12 +1155,19 @@ export function useTeacherCreateAssessmentMutation(classId?: string) {
 export function useTeacherAddSectionStudentsMutation(sectionId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (studentIds: string[]) => sectionsApi.addStudents(sectionId!, studentIds),
+    mutationFn: (studentIds: string[]) =>
+      sectionsApi.addStudents(sectionId!, studentIds),
     onSuccess: async () => {
       if (sectionId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionRoster(sectionId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionCandidates(sectionId, undefined) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(sectionId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSectionRoster(sectionId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSectionCandidates(sectionId, undefined),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSectionDetail(sectionId),
+        });
       }
     },
   });
@@ -917,7 +1178,9 @@ export function useExtractionStartMutation(classId?: string) {
     mutationFn: (payload: ExtractModuleDto) => extractionsApi.start(payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.extractionsByClass(classId),
+        });
       }
     },
   });
@@ -926,10 +1189,13 @@ export function useExtractionStartMutation(classId?: string) {
 export function useExtractionApplyMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ extractionId }: { extractionId: string }) => extractionsApi.apply(extractionId),
+    mutationFn: ({ extractionId }: { extractionId: string }) =>
+      extractionsApi.apply(extractionId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.extractionsByClass(classId),
+        });
       }
     },
   });
@@ -941,7 +1207,9 @@ export function useExtractionDeleteMutation(classId?: string) {
     mutationFn: (extractionId: string) => extractionsApi.delete(extractionId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.extractionsByClass(classId),
+        });
       }
     },
   });
@@ -950,11 +1218,18 @@ export function useExtractionDeleteMutation(classId?: string) {
 export function useExtractionRetryMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ extractionId, payload }: { extractionId: string; payload?: Parameters<typeof extractionsApi.retry>[1] }) =>
-      extractionsApi.retry(extractionId, payload),
+    mutationFn: ({
+      extractionId,
+      payload,
+    }: {
+      extractionId: string;
+      payload?: Parameters<typeof extractionsApi.retry>[1];
+    }) => extractionsApi.retry(extractionId, payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.extractionsByClass(classId),
+        });
       }
     },
   });
@@ -966,7 +1241,9 @@ export function useExtractionCancelMutation(classId?: string) {
     mutationFn: (extractionId: string) => extractionsApi.cancel(extractionId),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.extractionsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.extractionsByClass(classId),
+        });
       }
     },
   });
@@ -975,41 +1252,60 @@ export function useExtractionCancelMutation(classId?: string) {
 export function useClassRecordGenerateMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateClassRecordDto) => classRecordApi.generate(payload),
+    mutationFn: (payload: CreateClassRecordDto) =>
+      classRecordApi.generate(payload),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordsByClass(classId),
+        });
       }
     },
   });
 }
 
-export function useClassRecordFinalizeMutation(classId?: string, recordId?: string) {
+export function useClassRecordFinalizeMutation(
+  classId?: string,
+  recordId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => classRecordApi.finalize(recordId!),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordsByClass(classId),
+        });
       }
       if (recordId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordSpreadsheet(recordId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordPreviewGrades(recordId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordSpreadsheet(recordId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordPreviewGrades(recordId),
+        });
       }
     },
   });
 }
 
-export function useClassRecordReopenMutation(classId?: string, recordId?: string) {
+export function useClassRecordReopenMutation(
+  classId?: string,
+  recordId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => classRecordApi.reopen(recordId!),
+    mutationFn: (reason: string) => classRecordApi.reopen(recordId!, reason),
     onSuccess: async () => {
       if (classId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordsByClass(classId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordsByClass(classId),
+        });
       }
       if (recordId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classRecordSpreadsheet(recordId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classRecordSpreadsheet(recordId),
+        });
       }
     },
   });
@@ -1023,41 +1319,75 @@ export function useActiveTransmutationTable() {
   });
 }
 
-export function useDiscussionCommentMutation(classId?: string, threadId?: string) {
+export function useDiscussionCommentMutation(
+  classId?: string,
+  threadId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateDiscussionCommentDto) =>
       discussionBoardApi.createComment(classId!, threadId!, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, threadId),
+      });
     },
   });
 }
 
-export function useDiscussionDeleteCommentMutation(classId?: string, threadId?: string) {
+export function useDiscussionDeleteCommentMutation(
+  classId?: string,
+  threadId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (commentId: string) => discussionBoardApi.deleteComment(classId!, threadId!, commentId),
+    mutationFn: (commentId: string) =>
+      discussionBoardApi.deleteComment(classId!, threadId!, commentId),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, threadId),
+      });
     },
   });
 }
 
-export function useDiscussionReactionMutation(classId?: string, threadId?: string) {
+export function useDiscussionReactionMutation(
+  classId?: string,
+  threadId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { commentId: string; reactionType: DiscussionReactionType | null }) => {
+    mutationFn: (payload: {
+      commentId: string;
+      reactionType: DiscussionReactionType | null;
+    }) => {
       if (payload.reactionType) {
-        return discussionBoardApi.setReaction(classId!, threadId!, payload.commentId, payload.reactionType);
+        return discussionBoardApi.setReaction(
+          classId!,
+          threadId!,
+          payload.commentId,
+          payload.reactionType,
+        );
       }
-      return discussionBoardApi.removeReaction(classId!, threadId!, payload.commentId);
+      return discussionBoardApi.removeReaction(
+        classId!,
+        threadId!,
+        payload.commentId,
+      );
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, threadId),
+      });
     },
   });
 }
@@ -1065,21 +1395,31 @@ export function useDiscussionReactionMutation(classId?: string, threadId?: strin
 export function useDiscussionCreateThreadMutation(classId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: CreateDiscussionThreadDto) => discussionBoardApi.createThread(classId!, payload),
+    mutationFn: (payload: CreateDiscussionThreadDto) =>
+      discussionBoardApi.createThread(classId!, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
     },
   });
 }
 
-export function useDiscussionUpdateThreadMutation(classId?: string, threadId?: string) {
+export function useDiscussionUpdateThreadMutation(
+  classId?: string,
+  threadId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: UpdateDiscussionThreadDto) =>
       discussionBoardApi.updateThread(classId!, threadId!, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, threadId),
+      });
     },
   });
 }
@@ -1094,13 +1434,18 @@ export function useDiscussionThreadActionMutation(classId?: string) {
       threadId: string;
       action: "publish" | "close" | "reopen" | "archive";
     }) => {
-      if (action === "publish") return discussionBoardApi.publishThread(classId!, threadId);
-      if (action === "close") return discussionBoardApi.closeThread(classId!, threadId);
-      if (action === "reopen") return discussionBoardApi.reopenThread(classId!, threadId);
+      if (action === "publish")
+        return discussionBoardApi.publishThread(classId!, threadId);
+      if (action === "close")
+        return discussionBoardApi.closeThread(classId!, threadId);
+      if (action === "reopen")
+        return discussionBoardApi.reopenThread(classId!, threadId);
       return discussionBoardApi.archiveThread(classId!, threadId);
     },
     onSuccess: async (_value, variables) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThreads(classId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThreads(classId),
+      });
       await queryClient.invalidateQueries({
         queryKey: queryKeys.discussionThread(classId, variables.threadId),
       });
@@ -1108,21 +1453,38 @@ export function useDiscussionThreadActionMutation(classId?: string) {
   });
 }
 
-export function useDiscussionReportCommentMutation(classId?: string, threadId?: string) {
+export function useDiscussionReportCommentMutation(
+  classId?: string,
+  threadId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ commentId, payload }: { commentId: string; payload: ReportDiscussionCommentDto }) =>
+    mutationFn: ({
+      commentId,
+      payload,
+    }: {
+      commentId: string;
+      payload: ReportDiscussionCommentDto;
+    }) =>
       discussionBoardApi.reportComment(classId!, threadId!, commentId, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.discussionThread(classId, threadId) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.discussionThread(classId, threadId),
+      });
     },
   });
 }
 
-export function useTeacherClassPresentationUpdateMutation(hookClassId?: string) {
+export function useTeacherClassPresentationUpdateMutation(
+  hookClassId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { classId?: string; cardPreset?: string | null; cardBannerUrl?: string | null }) => {
+    mutationFn: (payload: {
+      classId?: string;
+      cardPreset?: string | null;
+      cardBannerUrl?: string | null;
+    }) => {
       const targetClassId = payload.classId || hookClassId;
       if (!targetClassId) throw new Error("classId is required");
       return classesApi.updatePresentation(targetClassId, {
@@ -1133,17 +1495,25 @@ export function useTeacherClassPresentationUpdateMutation(hookClassId?: string) 
     onSuccess: async (_, variables) => {
       const targetClassId = variables.classId || hookClassId;
       if (targetClassId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classDetail(targetClassId),
+        });
         await queryClient.invalidateQueries({ queryKey: ["teacher-classes"] });
       }
     },
   });
 }
 
-export function useTeacherSectionPresentationUpdateMutation(hookSectionId?: string) {
+export function useTeacherSectionPresentationUpdateMutation(
+  hookSectionId?: string,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload: { sectionId?: string; cardPreset?: string | null; cardBannerUrl?: string | null }) => {
+    mutationFn: (payload: {
+      sectionId?: string;
+      cardPreset?: string | null;
+      cardBannerUrl?: string | null;
+    }) => {
       const targetSectionId = payload.sectionId || hookSectionId;
       if (!targetSectionId) throw new Error("sectionId is required");
       return sectionsApi.updatePresentation(targetSectionId, {
@@ -1154,11 +1524,21 @@ export function useTeacherSectionPresentationUpdateMutation(hookSectionId?: stri
     onSuccess: async (_, variables) => {
       const targetSectionId = variables.sectionId || hookSectionId;
       if (targetSectionId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(targetSectionId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("all") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("active") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("archived") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("hidden") });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSectionDetail(targetSectionId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("all"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("active"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("archived"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("hidden"),
+        });
       }
     },
   });
@@ -1175,7 +1555,9 @@ export function useUploadClassBannerMutation(hookClassId?: string) {
     onSuccess: async (_, variables) => {
       const targetClassId = variables.classId || hookClassId;
       if (targetClassId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.classDetail(targetClassId) });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.classDetail(targetClassId),
+        });
         await queryClient.invalidateQueries({ queryKey: ["teacher-classes"] });
       }
     },
@@ -1193,11 +1575,21 @@ export function useUploadSectionBannerMutation(hookSectionId?: string) {
     onSuccess: async (_, variables) => {
       const targetSectionId = variables.sectionId || hookSectionId;
       if (targetSectionId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSectionDetail(targetSectionId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("all") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("active") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("archived") });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.teacherSections("hidden") });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSectionDetail(targetSectionId),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("all"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("active"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("archived"),
+        });
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.teacherSections("hidden"),
+        });
       }
     },
   });

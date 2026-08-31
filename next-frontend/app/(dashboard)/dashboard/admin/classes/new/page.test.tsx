@@ -10,7 +10,9 @@ const searchParams = new URLSearchParams({
   subjectGradeLevel: '7',
 });
 
-const classFormMock = jest.fn(() => <div data-testid="class-form" />);
+const classFormMock = jest.fn<React.ReactNode, [Record<string, unknown>]>(
+  () => <div data-testid="class-form" />,
+);
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -128,15 +130,16 @@ describe('CreateClassPage', () => {
     );
 
     await waitFor(() => {
-      const lastCall =
-        classFormMock.mock.calls[classFormMock.mock.calls.length - 1]?.[0] as {
-          initialValues: {
-            subjectName: string;
-            subjectCode: string;
-            subjectGradeLevel: string;
-          };
-          selectedTemplateId: string;
+      const lastCall = classFormMock.mock.calls[
+        classFormMock.mock.calls.length - 1
+      ]?.[0] as {
+        initialValues: {
+          subjectName: string;
+          subjectCode: string;
+          subjectGradeLevel: string;
         };
+        selectedTemplateId: string;
+      };
 
       expect(lastCall.initialValues).toEqual(
         expect.objectContaining({

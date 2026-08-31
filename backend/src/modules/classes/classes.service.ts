@@ -20,6 +20,7 @@ import {
   SQL,
 } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
+import { AcademicMutation } from '../../database/academic-transaction';
 import {
   assessments,
   assessmentQuestions,
@@ -529,6 +530,7 @@ export class ClassesService {
   /**
    * Create a new class
    */
+  @AcademicMutation()
   async create(
     createClassDto: CreateClassDto,
     actorId?: string,
@@ -558,6 +560,8 @@ export class ClassesService {
         name: true,
         gradeLevel: true,
         roomNumber: true,
+        schoolYear: true,
+        isActive: true,
       },
     });
 
@@ -567,6 +571,24 @@ export class ClassesService {
       );
     }
 
+    if (
+      section.schoolYear &&
+      (section.schoolYear !== effectiveSchoolYear || section.isActive === false)
+    )
+      throw new ConflictException(
+        'Choose an active section in the same school year',
+      );
+    if (
+      normalizedSubjectGradeLevel &&
+      normalizedSubjectGradeLevel !== section.gradeLevel
+    )
+      throw new BadRequestException(
+        'Subject grade level must match its section',
+      );
+    if (createClassDto.academicWeightProfile && !actorRoles.includes('admin'))
+      throw new ForbiddenException(
+        'Only an admin can classify a subject grading profile',
+      );
     const sectionRoomNumber = section.roomNumber?.trim() ?? '';
     if (!sectionRoomNumber) {
       throw new BadRequestException(
@@ -634,6 +656,7 @@ export class ClassesService {
       const insertPayload: any = {
         subjectName: createClassDto.subjectName,
         subjectCode: normalizedSubjectCode,
+        academicWeightProfile: createClassDto.academicWeightProfile ?? null,
         subjectGradeLevel: normalizedSubjectGradeLevel,
         sectionId: createClassDto.sectionId,
         teacherId: createClassDto.teacherId,
@@ -687,6 +710,9 @@ export class ClassesService {
             subjectGradeLevel: normalizedSubjectGradeLevel,
           },
           actorId ?? createClassDto.teacherId,
+          effectiveSchoolYear === activeAcademicState.schoolYear
+            ? activeAcademicState.quarter
+            : 'Q1',
         );
       }
 
@@ -701,20 +727,17 @@ export class ClassesService {
     const classRecordActorRoles =
       actorRoles.length > 0 ? actorRoles : ['teacher'];
 
-    try {
-      await this.classRecordService.generateClassRecord(
-        {
-          classId: newClassId,
-          gradingPeriod: activeAcademicState.quarter,
-        },
-        actorId ?? createClassDto.teacherId,
-        classRecordActorRoles,
-      );
-    } catch (error) {
-      if (!(error instanceof ConflictException)) {
-        throw error;
-      }
-    }
+    await this.classRecordService.generateClassRecord(
+      {
+        classId: newClassId,
+        gradingPeriod:
+          effectiveSchoolYear === activeAcademicState.schoolYear
+            ? activeAcademicState.quarter
+            : 'Q1',
+      },
+      actorId ?? createClassDto.teacherId,
+      classRecordActorRoles,
+    );
 
     await this.auditService.log({
       actorId: actorId ?? createClassDto.teacherId ?? 'system',
@@ -741,6 +764,7 @@ export class ClassesService {
     classId: string,
     createClassDto: CreateClassDto,
     actorId: string,
+    gradingPeriod: 'Q1' | 'Q2' | 'Q3' | 'Q4',
   ) {
     const template = await database.query.classTemplates.findFirst({
       where: eq(classTemplates.id, templateId),
@@ -878,6 +902,7 @@ export class ClassesService {
           dueDate,
           totalPoints: templateAssessment.totalPoints ?? 0,
           isPublished: false,
+          quarter: gradingPeriod,
           randomizeQuestions: Boolean(settings.randomizeQuestions ?? false),
           closeWhenDue:
             settings.closeWhenDue === undefined
@@ -1257,6 +1282,7 @@ export class ClassesService {
   /**
    * Update a class
    */
+  @AcademicMutation()
   async update(
     id: string,
     updateClassDto: UpdateClassDto,
@@ -1265,6 +1291,23 @@ export class ClassesService {
   ) {
     // Verify class exists
     const existing = await this.findById(id);
+    if (
+      updateClassDto.isActive !== undefined &&
+      updateClassDto.isActive !== existing.isActive
+    )
+      throw new ConflictException(
+        'Use the class archive action to change its academic status',
+      );
+    const identityChanged =
+      (updateClassDto.subjectCode !== undefined &&
+        updateClassDto.subjectCode !== existing.subjectCode) ||
+      (updateClassDto.subjectGradeLevel !== undefined &&
+        updateClassDto.subjectGradeLevel !== existing.subjectGradeLevel) ||
+      (updateClassDto.schoolYear !== undefined &&
+        updateClassDto.schoolYear !== existing.schoolYear) ||
+      (updateClassDto.sectionId !== undefined &&
+        updateClassDto.sectionId !== existing.sectionId);
+    if (identityChanged) await this.assertNoAcademicWorkbooks(id);
     this.assertRequiredClassSetup({
       room: updateClassDto.room,
       schedules: updateClassDto.schedules,
@@ -1554,9 +1597,34 @@ export class ClassesService {
    * Delete a class.
    * Blocked when active enrollments OR lessons are attached to prevent data loss.
    */
+  private async assertNoAcademicWorkbooks(classId: string) {
+    const records = await this.db.query.classRecords.findMany({
+      where: eq(classRecords.classId, classId),
+      columns: { id: true },
+      limit: 1,
+    });
+    if (records.length)
+      throw new ConflictException(
+        'Academic workbooks preserve identity and grade history; this class cannot be deleted or reassigned to a different year, section, or subject',
+      );
+  }
+
+  @AcademicMutation()
   async delete(id: string, actorId?: string, actorRoles: string[] = []) {
     // Verify class exists
     const classRecord = await this.findById(id);
+
+    const sectionMembership = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.sectionId, classRecord.sectionId),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+    if (sectionMembership)
+      throw new ConflictException(
+        'A subject class in an enrolled section cannot be removed from the expected annual curriculum',
+      );
 
     const activeEnrollments = await this.db.query.enrollments.findMany({
       where: and(
@@ -1591,6 +1659,7 @@ export class ClassesService {
       );
     }
 
+    await this.assertNoAcademicWorkbooks(id);
     await this.db.delete(classes).where(eq(classes.id, id));
 
     const actorRole = actorRoles.includes('admin')
@@ -1618,6 +1687,7 @@ export class ClassesService {
    * Permanently purge an archived class and all related cascade data.
    * This intentionally bypasses delete blockers used by the regular delete flow.
    */
+  @AcademicMutation()
   async purge(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
 
@@ -1627,6 +1697,7 @@ export class ClassesService {
       );
     }
 
+    await this.assertNoAcademicWorkbooks(id);
     await this.db.delete(classes).where(eq(classes.id, id));
 
     const actorRole = actorRoles.includes('admin')
@@ -1649,6 +1720,7 @@ export class ClassesService {
     return classRecord;
   }
 
+  @AcademicMutation()
   private async performBulkLifecycleAction(
     action: BulkClassLifecycleAction,
     classId: string,
@@ -2171,6 +2243,7 @@ export class ClassesService {
   /**
    * Archive a class. Archived classes are terminal and can only be purged.
    */
+  @AcademicMutation()
   async toggleActive(id: string, actorId?: string, actorRoles: string[] = []) {
     const classRecord = await this.findById(id);
 
@@ -2179,6 +2252,21 @@ export class ClassesService {
         'Archived classes cannot be restored. Purge the archived class instead.',
       );
     }
+
+    const activeMembership = await this.db.query.enrollments.findFirst({
+      where: and(
+        or(
+          eq(enrollments.classId, id),
+          eq(enrollments.sectionId, classRecord.sectionId),
+        ),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+    if (activeMembership)
+      throw new ConflictException(
+        'A class in an enrolled section must use academic transition or explicit student withdrawal before archival',
+      );
 
     const now = new Date();
 
@@ -2194,7 +2282,6 @@ export class ClassesService {
         .update(classes)
         .set({
           isActive: false,
-          teacherId: null,
           updatedAt: now,
         })
         .where(eq(classes.id, id));
@@ -2215,7 +2302,7 @@ export class ClassesService {
         actorRole,
         previousIsActive: classRecord.isActive,
         isActive: false,
-        removedTeacherId: classRecord.teacherId,
+        preservedTeacherId: classRecord.teacherId,
         completedEnrollmentStatus: 'completed',
       },
     });
@@ -3037,9 +3124,24 @@ export class ClassesService {
    * All reads and the final write are wrapped in a single database transaction
    * to prevent duplicate enrollments under concurrent requests.
    */
-  async enrollStudent(classId: string, studentId: string, actorId: string) {
+  @AcademicMutation()
+  async enrollStudent(
+    classId: string,
+    studentId: string,
+    actorId: string,
+    actorRoles: string[] = ['teacher'],
+  ) {
     // Pre-flight checks outside the transaction (cheap, read-only)
     const classRecord = await this.findById(classId);
+    if (!actorRoles.includes('admin') && classRecord.teacherId !== actorId)
+      throw new ForbiddenException(
+        'You can only manage enrollment for your own classes',
+      );
+    const state = await this.academicStateService.getCurrentState();
+    if (!classRecord.isActive || classRecord.schoolYear !== state.schoolYear)
+      throw new ConflictException(
+        'Class enrollment is allowed only in the active school year',
+      );
     const classGradeLevel =
       classRecord.subjectGradeLevel || classRecord.section?.gradeLevel;
 
@@ -3117,6 +3219,14 @@ export class ClassesService {
       }
     });
 
+    await this.classRecordService.captureClassEnrollment(
+      classId,
+      [studentId],
+      'joined',
+      actorId,
+      actorRoles,
+    );
+
     // Read the fully populated enrollment after the transaction is committed
     const enrollment = await this.getEnrollmentById(enrollmentId);
     if (!enrollment) {
@@ -3149,8 +3259,18 @@ export class ClassesService {
    *     an additional class-enrollment row; delete it.
    *   – Otherwise → this IS the (promoted) section row; revert classId to NULL.
    */
-  async removeStudent(classId: string, studentId: string, actorId: string) {
+  @AcademicMutation()
+  async removeStudent(
+    classId: string,
+    studentId: string,
+    actorId: string,
+    actorRoles: string[] = ['teacher'],
+  ) {
     const classRecord = await this.findById(classId);
+    if (!actorRoles.includes('admin') && classRecord.teacherId !== actorId)
+      throw new ForbiddenException(
+        'You can only manage enrollment for your own classes',
+      );
 
     const enrollment = await this.db.query.enrollments.findFirst({
       where: and(
@@ -3162,6 +3282,14 @@ export class ClassesService {
     if (!enrollment) {
       throw new NotFoundException(`Student is not enrolled in this class`);
     }
+
+    await this.classRecordService.captureClassEnrollment(
+      classId,
+      [studentId],
+      'left',
+      actorId,
+      actorRoles,
+    );
 
     // Determine whether a separate section-only row already exists
     const existingSectionRow = await this.db.query.enrollments.findFirst({

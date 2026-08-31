@@ -1,11 +1,18 @@
 'use client';
 
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import AssessmentEditorPage from './page';
 import { assessmentService } from '@/services/assessment-service';
 import { academicStateService } from '@/services/academic-state-service';
 import { classRecordService } from '@/services/class-record-service';
 import { toast } from 'sonner';
+import { openCapabilities } from '@/test/academic-fixtures';
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'assessment-1' }),
@@ -41,12 +48,20 @@ jest.mock('@/components/shared/rich-text/RichTextEditor', () => ({
 }));
 
 jest.mock('@/components/shared/rich-text/RichTextRenderer', () => ({
-  RichTextRenderer: ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />,
+  RichTextRenderer: ({ html }: { html: string }) => (
+    <div dangerouslySetInnerHTML={{ __html: html }} />
+  ),
 }));
 
 jest.mock('@/features/assessment-composer/AssessmentQuestionEditor', () => ({
-  AssessmentQuestionEditor: ({ question }: { question: { id: string; content: string } }) => (
-    <div data-testid={`question-editor-${question.id}`}>{question.content || 'Untitled question'}</div>
+  AssessmentQuestionEditor: ({
+    question,
+  }: {
+    question: { id: string; content: string };
+  }) => (
+    <div data-testid={`question-editor-${question.id}`}>
+      {question.content || 'Untitled question'}
+    </div>
   ),
 }));
 
@@ -82,9 +97,15 @@ jest.mock('@/services/academic-state-service', () => ({
   },
 }));
 
-const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
-const mockedAcademicStateService = academicStateService as jest.Mocked<typeof academicStateService>;
-const mockedClassRecordService = classRecordService as jest.Mocked<typeof classRecordService>;
+const mockedAssessmentService = assessmentService as jest.Mocked<
+  typeof assessmentService
+>;
+const mockedAcademicStateService = academicStateService as jest.Mocked<
+  typeof academicStateService
+>;
+const mockedClassRecordService = classRecordService as jest.Mocked<
+  typeof classRecordService
+>;
 const mockedToast = toast as jest.Mocked<typeof toast>;
 const LOCAL_DRAFT_KEY = 'teacher-assessment-editor-draft:assessment-1';
 
@@ -113,7 +134,8 @@ function buildAssessment(overrides: Record<string, unknown> = {}) {
     feedbackLevel: 'immediate',
     feedbackDelayHours: 0,
     classRecordCategory: 'written_work',
-    quarter: '',
+    quarter: 'Q1',
+    academicCapabilities: openCapabilities,
     classRecordPlacement: null,
     isPublished: false,
     questions: [
@@ -149,9 +171,9 @@ function buildAcademicStateResponse() {
 }
 
 function getQuarterSelect() {
-  const select = screen.getAllByRole('combobox').find((element) =>
-    element.querySelector('option[value="Q1"]'),
-  );
+  const select = screen
+    .getAllByRole('combobox')
+    .find((element) => element.querySelector('option[value="Q1"]'));
 
   if (!select) throw new Error('Quarter select was not rendered');
   return select as HTMLSelectElement;
@@ -196,7 +218,9 @@ describe('AssessmentEditorPage', () => {
       message: 'saved',
       data: buildAssessment({ rubricCriteria: [] }),
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
-    mockedAcademicStateService.getCurrent.mockResolvedValue(buildAcademicStateResponse());
+    mockedAcademicStateService.getCurrent.mockResolvedValue(
+      buildAcademicStateResponse(),
+    );
     mockedClassRecordService.getByClass.mockResolvedValue({
       success: true,
       data: [
@@ -255,48 +279,71 @@ describe('AssessmentEditorPage', () => {
   it('renders a direct, compact workbar before question content and advanced panels', async () => {
     render(<AssessmentEditorPage />);
 
-    expect(await screen.findByDisplayValue('Fractions Checkpoint')).toBeInTheDocument();
+    expect(
+      await screen.findByDisplayValue('Fractions Checkpoint'),
+    ).toBeInTheDocument();
     expect(screen.getAllByLabelText('Assessment title')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Back to assessments' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Back to assessments' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Assessment name')).not.toBeInTheDocument();
     expect(screen.queryByText('Editable')).not.toBeInTheDocument();
 
     const publishControls = screen.getByRole('group', {
       name: 'Assessment publishing controls',
     });
-    expect(within(publishControls).getByRole('button', { name: 'Preview' })).toBeInTheDocument();
-    expect(within(publishControls).getByRole('button', { name: 'Draft' })).toBeInTheDocument();
+    expect(
+      within(publishControls).getByRole('button', { name: 'Preview' }),
+    ).toBeInTheDocument();
+    expect(
+      within(publishControls).getByRole('button', { name: 'Draft' }),
+    ).toBeInTheDocument();
     expect(
       within(publishControls).getByRole('button', { name: 'Ready to give' }),
     ).toBeInTheDocument();
-    expect(within(publishControls).getByRole('button', { name: 'Save now' })).toBeInTheDocument();
+    expect(
+      within(publishControls).getByRole('button', { name: 'Save now' }),
+    ).toBeInTheDocument();
 
     const workbarMeta = screen.getByLabelText('Assessment status');
     expect(workbarMeta).toHaveTextContent(/saved|unsaved|saving|retry needed/i);
     expect(workbarMeta).not.toHaveClass('rounded-full');
-    expect(screen.getByLabelText('Assessment context')).toHaveTextContent('Quarter Q1');
+    expect(screen.getByLabelText('Assessment context')).toHaveTextContent(
+      'Term 1 · active Term 1',
+    );
 
-    const warningButton = screen.getByRole('button', { name: /view .* setup issues?/i });
+    const warningButton = screen.getByRole('button', {
+      name: /view .* setup issues?/i,
+    });
     expect(within(warningButton).getByText(/setup issues?/i)).toBeVisible();
 
     const firstQuestion = screen.getByTestId('question-editor-question-1');
     fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
-    const advancedField = (await screen.findAllByText('Time Limit (minutes)'))[0];
+    const advancedField = (
+      await screen.findAllByText('Time Limit (minutes)')
+    )[0];
     expect(
-      firstQuestion.compareDocumentPosition(advancedField) & Node.DOCUMENT_POSITION_FOLLOWING,
+      firstQuestion.compareDocumentPosition(advancedField) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
   it('opens the helper guide from the question mark button', async () => {
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: /assessment help/i }));
 
-    expect(await screen.findByText('Teacher guide: Assessment Setup Workspace')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Teacher guide: Assessment Setup Workspace'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Page 1 of 5')).toBeInTheDocument();
-    expect(screen.getByText('Start with the top-right controls')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start with the top-right controls'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Build the learner activity')).toBeInTheDocument();
@@ -322,16 +369,28 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByPlaceholderText('Untitled assessment')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByPlaceholderText('Untitled assessment')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /view .* setup issues/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /view .* setup issues/i }),
+    );
 
-    expect(await screen.findByText('Assessment setup checklist')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Assessment setup checklist'),
+    ).toBeInTheDocument();
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText('Add an assessment title')).toBeInTheDocument();
-    expect(within(dialog).getByText('Add at least one question')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Add an assessment title'),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Add at least one question'),
+    ).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /open build content/i }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: /open build content/i }),
+    );
 
     await waitFor(() => {
       expect(
@@ -343,12 +402,16 @@ describe('AssessmentEditorPage', () => {
   it('blocks publishing until class record setup is complete', async () => {
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
     fireEvent.click(screen.getAllByRole('button', { name: /manual slot/i })[0]);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /ready to give/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    );
     fireEvent.click(screen.getByRole('button', { name: /save now/i }));
 
     await waitFor(() => {
@@ -378,15 +441,22 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /ready to give/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    );
     fireEvent.click(screen.getByRole('button', { name: /save now/i }));
 
     await waitFor(() => {
-      expect(mockedAssessmentService.releaseCore).toHaveBeenCalledWith('assessment-1', {
-        isPublished: true,
-      });
+      expect(mockedAssessmentService.releaseCore).toHaveBeenCalledWith(
+        'assessment-1',
+        {
+          isPublished: true,
+        },
+      );
     });
 
     expect(mockedAssessmentService.update).toHaveBeenCalled();
@@ -401,13 +471,18 @@ describe('AssessmentEditorPage', () => {
   it('sanitizes advanced numeric inputs and constrains passing score choices', async () => {
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
-    const timeLimitField = screen.getAllByText('Time Limit (minutes)')[0].parentElement as HTMLElement;
-    const passingScoreField = screen.getAllByText('Passing Score (%)')[0].parentElement as HTMLElement;
-    const maxAttemptsField = screen.getAllByText('Max Attempts')[0].parentElement as HTMLElement;
+    const timeLimitField = screen.getAllByText('Time Limit (minutes)')[0]
+      .parentElement as HTMLElement;
+    const passingScoreField = screen.getAllByText('Passing Score (%)')[0]
+      .parentElement as HTMLElement;
+    const maxAttemptsField = screen.getAllByText('Max Attempts')[0]
+      .parentElement as HTMLElement;
 
     const timeLimitInput = within(timeLimitField).getByRole('textbox');
     const passingScoreSelect = within(passingScoreField).getByRole('combobox');
@@ -424,7 +499,8 @@ describe('AssessmentEditorPage', () => {
     fireEvent.blur(timeLimitInput);
     expect(timeLimitInput).toHaveValue('30');
 
-    const passingScoreOptions = within(passingScoreSelect).getAllByRole('option');
+    const passingScoreOptions =
+      within(passingScoreSelect).getAllByRole('option');
     expect(passingScoreOptions).toHaveLength(51);
     expect(passingScoreOptions[0]).toHaveValue('50');
     expect(passingScoreOptions[50]).toHaveValue('100');
@@ -444,24 +520,37 @@ describe('AssessmentEditorPage', () => {
     expect(maxAttemptsInput).toHaveValue('1');
   });
 
-  it('locks the class record quarter to the current academic quarter', async () => {
+  it('preserves a future draft period and offers only policy periods', async () => {
     mockedAssessmentService.getById.mockResolvedValueOnce({
       success: true,
       message: 'ok',
       data: buildAssessment({
         quarter: 'Q3',
+        academicCapabilities: {
+          ...openCapabilities,
+          period: 'Q3',
+          canRelease: false,
+        },
       }),
     } as Awaited<ReturnType<typeof assessmentService.getById>>);
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
     const quarterSelect = getQuarterSelect();
-    expect(quarterSelect).toHaveValue('Q1');
-    expect(quarterSelect).toBeDisabled();
+    expect(quarterSelect).toHaveValue('Q3');
+    expect(quarterSelect).toBeEnabled();
+    expect(
+      within(quarterSelect).queryByRole('option', { name: 'Q4' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    ).toBeDisabled();
   });
 
   it('treats a missing quarter workbook as setup guidance without requesting its slot resource', async () => {
@@ -472,11 +561,15 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
     expect(
-      await screen.findByText('Create the Q1 class record workbook before choosing a slot.'),
+      await screen.findByText(
+        'Create the Q1 class record workbook before choosing a slot.',
+      ),
     ).toBeInTheDocument();
     expect(mockedClassRecordService.getSlotOverview).not.toHaveBeenCalled();
   });
@@ -493,18 +586,24 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
     expect(getQuarterSelect()).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeDisabled();
+    expect(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    ).toBeDisabled();
 
     resolveQuarter(buildAcademicStateResponse());
 
     await waitFor(() => {
       expect(getQuarterSelect()).toHaveValue('Q1');
     });
-    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeEnabled();
+    expect(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    ).toBeEnabled();
   });
 
   it('shows safe retryable quarter verification failure without exposing the error', async () => {
@@ -517,13 +616,19 @@ describe('AssessmentEditorPage', () => {
     expect(
       await screen.findByText('Current quarter could not be verified'),
     ).toBeInTheDocument();
-    expect(screen.queryByText('forbidden quarter detail')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /ready to give/i })[0]).toBeDisabled();
+    expect(
+      screen.queryByText('forbidden quarter detail'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    ).toBeDisabled();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
     expect(getQuarterSelect()).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /retry quarter check/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /retry quarter check/i }),
+    );
 
     await waitFor(() => {
       expect(mockedAcademicStateService.getCurrent).toHaveBeenCalledTimes(2);
@@ -535,7 +640,9 @@ describe('AssessmentEditorPage', () => {
   });
 
   it('allows a persisted draft to save when quarter verification is unavailable', async () => {
-    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(new Error('network detail'));
+    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(
+      new Error('network detail'),
+    );
     mockedAssessmentService.getById.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -559,7 +666,9 @@ describe('AssessmentEditorPage', () => {
   });
 
   it('blocks release requests when quarter verification is unavailable', async () => {
-    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(new Error('network detail'));
+    mockedAcademicStateService.getCurrent.mockRejectedValueOnce(
+      new Error('network detail'),
+    );
     mockedAssessmentService.getById.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -582,44 +691,74 @@ describe('AssessmentEditorPage', () => {
   it('swaps the setup rules for file upload mode', async () => {
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /file upload assessment/i })[0]);
-    fireEvent.click(screen.getByRole('button', { name: /view .* setup issues/i }));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: /view .* setup issues/i }),
+    );
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Add upload instructions')).toBeInTheDocument();
-    expect(within(dialog).queryByText('Add at least one question')).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Add upload instructions'),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByText('Add at least one question'),
+    ).not.toBeInTheDocument();
   });
 
   it('simplifies advanced settings for file upload mode and fixes scoring to 100 points', async () => {
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /file upload assessment/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
+    );
     fireEvent.click(screen.getAllByRole('button', { name: 'Advanced' })[0]);
 
-    expect(screen.getByText('Score is always 100 for file upload assessments.')).toBeInTheDocument();
-    expect(screen.getByText('No rubric yet. Teachers will grade the latest submission out of 100.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Score is always 100 for file upload assessments.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'No rubric yet. Teachers will grade the latest submission out of 100.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Time Limit (minutes)')).not.toBeInTheDocument();
     expect(screen.queryByText('Passing Score (%)')).not.toBeInTheDocument();
     expect(screen.queryByText('Max Attempts')).not.toBeInTheDocument();
-    expect(screen.queryByText('Randomize questions and options per student')).not.toBeInTheDocument();
-    expect(screen.queryByText('Enable per-question timer')).not.toBeInTheDocument();
-    expect(screen.queryByText('Strict no-return policy for previous questions')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Randomize questions and options per student'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Enable per-question timer'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Strict no-return policy for previous questions'),
+    ).not.toBeInTheDocument();
 
     const classRecordHeading = screen.getByText('Class record setup');
     const feedbackLabel = screen.getByText('Result Release');
     expect(
       Boolean(
-        classRecordHeading.compareDocumentPosition(feedbackLabel)
-        & Node.DOCUMENT_POSITION_FOLLOWING,
+        classRecordHeading.compareDocumentPosition(feedbackLabel) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
 
-    expect(screen.getByLabelText(/total score 100 points/i)).toBeInTheDocument();
-    expect(screen.getByText('Close assessment when due date passes')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/total score 100 points/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Close assessment when due date passes'),
+    ).toBeInTheDocument();
   });
 
   it('treats answer choices with attached images as filled', async () => {
@@ -653,15 +792,21 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /view .* setup issues/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /view .* setup issues/i }),
+    );
 
     const dialog = await screen.findByRole('dialog');
     expect(
       within(dialog).queryByText('Question 1 has empty answer choices'),
     ).not.toBeInTheDocument();
-    expect(within(dialog).getByText('Assessment setup checklist')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Assessment setup checklist'),
+    ).toBeInTheDocument();
   });
 
   it('flags invalid question setup in question mode', async () => {
@@ -686,9 +831,13 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /view .* setup issues/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /view .* setup issues/i }),
+    );
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Question 1 is empty')).toBeInTheDocument();
@@ -700,17 +849,31 @@ describe('AssessmentEditorPage', () => {
       message: 'saved',
       data: {
         rubricCriteria: [
-          { id: 'criterion-1', title: 'Accuracy', description: 'Correctness', points: 51 },
-          { id: 'criterion-2', title: 'Clarity', description: 'Readable work', points: 49 },
+          {
+            id: 'criterion-1',
+            title: 'Accuracy',
+            description: 'Correctness',
+            points: 51,
+          },
+          {
+            id: 'criterion-2',
+            title: 'Clarity',
+            description: 'Readable work',
+            points: 49,
+          },
         ],
       },
     } as Awaited<ReturnType<typeof assessmentService.reviewRubric>>);
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Fractions Checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Fractions Checkpoint')).length,
+    ).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /file upload assessment/i })[0]);
+    fireEvent.click(
+      screen.getAllByRole('button', { name: /file upload assessment/i })[0],
+    );
     fireEvent.click(screen.getByRole('button', { name: /rubric/i }));
     fireEvent.click(screen.getByRole('button', { name: /add row/i }));
     fireEvent.click(screen.getByRole('button', { name: /add row/i }));
@@ -720,7 +883,8 @@ describe('AssessmentEditorPage', () => {
 
     fireEvent.change(titleInputs[0], { target: { value: 'Accuracy' } });
     fireEvent.change(titleInputs[1], { target: { value: 'Clarity' } });
-    const rubricMeter = screen.getByText('Rubric total').closest('div')?.parentElement as HTMLElement;
+    const rubricMeter = screen.getByText('Rubric total').closest('div')
+      ?.parentElement as HTMLElement;
 
     fireEvent.change(pointsInputs[0], { target: { value: '051' } });
     expect(pointsInputs[0]).toHaveValue('51');
@@ -731,7 +895,9 @@ describe('AssessmentEditorPage', () => {
     fireEvent.change(pointsInputs[1], { target: { value: '99' } });
     expect(pointsInputs[1]).toHaveValue('49');
     expect(rubricMeter.textContent).toContain('100/100');
-    expect(screen.getByText('Ready for file upload scoring.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Ready for file upload scoring.'),
+    ).toBeInTheDocument();
 
     const saveButton = screen.getByRole('button', { name: /save rubric/i });
     expect(saveButton).toBeEnabled();
@@ -739,16 +905,32 @@ describe('AssessmentEditorPage', () => {
     fireEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(mockedAssessmentService.reviewRubric).toHaveBeenCalledWith('assessment-1', [
-        { id: expect.any(String), title: 'Accuracy', description: undefined, points: 51 },
-        { id: expect.any(String), title: 'Clarity', description: undefined, points: 49 },
-      ]);
+      expect(mockedAssessmentService.reviewRubric).toHaveBeenCalledWith(
+        'assessment-1',
+        [
+          {
+            id: expect.any(String),
+            title: 'Accuracy',
+            description: undefined,
+            points: 51,
+          },
+          {
+            id: expect.any(String),
+            title: 'Clarity',
+            description: undefined,
+            points: 49,
+          },
+        ],
+      );
     });
 
     fireEvent.click(screen.getByRole('button', { name: /add row/i }));
-    const updatedTitleInputs = screen.getAllByPlaceholderText('Criterion title');
+    const updatedTitleInputs =
+      screen.getAllByPlaceholderText('Criterion title');
     const updatedPointsInputs = screen.getAllByPlaceholderText('Points');
-    fireEvent.change(updatedTitleInputs[2], { target: { value: 'Presentation' } });
+    fireEvent.change(updatedTitleInputs[2], {
+      target: { value: 'Presentation' },
+    });
     fireEvent.change(updatedPointsInputs[2], { target: { value: '1' } });
     expect(updatedPointsInputs[2]).toHaveValue('0');
   });
@@ -787,18 +969,30 @@ describe('AssessmentEditorPage', () => {
 
     await screen.findByText('Second question');
 
-    expect(screen.getByRole('button', { name: /move question 1 up/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /move question 2 down/i })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /move question 1 up/i }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /move question 2 down/i }),
+    ).toBeDisabled();
 
-    fireEvent.click(screen.getByRole('button', { name: /move question 1 down/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /move question 1 down/i }),
+    );
 
-    const articlesAfterMoveDown = Array.from(container.querySelectorAll('article'));
+    const articlesAfterMoveDown = Array.from(
+      container.querySelectorAll('article'),
+    );
     expect(articlesAfterMoveDown[0]).toHaveTextContent('Second question');
     expect(articlesAfterMoveDown[1]).toHaveTextContent('First question');
 
-    fireEvent.click(screen.getByRole('button', { name: /move question 2 up/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /move question 2 up/i }),
+    );
 
-    const articlesAfterMoveUp = Array.from(container.querySelectorAll('article'));
+    const articlesAfterMoveUp = Array.from(
+      container.querySelectorAll('article'),
+    );
     expect(articlesAfterMoveUp[0]).toHaveTextContent('First question');
     expect(articlesAfterMoveUp[1]).toHaveTextContent('Second question');
   });
@@ -806,8 +1000,12 @@ describe('AssessmentEditorPage', () => {
   it('writes a local draft snapshot while the teacher edits', async () => {
     render(<AssessmentEditorPage />);
 
-    const titleInput = (await screen.findAllByDisplayValue('Fractions Checkpoint'))[0];
-    fireEvent.change(titleInput, { target: { value: 'Fractions Checkpoint Updated' } });
+    const titleInput = (
+      await screen.findAllByDisplayValue('Fractions Checkpoint')
+    )[0];
+    fireEvent.change(titleInput, {
+      target: { value: 'Fractions Checkpoint Updated' },
+    });
 
     await waitFor(() => {
       const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
@@ -841,8 +1039,18 @@ describe('AssessmentEditorPage', () => {
             fillBlankSmartCaseInsensitive: true,
             fillBlankExperimentalSmartMatch: false,
             options: [
-              { id: 'temp-option-1', text: 'Recovered option', isCorrect: true, order: 1 },
-              { id: 'temp-option-2', text: 'Other option', isCorrect: false, order: 2 },
+              {
+                id: 'temp-option-1',
+                text: 'Recovered option',
+                isCorrect: true,
+                order: 1,
+              },
+              {
+                id: 'temp-option-2',
+                text: 'Other option',
+                isCorrect: false,
+                order: 2,
+              },
             ],
           },
         ],
@@ -876,7 +1084,9 @@ describe('AssessmentEditorPage', () => {
 
     render(<AssessmentEditorPage />);
 
-    expect((await screen.findAllByDisplayValue('Recovered checkpoint')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByDisplayValue('Recovered checkpoint')).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText('Recovered unsaved question')).toBeInTheDocument();
 
     await waitFor(() => {

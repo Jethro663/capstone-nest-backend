@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { AcademicMutation } from '../../database/academic-transaction';
+import { assertGradeLevelChangeAllowed } from '../academic-state/academic-membership-guard';
 import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
@@ -68,6 +70,7 @@ export class ProfilesService {
     return profile;
   }
 
+  @AcademicMutation()
   async createProfile(
     userId: string,
     dto: Partial<UpdateProfileDto>,
@@ -75,6 +78,7 @@ export class ProfilesService {
     actorRoles: string[] = [],
   ) {
     const payload = this.mapProfileDto(dto);
+    await assertGradeLevelChangeAllowed(this.db, userId, null, dto.gradeLevel);
     const [newProfile] = await this.db
       .insert(studentProfiles)
       .values({ userId, ...payload })
@@ -95,6 +99,7 @@ export class ProfilesService {
     return newProfile;
   }
 
+  @AcademicMutation()
   async updateProfile(
     userId: string,
     dto: Partial<UpdateProfileDto>,
@@ -107,6 +112,21 @@ export class ProfilesService {
     if (!existing) {
       return this.createProfile(userId, dto, actorId, actorRoles);
     }
+
+    if (
+      dto.gradeLevel !== undefined &&
+      dto.gradeLevel !== existing.gradeLevel &&
+      !actorRoles.includes('admin')
+    )
+      throw new ForbiddenException(
+        'Only an admin can correct an existing student grade level',
+      );
+    await assertGradeLevelChangeAllowed(
+      this.db,
+      userId,
+      existing.gradeLevel,
+      dto.gradeLevel,
+    );
 
     const [updated] = await this.db
       .update(studentProfiles)

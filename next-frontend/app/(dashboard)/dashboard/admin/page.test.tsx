@@ -1,9 +1,16 @@
 'use client';
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import AdminDashboardPage from './page';
 import { adminService } from '@/services/admin-service';
 import { analyticsService } from '@/services/analytics-service';
+import { performanceService } from '@/services/performance-service';
 
 jest.mock('@/services/admin-service', () => ({
   adminService: {
@@ -17,8 +24,15 @@ jest.mock('@/services/analytics-service', () => ({
   },
 }));
 
+jest.mock('@/services/performance-service', () => ({
+  performanceService: { getAdminAnalytics: jest.fn() },
+}));
+
+const mockedPerformanceService = jest.mocked(performanceService);
 const mockedAdminService = adminService as jest.Mocked<typeof adminService>;
-const mockedAnalyticsService = analyticsService as jest.Mocked<typeof analyticsService>;
+const mockedAnalyticsService = analyticsService as jest.Mocked<
+  typeof analyticsService
+>;
 
 describe('AdminDashboardPage', () => {
   beforeEach(() => {
@@ -27,6 +41,22 @@ describe('AdminDashboardPage', () => {
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
       value: 'visible',
+    });
+    mockedPerformanceService.getAdminAnalytics.mockResolvedValue({
+      success: true,
+      data: {
+        conceptMasterySnapshots: [],
+        recommendationHistory: [],
+        performanceLogTransitions: {
+          total: 0,
+          summary: {
+            riskIncrements: 0,
+            riskRecoveries: 0,
+            otherTransitions: 0,
+          },
+          rows: [],
+        },
+      },
     });
     mockedAdminService.getOverview.mockResolvedValue({
       success: true,
@@ -96,6 +126,7 @@ describe('AdminDashboardPage', () => {
     );
 
     expect(mockedAnalyticsService.getAdminOverview).not.toHaveBeenCalled();
+    expect(mockedPerformanceService.getAdminAnalytics).toHaveBeenCalled();
     expect(
       await screen.findByRole('heading', { name: 'Admin Dashboard' }),
     ).toBeInTheDocument();

@@ -32,8 +32,12 @@ jest.mock('@/services/notification-service', () => ({
 }));
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
-const mockedUseNotifications = useNotifications as jest.MockedFunction<typeof useNotifications>;
-const mockedNotificationService = notificationService as jest.Mocked<typeof notificationService>;
+const mockedUseNotifications = useNotifications as jest.MockedFunction<
+  typeof useNotifications
+>;
+const mockedNotificationService = notificationService as jest.Mocked<
+  typeof notificationService
+>;
 
 describe('NotificationsPage', () => {
   beforeEach(() => {
@@ -55,6 +59,7 @@ describe('NotificationsPage', () => {
       fetchNotifications: jest.fn().mockResolvedValue(undefined),
       markAsRead: jest.fn().mockResolvedValue(undefined),
       markAllAsRead: jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(() => jest.fn()),
     });
     mockedNotificationService.getAll.mockResolvedValue({
       success: true,
@@ -94,13 +99,18 @@ describe('NotificationsPage', () => {
       fetchNotifications,
       markAsRead,
       markAllAsRead: jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(() => jest.fn()),
     });
 
     render(<NotificationsPage />);
 
-    expect(await screen.findByRole('heading', { name: 'Notifications' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Notifications' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Math update')).toBeInTheDocument();
-    expect(screen.getByText('Bring your worksheet tomorrow.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Bring your worksheet tomorrow.'),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mark Read' }));
 
@@ -113,14 +123,24 @@ describe('NotificationsPage', () => {
   it('uses the LMS blue theme with red notification accents for students', async () => {
     render(<NotificationsPage />);
 
-    const page = await screen.findByRole('main', { name: 'Student notifications' });
+    const page = await screen.findByRole('main', {
+      name: 'Student notifications',
+    });
     expect(page).toHaveClass('bg-[#f4f7fb]');
     expect(page).toHaveClass('text-[#0f2340]');
 
-    expect(screen.getByTestId('student-notifications-hero')).toHaveClass('bg-[#12284a]');
-    expect(screen.getByTestId('student-notifications-hero')).toHaveClass('text-white');
-    expect(screen.getByRole('button', { name: /Mark All Read/i })).toHaveClass('bg-[#e70012]');
-    expect(screen.getByText('Math update').closest('article')).toHaveClass('border-[#e70012]');
+    expect(screen.getByTestId('student-notifications-hero')).toHaveClass(
+      'bg-[#12284a]',
+    );
+    expect(screen.getByTestId('student-notifications-hero')).toHaveClass(
+      'text-white',
+    );
+    expect(screen.getByRole('button', { name: /Mark All Read/i })).toHaveClass(
+      'bg-[#e70012]',
+    );
+    expect(screen.getByText('Math update').closest('article')).toHaveClass(
+      'border-[#e70012]',
+    );
   });
 
   it('uses the LMS blue theme with red notification accents for teachers', async () => {
@@ -136,14 +156,24 @@ describe('NotificationsPage', () => {
 
     render(<NotificationsPage />);
 
-    const page = await screen.findByRole('main', { name: 'Teacher notifications' });
+    const page = await screen.findByRole('main', {
+      name: 'Teacher notifications',
+    });
     expect(page).toHaveClass('bg-[#f4f7fb]');
     expect(page).toHaveClass('text-[#0f2340]');
 
-    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass('bg-[#12284a]');
-    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass('text-white');
-    expect(screen.getByRole('button', { name: /Mark All Read/i })).toHaveClass('bg-[#e70012]');
-    expect(screen.getByText('Math update').closest('article')).toHaveClass('border-[#e70012]');
+    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass(
+      'bg-[#12284a]',
+    );
+    expect(screen.getByTestId('teacher-notifications-hero')).toHaveClass(
+      'text-white',
+    );
+    expect(screen.getByRole('button', { name: /Mark All Read/i })).toHaveClass(
+      'bg-[#e70012]',
+    );
+    expect(screen.getByText('Math update').closest('article')).toHaveClass(
+      'border-[#e70012]',
+    );
   });
 
   it('filters to read notifications and keeps the existing mark all action', async () => {
@@ -156,6 +186,7 @@ describe('NotificationsPage', () => {
       fetchNotifications,
       markAsRead: jest.fn().mockResolvedValue(undefined),
       markAllAsRead,
+      subscribe: jest.fn(() => jest.fn()),
     });
 
     mockedNotificationService.getAll

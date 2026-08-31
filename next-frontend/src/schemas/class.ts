@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 const scheduleSlotSchema = z.object({
-  days: z.array(z.enum(['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'])).min(1),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, 'Format: HH:MM'),
+  days: z.array(z.enum(["M", "T", "W", "Th", "F", "Sa", "Su"])).min(1),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
 });
 
 const gradingProfileSchema = z.object({
@@ -13,22 +13,25 @@ const gradingProfileSchema = z.object({
 });
 
 export const createClassSchema = z.object({
-  subjectName: z.string().min(1, 'Subject name is required'),
-  subjectCode: z.string().min(1, 'Subject code is required'),
+  academicWeightProfile: z.enum(["academic", "practical"]).optional(),
+  subjectName: z.string().min(1, "Subject name is required"),
+  subjectCode: z.string().min(1, "Subject code is required"),
   subjectGradeLevel: z.string().optional(),
-  sectionId: z.string().min(1, 'Section is required'),
-  teacherId: z.string().min(1, 'Teacher is required'),
-  schoolYear: z.string().regex(/^\d{4}-\d{4}$/, 'Format: YYYY-YYYY'),
-  room: z.string().trim().min(1, 'Room is required'),
+  sectionId: z.string().min(1, "Section is required"),
+  teacherId: z.string().min(1, "Teacher is required"),
+  schoolYear: z.string().regex(/^\d{4}-\d{4}$/, "Format: YYYY-YYYY"),
+  room: z.string().trim().min(1, "Room is required"),
   gradingProfile: gradingProfileSchema.refine(
     (value) =>
       value.writtenWork + value.performanceTask + value.quarterlyAssessment ===
       100,
     {
-      message: 'Grading profile must sum to 100',
+      message: "Grading profile must sum to 100",
     },
   ),
-  schedules: z.array(scheduleSlotSchema).min(1, 'At least one schedule slot is required'),
+  schedules: z
+    .array(scheduleSlotSchema)
+    .min(1, "At least one schedule slot is required"),
 });
 export type CreateClassFormValues = z.infer<typeof createClassSchema>;
 

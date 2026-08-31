@@ -1,4 +1,12 @@
-import { api } from '@/lib/api-client';
+import type {
+  PeriodReadiness,
+  PeriodGradePreview,
+  PeriodRoster,
+  ConfirmPeriodRoster,
+  PeriodHistory,
+  AnnualSummary,
+} from "@/types/academic-grading";
+import { api } from "@/lib/api-client";
 import type {
   ClassRecord,
   FinalGrade,
@@ -16,13 +24,46 @@ import type {
   TransmutationBand,
   TransmutationTableRecord,
   TransmutationPreviewResult,
-} from '@/types/class-record';
-import type { GradingPeriod } from '@/utils/constants';
+} from "@/types/class-record";
+import type { GradingPeriod } from "@/utils/constants";
 
 export const classRecordService = {
+  async readiness(id: string) {
+    return (
+      await api.get<{ success: boolean; data: PeriodReadiness }>(
+        `/class-record/${id}/readiness`,
+      )
+    ).data;
+  },
+  async roster(id: string) {
+    return (
+      await api.get<{ success: boolean; data: PeriodRoster }>(
+        `/class-record/${id}/roster`,
+      )
+    ).data;
+  },
+  async confirmRoster(id: string, payload: ConfirmPeriodRoster) {
+    return (await api.post(`/class-record/${id}/roster/confirm`, payload)).data;
+  },
+  async history(id: string) {
+    return (
+      await api.get<{ success: boolean; data: PeriodHistory }>(
+        `/class-record/${id}/history`,
+      )
+    ).data;
+  },
+  async annualSummary(classId: string) {
+    return (
+      await api.get<{ success: boolean; data: AnnualSummary }>(
+        `/class-record/by-class/${classId}/annual-summary`,
+      )
+    ).data;
+  },
   /** POST /class-record — Teacher, Admin */
-  async generate(dto: CreateClassRecordDto): Promise<{ success: boolean; message?: string; data: ClassRecord }> {
-    const { data } = await api.post('/class-record', dto);
+  async generate(
+    dto: CreateClassRecordDto,
+  ): Promise<{ success: boolean; message?: string; data: ClassRecord }> {
+    const { data } = await api.post("/class-record", dto);
     return data;
   },
 
@@ -33,43 +74,79 @@ export const classRecordService = {
   },
 
   /** GET /class-record/by-class/:classId — Teacher, Admin */
-  async getByClass(classId: string): Promise<{ success?: boolean; data: ClassRecord[] }> {
+  async getByClass(
+    classId: string,
+  ): Promise<{ success?: boolean; data: ClassRecord[] }> {
     const { data } = await api.get(`/class-record/by-class/${classId}`);
     // Normalize: old backend returns raw array, new backend returns { success, data }
     return Array.isArray(data) ? { data } : data;
   },
 
   /** GET /class-record/:id/spreadsheet — Teacher, Admin */
-  async getSpreadsheet(id: string): Promise<{ success?: boolean; data: SpreadsheetData }> {
+  async getSpreadsheet(
+    id: string,
+  ): Promise<{ success?: boolean; data: SpreadsheetData }> {
     const { data } = await api.get(`/class-record/${id}/spreadsheet`);
     // Normalize: old backend returns raw object, new backend returns { success, data }
-    if (data && typeof data === 'object' && 'success' in data) return data;
+    if (data && typeof data === "object" && "success" in data) return data;
     return { data };
+  },
+
+  async restoreAssessmentEvidence(
+    itemId: string,
+    studentId: string,
+    reason: string,
+  ) {
+    return (
+      await api.post(
+        `/class-record/items/${itemId}/scores/${studentId}/restore-assessment`,
+        { reason },
+      )
+    ).data;
   },
 
   // --- Scores ---
 
   /** POST /class-record/items/:itemId/scores — Teacher, Admin */
-  async recordScore(itemId: string, dto: RecordScoreDto): Promise<{ success: boolean; data: ClassRecordScore }> {
-    const { data } = await api.post(`/class-record/items/${itemId}/scores`, dto);
+  async recordScore(
+    itemId: string,
+    dto: RecordScoreDto,
+  ): Promise<{ success: boolean; data: ClassRecordScore }> {
+    const { data } = await api.post(
+      `/class-record/items/${itemId}/scores`,
+      dto,
+    );
     return data;
   },
 
   /** PATCH /class-record/items/:itemId — Teacher, Admin */
-  async updateItem(itemId: string, dto: UpdateClassRecordItemDto): Promise<{ success: boolean; data: ClassRecordItem }> {
+  async updateItem(
+    itemId: string,
+    dto: UpdateClassRecordItemDto,
+  ): Promise<{ success: boolean; data: ClassRecordItem }> {
     const { data } = await api.patch(`/class-record/items/${itemId}`, dto);
     return data;
   },
 
   /** POST /class-record/items/:itemId/scores/bulk — Teacher, Admin */
-  async recordScoresBulk(itemId: string, dto: BulkRecordScoresDto): Promise<{ success: boolean; data: unknown }> {
-    const { data } = await api.post(`/class-record/items/${itemId}/scores/bulk`, dto);
+  async recordScoresBulk(
+    itemId: string,
+    dto: BulkRecordScoresDto,
+  ): Promise<{ success: boolean; data: unknown }> {
+    const { data } = await api.post(
+      `/class-record/items/${itemId}/scores/bulk`,
+      dto,
+    );
     return data;
   },
 
   /** POST /class-record/items/:itemId/sync-scores — Teacher, Admin */
-  async syncScores(itemId: string): Promise<{ success: boolean; data: unknown }> {
-    const { data } = await api.post(`/class-record/items/${itemId}/sync-scores`);
+  async syncScores(
+    itemId: string,
+  ): Promise<{ success: boolean; data: unknown }> {
+    const { data } = await api.post(
+      `/class-record/items/${itemId}/sync-scores`,
+    );
     return data;
   },
 
@@ -79,19 +156,24 @@ export const classRecordService = {
     gradingPeriod: GradingPeriod,
     assessmentId?: string,
   ): Promise<{ success: boolean; data: ClassRecordSlotOverview }> {
-    const { data } = await api.get(`/class-record/by-class/${classId}/slot-overview`, {
-      params: {
-        gradingPeriod,
-        assessmentId,
+    const { data } = await api.get(
+      `/class-record/by-class/${classId}/slot-overview`,
+      {
+        params: {
+          gradingPeriod,
+          assessmentId,
+        },
       },
-    });
+    );
     return data;
   },
 
   // --- Grades ---
 
   /** GET /class-record/:id/preview-grades — Teacher, Admin */
-  async previewGrades(id: string): Promise<{ success: boolean; data: FinalGrade[] }> {
+  async previewGrades(
+    id: string,
+  ): Promise<{ success: boolean; data: PeriodGradePreview }> {
     const { data } = await api.get(`/class-record/${id}/preview-grades`);
     return data;
   },
@@ -103,66 +185,98 @@ export const classRecordService = {
   },
 
   /** POST /class-record/:id/reopen - Teacher, Admin */
-  async reopen(id: string): Promise<{ success: boolean; data: ClassRecord }> {
-    const { data } = await api.post(`/class-record/${id}/reopen`);
+  async reopen(
+    id: string,
+    reason: string,
+  ): Promise<{ success: boolean; data: ClassRecord }> {
+    const { data } = await api.post(`/class-record/${id}/reopen`, { reason });
     return data;
   },
 
   /** GET /class-record/:id/final-grades — Teacher, Admin */
-  async getFinalGrades(id: string): Promise<{ success: boolean; data: FinalGrade[] }> {
+  async getFinalGrades(
+    id: string,
+  ): Promise<{ success: boolean; data: FinalGrade[] }> {
     const { data } = await api.get(`/class-record/${id}/final-grades`);
     return data;
   },
 
   /** GET /class-record/:id/final-grades/:studentId — All roles */
-  async getStudentFinalGrade(id: string, studentId: string): Promise<{ success: boolean; data: FinalGrade }> {
-    const { data } = await api.get(`/class-record/${id}/final-grades/${studentId}`);
+  async getStudentFinalGrade(
+    id: string,
+    studentId: string,
+  ): Promise<{ success: boolean; data: FinalGrade }> {
+    const { data } = await api.get(
+      `/class-record/${id}/final-grades/${studentId}`,
+    );
     return data;
   },
 
   /** GET /class-record/adviser/section/:sectionId — Admin, Teacher */
-  async getAdviserSection(sectionId: string): Promise<{ success: boolean; data: unknown }> {
-    const { data } = await api.get(`/class-record/adviser/section/${sectionId}`);
+  async getAdviserSection(
+    sectionId: string,
+  ): Promise<{ success: boolean; data: unknown }> {
+    const { data } = await api.get(
+      `/class-record/adviser/section/${sectionId}`,
+    );
     return data;
   },
 
   // --- Reports ---
 
   /** GET /class-record/:id/reports/class-average — Teacher, Admin */
-  async getClassAverageReport(id: string): Promise<{ success: boolean; data: ClassAverageReport }> {
+  async getClassAverageReport(
+    id: string,
+  ): Promise<{ success: boolean; data: ClassAverageReport }> {
     const { data } = await api.get(`/class-record/${id}/reports/class-average`);
     return data;
   },
 
   /** GET /class-record/:id/reports/distribution — Teacher, Admin */
-  async getDistributionReport(id: string): Promise<{ success: boolean; data: GradeDistributionReport }> {
+  async getDistributionReport(
+    id: string,
+  ): Promise<{ success: boolean; data: GradeDistributionReport }> {
     const { data } = await api.get(`/class-record/${id}/reports/distribution`);
     return data;
   },
 
   /** GET /class-record/:id/reports/intervention — Teacher, Admin */
-  async getInterventionReport(id: string): Promise<{ success: boolean; data: InterventionReportRow[] }> {
+  async getInterventionReport(
+    id: string,
+  ): Promise<{ success: boolean; data: InterventionReportRow[] }> {
     const { data } = await api.get(`/class-record/${id}/reports/intervention`);
     return data;
   },
 
   // --- Transmutation ---
-  async getActiveTransmutationTable(): Promise<{ success: boolean; data: TransmutationTableRecord }> {
-    const { data } = await api.get('/class-record/transmutation/active');
+  async getActiveTransmutationTable(): Promise<{
+    success: boolean;
+    data: TransmutationTableRecord;
+  }> {
+    const { data } = await api.get("/class-record/transmutation/active");
     return data;
   },
 
-  async getAllTransmutationTables(): Promise<{ success: boolean; data: TransmutationTableRecord[] }> {
-    const { data } = await api.get('/class-record/transmutation/all');
+  async getAllTransmutationTables(): Promise<{
+    success: boolean;
+    data: TransmutationTableRecord[];
+  }> {
+    const { data } = await api.get("/class-record/transmutation/all");
     return data;
   },
 
-  async previewTransmutationTable(file: File): Promise<{ success: boolean; data: TransmutationPreviewResult }> {
+  async previewTransmutationTable(
+    file: File,
+  ): Promise<{ success: boolean; data: TransmutationPreviewResult }> {
     const formData = new FormData();
-    formData.append('file', file);
-    const { data } = await api.post('/class-record/transmutation/preview', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    formData.append("file", file);
+    const { data } = await api.post(
+      "/class-record/transmutation/preview",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      },
+    );
     return data;
   },
 
@@ -171,12 +285,19 @@ export const classRecordService = {
     description?: string;
     bands: TransmutationBand[];
   }): Promise<{ success: boolean; data: TransmutationTableRecord }> {
-    const { data } = await api.post('/class-record/transmutation/apply', payload);
+    const { data } = await api.post(
+      "/class-record/transmutation/apply",
+      payload,
+    );
     return data;
   },
 
-  async activateTransmutationTable(id: string): Promise<{ success: boolean; data: TransmutationTableRecord }> {
-    const { data } = await api.post(`/class-record/transmutation/activate/${id}`);
+  async activateTransmutationTable(
+    id: string,
+  ): Promise<{ success: boolean; data: TransmutationTableRecord }> {
+    const { data } = await api.post(
+      `/class-record/transmutation/activate/${id}`,
+    );
     return data;
   },
 };

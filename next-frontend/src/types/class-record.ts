@@ -1,12 +1,22 @@
-import type { GradingPeriod } from '@/utils/constants';
+import type {
+  AcademicPolicy,
+  AcademicCapabilities,
+  AcademicBlocker,
+  PeriodEligibility,
+} from "./academic-grading";
+import type { GradingPeriod } from "@/utils/constants";
 
-export type ClassRecordStatus = 'draft' | 'finalized' | 'locked';
+export type ClassRecordStatus = "draft" | "finalized" | "locked";
 
 export interface ClassRecord {
   id: string;
   classId: string;
   gradingPeriod: GradingPeriod;
   status: ClassRecordStatus;
+  revision?: number;
+  rosterConfirmedAt?: string | null;
+  policyExclusionReason?: string | null;
+  policyExcludedAt?: string | null;
   teacherId?: string;
   categories?: ClassRecordCategory[];
   createdAt?: string;
@@ -23,6 +33,7 @@ export interface ClassRecordCategory {
 
 export interface ClassRecordItem {
   id: string;
+  examComponent?: "ST1" | "ST2" | "TE" | null;
   categoryId: string;
   assessmentId?: string;
   title: string;
@@ -37,7 +48,9 @@ export interface ClassRecordScore {
   id: string;
   itemId: string;
   studentId: string;
-  score: number;
+  score: number | null;
+  status?: "recorded" | "excused";
+  reason?: string | null;
 }
 
 export interface FinalGrade {
@@ -45,7 +58,7 @@ export interface FinalGrade {
   student?: { firstName?: string; lastName?: string; lrn?: string };
   finalPercentage: number;
   quarterlyGrade: number;
-  remarks: 'Passed' | 'For Intervention';
+  remarks: "Passed" | "For Intervention";
 }
 
 export interface CreateClassRecordDto {
@@ -55,7 +68,9 @@ export interface CreateClassRecordDto {
 
 export interface RecordScoreDto {
   studentId: string;
-  score: number;
+  score?: number | null;
+  status?: "recorded" | "excused";
+  reason?: string;
 }
 
 export interface UpdateClassRecordItemDto {
@@ -78,6 +93,7 @@ export interface SpreadsheetCategory {
     hps: number | null;
     order: number;
     assessmentId?: string;
+    examComponent?: "ST1" | "ST2" | "TE" | null;
   }[];
 }
 
@@ -92,19 +108,28 @@ export interface SpreadsheetStudentRow {
   categories: {
     categoryId: string;
     scores: (number | null)[];
-    total: number;
-    ps: number;
-    ws: number;
+    scoreStatuses?: ("recorded" | "excused" | "missing")[];
+    scoreReasons?: (string | null)[];
+    total: number | null;
+    ps: number | null;
+    ws: number | null;
   }[];
-  initialGrade: number;
-  quarterlyGrade: number;
-  remarks?: 'Passed' | 'For Intervention';
+  initialGrade: number | null;
+  quarterlyGrade: number | null;
+  remarks?: "Passed" | "For Intervention" | "Incomplete" | "Not graded";
+  eligibility?: PeriodEligibility | null;
+  provisional?: boolean;
+  gradeProvenance?: "verified_revision" | "legacy_unverified" | "provisional";
+  blockers?: AcademicBlocker[];
   isRemoved?: boolean;
-  enrollmentState?: 'active' | 'removed';
+  enrollmentState?: "active" | "removed";
 }
 
 export interface SpreadsheetData {
   classRecord: ClassRecord;
+  policy: AcademicPolicy;
+  academicCapabilities: AcademicCapabilities;
+  canReopen: boolean;
   header: {
     region?: string;
     division?: string;
@@ -113,6 +138,7 @@ export interface SpreadsheetData {
     schoolId?: string;
     schoolYear?: string;
     quarter: GradingPeriod;
+    periodLabel?: string;
     gradeLevel?: string;
     section?: string;
     teacher?: string;
@@ -129,10 +155,10 @@ export interface SpreadsheetData {
 }
 
 export type ClassRecordSlotStatus =
-  | 'empty'
-  | 'manual'
-  | 'linked_self'
-  | 'linked_other';
+  | "empty"
+  | "manual"
+  | "linked_self"
+  | "linked_other";
 
 export interface ClassRecordSlotOverviewItem {
   itemId: string;
@@ -148,7 +174,7 @@ export interface ClassRecordSlotOverviewItem {
 
 export interface ClassRecordSlotOverviewCategory {
   id: string;
-  key: 'written_work' | 'performance_task' | 'quarterly_assessment';
+  key: "written_work" | "performance_task" | "quarterly_assessment";
   label: string;
   slots: ClassRecordSlotOverviewItem[];
 }
@@ -178,7 +204,7 @@ export interface InterventionReportRow {
   classRecordId: string;
   studentId: string;
   finalPercentage: string;
-  remarks: 'Passed' | 'For Intervention';
+  remarks: "Passed" | "For Intervention";
   computedAt: string;
   student?: {
     id: string;

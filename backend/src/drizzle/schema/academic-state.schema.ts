@@ -1,4 +1,11 @@
-import { index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { gradingPeriodEnum, users } from './base.schema';
 
 export const academicSystemStates = pgTable(
@@ -6,6 +13,7 @@ export const academicSystemStates = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     schoolYear: text('school_year').notNull(),
+    version: integer('version').notNull().default(1),
     quarter: gradingPeriodEnum('quarter').notNull().default('Q1'),
     updatedBy: uuid('updated_by').references(() => users.id, {
       onDelete: 'set null',

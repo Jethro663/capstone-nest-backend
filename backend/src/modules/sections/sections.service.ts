@@ -20,6 +20,11 @@ import {
   SQL,
   sql,
 } from 'drizzle-orm';
+import { AcademicMutation } from '../../database/academic-transaction';
+import { AcademicTransitionReadinessService } from '../academic-state/academic-transition-readiness.service';
+import { AcademicPolicyService } from '../academic-state/academic-policy.service';
+import type { AcademicOutcome } from '../academic-state/academic-policy';
+import type { TransitionBlocker } from '../academic-state/academic-transition-readiness';
 import { DatabaseService } from '../../database/database.service';
 import { AuditService } from '../audit/audit.service';
 import { ClassRecordService } from '../class-record/class-record.service';
@@ -27,7 +32,6 @@ import {
   sections,
   classes,
   classRecords,
-  classRecordFinalGrades,
   sectionVisibilityPreferences,
   users,
   enrollments,
@@ -69,6 +73,9 @@ type AccessStudentPromotionReadiness = {
   finalGradeRecordCount: number;
   missingFinalGradeCount: number;
   finalizationLabel: string;
+  outcome: AcademicOutcome;
+  blockers: TransitionBlocker[];
+  outcomeManagedByTransition: true;
 };
 
 export type SectionVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
@@ -79,6 +86,8 @@ export class SectionsService {
     private databaseService: DatabaseService,
     private readonly auditService: AuditService,
     private readonly classRecordService: ClassRecordService,
+    private readonly readinessService: AcademicTransitionReadinessService,
+    private readonly policyService: AcademicPolicyService,
   ) {}
 
   private get db() {
@@ -679,12 +688,18 @@ export class SectionsService {
 
   // ─── addStudentsToSection ─────────────────────────────────────────────────
 
+  @AcademicMutation()
   async addStudentsToSection(
     sectionId: string,
     dto: BulkStudentsDto,
     requestingUser?: RequestingUser,
   ) {
     const section = await this.findById(sectionId, requestingUser);
+    const state = await this.policyService.currentState();
+    if (!section.isActive || section.schoolYear !== state.schoolYear)
+      throw new ConflictException(
+        'Student membership can be changed only in the active school year',
+      );
 
     return await this.db.transaction(async (tx) => {
       // 1. Capacity check — count DISTINCT enrolled students regardless of classId.
@@ -819,12 +834,18 @@ export class SectionsService {
 
   // ─── removeStudentFromSection ─────────────────────────────────────────────
 
+  @AcademicMutation()
   async removeStudentFromSection(
     sectionId: string,
     studentId: string,
     requestingUser?: RequestingUser,
   ) {
-    await this.findById(sectionId, requestingUser);
+    const section = await this.findById(sectionId, requestingUser);
+    const state = await this.policyService.currentState();
+    if (!section.isActive || section.schoolYear !== state.schoolYear)
+      throw new ConflictException(
+        'Student membership can be changed only in the active school year',
+      );
 
     // Wrap the guard check and the delete in a transaction to prevent a TOCTOU race
     // where a concurrent class-enrollment insert lands between the guard read and the
@@ -882,6 +903,7 @@ export class SectionsService {
 
   // ─── createSection ────────────────────────────────────────────────────────
 
+  @AcademicMutation()
   async createSection(
     createSectionDto: CreateSectionDto,
     actorId?: string,
@@ -968,6 +990,7 @@ export class SectionsService {
 
   // ─── updateSection ────────────────────────────────────────────────────────
 
+  @AcademicMutation()
   async updateSection(
     id: string,
     updateSectionDto: UpdateSectionDto,
@@ -983,6 +1006,32 @@ export class SectionsService {
     }
 
     const existingSection = await this.findById(id);
+    if (
+      updateSectionDto.isActive !== undefined &&
+      updateSectionDto.isActive !== existingSection.isActive
+    )
+      throw new ConflictException(
+        'Use the section archive action; active membership cannot be changed through section metadata',
+      );
+    const identityChanged =
+      (updateSectionDto.gradeLevel !== undefined &&
+        updateSectionDto.gradeLevel !== existingSection.gradeLevel) ||
+      (updateSectionDto.schoolYear !== undefined &&
+        updateSectionDto.schoolYear !== existingSection.schoolYear);
+    if (identityChanged) {
+      const linkedClass = await this.db.query.classes.findFirst({
+        where: eq(classes.sectionId, id),
+        columns: { id: true },
+      });
+      const linkedEnrollment = await this.db.query.enrollments.findFirst({
+        where: eq(enrollments.sectionId, id),
+        columns: { id: true },
+      });
+      if (linkedClass || linkedEnrollment)
+        throw new ConflictException(
+          'Section year or grade level cannot change after classes or student membership exist',
+        );
+    }
 
     if (
       updateSectionDto.name ||
@@ -1228,12 +1277,24 @@ export class SectionsService {
     };
   }
 
+  @AcademicMutation()
   async archiveSection(
     id: string,
     actorId?: string,
     actorRoles: string[] = [],
   ) {
     const section = await this.findById(id);
+    const activeMembership = await this.db.query.enrollments.findFirst({
+      where: and(
+        eq(enrollments.sectionId, id),
+        eq(enrollments.status, 'enrolled'),
+      ),
+      columns: { id: true },
+    });
+    if (activeMembership)
+      throw new ConflictException(
+        'A section with active students must use academic transition or explicit student withdrawal before archival',
+      );
     const now = new Date();
 
     await this.db.transaction(async (tx) => {
@@ -1249,12 +1310,17 @@ export class SectionsService {
 
       await tx
         .update(classes)
-        .set({ isActive: false, teacherId: null, updatedAt: now })
+        .set({ isActive: false, updatedAt: now })
         .where(eq(classes.sectionId, id));
 
       await tx
         .update(sections)
-        .set({ isActive: false, adviserId: null, updatedAt: now })
+        .set({
+          isActive: false,
+          isArchived: true,
+          archivedAt: now,
+          updatedAt: now,
+        })
         .where(eq(sections.id, id));
     });
 
@@ -1266,9 +1332,9 @@ export class SectionsService {
       metadata: {
         actorRole: this.resolveActorRole(actorRoles),
         previousIsActive: section.isActive,
-        removedAdviserId: section.adviserId,
+        preservedAdviserId: section.adviserId,
         completedEnrollmentStatus: 'completed',
-        linkedClassTeacherStatus: 'cleared',
+        linkedClassTeacherStatus: 'preserved_for_history',
       },
     });
   }
@@ -1284,10 +1350,12 @@ export class SectionsService {
     );
   }
 
+  @AcademicMutation()
   async deleteSection(id: string, actorId?: string, actorRoles: string[] = []) {
     await this.archiveSection(id, actorId, actorRoles);
   }
 
+  @AcademicMutation()
   private async performBulkLifecycleAction(
     action: BulkSectionLifecycleAction,
     sectionId: string,
@@ -1460,6 +1528,7 @@ export class SectionsService {
 
   // ─── permanentlyDeleteSection ─────────────────────────────────────────────
 
+  @AcademicMutation()
   async permanentlyDeleteSection(
     id: string,
     actorId?: string,
@@ -1467,6 +1536,15 @@ export class SectionsService {
   ) {
     // Verify section exists first
     const section = await this.findById(id);
+
+    const linkedClass = await this.db.query.classes.findFirst({
+      where: eq(classes.sectionId, id),
+      columns: { id: true },
+    });
+    if (linkedClass)
+      throw new ConflictException(
+        'Remove empty linked classes individually; sections containing academic class history cannot be purged',
+      );
 
     // Wrap the pre-flight count checks and the delete in a single transaction
     // to prevent a TOCTOU race where new enrolments are inserted between the
@@ -1534,130 +1612,86 @@ export class SectionsService {
     return `${start}-${end}`;
   }
 
-  private roundFinalGrade(value: number | null | undefined) {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) {
-      return null;
-    }
-
-    return Math.round(Number(value) * 1000) / 1000;
-  }
-
-  private buildPromotionReadiness(input: {
-    studentId: string;
-    averageFinal: number | null;
-    requiredClassRecordCount: number;
-    finalizedClassRecordCount: number;
-    finalGradeRecordCount: number;
-  }): AccessStudentPromotionReadiness {
-    const finalGrade = this.roundFinalGrade(input.averageFinal);
-    const missingFinalGradeCount = Math.max(
-      input.requiredClassRecordCount - input.finalGradeRecordCount,
+  private mapStudentAcademicReadiness(
+    result: Awaited<
+      ReturnType<AcademicTransitionReadinessService['getReadiness']>
+    >,
+    sectionId: string,
+    studentIds: string[],
+  ) {
+    const classRows = result.classReadiness.filter(
+      (c) => c.sectionId === sectionId,
+    );
+    const requiredClassRecordCount = classRows.reduce(
+      (sum, c) => sum + c.expectedPeriodRecords,
       0,
     );
-    const isFinalized =
-      input.requiredClassRecordCount > 0 &&
-      input.finalizedClassRecordCount >= input.requiredClassRecordCount &&
-      missingFinalGradeCount === 0 &&
-      finalGrade !== null;
-    const isPassing = isFinalized && finalGrade !== null && finalGrade >= 75;
-    const isFailing = isFinalized && finalGrade !== null && finalGrade < 75;
-    const gradeStatus: AccessStudentGradeStatus = !isFinalized
-      ? 'pending'
-      : isPassing
-        ? 'passing'
-        : 'failing';
-    const finalizationLabel = !isFinalized
-      ? input.requiredClassRecordCount === 0
-        ? 'No class records found to finalize'
-        : `${input.finalizedClassRecordCount}/${input.requiredClassRecordCount} class records finalized, ${input.finalGradeRecordCount}/${input.requiredClassRecordCount} final grades posted`
-      : isPassing
-        ? 'Finalized and passing'
-        : 'Finalized and failing';
-
-    return {
-      studentId: input.studentId,
-      finalGrade,
-      gradeStatus,
-      isFinalized,
-      isPassing,
-      isFailing,
-      requiredClassRecordCount: input.requiredClassRecordCount,
-      finalizedClassRecordCount: input.finalizedClassRecordCount,
-      finalGradeRecordCount: input.finalGradeRecordCount,
-      missingFinalGradeCount,
-      finalizationLabel,
-    };
+    const finalizedClassRecordCount = classRows.reduce(
+      (sum, c) => sum + c.finalizedPeriodRecords,
+      0,
+    );
+    const outcomes = new Map(
+      result.studentOutcomes.map((o) => [o.studentId, o]),
+    );
+    return new Map<string, AccessStudentPromotionReadiness>(
+      [...new Set(studentIds)].map((studentId) => {
+        const blockers = result.blockers.filter((b) =>
+          b.studentId
+            ? b.studentId === studentId
+            : !b.sectionId || b.sectionId === sectionId,
+        );
+        const outcome =
+          outcomes.get(studentId)?.outcome ??
+          (blockers.some((b) => b.code === 'pending_remediation')
+            ? 'pending_remediation'
+            : 'incomplete');
+        const isFinalized = blockers.length === 0 && outcomes.has(studentId);
+        const isPassing =
+          isFinalized && ['promoted', 'graduated'].includes(outcome);
+        const isFailing = isFinalized && outcome === 'retained';
+        return [
+          studentId,
+          {
+            studentId,
+            finalGrade: null,
+            gradeStatus: isPassing
+              ? 'passing'
+              : isFailing
+                ? 'failing'
+                : 'pending',
+            isFinalized,
+            isPassing,
+            isFailing,
+            requiredClassRecordCount,
+            finalizedClassRecordCount,
+            finalGradeRecordCount: isFinalized ? requiredClassRecordCount : 0,
+            missingFinalGradeCount: blockers.filter((b) =>
+              b.code.includes('missing'),
+            ).length,
+            finalizationLabel: blockers.length
+              ? blockers[0].message
+              : outcome.replaceAll('_', ' '),
+            outcome,
+            blockers,
+            outcomeManagedByTransition: true,
+          },
+        ];
+      }),
+    );
   }
 
   private async getSectionStudentPromotionReadiness(
     sectionId: string,
     studentIds: string[],
   ) {
-    const uniqueStudentIds = [...new Set(studentIds)];
-    if (uniqueStudentIds.length === 0) {
-      return new Map<string, AccessStudentPromotionReadiness>();
-    }
-
-    const recordRows = await this.db
-      .select({
-        id: classRecords.id,
-        status: classRecords.status,
-      })
-      .from(classRecords)
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(and(eq(classes.sectionId, sectionId), eq(classes.isActive, true)));
-
-    const requiredClassRecordCount = recordRows.length;
-    const finalizedClassRecordCount = recordRows.filter((record) =>
-      ['finalized', 'locked'].includes(record.status),
-    ).length;
-    const classRecordIds = recordRows.map((record) => record.id);
-
-    const gradeRows = classRecordIds.length
-      ? await this.db
-          .select({
-            studentId: classRecordFinalGrades.studentId,
-            avgFinal:
-              sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
-                Number,
-              ),
-            finalGradeRecordCount:
-              sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
-                Number,
-              ),
-          })
-          .from(classRecordFinalGrades)
-          .where(
-            and(
-              inArray(classRecordFinalGrades.classRecordId, classRecordIds),
-              inArray(classRecordFinalGrades.studentId, uniqueStudentIds),
-            ),
-          )
-          .groupBy(classRecordFinalGrades.studentId)
-      : [];
-
-    const gradeByStudentId = new Map(
-      gradeRows.map((row) => [
-        row.studentId,
-        {
-          averageFinal: Number(row.avgFinal ?? 0),
-          finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
-        },
-      ]),
-    );
-
-    return new Map(
-      uniqueStudentIds.map((studentId) => {
-        const gradeInfo = gradeByStudentId.get(studentId);
-        const readiness = this.buildPromotionReadiness({
-          studentId,
-          averageFinal: gradeInfo?.averageFinal ?? null,
-          requiredClassRecordCount,
-          finalizedClassRecordCount,
-          finalGradeRecordCount: gradeInfo?.finalGradeRecordCount ?? 0,
-        });
-        return [studentId, readiness];
-      }),
+    const section = await this.db.query.sections.findFirst({
+      where: eq(sections.id, sectionId),
+    });
+    if (!section) throw new NotFoundException('Section not found');
+    return this.mapStudentAcademicReadiness(
+      await this.readinessService.getReadiness(section.schoolYear, [sectionId]),
+      sectionId,
+      studentIds,
     );
   }
 
@@ -1736,68 +1770,49 @@ export class SectionsService {
         ),
       );
 
-    const finalGradeRows = await this.db
-      .select({
-        sectionId: classes.sectionId,
-        studentId: classRecordFinalGrades.studentId,
-        avgFinal:
-          sql<number>`avg(${classRecordFinalGrades.finalPercentage}::numeric)`.mapWith(
-            Number,
-          ),
-        finalGradeRecordCount:
-          sql<number>`count(distinct ${classRecordFinalGrades.classRecordId})`.mapWith(
-            Number,
-          ),
-      })
-      .from(classRecordFinalGrades)
-      .innerJoin(
-        classRecords,
-        eq(classRecords.id, classRecordFinalGrades.classRecordId),
-      )
-      .innerJoin(classes, eq(classes.id, classRecords.classId))
-      .where(
-        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
-      )
-      .groupBy(classes.sectionId, classRecordFinalGrades.studentId);
-
-    const classRecordCountRows = await this.db
-      .select({
-        sectionId: classes.sectionId,
-        totalRecords: sql<number>`count(distinct ${classRecords.id})`.mapWith(
-          Number,
-        ),
-        finalizedRecords:
-          sql<number>`count(distinct case when ${classRecords.status} in ('finalized', 'locked') then ${classRecords.id} end)`.mapWith(
-            Number,
-          ),
-      })
-      .from(classes)
-      .leftJoin(classRecords, eq(classRecords.classId, classes.id))
-      .where(
-        and(inArray(classes.sectionId, sectionIds), eq(classes.isActive, true)),
-      )
-      .groupBy(classes.sectionId);
-
     const classRecordCountBySectionId = new Map<
       string,
       { totalRecords: number; finalizedRecords: number }
     >();
-    for (const row of classRecordCountRows) {
-      classRecordCountBySectionId.set(row.sectionId, {
-        totalRecords: Number(row.totalRecords ?? 0),
-        finalizedRecords: Number(row.finalizedRecords ?? 0),
-      });
-    }
-
-    const finalGradeBySectionStudentKey = new Map<
+    const readinessBySection = new Map<
       string,
-      { averageFinal: number; finalGradeRecordCount: number }
+      Map<string, AccessStudentPromotionReadiness>
     >();
-    for (const row of finalGradeRows) {
-      finalGradeBySectionStudentKey.set(`${row.sectionId}:${row.studentId}`, {
-        averageFinal: Number(row.avgFinal ?? 0),
-        finalGradeRecordCount: Number(row.finalGradeRecordCount ?? 0),
-      });
+    for (const year of new Set(
+      sectionList.map((section) => section.schoolYear),
+    )) {
+      const yearSections = sectionList.filter(
+        (section) => section.schoolYear === year,
+      );
+      const result = await this.readinessService.getReadiness(
+        year,
+        yearSections.map((section) => section.id),
+      );
+      for (const section of yearSections) {
+        const classRows = result.classReadiness.filter(
+          (c) => c.sectionId === section.id,
+        );
+        classRecordCountBySectionId.set(section.id, {
+          totalRecords: classRows.reduce(
+            (sum, c) => sum + c.expectedPeriodRecords,
+            0,
+          ),
+          finalizedRecords: classRows.reduce(
+            (sum, c) => sum + c.finalizedPeriodRecords,
+            0,
+          ),
+        });
+        readinessBySection.set(
+          section.id,
+          this.mapStudentAcademicReadiness(
+            result,
+            section.id,
+            rosterRows
+              .filter((r) => r.sectionId === section.id)
+              .map((r) => r.studentId),
+          ),
+        );
+      }
     }
 
     const normalizedSearch = filters?.search?.trim().toLowerCase() ?? '';
@@ -1823,6 +1838,9 @@ export class SectionsService {
         finalGradeRecordCount: number;
         missingFinalGradeCount: number;
         finalizationLabel: string;
+        outcome: AcademicOutcome;
+        blockers: TransitionBlocker[];
+        outcomeManagedByTransition: true;
       }>
     >();
 
@@ -1831,21 +1849,10 @@ export class SectionsService {
       if (seenRosterKeys.has(rosterKey)) continue;
       seenRosterKeys.add(rosterKey);
 
-      const finalGradeKey = `${row.sectionId}:${row.studentId}`;
-      const finalGradeValue = finalGradeBySectionStudentKey.get(finalGradeKey);
-      const classRecordCounts = classRecordCountBySectionId.get(
-        row.sectionId,
-      ) ?? {
-        totalRecords: 0,
-        finalizedRecords: 0,
-      };
-      const readiness = this.buildPromotionReadiness({
-        studentId: row.studentId,
-        averageFinal: finalGradeValue?.averageFinal ?? null,
-        requiredClassRecordCount: classRecordCounts.totalRecords,
-        finalizedClassRecordCount: classRecordCounts.finalizedRecords,
-        finalGradeRecordCount: finalGradeValue?.finalGradeRecordCount ?? 0,
-      });
+      const readiness = readinessBySection
+        .get(row.sectionId)
+        ?.get(row.studentId);
+      if (!readiness) continue;
       const finalGrade = readiness.finalGrade;
       const searchable = [
         row.firstName ?? '',
@@ -1880,6 +1887,9 @@ export class SectionsService {
         finalGradeRecordCount: readiness.finalGradeRecordCount,
         missingFinalGradeCount: readiness.missingFinalGradeCount,
         finalizationLabel: readiness.finalizationLabel,
+        outcome: readiness.outcome,
+        blockers: readiness.blockers,
+        outcomeManagedByTransition: true,
       });
       studentsBySectionId.set(row.sectionId, bucket);
     }
@@ -1921,6 +1931,9 @@ export class SectionsService {
           finalGradeRecordCount: number;
           missingFinalGradeCount: number;
           finalizationLabel: string;
+          outcome: AcademicOutcome;
+          blockers: TransitionBlocker[];
+          outcomeManagedByTransition: true;
         }>;
       }>
     >();
@@ -2075,130 +2088,7 @@ export class SectionsService {
     };
   }
 
-  private async validateStudentAssignmentTransfer(
-    fromSectionId: string,
-    targetSectionId: string,
-    studentIds: string[],
-  ) {
-    const sourceMembershipRows = await this.db
-      .select({
-        studentId: enrollments.studentId,
-      })
-      .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.sectionId, fromSectionId),
-          eq(enrollments.status, 'enrolled'),
-          inArray(enrollments.studentId, studentIds),
-        ),
-      )
-      .groupBy(enrollments.studentId);
-
-    const sourceStudentIdSet = new Set(
-      sourceMembershipRows.map((row) => row.studentId),
-    );
-    const missingStudentIds = studentIds.filter(
-      (studentId) => !sourceStudentIdSet.has(studentId),
-    );
-    if (missingStudentIds.length > 0) {
-      throw new BadRequestException(
-        `These student(s) are not enrolled in the source section: ${missingStudentIds.join(', ')}`,
-      );
-    }
-
-    const conflictingAssignments = await this.db
-      .select({
-        studentId: enrollments.studentId,
-        sectionId: enrollments.sectionId,
-        sectionName: sections.name,
-        sectionGradeLevel: sections.gradeLevel,
-      })
-      .from(enrollments)
-      .innerJoin(sections, eq(sections.id, enrollments.sectionId))
-      .where(
-        and(
-          inArray(enrollments.studentId, studentIds),
-          eq(enrollments.status, 'enrolled'),
-          isNull(enrollments.classId),
-          notInArray(enrollments.sectionId, [fromSectionId, targetSectionId]),
-        ),
-      );
-
-    if (conflictingAssignments.length > 0) {
-      const firstConflict = conflictingAssignments[0];
-      throw new ConflictException(
-        `Student assignment conflict detected. Student ${firstConflict.studentId} is already assigned to Grade ${firstConflict.sectionGradeLevel} - ${firstConflict.sectionName}.`,
-      );
-    }
-  }
-
-  private async transferStudentsBetweenSections(params: {
-    fromSectionId: string;
-    targetSectionId: string;
-    studentIds: string[];
-    targetGradeLevel: string;
-  }) {
-    const uniqueStudentIds = [...new Set(params.studentIds)];
-    if (uniqueStudentIds.length === 0) {
-      return 0;
-    }
-
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(enrollments)
-        .set({ status: 'dropped' })
-        .where(
-          and(
-            eq(enrollments.sectionId, params.fromSectionId),
-            eq(enrollments.status, 'enrolled'),
-            inArray(enrollments.studentId, uniqueStudentIds),
-          ),
-        );
-
-      const alreadyInTargetRows = await tx
-        .select({ studentId: enrollments.studentId })
-        .from(enrollments)
-        .where(
-          and(
-            eq(enrollments.sectionId, params.targetSectionId),
-            eq(enrollments.status, 'enrolled'),
-            isNull(enrollments.classId),
-            inArray(enrollments.studentId, uniqueStudentIds),
-          ),
-        );
-
-      const alreadyInTargetSet = new Set(
-        alreadyInTargetRows.map((row) => row.studentId),
-      );
-      const studentsToInsert = uniqueStudentIds.filter(
-        (studentId) => !alreadyInTargetSet.has(studentId),
-      );
-
-      if (studentsToInsert.length > 0) {
-        await tx.insert(enrollments).values(
-          studentsToInsert.map((studentId) => ({
-            studentId,
-            classId: null,
-            sectionId: params.targetSectionId,
-            status: 'enrolled' as const,
-            enrolledAt: new Date(),
-          })),
-        );
-      }
-
-      await tx
-        .update(studentProfiles)
-        .set({
-          gradeLevel: params.targetGradeLevel as any,
-          graduatedAt: null,
-          updatedAt: new Date(),
-        })
-        .where(inArray(studentProfiles.userId, uniqueStudentIds));
-    });
-
-    return uniqueStudentIds.length;
-  }
-
+  @AcademicMutation()
   async finalizeAccessStudentGrades(
     dto: { sectionId: string; studentIds?: string[] },
     actorId?: string,
@@ -2290,327 +2180,44 @@ export class SectionsService {
     };
   }
 
+  private requireAcademicTransition(): never {
+    throw new ConflictException({
+      code: 'academic_transition_required',
+      message:
+        'Promotion, retention, and JHS completion are recorded by the verified school-year transition. Review annual results and SRC evidence in Academic Settings, complete the transition, then assign next-year sections.',
+      destination: '/dashboard/admin/system-settings',
+    });
+  }
+
   async moveUpStudents(
-    dto: {
+    _dto: {
       fromSectionId: string;
       targetSectionId: string;
       studentIds: string[];
       allowFailingPromotion?: boolean;
     },
-    actorId?: string,
-    actorRoles: string[] = [],
-  ) {
-    if (dto.fromSectionId === dto.targetSectionId) {
-      throw new BadRequestException(
-        'Source and target sections must be different.',
-      );
-    }
-
-    const [fromSection, targetSection] = await Promise.all([
-      this.db.query.sections.findFirst({
-        where: eq(sections.id, dto.fromSectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          schoolYear: true,
-        },
-      }),
-      this.db.query.sections.findFirst({
-        where: eq(sections.id, dto.targetSectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          schoolYear: true,
-        },
-      }),
-    ]);
-
-    if (!fromSection) throw new NotFoundException('Source section not found');
-    if (!targetSection) throw new NotFoundException('Target section not found');
-
-    const fromGradeLevel = this.parseGradeLevelAsNumber(fromSection.gradeLevel);
-    if (fromGradeLevel >= 10) {
-      throw new BadRequestException(
-        'Grade 10 students cannot be promoted to the next grade level.',
-      );
-    }
-
-    const expectedTargetGradeLevel = String(fromGradeLevel + 1);
-    if (targetSection.gradeLevel !== expectedTargetGradeLevel) {
-      throw new BadRequestException(
-        `Target section must be Grade ${expectedTargetGradeLevel} for promotion from Grade ${fromSection.gradeLevel}.`,
-      );
-    }
-
-    if (targetSection.schoolYear === fromSection.schoolYear) {
-      throw new BadRequestException(
-        'Target section must belong to a new school year for promotion.',
-      );
-    }
-
-    const uniqueStudentIds = [...new Set(dto.studentIds)];
-    await this.validateStudentAssignmentTransfer(
-      fromSection.id,
-      targetSection.id,
-      uniqueStudentIds,
-    );
-
-    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
-      fromSection.id,
-      uniqueStudentIds,
-    );
-    const studentReadiness = Array.from(readinessByStudentId.values());
-    const unfinalizedStudents = studentReadiness.filter(
-      (student) => !student.isFinalized,
-    );
-
-    if (unfinalizedStudents.length > 0) {
-      throw new BadRequestException({
-        message: 'Finalize selected student grades before moving students up.',
-        unfinalizedStudents,
-      });
-    }
-
-    const failingStudents = studentReadiness.filter(
-      (student) => !student.isPassing,
-    );
-
-    if (failingStudents.length > 0) {
-      throw new BadRequestException({
-        message:
-          'Only finalized passing students can be moved up. Retain failing students instead.',
-        failingStudents,
-      });
-    }
-
-    const movedCount = await this.transferStudentsBetweenSections({
-      fromSectionId: fromSection.id,
-      targetSectionId: targetSection.id,
-      studentIds: uniqueStudentIds,
-      targetGradeLevel: targetSection.gradeLevel,
-    });
-
-    await this.auditService.log({
-      actorId: actorId ?? 'system',
-      action: 'section.students.promoted',
-      targetType: 'section',
-      targetId: targetSection.id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        fromSectionId: fromSection.id,
-        targetSectionId: targetSection.id,
-        movedCount,
-        finalizedPassingStudents: studentReadiness.length,
-      },
-    });
-
-    return {
-      movedCount,
-      failingStudents,
-      fromSection,
-      targetSection,
-    };
+    _actorId?: string,
+    _actorRoles: string[] = [],
+  ): Promise<never> {
+    return this.requireAcademicTransition();
   }
-
   async failStudents(
-    dto: {
+    _dto: {
       fromSectionId: string;
       targetSectionId: string;
       studentIds: string[];
     },
-    actorId?: string,
-    actorRoles: string[] = [],
-  ) {
-    if (dto.fromSectionId === dto.targetSectionId) {
-      throw new BadRequestException(
-        'Source and target sections must be different.',
-      );
-    }
-
-    const [fromSection, targetSection] = await Promise.all([
-      this.db.query.sections.findFirst({
-        where: eq(sections.id, dto.fromSectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          schoolYear: true,
-        },
-      }),
-      this.db.query.sections.findFirst({
-        where: eq(sections.id, dto.targetSectionId),
-        columns: {
-          id: true,
-          name: true,
-          gradeLevel: true,
-          schoolYear: true,
-        },
-      }),
-    ]);
-
-    if (!fromSection) throw new NotFoundException('Source section not found');
-    if (!targetSection) throw new NotFoundException('Target section not found');
-
-    if (targetSection.gradeLevel !== fromSection.gradeLevel) {
-      throw new BadRequestException(
-        `Retained students must stay in Grade ${fromSection.gradeLevel}.`,
-      );
-    }
-
-    if (targetSection.schoolYear === fromSection.schoolYear) {
-      throw new BadRequestException(
-        'Target section must belong to a new school year for retention.',
-      );
-    }
-
-    const uniqueStudentIds = [...new Set(dto.studentIds)];
-    await this.validateStudentAssignmentTransfer(
-      fromSection.id,
-      targetSection.id,
-      uniqueStudentIds,
-    );
-
-    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
-      fromSection.id,
-      uniqueStudentIds,
-    );
-    const studentReadiness = Array.from(readinessByStudentId.values());
-    const unfinalizedStudents = studentReadiness.filter(
-      (student) => !student.isFinalized,
-    );
-
-    if (unfinalizedStudents.length > 0) {
-      throw new BadRequestException({
-        message: 'Finalize selected student grades before retaining students.',
-        unfinalizedStudents,
-      });
-    }
-
-    const nonFailingStudents = studentReadiness.filter(
-      (student) => !student.isFailing,
-    );
-
-    if (nonFailingStudents.length > 0) {
-      throw new BadRequestException({
-        message:
-          'Only finalized failing students can be retained. Move passing students up instead.',
-        nonFailingStudents,
-      });
-    }
-
-    const retainedCount = await this.transferStudentsBetweenSections({
-      fromSectionId: fromSection.id,
-      targetSectionId: targetSection.id,
-      studentIds: uniqueStudentIds,
-      targetGradeLevel: targetSection.gradeLevel,
-    });
-
-    await this.auditService.log({
-      actorId: actorId ?? 'system',
-      action: 'section.students.retained',
-      targetType: 'section',
-      targetId: targetSection.id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        fromSectionId: fromSection.id,
-        targetSectionId: targetSection.id,
-        retainedCount,
-        finalizedFailingStudents: studentReadiness.length,
-      },
-    });
-
-    return {
-      retainedCount,
-      fromSection,
-      targetSection,
-    };
+    _actorId?: string,
+    _actorRoles: string[] = [],
+  ): Promise<never> {
+    return this.requireAcademicTransition();
   }
-
   async graduateStudents(
-    dto: {
-      fromSectionId: string;
-      studentIds: string[];
-    },
-    actorId?: string,
-    actorRoles: string[] = [],
-  ) {
-    const fromSection = await this.db.query.sections.findFirst({
-      where: eq(sections.id, dto.fromSectionId),
-      columns: {
-        id: true,
-        name: true,
-        gradeLevel: true,
-        schoolYear: true,
-      },
-    });
-
-    if (!fromSection) throw new NotFoundException('Source section not found');
-
-    const uniqueStudentIds = [...new Set(dto.studentIds)];
-    const readinessByStudentId = await this.getSectionStudentPromotionReadiness(
-      fromSection.id,
-      uniqueStudentIds,
-    );
-    const studentReadiness = Array.from(readinessByStudentId.values());
-    const unfinalizedStudents = studentReadiness.filter(
-      (student) => !student.isFinalized,
-    );
-
-    if (unfinalizedStudents.length > 0) {
-      throw new BadRequestException({
-        message: 'Finalize selected student grades before graduating students.',
-        unfinalizedStudents,
-      });
-    }
-
-    const failingStudents = studentReadiness.filter(
-      (student) => !student.isPassing,
-    );
-
-    if (failingStudents.length > 0) {
-      throw new BadRequestException({
-        message:
-          'Only finalized passing students can be graduated. Retain failing students instead.',
-        failingStudents,
-      });
-    }
-
-    await this.db.transaction(async (tx) => {
-      await tx
-        .update(enrollments)
-        .set({ status: 'completed' })
-        .where(
-          and(
-            eq(enrollments.sectionId, fromSection.id),
-            eq(enrollments.status, 'enrolled'),
-            inArray(enrollments.studentId, uniqueStudentIds),
-          ),
-        );
-
-      await tx
-        .update(studentProfiles)
-        .set({ graduatedAt: new Date(), updatedAt: new Date() })
-        .where(inArray(studentProfiles.userId, uniqueStudentIds));
-    });
-
-    await this.auditService.log({
-      actorId: actorId ?? 'system',
-      action: 'section.students.graduated',
-      targetType: 'section',
-      targetId: fromSection.id,
-      metadata: {
-        actorRole: this.resolveActorRole(actorRoles),
-        fromSectionId: fromSection.id,
-        graduatedCount: uniqueStudentIds.length,
-      },
-    });
-
-    return {
-      graduatedCount: uniqueStudentIds.length,
-      fromSection,
-    };
+    _dto: { fromSectionId: string; studentIds: string[] },
+    _actorId?: string,
+    _actorRoles: string[] = [],
+  ): Promise<never> {
+    return this.requireAcademicTransition();
   }
 
   // ─────────────────────────────────────────────────────────────────────────

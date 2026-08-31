@@ -1,4 +1,4 @@
-import type { ScheduleDay } from '@/utils/constants';
+import type { ScheduleDay } from "@/utils/constants";
 
 export interface ClassSchedule {
   id: string;
@@ -15,7 +15,12 @@ export interface ClassItem {
   sectionId: string;
   section?: { id: string; name: string; gradeLevel: string };
   teacherId: string;
-  teacher?: { id: string; firstName?: string; lastName?: string; email?: string };
+  teacher?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+  };
   schoolYear: string;
   room?: string;
   cardPreset?: string;
@@ -37,6 +42,7 @@ export interface ClassItem {
 }
 
 export interface CreateClassDto {
+  academicWeightProfile?: "academic" | "practical";
   subjectName: string;
   subjectCode: string;
   subjectGradeLevel?: string;
@@ -55,7 +61,7 @@ export interface CreateClassDto {
   };
 }
 
-export type ClassVisibilityStatus = 'all' | 'active' | 'archived' | 'hidden';
+export type ClassVisibilityStatus = "all" | "active" | "archived" | "hidden";
 
 export interface UpdateClassDto {
   subjectName?: string;
@@ -80,11 +86,18 @@ export interface Enrollment {
   studentId: string;
   classId: string;
   sectionId?: string;
-  student?: { id: string; firstName?: string; lastName?: string; email?: string; lrn?: string; profile?: { lrn?: string; profilePicture?: string } };
+  student?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    lrn?: string;
+    profile?: { lrn?: string; profilePicture?: string | null };
+  };
 }
 
-export type StudentClassPresentationMode = 'solid' | 'gradient' | 'preset';
-export type StudentCourseViewMode = 'card' | 'wide';
+export type StudentClassPresentationMode = "solid" | "gradient" | "preset";
+export type StudentCourseViewMode = "card" | "wide";
 
 export interface StudentClassPresentationPreference {
   classId: string;
@@ -103,7 +116,7 @@ export interface StudentMasterlistSection {
 export interface StudentMasterlistItem {
   id: string;
   firstName?: string;
-  middleName?: string;
+  middleName?: string | null;
   lastName?: string;
   email?: string;
   status: string;
@@ -119,9 +132,15 @@ export interface StudentMasterlistQuery {
   gradeLevel?: string;
   sectionId?: string;
   search?: string;
-  eligibility?: 'all' | 'eligible' | 'mismatch';
-  sortBy?: 'lastName' | 'firstName' | 'email' | 'gradeLevel' | 'lrn' | 'eligibility';
-  sortDirection?: 'asc' | 'desc';
+  eligibility?: "all" | "eligible" | "mismatch";
+  sortBy?:
+    | "lastName"
+    | "firstName"
+    | "email"
+    | "gradeLevel"
+    | "lrn"
+    | "eligibility";
+  sortDirection?: "asc" | "desc";
   prioritizeEligible?: boolean;
   page?: number;
   limit?: number;
@@ -136,7 +155,7 @@ export interface TeacherClassStudentProfile {
   student: {
     id: string;
     firstName?: string;
-    middleName?: string;
+    middleName?: string | null;
     lastName?: string;
     email: string;
     status: string;
@@ -173,11 +192,7 @@ export interface TeacherStudentAssessmentHistoryItem {
   title: string;
   type: string;
   dueDate?: string | null;
-  status:
-    | 'finished'
-    | 'late'
-    | 'not_started'
-    | 'in_progress';
+  status: "finished" | "late" | "not_started" | "in_progress";
   statusLabel: string;
   submittedAt?: string | null;
   returnedAt?: string | null;
@@ -197,8 +212,8 @@ export interface TeacherClassStudentOverview {
     subjectCode: string;
     sectionLabel: string;
   };
-  student: TeacherClassStudentProfile['student'];
-  section: TeacherClassStudentProfile['section'];
+  student: TeacherClassStudentProfile["student"];
+  section: TeacherClassStudentProfile["section"];
   standing: {
     gradingPeriod: string | null;
     overallGradePercent: number | null;

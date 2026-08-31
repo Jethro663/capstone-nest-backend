@@ -47,17 +47,20 @@ describe('useTeacherDiscussionWorkspace', () => {
     );
 
     await waitFor(() => {
-      expect(result.current.discussionThreads.map((thread) => thread.id)).toEqual([
-        'pinned',
-        'newer',
-      ]);
+      expect(
+        result.current.discussionThreads.map((thread) => thread.id),
+      ).toEqual(['pinned', 'newer']);
     });
   });
 
   it('clears stale thread detail when the selection is cleared', async () => {
-    jest.mocked(discussionBoardService.listThreads).mockResolvedValue({
-      data: { items: [] },
-    } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
+    jest
+      .mocked(discussionBoardService.listThreads)
+      .mockResolvedValue({
+        success: true,
+        message: 'Fixture response',
+        data: { items: [], page: 1, limit: 20, total: 0 },
+      } as Awaited<ReturnType<typeof discussionBoardService.listThreads>>);
     jest.mocked(discussionBoardService.getThread).mockResolvedValue({
       data: { id: 'thread-1', title: 'Selected thread' },
     } as Awaited<ReturnType<typeof discussionBoardService.getThread>>);

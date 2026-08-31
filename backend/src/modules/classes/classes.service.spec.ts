@@ -153,9 +153,15 @@ describe('ClassesService', () => {
     transaction: jest.fn(),
   };
 
-  const mockDatabaseService = { db: mockDb };
+  const mockDatabaseService = {
+    db: mockDb,
+    academicTransaction: async (work: () => Promise<unknown>) => work(),
+  };
   const mockAuditService = { log: jest.fn() };
-  const mockClassRecordService = { generateClassRecord: jest.fn() };
+  const mockClassRecordService = {
+    generateClassRecord: jest.fn(),
+    captureClassEnrollment: jest.fn(),
+  };
   const mockAcademicStateService = { getCurrentState: jest.fn() };
 
   beforeEach(async () => {
@@ -164,6 +170,7 @@ describe('ClassesService', () => {
       async (callback: (tx: any) => Promise<any>) => callback(mockDb),
     );
     mockAuditService.log.mockResolvedValue(undefined);
+    mockDb.query.classRecords.findMany.mockResolvedValue([]);
     mockDb.query.classTemplates.findFirst.mockResolvedValue(null);
     mockDb.query.classTemplateAssessments.findMany.mockResolvedValue([]);
     mockDb.query.classTemplateAssessmentQuestions.findMany.mockResolvedValue(
@@ -591,6 +598,7 @@ describe('ClassesService', () => {
         expect.objectContaining({
           classId: CLASS_ID,
           isPublished: false,
+          quarter: 'Q1',
           isCoreTemplateAsset: true,
         }),
       );
@@ -2106,10 +2114,12 @@ describe('ClassesService', () => {
   // =========================================================================
 
   describe('toggleActive', () => {
-    it('archives an active class, clears the teacher, and completes active enrollments', async () => {
+    it('archives an empty active class while preserving the teacher for history', async () => {
       mockDb.query.classes.findFirst
         .mockResolvedValueOnce(makeClass({ isActive: true }))
-        .mockResolvedValueOnce(makeClass({ isActive: false, teacherId: null }));
+        .mockResolvedValueOnce(
+          makeClass({ isActive: false, teacherId: TEACHER_ID }),
+        );
       const updateChain = makeUpdateChain();
       mockDb.update.mockReturnValue(updateChain);
 
@@ -2121,7 +2131,6 @@ describe('ClassesService', () => {
       expect(updateChain.set.mock.calls[1][0]).toEqual(
         expect.objectContaining({
           isActive: false,
-          teacherId: null,
         }),
       );
       expect(updateChain.set.mock.calls[1][0]).toHaveProperty('updatedAt');
@@ -2156,7 +2165,7 @@ describe('ClassesService', () => {
           actorRole: 'admin',
           previousIsActive: true,
           isActive: false,
-          removedTeacherId: TEACHER_ID,
+          preservedTeacherId: TEACHER_ID,
           completedEnrollmentStatus: 'completed',
         },
       });

@@ -105,6 +105,8 @@ export interface ExtractionStructuredContent {
     sectionCount?: number;
     coherenceScore?: number;
     coherenceWarnings?: string[];
+    repairNotes?: string[];
+    confidenceBreakdown?: Record<string, unknown>;
     reviewFlags?: string[];
     imageAssignmentSummary?: {
       assigned?: number;

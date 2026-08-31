@@ -42,8 +42,8 @@ interface PreviewResponse {
   id?: string;
   selectedOptionId?: string;
   selectedOptionIds?: string[];
-  isCorrect?: boolean;
-  pointsEarned?: number;
+  isCorrect?: boolean | null;
+  pointsEarned?: number | null;
   question?: PreviewQuestion;
   studentAnswer?: string;
 }
