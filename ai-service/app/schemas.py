@@ -89,7 +89,30 @@ class RetryExtractionRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class AssessmentSettings(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    type: Literal["quiz", "exam", "assignment"] = "quiz"
+    quarter: Literal["Q1", "Q2", "Q3", "Q4"] | None = None
+    class_record_category: Literal["written_work", "performance_task", "quarterly_assessment"] | None = Field(None, alias="classRecordCategory")
+    class_record_item_id: str | None = Field(None, alias="classRecordItemId")
+    due_date: str | None = Field(None, alias="dueDate")
+    close_when_due: bool = Field(True, alias="closeWhenDue")
+    max_attempts: int = Field(1, ge=1, le=100, alias="maxAttempts")
+    time_limit_minutes: int | None = Field(None, ge=1, le=1440, alias="timeLimitMinutes")
+    timed_questions_enabled: bool = Field(False, alias="timedQuestionsEnabled")
+    question_time_limit_seconds: int | None = Field(None, ge=5, le=3600, alias="questionTimeLimitSeconds")
+    randomize_questions: bool = Field(False, alias="randomizeQuestions")
+    strict_mode: bool = Field(False, alias="strictMode")
+    passing_score: int = Field(60, ge=1, le=100, alias="passingScore")
+    feedback_level: Literal["immediate", "standard", "detailed"] = Field("standard", alias="feedbackLevel")
+    feedback_delay_hours: int = Field(24, ge=0, le=8760, alias="feedbackDelayHours")
+    model_config = {"populate_by_name": True, "extra": "forbid"}
+
+
 class ApplyExtractionRequest(BaseModel):
+    assessment_settings: AssessmentSettings | None = Field(None, alias="assessmentSettings")
+    academic_state_version: int | None = Field(None, alias="academicStateVersion")
     section_indices: list[int] | None = Field(None, alias="sectionIndices")
     lesson_indices: list[int] | None = Field(None, alias="lessonIndices")
 
@@ -231,6 +254,8 @@ class DemoInterventionPlanRequest(BaseModel):
 
 
 class GenerateQuizDraftRequest(BaseModel):
+    assessment_settings: AssessmentSettings | None = Field(None, alias="assessmentSettings")
+    assessment_settings_reviewed: bool = Field(False, alias="assessmentSettingsReviewed")
     class_id: str = Field(..., alias="classId")
     lesson_ids: list[str] | None = Field(default=None, alias="lessonIds")
     extraction_ids: list[str] | None = Field(default=None, alias="extractionIds")

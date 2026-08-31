@@ -1,3 +1,4 @@
+import type { AiAssessmentSettings } from "../../types/assessment";
 import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
@@ -135,6 +136,15 @@ function normalizeJobResult<TOutput>(
 }
 
 export const aiApi = {
+  async getQuizDraftSettings(jobId: string): Promise<{ assessmentSettings: AiAssessmentSettings; requiresSettingsReview: boolean; alreadyApplied: boolean; schoolYear: string; periods: { key: string; label: string }[] }> {
+    const response = await apiClient.get(`/ai/teacher/quizzes/jobs/${jobId}/settings`);
+    return response.data.data;
+  },
+  async updateQuizDraftSettings(jobId: string, assessmentSettings: AiAssessmentSettings): Promise<{ assessmentSettings: AiAssessmentSettings; requiresSettingsReview: boolean }> {
+    const response = await apiClient.patch(`/ai/teacher/quizzes/jobs/${jobId}/settings`, { assessmentSettings });
+    return response.data.data;
+  },
+
   async getClassIndexStatus(classId: string) {
     const response = await apiClient.get<ApiEnvelope<AiClassIndexStatus>>(`/ai/index/classes/${classId}/status`);
     return unwrapEnvelope(response.data);

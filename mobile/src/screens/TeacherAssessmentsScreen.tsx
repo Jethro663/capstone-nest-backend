@@ -32,7 +32,7 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-type FilterMode = "all" | "published" | "draft";
+type FilterMode = "all" | "published" | "draft" | "attention" | "history";
 
 function formatDate(value?: string | null) {
   if (!value) return "No due date";
@@ -65,6 +65,8 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       enabled: classIds.length > 0,
     })),
   });
+  const assessmentLoadFailed = classesQuery.isError || assessmentQueries.some(query => query.isError);
+  const assessmentsLoading = classesQuery.isLoading || assessmentQueries.some(query => query.isLoading);
 
   const records = useMemo(
     () =>
@@ -84,7 +86,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const filteredRecords = useMemo(() => {
     return records.filter((assessment) => {
       if (filter === "published" && !assessment.isPublished) return false;
-      if (filter === "draft" && assessment.isPublished) return false;
+      const historical = assessment.academicCapabilities?.schoolYear !== assessment.academicCapabilities?.activeSchoolYear;
+      if (filter === "draft" && (assessment.isPublished || historical)) return false;
+      if (filter === "history" && !historical) return false;
+      if (filter === "attention" && (historical || assessment.academicCapabilities?.canPrepare)) return false;
       if (search.trim()) {
         const haystack = `${assessment.title} ${assessment.classLabel} ${assessment.type}`.toLowerCase();
         if (!haystack.includes(search.trim().toLowerCase())) return false;
@@ -175,14 +180,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
 
     try {
       setCreatingAssessment(true);
-      const created = await assessmentsApi.create({
-        title: "Untitled Assessment",
-        classId,
-      });
-      navigation.navigate("TeacherAssessmentEditor", {
-        assessmentId: created.id,
-        classId: created.classId,
-      });
+      navigation.navigate("TeacherAssessmentEditor", { classId });
     } catch (error) {
       Alert.alert("Unable to create assessment", toAppError(error).message);
     } finally {
@@ -221,6 +219,9 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
         void Promise.all([classesQuery.refetch(), aiJobsQuery.refetch(), ...assessmentQueries.map((query) => query.refetch())]);
       }}
     >
+      {assessmentLoadFailed && <TeacherPanel title="Assessments could not fully load" subtitle="This is a loading problem, not a historical or empty class. Retry to refresh assessments and academic restrictions.">
+        <View style={{ padding: 14 }}><TeacherActionButton label="Retry assessment loading" icon="refresh" onPress={() => void refetchAllAssessments()} /></View>
+      </TeacherPanel>}
       <TeacherStats
         items={[
           { label: "Assessments", value: filteredRecords.length, tone: "red" },
@@ -233,8 +234,8 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search by class or assessment title" />
 
       <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-        {(["all", "published", "draft"] as const).map((entry) => (
-          <TeacherChip key={entry} label={entry[0].toUpperCase() + entry.slice(1)} active={filter === entry} onPress={() => setFilter(entry)} />
+        {(["all", "draft", "published", "attention", "history"] as const).map((entry) => (
+          <TeacherChip key={entry} label={entry === "published" ? "Ready to give" : entry === "attention" ? "Needs attention" : entry[0].toUpperCase() + entry.slice(1)} active={filter === entry} onPress={() => setFilter(entry)} />
         ))}
       </View>
 
@@ -354,7 +355,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                       {classItem.subjectCode} · {classItem.subjectName}
                     </Text>
                     <Text style={{ marginTop: 3, fontSize: 11, lineHeight: 17, color: theme.subtext }}>
-                      {classItem.section?.name || "Section pending"} · {assessments.length} assessment{assessments.length === 1 ? "" : "s"}
+                      {classItem.section?.name || "Section pending"} · {classItem.schoolYear} · {assessments.length} assessment{assessments.length === 1 ? "" : "s"}
                     </Text>
                   </View>
                   <TeacherActionButton
@@ -372,7 +373,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                       <TeacherRow
                         key={assessment.id}
                         title={assessment.title}
-                        subtitle={`${assessment.type.replace(/_/g, " ")} · Due ${formatDate(assessment.dueDate)}`}
+                        subtitle={`${assessment.academicCapabilities?.periodLabel || assessment.quarter || "Unassigned period"} · ${assessment.totalPoints ?? 0} points · Due ${formatDate(assessment.dueDate)}${assessment.academicCapabilities?.readOnlyReason ? " · " + assessment.academicCapabilities.readOnlyReason : ""}`}
                         left={
                           <Pressable
                             onPress={() => toggleSelectAssessment(assessment.id)}
@@ -395,7 +396,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                         right={
                           <View style={{ alignItems: "flex-end" }}>
                             <Text style={{ fontSize: 12, fontWeight: "700", color: assessment.isPublished ? theme.green : theme.amber }}>
-                              {assessment.isPublished ? "Published" : "Draft"}
+                              {assessment.isPublished ? "Ready to give" : "Draft"}
                             </Text>
                             <Text style={{ fontSize: 10, color: theme.muted }}>
                               {assessment.questions?.length ?? 0} questions
@@ -408,15 +409,22 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
                                     classId: assessment.classId,
                                   })
                                 }
-                                style={{ borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 8, paddingVertical: 4 }}
+                                accessibilityRole="button"
+                                style={{ minHeight: 44, borderRadius: 6, backgroundColor: theme.active, paddingHorizontal: 12, paddingVertical: 12 }}
                               >
-                                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                                <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>{assessment.academicCapabilities?.canPrepare ? "Edit" : "Review"}</Text>
                               </Pressable>
                               <Pressable
-                                onPress={() => setDeletingAssessment({ id: assessment.id, title: assessment.title })}
-                                style={{ borderRadius: 6, backgroundColor: theme.redSoft, borderWidth: 1, borderColor: theme.redLine, paddingHorizontal: 6, paddingVertical: 4 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={`More actions for ${assessment.title}`}
+                                onPress={() => Alert.alert(assessment.title, "Assessment actions", [
+                                  { text: "Details and submissions", onPress: () => navigation.navigate("TeacherAssessmentDetail", { assessmentId: assessment.id }) },
+                                  ...(assessment.academicCapabilities?.canPrepare ? [{ text: "Delete assessment", style: "destructive" as const, onPress: () => setDeletingAssessment({ id: assessment.id, title: assessment.title }) }] : []),
+                                  { text: "Cancel", style: "cancel" },
+                                ])}
+                                style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", borderRadius: 6, borderWidth: 1, borderColor: theme.border }}
                               >
-                                <MaterialCommunityIcons name="trash-can-outline" size={13} color={theme.red} />
+                                <MaterialCommunityIcons name="dots-horizontal" size={20} color={theme.text} />
                               </Pressable>
                             </View>
                           </View>
@@ -428,7 +436,7 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
             );
           })
         ) : (
-          <TeacherEmpty title="No classes with assessments" subtitle="Create or publish an assessment to make its class appear here." icon="clipboard-search-outline" />
+          <TeacherEmpty title={assessmentsLoading ? "Loading assessments…" : assessmentLoadFailed ? "Assessment list unavailable" : "No matching assessments"} subtitle={assessmentsLoading ? "Loading class content and academic restrictions." : assessmentLoadFailed ? "Use Retry assessment loading above. No records have been removed." : "Change the filter or create a draft in a class."} icon="clipboard-search-outline" />
         )}
       </TeacherPanel>
 

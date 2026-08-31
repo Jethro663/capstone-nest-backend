@@ -1,0 +1,64 @@
+{
+  "recordedAt": "2026-08-31T20:05:00.973676+00:00",
+  "baseCommit": "028f9dd3d28a83efd330294e32fb540f87dcdcbb",
+  "source": "Isolated assessment-only release snapshot; pending unrelated auth and roster changes excluded. Component fingerprints must match the commit index.",
+  "sourceComponents": {
+    "backend": {
+      "files": 631,
+      "sha256": "5109d9a9cc4bb54d59766d80075c2cffda6d93842072f4f90c7c28b0d2b919cb"
+    },
+    "next-frontend": {
+      "files": 612,
+      "sha256": "4d50cef04a109776203261374d16bc9e26168edcd4ef3f0060de071f7280503c"
+    },
+    "mobile": {
+      "files": 860,
+      "sha256": "63431cb3997c6a4ad72e57a3bf17dd29c9cc2ac914bc5a485af68d66f56eb9c8"
+    },
+    "ai-service": {
+      "files": 72,
+      "sha256": "f625ea49351d7f3fc00c52e32b88c2980f288ccaeeeaf7feee8c0f44cd991c93"
+    }
+  },
+  "fingerprintMethod": "SHA256 over sorted unique git-listed tracked and unignored files per component; path NUL file bytes NUL",
+  "backendEntrypointSha256": "c6a7218bbdfa95f09022516849cf87bd6e951b1e88a036328ad17f85de471587",
+  "apk": {
+    "path": "next-frontend/public/downloads/nexora-student-mobile-release.apk",
+    "sha256": "dd24d2d50e41985e30d1063719bb96e6ff378137c14d08bf6f38feafc345d477",
+    "bytes": 40046479,
+    "abis": [
+      "arm64-v8a"
+    ],
+    "package": "com.nexora.lms.mobile",
+    "versionName": "0.1.10",
+    "versionCode": 11,
+    "embeddedApiUrl": "https://capstone-backend-v2-production.up.railway.app/api",
+    "zipIntegrity": "pass",
+    "signatureScheme": "v2 verified",
+    "certificate": "Android Debug \u2014 internal testing only",
+    "certificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "embeddedBundleMatchesGenerated": true,
+    "bundledProjectSourceFilesMatched": 150,
+    "copiedArtifactMatches": true,
+    "buildDuration": "1m 50s (final packaging after EOF whitespace cleanup)",
+    "buildTasksExecuted": 20,
+    "java": "17.0.10",
+    "gradle": "8.14.3",
+    "otaUpdates": "explicitly disabled",
+    "authenticatedPhysicalDeviceVerified": false,
+    "alignment": "16 KB alignment check passed",
+    "servedDownloadMatches": true,
+    "initialCleanBuildDuration": "11m 11s",
+    "buildTasksUpToDate": 846
+  },
+  "tests": {
+    "backendUnit": 1238,
+    "backendE2e": 5,
+    "postgresIntegration": 53,
+    "web": 654,
+    "mobile": 229,
+    "ai": 181,
+    "deploymentGate": 10
+  },
+  "liveProviderVerification": "Not executed: local Ollama has no installed models and cloud credentials are unavailable."
+}

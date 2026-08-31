@@ -2396,8 +2396,7 @@ export default function TeacherClassDetailPage() {
     if (creatingAssessment) return;
     try {
       setCreatingAssessment(true);
-      const response = await assessmentService.create({
-        title: "Untitled Assessment",
+      const response = await assessmentService.createDraft({
         classId,
         quarter: newAssessmentPeriod || undefined,
       });

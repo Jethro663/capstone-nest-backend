@@ -1,4 +1,5 @@
 // @ts-nocheck
+jest.mock("../TeacherAiDraftScreen", () => ({ TeacherAiDraftScreen: () => null }));
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { TeacherInterventionWorkspaceContent } from "../TeacherDeepParityScreens";

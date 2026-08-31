@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-08-31T19:30:12.360085+00:00",
+  "baseCommit": "028f9dd3d28a83efd330294e32fb540f87dcdcbb",
+  "workingTree": "Uncommitted implementation plus preserved pre-existing changes; fingerprints include both.",
+  "sourceComponents": {
+    "backend": {
+      "files": 632,
+      "sha256": "404d4028c20772108eb73fa88da7312e015dfbb5bacec294e7c24cd16a8371b0"
+    },
+    "next-frontend": {
+      "files": 613,
+      "sha256": "b5fcb3fa82173454d8786cceb9b5424fa2a49ecb5adbdb7c98f354e62f7adea1"
+    },
+    "mobile": {
+      "files": 861,
+      "sha256": "f25acc0138d7f669e8ec8a64a5f280722f5d313c3715a6e33c35b6a5dc180800"
+    },
+    "ai-service": {
+      "files": 72,
+      "sha256": "f625ea49351d7f3fc00c52e32b88c2980f288ccaeeeaf7feee8c0f44cd991c93"
+    }
+  },
+  "backendEntrypointSha256": "c6a7218bbdfa95f09022516849cf87bd6e951b1e88a036328ad17f85de471587",
+  "apk": {
+    "path": "mobile/android/app/build/outputs/apk/release/app-release.apk",
+    "sha256": "4e70795620c893635526887bf0d87714f52756e93b601f0cc217cb9fd4a68b01",
+    "bytes": 40641731,
+    "abis": [
+      "x86_64"
+    ],
+    "zipIntegrity": "pass",
+    "embeddedApiUrl": "http://10.0.2.2:3000/api",
+    "purpose": "Local emulator verification only; not production distribution.",
+    "authenticatedRuntimeVerified": true,
+    "package": "com.nexora.lms.mobile",
+    "versionName": "0.1.9",
+    "versionCode": 10,
+    "signatureScheme": "v2 verified",
+    "certificate": "Android Debug",
+    "certificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "buildDuration": "1m 6s",
+    "otaUpdates": "explicitly disabled",
+    "installedApkSha256": "4e70795620c893635526887bf0d87714f52756e93b601f0cc217cb9fd4a68b01",
+    "installedArtifactMatches": true
+  },
+  "fingerprintMethod": "SHA256 over sorted unique git-listed tracked and unignored files per component; path NUL file bytes NUL"
+}

@@ -1,3 +1,4 @@
+import { AiAssessmentSettingsDto } from '../assessment-settings';
 import {
   IsUUID,
   IsOptional,
@@ -71,6 +72,11 @@ export class RetryExtractionDto {
  * DTO for applying an extraction — optionally selecting specific lessons.
  */
 export class ApplyExtractionDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AiAssessmentSettingsDto)
+  assessmentSettings?: AiAssessmentSettingsDto;
+
   @ApiPropertyOptional({
     description:
       'Array of section indices (0-based) to apply. If omitted, all sections are applied.',

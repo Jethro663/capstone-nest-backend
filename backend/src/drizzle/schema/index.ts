@@ -15,3 +15,4 @@ export * from './academic-state.schema';
 export * from './app-version.schema';
 export * from './transmutation.schema';
 export * from './academic-grading.schema';
+export * from './assessment-editor.schema';

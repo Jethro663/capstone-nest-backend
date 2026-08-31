@@ -223,6 +223,8 @@ class ExtractionApplyTests(unittest.IsolatedAsyncioTestCase):
 
         def execute_side_effect(*args, **kwargs):
             query = str(args[0])
+            if "pg_advisory_xact_lock" in query:
+                return SimpleNamespace()
             params = args[1] if len(args) > 1 else {}
             if "FROM extracted_modules WHERE id = :id" in query:
                 return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: extraction_row))
@@ -335,6 +337,8 @@ class ExtractionApplyTests(unittest.IsolatedAsyncioTestCase):
 
         def execute_side_effect(*args, **kwargs):
             query = str(args[0])
+            if "pg_advisory_xact_lock" in query:
+                return SimpleNamespace()
             if "FROM extracted_modules WHERE id = :id" in query:
                 return SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: extraction_row))
             if "SELECT id FROM classes WHERE id = :id" in query:

@@ -24,6 +24,7 @@ jest.mock('next/navigation', () => ({
 jest.mock('sonner', () => ({
   toast: {
     error: jest.fn(),
+    warning: jest.fn(),
     success: jest.fn(),
     info: jest.fn(),
   },
@@ -73,6 +74,7 @@ jest.mock('@/services/assessment-service', () => ({
   assessmentService: {
     getById: jest.fn(),
     update: jest.fn(),
+    saveEditor: jest.fn(),
     releaseCore: jest.fn(),
     createQuestion: jest.fn(),
     updateQuestion: jest.fn(),
@@ -189,6 +191,7 @@ describe('AssessmentEditorPage', () => {
       message: 'ok',
       data: buildAssessment(),
     } as Awaited<ReturnType<typeof assessmentService.getById>>);
+    mockedAssessmentService.saveEditor.mockResolvedValue({ success: true, data: { assessment: buildAssessment(), revision: 1, questionIds: {}, publicationIssues: [] } } as Awaited<ReturnType<typeof assessmentService.saveEditor>>);
     mockedAssessmentService.update.mockResolvedValue({
       success: true,
       message: 'saved',
@@ -551,7 +554,134 @@ describe('AssessmentEditorPage', () => {
     expect(
       screen.getAllByRole('button', { name: /ready to give/i })[0],
     ).toBeDisabled();
+    expect(screen.getByLabelText('Assessment release status')).toHaveTextContent(
+      /active.*Term 1/i,
+    );
+    expect(
+      screen.getAllByRole('button', { name: /ready to give/i })[0],
+    ).toHaveAccessibleDescription(/active.*Term 1/i);
   });
+
+  it('retries the exact pending request while keeping later edits available for export', async () => {
+    const body = { classId: 'class-1', expectedRevision: 3, action: 'save', settings: { title: 'Original pending title' }, questions: [] };
+    window.localStorage.setItem('assessment-editor-pending:assessment-1', JSON.stringify({ body: JSON.stringify(body), mutationId: 'original-mutation' }));
+    render(<AssessmentEditorPage />);
+    await screen.findByRole('button', { name: 'Retry original save' });
+    fireEvent.change(screen.getByLabelText('Assessment title'), { target: { value: 'Later local edit' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry original save' }));
+    await waitFor(() => expect(mockedAssessmentService.saveEditor).toHaveBeenCalledWith('assessment-1', { ...body, mutationId: 'original-mutation' }));
+    await waitFor(() => expect(window.localStorage.getItem('assessment-editor-pending:assessment-1')).toBeNull());
+    const copies = Object.keys(window.localStorage).filter(key => key.includes(':conflict:before-retry-'));
+    expect(copies).toHaveLength(1);
+    expect(JSON.parse(window.localStorage.getItem(copies[0])!)).toMatchObject({ title: 'Later local edit' });
+    expect(screen.getByRole('button', { name: 'Export recovery copies' })).toBeInTheDocument();
+  });
+
+  it('explains an unsaved period change, then permits release after saving the active period', async () => {
+    mockedAssessmentService.getById.mockResolvedValueOnce({
+      success: true,
+      message: 'ok',
+      data: buildAssessment({
+        quarter: 'Q2',
+        academicCapabilities: {
+          ...openCapabilities,
+          period: 'Q2',
+          periodLabel: 'Term 2',
+          canRelease: false,
+        },
+      }),
+    } as Awaited<ReturnType<typeof assessmentService.getById>>);
+    render(<AssessmentEditorPage />);
+    await screen.findByDisplayValue('Fractions Checkpoint');
+    fireEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+    fireEvent.change(getQuarterSelect(), { target: { value: 'Q1' } });
+    expect(screen.getByRole('button', { name: 'Ready to give' })).toBeDisabled();
+    expect(screen.getByLabelText('Assessment release status')).toHaveTextContent(
+      /save.*draft.*period/i,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Save now' }));
+    await waitFor(() =>
+      expect(mockedAssessmentService.saveEditor).toHaveBeenCalledWith(
+        'assessment-1',
+        expect.objectContaining({ action: 'save', settings: expect.objectContaining({ quarter: 'Q1' }) }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Ready to give' })).toBeEnabled(),
+    );
+    expect(
+      screen.queryByLabelText('Assessment release status'),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ready to give' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save now' }));
+    await waitFor(() =>
+      expect(mockedAssessmentService.saveEditor).toHaveBeenCalledWith(
+        'assessment-1',
+        expect.objectContaining({ action: 'publish', settings: expect.objectContaining({ quarter: 'Q1' }) }),
+      ),
+    );
+  });
+
+  it.each([
+    [
+      'future school year',
+      {
+        ...openCapabilities,
+        schoolYear: '2027-2028',
+        canRelease: false,
+      },
+      /keep.*draft until.*school year.*active/i,
+    ],
+    [
+      'unassigned period',
+      {
+        ...openCapabilities,
+        canPrepare: false,
+        canRelease: false,
+        period: null,
+        readOnlyReason: 'Invalid or unassigned grading period',
+      },
+      /unassigned grading period/i,
+    ],
+    [
+      'closed year',
+      {
+        ...openCapabilities,
+        canPrepare: false,
+        canRelease: false,
+        readOnlyReason: 'School year is closed',
+      },
+      /school year is closed/i,
+    ],
+    [
+      'finalized workbook',
+      {
+        ...openCapabilities,
+        canPrepare: false,
+        canRelease: false,
+        readOnlyReason: 'Period workbook is finalized or locked',
+      },
+      /finalized or locked/i,
+    ],
+    ['missing permissions', undefined, /permissions.*not.*verified/i],
+  ])(
+    'explains why release is blocked for %s',
+    async (_label, academicCapabilities, message) => {
+      mockedAssessmentService.getById.mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        data: buildAssessment({ academicCapabilities }),
+      } as Awaited<ReturnType<typeof assessmentService.getById>>);
+      render(<AssessmentEditorPage />);
+      await screen.findByDisplayValue('Fractions Checkpoint');
+      expect(
+        screen.getByRole('button', { name: 'Ready to give' }),
+      ).toBeDisabled();
+      expect(
+        screen.getByLabelText('Assessment release status'),
+      ).toHaveTextContent(message as RegExp);
+    },
+  );
 
   it('treats a missing quarter workbook as setup guidance without requesting its slot resource', async () => {
     mockedClassRecordService.getByClass.mockResolvedValueOnce({
@@ -657,12 +787,9 @@ describe('AssessmentEditorPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /save now/i }));
 
     await waitFor(() => {
-      expect(mockedAssessmentService.update).toHaveBeenCalledTimes(1);
+      expect(mockedAssessmentService.saveEditor).toHaveBeenCalledTimes(1);
     });
-    expect(mockedAssessmentService.update.mock.calls[0]?.[1]).toMatchObject({
-      quarter: 'Q3',
-      isPublished: false,
-    });
+    expect(mockedAssessmentService.saveEditor.mock.calls[0]?.[1]).toMatchObject({ action: 'save', settings: { quarter: 'Q3' } });
   });
 
   it('blocks release requests when quarter verification is unavailable', async () => {
@@ -1020,6 +1147,7 @@ describe('AssessmentEditorPage', () => {
     window.localStorage.setItem(
       LOCAL_DRAFT_KEY,
       JSON.stringify({
+        baseRevision: 0,
         title: 'Recovered checkpoint',
         description: '',
         questions: [

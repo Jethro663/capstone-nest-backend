@@ -1,3 +1,4 @@
+import type { SaveAssessmentEditorInput, AssessmentEditorResult } from "../../types/assessment";
 import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
 import { downloadProtectedFile, openLocalFile } from "./protected-files";
@@ -90,6 +91,21 @@ function normalizeTeacherSubmissionsResponse(
 }
 
 export const assessmentsApi = {
+  async uploadAuthorImage(kind: 'questions' | 'options', id: string, file: { uri: string; fileName?: string | null; mimeType?: string | null }) {
+    const form = new FormData();
+    form.append('image', { uri: file.uri, name: file.fileName ?? 'image.jpg', type: file.mimeType ?? 'image/jpeg' } as unknown as Blob);
+    return unwrapEnvelope((await apiClient.post(`/assessments/${kind}/${id}/image`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data);
+  },
+  async uploadAuthorFile(id: string, kind: 'teacher-attachment' | 'rubric-source', file: { uri: string; name: string; mimeType?: string }) {
+    const form = new FormData();
+    form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+    return unwrapEnvelope((await apiClient.post(`/assessments/${id}/${kind}`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data);
+  },
+  async saveEditor(id: string | undefined, input: SaveAssessmentEditorInput): Promise<AssessmentEditorResult> {
+    const response = id ? await apiClient.put<ApiEnvelope<AssessmentEditorResult>>(`/assessments/${id}/editor`, input)
+      : await apiClient.post<ApiEnvelope<AssessmentEditorResult>>('/assessments/editor', input);
+    return unwrapEnvelope(response.data);
+  },
   async create(payload: CreateAssessmentDto) {
     const response = await apiClient.post<ApiEnvelope<Assessment>>("/assessments", payload);
     return unwrapEnvelope(response.data);

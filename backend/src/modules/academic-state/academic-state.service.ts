@@ -1,4 +1,8 @@
 import {
+  resolveRolloverPeriod,
+  RolloverPeriodMapping,
+} from './rollover-period';
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -309,6 +313,8 @@ export class AcademicStateService {
     database: any,
     classIdMap: Map<string, string>,
     now: Date,
+    periodMapping: RolloverPeriodMapping,
+    destinationPeriods: string[],
   ) {
     const sourceClassIds = Array.from(classIdMap.keys());
     const counts = {
@@ -414,7 +420,11 @@ export class AcademicStateService {
           templateSourceId:
             sourceAssessment.templateSourceId ?? sourceAssessment.id,
           classRecordCategory: sourceAssessment.classRecordCategory,
-          quarter: sourceAssessment.quarter,
+          quarter: resolveRolloverPeriod(
+            sourceAssessment.quarter,
+            periodMapping,
+            destinationPeriods,
+          ),
           aiOrigin: sourceAssessment.aiOrigin,
           aiGenerationOutputId: sourceAssessment.aiGenerationOutputId,
           createdAt: now,
@@ -726,6 +736,16 @@ export class AcademicStateService {
     const targetPolicy = await this.policyService.forYear(schoolYear);
     const target = { schoolYear, quarter: targetPolicy.periods[0].key };
     const impact = await this.getTransitionTargets(current, target);
+    const clonedClassIds = impact.classesToClone.map((cls) => cls.id);
+    const copiedAssessments = clonedClassIds.length
+      ? await this.db.query.assessments.findMany({
+          where: inArray(assessments.classId, clonedClassIds),
+          columns: { quarter: true },
+        })
+      : [];
+    const assessmentPeriodSources = [
+      ...new Set(copiedAssessments.map((item) => item.quarter || 'unassigned')),
+    ];
 
     return {
       current: {
@@ -743,6 +763,8 @@ export class AcademicStateService {
         reusableSectionsToCreate: impact.sectionsToClone.length,
         reusableClassesToCreate: impact.classesToClone.length,
         promotionReadiness: impact.promotionReadiness,
+        assessmentPeriodSources,
+        destinationPeriods: targetPolicy.periods,
       },
       transitionConfirmationText:
         AcademicStateService.TRANSITION_CONFIRMATION_TEXT,
@@ -1160,6 +1182,8 @@ export class AcademicStateService {
             tx,
             sourceToTargetClassId,
             now,
+            dto.assessmentPeriodMapping ?? {},
+            targetPolicy.periods.map((period) => period.key),
           );
         }
 
@@ -1201,6 +1225,7 @@ export class AcademicStateService {
           sectionsArchived: impactTargets.sectionIdsToArchive.length,
           schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
           reusableSectionsCreated: sectionsCreated,
+          assessmentPeriodMapping: dto.assessmentPeriodMapping ?? {},
           reusableClassesCreated: classesCreated,
           classSchedulesCloned,
           classSchedulesCleared: false,
@@ -1225,6 +1250,7 @@ export class AcademicStateService {
           sectionsArchived: impactTargets.sectionIdsToArchive.length,
           schoolEventsArchived: impactTargets.schoolEventIdsToArchive.length,
           reusableSectionsCreated: sectionsCreated,
+          assessmentPeriodMapping: dto.assessmentPeriodMapping ?? {},
           reusableClassesCreated: classesCreated,
           classSchedulesCloned,
           classSchedulesCleared: false,

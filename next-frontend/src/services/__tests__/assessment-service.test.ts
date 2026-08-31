@@ -19,6 +19,7 @@ describe('assessmentService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    window.localStorage.clear();
     Object.defineProperty(window, 'URL', {
       value: {
         createObjectURL,
@@ -60,6 +61,17 @@ describe('assessmentService', () => {
     expect(mockedApi.post).toHaveBeenCalledWith('/assessments/assessment-1/unsubmit-file-upload');
     expect(result.data.id).toBe('attempt-1');
     expect(result.data.isSubmitted).toBe(false);
+  });
+
+  it('retries draft creation with its durable mutation ID after a lost response', async () => {
+    mockedApi.post.mockRejectedValueOnce({ code: 'ERR_NETWORK' }).mockResolvedValueOnce({ data: { success: true, data: { assessment: { id: 'created' } } } });
+    await expect(assessmentService.createDraft({ classId: 'class-1', quarter: 'Q2' })).rejects.toMatchObject({ code: 'ERR_NETWORK' });
+    expect(window.localStorage.getItem('assessment-create-pending:class-1')).not.toBeNull();
+    await expect(assessmentService.createDraft({ classId: 'class-1', quarter: 'Q2' })).resolves.toMatchObject({ data: { id: 'created' } });
+    expect(mockedApi.post.mock.calls[1]).toEqual(mockedApi.post.mock.calls[0]);
+    expect(mockedApi.post.mock.calls[0][0]).toBe('/assessments/editor');
+    expect(mockedApi.post.mock.calls[0][1]).toMatchObject({ action: 'save', settings: { title: '', quarter: 'Q2' }, questions: [] });
+    expect(window.localStorage.getItem('assessment-create-pending:class-1')).toBeNull();
   });
 
   it('uploads assessment question and option images through multipart form requests', async () => {

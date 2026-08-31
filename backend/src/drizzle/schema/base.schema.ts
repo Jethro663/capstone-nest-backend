@@ -540,6 +540,7 @@ export const lessonVersions = pgTable(
 export const assessments = pgTable(
   'assessments',
   {
+    editorRevision: integer('editor_revision').notNull().default(0),
     id: uuid('id').primaryKey().defaultRandom(),
     title: text('title').notNull(),
     description: text('description'),

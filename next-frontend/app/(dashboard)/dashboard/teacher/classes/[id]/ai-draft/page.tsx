@@ -1,5 +1,8 @@
 'use client';
 
+import { AiAssessmentSettingsFields, DEFAULT_AI_ASSESSMENT_SETTINGS } from '@/components/teacher/assessment/AiAssessmentSettingsFields';
+import type { AiAssessmentSettings } from '@/types/assessment';
+import { assessmentSettingsSummary } from '@/lib/assessment-settings-summary';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -63,6 +66,8 @@ const QUESTION_TYPES: Array<{ value: QuestionType; label: string }> = [
   { value: 'true_false', label: 'True / False' },
   { value: 'short_answer', label: 'Short Answer' },
   { value: 'multiple_select', label: 'Multiple Select' },
+  { value: 'fill_blank', label: 'Fill in the blank' },
+  { value: 'dropdown', label: 'Dropdown' },
 ];
 
 const JOB_POLL_INTERVAL_MS = 10_000;
@@ -289,7 +294,12 @@ export default function TeacherAiDraftQuizPage() {
   const [extractions, setExtractions] = useState<Extraction[]>([]);
   const [indexStatus, setIndexStatus] = useState<AiClassIndexStatus | null>(null);
 
-  const [title, setTitle] = useState('');
+  const [assessmentSettings, setAssessmentSettings] = useState<AiAssessmentSettings>(DEFAULT_AI_ASSESSMENT_SETTINGS);
+  const [settingsReviewed, setSettingsReviewed] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [policyReady, setPolicyReady] = useState(false);
+  const title = assessmentSettings.title ?? '';
+  const setTitle = (title: string) => { setAssessmentSettings(current => ({ ...current, title })); setSettingsReviewed(false); };
   const [teacherNote, setTeacherNote] = useState('');
   const [questionCount, setQuestionCount] = useState('5');
   const [questionType, setQuestionType] = useState<QuestionType>('multiple_choice');
@@ -300,6 +310,12 @@ export default function TeacherAiDraftQuizPage() {
   const [job, setJob] = useState<AiGenerationJob | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [result, setResult] = useState<QuizDraftStructuredOutput | null>(null);
+  useEffect(() => { if (!currentJobId) return; let active = true; setSettingsLoading(true); setSettingsReviewed(false);
+    void aiService.getQuizDraftSettings(currentJobId).then(response => { if (active) { setAssessmentSettings(response.assessmentSettings); setSettingsReviewed(!response.requiresSettingsReview); } }).catch(error => toast.error(getApiErrorMessage(error, 'Could not load assessment settings'))).finally(() => { if (active) setSettingsLoading(false); });
+    return () => { active = false; };
+  }, [currentJobId]);
+  const saveAssessmentSettings = async () => { if (!currentJobId) return; setSettingsLoading(true); try { const response = await aiService.updateQuizDraftSettings(currentJobId, assessmentSettings); setAssessmentSettings(response.assessmentSettings); setSettingsReviewed(true); toast.success('Assessment settings saved. Questions were not regenerated.'); } catch (error) { toast.error(getApiErrorMessage(error, 'Could not save assessment settings')); } finally { setSettingsLoading(false); } };
+
   const [trackedJobs, setTrackedJobs] = useState<TrackedAiDraftJobEntry[]>([]);
 
   const [lessonSearch, setLessonSearch] = useState('');
@@ -655,6 +671,7 @@ export default function TeacherAiDraftQuizPage() {
       !readinessUnavailable,
   );
   const canGenerate =
+    policyReady && Boolean(assessmentSettings.quarter) && !settingsLoading &&
     !submitting &&
     !hasRunningJob &&
     generationReady &&
@@ -779,6 +796,7 @@ export default function TeacherAiDraftQuizPage() {
   };
 
   const handleGenerate = async () => {
+    if (!policyReady || !assessmentSettings.quarter) { toast.error('Review valid academic settings before generating.'); return; }
     if (!isQuestionCountValid) {
       toast.error('Question count must be between 1 and 15.');
       return;
@@ -809,14 +827,10 @@ export default function TeacherAiDraftQuizPage() {
             : [];
       const response = await aiService.createQuizDraftJob({
         classId,
-        title: title.trim() || undefined,
+        assessmentSettings,
         teacherNote: teacherNote.trim() || undefined,
         questionCount: parsedQuestionCount,
         questionType,
-        assessmentType: 'quiz',
-        passingScore: 60,
-        feedbackLevel: 'standard',
-        classRecordCategory: 'written_work',
         lessonIds,
         extractionIds,
         sourcePolicy: 'published_default',
@@ -1071,13 +1085,14 @@ export default function TeacherAiDraftQuizPage() {
       toast.success(response.data.alreadyApplied ? 'Draft already applied.' : 'Draft applied.');
       setDeleteDialog(null);
       setApplyPreview(response.data.preview ?? null);
+      router.push(`/dashboard/teacher/assessments/${applyResult.assessmentId}/edit`);
       void fetchReadiness({ silent: true });
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'Failed to apply quiz draft'));
     } finally {
       setApplyingDraft(false);
     }
-  }, [currentJobId, fetchReadiness]);
+  }, [currentJobId, fetchReadiness, router]);
 
   const handleApplyPreview = async () => {
     if (!currentJobId) {
@@ -1090,6 +1105,7 @@ export default function TeacherAiDraftQuizPage() {
     }
     try {
       setApplyingDraft(true);
+      if (job?.status !== 'approved' && !settingsReviewed) { toast.error('Review and save assessment settings before applying.'); return; }
       const response = await aiService.previewQuizDraftApply(currentJobId);
       setApplyPreview(response.data);
       if (!response.data.canApply) {
@@ -1098,7 +1114,7 @@ export default function TeacherAiDraftQuizPage() {
       }
       setDeleteDialog({
         title: response.data.alreadyApplied ? 'Draft already applied' : 'Apply quiz draft?',
-        description: `${response.data.assessment.title} - ${response.data.assessment.questionCount} question(s), ${response.data.assessment.totalPoints} point(s). This creates an unpublished assessment draft.`,
+        description: `${response.data.assessment.title} - ${response.data.assessment.questionCount} question(s), ${response.data.assessment.totalPoints} point(s). ${assessmentSettingsSummary(response.data.assessmentSettings ?? assessmentSettings)} This creates an unpublished assessment draft.`,
         confirmLabel: response.data.alreadyApplied ? 'Open applied draft' : 'Apply draft',
         cancelLabel: 'Keep reviewing',
         tone: 'default',
@@ -1252,6 +1268,11 @@ export default function TeacherAiDraftQuizPage() {
         </nav>
       </header>
 
+      <div hidden={activeTab === 'sources'} className="mb-4 space-y-3">
+        <AiAssessmentSettingsFields classId={classId} value={assessmentSettings} onReady={setPolicyReady} disabled={settingsLoading || job?.status === 'approved'} onChange={value => { setAssessmentSettings(value); setSettingsReviewed(false); }} />
+        {currentJobId && job?.status !== 'approved' && <Button onClick={() => void saveAssessmentSettings()} disabled={settingsLoading}>{settingsLoading ? 'Saving settings…' : 'Save assessment settings'}</Button>}
+        {!settingsReviewed && currentJobId && <p role="status">Review and save the assessment settings before applying this draft.</p>}
+      </div>
       <div className="teacher-ai-draft__layout teacher-ai-draft__layout--tabs">
         <section
           className={`teacher-ai-draft__card teacher-ai-draft__card--sources ${activeTab === 'sources' ? 'is-active' : 'is-hidden'}`}
@@ -1908,6 +1929,7 @@ export default function TeacherAiDraftQuizPage() {
                     {applyPreview.assessment.title} - {applyPreview.assessment.questionCount}{' '}
                     question(s), {applyPreview.assessment.totalPoints} point(s)
                   </p>
+                  <p className="whitespace-pre-line">{assessmentSettingsSummary(applyPreview.assessmentSettings ?? assessmentSettings)}</p>
                 </div>
               ) : null}
 

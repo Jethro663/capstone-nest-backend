@@ -1,3 +1,6 @@
+import { AiAssessmentAuthoringService } from './ai-assessment-authoring.service';
+import { AssessmentsModule } from '../assessments/assessments.module';
+import { AcademicPolicyModule } from '../academic-state/academic-policy.module';
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { AiMentorController } from './ai-mentor.controller';
@@ -28,6 +31,8 @@ import { TeacherAiJobQueryService } from './teacher-ai-job-query.service';
  */
 @Module({
   imports: [
+    AssessmentsModule,
+    AcademicPolicyModule,
     DatabaseModule,
     AuditModule,
     AdminModule,
@@ -39,6 +44,7 @@ import { TeacherAiJobQueryService } from './teacher-ai-job-query.service';
   ],
   controllers: [AiMentorController],
   providers: [
+    AiAssessmentAuthoringService,
     AiProxyService,
     AdminAnalyticsChatService,
     AiGenerationQueueService,

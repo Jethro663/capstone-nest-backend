@@ -12,6 +12,9 @@ import { toast } from 'sonner';
 const pushMock = jest.fn();
 let mockSearchJobId: string | null = null;
 
+jest.mock('@/services/academic-state-service', () => ({ academicStateService: { getCurrent: jest.fn(async () => ({ data: { schoolYear: '2025-2026', quarter: 'Q1', policy: { periods: [{ key: 'Q1', label: 'Quarter 1' }, { key: 'Q2', label: 'Quarter 2' }] } } })) } }));
+jest.mock('@/services/class-record-service', () => ({ classRecordService: { getByClass: jest.fn(async () => ({ data: [] })) } }));
+jest.mock('@/components/shared/rich-text/RichTextEditor', () => ({ RichTextEditor: ({ value, onChange }: { value: string; onChange(value: string): void }) => <textarea aria-label="Assessment description" value={value} onChange={event => onChange(event.target.value)} /> }));
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'class-1' }),
   useRouter: () => ({ push: pushMock }),
@@ -56,6 +59,8 @@ jest.mock('@/services/ai-service', () => ({
     getClassIndexStatus: jest.fn(),
     reindexClass: jest.fn(),
     createQuizDraftJob: jest.fn(),
+    getQuizDraftSettings: jest.fn(),
+    updateQuizDraftSettings: jest.fn(),
     getTeacherJobStatus: jest.fn(),
     getQuizDraftJobResult: jest.fn(),
     updateQuizDraft: jest.fn(),
@@ -178,6 +183,8 @@ describe('TeacherAiDraftQuizPage', () => {
     jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-04-25T12:00:00.000Z'));
     window.localStorage.clear();
     mockSearchJobId = null;
+    mockedAiService.getQuizDraftSettings.mockResolvedValue({ assessmentSettings: { title: 'AI Draft Assessment', type: 'quiz', quarter: 'Q1' }, requiresSettingsReview: false, alreadyApplied: false, schoolYear: '2025-2026', periods: [{ key: 'Q1', label: 'Quarter 1' }, { key: 'Q2', label: 'Quarter 2' }] });
+    mockedAiService.updateQuizDraftSettings.mockImplementation(async (_id, settings) => ({ assessmentSettings: settings, requiresSettingsReview: false }));
 
     mockedClassService.getById.mockResolvedValue({
       data: {
@@ -503,6 +510,23 @@ describe('TeacherAiDraftQuizPage', () => {
     expect(screen.getByText('Choose the class sources')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /continue to quiz setup/i }));
+    fireEvent.change(screen.getByLabelText('Assessment title'), { target: { value: 'Configured exam' } });
+    fireEvent.change(screen.getByLabelText('Assessment type'), { target: { value: 'exam' } });
+    fireEvent.change(screen.getByLabelText('Assessment description'), { target: { value: '<p>Teacher instructions</p>' } });
+    fireEvent.change(screen.getByLabelText('Grading period'), { target: { value: 'Q2' } });
+    fireEvent.change(screen.getByLabelText('Class record category'), { target: { value: 'performance_task' } });
+    fireEvent.change(screen.getByLabelText('Due date'), { target: { value: '2026-09-20T10:30' } });
+    fireEvent.click(screen.getByText('Advanced: delivery and results'));
+    fireEvent.click(screen.getByLabelText('Close when due'));
+    fireEvent.change(screen.getByLabelText('Allowed attempts'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Assessment timer (minutes, blank for none)'), { target: { value: '27' } });
+    fireEvent.click(screen.getByLabelText('Question timer'));
+    fireEvent.change(screen.getByLabelText('Seconds per question'), { target: { value: '45' } });
+    fireEvent.click(screen.getByLabelText('Randomize questions'));
+    fireEvent.click(screen.getByLabelText('Strict mode'));
+    fireEvent.change(screen.getByLabelText('Passing score (%)'), { target: { value: '82' } });
+    fireEvent.change(screen.getByLabelText('Feedback level'), { target: { value: 'detailed' } });
+    fireEvent.change(screen.getByLabelText('Feedback delay (hours)'), { target: { value: '7' } });
     fireEvent.click(screen.getByRole('button', { name: /^generate draft$/i }));
 
     await waitFor(() => {
@@ -511,6 +535,12 @@ describe('TeacherAiDraftQuizPage', () => {
           classId: 'class-1',
           questionCount: 5,
           questionType: 'multiple_choice',
+          assessmentSettings: expect.objectContaining({
+            title: 'Configured exam', type: 'exam', description: '<p>Teacher instructions</p>', quarter: 'Q2', classRecordCategory: 'performance_task',
+            dueDate: new Date('2026-09-20T10:30').toISOString(), closeWhenDue: false, maxAttempts: 3,
+            timeLimitMinutes: 27, timedQuestionsEnabled: true, questionTimeLimitSeconds: 45, randomizeQuestions: true,
+            strictMode: true, passingScore: 82, feedbackLevel: 'detailed', feedbackDelayHours: 7,
+          }),
         }),
       );
     });

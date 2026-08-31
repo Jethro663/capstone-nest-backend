@@ -1,3 +1,4 @@
+import { AiAssessmentAuthoringService } from './ai-assessment-authoring.service';
 import { HttpException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AiMentorController } from './ai-mentor.controller';
@@ -78,6 +79,15 @@ const mockDb = {
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
+
+const mockAuthoring = {
+  prepare: jest.fn(async (dto: unknown) => dto),
+  extractionContext: jest.fn(async () => ({})),
+  preview: jest.fn(),
+  apply: jest.fn(),
+  settings: jest.fn(),
+  updateSettings: jest.fn(),
+};
 
 describe('AiMentorController', () => {
   let controller: AiMentorController;
@@ -176,6 +186,7 @@ describe('AiMentorController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AiMentorController],
       providers: [
+        { provide: AiAssessmentAuthoringService, useValue: mockAuthoring },
         { provide: AiProxyService, useValue: mockProxy },
         {
           provide: AiGenerationQueueService,
@@ -1538,10 +1549,10 @@ describe('AiMentorController', () => {
   });
 
   describe('quiz draft apply/retry actions', () => {
-    it('should forward POST /teacher/quizzes/jobs/:jobId/apply/preview and audit the preview', async () => {
-      mockProxy.forward.mockResolvedValue({
-        success: true,
-        data: { canApply: true, assessment: { questionCount: 2 } },
+    it('uses backend preview and audits it', async () => {
+      mockAuthoring.preview.mockResolvedValue({
+        canApply: true,
+        assessment: { questionCount: 2 },
       });
 
       const result = await controller.previewQuizDraftApply(
@@ -1549,12 +1560,7 @@ describe('AiMentorController', () => {
         TEACHER_USER,
       );
 
-      expect(mockProxy.forward).toHaveBeenCalledWith(
-        'POST',
-        `/teacher/quizzes/jobs/${JOB_ID}/apply/preview`,
-        TEACHER_USER,
-        {},
-      );
+      expect(mockAuthoring.preview).toHaveBeenCalledWith(JOB_ID, TEACHER_USER);
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: TEACHER_USER.id,
@@ -1565,27 +1571,20 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
+        message: 'Quiz draft preview',
         data: { canApply: true, assessment: { questionCount: 2 } },
       });
     });
 
-    it('should forward POST /teacher/quizzes/jobs/:jobId/apply and audit idempotent apply', async () => {
-      mockProxy.forward.mockResolvedValue({
-        success: true,
-        data: {
-          alreadyApplied: true,
-          applyResult: { assessmentId: 'assessment-1' },
-        },
+    it('uses backend idempotent apply and audits it', async () => {
+      mockAuthoring.apply.mockResolvedValue({
+        alreadyApplied: true,
+        applyResult: { assessmentId: 'assessment-1' },
       });
 
       const result = await controller.applyQuizDraft(JOB_ID, TEACHER_USER);
 
-      expect(mockProxy.forward).toHaveBeenCalledWith(
-        'POST',
-        `/teacher/quizzes/jobs/${JOB_ID}/apply`,
-        TEACHER_USER,
-        {},
-      );
+      expect(mockAuthoring.apply).toHaveBeenCalledWith(JOB_ID, TEACHER_USER);
       expect(mockAudit.log).toHaveBeenCalledWith(
         expect.objectContaining({
           actorId: TEACHER_USER.id,
@@ -1600,6 +1599,7 @@ describe('AiMentorController', () => {
       );
       expect(result).toEqual({
         success: true,
+        message: 'Quiz draft apply',
         data: {
           alreadyApplied: true,
           applyResult: { assessmentId: 'assessment-1' },

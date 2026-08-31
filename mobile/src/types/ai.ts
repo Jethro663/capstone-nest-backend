@@ -1,3 +1,4 @@
+import type { AiAssessmentSettings } from "./assessment";
 export type AiGenerationStatus =
   | "queued"
   | "pending"
@@ -302,6 +303,8 @@ export interface UpdateQuizDraftDto {
 }
 
 export interface QuizDraftApplyPreview {
+  assessmentSettings?: AiAssessmentSettings;
+  requiresSettingsReview?: boolean;
   jobId?: string;
   outputId?: string;
   canApply: boolean;
@@ -332,17 +335,18 @@ export interface QuizDraftApplyResponse {
 }
 
 export interface GenerateQuizDraftDto {
+  assessmentSettings?: AiAssessmentSettings;
   classId: string;
   lessonIds?: string[];
   extractionIds?: string[];
   title?: string;
   questionCount: number;
   questionType: string;
-  assessmentType: "quiz";
+  assessmentType?: "quiz" | "exam" | "assignment";
   passingScore: number;
   teacherNote?: string;
-  feedbackLevel: "standard";
-  classRecordCategory: "written_work";
+  feedbackLevel?: "immediate" | "standard" | "detailed";
+  classRecordCategory?: "written_work" | "performance_task" | "quarterly_assessment";
   sourcePolicy: "published_default";
   allowDraftSources: false;
 }

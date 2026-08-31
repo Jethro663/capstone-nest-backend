@@ -50,6 +50,8 @@ export interface StudentAssessmentActivity {
 }
 
 export interface Assessment {
+  authoringRestrictions?: { hasAttempts: boolean; canEditQuestions: boolean; reason: string | null };
+  editorRevision?: number;
   academicCapabilities?: AcademicCapabilities;
   id: string;
   title: string;
@@ -94,7 +96,7 @@ export interface Assessment {
   templateSourceId?: string | null;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
-  classRecordCategory?: ClassRecordCategory;
+  classRecordCategory?: ClassRecordCategory | null;
   quarter?: GradingPeriod;
   classRecordItemId?: string | null;
   classRecordPlacement?: AssessmentClassRecordPlacement | null;
@@ -156,7 +158,7 @@ export interface CreateAssessmentDto {
   timeLimitMinutes?: number;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
-  classRecordCategory?: ClassRecordCategory;
+  classRecordCategory?: ClassRecordCategory | null;
   quarter?: GradingPeriod;
   classRecordItemId?: string;
 }
@@ -184,7 +186,7 @@ export interface UpdateAssessmentDto {
   isPublished?: boolean;
   feedbackLevel?: FeedbackLevel;
   feedbackDelayHours?: number;
-  classRecordCategory?: ClassRecordCategory;
+  classRecordCategory?: ClassRecordCategory | null;
   quarter?: GradingPeriod;
   classRecordItemId?: string | null;
 }
@@ -514,3 +516,26 @@ export interface QuestionAnalyticsResponse {
   uniqueSubmitterCount?: number;
   questions: QuestionAnalytics[];
 }
+
+export interface EditorQuestionInput extends Omit<CreateQuestionDto, 'assessmentId' | 'options'> {
+  id?: string;
+  clientId: string;
+  options?: (NonNullable<CreateQuestionDto['options']>[number] & { id?: string })[];
+  deletedOptionIds?: string[];
+}
+export interface SaveAssessmentEditorInput {
+  mutationId: string;
+  classId?: string;
+  expectedRevision?: number;
+  action: 'save' | 'publish' | 'unpublish';
+  settings: Omit<UpdateAssessmentDto, 'isPublished'>;
+  questions?: EditorQuestionInput[];
+  deletedQuestionIds?: string[];
+}
+export interface AssessmentEditorResult {
+  assessment: Assessment;
+  revision: number;
+  questionIds: Record<string, string>;
+  publicationIssues: { field: string; message: string }[];
+}
+export type AiAssessmentSettings = Omit<UpdateAssessmentDto, 'isPublished' | 'type' | 'fileUploadInstructions' | 'teacherAttachmentFileId' | 'rubricSourceFileId' | 'rubricCriteria' | 'allowedUploadMimeTypes' | 'allowedUploadExtensions' | 'maxUploadSizeBytes'> & { type?: 'quiz' | 'exam' | 'assignment' };

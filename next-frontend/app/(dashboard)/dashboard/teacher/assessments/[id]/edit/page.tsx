@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { getApiErrorMessage } from "@/lib/api-error";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useParams, useSearchParams } from "next/navigation";
@@ -60,10 +61,9 @@ import type {
   AssessmentQuestion,
   AssessmentPlacementMode,
   ClassRecordCategory,
-  CreateQuestionDto,
+  SaveAssessmentEditorInput,
   QuestionAnalyticsResponse,
   RubricCriterion,
-  UpdateQuestionDto,
 } from "@/types/assessment";
 import type {
   ClassRecordSlotOverview,
@@ -131,6 +131,7 @@ type AssessmentGuidePinProps = {
 };
 
 type AssessmentEditorLocalDraft = {
+  baseRevision?: number;
   title: string;
   description: string;
   questions: QuestionDraft[];
@@ -541,16 +542,6 @@ function fromDateInputValue(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
-}
-
-function stripTitleFromSerializedDraft(serializedDraft: string) {
-  try {
-    const parsed = JSON.parse(serializedDraft) as Record<string, unknown>;
-    delete parsed.title;
-    return JSON.stringify(parsed);
-  } catch {
-    return serializedDraft;
-  }
 }
 
 function optionHasAnswerContent(option: {
@@ -1039,17 +1030,14 @@ export default function AssessmentEditorPage() {
     searchParams.get("mode") === "view" || searchParams.get("readonly") === "1";
   const initializedDraftRef = useRef(false);
   const lastSavedFingerprintRef = useRef<string | null>(null);
-  const lastSavedTitleRef = useRef("");
   const latestSerializedDraftRef = useRef("");
-  const latestTitleRef = useRef("");
-  const titleAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null,
-  );
   const academicQuarterRequestRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [pendingSaveAvailable, setPendingSaveAvailable] = useState(false);
+  const [recoveryAvailable, setRecoveryAvailable] = useState(false);
   const isReadOnlyMode =
     requestedReadOnly ||
     Boolean(assessment && !assessment.academicCapabilities?.canPrepare);
@@ -1098,6 +1086,35 @@ export default function AssessmentEditorPage() {
     useState<GradingPeriod | null>(null);
   const [quarterStatus, setQuarterStatus] =
     useState<AcademicQuarterStatus>("loading");
+  const releaseBlockReason = (() => {
+    const capabilities = assessment?.academicCapabilities;
+    if (!capabilities) {
+      return "Release permissions could not be verified. Reload this assessment to try again.";
+    }
+    if (isReadOnlyMode) {
+      return capabilities.readOnlyReason
+        ? `${capabilities.readOnlyReason}. Contact an administrator if this assessment should be editable.`
+        : "This assessment is open in view-only mode. Open the editor to release it.";
+    }
+    if (quarterStatus !== "ready") {
+      return quarterStatus === "error"
+        ? "The current grading period could not be verified. Retry the period check below before releasing."
+        : "Checking the current grading period before release.";
+    }
+    if (quarter !== capabilities.period) {
+      return "Save this draft to confirm the selected grading period before releasing.";
+    }
+    if (!capabilities.canRelease) {
+      if (capabilities.schoolYear !== capabilities.activeSchoolYear) {
+        return `This class belongs to school year ${capabilities.schoolYear}; the active school year is ${capabilities.activeSchoolYear}. Keep this assessment as a draft until its school year and grading period are active.`;
+      }
+      const activePeriod = capabilities.periods.find(
+        (period) => period.key === capabilities.activePeriod,
+      )?.label ?? capabilities.activePeriod;
+      return `Release is available only in the active period: ${activePeriod}, ${capabilities.activeSchoolYear}. Keep this assessment as a draft, or select the active period and save the draft first.`;
+    }
+    return null;
+  })();
   const [placementMode, setPlacementMode] =
     useState<AssessmentPlacementMode>("automatic");
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
@@ -1276,6 +1293,7 @@ export default function AssessmentEditorPage() {
       const placement: AssessmentClassRecordPlacement | null | undefined =
         data.classRecordPlacement;
       const serverSnapshot: AssessmentEditorLocalDraft = {
+        baseRevision: data.editorRevision ?? 0,
         title: data.title || "",
         description: data.description || "",
         questions: normalizedQuestions,
@@ -1292,11 +1310,7 @@ export default function AssessmentEditorPage() {
           MAX_ATTEMPTS,
           DEFAULT_MAX_ATTEMPTS,
         ),
-        timeLimitMinutes: finalizeBoundedPositiveIntegerInput(
-          data.timeLimitMinutes,
-          MAX_TIME_LIMIT_MINUTES,
-          DEFAULT_TIME_LIMIT_MINUTES,
-        ),
+        timeLimitMinutes: data.timeLimitMinutes == null ? "" : String(data.timeLimitMinutes),
         dueDate: toDateInputValue(data.dueDate),
         feedbackDelayHours: Math.max(
           0,
@@ -1338,8 +1352,12 @@ export default function AssessmentEditorPage() {
           : null;
       const shouldRestoreCachedDraft =
         cachedDraft !== null &&
+        cachedDraft.baseRevision === (data.editorRevision ?? 0) &&
         buildAssessmentEditorDraftFingerprint(cachedDraft) !==
           serverFingerprint;
+      if (cachedDraft && cachedDraft.baseRevision !== (data.editorRevision ?? 0)) window.localStorage.setItem(`${assessmentEditorDraftStorageKey(assessmentId)}:conflict:${cachedDraft.baseRevision ?? 'legacy'}`, JSON.stringify(cachedDraft));
+      setPendingSaveAvailable(Boolean(window.localStorage.getItem(`assessment-editor-pending:${assessmentId}`)));
+      setRecoveryAvailable(Object.keys(window.localStorage).some(key => key.startsWith(`${assessmentEditorDraftStorageKey(assessmentId)}:conflict:`)));
       const nextDraft = shouldRestoreCachedDraft ? cachedDraft : serverSnapshot;
 
       setAssessment(data);
@@ -1347,7 +1365,6 @@ export default function AssessmentEditorPage() {
         requestedReadOnly || !data.academicCapabilities?.canPrepare,
       );
       applyDraftSnapshot(nextDraft);
-      lastSavedTitleRef.current = serverSnapshot.title;
       lastSavedFingerprintRef.current = serverFingerprint;
       setAnalytics(null);
       setSlotOverview(null);
@@ -1355,7 +1372,8 @@ export default function AssessmentEditorPage() {
       initializedDraftRef.current = true;
 
       if (!shouldRestoreCachedDraft) {
-        clearAssessmentEditorLocalDraft(assessmentId);
+        if (!cachedDraft) clearAssessmentEditorLocalDraft(assessmentId);
+        else if (cachedDraft.baseRevision !== (data.editorRevision ?? 0)) toast.warning("A recovery copy belongs to another revision. It has been kept on this device and was not applied to the newer server version.");
         setSaveState("saved");
       } else {
         setSaveState("dirty");
@@ -1492,10 +1510,6 @@ export default function AssessmentEditorPage() {
   }, [serializedDraft]);
 
   useEffect(() => {
-    latestTitleRef.current = title;
-  }, [title]);
-
-  useEffect(() => {
     if (loading || !initializedDraftRef.current) return;
 
     if (serializedDraft !== lastSavedFingerprintRef.current) {
@@ -1522,78 +1536,8 @@ export default function AssessmentEditorPage() {
       return;
     }
 
-    writeAssessmentEditorLocalDraft(assessmentId, draftSnapshot);
-  }, [assessmentId, draftSnapshot, isReadOnlyMode, loading, serializedDraft]);
-
-  const autoSaveTitle = useCallback(
-    async (nextTitle: string) => {
-      if (!assessment || !assessmentId || saving || isReadOnlyMode) return;
-      try {
-        setSaveState("saving");
-        await assessmentService.update(assessment.id, { title: nextTitle });
-        lastSavedTitleRef.current = nextTitle;
-        setAssessment((current) =>
-          current ? { ...current, title: nextTitle } : current,
-        );
-
-        if (latestTitleRef.current.trim() !== nextTitle) {
-          setSaveState("dirty");
-          return;
-        }
-
-        const latestDraft = latestSerializedDraftRef.current;
-        const lastSavedDraft = lastSavedFingerprintRef.current;
-
-        if (
-          lastSavedDraft &&
-          stripTitleFromSerializedDraft(lastSavedDraft) ===
-            stripTitleFromSerializedDraft(latestDraft)
-        ) {
-          lastSavedFingerprintRef.current = latestDraft;
-          clearAssessmentEditorLocalDraft(assessmentId);
-          setSaveState("saved");
-          return;
-        }
-
-        setSaveState("dirty");
-      } catch {
-        setSaveState("error");
-        toast.error("Unable to auto-save assessment title");
-      }
-    },
-    [assessment, assessmentId, isReadOnlyMode, saving],
-  );
-
-  useEffect(() => {
-    if (
-      !assessment ||
-      loading ||
-      saving ||
-      isReadOnlyMode ||
-      !initializedDraftRef.current
-    ) {
-      return;
-    }
-    const nextTitle = title.trim();
-    const lastSavedTitle = lastSavedTitleRef.current.trim();
-
-    if (!nextTitle || nextTitle === lastSavedTitle) return;
-
-    if (titleAutosaveTimerRef.current) {
-      clearTimeout(titleAutosaveTimerRef.current);
-    }
-
-    titleAutosaveTimerRef.current = setTimeout(() => {
-      void autoSaveTitle(nextTitle);
-    }, 5000);
-
-    return () => {
-      if (titleAutosaveTimerRef.current) {
-        clearTimeout(titleAutosaveTimerRef.current);
-        titleAutosaveTimerRef.current = null;
-      }
-    };
-  }, [assessment, autoSaveTitle, isReadOnlyMode, loading, saving, title]);
+    writeAssessmentEditorLocalDraft(assessmentId, { ...draftSnapshot, baseRevision: assessment?.editorRevision ?? 0 });
+  }, [assessmentId, assessment?.editorRevision, draftSnapshot, isReadOnlyMode, loading, serializedDraft]);
 
   useEffect(() => {
     if (assessmentType !== "file_upload" && rightTab === "rubric") {
@@ -2111,304 +2055,63 @@ export default function AssessmentEditorPage() {
     });
   };
 
-  const replaceQuestionDraft = useCallback(
-    (previousQuestionId: string, nextQuestion: AssessmentQuestion) => {
-      const normalized = normalizeQuestion(nextQuestion);
-      setQuestions((current) =>
-        current.map((entry) =>
-          entry.id === previousQuestionId
-            ? {
-                ...normalized,
-                isNew: false,
-              }
-            : entry,
-        ),
-      );
-      setSelectedQuestionId((current) =>
-        current === previousQuestionId ? normalized.id : current,
-      );
-      return normalized;
-    },
-    [],
-  );
-
-  const buildQuestionWriteOptions = useCallback((question: QuestionDraft) => {
-    if (question.type === "fill_blank") {
-      return question.options
-        .map((option) => option.text.trim())
-        .filter((answer) => answer.length > 0)
-        .map((answer, answerIndex) => ({
-          text: answer,
-          isCorrect: true,
-          order: answerIndex + 1,
-        }));
+  const ensurePersistedQuestion = useCallback((questionId: string) => {
+    if (saveState !== "saved" || saving) {
+      toast.error('Save your changes before uploading an image.');
+      return null;
     }
-
-    if (!supportsOptions(question.type)) {
-      return [];
+    const question = questions.find(entry => entry.id === questionId);
+    if (!question || question.isNew || question.id.startsWith('temp-')) {
+      toast.error('Save this draft before adding an image to a new question.');
+      return null;
     }
+    return question;
+  }, [questions, saveState, saving]);
 
-    return question.options.map((option, optionIndex) => ({
-      text: option.text.trim(),
-      isCorrect: option.isCorrect,
-      order: optionIndex + 1,
-      imageUrl: option.imageUrl || undefined,
-      imageDisplayMode: option.imageDisplayMode || "default",
-      imageZoom: option.imageZoom ?? 100,
-      imagePositionX: option.imagePositionX ?? 50,
-      imagePositionY: option.imagePositionY ?? 50,
+  const handleUploadQuestionImage = useCallback(async (questionId: string, file: File) => {
+    const question = ensurePersistedQuestion(questionId);
+    if (!question) return;
+    setSaving(true);
+    try {
+      await assessmentService.uploadQuestionImage(question.id, file);
+      await fetchAssessment();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to upload question image'));
+    } finally { setSaving(false); }
+  }, [ensurePersistedQuestion, fetchAssessment]);
+
+  const handleUploadOptionImage = useCallback(async (questionId: string, optionId: string, file: File) => {
+    const question = ensurePersistedQuestion(questionId);
+    if (!question) return;
+    const option = question.options.find(entry => entry.id === optionId);
+    if (!option || option.id.startsWith('temp-')) {
+      toast.error('Save the new choice before uploading its image.');
+      return;
+    }
+    setSaving(true);
+    try {
+      await assessmentService.uploadOptionImage(option.id, file);
+      await fetchAssessment();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Unable to upload choice image'));
+    } finally { setSaving(false); }
+  }, [ensurePersistedQuestion, fetchAssessment]);
+
+  const buildEditorQuestions = () => questions.map((question, index) => {
+    const old = assessment?.questions?.find(item => item.id === question.id);
+    const options = question.options.map((option, optionIndex) => ({
+      id: old?.options?.some(item => item.id === option.id) ? option.id : undefined,
+      text: option.text, isCorrect: question.type === 'fill_blank' ? true : option.isCorrect, order: question.options.length === old?.options?.length && question.options.every((entry, i) => entry.id === old?.options?.[i]?.id) ? option.order : optionIndex + 1,
+      imageUrl: option.imageUrl, imageDisplayMode: option.imageDisplayMode,
+      imageZoom: option.imageZoom, imagePositionX: option.imagePositionX, imagePositionY: option.imagePositionY,
     }));
-  }, []);
-
-  const ensurePersistedQuestion = useCallback(
-    async (questionId: string) => {
-      if (!assessment) return null;
-      const draftQuestion = questions.find((entry) => entry.id === questionId);
-      if (!draftQuestion) return null;
-      if (!draftQuestion.isNew && !draftQuestion.id.startsWith("temp-")) {
-        return draftQuestion;
-      }
-
-      const questionIndex = questions.findIndex(
-        (entry) => entry.id === questionId,
-      );
-      const isFillBlank = draftQuestion.type === "fill_blank";
-      const conceptTags = isFillBlank
-        ? buildFillBlankConceptTags(
-            draftQuestion.conceptTags,
-            draftQuestion.fillBlankSmartCaseInsensitive,
-            draftQuestion.fillBlankExperimentalSmartMatch,
-          )
-        : draftQuestion.conceptTags.filter(
-            (tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX),
-          );
-
-      const created = await assessmentService.createQuestion({
-        assessmentId: assessment.id,
-        type: draftQuestion.type,
-        content: draftQuestion.content.trim() || "<p></p>",
-        points: Number(draftQuestion.points) || 1,
-        order: questionIndex >= 0 ? questionIndex + 1 : questions.length + 1,
-        isRequired: draftQuestion.isRequired,
-        explanation: draftQuestion.explanation || undefined,
-        imageUrl: draftQuestion.imageUrl || undefined,
-        imageDisplayMode: draftQuestion.imageDisplayMode || "default",
-        imageZoom: draftQuestion.imageZoom ?? 100,
-        imagePositionX: draftQuestion.imagePositionX ?? 50,
-        imagePositionY: draftQuestion.imagePositionY ?? 50,
-        conceptTags,
-        options: buildQuestionWriteOptions(draftQuestion),
-      });
-
-      return replaceQuestionDraft(questionId, created.data);
-    },
-    [assessment, buildQuestionWriteOptions, questions, replaceQuestionDraft],
-  );
-
-  const handleUploadQuestionImage = useCallback(
-    async (questionId: string, file: File) => {
-      const persistedQuestion = await ensurePersistedQuestion(questionId);
-      if (!persistedQuestion) {
-        toast.error("Unable to prepare this question for image upload");
-        return;
-      }
-
-      try {
-        const response = await assessmentService.uploadQuestionImage(
-          persistedQuestion.id,
-          file,
-        );
-        setQuestions((current) =>
-          current.map((entry) =>
-            entry.id === persistedQuestion.id
-              ? {
-                  ...entry,
-                  imageUrl: response.data.imageUrl,
-                  imageDisplayMode: entry.imageDisplayMode || "default",
-                  imageZoom: entry.imageZoom ?? 100,
-                  imagePositionX: entry.imagePositionX ?? 50,
-                  imagePositionY: entry.imagePositionY ?? 50,
-                }
-              : entry,
-          ),
-        );
-      } catch {
-        toast.error("Unable to upload question image");
-      }
-    },
-    [ensurePersistedQuestion],
-  );
-
-  const handleUploadOptionImage = useCallback(
-    async (questionId: string, optionId: string, file: File) => {
-      const draftQuestion = questions.find((entry) => entry.id === questionId);
-      const draftOptionIndex =
-        draftQuestion?.options.findIndex((entry) => entry.id === optionId) ??
-        -1;
-      const persistedQuestion = await ensurePersistedQuestion(questionId);
-      if (!persistedQuestion || draftOptionIndex < 0) {
-        toast.error("Unable to prepare this option for image upload");
-        return;
-      }
-
-      const persistedOption = persistedQuestion.options[draftOptionIndex];
-      if (!persistedOption?.id) {
-        toast.error("Unable to locate the saved option for image upload");
-        return;
-      }
-
-      try {
-        const response = await assessmentService.uploadOptionImage(
-          persistedOption.id,
-          file,
-        );
-        setQuestions((current) =>
-          current.map((entry) =>
-            entry.id === persistedQuestion.id
-              ? {
-                  ...entry,
-                  options: entry.options.map((option, optionIndex) =>
-                    optionIndex === draftOptionIndex
-                      ? {
-                          ...option,
-                          imageUrl: response.data.imageUrl,
-                          imageDisplayMode:
-                            option.imageDisplayMode || "default",
-                          imageZoom: option.imageZoom ?? 100,
-                          imagePositionX: option.imagePositionX ?? 50,
-                          imagePositionY: option.imagePositionY ?? 50,
-                        }
-                      : option,
-                  ),
-                }
-              : entry,
-          ),
-        );
-      } catch {
-        toast.error("Unable to upload option image");
-      }
-    },
-    [ensurePersistedQuestion, questions],
-  );
-
-  const syncQuestions = async () => {
-    if (!assessment || isReadOnlyMode) return;
-
-    for (const questionId of deletedQuestionIds) {
-      await assessmentService.deleteQuestion(questionId);
-    }
-
-    for (let index = 0; index < questions.length; index += 1) {
-      const question = questions[index];
-      const content = question.content.trim();
-      const points = Number(question.points);
-      const isFillBlank = question.type === "fill_blank";
-
-      const fillBlankAnswerOptions = isFillBlank
-        ? question.options
-            .map((option) => option.text.trim())
-            .filter((answer) => answer.length > 0)
-            .map((answer, answerIndex) => ({
-              text: answer,
-              isCorrect: true,
-              order: answerIndex + 1,
-            }))
-        : [];
-
-      const options = supportsOptions(question.type)
-        ? question.options.map((option, optionIndex) => ({
-            text: option.text.trim(),
-            isCorrect: option.isCorrect,
-            order: optionIndex + 1,
-            imageUrl: option.imageUrl || undefined,
-            imageDisplayMode: option.imageDisplayMode || "default",
-            imageZoom: option.imageZoom ?? 100,
-            imagePositionX: option.imagePositionX ?? 50,
-            imagePositionY: option.imagePositionY ?? 50,
-          }))
-        : fillBlankAnswerOptions;
-
-      const conceptTags = isFillBlank
-        ? buildFillBlankConceptTags(
-            question.conceptTags,
-            question.fillBlankSmartCaseInsensitive,
-            question.fillBlankExperimentalSmartMatch,
-          )
-        : question.conceptTags.filter(
-            (tag) => !tag.startsWith(FILL_BLANK_META_TAG_PREFIX),
-          );
-
-      if (!content) {
-        throw new Error(`Question ${index + 1} is empty`);
-      }
-
-      if (!Number.isInteger(points) || points < 1) {
-        throw new Error(`Question ${index + 1} needs valid points`);
-      }
-
-      if (isFillBlank) {
-        if (options.length === 0) {
-          throw new Error(
-            `Question ${index + 1} needs at least one correct answer`,
-          );
-        }
-      } else if (supportsOptions(question.type)) {
-        if (options.some((option) => !optionHasAnswerContent(option))) {
-          throw new Error(`Question ${index + 1} has empty answer choices`);
-        }
-        if (options.some((option) => typeof option.isCorrect !== "boolean")) {
-          throw new Error(`Question ${index + 1} has invalid answer choices`);
-        }
-        if (options.length < 2) {
-          throw new Error(
-            `Question ${index + 1} needs at least two answer choices`,
-          );
-        }
-        if (!options.some((option) => option.isCorrect)) {
-          throw new Error(
-            `Question ${index + 1} needs at least one correct answer`,
-          );
-        }
-      }
-
-      const updatePayload: UpdateQuestionDto = {
-        content,
-        points,
-        order: index + 1,
-        isRequired: question.isRequired,
-        explanation: question.explanation || undefined,
-        imageUrl: question.imageUrl || undefined,
-        imageDisplayMode: question.imageDisplayMode || "default",
-        imageZoom: question.imageZoom ?? 100,
-        imagePositionX: question.imagePositionX ?? 50,
-        imagePositionY: question.imagePositionY ?? 50,
-        conceptTags,
-        options,
-      };
-
-      if (question.isNew || question.id.startsWith("temp-")) {
-        const createPayload: CreateQuestionDto = {
-          assessmentId: assessment.id,
-          type: question.type,
-          content,
-          points,
-          order: index + 1,
-          isRequired: question.isRequired,
-          explanation: question.explanation || undefined,
-          imageUrl: question.imageUrl || undefined,
-          imageDisplayMode: question.imageDisplayMode || "default",
-          imageZoom: question.imageZoom ?? 100,
-          imagePositionX: question.imagePositionX ?? 50,
-          imagePositionY: question.imagePositionY ?? 50,
-          conceptTags,
-          options,
-        };
-        await assessmentService.createQuestion(createPayload);
-      } else {
-        await assessmentService.updateQuestion(question.id, updatePayload);
-      }
-    }
-  };
+    return { id: old?.id, clientId: question.id, type: question.type, content: question.content, points: Number(question.points),
+      order: questions.length === assessment?.questions?.length && questions.every((entry, i) => entry.id === assessment?.questions?.[i]?.id) ? old!.order : index + 1, isRequired: question.isRequired, explanation: question.explanation, imageUrl: question.imageUrl,
+      imageDisplayMode: question.imageDisplayMode, imageZoom: question.imageZoom, imagePositionX: question.imagePositionX, imagePositionY: question.imagePositionY,
+      conceptTags: question.type === 'fill_blank' ? buildFillBlankConceptTags(question.conceptTags, question.fillBlankSmartCaseInsensitive, question.fillBlankExperimentalSmartMatch) : question.conceptTags,
+      options, deletedOptionIds: (old?.options ?? []).filter(option => !options.some(item => item.id === option.id)).map(option => option.id),
+    };
+  });
 
   const handleTeacherAttachmentUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -2417,13 +2120,17 @@ export default function AssessmentEditorPage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (saveState !== 'saved' || saving) {
+      toast.error('Save your changes before uploading an attachment.');
+      return;
+    }
     try {
       setUploadingTeacherAttachment(true);
-      const response = await assessmentService.uploadTeacherAttachment(
+      await assessmentService.uploadTeacherAttachment(
         assessment.id,
         file,
       );
-      setTeacherAttachmentFile(response.data);
+      await fetchAssessment();
       toast.success("Reference file uploaded");
     } catch {
       toast.error("Unable to upload reference file");
@@ -2461,49 +2168,6 @@ export default function AssessmentEditorPage() {
       return;
     }
 
-    if (!title.trim()) {
-      toast.error("Assessment title is required");
-      focusSection("basics");
-      return;
-    }
-
-    if (dueDate) {
-      const parsedDue = new Date(dueDate);
-      if (
-        !Number.isNaN(parsedDue.getTime()) &&
-        parsedDue.getTime() < Date.now()
-      ) {
-        toast.error(
-          "Assessment due date cannot be earlier than the present date and time.",
-        );
-        focusSection("delivery");
-        return;
-      }
-    }
-
-    if (assessmentType !== "file_upload" && questions.length === 0) {
-      toast.error(
-        "No questions entered. Please add at least 1 question to the assessment before saving.",
-      );
-      focusSection("content");
-      return;
-    }
-
-    if (assessmentType === "file_upload" && !fileUploadInstructions.trim()) {
-      toast.error("File upload instructions are required");
-      focusSection("content");
-      return;
-    }
-
-    if (
-      assessmentType === "file_upload" &&
-      allowedUploadExtensions.length === 0
-    ) {
-      toast.error("Select at least one allowed file type");
-      focusSection("content");
-      return;
-    }
-
     if (!quarter) {
       toast.error("Select a valid grading period");
       focusSection("placement");
@@ -2523,7 +2187,7 @@ export default function AssessmentEditorPage() {
       const targetPublishedState = availability === "given";
 
       const classRecordPlacementPayload = {
-        classRecordCategory: category || undefined,
+        classRecordCategory: category || null,
         quarter: quarter || undefined,
         classRecordItemId:
           category && quarter
@@ -2534,20 +2198,17 @@ export default function AssessmentEditorPage() {
       };
 
       const updatePayload = {
-        title: title.trim(),
-        description: description.trim() || undefined,
+        title: title.trim() || "Untitled assessment",
+        description,
         type: assessmentType,
         passingScore,
-        maxAttempts:
-          assessmentType === "file_upload"
-            ? DEFAULT_MAX_ATTEMPTS
-            : toBoundedPositiveInteger(
+        maxAttempts: toBoundedPositiveInteger(
                 maxAttempts,
                 MAX_ATTEMPTS,
                 DEFAULT_MAX_ATTEMPTS,
               ),
         timeLimitMinutes:
-          assessmentType === "file_upload"
+          !timeLimitMinutes
             ? null
             : toBoundedPositiveInteger(
                 timeLimitMinutes,
@@ -2556,17 +2217,14 @@ export default function AssessmentEditorPage() {
               ),
         dueDate: fromDateInputValue(dueDate),
         closeWhenDue,
-        randomizeQuestions:
-          assessmentType === "file_upload" ? false : randomizeQuestions,
-        timedQuestionsEnabled:
-          assessmentType === "file_upload" ? false : timedQuestionsEnabled,
+        randomizeQuestions,
+        timedQuestionsEnabled,
         questionTimeLimitSeconds:
-          assessmentType !== "file_upload" &&
           timedQuestionsEnabled &&
           questionTimeLimitSeconds
             ? Number(questionTimeLimitSeconds)
             : null,
-        strictMode: assessmentType === "file_upload" ? false : strictMode,
+        strictMode,
         feedbackLevel,
         feedbackDelayHours:
           resultReleaseMode === "score_immediately" ? 0 : feedbackDelayHours,
@@ -2576,7 +2234,7 @@ export default function AssessmentEditorPage() {
         teacherAttachmentFileId:
           assessmentType === "file_upload"
             ? (teacherAttachmentFile?.id ?? null)
-            : null,
+            : assessment.teacherAttachmentFileId,
         allowedUploadExtensions:
           assessmentType === "file_upload"
             ? allowedUploadExtensions
@@ -2585,38 +2243,99 @@ export default function AssessmentEditorPage() {
           assessmentType === "file_upload" ? allowedUploadMimeTypes : undefined,
         maxUploadSizeBytes:
           assessmentType === "file_upload" ? maxUploadSizeBytes : undefined,
-        ...(isCoreTemplateAssessment
-          ? {}
-          : { isPublished: targetPublishedState }),
+        rubricCriteria,
       };
 
-      if (!isCoreTemplateAssessment && assessmentType !== "file_upload") {
-        await syncQuestions();
+      if (isCoreTemplateAssessment) {
+        await assessmentService.update(assessment.id, updatePayload);
+        if (assessment.isPublished !== targetPublishedState) await assessmentService.releaseCore(assessment.id, { isPublished: targetPublishedState });
+      } else {
+        const request = {
+          classId: assessment.classId, expectedRevision: assessment.editorRevision ?? 0,
+          action: targetPublishedState === assessment.isPublished ? 'save' as const : targetPublishedState ? 'publish' as const : 'unpublish' as const,
+          settings: updatePayload, questions: assessmentType === 'file_upload' ? undefined : buildEditorQuestions(), deletedQuestionIds,
+        };
+        const pendingKey = `assessment-editor-pending:${assessment.id}`;
+        const previous = window.localStorage.getItem(pendingKey);
+        const serialized = JSON.stringify(request);
+        const pending = previous ? JSON.parse(previous) as { body: string; mutationId: string } : { body: serialized, mutationId: crypto.randomUUID() };
+        if (pending.body !== serialized) throw new Error('A previous save has an uncertain result. Keep your recovery copy and reopen the server version before making another save.');
+        window.localStorage.setItem(pendingKey, JSON.stringify(pending));
+        try {
+          const response = await assessmentService.saveEditor(assessment.id, { ...request, mutationId: pending.mutationId });
+          setAssessment(response.data.assessment);
+          window.localStorage.removeItem(pendingKey);
+          setPendingSaveAvailable(false);
+        } catch (error) {
+          const status = (error as { response?: { status?: number } }).response?.status;
+          if (status && status < 500) window.localStorage.removeItem(pendingKey);
+          throw error;
+        }
       }
-
-      await assessmentService.update(assessment.id, updatePayload);
-
-      if (
-        isCoreTemplateAssessment &&
-        assessment.isPublished !== targetPublishedState
-      ) {
-        await assessmentService.releaseCore(assessment.id, {
-          isPublished: targetPublishedState,
-        });
-      }
-
+      clearAssessmentEditorLocalDraft(assessmentId);
       toast.success("Assessment saved");
       await fetchAssessment();
     } catch (error: unknown) {
-      const message =
-        typeof error === "object" &&
-        error !== null &&
-        "message" in error &&
-        typeof (error as { message?: unknown }).message === "string"
-          ? (error as { message: string }).message
-          : "Unable to save assessment";
+      const message = getApiErrorMessage(error, 'Unable to save assessment. Your recovery copy is retained.');
+      setPendingSaveAvailable(Boolean(window.localStorage.getItem(`assessment-editor-pending:${assessmentId}`)));
       setSaveState("error");
       toast.error(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const exportRecovery = () => {
+    const prefix = assessmentEditorDraftStorageKey(assessmentId);
+    const copies = Object.fromEntries(Object.keys(window.localStorage)
+      .filter(key => key.startsWith(prefix) || key === `assessment-editor-pending:${assessmentId}`)
+      .map(key => [key, window.localStorage.getItem(key)]));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ assessmentId, currentDraft: draftSnapshot, copies }, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `assessment-${assessmentId}-recovery.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const retryPendingSave = async () => {
+    if (saving || isReadOnlyMode) return;
+    const key = `assessment-editor-pending:${assessmentId}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) { setPendingSaveAvailable(false); return; }
+    setSaving(true);
+    try {
+      const pending = JSON.parse(raw) as { body: string; mutationId: string };
+      const request = JSON.parse(pending.body) as Omit<SaveAssessmentEditorInput, 'mutationId'>;
+      // Preserve any edits made since the original request before reconciling it.
+      window.localStorage.setItem(`${assessmentEditorDraftStorageKey(assessmentId)}:conflict:before-retry-${Date.now()}`, JSON.stringify(draftSnapshot));
+      setRecoveryAvailable(true);
+      await assessmentService.saveEditor(assessmentId, { ...request, mutationId: pending.mutationId });
+      window.localStorage.removeItem(key);
+      setPendingSaveAvailable(false);
+      clearAssessmentEditorLocalDraft(assessmentId);
+      await fetchAssessment();
+      toast.success('Original save confirmed. Any later local edits remain available in Export recovery copies.');
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not confirm the original save. Recovery copies are retained.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const keepRecoveryAndReload = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const pendingKey = `assessment-editor-pending:${assessmentId}`;
+      window.localStorage.setItem(`${assessmentEditorDraftStorageKey(assessmentId)}:conflict:before-reload-${Date.now()}`, JSON.stringify({ draft: draftSnapshot, pendingSave: window.localStorage.getItem(pendingKey) }));
+      window.localStorage.removeItem(pendingKey);
+      clearAssessmentEditorLocalDraft(assessmentId);
+      setPendingSaveAvailable(false);
+      setRecoveryAvailable(true);
+      await fetchAssessment();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Could not keep the recovery copy. Your current edits are still open.'));
     } finally {
       setSaving(false);
     }
@@ -2652,6 +2371,7 @@ export default function AssessmentEditorPage() {
         assessment.id,
         normalized,
       );
+      setAssessment(response.data);
       setRubricCriteria(response.data.rubricCriteria || []);
       toast.success("Rubric saved");
     } catch {
@@ -3838,6 +3558,7 @@ export default function AssessmentEditorPage() {
                   {isSelected ? (
                     <AssessmentQuestionEditor
                       question={question}
+                      typeLocked={!question.isNew && !question.id.startsWith("temp-")}
                       questions={questions}
                       onQuestionsChange={setQuestions}
                       onUploadQuestionImage={handleUploadQuestionImage}
@@ -3893,6 +3614,7 @@ export default function AssessmentEditorPage() {
                   variant="outline"
                   size="icon"
                   onClick={() => openQuestionTypeDialog(index)}
+                  aria-label={`Add question after question ${index + 1}`}
                   disabled={isReadOnlyMode}
                   className={`h-10 min-w-14 rounded-full border-sky-200 bg-white/95 px-4 shadow-[0_10px_22px_-16px_rgba(15,23,42,0.42)] transition hover:scale-[1.03] hover:border-sky-300 hover:bg-sky-50 ${
                     isLastQuestion
@@ -3912,6 +3634,14 @@ export default function AssessmentEditorPage() {
 
   return (
     <div className="assessment-editor assessment-editor--flattened px-4 pb-8 pt-2 lg:px-6">
+      {(pendingSaveAvailable || recoveryAvailable) && <aside role="status" className="mb-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-slate-800">
+        <p>{pendingSaveAvailable ? 'A previous save has an unconfirmed result. Retry the original request, including its original publication action, or export your copies before reviewing the server version.' : 'A recovery copy from another revision is retained on this device. It has not overwritten server content.'}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={exportRecovery}>Export recovery copies</Button>
+          {pendingSaveAvailable && <Button type="button" disabled={saving || isReadOnlyMode} onClick={() => void retryPendingSave()}>Retry original save</Button>}
+          <Button type="button" variant="outline" disabled={saving} onClick={() => void keepRecoveryAndReload()}>Keep copies and reload server</Button>
+        </div>
+      </aside>}
       <header className="assessment-editor__header assessment-editor__header--sticky assessment-editor__workspace-header">
         <div className="assessment-editor__workspace-main">
           <div className="assessment-editor__workspace-title-block">
@@ -4103,12 +3833,8 @@ export default function AssessmentEditorPage() {
                   }
                   setAvailability("given");
                 }}
-                disabled={
-                  isReadOnlyMode ||
-                  quarterStatus !== "ready" ||
-                  !assessment?.academicCapabilities?.canRelease ||
-                  quarter !== assessment?.academicCapabilities?.period
-                }
+                disabled={Boolean(releaseBlockReason)}
+                aria-describedby={releaseBlockReason ? "assessment-release-status" : undefined}
               >
                 Ready to give
               </button>
@@ -4133,10 +3859,9 @@ export default function AssessmentEditorPage() {
           </div>
         </div>
       </header>
-      {assessment?.academicCapabilities?.readOnlyReason && (
-        <p role="status" className="border-b px-6 py-3 text-sm">
-          {assessment.academicCapabilities.readOnlyReason}. Historical content
-          remains available for review.
+      {releaseBlockReason && (
+        <p id="assessment-release-status" role="status" aria-label="Assessment release status" className="border-b px-6 py-3 text-sm">
+          {releaseBlockReason}
         </p>
       )}
       {quarterStatus === "error" ? (

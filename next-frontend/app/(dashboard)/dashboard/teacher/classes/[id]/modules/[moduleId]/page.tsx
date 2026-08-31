@@ -1227,8 +1227,7 @@ export default function TeacherModuleDetailPage() {
         };
       } else if (attachState.itemType === 'assessment') {
         if (attachState.assessmentMode === 'create-new') {
-          const createdAssessment = await assessmentService.create({
-            title: 'Untitled Assessment',
+          const createdAssessment = await assessmentService.createDraft({
             classId,
           });
           createdAssessmentId = createdAssessment.data.id;

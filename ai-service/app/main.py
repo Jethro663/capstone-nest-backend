@@ -4012,6 +4012,7 @@ async def apply_extraction(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await db.execute(sa_text("SELECT pg_advisory_xact_lock(78766901)"))
     row = await db.execute(
         sa_text(
             "SELECT id, extraction_status, is_applied, teacher_id, "
@@ -4067,6 +4068,38 @@ async def apply_extraction(
         )
         for section_data, source_section_index in sections_to_apply
     ]
+
+    has_assessments = any((section.get("assessmentDraft") or {}).get("questions") for section, _ in prepared_sections)
+    assessment_settings = body.assessment_settings.model_dump(by_alias=True, exclude_none=True) if getattr(body, "assessment_settings", None) else {}
+    if has_assessments:
+        if not assessment_settings.get("quarter") or body.academic_state_version is None:
+            raise HTTPException(409, "Backend-validated grading-period settings are required before creating assessments.")
+        state_result = await db.execute(sa_text("SELECT version, school_year FROM academic_system_states ORDER BY updated_at DESC LIMIT 1"))
+        state_row = state_result.mappings().first()
+        if not state_row or state_row["version"] != body.academic_state_version:
+            raise HTTPException(409, "Academic state changed. Refresh the extraction preview and retry.")
+        # Nest approves canonical settings; recheck the referenced records while
+        # holding the shared academic lock so a workbook lock or class closure
+        # between the proxy call and this transaction cannot bypass that approval.
+        eligibility_result = await db.execute(sa_text(
+            "SELECT c.school_year, c.is_active, p.policy, "
+            "EXISTS (SELECT 1 FROM class_records r WHERE r.class_id = c.id "
+            "AND r.grading_period = :quarter AND r.status <> 'draft') AS workbook_locked "
+            "FROM classes c LEFT JOIN academic_year_policies p ON p.school_year = c.school_year "
+            "WHERE c.id = :class_id"
+        ), {"class_id": extraction["class_id"], "quarter": assessment_settings["quarter"]})
+        eligibility = eligibility_result.mappings().first()
+        policy = eligibility.get("policy") if eligibility else None
+        if isinstance(policy, str):
+            policy = json.loads(policy)
+        valid_period = isinstance(policy, dict) and any(
+            period.get("key") == assessment_settings["quarter"]
+            for period in policy.get("periods", []) if isinstance(period, dict)
+        )
+        if (not eligibility or not eligibility["is_active"] or
+                eligibility["school_year"] < state_row["school_year"] or
+                eligibility["workbook_locked"] or not valid_period):
+            raise HTTPException(409, "Academic eligibility changed. Review the class, grading period, and workbook before applying.")
 
     class_id = extraction["class_id"]
 
@@ -4261,7 +4294,7 @@ async def apply_extraction(
                           passing_score,
                           feedback_level,
                           is_published,
-                          ai_origin
+                          ai_origin, class_record_category, quarter, max_attempts, time_limit_minutes, close_when_due, randomize_questions, timed_questions_enabled, question_time_limit_seconds, strict_mode, feedback_delay_hours, due_date
                         )
                         VALUES (
                           :title,
@@ -4272,7 +4305,7 @@ async def apply_extraction(
                           :passingScore,
                           :feedbackLevel,
                           false,
-                          'ai_extraction_draft'
+                          'ai_extraction_draft', :classRecordCategory, :quarter, :maxAttempts, :timeLimitMinutes, :closeWhenDue, :randomizeQuestions, :timedQuestionsEnabled, :questionTimeLimitSeconds, :strictMode, :feedbackDelayHours, CAST(:dueDate AS timestamp)
                         )
                         RETURNING id, title
                         """
@@ -4281,13 +4314,24 @@ async def apply_extraction(
                         "title": str(assessment_draft.get("title") or f"{section_title} Checkpoint"),
                         "description": str(assessment_draft.get("description") or "").strip(),
                         "classId": class_id,
-                        "assessmentType": assessment_type,
+                        "assessmentType": assessment_settings.get("type", assessment_type),
                         "totalPoints": sum(
                             max(1, _safe_int(question.get("points"), 1))
                             for question in questions
                         ),
-                        "passingScore": max(1, _safe_int(assessment_draft.get("passingScore"), 60)),
-                        "feedbackLevel": feedback_level,
+                        "passingScore": assessment_settings.get("passingScore", 60),
+                        "classRecordCategory": assessment_settings.get("classRecordCategory"),
+                        "feedbackLevel": assessment_settings.get("feedbackLevel", feedback_level),
+                        "quarter": assessment_settings["quarter"],
+                        "maxAttempts": assessment_settings.get("maxAttempts", 1),
+                        "timeLimitMinutes": assessment_settings.get("timeLimitMinutes"),
+                        "closeWhenDue": assessment_settings.get("closeWhenDue", True),
+                        "randomizeQuestions": assessment_settings.get("randomizeQuestions", False),
+                        "timedQuestionsEnabled": assessment_settings.get("timedQuestionsEnabled", False),
+                        "questionTimeLimitSeconds": assessment_settings.get("questionTimeLimitSeconds"),
+                        "strictMode": assessment_settings.get("strictMode", False),
+                        "feedbackDelayHours": assessment_settings.get("feedbackDelayHours", 24),
+                        "dueDate": assessment_settings.get("dueDate"),
                     },
                 )
                 assessment_row = assessment_insert.mappings().first()
@@ -4756,6 +4800,8 @@ async def queue_teacher_quiz_draft_job(
         class_id=body.class_id,
         teacher_id=user.id,
         source_filters={
+            "assessmentSettings": body.assessment_settings.model_dump(by_alias=True, exclude_none=True) if body.assessment_settings else None,
+            "assessmentSettingsReviewed": body.assessment_settings_reviewed,
             "lessonIds": body.lesson_ids,
             "extractionIds": body.extraction_ids,
             "questionCount": body.question_count,
@@ -5130,6 +5176,8 @@ async def run_teacher_quiz_job(
         feedbackLevel=source_filters.get("feedbackLevel", "summary"),
         classRecordCategory=source_filters.get("classRecordCategory"),
         quarter=source_filters.get("quarter"),
+        assessmentSettings=source_filters.get("assessmentSettings"),
+        assessmentSettingsReviewed=bool(source_filters.get("assessmentSettingsReviewed")),
         sourcePolicy=source_filters.get("sourcePolicy", "strict_lesson"),
         allowDraftSources=bool(source_filters.get("allowDraftSources", False)),
         retryOfJobId=source_filters.get("retryOfJobId"),
@@ -5384,23 +5432,10 @@ async def apply_teacher_quiz_draft(
     user: RequestUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await apply_quiz_draft(db, job_id=job_id, user=user)
-    await _record_ai_job_runtime(
-        db,
-        job_id=job_id,
-        progressPercent=100,
-        statusMessage="Draft applied",
-        resultSummary={
-            "assessmentId": (result.get("applyResult") or {}).get("assessmentId"),
-            "outputId": result.get("outputId"),
-            "applyResult": result.get("applyResult"),
-        },
-    )
-    return {
-        "success": True,
-        "message": "Quiz draft applied",
-        "data": result,
-    }
+    preview = await preview_quiz_draft_apply(db, job_id=job_id, user=user)
+    if not preview.get("alreadyApplied"):
+        raise HTTPException(409, "Apply assessments through the backend teacher quiz endpoint; academic validation is required.")
+    return {"success": True, "message": "Quiz draft already applied", "data": {"jobId": job_id, "alreadyApplied": True, "applyResult": preview["applyResult"], "preview": preview}}
 
 
 # ---------------------------------------------------------------------------
@@ -5431,6 +5466,8 @@ async def retry_teacher_quiz_draft_job(
         feedbackLevel=filters.get("feedbackLevel") or "standard",
         classRecordCategory=filters.get("classRecordCategory"),
         quarter=filters.get("quarter"),
+        assessmentSettings=filters.get("assessmentSettings"),
+        assessmentSettingsReviewed=bool(filters.get("assessmentSettingsReviewed")),
         sourcePolicy=filters.get("sourcePolicy") or "published_default",
         allowDraftSources=bool(filters.get("allowDraftSources")),
         retryOfJobId=job_id,

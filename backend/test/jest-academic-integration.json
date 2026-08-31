@@ -2,7 +2,7 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
-  "testRegex": "academic-lifecycle.integration-spec.ts$",
+  "testRegex": "(academic-lifecycle|assessment-editor)\\.integration-spec\\.ts$",
   "transform": { "^.+\\.(t|j)s$": "ts-jest" },
   "testTimeout": 30000
 }

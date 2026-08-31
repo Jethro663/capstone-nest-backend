@@ -35,16 +35,16 @@ export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOpt
 
   const status = error.response?.status;
   const payload = error.response?.data as
-    | { message?: string | string[] | FieldErrorMap; error?: string; code?: string }
+    | { message?: string | string[] | FieldErrorMap; error?: string; code?: string; errors?: string[]; fieldErrors?: Array<{ field: string; message: string }> }
     | undefined;
 
-  const details = Array.isArray(payload?.message)
+  const details = payload?.errors ?? (Array.isArray(payload?.message)
     ? payload.message
     : typeof payload?.message === "string"
       ? [payload.message]
-      : undefined;
+      : undefined);
 
-  const fieldErrors =
+  const fieldErrors = Array.isArray(payload?.fieldErrors) ? Object.fromEntries(payload.fieldErrors.map(issue => [issue.field, [issue.message]])) :
     payload?.message && typeof payload.message === "object" && !Array.isArray(payload.message)
       ? toFieldErrors(payload.message)
       : undefined;
@@ -58,13 +58,15 @@ export function normalizeApiError(error: unknown, options?: NormalizeApiErrorOpt
     status,
     code: payload?.code,
     title:
-      status === 401
+      status === 409
+        ? "Save conflict or academic restriction"
+        : status === 401
         ? "Session Expired"
         : status === 403
           ? "Access Denied"
           : status === 404
             ? "Not Found"
-            : status === 422
+            : status === 422 || status === 400
               ? "Validation Failed"
               : error.code === "ERR_NETWORK"
                 ? "Network Error"

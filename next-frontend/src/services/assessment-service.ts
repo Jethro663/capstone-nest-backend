@@ -1,3 +1,4 @@
+import type { SaveAssessmentEditorInput, AssessmentEditorResult } from '@/types/assessment';
 import { api } from '@/lib/api-client';
 import type {
   Assessment,
@@ -58,6 +59,29 @@ function openBlobInNewTab(blob: Blob) {
 }
 
 export const assessmentService = {
+  async saveEditor(id: string | undefined, input: SaveAssessmentEditorInput): Promise<{ success: boolean; data: AssessmentEditorResult }> {
+    const response = id ? await api.put(`/assessments/${id}/editor`, input) : await api.post('/assessments/editor', input);
+    return response.data;
+  },
+  async createDraft(input: Pick<CreateAssessmentDto, 'classId' | 'quarter'>): Promise<{ success: boolean; message: string; data: Assessment }> {
+    const key = `assessment-create-pending:${input.classId}`;
+    const cached = window.localStorage.getItem(key);
+    const request: SaveAssessmentEditorInput = cached ? JSON.parse(cached) as SaveAssessmentEditorInput : {
+      mutationId: crypto.randomUUID(), classId: input.classId, action: 'save',
+      settings: { title: '', quarter: input.quarter }, questions: [],
+    };
+    // Reopening creation retries its original request, including after a reload.
+    window.localStorage.setItem(key, JSON.stringify(request));
+    try {
+      const response = await assessmentService.saveEditor(undefined, request);
+      window.localStorage.removeItem(key);
+      return { success: response.success, message: 'Assessment draft saved', data: response.data.assessment };
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status && status < 500) window.localStorage.removeItem(key);
+      throw error;
+    }
+  },
   /** GET /assessments/class/:classId — All roles */
   async getByClass(
     classId: string,

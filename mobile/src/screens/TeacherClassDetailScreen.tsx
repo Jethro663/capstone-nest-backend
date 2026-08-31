@@ -242,14 +242,7 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
     if (creatingAssessment) return;
     try {
       setCreatingAssessment(true);
-      const created = await assessmentsApi.create({
-        title: "Untitled Assessment",
-        classId,
-      });
-      navigation.navigate("TeacherAssessmentEditor", {
-        assessmentId: created.id,
-        classId: created.classId,
-      });
+      navigation.navigate("TeacherAssessmentEditor", { classId });
     } catch (error) {
       Alert.alert("Unable to create assessment", toAppError(error).message);
     } finally {
@@ -492,6 +485,8 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                     right={
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${assessment.title}`}
                           onPress={() =>
                             navigation.navigate("TeacherAssessmentEditor", {
                               assessmentId: assessment.id,
@@ -505,11 +500,17 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                             backgroundColor: theme.active,
                             paddingHorizontal: 10,
                             paddingVertical: 6,
+                            minWidth: 44,
+                            minHeight: 44,
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
-                          <Text style={{ fontSize: 10, fontWeight: "700", color: theme.text }}>Edit</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text }}>Edit</Text>
                         </Pressable>
                         <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${assessment.title}`}
                           onPress={() => setDeletingAssessment({ id: assessment.id, title: assessment.title })}
                           style={{
                             borderRadius: 8,
@@ -518,6 +519,10 @@ export function TeacherClassDetailScreen({ navigation, route }: Props) {
                             backgroundColor: theme.redSoft,
                             paddingHorizontal: 8,
                             paddingVertical: 6,
+                            minWidth: 44,
+                            minHeight: 44,
+                            alignItems: "center",
+                            justifyContent: "center",
                           }}
                         >
                           <MaterialCommunityIcons name="trash-can-outline" size={14} color={theme.red} />

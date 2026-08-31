@@ -175,7 +175,7 @@ function resolveUserInitials(firstName?: string, lastName?: string, email?: stri
   return (email?.slice(0, 2) || "ST").toUpperCase();
 }
 
-function formatDueDate(value?: string) {
+function formatDueDate(value?: string | null) {
   if (!value) {
     return "No due date";
   }

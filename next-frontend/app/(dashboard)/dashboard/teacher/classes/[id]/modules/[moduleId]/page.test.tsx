@@ -54,7 +54,7 @@ jest.mock('@/services/lesson-service', () => ({
 }));
 
 jest.mock('@/services/assessment-service', () => ({
-  assessmentService: { getByClass: jest.fn(), getById: jest.fn(), create: jest.fn() },
+  assessmentService: { getByClass: jest.fn(), getById: jest.fn(), createDraft: jest.fn() },
 }));
 
 jest.mock('@/services/file-service', () => ({
@@ -171,7 +171,7 @@ describe('TeacherModuleDetailPage', () => {
         questions: [],
       } as never,
     });
-    mockedAssessmentService.create.mockResolvedValue({
+    mockedAssessmentService.createDraft.mockResolvedValue({
       success: true,
       message: 'ok',
       data: { id: 'assessment-new' } as never,
@@ -517,9 +517,8 @@ describe('TeacherModuleDetailPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add Block' }));
 
     await waitFor(() => {
-      expect(mockedAssessmentService.create).toHaveBeenCalledWith(
+      expect(mockedAssessmentService.createDraft).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: 'Untitled Assessment',
           classId: 'class-1',
         }),
       );
@@ -586,7 +585,7 @@ describe('TeacherModuleDetailPage', () => {
         }),
       );
     });
-    expect(mockedAssessmentService.create).not.toHaveBeenCalled();
+    expect(mockedAssessmentService.createDraft).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import { Choices } from "../features/assessment-editor/SettingsFields";
 import { useCallback, useRef, useState } from "react";
 import { Alert, Text, TextInput, View } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +49,7 @@ export function AdminAcademicScreen() {
     useState<AcademicStateImpactPreview | null>(null);
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [assessmentPeriodMapping, setAssessmentPeriodMapping] = useState<Partial<Record<string, AcademicPeriodKey>>>({});
   const [reason, setReason] = useState("");
   const [override, setOverride] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -294,6 +296,8 @@ export function AdminAcademicScreen() {
                           .studentsPendingCompletion
                       }
                     </Text>
+                    <Text style={textStyle}>Map copied assessment drafts into the new year. Original assessments and student results will not be changed.</Text>
+                    {(transition.impact.assessmentPeriodSources ?? []).map(source => <Choices key={source} label={`Destination period for ${source}`} value={assessmentPeriodMapping[source]} options={(transition.impact.destinationPeriods ?? []).map(period => ({ value: period.key, label: period.label }))} onChange={period => setAssessmentPeriodMapping(current => ({ ...current, [source]: period as AcademicPeriodKey }))} />)}
                     <Text style={textStyle}>
                       Type exactly: {transition.transitionConfirmationText}
                     </Text>
@@ -307,6 +311,7 @@ export function AdminAcademicScreen() {
                       disabled={
                         busy ||
                         !password ||
+                        (transition.impact.assessmentPeriodSources ?? []).some(source => !assessmentPeriodMapping[source]) ||
                         transition.impact.promotionReadiness
                           .transitionBlocked ||
                         confirmation !== transition.transitionConfirmationText
@@ -320,6 +325,7 @@ export function AdminAcademicScreen() {
                             schoolYear: transition.target.schoolYear,
                             currentPassword: password,
                             confirmationText: confirmation,
+                            assessmentPeriodMapping,
                           });
                           setTransition(null);
                           setActivation(null);

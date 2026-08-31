@@ -24,6 +24,8 @@ export interface AcademicStateImpactPreview {
   current: AcademicStateSnapshot & { version: number };
   target: AcademicStateSnapshot;
   impact: {
+    assessmentPeriodSources?: string[];
+    destinationPeriods?: AcademicPeriod[];
     classRecordsToFinalize: number;
     enrollmentsToComplete: number;
     classesToArchive: number;

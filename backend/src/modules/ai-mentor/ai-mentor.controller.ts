@@ -1,3 +1,5 @@
+import { AiAssessmentAuthoringService } from './ai-assessment-authoring.service';
+import { UpdateAiAssessmentSettingsDto } from './assessment-settings';
 import {
   BadRequestException,
   Controller,
@@ -102,6 +104,7 @@ export class AiMentorController {
     private readonly adminAnalyticsChatService: AdminAnalyticsChatService,
     private readonly aiGenerationQueueService: AiGenerationQueueService,
     private readonly teacherAiJobQueryService: TeacherAiJobQueryService,
+    private readonly authoring: AiAssessmentAuthoringService,
   ) {}
 
   private get db() {
@@ -1932,7 +1935,14 @@ export class AiMentorController {
         'POST',
         `/extractions/${id}/apply/preview`,
         user,
-        dto,
+        {
+          ...dto,
+          ...(await this.authoring.extractionContext(
+            id,
+            dto.assessmentSettings,
+            dto.sectionIndices ?? dto.lessonIndices,
+          )),
+        },
       );
     } catch (error) {
       if (error instanceof HttpException) {
@@ -1978,7 +1988,14 @@ export class AiMentorController {
         'POST',
         `/extractions/${id}/apply`,
         user,
-        dto,
+        {
+          ...dto,
+          ...(await this.authoring.extractionContext(
+            id,
+            dto.assessmentSettings,
+            dto.sectionIndices ?? dto.lessonIndices,
+          )),
+        },
       );
       await this.logAuditSafe({
         actorId: user.id,
@@ -2378,7 +2395,7 @@ export class AiMentorController {
       'POST',
       '/teacher/quizzes/generate-draft',
       user,
-      dto,
+      await this.authoring.prepare(dto),
     );
     await this.logAuditSafe({
       actorId: user.id,
@@ -2411,7 +2428,7 @@ export class AiMentorController {
       'POST',
       '/teacher/quizzes/jobs',
       user,
-      dto,
+      await this.authoring.prepare(dto),
     );
     const jobId = this.extractStringField(result, 'jobId');
     if (!jobId) {
@@ -2534,6 +2551,36 @@ export class AiMentorController {
     return result;
   }
 
+  @Get('teacher/quizzes/jobs/:jobId/settings')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async getQuizDraftSettings(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    return { success: true, data: await this.authoring.settings(jobId, user) };
+  }
+
+  @Patch('teacher/quizzes/jobs/:jobId/settings')
+  @Roles(RoleName.Teacher, RoleName.Admin)
+  async updateQuizDraftSettings(
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body() dto: UpdateAiAssessmentSettingsDto,
+    @CurrentUser() user: { id: string; email: string; roles: string[] },
+  ) {
+    const data = await this.authoring.updateSettings(
+      jobId,
+      dto.assessmentSettings,
+      user,
+    );
+    await this.logAuditSafe({
+      actorId: user.id,
+      action: 'ai.quiz_draft.settings_saved',
+      targetType: 'ai_generation_job',
+      targetId: jobId,
+    });
+    return { success: true, data };
+  }
+
   @Post('teacher/quizzes/jobs/:jobId/apply/preview')
   @Roles(RoleName.Teacher, RoleName.Admin)
   @ApiOperation({
@@ -2544,12 +2591,11 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherJobAccess(jobId, user);
-    const result = await this.proxy.forward(
-      'POST',
-      `/teacher/quizzes/jobs/${jobId}/apply/preview`,
-      user,
-      {},
-    );
+    const result = {
+      success: true,
+      message: 'Quiz draft preview',
+      data: await this.authoring.preview(jobId, user),
+    };
     await this.logAuditSafe({
       actorId: user.id,
       action: 'ai.quiz_draft.apply_previewed',
@@ -2569,12 +2615,11 @@ export class AiMentorController {
     @CurrentUser() user: { id: string; email: string; roles: string[] },
   ) {
     await this.assertTeacherJobAccess(jobId, user);
-    const result = await this.proxy.forward(
-      'POST',
-      `/teacher/quizzes/jobs/${jobId}/apply`,
-      user,
-      {},
-    );
+    const result = {
+      success: true,
+      message: 'Quiz draft apply',
+      data: await this.authoring.apply(jobId, user),
+    };
     const data =
       result && typeof result === 'object' && 'data' in result
         ? (result as { data?: Record<string, unknown> }).data

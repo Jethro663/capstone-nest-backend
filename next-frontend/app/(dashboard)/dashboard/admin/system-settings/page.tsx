@@ -45,6 +45,7 @@ export default function AdminSystemSettingsPage() {
   const [transitionOpen, setTransitionOpen] = useState(false);
   const [transitionPassword, setTransitionPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [assessmentPeriodMapping, setAssessmentPeriodMapping] = useState<Partial<Record<string, AcademicQuarter>>>({});
   const request = useRef<{ signature: string; id: string } | null>(null);
   const load = useCallback(async () => {
     setError(null);
@@ -128,6 +129,7 @@ export default function AdminSystemSettingsPage() {
         expectedVersion: preview.current.version,
         currentPassword: transitionPassword,
         confirmationText: confirmation,
+        assessmentPeriodMapping,
       });
       setTransitionOpen(false);
       setTransitionPassword("");
@@ -441,6 +443,9 @@ export default function AdminSystemSettingsPage() {
               {preview.impact.reusableSectionsToCreate} sections.
             </p>
           )}
+          <div className="space-y-2"><p className="text-sm">Map copied assessment drafts to the destination year. Historical assessments and student results remain unchanged.</p>
+            {(preview?.impact.assessmentPeriodSources ?? []).map(source => <label key={source} className="grid gap-1 text-sm">Source {source}<select aria-label={`Destination period for ${source}`} className="rounded border p-2" value={assessmentPeriodMapping[source] ?? ''} onChange={event => setAssessmentPeriodMapping(current => ({ ...current, [source]: event.target.value as AcademicQuarter }))}><option value="">Choose destination period</option>{preview?.impact.destinationPeriods?.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label>)}
+          </div>
           <Label htmlFor="transition-password">Admin password</Label>
           <Input
             id="transition-password"
@@ -473,6 +478,7 @@ export default function AdminSystemSettingsPage() {
               disabled={
                 !!busy ||
                 !transitionPassword ||
+                (preview?.impact.assessmentPeriodSources ?? []).some(source => !assessmentPeriodMapping[source]) ||
                 confirmation !== preview?.transitionConfirmationText ||
                 readiness?.transitionBlocked
               }

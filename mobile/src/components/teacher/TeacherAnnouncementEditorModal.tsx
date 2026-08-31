@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { DatePickerModal } from "../../screens/TeacherAssessmentEditorScreen";
+import { DatePickerModal } from "../ui/DatePickerModal";
 import { teacherTheme as theme } from "./TeacherMobilePrimitives";
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];

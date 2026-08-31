@@ -42,6 +42,9 @@ import {
   ReleaseCoreAssessmentDto,
 } from './DTO/assessment.dto';
 
+import { AssessmentEditorService } from './assessment-editor.service';
+import { SaveAssessmentEditorDto } from './DTO/assessment-editor.dto';
+
 const IMAGE_UPLOAD_DEST = './uploads/question-images';
 const FILE_UPLOAD_DEST = './uploads/assessment-files';
 const ALLOWED_IMAGE_MIMES = [
@@ -91,7 +94,37 @@ function isAllowedImageUpload(file: {
 @Controller('assessments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AssessmentsController {
-  constructor(private assessmentsService: AssessmentsService) {}
+  constructor(
+    private assessmentsService: AssessmentsService,
+    private readonly editor: AssessmentEditorService,
+  ) {}
+
+  @Post('editor')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async createEditor(
+    @Body() dto: SaveAssessmentEditorDto,
+    @CurrentUser() user: any,
+  ) {
+    return {
+      success: true,
+      message: 'Assessment saved',
+      data: await this.editor.save(undefined, dto, user),
+    };
+  }
+
+  @Put(':id/editor')
+  @Roles(RoleName.Admin, RoleName.Teacher)
+  async saveEditor(
+    @Param('id') id: string,
+    @Body() dto: SaveAssessmentEditorDto,
+    @CurrentUser() user: any,
+  ) {
+    return {
+      success: true,
+      message: 'Assessment saved',
+      data: await this.editor.save(id, dto, user),
+    };
+  }
 
   /**
    * Get all assessments for a class

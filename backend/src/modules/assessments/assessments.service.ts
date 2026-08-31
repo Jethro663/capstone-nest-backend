@@ -56,6 +56,7 @@ import { RagIndexingService } from '../rag/rag-indexing.service';
 import { AssessmentNotificationDispatchService } from '../notifications/assessment-notification-dispatch.service';
 import { sanitizeRichTextHtml } from '../../common/utils/rich-text-sanitizer';
 import { AssessmentAccessService } from './assessment-access.service';
+import { assessmentPublicationIssues } from './assessment-readiness';
 
 const MAX_ASSESSMENT_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 const DEFAULT_FILE_UPLOAD_EXTENSIONS = [
@@ -185,6 +186,11 @@ type AssessmentAttachmentSummary = {
 };
 
 type AssessmentView = {
+  authoringRestrictions?: {
+    hasAttempts: boolean;
+    canEditQuestions: boolean;
+    reason: string | null;
+  };
   id: string;
   title: string;
   description?: string | null;
@@ -1064,21 +1070,8 @@ export class AssessmentsService {
   }) {
     if (input.type !== AssessmentType.FILE_UPLOAD) return;
 
-    if (!input.fileUploadInstructions?.trim()) {
-      throw new BadRequestException(
-        'File upload instructions are required for file upload assessments',
-      );
-    }
-
-    const extensions = this.normalizeExtensions(input.allowedUploadExtensions);
-    const mimeTypes = this.normalizeMimeTypes(input.allowedUploadMimeTypes);
-
-    if (extensions.length === 0 || mimeTypes.length === 0) {
-      throw new BadRequestException(
-        'At least one allowed file extension and mime type is required',
-      );
-    }
-
+    // Drafts may be unfinished. Instructions and accepted file types are checked
+    // by publication readiness; structural limits still apply on every save.
     const maxBytes =
       input.maxUploadSizeBytes ?? MAX_ASSESSMENT_UPLOAD_SIZE_BYTES;
 
@@ -1863,9 +1856,33 @@ export class AssessmentsService {
             this.decorateAssessmentQuestion(question),
           );
 
+    const authoringAttempt =
+      currentUser && this.getUserRole(currentUser) !== 'student'
+        ? await this.db.query.assessmentAttempts.findFirst({
+            where: eq(assessmentAttempts.assessmentId, assessment.id),
+            columns: { id: true },
+          })
+        : undefined;
+    const authoringRestrictions =
+      currentUser && this.getUserRole(currentUser) !== 'student'
+        ? {
+            hasAttempts: Boolean(authoringAttempt),
+            canEditQuestions: Boolean(
+              academicCapabilities?.canPrepare &&
+              !assessment.isCoreTemplateAsset &&
+              !authoringAttempt,
+            ),
+            reason: authoringAttempt
+              ? 'Student attempts exist. Questions, answer keys, rubric and placement are protected; other permitted settings may still be edited.'
+              : assessment.isCoreTemplateAsset
+                ? 'Core template content cannot be changed.'
+                : (academicCapabilities?.readOnlyReason ?? null),
+          }
+        : undefined;
     const assessmentWithAttachment = {
       ...assessment,
       academicCapabilities,
+      authoringRestrictions,
       questions: sanitizedQuestions,
       teacherAttachmentFile,
       rubricSourceFile: rubricSourceFile
@@ -2066,101 +2083,9 @@ export class AssessmentsService {
    */
   private async validateForPublish(assessmentId: string) {
     const assessment = await this.getAssessmentById(assessmentId);
-    const errors: string[] = [];
-    const isFileUpload = assessment.type === AssessmentType.FILE_UPLOAD;
-
-    if (!assessment.title || !assessment.title.trim()) {
-      errors.push('Title is required');
-    }
-    if (!assessment.type) {
-      errors.push('Assessment type is required');
-    }
-
-    if (
-      !isFileUpload &&
-      (!assessment.questions || assessment.questions.length === 0)
-    ) {
-      errors.push('At least one question is required');
-    }
-
-    if (
-      assessment.passingScore === null ||
-      assessment.passingScore === undefined
-    ) {
-      errors.push('Passing score is required');
-    }
-
-    if (isFileUpload) {
-      if (!assessment.fileUploadInstructions?.trim()) {
-        errors.push('File upload instructions are required');
-      }
-
-      if (
-        !Array.isArray(assessment.allowedUploadExtensions) ||
-        assessment.allowedUploadExtensions.length === 0
-      ) {
-        errors.push('At least one allowed file extension is required');
-      }
-
-      if (
-        !Array.isArray(assessment.allowedUploadMimeTypes) ||
-        assessment.allowedUploadMimeTypes.length === 0
-      ) {
-        errors.push('At least one allowed mime type is required');
-      }
-
-      if (
-        !assessment.maxUploadSizeBytes ||
-        assessment.maxUploadSizeBytes < 1 ||
-        assessment.maxUploadSizeBytes > MAX_ASSESSMENT_UPLOAD_SIZE_BYTES
-      ) {
-        errors.push(
-          `Max upload size must be between 1 and ${MAX_ASSESSMENT_UPLOAD_SIZE_BYTES} bytes`,
-        );
-      }
-    }
-
-    // Validate each question
-    const optionTypes: string[] = [
-      QuestionType.MULTIPLE_CHOICE,
-      QuestionType.MULTIPLE_SELECT,
-      QuestionType.TRUE_FALSE,
-      QuestionType.DROPDOWN,
-    ];
-
-    if (!isFileUpload && assessment.questions) {
-      for (let i = 0; i < assessment.questions.length; i++) {
-        const q = assessment.questions[i];
-        if (!q.content || !q.content.trim()) {
-          errors.push(`Question ${i + 1}: Content is required`);
-        }
-        if (optionTypes.includes(q.type)) {
-          if (!q.options || q.options.length < 2) {
-            errors.push(
-              `Question ${i + 1}: Choice questions need at least 2 options`,
-            );
-          } else {
-            const hasCorrect = q.options.some((o) => o.isCorrect);
-            if (!hasCorrect) {
-              errors.push(
-                `Question ${i + 1}: At least one option must be marked correct`,
-              );
-            }
-          }
-        } else if (q.type === 'fill_blank') {
-          const validAnswerKeys = (q.options || [])
-            .filter((option) => option.isCorrect)
-            .map((option) => option.text?.trim())
-            .filter((answer) => Boolean(answer));
-          if (validAnswerKeys.length === 0) {
-            errors.push(
-              `Question ${i + 1}: Fill in the blank needs at least one correct answer`,
-            );
-          }
-        }
-      }
-    }
-
+    const errors = assessmentPublicationIssues(assessment).map(
+      (issue) => issue.message,
+    );
     if (errors.length > 0) {
       throw new BadRequestException({
         message: 'Assessment cannot be published',
@@ -2347,7 +2272,11 @@ export class AssessmentsService {
     if (updateAssessmentDto.teacherAttachmentFileId !== undefined)
       updateData.teacherAttachmentFileId =
         updateAssessmentDto.teacherAttachmentFileId;
-    if (updateAssessmentDto.rubricSourceFileId !== undefined) {
+    if (
+      updateAssessmentDto.rubricSourceFileId !== undefined &&
+      updateAssessmentDto.rubricSourceFileId !==
+        existingAssessment.rubricSourceFileId
+    ) {
       updateData.rubricSourceFileId = updateAssessmentDto.rubricSourceFileId;
       updateData.rubricParseStatus = updateAssessmentDto.rubricSourceFileId
         ? (existingAssessment.rubricParseStatus ?? 'pending')
@@ -2380,7 +2309,16 @@ export class AssessmentsService {
     if (updateAssessmentDto.quarter !== undefined)
       updateData.quarter = updateAssessmentDto.quarter;
 
-    if (updateAssessmentDto.rubricCriteria !== undefined) {
+    if (
+      nextIsFileUpload &&
+      updateAssessmentDto.rubricCriteria !== undefined &&
+      JSON.stringify(
+        this.normalizeRubricCriteria(updateAssessmentDto.rubricCriteria),
+      ) !==
+        JSON.stringify(
+          this.normalizeRubricCriteria(existingAssessment.rubricCriteria ?? []),
+        )
+    ) {
       const rubricCriteria = this.normalizeRubricCriteria(
         updateAssessmentDto.rubricCriteria,
       );
@@ -2393,6 +2331,12 @@ export class AssessmentsService {
     }
 
     if (!nextIsFileUpload) {
+      // Full editor payloads can contain an empty rubric. Question assessments
+      // always derive their score from questions, never from upload defaults.
+      updateData.totalPoints = existingAssessment.questions.reduce(
+        (total, question) => total + (question.points ?? 0),
+        0,
+      );
       updateData.fileUploadInstructions = null;
       updateData.teacherAttachmentFileId = null;
       updateData.rubricSourceFileId = null;

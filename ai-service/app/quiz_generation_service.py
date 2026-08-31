@@ -140,6 +140,9 @@ RULES:
 - Create questions that test understanding, not trivia.
 - Avoid duplicating the provided existing questions.
 - Prefer clear wording suitable for Grade 7-10 students.
+- Supported types: multiple_choice, multiple_select, true_false, short_answer, fill_blank, dropdown.
+- Dropdown uses at least two options with exactly one correct answer.
+- Fill in the blank uses ____ in content and options containing accepted answers marked isCorrect true.
 
 JSON FORMAT:
 {
@@ -460,6 +463,9 @@ def _build_fallback_question(
                 "rubric": "Award credit when the answer accurately uses the selected source evidence.",
             }
         )
+    elif question_type == "fill_blank":
+        answer = next(iter(statement.split()), "answer")
+        base.update({"content": statement.replace(answer, "____", 1), "options": [{"text": answer, "isCorrect": True, "order": 1}]})
     elif question_type == "multiple_select":
         base.update(
             {
@@ -475,7 +481,7 @@ def _build_fallback_question(
     else:
         base.update(
             {
-                "type": "multiple_choice",
+                "type": "dropdown" if question_type == "dropdown" else "multiple_choice",
                 "content": f"Which statement is supported by the selected source about {focus}?",
                 "options": [
                     {"text": statement, "isCorrect": True, "order": 1},
@@ -533,6 +539,15 @@ def _validate_question_shape(
                 )
             )
         normalized["options"] = options
+    elif qtype == "dropdown":
+        if len(options) < 2 or correct_count != 1:
+            issues.append(_issue(code="invalid_dropdown_options", severity="blocking", message="Dropdown questions need at least two choices and one correct answer.", question_index=question_index))
+        normalized["options"] = options
+    elif qtype == "fill_blank":
+        accepted = [option for option in options if option.get("isCorrect")]
+        if not accepted:
+            issues.append(_issue(code="missing_fill_blank_answer", severity="blocking", message="Fill in the blank needs at least one accepted answer.", question_index=question_index))
+        normalized["options"] = accepted
     elif qtype == "multiple_select":
         if len(options) < 4 or len(options) > 6 or correct_count < 2:
             issues.append(
@@ -768,6 +783,8 @@ def _build_blueprint_evidence(source_chunks: list[dict[str, Any]], *, strict: bo
 
 def _quiz_source_filters(body: GenerateQuizDraftRequest) -> dict[str, Any]:
     return {
+        "assessmentSettings": body.assessment_settings.model_dump(by_alias=True, exclude_none=True) if body.assessment_settings else None,
+        "assessmentSettingsReviewed": body.assessment_settings_reviewed,
         "lessonIds": body.lesson_ids,
         "extractionIds": body.extraction_ids,
         "questionCount": body.question_count,
@@ -1102,6 +1119,16 @@ Source material:
             "applyResult": None,
         },
     }
+    persisted_filters = _quiz_source_filters(body)
+    if existing_job_id:
+        latest_result = await db.execute(sa_text("SELECT source_filters FROM ai_generation_jobs WHERE id = :jobId"), {"jobId": existing_job_id})
+        latest_row = latest_result.mappings().first()
+        latest_filters = latest_row.get("source_filters") if latest_row else None
+        if isinstance(latest_filters, dict):
+            for key in ("assessmentSettings", "assessmentSettingsReviewed"):
+                if key in latest_filters:
+                    persisted_filters[key] = latest_filters[key]
+
     output_row = await db.execute(
         sa_text(
             """
@@ -1133,7 +1160,7 @@ Source material:
             "jobId": job_id,
             "classId": body.class_id,
             "teacherId": user.id,
-            "sourceFilters": _quiz_source_filters(body),
+            "sourceFilters": persisted_filters,
             "structuredOutput": structured_output,
         },
     )
@@ -1298,7 +1325,13 @@ def _build_quiz_apply_preview(
     apply_result = audit.get("applyResult") if isinstance(audit, dict) else None
     already_applied = isinstance(apply_result, dict) and bool(apply_result.get("assessmentId") or existing_assessment_id)
 
+    settings = source_filters.get("assessmentSettings") or {}
+    requires_settings_review = not source_filters.get("assessmentSettingsReviewed", False)
     blocked_reasons: list[str] = []
+    if requires_settings_review:
+        blocked_reasons.append("Review and save assessment settings before applying this draft.")
+    if not settings.get("quarter") and not source_filters.get("quarter"):
+        blocked_reasons.append("Select a valid grading period before applying.")
     if not questions:
         blocked_reasons.append("Add at least one reviewed question before applying.")
     if structured_output.get("qualityGate") == "fail":
@@ -1309,6 +1342,8 @@ def _build_quiz_apply_preview(
         blocked_reasons.append("Resolve blocking review issues before applying.")
 
     return {
+        "requiresSettingsReview": requires_settings_review,
+        "assessmentSettings": settings,
         "canApply": already_applied or not blocked_reasons,
         "alreadyApplied": already_applied,
         "blockedReasons": [] if already_applied else blocked_reasons,
@@ -1321,6 +1356,7 @@ def _build_quiz_apply_preview(
             "feedbackLevel": source_filters.get("feedbackLevel") or "standard",
             "classRecordCategory": source_filters.get("classRecordCategory"),
             "quarter": source_filters.get("quarter"),
+            **settings,
             "totalPoints": total_points,
             "questionCount": len(questions),
         },
@@ -1385,197 +1421,16 @@ async def preview_quiz_draft_apply(
     }
 
 
-async def apply_quiz_draft(
-    db: AsyncSession,
-    *,
-    job_id: str,
-    user: RequestUser,
-) -> dict[str, Any]:
+async def apply_quiz_draft(db: AsyncSession, *, job_id: str, user: RequestUser) -> dict[str, Any]:
+    """Compatibility reads only. Nest owns new assessment persistence and policy checks."""
     record = await _load_quiz_draft_record(db, job_id=job_id, user=user)
-    structured_output = record.get("structured_output") if isinstance(record.get("structured_output"), dict) else {}
-    source_filters = record.get("source_filters") if isinstance(record.get("source_filters"), dict) else {}
-    preview = _build_quiz_apply_preview(
-        structured_output=structured_output,
-        source_filters=source_filters,
-        existing_assessment_id=None,
-    )
-    if preview["alreadyApplied"]:
-        return {
-            "jobId": job_id,
-            "outputId": str(record["output_id"]),
-            "alreadyApplied": True,
-            "applyResult": preview["applyResult"],
-            "preview": preview,
-        }
-    if not preview["canApply"]:
-        raise HTTPException(409, "Quiz draft cannot be applied until review issues are resolved.")
-
-    assessment = preview["assessment"]
-    assessment_insert = await db.execute(
-        sa_text(
-            """
-            INSERT INTO assessments (
-              title,
-              description,
-              class_id,
-              type,
-              total_points,
-              passing_score,
-              feedback_level,
-              class_record_category,
-              quarter,
-              is_published,
-              ai_origin,
-              ai_generation_output_id
-            )
-            VALUES (
-              :title,
-              :description,
-              :classId,
-              :assessmentType,
-              :totalPoints,
-              :passingScore,
-              :feedbackLevel,
-              :classRecordCategory,
-              :quarter,
-              false,
-              'ai_generated',
-              :outputId
-            )
-            RETURNING id
-            """
-        ),
-        {
-            "title": assessment["title"],
-            "description": assessment["description"],
-            "classId": record["class_id"],
-            "assessmentType": assessment["type"],
-            "totalPoints": assessment["totalPoints"],
-            "passingScore": assessment["passingScore"],
-            "feedbackLevel": assessment["feedbackLevel"],
-            "classRecordCategory": assessment["classRecordCategory"],
-            "quarter": assessment["quarter"],
-            "outputId": record["output_id"],
-        },
-    )
-    assessment_id = assessment_insert.scalar_one()
-    questions_created = 0
-    for order, question in enumerate(preview["questions"], start=1):
-        if not isinstance(question, dict):
-            continue
-        question_insert = await db.execute(
-            sa_text(
-                """
-                INSERT INTO assessment_questions (
-                  assessment_id,
-                  type,
-                  content,
-                  points,
-                  "order",
-                  explanation,
-                  concept_tags
-                )
-                VALUES (
-                  :assessmentId,
-                  :type,
-                  :content,
-                  :points,
-                  :order,
-                  :explanation,
-                  :conceptTags
-                )
-                RETURNING id
-                """
-            ).bindparams(bindparam("conceptTags", type_=postgresql.JSONB)),
-            {
-                "assessmentId": assessment_id,
-                "type": question.get("type") or source_filters.get("questionType") or "multiple_choice",
-                "content": question.get("content"),
-                "points": _safe_positive_int(question.get("points")),
-                "order": order,
-                "explanation": question.get("explanation"),
-                "conceptTags": question.get("conceptTags") or [],
-            },
-        )
-        questions_created += 1
-        question_id = question_insert.scalar_one()
-        for option_order, option in enumerate(question.get("options") or [], start=1):
-            if not isinstance(option, dict):
-                continue
-            await db.execute(
-                sa_text(
-                    """
-                    INSERT INTO assessment_question_options (
-                      question_id,
-                      text,
-                      is_correct,
-                      "order"
-                    )
-                    VALUES (
-                      :questionId,
-                      :text,
-                      :isCorrect,
-                      :order
-                    )
-                    """
-                ),
-                {
-                    "questionId": question_id,
-                    "text": option.get("text"),
-                    "isCorrect": bool(option.get("isCorrect")),
-                    "order": _safe_positive_int(option.get("order"), option_order),
-                },
-            )
-
-    apply_result = {
-        "assessmentId": str(assessment_id),
-        "outputId": str(record["output_id"]),
-        "questionsCreated": questions_created,
-        "totalPoints": assessment["totalPoints"],
-        "appliedAt": datetime.now(timezone.utc).isoformat(),
-    }
-    audit = structured_output.get("audit") if isinstance(structured_output.get("audit"), dict) else {}
-    structured_output["audit"] = {**audit, "applyResult": apply_result}
-    structured_output["assessmentId"] = str(assessment_id)
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_outputs
-            SET structured_output = :structuredOutput,
-                updated_at = NOW()
-            WHERE id = :outputId
-            """
-        ).bindparams(bindparam("structuredOutput", type_=postgresql.JSONB)),
-        {
-            "outputId": record["output_id"],
-            "structuredOutput": structured_output,
-        },
-    )
-    await db.execute(
-        sa_text(
-            """
-            UPDATE ai_generation_jobs
-            SET status = 'approved',
-                error_message = NULL,
-                updated_at = NOW()
-            WHERE id = :jobId
-            """
-        ),
-        {"jobId": job_id},
-    )
-    await db.commit()
-    return {
-        "jobId": job_id,
-        "outputId": str(record["output_id"]),
-        "alreadyApplied": False,
-        "applyResult": apply_result,
-        "preview": {
-            **preview,
-            "alreadyApplied": True,
-            "applyResult": apply_result,
-            "blockedReasons": [],
-        },
-    }
+    preview = _build_quiz_apply_preview(structured_output=record.get("structured_output") or {},
+                                       source_filters=record.get("source_filters") or {},
+                                       existing_assessment_id=None)
+    if not preview["alreadyApplied"]:
+        raise HTTPException(409, "Apply assessments through the backend teacher quiz endpoint; academic validation is required.")
+    return {"jobId": job_id, "outputId": str(record["output_id"]), "alreadyApplied": True,
+            "applyResult": preview["applyResult"], "preview": preview}
 
 
 async def _build_quiz_blueprint(

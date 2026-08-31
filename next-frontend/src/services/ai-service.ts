@@ -1,3 +1,4 @@
+import type { AiAssessmentSettings } from "@/types/assessment";
 import { api } from '@/lib/api-client';
 import type {
   AiGenerationStatus,
@@ -272,6 +273,15 @@ function normalizeJobResultEnvelope<T>(
 }
 
 export const aiService = {
+  async getQuizDraftSettings(jobId: string): Promise<{ assessmentSettings: AiAssessmentSettings; requiresSettingsReview: boolean; alreadyApplied: boolean; schoolYear: string; periods: { key: string; label: string }[] }> {
+    const response = await api.get(`/ai/teacher/quizzes/jobs/${jobId}/settings`);
+    return response.data.data;
+  },
+  async updateQuizDraftSettings(jobId: string, assessmentSettings: AiAssessmentSettings): Promise<{ assessmentSettings: AiAssessmentSettings; requiresSettingsReview: boolean }> {
+    const response = await api.patch(`/ai/teacher/quizzes/jobs/${jobId}/settings`, { assessmentSettings });
+    return response.data.data;
+  },
+
   async explainMistake(dto: MentorExplainDto): Promise<Envelope<MentorExplainResponse>> {
     const { data } = await api.post('/ai/mentor/explain', dto, { timeout: AI_CHAT_TIMEOUT_MS });
     return normalizeEnvelope<MentorExplainResponse>(data);

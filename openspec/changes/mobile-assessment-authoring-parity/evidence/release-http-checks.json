@@ -1,0 +1,52 @@
+{
+  "verifiedAt": "2026-08-31T19:47:57.943Z",
+  "api": "disposable local release backend",
+  "results": [
+    {
+      "workflow": "six question types",
+      "assessmentId": "f60e3c7d-8768-408c-aab1-a20fc1f97478",
+      "questionCount": 6,
+      "totalPoints": 6,
+      "settingsPreserved": true,
+      "questionRowsPreserved": true,
+      "replayIdentical": true,
+      "staleRejected": true
+    },
+    {
+      "workflow": "file upload",
+      "assessmentId": "7e6fd7ce-aa1f-43c2-ba26-121bad98d39c",
+      "questionCount": 0,
+      "totalPoints": 100,
+      "settingsPreserved": true,
+      "questionRowsPreserved": true,
+      "replayIdentical": true,
+      "staleRejected": true
+    },
+    {
+      "workflow": "already-applied AI fixture",
+      "type": "quiz",
+      "assessmentId": "1fada19c-361c-4351-840c-200b9859b505",
+      "reopenedSameAssessment": true,
+      "isPublished": false
+    },
+    {
+      "workflow": "already-applied AI fixture",
+      "type": "exam",
+      "assessmentId": "b0f02f75-8877-48de-9526-1b07bbae587b",
+      "reopenedSameAssessment": true,
+      "isPublished": false
+    },
+    {
+      "workflow": "already-applied AI fixture",
+      "type": "assignment",
+      "assessmentId": "ead51592-fbf0-4a61-b31c-eab7c5f53b07",
+      "reopenedSameAssessment": true,
+      "isPublished": false
+    },
+    {
+      "workflow": "missing period",
+      "canPrepare": false,
+      "canRelease": false
+    }
+  ]
+}

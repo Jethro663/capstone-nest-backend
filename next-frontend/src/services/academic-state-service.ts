@@ -61,6 +61,7 @@ export const academicStateService = {
   },
 
   async transition(payload: {
+    assessmentPeriodMapping?: Partial<Record<string, AcademicQuarter>>;
     expectedSchoolYear: string;
     expectedQuarter: AcademicQuarter;
     expectedVersion: number;

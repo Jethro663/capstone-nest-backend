@@ -1,3 +1,4 @@
+import type { AiAssessmentSettings } from "./assessment";
 import type { ClassRecordCategory } from '@/types/assessment';
 import type { GradingPeriod, AssessmentType, FeedbackLevel, QuestionType } from '@/utils/constants';
 
@@ -315,6 +316,8 @@ export interface QuizDraftApplyResult {
 }
 
 export interface QuizDraftApplyPreview {
+  assessmentSettings?: AiAssessmentSettings;
+  requiresSettingsReview?: boolean;
   jobId?: string;
   outputId?: string;
   canApply: boolean;
@@ -345,16 +348,17 @@ export interface QuizDraftApplyResponse {
 }
 
 export interface GenerateQuizDraftDto {
+  assessmentSettings?: AiAssessmentSettings;
   classId: string;
   lessonIds?: string[];
   extractionIds?: string[];
   title?: string;
   questionCount: number;
   questionType: QuestionType;
-  assessmentType: AssessmentType;
-  passingScore: number;
+  assessmentType?: AssessmentType;
+  passingScore?: number;
   teacherNote?: string;
-  feedbackLevel: FeedbackLevel;
+  feedbackLevel?: FeedbackLevel;
   classRecordCategory?: ClassRecordCategory;
   quarter?: GradingPeriod;
   sourcePolicy?: 'published_default' | 'published_only' | 'any_indexed' | string;

@@ -324,7 +324,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
 
           <TeacherPanel
             title="Assessment controls"
-            subtitle="Keep publish state management available at the top of the teacher detail page."
+            subtitle={assessment.academicCapabilities?.canPrepare ? "Edit content in the assessment editor. Review submissions below." : assessment.academicCapabilities?.readOnlyReason || "Academic settings must be loaded before editing."}
           >
             <View
               style={{
@@ -336,7 +336,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
               }}
             >
               <TeacherActionButton
-                label="Edit assessment"
+                label={assessment.academicCapabilities?.canPrepare ? "Edit assessment" : "Review assessment and restrictions"}
                 icon="pencil-outline"
                 tone="blue"
                 onPress={() =>

@@ -30,6 +30,7 @@ export interface QuestionOption {
 }
 
 export interface AssessmentQuestion {
+  conceptTags?: string[];
   id: string;
   assessmentId: string;
   type: QuestionType;
@@ -56,7 +57,22 @@ export interface AssessmentFileRecord {
   downloadUrl?: string | null;
 }
 
+export interface RubricCriterion { id: string; title: string; description?: string; points: number; }
+
 export interface Assessment {
+  authoringRestrictions?: { hasAttempts: boolean; canEditQuestions: boolean; reason: string | null };
+  closeWhenDue?: boolean;
+  randomizeQuestions?: boolean;
+  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackDelayHours?: number;
+  rubricSourceFileId?: string | null;
+  rubricSourceFile?: AssessmentFileRecord | null;
+  rubricCriteria?: RubricCriterion[];
+  rubricParseStatus?: string | null;
+  classRecordItemId?: string | null;
+  classRecordPlacement?: { itemId?: string | null } | null;
+
+  editorRevision?: number;
   isCoreTemplateAsset?: boolean | null;
   academicCapabilities?: AcademicCapabilities;
   id: string;
@@ -77,7 +93,7 @@ export interface Assessment {
   maxUploadSizeBytes?: number | null;
   teacherAttachmentFileId?: string | null;
   teacherAttachmentFile?: AssessmentFileRecord | null;
-  dueDate?: string;
+  dueDate?: string | null;
   isPublished: boolean;
   classRecordCategory?: string | null;
   quarter?: string | null;
@@ -85,11 +101,17 @@ export interface Assessment {
 }
 
 export interface CreateAssessmentDto {
+  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackDelayHours?: number;
+  teacherAttachmentFileId?: string | null;
+  rubricSourceFileId?: string | null;
+  rubricCriteria?: RubricCriterion[];
+  classRecordItemId?: string | null;
   title: string;
   description?: string;
   classId: string;
   type?: AssessmentType;
-  dueDate?: string;
+  dueDate?: string | null;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
   timedQuestionsEnabled?: boolean;
@@ -107,10 +129,16 @@ export interface CreateAssessmentDto {
 }
 
 export interface UpdateAssessmentDto {
+  feedbackLevel?: 'immediate' | 'standard' | 'detailed';
+  feedbackDelayHours?: number;
+  teacherAttachmentFileId?: string | null;
+  rubricSourceFileId?: string | null;
+  rubricCriteria?: RubricCriterion[];
+  classRecordItemId?: string | null;
   title?: string;
   description?: string;
   type?: AssessmentType;
-  dueDate?: string;
+  dueDate?: string | null;
   closeWhenDue?: boolean;
   randomizeQuestions?: boolean;
   timedQuestionsEnabled?: boolean;
@@ -129,12 +157,23 @@ export interface UpdateAssessmentDto {
 }
 
 export interface QuestionOptionInput {
+  imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   text: string;
   isCorrect: boolean;
   order: number;
 }
 
 export interface CreateQuestionDto {
+  conceptTags?: string[];
+  imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   assessmentId: string;
   type: QuestionType;
   content: string;
@@ -146,6 +185,12 @@ export interface CreateQuestionDto {
 }
 
 export interface UpdateQuestionDto {
+  conceptTags?: string[];
+  imageUrl?: string | null;
+  imageDisplayMode?: 'default' | 'expanded';
+  imageZoom?: number;
+  imagePositionX?: number;
+  imagePositionY?: number;
   content?: string;
   points?: number;
   order?: number;
@@ -290,3 +335,26 @@ export interface TeacherAssessmentSubmissionsResponse {
   submissions: TeacherAssessmentSubmission[];
   summary: TeacherAssessmentSubmissionSummary;
 }
+
+export interface EditorQuestionInput extends Omit<CreateQuestionDto, 'assessmentId' | 'options'> {
+  id?: string;
+  clientId: string;
+  options?: (NonNullable<CreateQuestionDto['options']>[number] & { id?: string })[];
+  deletedOptionIds?: string[];
+}
+export interface SaveAssessmentEditorInput {
+  mutationId: string;
+  classId?: string;
+  expectedRevision?: number;
+  action: 'save' | 'publish' | 'unpublish';
+  settings: Omit<UpdateAssessmentDto, 'isPublished'>;
+  questions?: EditorQuestionInput[];
+  deletedQuestionIds?: string[];
+}
+export interface AssessmentEditorResult {
+  assessment: Assessment;
+  revision: number;
+  questionIds: Record<string, string>;
+  publicationIssues: { field: string; message: string }[];
+}
+export type AiAssessmentSettings = Omit<UpdateAssessmentDto, 'isPublished' | 'type' | 'fileUploadInstructions' | 'teacherAttachmentFileId' | 'rubricSourceFileId' | 'rubricCriteria' | 'allowedUploadMimeTypes' | 'allowedUploadExtensions' | 'maxUploadSizeBytes'> & { type?: 'quiz' | 'exam' | 'assignment' };

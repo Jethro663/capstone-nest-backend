@@ -1,0 +1,113 @@
+{
+  "recordedAt": "2026-08-31T19:30:12.360085+00:00",
+  "environment": "disposable local synthetic teacher data",
+  "sixTypeRoundTrip": {
+    "assessmentId": "f60e3c7d-8768-408c-aab1-a20fc1f97478",
+    "types": [
+      "multiple_choice",
+      "multiple_select",
+      "true_false",
+      "short_answer",
+      "fill_blank",
+      "dropdown"
+    ],
+    "questionsAndOptionsExactlyEqual": true,
+    "beforeQuestionRowsSha256": "1ec9502516bc724ecd9311c5b57ee5e5de071b147327e0198d13544c2795dd06",
+    "afterQuestionRowsSha256": "1ec9502516bc724ecd9311c5b57ee5e5de071b147327e0198d13544c2795dd06",
+    "changedAssessmentFields": [
+      "description",
+      "updated_at",
+      "editor_revision"
+    ],
+    "totalPoints": 6,
+    "savedDescription": "<p>Mobile authoring notes <strong>with bold Offline recovery check.</strong></p>"
+  },
+  "manualUploadRoundTrip": {
+    "assessmentId": "7e6fd7ce-aa1f-43c2-ba26-121bad98d39c",
+    "changedFields": [
+      "description",
+      "updated_at",
+      "editor_revision"
+    ],
+    "preservedFields": {
+      "file_upload_instructions": "<p>Submit your worked solution as a PDF.</p>",
+      "teacher_attachment_file_id": "5477bfae-2393-4f38-827a-5e5128fd0065",
+      "rubric_criteria": [
+        {
+          "id": "temp-p5batof9",
+          "title": "Correct reasoning",
+          "description": "Show all steps clearly",
+          "points": 100
+        }
+      ],
+      "rubric_parsed_at": "2026-08-31T19:10:21.025",
+      "rubric_parse_status": "reviewed",
+      "allowed_upload_extensions": [
+        "pdf",
+        "docx",
+        "txt",
+        "rtf"
+      ],
+      "max_upload_size_bytes": 12582912
+    }
+  },
+  "futureTerm": {
+    "period": "Q2",
+    "draftSaveSucceeded": true,
+    "releaseControlEnabled": false
+  },
+  "missingPeriod": {
+    "assessmentId": "980d55bc-3593-4db7-8359-156d7680089e",
+    "saveEnabled": false,
+    "releaseEnabled": false,
+    "diagnosticCopySucceeded": true
+  },
+  "liveProviderGenerationVerified": false,
+  "aiFixtureApplications": [
+    {
+      "id": "1fada19c-361c-4351-840c-200b9859b505",
+      "title": "Native reviewed quiz fixture",
+      "type": "quiz",
+      "is_published": false,
+      "quarter": "Q2",
+      "max_attempts": 5,
+      "time_limit_minutes": 47,
+      "question_time_limit_seconds": 75,
+      "passing_score": 83,
+      "feedback_delay_hours": 7
+    },
+    {
+      "id": "b0f02f75-8877-48de-9526-1b07bbae587b",
+      "title": "Reviewed exam fixture settings",
+      "type": "exam",
+      "is_published": false,
+      "quarter": "Q1",
+      "max_attempts": 4,
+      "time_limit_minutes": 47,
+      "question_time_limit_seconds": 75,
+      "passing_score": 83,
+      "feedback_delay_hours": 9
+    },
+    {
+      "id": "ead51592-fbf0-4a61-b31c-eab7c5f53b07",
+      "title": "Local assignment fixture - review and apply",
+      "type": "assignment",
+      "is_published": false,
+      "quarter": "Q1",
+      "max_attempts": 3,
+      "time_limit_minutes": 47,
+      "question_time_limit_seconds": 75,
+      "passing_score": 83,
+      "feedback_delay_hours": 7
+    }
+  ],
+  "studentAttemptCountAfterPreview": 0,
+  "nativeAssignmentApplyRefreshedApprovedJobWithoutManualRefresh": true,
+  "finalApkConflictRecovery": {
+    "conflictRejected": true,
+    "newerServerTitle": "Assignment server revision check",
+    "loadedStatus": "Server version loaded \u00b7 recovery copy kept",
+    "localConflictTitleNotApplied": true
+  },
+  "nativeLogoutReturnedToSignIn": true
+}

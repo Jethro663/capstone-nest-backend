@@ -1,3 +1,4 @@
+import { clearAllEditorRecovery } from "../features/assessment-editor/recovery";
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { authApi } from "../api/services/auth";
@@ -88,6 +89,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } finally {
       await clearAuthSession();
       await persistSession(null);
+      await clearAllEditorRecovery();
     }
   }, [persistSession]);
 

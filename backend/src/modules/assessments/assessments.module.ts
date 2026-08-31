@@ -1,3 +1,4 @@
+import { AssessmentEditorService } from './assessment-editor.service';
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AssessmentsController } from './assessments.controller';
@@ -21,7 +22,16 @@ import { ClassRecordModule } from '../class-record/class-record.module';
     ClassRecordModule,
   ],
   controllers: [AssessmentsController, AssessmentsPublicController],
-  providers: [AssessmentsService, AssessmentAccessService, FeedbackService],
-  exports: [AssessmentsService, AssessmentAccessService],
+  providers: [
+    AssessmentEditorService,
+    AssessmentsService,
+    AssessmentAccessService,
+    FeedbackService,
+  ],
+  exports: [
+    AssessmentEditorService,
+    AssessmentsService,
+    AssessmentAccessService,
+  ],
 })
 export class AssessmentsModule {}

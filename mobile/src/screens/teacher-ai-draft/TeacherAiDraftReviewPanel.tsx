@@ -1,5 +1,5 @@
 import { Text, View } from "react-native";
-import { TeacherActionButton, TeacherRow } from "../../components/teacher/TeacherMobilePrimitives";
+import { TeacherActionButton, TeacherRow, stripRichText } from "../../components/teacher/TeacherMobilePrimitives";
 import type { QuizDraftStructuredOutput } from "../../types/ai";
 
 interface TeacherAiDraftReviewPanelProps {
@@ -31,7 +31,7 @@ export function TeacherAiDraftReviewPanel({
       {draft.questions.map((question, index) => (
         <View key={question.id ?? `${question.content}-${index}`}>
           <TeacherRow
-            title={`Q${index + 1}: ${question.content || "No question text"}`}
+            title={`Q${index + 1}: ${stripRichText(question.content) || "No question text"}`}
             subtitle={`Type: ${question.type || "multiple_choice"} • Points: ${question.points ?? 1} • ${question.reviewed ? "Reviewed" : "Needs review"}`}
           />
           {!question.reviewed ? (

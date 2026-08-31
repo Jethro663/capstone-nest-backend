@@ -10,6 +10,11 @@ import {
   writeTeacherAiDraftJobId,
 } from "../../api/teacher-ai-draft-jobs";
 
+jest.mock("../../api/services/academic-state", () => ({ academicStateService: {} }));
+jest.mock("../../api/services/classes", () => ({ classesApi: {} }));
+const mockInvalidateQueries = jest.fn().mockResolvedValue(undefined);
+jest.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }), useQuery: () => ({ data: { cls: { subjectName: 'Math', schoolYear: '2026-2027' }, current: { schoolYear: '2026-2027', quarter: 'Q1' }, policy: { periods: [{ key: 'Q1', label: 'Term 1' }, { key: 'Q2', label: 'Term 2' }] } } }) }));
+jest.mock("../../features/assessment-editor/SettingsFields", () => ({ AssessmentSettingsFields: (props: object) => require('react').createElement('AssessmentSettingsFields', props) }));
 jest.mock("react-native", () => {
   const ReactRuntime = require("react");
   const component = (name: string) => (props: Record<string, unknown>) =>
@@ -63,6 +68,8 @@ jest.mock("../../api/services/ai", () => ({
     getClassIndexStatus: jest.fn(),
     reindexClass: jest.fn(),
     createQuizDraftJob: jest.fn(),
+    getQuizDraftSettings: jest.fn(),
+    updateQuizDraftSettings: jest.fn(),
     getTeacherJobStatus: jest.fn(),
     getQuizDraftJobResult: jest.fn(),
     updateQuizDraft: jest.fn(),
@@ -173,6 +180,8 @@ describe("TeacherAiDraftScreen", () => {
     mockedStorage.readTeacherAiDraftJobId.mockResolvedValue(null);
     mockedStorage.writeTeacherAiDraftJobId.mockResolvedValue(undefined);
     mockedStorage.clearTeacherAiDraftJobId.mockResolvedValue(undefined);
+    mockedAiApi.getQuizDraftSettings.mockResolvedValue({ assessmentSettings: { title: 'AI Draft Assessment', type: 'quiz', quarter: 'Q1' }, requiresSettingsReview: false });
+    mockedAiApi.updateQuizDraftSettings.mockImplementation(async (_id, settings) => ({ assessmentSettings: settings, requiresSettingsReview: false }));
     mockedAiApi.getClassIndexStatus.mockResolvedValue(readyIndexStatus as never);
     mockedAiApi.createQuizDraftJob.mockResolvedValue(pendingJob as never);
     mockedAiApi.updateQuizDraft.mockResolvedValue(completedJob as never);
@@ -321,6 +330,9 @@ describe("TeacherAiDraftScreen", () => {
       await flushPromises();
     });
 
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["teacher-ai-jobs"] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ["assessments", "class-1"] });
+    expect(renderer.root.findByType("AssessmentSettingsFields").props.disabled).toBe(true);
     expect(navigation.navigate).toHaveBeenCalledWith("TeacherAssessmentEditor", {
       assessmentId: "assessment-1",
       classId: "class-1",
@@ -330,4 +342,16 @@ describe("TeacherAiDraftScreen", () => {
       expect.objectContaining({ assessmentId: "output-1" }),
     );
   });
+it('sends full assessment settings through generate and settings-only review edits', async () => {
+  const { renderer } = await renderScreen();
+  const settings = { title: 'Teacher exam', type: 'exam', quarter: 'Q2', passingScore: 83, maxAttempts: 3, timeLimitMinutes: 22, questionTimeLimitSeconds: 40, timedQuestionsEnabled: true, randomizeQuestions: true, strictMode: true, closeWhenDue: false, feedbackLevel: 'detailed', feedbackDelayHours: 7 };
+  await act(async () => renderer.root.findByType('AssessmentSettingsFields').props.onChange(settings));
+  await press(renderer.root, 'Generate');
+  expect(mockedAiApi.createQuizDraftJob).toHaveBeenCalledWith(expect.objectContaining({ assessmentSettings: settings }));
+  await act(async () => renderer.root.findByType('AssessmentSettingsFields').props.onChange(settings));
+  await press(renderer.root, 'Save assessment settings');
+  expect(mockedAiApi.updateQuizDraftSettings).toHaveBeenCalledWith('job-1', settings);
+  expect(mockedAiApi.createQuizDraftJob).toHaveBeenCalledTimes(1);
+});
+
 });

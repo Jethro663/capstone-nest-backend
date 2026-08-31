@@ -194,6 +194,7 @@ function isAllowedImageFile(file: File) {
 }
 
 interface AssessmentQuestionEditorProps {
+  typeLocked?: boolean;
   question: AssessmentComposerQuestionDraft;
   questions: AssessmentComposerQuestionDraft[];
   onQuestionsChange: (questions: AssessmentComposerQuestionDraft[]) => void;
@@ -391,6 +392,7 @@ export function AssessmentQuestionEditor({
   questions,
   onQuestionsChange,
   pointsLabel = 'pts',
+  typeLocked = false,
   onUploadQuestionImage,
   onUploadOptionImage,
   onOpenQuestionDetails,
@@ -563,6 +565,8 @@ export function AssessmentQuestionEditor({
               />
               <select
                 value={question.type}
+                disabled={typeLocked}
+                title={typeLocked ? "Saved question types are fixed. Add a replacement question to change its type." : undefined}
                 onChange={(event) => handleTypeChange(event.target.value as QuestionType)}
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-800"
               >
@@ -950,6 +954,8 @@ export function AssessmentQuestionEditor({
               <span>Type</span>
               <select
                 value={question.type}
+                disabled={typeLocked}
+                title={typeLocked ? "Saved question types are fixed. Add a replacement question to change its type." : undefined}
                 onChange={(event) => handleTypeChange(event.target.value as QuestionType)}
                 className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"
               >

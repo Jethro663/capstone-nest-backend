@@ -148,12 +148,16 @@ describe('AcademicStateService rollover characterization', () => {
             db: unknown,
             classIds: Map<string, string>,
             now: Date,
+            mapping: Record<string, string>,
+            periods: string[],
           ) => Promise<Record<string, number>>;
         }
       ).cloneClassLearningAssets(
         database,
         new Map([['class-source', 'class-target']]),
         new Date('2026-07-13T00:00:00Z'),
+        { unassigned: 'Q1', Q1: 'Q1', Q2: 'Q2', Q3: 'Q3', Q4: 'Q3' },
+        ['Q1', 'Q2', 'Q3'],
       );
 
       expect(counts).toEqual({

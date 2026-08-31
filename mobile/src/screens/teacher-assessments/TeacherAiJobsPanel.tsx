@@ -38,7 +38,8 @@ function JobAction({
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
       style={{
-        minHeight: 36,
+        minHeight: 44,
+        minWidth: 44,
         flexDirection: "row",
         alignItems: "center",
         gap: 5,

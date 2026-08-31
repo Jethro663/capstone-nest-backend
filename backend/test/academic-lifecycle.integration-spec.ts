@@ -37,7 +37,10 @@ import { ClassRecordReadinessService } from '../src/modules/class-record/class-r
 import { ClassRecordRosterService } from '../src/modules/class-record/class-record-roster.service';
 import { AssessmentAccessService } from '../src/modules/assessments/assessment-access.service';
 import { AssessmentsService } from '../src/modules/assessments/assessments.service';
-import { AssessmentType } from '../src/modules/assessments/DTO/assessment.dto';
+import {
+  AssessmentType,
+  Quarter,
+} from '../src/modules/assessments/DTO/assessment.dto';
 import { AcademicPeriodService } from '../src/modules/academic-state/academic-period.service';
 import { ClassesService } from '../src/modules/classes/classes.service';
 import * as bcrypt from 'bcrypt';
@@ -509,7 +512,18 @@ describe('academic lifecycle PostgreSQL integration', () => {
       isPublished: true,
     });
     expect((await f.readiness.getReadiness()).transitionBlocked).toBe(false);
-    const result = await f.stateService.transition(f.dto, f.actor.id);
+    await expect(f.stateService.transition(f.dto, f.actor.id)).rejects.toThrow(
+      'Choose an explicit destination period',
+    );
+    expect(
+      (await database.db.query.classes.findMany()).some(
+        (cls) => cls.schoolYear === '2027-2028',
+      ),
+    ).toBe(false);
+    const result = await f.stateService.transition(
+      { ...f.dto, assessmentPeriodMapping: { Q2: Quarter.Q2 } },
+      f.actor.id,
+    );
     expect(result.state).toMatchObject({
       schoolYear: '2027-2028',
       quarter: 'Q1',
@@ -626,13 +640,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
     const role = await database.db.query.roles.findFirst({
       where: eq(roles.name, 'student'),
     });
-    await database.db
-      .insert(userRoles)
-      .values({
-        userId: newStudent.id,
-        roleId: role!.id,
-        assignedBy: f.actor.id,
-      });
+    await database.db.insert(userRoles).values({
+      userId: newStudent.id,
+      roleId: role!.id,
+      assignedBy: f.actor.id,
+    });
     const importer = new RosterImportService(
       database,
       new AcademicPolicyService(database),
@@ -1309,13 +1321,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
         itemOrder: 1,
       })
       .returning();
-    await database.db
-      .insert(classRecordScores)
-      .values({
-        classRecordItemId: exam.id,
-        studentId: f.student.id,
-        score: '65',
-      });
+    await database.db.insert(classRecordScores).values({
+      classRecordItemId: exam.id,
+      studentId: f.student.id,
+      score: '65',
+    });
     const repair = new AcademicRepairService(
       database,
       new AcademicPolicyService(database),
@@ -1396,13 +1406,11 @@ describe('academic lifecycle PostgreSQL integration', () => {
     await expect(
       repair.retireDuplicateClass(f.cls.id, dto, f.actor.id, ['admin']),
     ).rejects.toThrow('Enroll each');
-    await database.db
-      .insert(enrollments)
-      .values({
-        classId: canonical.id,
-        sectionId: canonical.sectionId,
-        studentId: f.student.id,
-      });
+    await database.db.insert(enrollments).values({
+      classId: canonical.id,
+      sectionId: canonical.sectionId,
+      studentId: f.student.id,
+    });
     await repair.retireDuplicateClass(f.cls.id, dto, f.actor.id, ['admin']);
     expect(await database.db.query.classRecords.findMany()).toHaveLength(3);
     expect(

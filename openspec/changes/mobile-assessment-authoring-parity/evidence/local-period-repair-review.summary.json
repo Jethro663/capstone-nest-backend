@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-08-31T18:04:37.794Z",
+  "source": "Existing local Compose database; pre-lifecycle snapshot, not production",
+  "readOnly": true,
+  "limitations": [
+    "The complete academic audit requires the missing lifecycle schema (academic_system_states.version).",
+    "Documented school-year defaults were used where no stored policy exists. Review against authoritative school evidence.",
+    "No period mappings, student evidence, placements, or schema were changed."
+  ],
+  "assessmentsReviewed": 5,
+  "issues": [
+    {
+      "quarter": null,
+      "school_year": "2026-2027",
+      "attempt_count": 0,
+      "code": "invalid_or_unassigned_period",
+      "validDestinationPeriods": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "policySource": "documented default (not frozen)",
+      "repairGuidance": "Administrator must confirm period from school records before using the audited repair endpoint.",
+      "localReviewReference": "local-assessment-1"
+    },
+    {
+      "quarter": null,
+      "school_year": "2026-2027",
+      "attempt_count": 0,
+      "code": "invalid_or_unassigned_period",
+      "validDestinationPeriods": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "policySource": "documented default (not frozen)",
+      "repairGuidance": "Administrator must confirm period from school records before using the audited repair endpoint.",
+      "localReviewReference": "local-assessment-2"
+    },
+    {
+      "quarter": null,
+      "school_year": "2026-2027",
+      "attempt_count": 0,
+      "code": "invalid_or_unassigned_period",
+      "validDestinationPeriods": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "policySource": "documented default (not frozen)",
+      "repairGuidance": "Administrator must confirm period from school records before using the audited repair endpoint.",
+      "localReviewReference": "local-assessment-3"
+    },
+    {
+      "quarter": null,
+      "school_year": "2026-2027",
+      "attempt_count": 0,
+      "code": "invalid_or_unassigned_period",
+      "validDestinationPeriods": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "policySource": "documented default (not frozen)",
+      "repairGuidance": "Administrator must confirm period from school records before using the audited repair endpoint.",
+      "localReviewReference": "local-assessment-4"
+    },
+    {
+      "quarter": null,
+      "school_year": "2026-2027",
+      "attempt_count": 0,
+      "code": "invalid_or_unassigned_period",
+      "validDestinationPeriods": [
+        "Q1",
+        "Q2",
+        "Q3"
+      ],
+      "policySource": "documented default (not frozen)",
+      "repairGuidance": "Administrator must confirm period from school records before using the audited repair endpoint.",
+      "localReviewReference": "local-assessment-5"
+    }
+  ],
+  "identifiers": "School-record identifiers omitted from the committed summary. Full read-only repair report remains in the original local checkout."
+}

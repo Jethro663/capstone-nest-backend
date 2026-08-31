@@ -1,3 +1,6 @@
+import { AiAssessmentSettingsDto } from '../assessment-settings';
+import { Type } from 'class-transformer';
+import { ValidateNested } from 'class-validator';
 import {
   IsArray,
   IsBoolean,
@@ -21,6 +24,11 @@ import {
 } from '../../assessments/DTO/assessment.dto';
 
 export class GenerateQuizDraftDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AiAssessmentSettingsDto)
+  assessmentSettings?: AiAssessmentSettingsDto;
+
   @ApiProperty({
     description: 'Class where the assessment draft will be created',
     example: '7c6b6047-f8ef-483b-8d51-c4bac7ed13d2',
@@ -81,7 +89,7 @@ export class GenerateQuizDraftDto {
   })
   @IsOptional()
   @IsEnum(AssessmentType)
-  assessmentType?: AssessmentType = AssessmentType.QUIZ;
+  assessmentType?: AssessmentType;
 
   @ApiPropertyOptional({
     description: 'Passing score for the draft assessment',
@@ -91,7 +99,7 @@ export class GenerateQuizDraftDto {
   @IsInt()
   @Min(1)
   @Max(100)
-  passingScore?: number = 60;
+  passingScore?: number;
 
   @ApiPropertyOptional({
     description: 'Optional teacher instruction to guide generation',
@@ -109,7 +117,7 @@ export class GenerateQuizDraftDto {
   })
   @IsOptional()
   @IsEnum(FeedbackLevel)
-  feedbackLevel?: FeedbackLevel = FeedbackLevel.STANDARD;
+  feedbackLevel?: FeedbackLevel;
 
   @ApiPropertyOptional({ enum: ClassRecordCategory })
   @IsOptional()

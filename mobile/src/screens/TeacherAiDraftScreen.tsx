@@ -1,3 +1,10 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { academicStateService } from "../api/services/academic-state";
+import { classesApi } from "../api/services/classes";
+import { AssessmentSettingsFields } from "../features/assessment-editor/SettingsFields";
+import { DEFAULT_SETTINGS, QUESTION_TYPES as SUPPORTED_QUESTION_TYPES } from "../features/assessment-editor/model";
+import type { AiAssessmentSettings } from "../types/assessment";
+import { assessmentSettingsSummary } from "../features/assessment-editor/settings-summary";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -33,20 +40,26 @@ function getErrorMessage(error: unknown) {
   return toAppError(error).message;
 }
 
-const QUESTION_TYPES = [
-  { value: "multiple_choice", label: "Multiple Choice" },
-  { value: "true_false", label: "True / False" },
-  { value: "short_answer", label: "Short Answer" },
-  { value: "multiple_select", label: "Multiple Select" },
-];
+const QUESTION_TYPES = SUPPORTED_QUESTION_TYPES;
 const TERMINAL_STATUSES = ["completed", "approved", "failed", "cancelled", "rejected"];
 
 export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
+  const queryClient = useQueryClient();
   const { classId, jobId: requestedJobId } = route.params;
   const [indexStatus, setIndexStatus] = useState<Awaited<ReturnType<typeof aiApi.getClassIndexStatus>> | null>(null);
   const [job, setJob] = useState<Awaited<ReturnType<typeof aiApi.createQuizDraftJob>> | null>(null);
   const [result, setResult] = useState<Awaited<ReturnType<typeof aiApi.getQuizDraftJobResult>> | null>(null);
-  const [title, setTitle] = useState("AI Draft Assessment");
+  const [settings, setSettings] = useState<AiAssessmentSettings>({ ...DEFAULT_SETTINGS, type: 'quiz', title: 'AI Draft Assessment' });
+  const [settingsReviewed, setSettingsReviewed] = useState(true);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const context = useQuery({ queryKey: ['ai-assessment-policy', classId], queryFn: async () => {
+    const [cls, current] = await Promise.all([classesApi.getById(classId), academicStateService.getCurrent()]);
+    const policy = cls.schoolYear === current.data.schoolYear ? current.data.policy : (await academicStateService.getPolicy(cls.schoolYear)).data;
+    return { cls, current: current.data, policy };
+  } });
+  useEffect(() => { if (!job?.id && context.data && !settings.quarter) setSettings(current => ({ ...current, quarter: current.quarter ?? (context.data!.cls.schoolYear === context.data!.current.schoolYear ? context.data!.current.quarter : context.data!.policy.periods[0]?.key) })); }, [context.data, job?.id, settings.quarter]);
+  useEffect(() => { if (!job?.id) return; let active = true; setSettingsLoading(true); setSettingsReviewed(false); void aiApi.getQuizDraftSettings(job.id).then(response => { if (active) { setSettings(response.assessmentSettings); setSettingsReviewed(!response.requiresSettingsReview); } }).catch(error => Alert.alert('Unable to load assessment settings', getErrorMessage(error))).finally(() => { if (active) setSettingsLoading(false); }); return () => { active = false; }; }, [job?.id]);
+  const saveSettings = async () => { if (!job?.id) return; setSettingsLoading(true); try { const response = await aiApi.updateQuizDraftSettings(job.id, settings); setSettings(response.assessmentSettings); setSettingsReviewed(true); Alert.alert('Settings saved', 'The generated questions were not changed.'); } catch (error) { Alert.alert('Settings need attention', getErrorMessage(error)); } finally { setSettingsLoading(false); } };
   const [questionCount, setQuestionCount] = useState("10");
   const [questionType, setQuestionType] = useState("multiple_choice");
   const [teacherNote, setTeacherNote] = useState("");
@@ -162,7 +175,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
       const sourceFields = buildQuizDraftSourceFields(useAllReadySources, selectedLessonIds, selectedExtractionIds);
       const created = await aiApi.createQuizDraftJob({
         classId,
-        title: title.trim() || "AI Draft Assessment",
+        assessmentSettings: settings,
         questionCount: Math.max(1, Math.min(15, Number.parseInt(questionCount, 10) || 10)),
         questionType,
         teacherNote: teacherNote.trim() || undefined,
@@ -224,7 +237,12 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
     try {
       setApplying(true);
       const response = await aiApi.applyQuizDraftJob(job.id);
+      setJob(current => current ? { ...current, status: 'approved' } : current);
       await clearTeacherAiDraftJobId(classId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['teacher-ai-jobs'] }),
+        queryClient.invalidateQueries({ queryKey: ['assessments', classId] }),
+      ]);
       navigation.navigate("TeacherAssessmentEditor", { assessmentId: response.applyResult.assessmentId, classId });
     } catch (error) {
       Alert.alert("Unable to apply draft", getErrorMessage(error));
@@ -237,6 +255,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
     if (!job?.id) return;
     try {
       setApplying(true);
+      if (job.status !== 'approved' && !settingsReviewed) { Alert.alert('Review assessment settings', 'Review the settings below and tap Save assessment settings before applying.'); return; }
       const preview = await aiApi.previewQuizDraftApply(job.id);
       if (!preview.canApply) {
         Alert.alert("Draft needs review", preview.blockedReasons[0] || "Resolve review issues before applying.");
@@ -244,7 +263,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
       }
       Alert.alert(
         preview.alreadyApplied ? "Draft already applied" : "Apply quiz draft?",
-        `${preview.assessment.title} - ${preview.assessment.questionCount} question(s), ${preview.assessment.totalPoints} point(s).`,
+        `${preview.assessment.title} - ${preview.assessment.questionCount} question(s), ${preview.assessment.totalPoints} point(s).\n\n${assessmentSettingsSummary(preview.assessmentSettings ?? settings)}\n\nThis creates an unpublished draft.`,
         [
           { text: "Keep reviewing", style: "cancel" },
           { text: preview.alreadyApplied ? "Open assessment" : "Apply draft", onPress: () => void applyJob() },
@@ -259,7 +278,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
 
   const draft = result?.result?.structuredOutput;
   const degradedResult = result?.result?.outputType === "degraded_unavailable";
-  const canGenerate = !submitting && !restoringJob && canGenerateQuizDraft(indexStatus, useAllReadySources, selectedLessonIds, selectedExtractionIds);
+  const canGenerate = !submitting && !restoringJob && !settingsLoading && Boolean(context.data?.policy.periods.some(period => period.key === settings.quarter) && context.data.cls.isActive !== false && Number(context.data.cls.schoolYear.slice(0, 4)) >= Number(context.data.current.schoolYear.slice(0, 4))) && canGenerateQuizDraft(indexStatus, useAllReadySources, selectedLessonIds, selectedExtractionIds);
   const jobDetail = job?.errorMessage || job?.statusMessage || job?.message;
 
   return (
@@ -298,16 +317,26 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
         </View>
       </TeacherPanel>
 
+      <TeacherPanel title="Assessment settings" subtitle="These settings belong to the assessment. Editing them does not regenerate questions.">
+        <View style={{ padding: 14, gap: 12 }}>
+          <Text>{context.data?.cls.subjectName} · {context.data?.cls.schoolYear}</Text>
+          {context.isError && <TeacherActionButton label="Policy failed to load. Retry" onPress={() => void context.refetch()} />}
+          <AssessmentSettingsFields ai classId={classId} periods={context.data?.policy.periods ?? []} value={settings} disabled={settingsLoading || job?.status === 'approved'} onChange={value => { setSettings(value as AiAssessmentSettings); setSettingsReviewed(false); }} />
+          <Text>Resolved period: {context.data?.policy.periods.find(period => period.key === settings.quarter)?.label ?? 'Unassigned'}</Text>
+          {job && job.status !== 'approved' && <TeacherActionButton label={settingsLoading ? 'Saving settings…' : 'Save assessment settings'} disabled={settingsLoading} onPress={() => void saveSettings()} />}
+          {!settingsReviewed && job && <Text>Settings need review and saving before application.</Text>}
+        </View>
+      </TeacherPanel>
       <TeacherPanel title="Generate quiz draft" subtitle="Generation starts only when the selected source scope is ready.">
         <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-          <TeacherInlineField label="Title" value={title} onChangeText={setTitle} />
+
           <TeacherInlineField label="Question count (1-15)" value={questionCount} onChangeText={setQuestionCount} />
           <Text style={{ fontSize: 13, fontWeight: "600", color: "#374151", marginTop: 8, marginBottom: 4 }}>Question Type</Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {QUESTION_TYPES.map((type) => {
               const selected = questionType === type.value;
               return (
-                <TouchableOpacity key={type.value} onPress={() => setQuestionType(type.value)} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? "#4f46e5" : "#f3f4f6", borderWidth: 1, borderColor: selected ? "#4f46e5" : "#e5e7eb" }}>
+                <TouchableOpacity key={type.value} accessibilityRole="button" accessibilityState={{ selected }} onPress={() => setQuestionType(type.value)} style={{ minHeight: 44, minWidth: 44, justifyContent: "center", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: selected ? "#4f46e5" : "#f3f4f6", borderWidth: 1, borderColor: selected ? "#4f46e5" : "#e5e7eb" }}>
                   <Text style={{ fontSize: 12, fontWeight: "600", color: selected ? "#ffffff" : "#374151" }}>{type.label}</Text>
                 </TouchableOpacity>
               );
