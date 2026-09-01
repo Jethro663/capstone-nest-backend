@@ -27,6 +27,6 @@
 ## 6. Verification and release
 
 - [x] 6.1 Validate OpenSpec and run focused plus broad backend, web, mobile, and AI verification
-- [ ] 6.2 Review and stage only owned paths, commit, push developement, and verify exact CI and Railway deployments
+- [x] 6.2 Review and stage only owned paths, commit, push developement, and verify exact CI and Railway deployments
 - [ ] 6.3 Verify a restorable database backup, execute the reviewed production alignment, and confirm live assessment and AI behavior
 - [ ] 6.4 Build, validate, publish, and compare the production-URL ARM64 mobile APK
