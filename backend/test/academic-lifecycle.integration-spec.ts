@@ -1889,7 +1889,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
         .returning();
       const policyService = new AcademicPolicyService(database);
       const policy = await policyService.forYear('2026-2027');
-      await database.db.update(academicSystemStates).set({ quarter: 'Q3' });
+      await database.db.update(academicSystemStates).set({ quarter: 'Q4' });
       const sectionRows: any[] = [],
         classRows: any[] = [],
         studentRows: any[] = [],
@@ -2050,8 +2050,8 @@ describe('academic lifecycle PostgreSQL integration', () => {
           academicScale: {
             students: 1200,
             classes: 240,
-            records: 720,
-            periodGrades: 28800,
+            records: 960,
+            periodGrades: 38400,
             annualGrades: 9600,
             readinessMilliseconds: elapsed,
           },
