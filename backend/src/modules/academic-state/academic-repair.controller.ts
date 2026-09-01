@@ -13,9 +13,12 @@ import { RoleName, Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AcademicAuditService } from './academic-audit.service';
 import { AcademicRepairService } from './academic-repair.service';
+import { AcademicStateAlignmentService } from './academic-state-alignment.service';
 import {
   AcademicRepairReasonDto,
   ClassifyAcademicSubjectDto,
+  ExecuteAcademicStateAlignmentDto,
+  PreviewAcademicStateAlignmentDto,
   RepairAcademicStateDto,
   RepairAssessmentPeriodDto,
   RepairWorkbookPolicyDto,
@@ -30,6 +33,7 @@ export class AcademicRepairController {
   constructor(
     private readonly audit: AcademicAuditService,
     private readonly repair: AcademicRepairService,
+    private readonly alignment: AcademicStateAlignmentService,
   ) {}
   @Get('audit')
   async report(@Query('schoolYear') year?: string) {
@@ -174,6 +178,27 @@ export class AcademicRepairController {
       success: true,
       message: 'Authoritative academic state reconciled',
       data: await this.repair.repairState(dto, user.userId, user.roles),
+    };
+  }
+
+  @Post('repair/state-alignment/preview')
+  async previewStateAlignment(@Body() dto: PreviewAcademicStateAlignmentDto) {
+    return {
+      success: true,
+      message: 'Academic state alignment preview generated',
+      data: await this.alignment.preview(dto),
+    };
+  }
+
+  @Post('repair/state-alignment')
+  async executeStateAlignment(
+    @Body() dto: ExecuteAcademicStateAlignmentDto,
+    @CurrentUser() user: Actor,
+  ) {
+    return {
+      success: true,
+      message: 'Academic state alignment repaired',
+      data: await this.alignment.execute(dto, user.userId, user.roles),
     };
   }
 }

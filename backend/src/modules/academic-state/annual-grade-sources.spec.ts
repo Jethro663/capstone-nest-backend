@@ -17,6 +17,7 @@ describe('annual source selection', () => {
         source('a', 'Q1', 'old'),
         source('b', 'Q2', 'new'),
         source('c', 'Q3', 'new'),
+        source('d', 'Q4', 'new'),
       ],
       [],
     );
@@ -25,6 +26,7 @@ describe('annual source selection', () => {
       'a',
       'b',
       'c',
+      'd',
     ]);
   });
   it('reports missing periods and refuses a partial annual grade', () => {
@@ -32,6 +34,7 @@ describe('annual source selection', () => {
     expect(result.blockers.map((blocker) => blocker.period)).toEqual([
       'Q2',
       'Q3',
+      'Q4',
     ]);
   });
   it('requires explicit selection for duplicate sources even if their grades match', () => {
@@ -40,6 +43,7 @@ describe('annual source selection', () => {
       source('duplicate', 'Q1'),
       source('b', 'Q2'),
       source('c', 'Q3'),
+      source('d', 'Q4'),
     ];
     expect(selectAnnualSources(policy, sources, []).blockers[0].code).toBe(
       'conflicting_period_sources',
@@ -51,7 +55,12 @@ describe('annual source selection', () => {
     ).toEqual([]);
   });
   it('never substitutes another source when a selected source is stale or untrusted', () => {
-    const sources = [source('a', 'Q1'), source('b', 'Q2'), source('c', 'Q3')];
+    const sources = [
+      source('a', 'Q1'),
+      source('b', 'Q2'),
+      source('c', 'Q3'),
+      source('d', 'Q4'),
+    ];
     expect(
       selectAnnualSources(policy, sources, [
         { period: 'Q1', sourceId: 'stale', sourceType: 'period_revision' },
@@ -69,6 +78,7 @@ describe('annual source selection', () => {
         { ...source('external', 'Q1'), sourceType: 'external', classId: null },
         source('b', 'Q2'),
         source('c', 'Q3'),
+        source('d', 'Q4'),
       ],
       [],
     );

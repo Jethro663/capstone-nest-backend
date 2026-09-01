@@ -16,6 +16,7 @@ import type {
   AcademicReadiness,
 } from "@/types/academic-grading";
 import type { ClassRecord } from "@/types/class-record";
+import { AcademicStateAlignmentRecovery } from "./AcademicStateAlignmentRecovery";
 
 const actions = [
   ["preserve-legacy", "Archive exact legacy grades"],
@@ -267,6 +268,13 @@ export function AcademicRecoveryPanel({
           </div>
         </div>
       )}
+      <AcademicStateAlignmentRecovery
+        schoolYear={schoolYear}
+        onChanged={async () => {
+          await onChanged();
+          await refresh();
+        }}
+      />
       <details
         className="mt-4 rounded-md border p-4"
         open={expanded}

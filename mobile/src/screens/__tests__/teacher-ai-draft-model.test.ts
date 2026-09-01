@@ -3,9 +3,40 @@ import {
   acceptReviewWarning,
   buildQuizDraftSourceFields,
   canGenerateQuizDraft,
+  getAiDraftReadinessBlockers,
   isGenerationReady,
   markQuestionReviewed,
 } from "../teacher-ai-draft/model";
+
+it("orders every mobile AI Draft readiness blocker and limits reindex actions", () => {
+  const blockers = getAiDraftReadinessBlockers({
+    policyStatus: "error",
+    classActive: false,
+    historicalClass: true,
+    validQuarter: false,
+    hasRunningJob: true,
+    validQuestionCount: false,
+    indexStatus: "stale",
+    hasReadySource: false,
+    hasSelectedSource: false,
+    submitting: true,
+  });
+  expect(blockers.map((blocker) => blocker.code)).toEqual([
+    "policy_error",
+    "inactive_class",
+    "historical_class",
+    "invalid_quarter",
+    "running_job",
+    "invalid_question_count",
+    "index_stale",
+    "no_ready_source",
+    "no_source_selected",
+    "submitting",
+  ]);
+  expect(blockers.filter((blocker) => blocker.canReindex).map((blocker) => blocker.code)).toEqual([
+    "index_stale",
+  ]);
+});
 
 const readyStatus: AiClassIndexStatus = {
   classId: "class-1",

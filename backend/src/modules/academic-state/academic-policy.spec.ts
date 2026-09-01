@@ -11,7 +11,7 @@ const legacy = () => getDefaultAcademicPolicy('2025-2026');
 const modern = () => getDefaultAcademicPolicy('2026-2027');
 
 describe('academic policy', () => {
-  it('preserves historic quarters and exposes three modern terms', () => {
+  it('exposes four school-authoritative quarters for legacy and modern years', () => {
     expect(legacy().periods.map((p) => p.key)).toEqual([
       'Q1',
       'Q2',
@@ -19,10 +19,13 @@ describe('academic policy', () => {
       'Q4',
     ]);
     expect(modern().periods).toEqual([
-      { key: 'Q1', label: 'Term 1' },
-      { key: 'Q2', label: 'Term 2' },
-      { key: 'Q3', label: 'Term 3' },
+      { key: 'Q1', label: 'Quarter 1' },
+      { key: 'Q2', label: 'Quarter 2' },
+      { key: 'Q3', label: 'Quarter 3' },
+      { key: 'Q4', label: 'Quarter 4' },
     ]);
+    expect(modern().id).toBe('deped-2026-q4-v2');
+    expect(getDefaultAcademicPolicy('2027-2028').id).toBe('deped-2027-q4-v2');
     expect(legacy().gradeMethod).toBe('legacy_transmutation');
     expect(modern().gradeMethod).toBe('adjusted_2026');
     expect(getDefaultAcademicPolicy('2027-2028').gradeMethod).toBe(
@@ -37,7 +40,7 @@ describe('academic policy', () => {
   );
   it('does not share mutable policy arrays', () => {
     modern().periods.pop();
-    expect(modern().periods).toHaveLength(3);
+    expect(modern().periods).toHaveLength(4);
   });
   it.each([
     [0, 60],
@@ -133,11 +136,12 @@ describe('academic policy', () => {
         { period: 'Q1', grade: 75 },
         { period: 'Q2', grade: 75 },
         { period: 'Q3', grade: 74 },
+        { period: 'Q4', grade: 74 },
       ]),
     ).toEqual({
-      sum: 224,
-      divisor: 3,
-      rawAverage: 74.666667,
+      sum: 298,
+      divisor: 4,
+      rawAverage: 74.5,
       officialGrade: 75,
       remarks: 'Passed',
     });
@@ -148,6 +152,7 @@ describe('academic policy', () => {
         { period: 'Q1', grade: 74.5 },
         { period: 'Q2', grade: 75 },
         { period: 'Q3', grade: 75 },
+        { period: 'Q4', grade: 75 },
       ]),
     ).toThrow('whole');
   });

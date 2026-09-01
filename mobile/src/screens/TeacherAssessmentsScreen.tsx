@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -9,12 +9,18 @@ import { queryKeys, useTeacherAiJobs, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { assessmentsApi } from "../api/services/assessments";
 import { aiApi } from "../api/services/ai";
+import { academicStateService } from "../api/services/academic-state";
 import { clearTeacherAiDraftJobIdIfMatches } from "../api/teacher-ai-draft-jobs";
 import type { MainTabParamList, RootStackParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import { TeacherAiJobsPanel } from "./teacher-assessments/TeacherAiJobsPanel";
 import type { TeacherAiJobSummary } from "../types/ai";
+import type { AcademicPeriodKey } from "../types/academic-grading";
+import {
+  filterTeacherAssessments,
+  type TeacherAssessmentStatusFilter,
+} from "./teacher-assessments/model";
 import {
   TeacherActionButton,
   TeacherChip,
@@ -32,8 +38,6 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
-type FilterMode = "all" | "published" | "draft" | "attention" | "history";
-
 function formatDate(value?: string | null) {
   if (!value) return "No due date";
   const date = new Date(value);
@@ -47,7 +51,11 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const classesQuery = useTeacherClasses(teacherId);
   const aiJobsQuery = useTeacherAiJobs();
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterMode>("all");
+  const [filter, setFilter] =
+    useState<TeacherAssessmentStatusFilter>("all");
+  const [periodFilter, setPeriodFilter] =
+    useState<"all" | AcademicPeriodKey>("all");
+  const [classFilter, setClassFilter] = useState("all");
   const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
   const [creatingAssessment, setCreatingAssessment] = useState(false);
   const [selectedAssessmentIds, setSelectedAssessmentIds] = useState<string[]>([]);
@@ -56,6 +64,10 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   const [isDeletingAssessment, setIsDeletingAssessment] = useState(false);
   const [deletingAiJob, setDeletingAiJob] = useState<TeacherAiJobSummary | null>(null);
   const [isDeletingAiJob, setIsDeletingAiJob] = useState(false);
+  const policyQuery = useQuery({
+    queryKey: ["academic-state", "current", "teacher-assessment-filters"],
+    queryFn: async () => (await academicStateService.getCurrent()).data,
+  });
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
   const assessmentQueries = useQueries({
@@ -84,19 +96,13 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
   );
 
   const filteredRecords = useMemo(() => {
-    return records.filter((assessment) => {
-      if (filter === "published" && !assessment.isPublished) return false;
-      const historical = assessment.academicCapabilities?.schoolYear !== assessment.academicCapabilities?.activeSchoolYear;
-      if (filter === "draft" && (assessment.isPublished || historical)) return false;
-      if (filter === "history" && !historical) return false;
-      if (filter === "attention" && (historical || assessment.academicCapabilities?.canPrepare)) return false;
-      if (search.trim()) {
-        const haystack = `${assessment.title} ${assessment.classLabel} ${assessment.type}`.toLowerCase();
-        if (!haystack.includes(search.trim().toLowerCase())) return false;
-      }
-      return true;
+    return filterTeacherAssessments(records, {
+      period: periodFilter,
+      status: filter,
+      classId: classFilter,
+      search,
     });
-  }, [filter, records, search]);
+  }, [classFilter, filter, periodFilter, records, search]);
 
   const classGroups = useMemo(
     () =>
@@ -222,6 +228,20 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
       {assessmentLoadFailed && <TeacherPanel title="Assessments could not fully load" subtitle="This is a loading problem, not a historical or empty class. Retry to refresh assessments and academic restrictions.">
         <View style={{ padding: 14 }}><TeacherActionButton label="Retry assessment loading" icon="refresh" onPress={() => void refetchAllAssessments()} /></View>
       </TeacherPanel>}
+      {policyQuery.isError && (
+        <TeacherPanel
+          title="Quarter policy could not load"
+          subtitle="Retry before filtering assessments by quarter. Existing assessments remain visible under All Quarters."
+        >
+          <View style={{ padding: 14 }}>
+            <TeacherActionButton
+              label="Retry quarter policy"
+              icon="refresh"
+              onPress={() => void policyQuery.refetch()}
+            />
+          </View>
+        </TeacherPanel>
+      )}
       <TeacherStats
         items={[
           { label: "Assessments", value: filteredRecords.length, tone: "red" },
@@ -233,10 +253,54 @@ export function TeacherAssessmentsScreen({ navigation }: Props) {
 
       <TeacherSearch value={search} onChangeText={setSearch} placeholder="Search by class or assessment title" />
 
+      <View style={{ marginHorizontal: 16, marginTop: 10 }}>
+        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
+          Quarter
+        </Text>
+        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+          <TeacherChip
+            label="All Quarters"
+            active={periodFilter === "all"}
+            onPress={() => {
+              setPeriodFilter("all");
+              setSelectedAssessmentIds([]);
+            }}
+          />
+          {(policyQuery.data?.policy.periods ?? []).map((period) => (
+            <TeacherChip
+              key={period.key}
+              label={period.label}
+              active={periodFilter === period.key}
+              onPress={() => {
+                setPeriodFilter(period.key);
+                setSelectedAssessmentIds([]);
+              }}
+            />
+          ))}
+        </View>
+      </View>
+
       <View style={{ marginHorizontal: 16, marginTop: 10, flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
         {(["all", "draft", "published", "attention", "history"] as const).map((entry) => (
           <TeacherChip key={entry} label={entry === "published" ? "Ready to give" : entry === "attention" ? "Needs attention" : entry[0].toUpperCase() + entry.slice(1)} active={filter === entry} onPress={() => setFilter(entry)} />
         ))}
+      </View>
+
+      <View style={{ marginHorizontal: 16, marginTop: 10 }}>
+        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: "700", marginBottom: 6 }}>
+          Class
+        </Text>
+        <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+          <TeacherChip label="All Classes" active={classFilter === "all"} onPress={() => setClassFilter("all")} />
+          {(classesQuery.data ?? []).map((classItem) => (
+            <TeacherChip
+              key={classItem.id}
+              label={classItem.subjectCode}
+              active={classFilter === classItem.id}
+              onPress={() => setClassFilter(classItem.id)}
+            />
+          ))}
+        </View>
       </View>
 
       <TeacherPanel

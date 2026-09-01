@@ -9,6 +9,14 @@ import { RichTextRenderer } from "@/components/shared/rich-text/RichTextRenderer
 import { getApiErrorMessage } from "@/lib/api-error";
 import type { AiAssessmentSettings } from "@/types/assessment";
 import type { AcademicPeriod } from "@/types/academic-grading";
+import type { AiDraftPolicyStatus } from "./ai-draft-readiness";
+
+export interface AiAcademicSettingsReadiness {
+  policyStatus: AiDraftPolicyStatus;
+  classActive: boolean;
+  historicalClass: boolean;
+  validQuarter: boolean;
+}
 
 export const DEFAULT_AI_ASSESSMENT_SETTINGS: AiAssessmentSettings = {
   title: "AI Draft Assessment",
@@ -36,11 +44,15 @@ export function AiAssessmentSettingsFields({
   value: AiAssessmentSettings;
   onChange(value: AiAssessmentSettings): void;
   disabled?: boolean;
-  onReady?(ready: boolean): void;
+  onReady?(readiness: AiAcademicSettingsReadiness): void;
 }) {
   const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
   const [context, setContext] = useState("Loading class policy…");
   const [error, setError] = useState("");
+  const [policyStatus, setPolicyStatus] =
+    useState<AiDraftPolicyStatus>("loading");
+  const [classActive, setClassActive] = useState(true);
+  const [historicalClass, setHistoricalClass] = useState(false);
   const [reload, setReload] = useState(0);
   const [placements, setPlacements] = useState<
     Array<{ value: string; label: string; quarter: string }>
@@ -49,6 +61,7 @@ export function AiAssessmentSettingsFields({
     useState<AiAssessmentSettings["quarter"]>();
   useEffect(() => {
     let active = true;
+    setPolicyStatus("loading");
     void Promise.all([
       classService.getById(classId),
       academicStateService.getCurrent(),
@@ -61,6 +74,12 @@ export function AiAssessmentSettingsFields({
             : (await academicStateService.getPolicy(cls.data.schoolYear)).data;
         if (!active) return;
         setPeriods(policy.periods);
+        setClassActive(cls.data.isActive !== false);
+        setHistoricalClass(
+          Number(cls.data.schoolYear.slice(0, 4)) <
+            Number(current.data.schoolYear.slice(0, 4)),
+        );
+        setPolicyStatus("ready");
         setDefaultPeriod(cls.data.schoolYear === current.data.schoolYear ? current.data.quarter : policy.periods[0]?.key);
         setContext(`${cls.data.subjectName} · ${cls.data.schoolYear}`);
         setError("");
@@ -80,14 +99,13 @@ export function AiAssessmentSettingsFields({
             ),
           ),
         );
-        onReady?.(cls.data.isActive !== false && Number(cls.data.schoolYear.slice(0, 4)) >= Number(current.data.schoolYear.slice(0, 4)));
       })
       .catch((cause) => {
         if (active) {
           setError(
             getApiErrorMessage(cause, "Could not load academic settings"),
           );
-          onReady?.(false);
+          setPolicyStatus("error");
         }
       });
     return () => {
@@ -96,6 +114,24 @@ export function AiAssessmentSettingsFields({
     // Settings changes must not reload the policy or reset teacher selections.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId, reload]);
+  useEffect(() => {
+    onReady?.({
+      policyStatus,
+      classActive,
+      historicalClass,
+      validQuarter:
+        policyStatus === "ready"
+          ? periods.some((period) => period.key === value.quarter)
+          : true,
+    });
+  }, [
+    classActive,
+    historicalClass,
+    onReady,
+    periods,
+    policyStatus,
+    value.quarter,
+  ]);
   useEffect(() => {
     if (
       !value.quarter &&

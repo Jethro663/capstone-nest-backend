@@ -99,14 +99,14 @@ describe('AcademicPolicyService', () => {
       ),
     ).rejects.toThrow('active period');
   });
-  it('rejects Q4 in a three-term year, closed-year writes, and missing-period release', async () => {
+  it('allows modern Q4 preparation while rejecting closed-year writes and missing-period release', async () => {
     const { service, db } = make();
     await expect(
       service.assertAssessmentAction(
         { classId: 'class', quarter: 'Q4' },
         'prepare',
       ),
-    ).rejects.toThrow('not part');
+    ).resolves.toBeDefined();
     await expect(
       service.assertAssessmentAction(
         { classId: 'class', quarter: null },

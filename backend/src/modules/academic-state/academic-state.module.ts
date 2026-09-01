@@ -11,6 +11,7 @@ import { AcademicAuditService } from './academic-audit.service';
 import { AcademicRepairService } from './academic-repair.service';
 import { AcademicRepairController } from './academic-repair.controller';
 import { AcademicGradingModule } from './academic-grading.module';
+import { AcademicStateAlignmentService } from './academic-state-alignment.service';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AcademicGradingModule } from './academic-grading.module';
     AcademicPeriodService,
     AcademicAuditService,
     AcademicRepairService,
+    AcademicStateAlignmentService,
   ],
   exports: [AcademicStateService],
 })

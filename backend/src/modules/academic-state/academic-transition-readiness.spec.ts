@@ -16,7 +16,7 @@ function completeEvidence(): TransitionEvidence {
   }));
   return {
     policy,
-    activePeriod: 'Q3',
+    activePeriod: 'Q4',
     sections: [{ id: 'section', gradeLevel: '7', name: 'A', isActive: true }],
     classes: [
       {
@@ -87,7 +87,7 @@ describe('expected academic transition matrix', () => {
   it('uses every policy period and a current annual snapshot', () => {
     const result = evaluateTransitionReadiness(completeEvidence());
     expect(result.transitionBlocked).toBe(false);
-    expect(result.expectedPeriodRecords).toBe(3);
+    expect(result.expectedPeriodRecords).toBe(4);
     expect(result.studentOutcomes[0]).toMatchObject({
       outcome: 'promoted',
       targetGradeLevel: '8',
@@ -101,7 +101,7 @@ describe('expected academic transition matrix', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'missing_period_record',
-          period: 'Q3',
+          period: 'Q4',
           teacherId: 'teacher',
         }),
       ]),

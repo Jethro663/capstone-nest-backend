@@ -27,11 +27,12 @@ const current = {
   quarter: "Q1",
   version: 4,
   periods: [
-    { key: "Q1", label: "Term 1" },
-    { key: "Q2", label: "Term 2" },
-    { key: "Q3", label: "Term 3" },
+    { key: "Q1", label: "Quarter 1" },
+    { key: "Q2", label: "Quarter 2" },
+    { key: "Q3", label: "Quarter 3" },
+    { key: "Q4", label: "Quarter 4" },
   ],
-  policy: { id: "deped-2026-v1", gradeMethod: "adjusted_2026" },
+  policy: { id: "deped-2026-q4-v2", gradeMethod: "adjusted_2026" },
   updatedAt: "2026-08-31T00:00:00Z",
   transitionConfirmationText: "TRANSITION",
 };
@@ -54,13 +55,13 @@ beforeEach(() => {
         promotionReadiness: {
           transitionBlocked: true,
           message: "Resolve missing grades",
-          expectedPeriodRecords: 3,
+          expectedPeriodRecords: 4,
           finalizedPeriodRecords: 1,
           expectedAnnualGrades: 1,
           blockers: [
             {
               code: "missing_period_record",
-              message: "Mathematics: Term 2 requires one class record.",
+              message: "Mathematics: Quarter 2 requires one class record.",
               classId: "class-1",
             },
           ],
@@ -83,13 +84,11 @@ beforeEach(() => {
     },
   });
 });
-it("shows policy terms and keeps a blocked transition unavailable with an actionable destination", async () => {
+it("shows Quarter 1-4 and keeps a blocked transition unavailable with an actionable destination", async () => {
   render(<Page />);
   expect(await screen.findByLabelText("Target period")).toBeInTheDocument();
-  expect(
-    screen.queryByRole("option", { name: /Q4|Term 4|Quarter 4/ }),
-  ).not.toBeInTheDocument();
-  await screen.findByText("Mathematics: Term 2 requires one class record.");
+  expect(screen.getByRole("option", { name: "Quarter 4" })).toBeInTheDocument();
+  await screen.findByText("Mathematics: Quarter 2 requires one class record.");
   expect(
     screen.getByRole("button", { name: "Review year transition" }),
   ).toBeDisabled();
@@ -113,12 +112,12 @@ it("requires preview and password, then submits the exact observed activation ve
   );
   await screen.findByText("No record is automatically finalized.");
   expect(
-    screen.getByRole("button", { name: "Activate Term 2" }),
+    screen.getByRole("button", { name: "Activate Quarter 2" }),
   ).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Password for period activation"), {
     target: { value: "invented-test-password" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Activate Term 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Activate Quarter 2" }));
   await waitFor(() =>
     expect(academicStateService.activatePeriod).toHaveBeenCalledWith(
       expect.objectContaining({

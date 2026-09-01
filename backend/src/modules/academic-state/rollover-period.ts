@@ -9,7 +9,9 @@ export function resolveRolloverPeriod(
   validPeriods: readonly string[],
 ) {
   const destination =
-    mapping[(source || 'unassigned') as keyof RolloverPeriodMapping];
+    source && validPeriods.includes(source)
+      ? source
+      : mapping[(source || 'unassigned') as keyof RolloverPeriodMapping];
   if (!destination)
     throw new BadRequestException(
       `Choose an explicit destination period for copied assessments from ${source || 'unassigned'}`,

@@ -42,14 +42,19 @@ describe('assessment academic capabilities', () => {
       canGrade: true,
     });
   });
-  it('keeps invalid historical evidence viewable only to its previous participant', () => {
+  it('keeps valid Q4 historical evidence read only', () => {
     const historic = {
       ...input,
       quarter: 'Q4',
       activeSchoolYear: '2027-2028',
       classActive: false,
     };
-    expect(assessmentAcademicCapabilities(historic).canView).toBe(false);
+    expect(assessmentAcademicCapabilities(historic)).toMatchObject({
+      canView: true,
+      canPrepare: false,
+      canStart: false,
+      canGrade: false,
+    });
     expect(
       assessmentAcademicCapabilities({ ...historic, hasAttempt: true }),
     ).toMatchObject({

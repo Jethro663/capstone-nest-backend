@@ -1,6 +1,7 @@
 'use client';
 
-import { AiAssessmentSettingsFields, DEFAULT_AI_ASSESSMENT_SETTINGS } from '@/components/teacher/assessment/AiAssessmentSettingsFields';
+import { AiAssessmentSettingsFields, DEFAULT_AI_ASSESSMENT_SETTINGS, type AiAcademicSettingsReadiness } from '@/components/teacher/assessment/AiAssessmentSettingsFields';
+import { getAiDraftReadinessBlockers, type AiDraftIndexStatus } from '@/components/teacher/assessment/ai-draft-readiness';
 import type { AiAssessmentSettings } from '@/types/assessment';
 import { assessmentSettingsSummary } from '@/lib/assessment-settings-summary';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -297,7 +298,13 @@ export default function TeacherAiDraftQuizPage() {
   const [assessmentSettings, setAssessmentSettings] = useState<AiAssessmentSettings>(DEFAULT_AI_ASSESSMENT_SETTINGS);
   const [settingsReviewed, setSettingsReviewed] = useState(true);
   const [settingsLoading, setSettingsLoading] = useState(false);
-  const [policyReady, setPolicyReady] = useState(false);
+  const [academicReadiness, setAcademicReadiness] =
+    useState<AiAcademicSettingsReadiness>({
+      policyStatus: 'loading',
+      classActive: true,
+      historicalClass: false,
+      validQuarter: true,
+    });
   const title = assessmentSettings.title ?? '';
   const setTitle = (title: string) => { setAssessmentSettings(current => ({ ...current, title })); setSettingsReviewed(false); };
   const [teacherNote, setTeacherNote] = useState('');
@@ -656,6 +663,10 @@ export default function TeacherAiDraftQuizPage() {
     parsedQuestionCount >= 1 &&
     parsedQuestionCount <= 15;
   const hasAnySource = lessons.length + extractions.length > 0;
+  const hasReadySource =
+    (indexStatus?.readyLessons?.length ?? 0) +
+      (indexStatus?.readyExtractions?.length ?? 0) >
+    0;
   const hasManualSelection =
     selectedLessonIds.length + selectedExtractionIds.length > 0;
   const hasRunningJob = Boolean(
@@ -670,14 +681,28 @@ export default function TeacherAiDraftQuizPage() {
       !indexStatus.needsReindex &&
       !readinessUnavailable,
   );
-  const canGenerate =
-    policyReady && Boolean(assessmentSettings.quarter) && !settingsLoading &&
-    !submitting &&
-    !hasRunningJob &&
-    generationReady &&
-    hasAnySource &&
-    isQuestionCountValid &&
-    (useAllSourcesWhenNoneSelected || hasManualSelection);
+  const draftIndexStatus: AiDraftIndexStatus = readinessUnavailable
+    ? 'unavailable'
+    : indexStatus?.needsReindex || indexStatus?.isStale
+      ? 'stale'
+      : !indexStatus || indexStatus.chunksIndexed <= 0
+        ? 'empty'
+        : 'ready';
+  const readinessBlockers = getAiDraftReadinessBlockers({
+    ...academicReadiness,
+    validQuarter:
+      academicReadiness.validQuarter &&
+      Boolean(assessmentSettings.quarter) &&
+      !settingsLoading,
+    hasRunningJob,
+    validQuestionCount: isQuestionCountValid,
+    indexStatus: draftIndexStatus,
+    hasReadySource: generationReady && hasReadySource,
+    hasSelectedSource:
+      hasAnySource && (useAllSourcesWhenNoneSelected || hasManualSelection),
+    submitting,
+  });
+  const canGenerate = readinessBlockers.length === 0;
 
   const readinessBadge = getReadinessBadge(indexStatus);
   const assessmentId =
@@ -796,7 +821,7 @@ export default function TeacherAiDraftQuizPage() {
   };
 
   const handleGenerate = async () => {
-    if (!policyReady || !assessmentSettings.quarter) { toast.error('Review valid academic settings before generating.'); return; }
+    if (readinessBlockers.length || !assessmentSettings.quarter) { toast.error(readinessBlockers[0]?.message ?? 'Review valid academic settings before generating.'); return; }
     if (!isQuestionCountValid) {
       toast.error('Question count must be between 1 and 15.');
       return;
@@ -1208,19 +1233,21 @@ export default function TeacherAiDraftQuizPage() {
           </div>
 
           <div className="teacher-ai-draft__header-buttons">
-            <Button
-              type="button"
-              className="teacher-class-workspace__outline"
-              onClick={() => void handleReindex()}
-              disabled={reindexing || deleting || hasRunningJob}
-            >
-              {reindexing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Reindex Sources
-            </Button>
+            {readinessBlockers.some((blocker) => blocker.canReindex) && (
+              <Button
+                type="button"
+                className="teacher-class-workspace__outline"
+                onClick={() => void handleReindex()}
+                disabled={reindexing || deleting || hasRunningJob}
+              >
+                {reindexing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Reindex Sources
+              </Button>
+            )}
             <Button
               type="button"
               className="teacher-ai-draft__danger"
@@ -1269,7 +1296,7 @@ export default function TeacherAiDraftQuizPage() {
       </header>
 
       <div hidden={activeTab === 'sources'} className="mb-4 space-y-3">
-        <AiAssessmentSettingsFields classId={classId} value={assessmentSettings} onReady={setPolicyReady} disabled={settingsLoading || job?.status === 'approved'} onChange={value => { setAssessmentSettings(value); setSettingsReviewed(false); }} />
+        <AiAssessmentSettingsFields classId={classId} value={assessmentSettings} onReady={setAcademicReadiness} disabled={settingsLoading || job?.status === 'approved'} onChange={value => { setAssessmentSettings(value); setSettingsReviewed(false); }} />
         {currentJobId && job?.status !== 'approved' && <Button onClick={() => void saveAssessmentSettings()} disabled={settingsLoading}>{settingsLoading ? 'Saving settings…' : 'Save assessment settings'}</Button>}
         {!settingsReviewed && currentJobId && <p role="status">Review and save the assessment settings before applying this draft.</p>}
       </div>
@@ -1598,17 +1625,16 @@ export default function TeacherAiDraftQuizPage() {
             </div>
 
             {!canGenerate ? (
-              <p className="teacher-ai-draft__hint">
-                {hasRunningJob
-                  ? 'Wait for the current AI generation to finish before starting another draft.'
-                  : readinessUnavailable
-                    ? 'AI source readiness is temporarily unavailable. Refresh the page or run reindex when the AI service is ready.'
-                  : hasAnySource
-                    ? generationReady
-                      ? 'Choose at least one valid source or keep the fallback option enabled. Question count must be valid.'
-                      : 'Finish source indexing before generating. Reindex the class once the selected materials are ready.'
-                    : 'No source lessons or extractions are available for this class yet.'}
-              </p>
+              <div className="teacher-ai-draft__hint" role="status">
+                <p className="font-semibold">{readinessBlockers[0]?.message}</p>
+                {readinessBlockers.length > 1 && (
+                  <ul className="mt-2 list-disc space-y-1 pl-5">
+                    {readinessBlockers.slice(1).map((blocker) => (
+                      <li key={blocker.code}>{blocker.message}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             ) : null}
 
             <div className="teacher-ai-draft__actions">

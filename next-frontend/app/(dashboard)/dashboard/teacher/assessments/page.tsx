@@ -6,6 +6,7 @@ import { ClipboardCheck, Clock3, Search, Sparkles } from 'lucide-react';
 import { useAuth } from '@/providers/AuthProvider';
 import { assessmentService } from '@/services/assessment-service';
 import { classService } from '@/services/class-service';
+import { academicStateService } from '@/services/academic-state-service';
 import {
   TeacherEmptyState,
   TeacherPageShell,
@@ -19,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DashboardStatePanel } from '@/components/layout/DashboardStatePanel';
 import type { Assessment } from '@/types/assessment';
 import type { ClassItem } from '@/types/class';
+import type { AcademicPeriod, AcademicPeriodKey } from '@/types/academic-grading';
 
 type AssessmentWithClass = Assessment & {
   classLabel: string;
@@ -52,6 +54,10 @@ export default function TeacherAssessmentsPage() {
   const [collectionState, setCollectionState] =
     useState<TeacherCollectionState>('loading');
   const [selectedClassId, setSelectedClassId] = useState('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<'all' | AcademicPeriodKey>('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'published' | 'draft'>('all');
+  const [periods, setPeriods] = useState<AcademicPeriod[]>([]);
+  const [periodLoadError, setPeriodLoadError] = useState(false);
   const [search, setSearch] = useState('');
 
   const fetchData = useCallback(() => {
@@ -130,9 +136,37 @@ export default function TeacherAssessmentsPage() {
     void fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void academicStateService
+      .getCurrent()
+      .then((response) => {
+        if (!cancelled) {
+          setPeriods(response.data.policy.periods);
+          setPeriodLoadError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPeriods([]);
+          setPeriodLoadError(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredAssessments = useMemo(() => {
     return assessments.filter((assessment) => {
       const matchesClass = selectedClassId === 'all' || assessment.classId === selectedClassId;
+      const matchesPeriod =
+        selectedPeriod === 'all' || assessment.quarter === selectedPeriod;
+      const matchesStatus =
+        selectedStatus === 'all' ||
+        (selectedStatus === 'published'
+          ? assessment.isPublished
+          : !assessment.isPublished);
       const needle = search.trim().toLowerCase();
       const matchesSearch =
         needle.length === 0 ||
@@ -140,9 +174,9 @@ export default function TeacherAssessmentsPage() {
         assessment.classLabel.toLowerCase().includes(needle) ||
         formatAssessmentType(assessment.type).toLowerCase().includes(needle);
 
-      return matchesClass && matchesSearch;
+      return matchesClass && matchesPeriod && matchesStatus && matchesSearch;
     });
-  }, [assessments, search, selectedClassId]);
+  }, [assessments, search, selectedClassId, selectedPeriod, selectedStatus]);
 
   if (collectionState === 'loading') {
     return (
@@ -209,10 +243,41 @@ export default function TeacherAssessmentsPage() {
     >
       <TeacherSectionCard
         title="Assessment Filters"
-        description="Filter by class or search by title and assessment type."
+        description="Quarter, status, class, and search filters are combined. Unassigned assessments appear only under All Quarters."
       >
-        <div className="grid gap-4 md:grid-cols-[minmax(14rem,18rem)_1fr]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(12rem,16rem)_minmax(10rem,14rem)_minmax(10rem,14rem)_1fr]">
           <select
+            aria-label="Quarter filter"
+            value={selectedPeriod}
+            onChange={(event) =>
+              setSelectedPeriod(event.target.value as 'all' | AcademicPeriodKey)
+            }
+            disabled={periods.length === 0}
+            className="teacher-select text-sm font-semibold"
+          >
+            <option value="all">All Quarters</option>
+            {periods.map((period) => (
+              <option key={period.key} value={period.key}>
+                {period.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Status filter"
+            value={selectedStatus}
+            onChange={(event) =>
+              setSelectedStatus(
+                event.target.value as 'all' | 'published' | 'draft',
+              )
+            }
+            className="teacher-select text-sm font-semibold"
+          >
+            <option value="all">All statuses</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+          <select
+            aria-label="Class filter"
             value={selectedClassId}
             onChange={(event) => setSelectedClassId(event.target.value)}
             className="teacher-select text-sm font-semibold"
@@ -234,6 +299,12 @@ export default function TeacherAssessmentsPage() {
             />
           </div>
         </div>
+        {periodLoadError && (
+          <p role="alert" className="mt-3 text-sm text-red-700">
+            Quarter policy could not be loaded. Refresh before filtering by
+            quarter.
+          </p>
+        )}
       </TeacherSectionCard>
 
       <TeacherSectionCard
@@ -285,6 +356,9 @@ export default function TeacherAssessmentsPage() {
                     <p className="text-base font-black text-[var(--teacher-text-strong)]">{assessment.title}</p>
                     <Badge variant="outline" className="teacher-button-outline rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase">
                       {assessment.isPublished ? 'Published' : 'Draft'}
+                    </Badge>
+                    <Badge variant="outline" className="teacher-button-outline rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase">
+                      {periods.find((period) => period.key === assessment.quarter)?.label ?? 'Unassigned'}
                     </Badge>
                   </div>
                   <p className="text-sm text-[var(--teacher-text-muted)]">{assessment.classLabel}</p>

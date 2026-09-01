@@ -61,6 +61,17 @@ export default function AdminSystemSettingsPage() {
         schoolYear: `${start + 1}-${start + 2}`,
       });
       setPreview(next);
+      setAssessmentPeriodMapping(
+        Object.fromEntries(
+          (next.impact.assessmentPeriodSources ?? [])
+            .filter((source) =>
+              next.impact.destinationPeriods?.some(
+                (period) => period.key === source,
+              ),
+            )
+            .map((source) => [source, source as AcademicQuarter]),
+        ),
+      );
     } catch (err) {
       setPreview(null);
       setError(getApiErrorMessage(err, "Academic state could not be loaded."));
@@ -443,8 +454,8 @@ export default function AdminSystemSettingsPage() {
               {preview.impact.reusableSectionsToCreate} sections.
             </p>
           )}
-          <div className="space-y-2"><p className="text-sm">Map copied assessment drafts to the destination year. Historical assessments and student results remain unchanged.</p>
-            {(preview?.impact.assessmentPeriodSources ?? []).map(source => <label key={source} className="grid gap-1 text-sm">Source {source}<select aria-label={`Destination period for ${source}`} className="rounded border p-2" value={assessmentPeriodMapping[source] ?? ''} onChange={event => setAssessmentPeriodMapping(current => ({ ...current, [source]: event.target.value as AcademicQuarter }))}><option value="">Choose destination period</option>{preview?.impact.destinationPeriods?.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label>)}
+          <div className="space-y-2"><p className="text-sm">Copied assessment drafts preserve their existing quarter. Only unassigned or policy-invalid drafts require a destination choice; historical assessments and student results remain unchanged.</p>
+            {(preview?.impact.assessmentPeriodSources ?? []).filter(source => !(preview?.impact.destinationPeriods ?? []).some(period => period.key === source)).map(source => <label key={source} className="grid gap-1 text-sm">Source {source}<select aria-label={`Destination period for ${source}`} className="rounded border p-2" value={assessmentPeriodMapping[source] ?? ''} onChange={event => setAssessmentPeriodMapping(current => ({ ...current, [source]: event.target.value as AcademicQuarter }))}><option value="">Choose destination period</option>{preview?.impact.destinationPeriods?.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label>)}
           </div>
           <Label htmlFor="transition-password">Admin password</Label>
           <Input

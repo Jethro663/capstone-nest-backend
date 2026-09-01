@@ -29,7 +29,7 @@ import {
 import {
   acceptReviewWarning,
   buildQuizDraftSourceFields,
-  canGenerateQuizDraft,
+  getAiDraftReadinessBlockers,
   markQuestionReviewed,
 } from "./teacher-ai-draft/model";
 import { TeacherAiDraftReviewPanel } from "./teacher-ai-draft/TeacherAiDraftReviewPanel";
@@ -69,6 +69,7 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  const [indexLoadFailed, setIndexLoadFailed] = useState(false);
   const [restoringJob, setRestoringJob] = useState(true);
   const [savingDraft, setSavingDraft] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -77,7 +78,9 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
     try {
       setLoading(true);
       setIndexStatus(await aiApi.getClassIndexStatus(classId));
+      setIndexLoadFailed(false);
     } catch (error) {
+      setIndexLoadFailed(true);
       Alert.alert("Unable to load AI readiness", getErrorMessage(error));
     } finally {
       setLoading(false);
@@ -169,6 +172,10 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
   };
 
   const createJob = async () => {
+    if (readinessBlockers.length) {
+      Alert.alert("AI Draft is not ready", readinessBlockers[0].message);
+      return;
+    }
     try {
       setSubmitting(true);
       setResult(null);
@@ -278,7 +285,51 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
 
   const draft = result?.result?.structuredOutput;
   const degradedResult = result?.result?.outputType === "degraded_unavailable";
-  const canGenerate = !submitting && !restoringJob && !settingsLoading && Boolean(context.data?.policy.periods.some(period => period.key === settings.quarter) && context.data.cls.isActive !== false && Number(context.data.cls.schoolYear.slice(0, 4)) >= Number(context.data.current.schoolYear.slice(0, 4))) && canGenerateQuizDraft(indexStatus, useAllReadySources, selectedLessonIds, selectedExtractionIds);
+  const parsedQuestionCount = Number(questionCount);
+  const validQuestionCount =
+    Number.isInteger(parsedQuestionCount) &&
+    parsedQuestionCount >= 1 &&
+    parsedQuestionCount <= 15;
+  const historicalClass = Boolean(
+    context.data &&
+      Number(context.data.cls.schoolYear.slice(0, 4)) <
+        Number(context.data.current.schoolYear.slice(0, 4)),
+  );
+  const validQuarter = context.data
+    ? context.data.policy.periods.some((period) => period.key === settings.quarter)
+    : true;
+  const indexReadiness = indexLoadFailed
+    ? "unavailable"
+    : indexStatus?.needsReindex || indexStatus?.isStale
+      ? "stale"
+      : !indexStatus || indexStatus.chunksIndexed <= 0
+        ? "empty"
+        : "ready";
+  const hasRunningJob =
+    restoringJob || Boolean(job && !TERMINAL_STATUSES.includes(job.status));
+  const hasReadySource =
+    (indexStatus?.readyLessons.length ?? 0) +
+      (indexStatus?.readyExtractions.length ?? 0) >
+    0;
+  const readinessBlockers = getAiDraftReadinessBlockers({
+    policyStatus: context.isLoading
+      ? "loading"
+      : context.isError
+        ? "error"
+        : "ready",
+    classActive: context.data ? context.data.cls.isActive !== false : true,
+    historicalClass,
+    validQuarter,
+    hasRunningJob,
+    validQuestionCount,
+    indexStatus: indexReadiness,
+    hasReadySource: indexReadiness === "ready" && hasReadySource,
+    hasSelectedSource:
+      useAllReadySources ||
+      selectedLessonIds.length + selectedExtractionIds.length > 0,
+    submitting: submitting || settingsLoading,
+  });
+  const canGenerate = readinessBlockers.length === 0;
   const jobDetail = job?.errorMessage || job?.statusMessage || job?.message;
 
   return (
@@ -313,7 +364,9 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
         {(indexStatus?.extractionBlockers ?? []).map((source) => <TeacherRow key={source.extractionId} title={`${source.title} (blocked)`} subtitle={source.reason} />)}
         <View style={{ paddingHorizontal: 14, paddingVertical: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
           <TeacherActionButton label="Refresh status" icon="refresh" tone="blue" onPress={() => void loadStatus()} />
-          <TeacherActionButton label={reindexing ? "Reindexing..." : "Reindex class"} icon="database-refresh-outline" tone="amber" disabled={reindexing} onPress={() => void reindexClass()} />
+          {readinessBlockers.some((blocker) => blocker.canReindex) ? (
+            <TeacherActionButton label={reindexing ? "Reindexing..." : "Reindex class"} icon="database-refresh-outline" tone="amber" disabled={reindexing} onPress={() => void reindexClass()} />
+          ) : null}
         </View>
       </TeacherPanel>
 
@@ -343,6 +396,18 @@ export function TeacherAiDraftScreen({ navigation, route }: AiDraftProps) {
             })}
           </View>
           <TeacherInlineField label="Teacher note (optional)" value={teacherNote} onChangeText={setTeacherNote} multiline />
+          {!canGenerate ? (
+            <View style={{ marginTop: 12, gap: 4 }}>
+              <Text style={{ color: "#991b1b", fontWeight: "700" }}>
+                {readinessBlockers[0]?.message}
+              </Text>
+              {readinessBlockers.slice(1).map((blocker) => (
+                <Text key={blocker.code} style={{ color: "#6b7280", fontSize: 13 }}>
+                  • {blocker.message}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           <View style={{ marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <TeacherActionButton label={submitting ? "Generating..." : "Generate"} icon="auto-fix" tone="green" disabled={!canGenerate} onPress={() => void createJob()} />
             <TeacherActionButton label="Refresh job" icon="refresh" tone="blue" disabled={!job} onPress={() => void refreshJob()} />

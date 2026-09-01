@@ -9,7 +9,7 @@ export interface GradeBand {
   transmutedGrade: number;
 }
 export interface AcademicPolicy {
-  id: 'deped-2015-v1' | 'deped-2026-v1' | 'deped-2027-v1';
+  id: 'deped-2015-v1' | 'deped-2026-q4-v2' | 'deped-2027-q4-v2';
   schoolYear: string;
   periods: Array<{ key: PeriodKey; label: string }>;
   gradeMethod: GradeMethod;
@@ -98,20 +98,18 @@ export function getDefaultAcademicPolicy(schoolYear: string): AcademicPolicy {
       : start === 2026
         ? 'adjusted_2026'
         : 'zero_based';
-  const keys: PeriodKey[] = modern
-    ? ['Q1', 'Q2', 'Q3']
-    : ['Q1', 'Q2', 'Q3', 'Q4'];
+  const keys: PeriodKey[] = ['Q1', 'Q2', 'Q3', 'Q4'];
   return {
     id:
       start < 2026
         ? 'deped-2015-v1'
         : start === 2026
-          ? 'deped-2026-v1'
-          : 'deped-2027-v1',
+          ? 'deped-2026-q4-v2'
+          : 'deped-2027-q4-v2',
     schoolYear,
     periods: keys.map((key, i) => ({
       key,
-      label: modern ? `Term ${i + 1}` : `Quarter ${i + 1}`,
+      label: `Quarter ${i + 1}`,
     })),
     gradeMethod,
     conditionalPromotion: modern,

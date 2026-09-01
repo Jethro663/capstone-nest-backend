@@ -37,10 +37,7 @@ import { ClassRecordReadinessService } from '../src/modules/class-record/class-r
 import { ClassRecordRosterService } from '../src/modules/class-record/class-record-roster.service';
 import { AssessmentAccessService } from '../src/modules/assessments/assessment-access.service';
 import { AssessmentsService } from '../src/modules/assessments/assessments.service';
-import {
-  AssessmentType,
-  Quarter,
-} from '../src/modules/assessments/DTO/assessment.dto';
+import { AssessmentType } from '../src/modules/assessments/DTO/assessment.dto';
 import { AcademicPeriodService } from '../src/modules/academic-state/academic-period.service';
 import { ClassesService } from '../src/modules/classes/classes.service';
 import * as bcrypt from 'bcrypt';
@@ -50,6 +47,7 @@ import { AcademicTransitionReadinessService } from '../src/modules/academic-stat
 import { NotificationsService } from '../src/modules/notifications/notifications.service';
 import { AcademicAuditService } from '../src/modules/academic-state/academic-audit.service';
 import { AcademicRepairService } from '../src/modules/academic-state/academic-repair.service';
+import { AcademicStateAlignmentService } from '../src/modules/academic-state/academic-state-alignment.service';
 import { ProfilesService } from '../src/modules/profiles/profiles.service';
 import { RosterImportService } from '../src/modules/roster-import/roster-import.service';
 
@@ -230,7 +228,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     const records = await database.db
       .insert(classRecords)
       .values(
-        (['Q1', 'Q2', 'Q3'] as const).map((gradingPeriod) => ({
+        (['Q1', 'Q2', 'Q3', 'Q4'] as const).map((gradingPeriod) => ({
           classId: cls.id,
           teacherId: actor.id,
           gradingPeriod,
@@ -281,7 +279,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
       .where(eq(users.id, f.actor.id));
     await database.db
       .update(academicSystemStates)
-      .set({ quarter: 'Q3' })
+      .set({ quarter: 'Q4' })
       .where(eq(academicSystemStates.id, ACADEMIC_STATE_ID));
     await database.db
       .insert(studentProfiles)
@@ -295,7 +293,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
         updatedBy: f.actor.id,
       })),
     );
-    for (let i = 0; i < 3; i++) await f.addRevision(i, mark);
+    for (let i = 0; i < 4; i++) await f.addRevision(i, mark);
     await f.service.refreshForClass(f.cls.id, f.actor.id);
     const policy = new AcademicPolicyService(database);
     const readiness = new AcademicTransitionReadinessService(database, policy);
@@ -312,7 +310,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     const dto = {
       schoolYear: '2027-2028',
       expectedSchoolYear: '2026-2027',
-      expectedQuarter: 'Q3' as const,
+      expectedQuarter: 'Q4' as const,
       expectedVersion: 1,
       currentPassword: 'transition-test-only',
       confirmationText: AcademicStateService.TRANSITION_CONFIRMATION_TEXT,
@@ -394,14 +392,10 @@ describe('academic lifecycle PostgreSQL integration', () => {
     );
   });
 
-  it('preserves an incompatible historical Q4 without allowing exclusion of a required term', async () => {
+  it('treats Q4 as required four-quarter evidence that cannot be excluded', async () => {
     const f = await seedAnnualFixture();
-    const [q4] = await database.db
-      .insert(classRecords)
-      .values({ classId: f.cls.id, gradingPeriod: 'Q4', status: 'finalized' })
-      .returning();
     await database.db.insert(classRecordFinalGrades).values({
-      classRecordId: q4.id,
+      classRecordId: f.records[3].id,
       studentId: f.student.id,
       finalPercentage: '63.500',
       remarks: 'For Intervention',
@@ -420,33 +414,21 @@ describe('academic lifecycle PostgreSQL integration', () => {
         ['admin'],
       ),
     ).rejects.toThrow('required policy period');
-    const excluded = await repair.excludeHistoricalPeriod(
-      q4.id,
-      'Historical four-quarter artifact; verified three-term evidence remains separate',
-      f.actor.id,
-      ['admin'],
-    );
-    expect(excluded).toMatchObject({
-      gradingPeriod: 'Q4',
-      status: 'locked',
-      policyExcludedBy: f.actor.id,
-    });
+    await expect(
+      repair.excludeHistoricalPeriod(
+        f.records[3].id,
+        'Attempt to skip required fourth quarter',
+        f.actor.id,
+        ['admin'],
+      ),
+    ).rejects.toThrow('required policy period');
     expect(
       (
         await database.db.query.classRecordFinalGrades.findFirst({
-          where: eq(classRecordFinalGrades.classRecordId, q4.id),
+          where: eq(classRecordFinalGrades.classRecordId, f.records[3].id),
         })
       )?.finalPercentage,
     ).toBe('63.500');
-    expect((await new AcademicAuditService(database).report()).issues).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          classRecordId: q4.id,
-          code: 'incompatible_period_record',
-          severity: 'acknowledged',
-        }),
-      ]),
-    );
   });
 
   it('repairs duplicate state only with password and exact observed row/version preconditions', async () => {
@@ -493,7 +475,123 @@ describe('academic lifecycle PostgreSQL integration', () => {
     expect(
       await database.db.query.academicSystemStates.findMany(),
     ).toHaveLength(1);
-    expect(await database.db.query.classRecords.findMany()).toHaveLength(3);
+    expect(await database.db.query.classRecords.findMany()).toHaveLength(4);
+  });
+
+  it('previews and atomically applies a reviewed academic-state alignment while rejecting a stale manifest', async () => {
+    const password = 'alignment-test-only';
+    const [actor] = await database.db
+      .insert(users)
+      .values({
+        email: 'alignment-admin@example.test',
+        password: await bcrypt.hash(password, 4),
+        firstName: 'Alignment',
+        lastName: 'Admin',
+      })
+      .returning();
+    const [section] = await database.db
+      .insert(sections)
+      .values({
+        name: 'Misdated Grade 7',
+        gradeLevel: '7',
+        schoolYear: '2027-2028',
+      })
+      .returning();
+    const [cls] = await database.db
+      .insert(classes)
+      .values({
+        sectionId: section.id,
+        teacherId: actor.id,
+        subjectName: 'Science',
+        subjectCode: 'SCI-7',
+        subjectGradeLevel: '7',
+        schoolYear: '2027-2028',
+      })
+      .returning();
+    await database.db
+      .update(academicSystemStates)
+      .set({ schoolYear: '2027-2028', quarter: 'Q2', version: 7 })
+      .where(eq(academicSystemStates.id, ACADEMIC_STATE_ID));
+
+    const service = new AcademicStateAlignmentService(
+      database,
+      new AuditService(database),
+    );
+    const request = {
+      sourceSchoolYear: '2027-2028',
+      targetSchoolYear: '2026-2027',
+      targetQuarter: 'Q1' as const,
+      classIds: [cls.id],
+    };
+    const preview = await service.preview(request);
+    expect(preview).toMatchObject({
+      safeToApply: true,
+      state: { schoolYear: '2027-2028', quarter: 'Q2', version: 7 },
+      movedSectionIds: [section.id],
+    });
+    expect(
+      await database.db.query.academicSystemStates.findFirst(),
+    ).toMatchObject({ schoolYear: '2027-2028', quarter: 'Q2', version: 7 });
+
+    await database.db.insert(assessments).values({
+      classId: cls.id,
+      title: 'Created after preview',
+      type: 'quiz',
+      quarter: 'Q1',
+    });
+    await expect(
+      service.execute(
+        {
+          ...request,
+          manifestHash: preview.manifestHash,
+          confirmations: preview.requiredConfirmations,
+          currentPassword: password,
+          reason: 'Correct the reviewed school-year alignment',
+        },
+        actor.id,
+        ['admin'],
+      ),
+    ).rejects.toThrow('changed');
+
+    const refreshed = await service.preview(request);
+    const result = await service.execute(
+      {
+        ...request,
+        manifestHash: refreshed.manifestHash,
+        confirmations: refreshed.requiredConfirmations,
+        currentPassword: password,
+        reason: 'Correct the reviewed school-year alignment',
+      },
+      actor.id,
+      ['admin'],
+    );
+    expect(result).toMatchObject({
+      state: { schoolYear: '2026-2027', quarter: 'Q1', version: 8 },
+      movedClassIds: [cls.id],
+      movedSectionIds: [section.id],
+      updatedLegacyEvidenceRows: 0,
+      auditEventId: expect.any(String),
+    });
+    expect(await database.db.query.classes.findFirst()).toMatchObject({
+      id: cls.id,
+      schoolYear: '2026-2027',
+    });
+    expect(await database.db.query.sections.findFirst()).toMatchObject({
+      id: section.id,
+      schoolYear: '2026-2027',
+    });
+    expect(await database.db.query.academicYearPolicies.findMany()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          schoolYear: '2026-2027',
+          policyId: 'deped-2026-q4-v2',
+        }),
+        expect.objectContaining({
+          schoolYear: '2027-2028',
+          policyId: 'deped-2027-q4-v2',
+        }),
+      ]),
+    );
   });
 
   it('transitions only complete annual evidence, persists outcomes, and clones structure with empty next-year rosters', async () => {
@@ -512,18 +610,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
       isPublished: true,
     });
     expect((await f.readiness.getReadiness()).transitionBlocked).toBe(false);
-    await expect(f.stateService.transition(f.dto, f.actor.id)).rejects.toThrow(
-      'Choose an explicit destination period',
-    );
-    expect(
-      (await database.db.query.classes.findMany()).some(
-        (cls) => cls.schoolYear === '2027-2028',
-      ),
-    ).toBe(false);
-    const result = await f.stateService.transition(
-      { ...f.dto, assessmentPeriodMapping: { Q2: Quarter.Q2 } },
-      f.actor.id,
-    );
+    const result = await f.stateService.transition(f.dto, f.actor.id);
     expect(result.state).toMatchObject({
       schoolYear: '2027-2028',
       quarter: 'Q1',
@@ -570,7 +657,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     ).toEqual([expect.objectContaining({ isPublished: false, quarter: 'Q2' })]);
     expect(
       await database.db.query.academicPeriodGradeRevisions.findMany(),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     await expect(f.stateService.transition(f.dto, f.actor.id)).rejects.toThrow(
       'Academic state changed',
     );
@@ -774,7 +861,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     ).rejects.toThrow();
     await database.db
       .update(academicSystemStates)
-      .set({ quarter: 'Q3' })
+      .set({ quarter: 'Q4' })
       .where(eq(academicSystemStates.id, ACADEMIC_STATE_ID));
     await database.db.insert(sections).values({
       name: 'Already planned',
@@ -856,14 +943,15 @@ describe('academic lifecycle PostgreSQL integration', () => {
       0,
     );
     await addRevision(2, 74);
+    await addRevision(3, 74);
     await service.refreshForClass(cls.id, actor.id);
     const rows = await database.db.query.subjectAnnualGrades.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       studentId: student.id,
       officialGrade: 75,
-      sum: 224,
-      divisor: 3,
+      sum: 298,
+      divisor: 4,
       isCurrent: true,
     });
     await service.refreshForClass(cls.id, actor.id);
@@ -877,7 +965,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
   it('invalidates annual results on reopen while retaining immutable evidence', async () => {
     const { actor, cls, records, service, addRevision } =
       await seedAnnualFixture();
-    for (let index = 0; index < 3; index++) await addRevision(index, 80);
+    for (let index = 0; index < 4; index++) await addRevision(index, 80);
     await service.refreshForClass(cls.id, actor.id);
     await service.invalidateRecordSources(
       records[0].id,
@@ -887,12 +975,12 @@ describe('academic lifecycle PostgreSQL integration', () => {
     const history = await database.db.query.subjectAnnualGrades.findMany();
     expect(history).toHaveLength(1);
     expect(history[0].isCurrent).toBe(false);
-    expect(history[0].components).toHaveLength(3);
+    expect(history[0].components).toHaveLength(4);
     expect(
       (await database.db.query.academicPeriodGradeRevisions.findMany()).filter(
         (row) => row.isCurrent,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it('finalizes only a confirmed complete workbook and preserves every revision on correction', async () => {
@@ -1006,6 +1094,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     const local = await f.addRevision(0, 80);
     await f.addRevision(1, 80);
     await f.addRevision(2, 80);
+    await f.addRevision(3, 80);
     await f.service.refreshForClass(f.cls.id, f.actor.id);
     await expect(
       f.service.recordExternalGrade(
@@ -1059,8 +1148,8 @@ describe('academic lifecycle PostgreSQL integration', () => {
 
   it('records evidenced remediation and a durable back subject with audited scheduling and clearance', async () => {
     const f = await seedAnnualFixture();
-    await database.db.update(academicSystemStates).set({ quarter: 'Q3' });
-    for (let i = 0; i < 3; i++) await f.addRevision(i, 70);
+    await database.db.update(academicSystemStates).set({ quarter: 'Q4' });
+    for (let i = 0; i < 4; i++) await f.addRevision(i, 70);
     await f.service.refreshForClass(f.cls.id, f.actor.id);
     const [annual] = await database.db.query.subjectAnnualGrades.findMany();
     await expect(
@@ -1141,7 +1230,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
     // Prepare another valid obligation in the source year, then return to its scheduled year.
     await database.db
       .update(academicSystemStates)
-      .set({ schoolYear: '2026-2027', quarter: 'Q3' });
+      .set({ schoolYear: '2026-2027', quarter: 'Q4' });
     await f.service.recordRemediation(
       secondAnnual.id,
       {
@@ -1412,10 +1501,10 @@ describe('academic lifecycle PostgreSQL integration', () => {
       studentId: f.student.id,
     });
     await repair.retireDuplicateClass(f.cls.id, dto, f.actor.id, ['admin']);
-    expect(await database.db.query.classRecords.findMany()).toHaveLength(3);
+    expect(await database.db.query.classRecords.findMany()).toHaveLength(4);
     expect(
       await database.db.query.academicPeriodGradeRevisions.findMany(),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     expect(
       await database.db.query.classes.findFirst({
         where: eq(classes.id, f.cls.id),
@@ -1910,8 +1999,8 @@ describe('academic lifecycle PostgreSQL integration', () => {
               sourceFingerprint: createHash('sha256')
                 .update(JSON.stringify({ policy, components }))
                 .digest('hex'),
-              sum: 240,
-              divisor: 3,
+              sum: 320,
+              divisor: 4,
               rawAverage: '80',
               officialGrade: 80,
               remarks: 'Passed',
