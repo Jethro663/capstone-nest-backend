@@ -45,4 +45,9 @@ export const notificationsApi = {
   async markRead(id: string) {
     await apiClient.patch(`/notifications/${id}/read`);
   },
+
+  async markAllRead() {
+    const response = await apiClient.patch<ApiEnvelope<{ updatedCount?: number }>>("/notifications/read-all");
+    return response.data;
+  },
 };

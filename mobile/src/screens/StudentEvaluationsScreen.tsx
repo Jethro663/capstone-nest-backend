@@ -3,7 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { evaluationsApi, type EvaluationInboxItem, type SubmitEvaluationDto } from "../api/services/evaluations";
+import {
+  evaluationsApi,
+  type AcademicPeriodKey,
+  type TeacherEvaluationQuestion,
+  type TeacherEvaluationType,
+} from "../api/services/evaluations";
 import { toAppError } from "../api/http";
 import type { RootStackParamList } from "../navigation/types";
 import { Refreshable, ScreenScroll } from "../components/ui/primitives";
@@ -14,6 +19,22 @@ import { useAuth } from "../providers/AuthProvider";
 
 type Props = NativeStackScreenProps<RootStackParamList, "StudentEvaluations">;
 type TabFilter = "pending" | "submitted";
+type EvaluationListItem = {
+  key: string;
+  kind: "teacher" | "system";
+  status: "pending" | "submitted";
+  classId: string | null;
+  subjectCode: string;
+  subjectName: string;
+  title: string;
+  description: string;
+  gradingPeriod?: AcademicPeriodKey;
+  evaluationType?: TeacherEvaluationType;
+  assignmentId?: string;
+  dueDate?: string;
+  submittedAt?: string | null;
+  questions: TeacherEvaluationQuestion[];
+};
 
 function StarRating({ label, rating, onChange }: { label: string; rating: number; onChange: (val: number) => void }) {
   return (
@@ -44,64 +65,138 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
 
   const [activeTab, setActiveTab] = useState<TabFilter>("pending");
   const [selectedClassId, setSelectedClassId] = useState<string>("all");
-  const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationInboxItem | null>(null);
-
-  // Form ratings
-  const [pedagogicalRating, setPedagogicalRating] = useState(5);
-  const [subjectKnowledgeRating, setSubjectKnowledgeRating] = useState(5);
-  const [classroomManagementRating, setClassroomManagementRating] = useState(5);
-  const [learningMaterialsRating, setLearningMaterialsRating] = useState(5);
+  const [selectedEvaluation, setSelectedEvaluation] = useState<EvaluationListItem | null>(null);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comments, setComments] = useState("");
 
   const inboxQuery = useQuery({
     queryKey: ["student-evaluations-inbox"],
     queryFn: () => evaluationsApi.getStudentInbox(),
   });
+  const systemInboxQuery = useQuery({
+    queryKey: ["system-evaluations-inbox"],
+    queryFn: () => evaluationsApi.getMySystemEvaluations(),
+  });
 
   const submitMutation = useMutation({
-    mutationFn: (payload: SubmitEvaluationDto) => evaluationsApi.submitEvaluation(payload),
-    onSuccess: (data) => {
-      Alert.alert("Evaluation Submitted", data.message || "Thank you for submitting your evaluation feedback!");
+    mutationFn: async ({ item, values, comment }: { item: EvaluationListItem; values: Record<string, number>; comment?: string }) => {
+      if (item.kind === "system" && item.assignmentId) {
+        return evaluationsApi.submitAssignedSystemEvaluation(item.assignmentId, {
+          questionRatings: values,
+          feedback: comment,
+        });
+      }
+      if (!item.classId || !item.gradingPeriod || !item.evaluationType) {
+        throw new Error("This teacher evaluation is missing its class or grading period.");
+      }
+      return evaluationsApi.submitEvaluation({
+        classId: item.classId,
+        gradingPeriod: item.gradingPeriod,
+        evaluationType: item.evaluationType,
+        ratings: values,
+        comment,
+      });
+    },
+    onSuccess: () => {
+      Alert.alert("Evaluation Submitted", "Thank you for submitting your evaluation feedback!");
       setSelectedEvaluation(null);
       setActiveTab("submitted");
       void queryClient.invalidateQueries({ queryKey: ["student-evaluations-inbox"] });
       void queryClient.invalidateQueries({ queryKey: ["teacher-evaluations-inbox"] });
-      void inboxQuery.refetch();
+      void queryClient.invalidateQueries({ queryKey: ["system-evaluations-inbox"] });
+      void Promise.all([inboxQuery.refetch(), systemInboxQuery.refetch()]);
     },
     onError: (err) => {
       Alert.alert("Submission Failed", toAppError(err).message);
     },
   });
 
-  const inboxItems = inboxQuery.data ?? [];
-  const pendingItems = useMemo(() => inboxItems.filter((item) => item.status === "pending"), [inboxItems]);
-  const submittedItems = useMemo(() => inboxItems.filter((item) => item.status === "submitted"), [inboxItems]);
+  const pendingItems = useMemo<EvaluationListItem[]>(() => [
+    ...(inboxQuery.data?.pending ?? []).map((item) => ({
+      key: `teacher-${item.classId}-${item.gradingPeriod}-${item.evaluationType}`,
+      kind: "teacher" as const,
+      status: "pending" as const,
+      classId: item.classId,
+      subjectCode: item.class.subjectCode,
+      subjectName: item.class.subjectName,
+      title: item.title,
+      description: item.description,
+      gradingPeriod: item.gradingPeriod,
+      evaluationType: item.evaluationType,
+      questions: item.questions,
+    })),
+    ...(systemInboxQuery.data?.pending ?? []).map((item) => ({
+      key: `system-${item.id}`,
+      kind: "system" as const,
+      status: "pending" as const,
+      classId: item.classId,
+      subjectCode: item.class?.subjectCode ?? item.targetModule.toUpperCase(),
+      subjectName: item.class?.subjectName ?? "Nexora system",
+      title: item.title,
+      description: item.description,
+      assignmentId: item.id,
+      dueDate: item.endsAt,
+      questions: item.questions,
+    })),
+  ], [inboxQuery.data, systemInboxQuery.data]);
+  const submittedItems = useMemo<EvaluationListItem[]>(() => [
+    ...(inboxQuery.data?.completed ?? []).map((item) => ({
+      key: `teacher-completed-${item.id}`,
+      kind: "teacher" as const,
+      status: "submitted" as const,
+      classId: item.classId,
+      subjectCode: item.class?.subjectCode ?? "CLASS",
+      subjectName: item.class?.subjectName ?? "Class evaluation",
+      title: item.title,
+      gradingPeriod: item.gradingPeriod,
+      evaluationType: item.evaluationType,
+      submittedAt: item.submittedAt,
+      description: "Submitted teacher evaluation",
+      questions: [],
+    })),
+    ...(systemInboxQuery.data?.completed ?? []).map((item) => ({
+      key: `system-completed-${item.id}`,
+      kind: "system" as const,
+      status: "submitted" as const,
+      classId: item.classId,
+      subjectCode: item.class?.subjectCode ?? item.targetModule.toUpperCase(),
+      subjectName: item.class?.subjectName ?? "Nexora system",
+      title: item.title,
+      description: item.description,
+      assignmentId: item.id,
+      dueDate: item.endsAt,
+      submittedAt: item.submittedAt,
+      questions: item.questions,
+    })),
+  ], [inboxQuery.data, systemInboxQuery.data]);
 
   const visibleItems = useMemo(() => {
     let list = activeTab === "pending" ? pendingItems : submittedItems;
     if (selectedClassId !== "all") {
-      list = list.filter((item) => item.classId === selectedClassId || item.subjectCode === selectedClassId);
+      list = list.filter((item) => item.classId === selectedClassId);
     }
     return list;
   }, [activeTab, pendingItems, selectedClassId, submittedItems]);
 
   const handleSubmit = () => {
     if (!selectedEvaluation) return;
-    submitMutation.mutate({
-      evaluationId: selectedEvaluation.id,
-      pedagogicalRating,
-      subjectKnowledgeRating,
-      classroomManagementRating,
-      learningMaterialsRating,
-      comments: comments.trim() || undefined,
-    });
+    submitMutation.mutate({ item: selectedEvaluation, values: ratings, comment: comments.trim() || undefined });
+  };
+
+  const openEvaluation = (item: EvaluationListItem) => {
+    setRatings(Object.fromEntries(item.questions.map((question) => [question.key, 5])));
+    setComments("");
+    setSelectedEvaluation(item);
   };
 
   return (
     <ScreenScroll
       backgroundColor={theme.bg}
       refreshControl={
-        <Refreshable refreshing={inboxQuery.isRefetching} onRefresh={() => void inboxQuery.refetch()} />
+        <Refreshable
+          refreshing={inboxQuery.isRefetching || systemInboxQuery.isRefetching}
+          onRefresh={() => void Promise.all([inboxQuery.refetch(), systemInboxQuery.refetch()])}
+        />
       }
     >
       <View style={{ backgroundColor: theme.header, borderBottomWidth: 1, borderBottomColor: theme.border }}>
@@ -211,7 +306,21 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
       </View>
 
       {/* Evaluation List */}
-      {visibleItems.length === 0 ? (
+      {inboxQuery.isError || systemInboxQuery.isError ? (
+        <View style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 16, borderWidth: 1, borderColor: theme.red, backgroundColor: theme.surface, padding: 24, alignItems: "center" }}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={32} color={theme.red} />
+          <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: theme.text }}>Evaluations unavailable</Text>
+          <Text style={{ marginTop: 4, textAlign: "center", fontSize: 12, color: theme.muted }}>
+            {toAppError(inboxQuery.error ?? systemInboxQuery.error).message}
+          </Text>
+          <Pressable
+            onPress={() => void Promise.all([inboxQuery.refetch(), systemInboxQuery.refetch()])}
+            style={{ marginTop: 12, borderRadius: 999, backgroundColor: theme.blue, paddingHorizontal: 14, paddingVertical: 8 }}
+          >
+            <Text style={{ color: "#FFFFFF", fontSize: 11, fontWeight: "800" }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : visibleItems.length === 0 ? (
         <View style={{ marginHorizontal: 16, marginTop: 20, borderRadius: 16, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, padding: 24, alignItems: "center" }}>
           <MaterialCommunityIcons name="clipboard-text-outline" size={32} color={theme.muted} />
           <Text style={{ marginTop: 10, fontSize: 14, fontWeight: "800", color: theme.text }}>
@@ -225,10 +334,10 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
         <View style={{ marginHorizontal: 16, marginTop: 12, gap: 10 }}>
           {visibleItems.map((item) => (
             <Pressable
-              key={item.id}
+              key={item.key}
               onPress={() => {
                 if (item.status === "pending") {
-                  setSelectedEvaluation(item);
+                  openEvaluation(item);
                 }
               }}
               style={{
@@ -258,7 +367,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
               </View>
               <Text style={{ fontSize: 14, fontWeight: "800", color: theme.text }}>{item.title}</Text>
               <Text style={{ marginTop: 4, fontSize: 11, color: theme.muted }}>
-                Instructor: {item.teacherName || "Assigned Teacher"} | Due: {item.dueDate || "N/A"}
+                {item.kind === "teacher" ? `Period: ${item.gradingPeriod}` : `Due: ${item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "N/A"}`}
               </Text>
               {item.status === "pending" ? (
                 <View style={{ marginTop: 10, alignSelf: "flex-start", borderRadius: 999, backgroundColor: theme.blue, paddingHorizontal: 12, paddingVertical: 6 }}>
@@ -277,7 +386,7 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
             <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
               <View style={{ flex: 1, paddingRight: 12 }}>
                 <Text style={{ fontSize: 11, fontWeight: "800", color: theme.blue, textTransform: "uppercase" }}>
-                  {selectedEvaluation?.subjectCode} | {selectedEvaluation?.teacherName}
+                  {selectedEvaluation?.subjectCode} | {selectedEvaluation?.subjectName}
                 </Text>
                 <Text style={{ marginTop: 2, fontSize: 16, fontWeight: "800", color: theme.text }}>
                   {selectedEvaluation?.title}
@@ -290,13 +399,17 @@ export function StudentEvaluationsScreen({ navigation }: Props) {
 
             <ScrollView showsVerticalScrollIndicator style={{ marginBottom: 16 }}>
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 14 }}>
-                Please rate your instructor across the following categories (1 = Needs Improvement, 5 = Excellent):
+                {selectedEvaluation?.description || "Rate each category from 1 (Needs Improvement) to 5 (Excellent)."}
               </Text>
 
-              <StarRating label="1. Pedagogical Competence" rating={pedagogicalRating} onChange={setPedagogicalRating} />
-              <StarRating label="2. Subject Knowledge & Mastery" rating={subjectKnowledgeRating} onChange={setSubjectKnowledgeRating} />
-              <StarRating label="3. Classroom & Time Management" rating={classroomManagementRating} onChange={setClassroomManagementRating} />
-              <StarRating label="4. Learning Resources & Support" rating={learningMaterialsRating} onChange={setLearningMaterialsRating} />
+              {(selectedEvaluation?.questions ?? []).map((question, index) => (
+                <StarRating
+                  key={question.key}
+                  label={`${index + 1}. ${question.label}`}
+                  rating={ratings[question.key] ?? 5}
+                  onChange={(value) => setRatings((current) => ({ ...current, [question.key]: value }))}
+                />
+              ))}
 
               <Text style={{ fontSize: 12, fontWeight: "700", color: theme.text, marginTop: 8, marginBottom: 6 }}>
                 Qualitative Feedback / Comments (Optional):

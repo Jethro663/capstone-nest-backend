@@ -8,8 +8,10 @@ import type {
   CreateModuleSectionDto,
   ModuleItem,
   ModuleSection,
+  ReplaceModuleGradingScaleDto,
   UpdateClassModuleDto,
   UpdateModuleItemDto,
+  UpdateModuleSectionDto,
 } from "../../types/module";
 
 export type ModuleDetail = ClassModule;
@@ -35,8 +37,18 @@ export const modulesApi = {
     return unwrapEnvelope(response.data);
   },
 
+  async releaseCoreModule(moduleId: string, payload: { isVisible?: boolean; isLocked?: boolean }) {
+    const response = await apiClient.patch<ApiEnvelope<ClassModule>>(`/modules/${moduleId}/core-release`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
   async updateItem(itemId: string, payload: UpdateModuleItemDto) {
     const response = await apiClient.patch<ApiEnvelope<ModuleItem>>(`/modules/items/${itemId}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async releaseCoreItem(itemId: string, payload: { isVisible?: boolean; isGiven?: boolean }) {
+    const response = await apiClient.patch<ApiEnvelope<ModuleItem>>(`/modules/items/${itemId}/core-release`, payload);
     return unwrapEnvelope(response.data);
   },
 
@@ -47,6 +59,11 @@ export const modulesApi = {
 
   async createSection(moduleId: string, payload: CreateModuleSectionDto) {
     const response = await apiClient.post<ApiEnvelope<ModuleSection>>(`/modules/${moduleId}/sections`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async updateSection(sectionId: string, payload: UpdateModuleSectionDto) {
+    const response = await apiClient.patch<ApiEnvelope<ModuleSection>>(`/modules/sections/${sectionId}`, payload);
     return unwrapEnvelope(response.data);
   },
 
@@ -100,6 +117,11 @@ export const modulesApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return unwrapEnvelope(response.data);
+  },
+
+  async replaceGradingScale(moduleId: string, payload: ReplaceModuleGradingScaleDto) {
+    const response = await apiClient.put<ApiEnvelope<Array<Record<string, unknown>>>>(`/modules/${moduleId}/grading-scale`, payload);
+    return normalizeArray<Record<string, unknown>>(unwrapEnvelope(response.data));
   },
 
   async downloadAttachedFile(itemId: string, fallbackName = "module-attachment") {

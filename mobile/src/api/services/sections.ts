@@ -3,13 +3,16 @@ import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   TeacherSectionCandidate,
+  CreateSectionDto,
   TeacherSection,
   TeacherSectionRosterStudent,
   TeacherSectionSchedulePayload,
   TeacherSectionStudentProfile,
   TeacherSectionsListResponse,
   TeacherSectionVisibilityStatus,
+  UpdateSectionDto,
 } from "../../types/teacher";
+import { fetchAllPages, normalizePageEnvelope, type PageEnvelope } from "../pagination";
 
 export type TeacherSectionCandidateQuery = {
   search?: string;
@@ -20,24 +23,61 @@ export type TeacherSectionCandidateQuery = {
   limit?: number;
 };
 
+export type SectionsListQuery = {
+  gradeLevel?: string;
+  schoolYear?: string;
+  isActive?: boolean;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
 export const sectionsApi = {
-  async getAll(query?: {
-    gradeLevel?: string;
-    schoolYear?: string;
-    isActive?: boolean;
-    search?: string;
-    limit?: number;
-  }): Promise<TeacherSectionsListResponse> {
+  async create(payload: CreateSectionDto) {
+    const response = await apiClient.post<ApiEnvelope<TeacherSection>>("/sections/create", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async update(sectionId: string, payload: UpdateSectionDto) {
+    const response = await apiClient.put<ApiEnvelope<TeacherSection>>(`/sections/update/${sectionId}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async getPage(query: SectionsListQuery = {}): Promise<PageEnvelope<TeacherSection>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
     const response = await apiClient.get<TeacherSectionsListResponse | ApiEnvelope<TeacherSection[]>>(
       "/sections/all",
-      { params: query },
+      { params: { ...query, page, limit } },
     );
     const payload = response.data as TeacherSectionsListResponse;
+    return normalizePageEnvelope(
+      {
+        data: normalizeArray<TeacherSection>(unwrapEnvelope(response.data as ApiEnvelope<TeacherSection[]>)),
+        page: payload.pagination?.page,
+        limit: payload.pagination?.limit,
+        total: payload.pagination?.total,
+        totalPages: payload.pagination?.totalPages,
+      },
+      page,
+      limit,
+    );
+  },
 
+  async getAll(query: Omit<SectionsListQuery, "page"> = {}): Promise<TeacherSectionsListResponse> {
+    const result = await fetchAllPages(
+      (page, limit) => sectionsApi.getPage({ ...query, page, limit }),
+      { limit: query.limit ?? 100, key: (item) => item.id },
+    );
     return {
-      success: payload?.success,
-      data: normalizeArray<TeacherSection>(unwrapEnvelope(response.data as ApiEnvelope<TeacherSection[]>)),
-      pagination: payload?.pagination,
+      success: true,
+      data: result.data,
+      pagination: {
+        page: 1,
+        limit: result.limit,
+        total: result.total ?? result.count,
+        totalPages: result.totalPages ?? 1,
+      },
     };
   },
 

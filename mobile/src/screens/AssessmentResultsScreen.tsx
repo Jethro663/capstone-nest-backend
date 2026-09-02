@@ -252,6 +252,7 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
     [result?.submittedFile, result?.submittedFiles],
   );
   const isFileUploadAssessment = result?.assessment?.type === "file_upload";
+  const feedbackLocked = result?.feedbackStatus?.unlocked === false;
 
   const openAssessment = () => {
     if (!assessmentId) {
@@ -319,8 +320,8 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
             </View>
             {result ? (
               <ToneTag
-                label={result.isReturned === false ? "Pending" : result.passed ? "Passed" : "Needs Work"}
-                tone={result.isReturned === false ? "amber" : result.passed ? "green" : "red"}
+                label={result.isReturned === false ? "Pending" : feedbackLocked ? "Feedback Locked" : result.passed == null ? "Ungraded" : result.passed ? "Passed" : "Needs Work"}
+                tone={result.isReturned === false || feedbackLocked || result.passed == null ? "amber" : result.passed ? "green" : "red"}
               />
             ) : null}
           </View>
@@ -349,15 +350,17 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
           <DarkPanel>
             <Text style={{ color: theme.muted }}>Loading attempt result...</Text>
           </DarkPanel>
-        ) : result.isReturned === false ? (
+        ) : result.isReturned === false || feedbackLocked ? (
           <>
             <DarkPanel>
               <Text style={{ fontSize: 12, color: theme.muted }}>Submission Status</Text>
               <Text style={{ marginTop: 6, fontSize: 26, lineHeight: 32, fontWeight: "900", color: theme.text }}>
-                Awaiting Teacher Review
+                {feedbackLocked ? "Feedback Not Yet Available" : "Awaiting Teacher Review"}
               </Text>
               <Text style={{ marginTop: 10, fontSize: 13, lineHeight: 20, color: theme.subtext }}>
-                Your submission is recorded. Results and teacher feedback will appear here once they are returned.
+                {feedbackLocked
+                  ? result.feedbackStatus?.message || `Detailed feedback is delayed${result.feedbackStatus?.hoursRemaining != null ? ` for about ${result.feedbackStatus.hoursRemaining} more hour(s)` : ""}.`
+                  : "Your submission is recorded. Results and teacher feedback will appear here once they are returned."}
               </Text>
               <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 <ActionButton label="Back to Assessment" onPress={openAssessment} />
@@ -439,15 +442,15 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
               <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
                 <MetricTile
                   eyebrow="SCORE"
-                  value={`${Math.round(result.score ?? 0)}%`}
-                  caption={result.passed ? "You met the passing requirement." : "You still need improvement."}
-                  tone={result.passed ? "green" : "amber"}
+                  value={result.score == null ? "Pending" : `${Math.round(result.score)}%`}
+                  caption={result.passed == null ? "This response still needs grading." : result.passed ? "You met the passing requirement." : "You still need improvement."}
+                  tone={result.passed == null ? "amber" : result.passed ? "green" : "amber"}
                 />
                 <MetricTile
                   eyebrow="STATUS"
-                  value={result.passed ? "Pass" : "Review"}
+                  value={result.passed == null ? "Ungraded" : result.passed ? "Pass" : "Review"}
                   caption={result.isReturned ? "Teacher has already returned this attempt." : "Recorded in the system."}
-                  tone={result.passed ? "green" : "red"}
+                  tone={result.passed == null ? "amber" : result.passed ? "green" : "red"}
                 />
                 <MetricTile
                   eyebrow="ATTEMPT"
@@ -470,6 +473,27 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                 ) : null}
               </View>
             </DarkPanel>
+
+            {result.assessment?.rubricCriteria?.length ? (
+              <DarkPanel>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Rubric breakdown</Text>
+                <Text style={{ marginTop: 4, fontSize: 11, lineHeight: 17, color: theme.muted }}>Scores and criterion feedback returned by your teacher.</Text>
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  {result.assessment.rubricCriteria.map((criterion) => {
+                    const score = result.rubricScores?.find((entry) => entry.criterionId === criterion.id);
+                    return (
+                      <View key={criterion.id} style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.active, padding: 12 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "800", color: theme.text }}>{criterion.title}</Text>
+                        <Text style={{ marginTop: 4, fontSize: 12, color: score ? theme.green : theme.muted }}>
+                          {score ? `${score.pointsEarned}/${criterion.points} points` : "Awaiting rubric score"}
+                        </Text>
+                        {score?.feedback ? <Text style={{ marginTop: 5, fontSize: 11, color: theme.subtext }}>{score.feedback}</Text> : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              </DarkPanel>
+            ) : null}
 
             {isFileUploadAssessment ? (
               <DarkPanel>
@@ -545,8 +569,8 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                       <Text style={{ fontSize: 12, color: theme.muted }}>Question {index + 1}</Text>
                       <ToneTag
-                        label={response.isCorrect ? "Correct enough" : "Needs correction"}
-                        tone={response.isCorrect ? "green" : "red"}
+                        label={response.isCorrect == null ? "Awaiting grade" : response.isCorrect ? "Correct" : "Needs correction"}
+                        tone={response.isCorrect == null ? "amber" : response.isCorrect ? "green" : "red"}
                       />
                     </View>
                     <Text style={{ marginTop: 8, fontSize: 14, lineHeight: 21, fontWeight: "800", color: theme.text }}>
@@ -555,14 +579,19 @@ export function AssessmentResultsScreen({ route, navigation }: Props) {
                     <Text style={{ marginTop: 10, fontSize: 12, lineHeight: 18, color: theme.subtext }}>
                       Your previous answer: <Text style={{ color: theme.text }}>{formatAnswer(response)}</Text>
                     </Text>
-                    {correctAnswer ? (
+                    {result.feedbackStatus?.unlocked !== false && correctAnswer ? (
                       <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                         Correct answer: <Text style={{ color: theme.green, fontWeight: "900" }}>{correctAnswer}</Text>
                       </Text>
                     ) : null}
-                    {response.question?.explanation ? (
+                    {result.feedbackStatus?.unlocked !== false && response.question?.explanation ? (
                       <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
                         Explanation: <Text style={{ color: theme.text }}>{stripRichText(response.question.explanation)}</Text>
+                      </Text>
+                    ) : null}
+                    {response.hint ? (
+                      <Text style={{ marginTop: 8, fontSize: 12, lineHeight: 18, color: theme.muted }}>
+                        Hint: <Text style={{ color: theme.text }}>{response.hint}</Text>
                       </Text>
                     ) : null}
                   </DarkPanel>

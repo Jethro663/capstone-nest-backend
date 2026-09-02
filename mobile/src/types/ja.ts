@@ -158,6 +158,29 @@ export interface JaAskThreadResponse {
   };
 }
 
+export interface JaActivityHistoryItem {
+  id: string;
+  mode: "ask" | "review";
+  classId: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  activityAt: string;
+}
+
+export interface JaActivityHistoryResponse {
+  items: JaActivityHistoryItem[];
+  counts: { all: number; ask: number; review: number };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrevious?: boolean;
+  };
+}
+
 export interface JaAskSendResponse {
   thread: {
     id: string;

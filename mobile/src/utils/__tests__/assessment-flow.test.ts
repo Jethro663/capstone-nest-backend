@@ -1,6 +1,11 @@
 import {
   buildAssessmentResponses,
+  orderAttemptQuestions,
   resolveAttemptTimer,
+  resolveCurrentQuestionIndex,
+  resolveQuestionDeadlineAction,
+  resolveQuestionTimer,
+  resolveSubmittedAttemptState,
   resolveViolationState,
   restoreDraftResponses,
   validateUploadBundle,
@@ -69,5 +74,55 @@ describe("assessment flow utilities", () => {
   it("locks the attempt on the third anti-cheat violation", () => {
     expect(resolveViolationState(0)).toEqual({ nextCount: 1, locked: false });
     expect(resolveViolationState(2)).toEqual({ nextCount: 3, locked: true });
+  });
+
+  it("projects questions using the backend attempt order and preserves unknown fallbacks", () => {
+    const questions = [
+      { id: "q1", type: "short_answer" as const, order: 1 },
+      { id: "q2", type: "short_answer" as const, order: 2 },
+      { id: "q3", type: "short_answer" as const, order: 3 },
+    ];
+
+    expect(orderAttemptQuestions(questions, ["q3", "q1"])).toEqual([
+      questions[2],
+      questions[0],
+      questions[1],
+    ]);
+    expect(orderAttemptQuestions(questions, null)).toEqual(questions);
+  });
+
+  it("uses the server question deadline and recalculates after foreground resume", () => {
+    const deadline = "2026-09-02T00:01:00.000Z";
+
+    expect(resolveQuestionTimer(true, deadline, Date.parse("2026-09-02T00:00:40.000Z"))).toEqual({
+      secondsRemaining: 20,
+      deadlineAt: deadline,
+    });
+    expect(resolveQuestionTimer(true, deadline, Date.parse("2026-09-02T00:01:05.000Z"))).toEqual({
+      secondsRemaining: 0,
+      deadlineAt: deadline,
+    });
+    expect(resolveQuestionTimer(false, deadline, Date.parse("2026-09-02T00:00:40.000Z"))).toEqual({
+      secondsRemaining: null,
+      deadlineAt: null,
+    });
+  });
+
+  it("clamps resumed navigation and resolves deadline behavior", () => {
+    expect(resolveCurrentQuestionIndex(7, 3)).toBe(2);
+    expect(resolveCurrentQuestionIndex(-1, 3)).toBe(0);
+    expect(resolveQuestionDeadlineAction(0, 3)).toBe("advance");
+    expect(resolveQuestionDeadlineAction(2, 3)).toBe("submit");
+  });
+
+  it("treats backend submission as terminal even when the local mutation is idle", () => {
+    expect(resolveSubmittedAttemptState({ isSubmitted: true, violationCount: 0 })).toEqual({
+      submitted: true,
+      locked: true,
+    });
+    expect(resolveSubmittedAttemptState({ isSubmitted: false, violationCount: 3 })).toEqual({
+      submitted: false,
+      locked: true,
+    });
   });
 });

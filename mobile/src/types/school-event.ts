@@ -19,3 +19,16 @@ export interface SchoolEventQuery {
   from?: string;
   to?: string;
 }
+
+export interface CreateSchoolEventDto {
+  eventType: SchoolEventType;
+  schoolYear: string;
+  title: string;
+  description?: string;
+  location?: string;
+  startsAt: string;
+  endsAt: string;
+  allDay?: boolean;
+}
+
+export type UpdateSchoolEventDto = Partial<CreateSchoolEventDto>;

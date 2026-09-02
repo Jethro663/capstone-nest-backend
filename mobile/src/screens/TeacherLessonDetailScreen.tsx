@@ -1,9 +1,11 @@
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Image, Pressable, Text, View } from "react-native";
 import { useLessonDetail, useTeacherLessonDraftStateMutation } from "../api/hooks";
 import { toAppError } from "../api/http";
+import { lessonsApi } from "../api/services/lessons";
 import type { RootStackParamList } from "../navigation/types";
 import { extractLessonBlockText, resolveLessonBlockMeta } from "../utils/lessonBlocks";
 import {
@@ -40,6 +42,7 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
   const lessonQuery = useLessonDetail(lessonId);
   const lesson = lessonQuery.data;
   const draftMutation = useTeacherLessonDraftStateMutation(classId || lesson?.classId, lessonId);
+  const versionsQuery = useQuery({ queryKey: ["lesson-versions", lessonId], queryFn: () => lessonsApi.getVersions(lessonId) });
 
   const blockCount = lesson?.contentBlocks?.length ?? 0;
   const interactiveCount = useMemo(
@@ -56,6 +59,26 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
       });
     } catch (error) {
       Alert.alert("Unable to update lesson", toAppError(error).message);
+    }
+  };
+
+  const createSnapshot = async () => {
+    try {
+      await lessonsApi.createVersion(lessonId, { label: `Mobile snapshot ${new Date().toLocaleString()}` });
+      await versionsQuery.refetch();
+      Alert.alert("Version saved", "A restorable lesson snapshot was created.");
+    } catch (error) {
+      Alert.alert("Unable to save version", toAppError(error).message);
+    }
+  };
+
+  const restoreSnapshot = async (versionId: string) => {
+    try {
+      await lessonsApi.restoreVersion(lessonId, versionId);
+      await Promise.all([lessonQuery.refetch(), versionsQuery.refetch()]);
+      Alert.alert("Version restored", "The lesson now uses the selected snapshot.");
+    } catch (error) {
+      Alert.alert("Unable to restore version", toAppError(error).message);
     }
   };
 
@@ -102,7 +125,20 @@ export function TeacherLessonDetailScreen({ navigation, route }: Props) {
                 onPress={() => void togglePublish()}
                 disabled={draftMutation.isPending}
               />
+              <TeacherActionButton label="Save version" icon="content-save-check-outline" tone="blue" onPress={() => void createSnapshot()} />
             </View>
+          </TeacherPanel>
+
+          <TeacherPanel title="Version history" subtitle="Create and restore server-owned lesson snapshots.">
+            {(versionsQuery.data ?? []).length ? (versionsQuery.data ?? []).map((version) => (
+              <View key={version.id} style={{ paddingHorizontal: 14, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.text, fontWeight: "800" }}>Version {version.versionNumber}{version.label ? ` - ${version.label}` : ""}</Text>
+                  <Text style={{ color: theme.muted, fontSize: 11, marginTop: 4 }}>{new Date(version.createdAt).toLocaleString()}</Text>
+                </View>
+                <TeacherActionButton label="Restore" icon="history" tone="amber" onPress={() => void restoreSnapshot(version.id)} />
+              </View>
+            )) : <View style={{ padding: 14 }}><Text style={{ color: theme.muted }}>No saved versions yet.</Text></View>}
           </TeacherPanel>
 
           <TeacherPanel title="Lesson content" subtitle="Teachers can review the same block sequence students consume.">

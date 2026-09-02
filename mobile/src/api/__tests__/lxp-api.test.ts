@@ -1,5 +1,6 @@
 import { lxpApi } from "../services/lxp";
 import { apiClient } from "../client";
+import { teacherEvaluationSummaryFixture } from "./fixtures/contracts";
 
 jest.mock("../client", () => ({
   apiClient: {
@@ -314,5 +315,24 @@ describe("lxpApi", () => {
       "/lxp/teacher/interventions/case-1/regenerate",
     );
     expect(regenerated.case.id).toBe("case-2");
+  });
+
+  it("preserves the current teacher evaluation summary contract", async () => {
+    mockedApiClient.get.mockResolvedValue({ data: { success: true, data: teacherEvaluationSummaryFixture } });
+
+    const result = await lxpApi.getTeacherEvaluationSummary({
+      evaluationType: "teacher_class",
+      classId: "class-1",
+      gradingPeriod: "Q2",
+    });
+
+    expect(mockedApiClient.get).toHaveBeenCalledWith("/lxp/teacher/evaluations/summary", {
+      params: {
+        evaluationType: "teacher_class",
+        classId: "class-1",
+        gradingPeriod: "Q2",
+      },
+    });
+    expect(result).toEqual(teacherEvaluationSummaryFixture);
   });
 });

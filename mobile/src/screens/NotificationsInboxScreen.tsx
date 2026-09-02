@@ -118,6 +118,8 @@ export function NotificationsInboxScreen({ navigation }: Props) {
   const { user } = useAuth();
   const role = resolveMobileRole(user?.roles);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [markingAll, setMarkingAll] = useState(false);
+  const [actionError, setActionError] = useState("");
   const notificationsQuery = useQuery({
     queryKey: ["mobile-notifications", "inbox"],
     queryFn: () => notificationsApi.getAll({ limit: 60 }),
@@ -148,6 +150,19 @@ export function NotificationsInboxScreen({ navigation }: Props) {
 
     const nav = navigation as unknown as { navigate: (name: string, params?: unknown) => void };
     await openMobileNotification(notification, role, nav.navigate);
+  };
+
+  const markAllRead = async () => {
+    try {
+      setMarkingAll(true);
+      setActionError("");
+      await notificationsApi.markAllRead();
+      await Promise.all([notificationsQuery.refetch(), unreadQuery.refetch()]);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Unable to mark all notifications as read.");
+    } finally {
+      setMarkingAll(false);
+    }
   };
 
   return (
@@ -183,12 +198,21 @@ export function NotificationsInboxScreen({ navigation }: Props) {
               </Text>
               <Text style={{ marginTop: 4, fontSize: 25, fontWeight: "900", color: colors.white }}>Notifications</Text>
             </View>
+            <Pressable accessibilityRole="button" disabled={markingAll || unreadCount === 0} onPress={() => void markAllRead()} style={{ borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.4)", paddingHorizontal: 10, paddingVertical: 8, opacity: markingAll || unreadCount === 0 ? 0.5 : 1 }}>
+              <Text style={{ color: colors.white, fontSize: 10, fontWeight: "900" }}>{markingAll ? "Updating..." : "Read all"}</Text>
+            </Pressable>
           </View>
           <Text style={{ marginTop: 12, fontSize: 13, lineHeight: 20, color: "rgba(255,255,255,0.78)" }}>
             All notifications appear here: announcements, pending assessments, Learners Path alerts, and class updates.
           </Text>
         </View>
       </View>
+
+      {actionError ? (
+        <View style={{ marginHorizontal: 16, marginTop: 12, borderRadius: 12, backgroundColor: "#FFF1F2", padding: 12 }}>
+          <Text accessibilityLiveRegion="polite" style={{ color: "#BE123C", fontSize: 12 }}>{actionError}</Text>
+        </View>
+      ) : null}
 
       <View style={{ marginHorizontal: 16, marginTop: 14, flexDirection: "row", gap: 8 }}>
         <CountPill label="Unread" value={unreadCount} color="#1D4ED8" />

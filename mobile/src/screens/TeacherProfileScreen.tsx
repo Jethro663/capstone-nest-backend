@@ -21,6 +21,7 @@ import {
   TeacherStats,
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
+import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -167,6 +168,12 @@ export function TeacherProfileScreen(_: Props) {
             <TeacherActionButton label="Save profile" icon="content-save-outline" tone="green" onPress={() => void saveProfile()} disabled={updateMutation.isPending} />
             <TeacherActionButton label="Log out" icon="logout" tone="amber" onPress={() => void logout()} />
           </View>
+        </View>
+      </TeacherPanel>
+
+      <TeacherPanel title="Security" subtitle="Change the password for this authenticated account.">
+        <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
+          <PasswordChangeForm />
         </View>
       </TeacherPanel>
     </TeacherScreen>

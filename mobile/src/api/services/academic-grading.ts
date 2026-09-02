@@ -1,6 +1,7 @@
 import { apiClient as api } from "../client";
 import type {
   AcademicAudit,
+  AcademicAlignmentPreview,
   AcademicPeriodKey,
   BackSubject,
   Grade10Completion,
@@ -71,6 +72,18 @@ export const academicGradingService = {
     currentPassword: string;
     reason: string;
   }) => post("/academic-state/repair/state", payload),
+  previewStateAlignment: (payload: { sourceSchoolYear: string; targetSchoolYear: string; targetQuarter: AcademicPeriodKey; classIds: string[] }) =>
+    post<AcademicAlignmentPreview>("/academic-state/repair/state-alignment/preview", payload),
+  executeStateAlignment: (payload: {
+    sourceSchoolYear: string;
+    targetSchoolYear: string;
+    targetQuarter: AcademicPeriodKey;
+    classIds: string[];
+    manifestHash: string;
+    confirmations: Array<{ code: string; text: string }>;
+    reason: string;
+    currentPassword: string;
+  }) => post<{ auditEventId: string; movedClassIds: string[]; movedSectionIds: string[]; updatedLegacyEvidenceRows: number }>("/academic-state/repair/state-alignment", payload),
   externalGrade: (
     classId: string,
     payload: Evidence & {

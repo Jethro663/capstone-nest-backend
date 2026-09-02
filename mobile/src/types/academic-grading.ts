@@ -1,5 +1,17 @@
 /** Backend-owned academic contracts. Mirror in mobile/src/types/academic-grading.ts. */
 export type AcademicPeriodKey = "Q1" | "Q2" | "Q3" | "Q4";
+
+export interface AcademicAlignmentPreview {
+  input: { sourceSchoolYear: string; targetSchoolYear: string; targetQuarter: AcademicPeriodKey; classIds: string[] };
+  state: { id: string; schoolYear: string; quarter: AcademicPeriodKey; version: number };
+  selectedClasses: Array<{ id: string; subjectCode: string; subjectName: string; sectionName: string; isActive: boolean }>;
+  movedSectionIds: string[];
+  requiredConfirmations: Array<{ code: string; text: string }>;
+  blockers: Array<{ code: string; message: string; classId?: string; sectionId?: string }>;
+  warnings: Array<{ code: string; message: string; classId?: string; sectionId?: string }>;
+  safeToApply: boolean;
+  manifestHash: string;
+}
 export interface AcademicPeriod {
   key: AcademicPeriodKey;
   label: string;

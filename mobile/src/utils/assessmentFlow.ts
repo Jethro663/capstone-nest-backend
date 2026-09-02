@@ -130,6 +130,63 @@ export function resolveAttemptTimer(
   return { source: "none" as const, secondsRemaining: null };
 }
 
+export function orderAttemptQuestions<T extends { id: string }>(
+  questions: readonly T[],
+  questionOrder?: readonly string[] | null,
+) {
+  if (!questionOrder?.length) return [...questions];
+
+  const positions = new Map(questionOrder.map((id, index) => [id, index]));
+  return questions
+    .map((question, sourceIndex) => ({ question, sourceIndex }))
+    .sort((left, right) => {
+      const leftPosition = positions.get(left.question.id);
+      const rightPosition = positions.get(right.question.id);
+      if (leftPosition !== undefined && rightPosition !== undefined) return leftPosition - rightPosition;
+      if (leftPosition !== undefined) return -1;
+      if (rightPosition !== undefined) return 1;
+      return left.sourceIndex - right.sourceIndex;
+    })
+    .map(({ question }) => question);
+}
+
+export function resolveQuestionTimer(
+  timedQuestionsEnabled: boolean,
+  currentQuestionDeadlineAt?: string | null,
+  now = Date.now(),
+) {
+  if (!timedQuestionsEnabled || !currentQuestionDeadlineAt) {
+    return { secondsRemaining: null, deadlineAt: null };
+  }
+
+  const deadline = new Date(currentQuestionDeadlineAt).getTime();
+  if (Number.isNaN(deadline)) {
+    return { secondsRemaining: null, deadlineAt: null };
+  }
+
+  return {
+    secondsRemaining: Math.max(0, Math.ceil((deadline - now) / 1000)),
+    deadlineAt: currentQuestionDeadlineAt,
+  };
+}
+
+export function resolveCurrentQuestionIndex(serverIndex: number | null | undefined, questionCount: number) {
+  if (questionCount <= 0) return 0;
+  return Math.min(Math.max(serverIndex ?? 0, 0), questionCount - 1);
+}
+
+export function resolveQuestionDeadlineAction(currentIndex: number, questionCount: number) {
+  return currentIndex >= Math.max(0, questionCount - 1) ? "submit" as const : "advance" as const;
+}
+
+export function resolveSubmittedAttemptState(attempt?: { isSubmitted?: boolean; violationCount?: number } | null) {
+  const submitted = Boolean(attempt?.isSubmitted);
+  return {
+    submitted,
+    locked: submitted || (attempt?.violationCount ?? 0) >= 3,
+  };
+}
+
 export function resolveViolationState(currentCount: number) {
   const nextCount = Math.max(0, currentCount) + 1;
   return { nextCount, locked: nextCount >= 3 };

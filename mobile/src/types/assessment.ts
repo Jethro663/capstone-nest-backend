@@ -59,6 +59,12 @@ export interface AssessmentFileRecord {
 
 export interface RubricCriterion { id: string; title: string; description?: string; points: number; }
 
+export interface RubricScore {
+  criterionId: string;
+  pointsEarned: number;
+  feedback?: string;
+}
+
 export interface Assessment {
   authoringRestrictions?: { hasAttempts: boolean; canEditQuestions: boolean; reason: string | null };
   closeWhenDue?: boolean;
@@ -215,7 +221,10 @@ export interface AssessmentAttempt {
   updatedAt?: string;
   expiresAt?: string | null;
   lastQuestionIndex?: number;
+  currentQuestionStartedAt?: string | null;
+  currentQuestionDeadlineAt?: string | null;
   violationCount?: number;
+  questionOrder?: string[] | null;
   draftResponses?: SubmitAssessmentDto["responses"];
   submittedFileId?: string | null;
   submittedFileOriginalName?: string | null;
@@ -226,6 +235,8 @@ export interface AssessmentAttempt {
   isReturned?: boolean;
   returnedAt?: string;
   teacherFeedback?: string;
+  directScore?: number | null;
+  rubricScores?: RubricScore[] | null;
 }
 
 export interface SubmitAssessmentDto {
@@ -274,21 +285,23 @@ export interface RemovedAssessmentSubmissionFiles {
 }
 
 export interface AttemptResult {
-  attempt: AssessmentAttempt;
-  score: number;
-  passed: boolean;
+  attempt?: AssessmentAttempt;
+  score: number | null;
+  passed: boolean | null;
   isReturned: boolean;
-  attemptNumber: number;
-  teacherFeedback: string;
+  attemptNumber?: number;
+  teacherFeedback?: string | null;
   returnedAt?: string | null;
   directScore?: number | null;
+  rubricScores?: RubricScore[];
   responses: {
     questionId: string;
     studentAnswer?: string;
     selectedOptionId?: string;
     selectedOptionIds?: string[];
-    isCorrect?: boolean;
-    pointsEarned?: number;
+    isCorrect?: boolean | null;
+    pointsEarned?: number | null;
+    hint?: string;
     question?: AssessmentQuestion;
   }[];
   submittedFile?: AssessmentFileRecord | null;
@@ -299,6 +312,13 @@ export interface AttemptResult {
     type?: string;
     totalPoints?: number;
     passingScore?: number;
+    rubricCriteria?: RubricCriterion[];
+  };
+  feedbackStatus?: {
+    level: string;
+    unlocked: boolean;
+    hoursRemaining?: number;
+    message?: string;
   };
 }
 
@@ -334,6 +354,46 @@ export interface TeacherAssessmentSubmissionSummary {
 export interface TeacherAssessmentSubmissionsResponse {
   submissions: TeacherAssessmentSubmission[];
   summary: TeacherAssessmentSubmissionSummary;
+}
+
+export interface AssessmentStats {
+  totalAttempts: number;
+  submittedAttempts: number;
+  averageScore: number;
+  highestScore: number;
+  lowestScore: number;
+  passRate: number;
+  averageTimeSeconds: number;
+  completionRate: number;
+  totalEnrolled: number;
+}
+
+export interface AssessmentOptionAnalytics {
+  optionId: string;
+  text: string;
+  isCorrect: boolean;
+  selectionCount: number;
+  selectionPercent: number;
+}
+
+export interface AssessmentQuestionAnalytics {
+  questionId: string;
+  content: string;
+  type: string;
+  points: number;
+  totalResponses: number;
+  correctCount: number;
+  correctPercent: number;
+  averagePoints: number;
+  options: AssessmentOptionAnalytics[];
+  textAnswers: string[];
+}
+
+export interface AssessmentQuestionAnalyticsResponse {
+  totalResponses: number;
+  totalAttempts?: number;
+  uniqueSubmitterCount?: number;
+  questions: AssessmentQuestionAnalytics[];
 }
 
 export interface EditorQuestionInput extends Omit<CreateQuestionDto, 'assessmentId' | 'options'> {

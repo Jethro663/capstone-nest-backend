@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { peekAppError, toAppError } from "../api/http";
-import { useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
+import { useJaActivityHistory, useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
 import { RichTextContent } from "../components/ui/RichTextContent";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
@@ -212,6 +212,7 @@ export function JaScreen({ navigation, route }: Props) {
   const [actionError, setActionError] = useState("");
 
   const jaHubQuery = useJaHub(selectedClassId);
+  const activityHistoryQuery = useJaActivityHistory(selectedClassId, activityFilter);
   const eligibilityQuery = useLxpEligibility();
   const lxpPlaylistQuery = useLxpPlaylist(selectedLxpClassId);
   const lxpOverviewQuery = useLxpOverview(selectedLxpClassId);
@@ -251,25 +252,10 @@ export function JaScreen({ navigation, route }: Props) {
   );
   const lessonSteps = checkpoints.filter((checkpoint) => checkpoint.type === "lesson_review" || checkpoint.type === "generated_lesson_review");
   const replaySteps = checkpoints.filter((checkpoint) => checkpoint.type === "assessment_retry" || checkpoint.type === "guided_assessment");
-  const visibleActivities = [
-    ...(jaHubQuery.data?.ask.threads ?? []).map((thread) => ({
-      id: thread.id,
-      mode: "ask" as const,
-      title: thread.title || "Ask thread",
-      subtitle: thread.contextLessonTitle || "Ask thread",
-      updatedAt: thread.lastMessageAt || thread.updatedAt,
-    })),
-    ...(jaHubQuery.data?.review.sessions ?? []).map((session) => ({
-      id: session.id,
-      mode: "review" as const,
-      title: "Replay Session",
-      subtitle: `${session.status.toUpperCase()} - ${session.currentIndex}/${session.questionCount}`,
-      updatedAt: session.completedAt || session.startedAt,
-    })),
-  ].filter((item) => activityFilter === "all" || item.mode === activityFilter);
+  const visibleActivities = activityHistoryQuery.data?.items ?? [];
 
   const refreshAll = () => {
-    void Promise.all([jaHubQuery.refetch(), eligibilityQuery.refetch(), lxpPlaylistQuery.refetch(), lxpOverviewQuery.refetch()]);
+    void Promise.all([jaHubQuery.refetch(), activityHistoryQuery.refetch(), eligibilityQuery.refetch(), lxpPlaylistQuery.refetch(), lxpOverviewQuery.refetch()]);
   };
 
   const resetJaWorkspace = () => {
@@ -485,6 +471,10 @@ export function JaScreen({ navigation, route }: Props) {
   };
 
   const openLesson = (checkpoint: LxpCheckpoint) => {
+    if (checkpoint.type === "generated_lesson_review" && selectedLxpClassId) {
+      navigation.navigate("StudentGeneratedLesson" as never, { classId: selectedLxpClassId, assignmentId: checkpoint.id } as never);
+      return;
+    }
     if (!checkpoint.lesson?.id || !selectedLxpClassId) return;
     navigation.navigate("LessonDetail" as never, { lessonId: checkpoint.lesson.id, classId: selectedLxpClassId } as never);
   };
@@ -654,7 +644,13 @@ export function JaScreen({ navigation, route }: Props) {
           ))}
         </ScrollView>
         <Text style={{ marginTop: 9, color: dark.muted, fontSize: 11 }}>
-          {visibleActivities.length ? `${visibleActivities.length} saved activities for this filter.` : "No saved JA activity for this filter yet."}
+          {activityHistoryQuery.isLoading
+            ? "Loading complete activity history..."
+            : activityHistoryQuery.isError
+              ? "Activity history is unavailable. Pull to refresh and try again."
+              : visibleActivities.length
+                ? `${visibleActivities.length} saved activities for this filter.`
+                : "No saved JA activity for this filter yet."}
         </Text>
       </View>
 

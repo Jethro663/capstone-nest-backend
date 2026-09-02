@@ -343,12 +343,13 @@ export interface GenerateQuizDraftDto {
   questionCount: number;
   questionType: string;
   assessmentType?: "quiz" | "exam" | "assignment";
-  passingScore: number;
+  passingScore?: number;
   teacherNote?: string;
   feedbackLevel?: "immediate" | "standard" | "detailed";
   classRecordCategory?: "written_work" | "performance_task" | "quarterly_assessment";
-  sourcePolicy: "published_default";
-  allowDraftSources: false;
+  sourcePolicy?: "published_default" | "published_only" | "any_indexed";
+  allowDraftSources?: boolean;
+  retryOfJobId?: string;
 }
 
 export type CreateQuizDraftJobInput = Pick<

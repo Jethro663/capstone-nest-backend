@@ -46,10 +46,22 @@ export interface ModuleItem {
 
 export interface ModuleSection {
   id: string;
+  moduleId?: string;
   title: string;
   description?: string;
   order: number;
   items: ModuleItem[];
+}
+
+export interface ModuleGradingScaleEntry {
+  id?: string;
+  moduleId?: string;
+  letter: string;
+  label: string;
+  minScore: number;
+  maxScore: number;
+  description?: string;
+  order?: number;
 }
 
 export interface ClassModule {
@@ -60,12 +72,16 @@ export interface ClassModule {
   order: number;
   isVisible?: boolean;
   isLocked?: boolean;
+  isCoreTemplateAsset?: boolean;
+  templateId?: string | null;
+  templateSourceId?: string | null;
   teacherNotes?: string | null;
   coverImageUrl?: string | null;
   themeKind?: "gradient" | "image";
   gradientId?: string | null;
   progressPercent?: number;
   sections: ModuleSection[];
+  gradingScaleEntries?: ModuleGradingScaleEntry[];
 }
 
 export interface UpdateClassModuleDto {
@@ -92,6 +108,12 @@ export interface CreateModuleSectionDto {
   title: string;
   description?: string;
   order?: number;
+}
+
+export interface UpdateModuleSectionDto { title?: string; description?: string }
+
+export interface ReplaceModuleGradingScaleDto {
+  entries: Array<{ letter: string; label: string; minScore: number; maxScore: number; description?: string; order?: number }>;
 }
 
 export interface UpdateModuleItemDto {

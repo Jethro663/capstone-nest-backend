@@ -10,6 +10,7 @@ import type {
   PlaylistResponse,
   GuidedAssessmentResultResponse,
   GuidedAssessmentSessionResponse,
+  GeneratedLessonResponse,
   StudentInterventionAlert,
   StudentInterventionAlertsResponse,
 } from "../../types/lxp";
@@ -175,6 +176,13 @@ export const lxpApi = {
       progress: normalizeObject(payload.progress, emptyPlaylist().progress),
       checkpoints: normalizeArray<LxpCheckpoint>(payload.checkpoints),
     };
+  },
+
+  async getGeneratedLesson(classId: string, assignmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<GeneratedLessonResponse>>(
+      `/lxp/me/playlist/${classId}/generated-lessons/${assignmentId}`,
+    );
+    return unwrapEnvelope(response.data);
   },
 
   async startGuidedAssessment(classId: string, assignmentId: string, forceNewAttempt = false) {
@@ -350,12 +358,6 @@ export const lxpApi = {
       "/lxp/teacher/evaluations/summary",
       { params: filters },
     );
-    return normalizeObject<TeacherEvaluationSummaryResponse>(unwrapEnvelope(response.data), {
-      evaluationType: filters.evaluationType,
-      overallAverage: null,
-      responseCount: 0,
-      classAverages: [] as TeacherEvaluationSummaryResponse["classAverages"],
-      gradingPeriodBreakdown: [] as TeacherEvaluationSummaryResponse["gradingPeriodBreakdown"],
-    });
+    return unwrapEnvelope(response.data);
   },
 };

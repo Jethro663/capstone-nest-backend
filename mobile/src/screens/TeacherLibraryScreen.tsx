@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Alert, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { queryKeys, useTeacherClasses } from "../api/hooks";
 import { toAppError } from "../api/http";
 import { fileUploadApi } from "../api/services/file-upload";
@@ -40,6 +40,8 @@ export function TeacherLibraryScreen({ navigation }: Props) {
   const [deletingFile, setDeletingFile] = useState<{ id: string; name: string } | null>(null);
   const [importingFile, setImportingFile] = useState<{ id: string; name: string } | null>(null);
   const [targetClassId, setTargetClassId] = useState<string>("");
+  const [selectedFolderId, setSelectedFolderId] = useState<string>("all");
+  const [newFolderName, setNewFolderName] = useState("");
 
   const classIds = classesQuery.data?.map((entry) => entry.id) ?? [];
 
@@ -57,8 +59,17 @@ export function TeacherLibraryScreen({ navigation }: Props) {
       : classesQuery.data?.find((entry) => entry.id === selectedClassId);
 
   const filesQuery = useQuery({
-    queryKey: ["library-files", selectedClassId, search],
-    queryFn: () => fileUploadApi.getAll({ classId: selectedClassId !== "all" ? selectedClassId : undefined, search: search.trim() || undefined }),
+    queryKey: ["library-files", selectedClassId, selectedFolderId, search],
+    queryFn: () => fileUploadApi.getAll({ classId: selectedClassId !== "all" ? selectedClassId : undefined, folderId: selectedFolderId !== "all" ? selectedFolderId : undefined, search: search.trim() || undefined }),
+  });
+  const foldersQuery = useQuery({ queryKey: ["library-folders"], queryFn: () => fileUploadApi.getFolders() });
+  const storageQuery = useQuery({ queryKey: ["library-storage-summary"], queryFn: () => fileUploadApi.getStorageSummary() });
+  const createFolderMutation = useMutation({
+    mutationFn: (name: string) => fileUploadApi.createFolder({ name, scope: "private" }),
+    onSuccess: async () => {
+      setNewFolderName("");
+      await foldersQuery.refetch();
+    },
   });
 
   const handleUploadFile = async () => {
@@ -81,6 +92,7 @@ export function TeacherLibraryScreen({ navigation }: Props) {
         },
         {
           classId: selectedClassId !== "all" ? selectedClassId : undefined,
+          folderId: selectedFolderId !== "all" ? selectedFolderId : undefined,
           scope: "private",
         },
       );
@@ -137,13 +149,15 @@ export function TeacherLibraryScreen({ navigation }: Props) {
       onBackPress={() => navigation.goBack()}
       refreshing={classesQuery.isRefetching || moduleQueries.some((query) => query.isRefetching)}
       onRefresh={() => {
-        void Promise.all([classesQuery.refetch(), ...moduleQueries.map((query) => query.refetch())]);
+        void Promise.all([classesQuery.refetch(), filesQuery.refetch(), foldersQuery.refetch(), storageQuery.refetch(), ...moduleQueries.map((query) => query.refetch())]);
       }}
     >
       <TeacherStats
         items={[
           { label: "Modules", value: moduleRecords.length, tone: "red" },
           { label: "Classes", value: classesQuery.data?.length ?? 0, tone: "blue" },
+          { label: "Files", value: storageQuery.data?.totalFiles ?? filesQuery.data?.length ?? 0, tone: "green" },
+          { label: "Storage", value: `${storageQuery.data?.totalMB ?? 0} MB`, tone: "amber" },
         ]}
       />
 
@@ -165,6 +179,19 @@ export function TeacherLibraryScreen({ navigation }: Props) {
           />
         ))}
       </View>
+
+      {activeTab === "files" ? (
+        <TeacherPanel title="Folders and storage" subtitle="Filter the complete library, create folders, and review authoritative storage totals.">
+          <View style={{ paddingHorizontal: 14, paddingBottom: 12, flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+            <TeacherChip label="All folders" active={selectedFolderId === "all"} onPress={() => setSelectedFolderId("all")} />
+            {(foldersQuery.data ?? []).map((folder) => <TeacherChip key={folder.id} label={folder.name} active={selectedFolderId === folder.id} onPress={() => setSelectedFolderId(folder.id)} />)}
+          </View>
+          <View style={{ paddingHorizontal: 14, paddingBottom: 14, flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <TextInput accessibilityLabel="New folder name" value={newFolderName} onChangeText={setNewFolderName} placeholder="New folder name" placeholderTextColor={teacherTheme.muted} style={{ flex: 1, borderWidth: 1, borderColor: teacherTheme.border, borderRadius: 10, color: teacherTheme.text, paddingHorizontal: 11, paddingVertical: 9 }} />
+            <TeacherActionButton label="Create" icon="folder-plus-outline" tone="blue" disabled={!newFolderName.trim() || createFolderMutation.isPending} onPress={() => void createFolderMutation.mutateAsync(newFolderName.trim()).catch((error) => Alert.alert("Unable to create folder", toAppError(error).message))} />
+          </View>
+        </TeacherPanel>
+      ) : null}
 
       <TeacherPanel
         title="Library actions"
@@ -245,6 +272,9 @@ export function TeacherLibraryScreen({ navigation }: Props) {
                         tone="blue"
                         onPress={() => void fileUploadApi.open(file.id, name)}
                       />
+                      {file.indexStatus === "failed" ? (
+                        <TeacherActionButton label="Retry index" tone="amber" onPress={() => void fileUploadApi.retryIndex(file.id).then(() => filesQuery.refetch()).catch((error) => Alert.alert("Retry failed", toAppError(error).message))} />
+                      ) : null}
                       <Pressable
                         onPress={() => setDeletingFile({ id: file.id, name })}
                         style={{ padding: 6 }}

@@ -21,6 +21,9 @@ export interface TeacherSection {
   cardBannerUrl?: string | null;
 }
 
+export interface CreateSectionDto { name: string; gradeLevel: "7" | "8" | "9" | "10"; schoolYear: string; capacity: number; roomNumber?: string; adviserId?: string }
+export interface UpdateSectionDto { name?: string; gradeLevel?: string; schoolYear?: string; capacity?: number; roomNumber?: string; adviserId?: string | null; isActive?: boolean }
+
 export interface TeacherSectionsListResponse {
   success?: boolean;
   data: TeacherSection[];
@@ -481,20 +484,48 @@ export interface LxpClassReport {
 
 export type TeacherEvaluationType = "teacher_class" | "ja_hub" | "learners_path";
 
+export interface TeacherEvaluationCategoryAverage {
+  key: string;
+  label: string;
+  average: number;
+}
+
 export interface TeacherEvaluationSummaryResponse {
-  evaluationType: TeacherEvaluationType;
-  overallAverage?: number | null;
-  responseCount?: number;
-  classAverages?: Array<{
-    classId: string;
-    classCode?: string;
-    className?: string;
-    averageScore?: number | null;
-    responseCount?: number;
+  classes: Array<{
+    id: string;
+    subjectName: string;
+    subjectCode: string;
+    section?: {
+      id: string;
+      name: string;
+      gradeLevel: string;
+    } | null;
   }>;
-  gradingPeriodBreakdown?: Array<{
+  periods: Array<"Q1" | "Q2" | "Q3" | "Q4">;
+  evaluationType: TeacherEvaluationType;
+  tabTitle: string;
+  tabDescription: string;
+  overview: {
+    responseCount: number;
+    eligibleCount: number;
+    responseRate: number;
+    averageOverall: number;
+    latestSubmittedAt: string | null;
+  };
+  categoryAverages: TeacherEvaluationCategoryAverage[];
+  comments: Array<{
+    id: string;
+    comment: string;
+    submittedAt: string;
     gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
-    averageScore?: number | null;
-    responseCount?: number;
+    classId: string;
+    classLabel: string;
+  }>;
+  trends: Array<{
+    classId: string;
+    gradingPeriod: "Q1" | "Q2" | "Q3" | "Q4";
+    classLabel: string;
+    responseCount: number;
+    eligibleCount: number;
   }>;
 }

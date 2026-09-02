@@ -32,6 +32,7 @@ import {
   useLxpOverview,
   useLxpPlaylist,
   useJaHub,
+  useJaActivityHistory,
   usePerformanceSummary,
   useProfile,
   useProfileAvatarMutation,
@@ -257,6 +258,7 @@ jest.mock("../../api/services/assessments", () => ({
       isSubmitted: false,
     }),
     getStudentAttempts: jest.fn().mockResolvedValue([]),
+    updateAttemptProgress: jest.fn(),
     uploadSubmissionFile: jest.fn(),
     removeSubmissionFile: jest.fn(),
     openTeacherAttachment: jest.fn().mockResolvedValue(undefined),
@@ -315,6 +317,7 @@ jest.mock("../../api/hooks", () => ({
   useLxpEligibility: jest.fn(),
   useLxpOverview: jest.fn(),
   useJaHub: jest.fn(),
+  useJaActivityHistory: jest.fn(),
   useTutorBootstrap: jest.fn(),
   useLxpPlaylist: jest.fn(),
   useLxpCheckpointMutation: jest.fn(),
@@ -483,6 +486,7 @@ const mockedUseDiscussionReactionMutation = useDiscussionReactionMutation as jes
 const mockedUseLxpEligibility = useLxpEligibility as jest.MockedFunction<typeof useLxpEligibility>;
 const mockedUseLxpOverview = useLxpOverview as jest.MockedFunction<typeof useLxpOverview>;
 const mockedUseJaHub = useJaHub as jest.MockedFunction<typeof useJaHub>;
+const mockedUseJaActivityHistory = useJaActivityHistory as jest.MockedFunction<typeof useJaActivityHistory>;
 const mockedUseTutorBootstrap = useTutorBootstrap as jest.MockedFunction<typeof useTutorBootstrap>;
 const mockedUseLxpPlaylist = useLxpPlaylist as jest.MockedFunction<typeof useLxpPlaylist>;
 const mockedUseLxpCheckpointMutation = useLxpCheckpointMutation as jest.MockedFunction<typeof useLxpCheckpointMutation>;
@@ -518,6 +522,7 @@ const mockedAssessmentsApi = require("../../api/services/assessments").assessmen
   submit: jest.Mock;
   unsubmitFileUploadAssessment: jest.Mock;
   getStudentAttempts: jest.Mock;
+  updateAttemptProgress: jest.Mock;
   uploadSubmissionFile: jest.Mock;
   removeSubmissionFile: jest.Mock;
   openTeacherAttachment: jest.Mock;
@@ -829,6 +834,9 @@ describe("mobile rendered screen flows", () => {
           sessions: [],
         },
       }) as ReturnType<typeof useJaHub>,
+    );
+    mockedUseJaActivityHistory.mockReturnValue(
+      createQueryState({ data: [], page: 1, limit: 20, total: 0, totalPages: 0 }) as ReturnType<typeof useJaActivityHistory>,
     );
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
@@ -5481,6 +5489,100 @@ describe("mobile rendered screen flows", () => {
 
     expect(expandedText).toContain("Blue");
     expect(expandedText).toContain("Red");
+  });
+
+  it("resumes the server-randomized question position and keeps strict back navigation locked", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    const future = new Date(Date.now() + 120_000).toISOString();
+    mockedUseAssessmentDetail.mockReturnValue(createQueryState({
+      id: "assessment-1", classId: "class-1", title: "Ordered assessment", type: "quiz", isPublished: true,
+      totalPoints: 10, passingScore: 75, maxAttempts: 1, timeLimitMinutes: 30, strictMode: true,
+      questions: [
+        { id: "question-1", assessmentId: "assessment-1", type: "short_answer", content: "Source question one", points: 5, order: 1, options: [] },
+        { id: "question-2", assessmentId: "assessment-1", type: "short_answer", content: "Source question two", points: 5, order: 2, options: [] },
+      ],
+    }) as ReturnType<typeof useAssessmentDetail>);
+    mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
+      attempt: { id: "attempt-1", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 1, questionOrder: ["question-2", "question-1"], draftResponses: [] },
+      timeLimitMinutes: 30, expiresAt: future, strictMode: true,
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(React.createElement(AssessmentTakeScreen, {
+        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
+        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
+      }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = testRenderer!.root.findAll((node) => node.type === "Text").map((node) => flattenText(node)).join(" ");
+    expect(text).toContain("Source question one");
+    expect(text).not.toContain("Source question two");
+    const lockedPreviousButtons = testRenderer!.root.findAll((node) => node.type === "Pressable" && node.props.disabled === true && node.findAll((child) => child.type === "MaterialCommunityIcons" && child.props.name === "chevron-left").length > 0);
+    expect(lockedPreviousButtons).toHaveLength(1);
+  });
+
+  it("submits the last timed question after its server deadline instead of deadlocking the expired UI", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    const submit = jest.fn().mockResolvedValue(undefined);
+    const future = new Date(Date.now() + 120_000).toISOString();
+    mockedUseAssessmentSubmitMutation.mockReturnValue({ mutateAsync: submit, isPending: false, error: null } as ReturnType<typeof useAssessmentSubmitMutation>);
+    mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
+      attempt: { id: "attempt-expired-question", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 0, currentQuestionDeadlineAt: new Date(Date.now() - 1_000).toISOString(), questionOrder: ["question-1"], draftResponses: [] },
+      timeLimitMinutes: 30, expiresAt: future, timedQuestionsEnabled: true, questionTimeLimitSeconds: 30,
+    });
+    mockedAssessmentsApi.updateAttemptProgress.mockResolvedValue({ id: "attempt-expired-question", assessmentId: "assessment-1", lastQuestionIndex: 0, isSubmitted: false, expiresAt: future });
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(AssessmentTakeScreen, {
+        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
+        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
+      }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedAssessmentsApi.updateAttemptProgress).toHaveBeenCalled();
+    expect(submit).toHaveBeenCalled();
+  });
+
+  it("surfaces foreground resynchronization failure and pauses the attempt", async () => {
+    const { AssessmentTakeScreen } = require("../AssessmentTakeScreen");
+    const { AppState } = require("react-native") as { AppState: { addEventListener: jest.Mock } };
+    let appStateListener: ((state: string) => void) | undefined;
+    AppState.addEventListener.mockImplementationOnce((_event: string, listener: (state: string) => void) => {
+      appStateListener = listener;
+      return { remove: jest.fn() };
+    });
+    const future = new Date(Date.now() + 120_000).toISOString();
+    mockedAssessmentsApi.getOngoingAttempt.mockResolvedValueOnce({
+      attempt: { id: "attempt-online", assessmentId: "assessment-1", startedAt: new Date().toISOString(), expiresAt: future, lastQuestionIndex: 0 },
+      timeLimitMinutes: 30, expiresAt: future,
+    });
+
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(React.createElement(AssessmentTakeScreen, {
+        navigation: { replace: jest.fn(), goBack: jest.fn(), addListener: jest.fn(() => jest.fn()), dispatch: jest.fn() } as never,
+        route: { key: "AssessmentTake", name: "AssessmentTake", params: { assessmentId: "assessment-1" } } as never,
+      }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    mockedAssessmentsApi.getOngoingAttempt.mockRejectedValueOnce({ isAxiosError: true, response: { status: 503, data: { message: "Network unavailable during resume" } }, message: "Request failed" });
+    await act(async () => {
+      appStateListener?.("active");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const text = testRenderer!.root.findAll((node) => node.type === "Text").map((node) => flattenText(node)).join(" ");
+    expect(text).toContain("Network sync paused");
+    expect(text).toContain("The app hit an unexpected state");
   });
 
   it("surfaces assessments backend error state in rendered screen flow", () => {

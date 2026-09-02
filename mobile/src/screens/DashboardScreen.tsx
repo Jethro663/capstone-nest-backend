@@ -1002,7 +1002,7 @@ export function DashboardScreen({ navigation }: Props) {
   };
 
   const handleOpenNotifications = () => {
-    navigation.navigate("Announcements");
+    navigation.navigate("Notifications" as never);
   };
 
   const handleOpenProfile = () => {
@@ -1069,7 +1069,7 @@ export function DashboardScreen({ navigation }: Props) {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
               <Pressable
                 accessibilityLabel="Open announcements"
-                onPress={() => navigation.navigate("Announcements")}
+                onPress={() => navigation.navigate("Notifications" as never)}
                 style={{
                   width: 44,
                   height: 44,

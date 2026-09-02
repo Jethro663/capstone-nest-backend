@@ -142,7 +142,7 @@ export function TeacherHomeScreen({ navigation }: Props) {
       rightAction={
         <Pressable
           accessibilityLabel="Open notifications"
-          onPress={() => navigation.navigate("Announcements")}
+          onPress={() => navigation.navigate("Notifications")}
           style={{
             width: 44,
             height: 44,

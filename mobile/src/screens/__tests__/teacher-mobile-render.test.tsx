@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { TeacherAssessmentDetailScreen } from "../TeacherAssessmentDetailScreen";
 import { TeacherHomeScreen } from "../TeacherHomeScreen";
 import { TeacherProfileScreen } from "../TeacherProfileScreen";
@@ -18,6 +18,7 @@ import {
 
 jest.mock("@tanstack/react-query", () => ({
   useQueries: jest.fn(),
+  useQuery: jest.fn(),
 }));
 
 jest.mock("react-native", () => {
@@ -58,6 +59,13 @@ jest.mock("../../components/ui/primitives", () => {
   return {
     Refreshable: component("Refreshable"),
     ScreenScroll: component("ScreenScroll"),
+  };
+});
+
+jest.mock("../../components/account/PasswordChangeForm", () => {
+  const ReactRuntime = require("react");
+  return {
+    PasswordChangeForm: () => ReactRuntime.createElement("PasswordChangeForm"),
   };
 });
 
@@ -150,6 +158,7 @@ jest.mock("../../api/hooks", () => ({
 }));
 
 const mockedUseQueries = useQueries as jest.Mock;
+const mockedUseQuery = useQuery as jest.Mock;
 const mockedUseAuth = useAuth as jest.Mock;
 const mockedUseTeacherClasses = useTeacherClasses as jest.Mock;
 const mockedUseAssessmentDetail = useAssessmentDetail as jest.Mock;
@@ -171,6 +180,15 @@ function flattenText(node: TestRenderer.ReactTestRendererJSON | TestRenderer.Rea
 describe("teacher mobile screens", () => {
   beforeEach(() => {
     mockedUseQueries.mockReturnValue([]);
+    mockedUseQuery.mockImplementation(({ queryKey }: { queryKey: string[] }) => ({
+      data: queryKey.includes("teacher-assessment-stats")
+        ? { totalAttempts: 1, submittedAttempts: 1, averageScore: 88, highestScore: 88, lowestScore: 88, passRate: 100, averageTimeSeconds: 120, completionRate: 100, totalEnrolled: 1 }
+        : { totalResponses: 1, uniqueSubmitterCount: 1, questions: [] },
+      isError: false,
+      error: null,
+      isRefetching: false,
+      refetch: jest.fn(),
+    }));
     mockedUseAuth.mockReturnValue({
       user: {
         id: "teacher-1",

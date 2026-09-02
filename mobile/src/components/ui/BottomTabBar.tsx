@@ -27,6 +27,7 @@ const teacherTabOrder: Array<keyof MainTabParamList> = [
   "Home",
   "Assessments",
   "Classes",
+  "Announcements",
   "Sections",
   "Profile",
 ];
@@ -71,9 +72,9 @@ const routeConfig: Record<
     inactiveIcon: "robot-happy-outline",
   },
   Announcements: {
-    label: "Notifications",
-    activeIcon: "bell",
-    inactiveIcon: "bell-outline",
+    label: "Announcements",
+    activeIcon: "bullhorn",
+    inactiveIcon: "bullhorn-outline",
   },
   Profile: {
     label: "Profile",

@@ -3,6 +3,7 @@ import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   ClassItem,
+  CreateClassDto,
   ClassVisibilityStatus,
   EnrollmentRecord,
   EnrollStudentDto,
@@ -11,21 +12,57 @@ import type {
   StudentMasterlistResponse,
   TeacherClassStudentOverview,
   TeacherClassStudentProfile,
+  UpdateClassDto,
 } from "../../types/class";
+import { fetchAllPages, normalizePageEnvelope, type PageEnvelope } from "../pagination";
+
+export type ClassesListQuery = {
+  isActive?: boolean;
+  schoolYear?: string;
+  subjectGradeLevel?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
 
 export const classesApi = {
-  async getAll(query?: {
-    isActive?: boolean;
-    schoolYear?: string;
-    subjectGradeLevel?: string;
-    search?: string;
-    limit?: number;
-  }) {
-    const response = await apiClient.get<ApiEnvelope<{ data: ClassItem[] }>>("/classes/all", {
-      params: query,
-    });
-    const payload = unwrapEnvelope(response.data);
-    return normalizeArray<ClassItem>(payload?.data);
+  async create(payload: CreateClassDto) {
+    const response = await apiClient.post<ApiEnvelope<ClassItem>>("/classes", payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async update(classId: string, payload: UpdateClassDto) {
+    const response = await apiClient.put<ApiEnvelope<ClassItem>>(`/classes/${classId}`, payload);
+    return unwrapEnvelope(response.data);
+  },
+
+  async toggleStatus(classId: string) {
+    const response = await apiClient.put<ApiEnvelope<ClassItem>>(`/classes/${classId}/toggle-status`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async remove(classId: string) {
+    await apiClient.delete(`/classes/${classId}`);
+  },
+
+  async getPage(query: ClassesListQuery = {}): Promise<PageEnvelope<ClassItem>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 50;
+    const response = await apiClient.get<ApiEnvelope<{ data: ClassItem[]; total?: number; page?: number; limit?: number }>>(
+      "/classes/all",
+      {
+        params: { ...query, page, limit },
+      },
+    );
+    return normalizePageEnvelope(unwrapEnvelope(response.data), page, limit);
+  },
+
+  async getAll(query: Omit<ClassesListQuery, "page"> = {}) {
+    const result = await fetchAllPages(
+      (page, limit) => classesApi.getPage({ ...query, page, limit }),
+      { limit: query.limit ?? 100, key: (item) => item.id },
+    );
+    return result.data;
   },
 
   async getStudentClasses(studentId: string) {

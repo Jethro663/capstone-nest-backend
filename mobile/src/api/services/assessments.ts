@@ -1,12 +1,15 @@
 import type { SaveAssessmentEditorInput, AssessmentEditorResult } from "../../types/assessment";
 import { apiClient } from "../client";
-import { unwrapEnvelope } from "../http";
+import { normalizeArray, unwrapEnvelope } from "../http";
+import { fetchAllPages, normalizePageEnvelope } from "../pagination";
 import { downloadProtectedFile, openLocalFile } from "./protected-files";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   Assessment,
   AssessmentAttempt,
   AssessmentQuestion,
+  AssessmentQuestionAnalyticsResponse,
+  AssessmentStats,
   AttemptResult,
   CreateAssessmentDto,
   CreateQuestionDto,
@@ -29,6 +32,19 @@ import type {
 export type AssessmentAttemptList = AssessmentAttempt[];
 export type AssessmentAttemptDetail = AttemptResult;
 export type AssessmentHistoryList = AssessmentHistoryResponse;
+export type ReturnGradeDto = {
+  teacherFeedback?: string;
+  directScore?: number;
+  rubricScores?: Array<{
+    criterionId: string;
+    pointsEarned: number;
+    feedback?: string;
+  }>;
+  manualResponseScores?: Array<{
+    questionId: string;
+    pointsEarned: number;
+  }>;
+};
 
 type TeacherSubmissionAttemptPayload = {
   id?: string | null;
@@ -111,9 +127,30 @@ export const assessmentsApi = {
     return unwrapEnvelope(response.data);
   },
 
+  async getPageByClass(
+    classId: string,
+    query: { page?: number; limit?: number; status?: "all" | "upcoming" | "past_due" | "completed" } = {},
+  ) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 100;
+    const response = await apiClient.get<ApiEnvelope<Assessment[]>>(`/assessments/class/${classId}`, {
+      params: { ...query, page, limit },
+    });
+    return normalizePageEnvelope(response.data, page, limit);
+  },
+
+  async getAllByClass(
+    classId: string,
+    query: { status?: "all" | "upcoming" | "past_due" | "completed" } = {},
+  ) {
+    return fetchAllPages(
+      (page, limit) => assessmentsApi.getPageByClass(classId, { ...query, page, limit }),
+      { key: (assessment) => assessment.id },
+    );
+  },
+
   async getByClass(classId: string) {
-    const response = await apiClient.get<ApiEnvelope<Assessment[]>>(`/assessments/class/${classId}`);
-    return unwrapEnvelope(response.data);
+    return (await assessmentsApi.getAllByClass(classId)).data;
   },
 
   async getById(assessmentId: string) {
@@ -244,12 +281,46 @@ export const assessmentsApi = {
     return normalizeTeacherSubmissionsResponse(unwrapEnvelope(response.data));
   },
 
+  async getAllAttempts(assessmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<AssessmentAttempt[]>>(`/assessments/${assessmentId}/all-attempts`);
+    return normalizeArray<AssessmentAttempt>(unwrapEnvelope(response.data));
+  },
+
+  async getStats(assessmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<AssessmentStats>>(`/assessments/${assessmentId}/stats`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async getQuestionAnalytics(assessmentId: string) {
+    const response = await apiClient.get<ApiEnvelope<AssessmentQuestionAnalyticsResponse>>(`/assessments/${assessmentId}/question-analytics`);
+    return unwrapEnvelope(response.data);
+  },
+
+  async returnAllGrades(assessmentId: string, teacherFeedback?: string) {
+    const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(`/assessments/${assessmentId}/return-all`, { teacherFeedback: teacherFeedback || undefined });
+    return unwrapEnvelope(response.data);
+  },
+
+  async bulkReturnGrades(payload: { attemptIds: string[]; teacherFeedback?: string }) {
+    const response = await apiClient.post<ApiEnvelope<{ returned: number; attemptIds: string[] }>>("/assessments/attempts/bulk-return", { attemptIds: payload.attemptIds, teacherFeedback: payload.teacherFeedback || undefined });
+    return unwrapEnvelope(response.data);
+  },
+
+  async uploadRubricSource(assessmentId: string, file: { uri: string; name: string; type?: string }) {
+    const formData = new FormData();
+    formData.append("file", { uri: file.uri, name: file.name, type: file.type || "application/octet-stream" } as unknown as Blob);
+    const response = await apiClient.post<ApiEnvelope<Record<string, unknown>>>(`/assessments/${assessmentId}/rubric-source`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+    return unwrapEnvelope(response.data);
+  },
+
+  async reviewRubric(assessmentId: string, rubricCriteria: Array<Record<string, unknown>>) {
+    const response = await apiClient.put<ApiEnvelope<Assessment>>(`/assessments/${assessmentId}/rubric-review`, { rubricCriteria });
+    return unwrapEnvelope(response.data);
+  },
+
   async returnGrade(
     attemptId: string,
-    payload: {
-      teacherFeedback?: string;
-      directScore?: number;
-    } = {},
+    payload: ReturnGradeDto = {},
   ) {
     const response = await apiClient.post<ApiEnvelope<{ success?: boolean }>>(
       `/assessments/attempts/${attemptId}/return`,

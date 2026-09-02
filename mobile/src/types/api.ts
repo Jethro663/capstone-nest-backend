@@ -3,6 +3,10 @@ export type ApiEnvelope<T> = {
   message?: string;
   data: T;
   count?: number;
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
 };
 
 export type FieldErrorMap = Record<string, string[]>;

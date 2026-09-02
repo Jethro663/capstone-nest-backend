@@ -161,20 +161,24 @@ export const aiApi = {
 
   async createQuizDraftJob(payload: CreateQuizDraftJobInput) {
     const clampedCount = Math.max(1, Math.min(15, payload.questionCount));
+    const assessmentSettings: AiAssessmentSettings = payload.assessmentSettings ?? {
+      title: payload.title?.trim() || "AI Draft Assessment",
+      type: payload.assessmentType || "quiz",
+      passingScore: payload.passingScore ?? 60,
+      feedbackLevel: payload.feedbackLevel ?? "standard",
+      classRecordCategory: payload.classRecordCategory ?? "written_work",
+    };
     const dto: GenerateQuizDraftDto = {
       classId: payload.classId,
-      title: payload.title?.trim() || "AI Draft Assessment",
       questionCount: clampedCount,
       questionType: payload.questionType || "multiple_choice",
-      assessmentType: "quiz",
-      passingScore: 60,
-      teacherNote: payload.teacherNote?.trim() || undefined,
-      feedbackLevel: "standard",
-      classRecordCategory: "written_work",
-      sourcePolicy: "published_default",
-      allowDraftSources: false,
-      lessonIds: payload.lessonIds?.length ? payload.lessonIds : undefined,
-      extractionIds: payload.extractionIds?.length ? payload.extractionIds : undefined,
+      assessmentSettings,
+      sourcePolicy: payload.sourcePolicy ?? "published_default",
+      allowDraftSources: payload.allowDraftSources ?? false,
+      ...(payload.teacherNote?.trim() ? { teacherNote: payload.teacherNote.trim() } : {}),
+      ...(payload.lessonIds?.length ? { lessonIds: payload.lessonIds } : {}),
+      ...(payload.extractionIds?.length ? { extractionIds: payload.extractionIds } : {}),
+      ...(payload.retryOfJobId ? { retryOfJobId: payload.retryOfJobId } : {}),
     };
     const response = await apiClient.post<ApiEnvelope<AiGenerationJob>>("/ai/teacher/quizzes/jobs", dto);
     return normalizeJob(unwrapEnvelope(response.data));

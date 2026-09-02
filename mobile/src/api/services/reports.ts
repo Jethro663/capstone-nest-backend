@@ -64,4 +64,17 @@ export const reportsApi = {
     );
     return response.data;
   },
+
+  async exportCsv(
+    report: "student-master-list" | "class-enrollment" | "student-performance" | "assessment-summary" | "intervention-participation" | "system-usage",
+    query?: TeacherReportQuery,
+  ) {
+    const response = await apiClient.get<string>(`/reports/${report}`, {
+      params: { ...query, page: undefined, limit: undefined, export: "csv" },
+      responseType: "text",
+    });
+    const disposition = String(response.headers?.["content-disposition"] ?? "");
+    const fileName = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? `${report}.csv`;
+    return { csv: response.data, fileName };
+  },
 };

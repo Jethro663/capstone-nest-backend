@@ -34,7 +34,11 @@ export type JaRouteParams = {
 };
 
 export type RootStackParamList = {
+  CompleteProfile: undefined;
   MainTabs: undefined;
+  Notifications: undefined;
+  AdminTools: { section?: "users" | "evaluations" | "calendar" | "library" | "reports" | "audit" | "diagnostics" | "roster" | "templates" | "settings" | "records" };
+  AdminAcademic: undefined;
   ClassWorkspace: { classId: string };
   ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab };
   ModuleDetail: { classId: string; moduleId: string };
@@ -48,6 +52,7 @@ export type RootStackParamList = {
   AssessmentHistory: { assessmentId?: string; classId?: string } | undefined;
   LXP: { classId?: string; tab?: LxpMobileTab } | undefined;
   StudentGuidedAssessment: { classId: string; assignmentId: string };
+  StudentGeneratedLesson: { classId: string; assignmentId: string };
   StudentJaReviewAssessment: {
     classId: string;
     assessmentId?: string;
@@ -69,6 +74,7 @@ export type RootStackParamList = {
   };
   TeacherLessonDetail: { lessonId: string; classId?: string };
   TeacherLessonEditor: { lessonId: string; classId?: string };
+  TeacherLessons: undefined;
   TeacherAssessmentDetail: { assessmentId: string; classId?: string };
   TeacherAssessmentEditor:
     | { assessmentId?: string; classId?: string }

@@ -31,3 +31,18 @@ export interface LessonCompletion {
   completed: boolean;
   completedAt?: string;
 }
+
+export interface LessonVersion {
+  id: string;
+  lessonId: string;
+  versionNumber: number;
+  type: "auto" | "manual" | "restore";
+  label?: string | null;
+  createdAt: string;
+  createdBy?: string | null;
+  createdByName?: string | null;
+}
+
+export interface LessonListQuery { status?: "all" | "draft" | "published"; search?: string }
+export interface BulkLessonIdsDto { lessonIds: string[] }
+export interface ReorderLessonsDto { lessons: Array<{ id: string; order: number }> }

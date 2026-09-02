@@ -31,7 +31,12 @@ import {
   type UploadCandidate,
   buildAssessmentResponses,
   formatBytes,
+  orderAttemptQuestions,
   resolveAttemptTimer,
+  resolveCurrentQuestionIndex,
+  resolveQuestionDeadlineAction,
+  resolveQuestionTimer,
+  resolveSubmittedAttemptState,
   resolveViolationState,
   restoreDraftResponses,
   validateUploadBundle,
@@ -132,7 +137,8 @@ function TimerBadge({ seconds, source }: { seconds: number | null; source: strin
       }}
     >
       <Text style={{ color: warning ? theme.red : theme.text, fontSize: 12, fontWeight: "900" }}>
-        {minutes}:{String(remainder).padStart(2, "0")} {source === "server" ? "" : "local"}
+        {source === "question" ? "Q " : ""}{minutes}:{String(remainder).padStart(2, "0")}
+        {source === "local" ? " local" : ""}
       </Text>
     </View>
   );
@@ -226,6 +232,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
   const [syncPaused, setSyncPaused] = useState(false);
   const leavingRef = useRef(false);
   const violationInFlightRef = useRef(false);
+  const handledQuestionDeadlineRef = useRef<string | null>(null);
   const latestAnswersRef = useRef(answers);
 
   useEffect(() => {
@@ -233,11 +240,18 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
   }, [answers]);
 
   const assessment = detailQuery.data;
-  const questions = assessment?.questions ?? [];
   const assessmentType = String(assessment?.type || "");
   const isFileUploadAssessment = assessmentType === "file_upload";
   const attempt = attemptResult?.attempt;
-  const strictMode = Boolean(attemptResult?.strictMode || assessment?.strictMode || attemptResult?.timedQuestionsEnabled);
+  const questions = useMemo(
+    () => orderAttemptQuestions(assessment?.questions ?? [], attempt?.questionOrder),
+    [assessment?.questions, attempt?.questionOrder],
+  );
+  const strictMode = Boolean(attemptResult?.strictMode || assessment?.strictMode);
+  const timedQuestionsEnabled = Boolean(
+    attemptResult?.timedQuestionsEnabled ?? assessment?.timedQuestionsEnabled,
+  );
+  const sequentialNavigationLocked = strictMode || timedQuestionsEnabled;
   const timer = resolveAttemptTimer(
     {
       expiresAt: attemptResult?.expiresAt ?? attempt?.expiresAt,
@@ -245,6 +259,11 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
       startedAt: attempt?.startedAt,
       createdAt: attempt?.createdAt,
     },
+    timerNow,
+  );
+  const questionTimer = resolveQuestionTimer(
+    timedQuestionsEnabled,
+    attempt?.currentQuestionDeadlineAt,
     timerNow,
   );
   const uploadRules = useMemo(() => buildUploadRules(assessment), [assessment]);
@@ -282,6 +301,9 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
           registerViolation: options?.registerViolation,
         });
         setAttemptResult((current) => (current ? { ...current, attempt: updated } : current));
+        if (updated.lastQuestionIndex !== undefined) {
+          setCurrentIndex(resolveCurrentQuestionIndex(updated.lastQuestionIndex, questions.length));
+        }
         setSyncPaused(false);
         return updated;
       } catch (rawError) {
@@ -292,6 +314,20 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
     },
     [attempt?.id, currentIndex, questions],
   );
+
+  const navigateToLatestSubmittedAttempt = useCallback(async () => {
+    const attempts = await assessmentsApi.getStudentAttempts(assessmentId);
+    const latestAttempt = [...attempts]
+      .filter((entry) => entry.isSubmitted !== false)
+      .sort((left, right) => getAttemptTime(right) - getAttemptTime(left))[0];
+
+    leavingRef.current = true;
+    if (latestAttempt) {
+      navigation.replace("AssessmentResults", { attemptId: latestAttempt.id, assessmentId } as never);
+      return;
+    }
+    navigation.goBack();
+  }, [assessmentId, navigation]);
 
   const registerViolation = useCallback(
     async (reason: string) => {
@@ -347,6 +383,10 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
   }, [assessmentId]);
 
   useEffect(() => {
+    setCurrentIndex((current) => resolveCurrentQuestionIndex(current, questions.length));
+  }, [questions.length]);
+
+  useEffect(() => {
     if (process.env.NODE_ENV === "test") {
       return undefined;
     }
@@ -385,10 +425,26 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active") {
         void registerViolation("app left assessment screen");
+        return;
       }
+      setTimerNow(Date.now());
+      void assessmentsApi
+        .getOngoingAttempt(assessmentId)
+        .then((ongoing) => {
+          if (!ongoing) return;
+          setAttemptResult(ongoing);
+          setCurrentIndex(
+            resolveCurrentQuestionIndex(ongoing.attempt.lastQuestionIndex, questions.length),
+          );
+          setSyncPaused(false);
+        })
+        .catch((rawError) => {
+          setSyncPaused(true);
+          setError(toAppError(rawError).message);
+        });
     });
     return () => subscription.remove();
-  }, [registerViolation]);
+  }, [assessmentId, questions.length, registerViolation]);
 
   useEffect(() => {
     const beforeRemove =
@@ -413,11 +469,19 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
   }, [navigation, saveProgress]);
 
   const currentQuestion = questions[currentIndex] as AssessmentQuestion | undefined;
-  const canGoPrevious = currentIndex > 0 && !strictMode;
+  const currentAnswer = currentQuestion ? answers[currentQuestion.id] : undefined;
+  const currentQuestionAnswered = Array.isArray(currentAnswer)
+    ? currentAnswer.length > 0
+    : typeof currentAnswer === "string" && currentAnswer.trim().length > 0;
+  const canGoPrevious = currentIndex > 0 && !sequentialNavigationLocked;
   const canGoNext = currentIndex < questions.length - 1;
+  const canAdvance = !strictMode || currentQuestionAnswered;
   const progress = questions.length ? ((currentIndex + 1) / questions.length) * 100 : 0;
-  const lockedByViolation = (attempt?.violationCount ?? 0) >= 3 || Boolean(attempt?.isSubmitted && !submitMutation.isPending);
+  const submittedState = resolveSubmittedAttemptState(attempt);
+  const lockedByViolation = submittedState.locked;
   const paused = syncPaused || timer.secondsRemaining === 0 || lockedByViolation;
+  const questionExpired = questionTimer.secondsRemaining === 0;
+  const interactionPaused = paused || questionExpired;
 
   const setQuestionAnswer = (questionId: string, value: AnswerValue) => {
     setAnswers((current) => ({ ...current, [questionId]: value }));
@@ -559,12 +623,13 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
     ]);
   };
 
-  const submitAssessment = async () => {
+  const submitAssessment = async (options?: { allowQuestionExpiry?: boolean }) => {
     if (!attempt?.id) {
       setError("This attempt is not ready yet.");
       return;
     }
-    if (paused) {
+    const blockedForSubmission = syncPaused || timer.secondsRemaining === 0 || lockedByViolation || (questionExpired && !options?.allowQuestionExpiry);
+    if (blockedForSubmission) {
       setError("The attempt is paused until the timer, network sync, or lock state is resolved.");
       return;
     }
@@ -587,22 +652,64 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
 
       setStatus("Submitting assessment...");
       await submitMutation.mutateAsync(payload);
-      const attempts = await assessmentsApi.getStudentAttempts(assessmentId);
-      const latestAttempt = [...attempts]
-        .filter((entry) => entry.isSubmitted !== false)
-        .sort((left, right) => getAttemptTime(right) - getAttemptTime(left))[0];
-
-      leavingRef.current = true;
-      if (latestAttempt) {
-        navigation.replace("AssessmentResults", { attemptId: latestAttempt.id, assessmentId } as never);
-      } else {
-        navigation.goBack();
-      }
+      await navigateToLatestSubmittedAttempt();
     } catch (rawError) {
       setError(toAppError(rawError).message);
       setStatus("");
     }
   };
+
+  useEffect(() => {
+    const deadlineAt = questionTimer.deadlineAt;
+    if (
+      !timedQuestionsEnabled ||
+      questionTimer.secondsRemaining !== 0 ||
+      !deadlineAt ||
+      handledQuestionDeadlineRef.current === deadlineAt ||
+      !attempt?.id ||
+      submittedState.submitted
+    ) {
+      return;
+    }
+
+    handledQuestionDeadlineRef.current = deadlineAt;
+    const action = resolveQuestionDeadlineAction(currentIndex, questions.length);
+    if (action === "submit") {
+      setStatus("Question time ended. Submitting your attempt...");
+      void submitAssessment({ allowQuestionExpiry: true });
+      return;
+    }
+
+    setStatus("Question time ended. Moving to the next question...");
+    void saveProgress({ questionIndex: currentIndex + 1 }).then((updated) => {
+      if (updated?.isSubmitted) {
+        void navigateToLatestSubmittedAttempt();
+      } else if (updated) {
+        setStatus("");
+      }
+    });
+  }, [
+    attempt?.id,
+    currentIndex,
+    navigateToLatestSubmittedAttempt,
+    questionTimer.deadlineAt,
+    questionTimer.secondsRemaining,
+    questions.length,
+    saveProgress,
+    submittedState.submitted,
+    timedQuestionsEnabled,
+  ]);
+
+  useEffect(() => {
+    if (timer.secondsRemaining !== 0 || !attempt?.id || submittedState.submitted) return;
+
+    setStatus("Assessment time ended. Confirming submission with the server...");
+    void saveProgress().then((updated) => {
+      if (updated?.isSubmitted) {
+        void navigateToLatestSubmittedAttempt();
+      }
+    });
+  }, [attempt?.id, navigateToLatestSubmittedAttempt, saveProgress, submittedState.submitted, timer.secondsRemaining]);
 
   const unsubmitUpload = async () => {
     try {
@@ -718,7 +825,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
           {currentQuestion.type === "dropdown" ? (
             <View style={{ marginTop: 16, gap: 10 }}>
               <Pressable
-                disabled={paused}
+                disabled={interactionPaused}
                 onPress={() => setExpandedDropdownId((current) => (current === currentQuestion.id ? null : currentQuestion.id))}
                 style={{
                   borderRadius: 16,
@@ -730,7 +837,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  opacity: paused ? 0.6 : 1,
+                  opacity: interactionPaused ? 0.6 : 1,
                 }}
               >
                 <Text style={{ flex: 1, color: selectedDropdownOption ? theme.text : theme.muted, fontSize: 13, fontWeight: "700" }}>
@@ -748,7 +855,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                   {options.map((option) => (
                     <Pressable
                       key={option.id}
-                      disabled={paused}
+                      disabled={interactionPaused}
                       onPress={() => {
                         setQuestionAnswer(currentQuestion.id, option.id);
                         setExpandedDropdownId(null);
@@ -765,7 +872,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
               {options.map((option) => (
                 <Pressable
                   key={option.id}
-                  disabled={paused}
+                  disabled={interactionPaused}
                   onPress={() => {
                     if (currentQuestion.type === "multiple_select") {
                       const activeSelections = new Set((answers[currentQuestion.id] as string[] | undefined) ?? []);
@@ -776,7 +883,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                     }
                     setQuestionAnswer(currentQuestion.id, option.id);
                   }}
-                  style={{ opacity: paused ? 0.65 : 1 }}
+                  style={{ opacity: interactionPaused ? 0.65 : 1 }}
                 >
                   {renderQuestionOptionCard(currentQuestion, option, answer)}
                 </Pressable>
@@ -789,7 +896,7 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
               onChangeText={(value) => setQuestionAnswer(currentQuestion.id, value)}
               placeholder="Write your answer here..."
               placeholderTextColor={theme.muted}
-              editable={!paused}
+              editable={!interactionPaused}
               contextMenuHidden
               style={{
                 minHeight: currentQuestion.type === "essay" ? 180 : 130,
@@ -878,7 +985,12 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                   }
                 />
               ) : (
-                <TimerBadge seconds={timer.secondsRemaining} source={timer.source} />
+                <View style={{ alignItems: "flex-end", gap: 6 }}>
+                  {timedQuestionsEnabled ? (
+                    <TimerBadge seconds={questionTimer.secondsRemaining} source="question" />
+                  ) : null}
+                  <TimerBadge seconds={timer.secondsRemaining} source={timer.source} />
+                </View>
               )}
             </View>
 
@@ -920,10 +1032,12 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
             </Card>
           ) : null}
 
-          {paused && !attemptPreparationFailed ? (
+          {(paused || questionExpired) && !attemptPreparationFailed ? (
             <View style={{ borderRadius: 18, backgroundColor: theme.amberSoft, padding: 12 }}>
               <Text style={{ color: theme.amber, fontSize: 12, fontWeight: "800" }}>
-                {timer.secondsRemaining === 0
+                {questionExpired
+                  ? "This question's timer ended. Syncing the next server-authoritative step."
+                  : timer.secondsRemaining === 0
                   ? "Timer ended. Sync with the backend before continuing."
                   : lockedByViolation
                     ? "This attempt is locked or already submitted."
@@ -1116,6 +1230,10 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
               </Pressable>
               <Pressable
                 onPress={() => {
+                  if (!canAdvance) {
+                    Alert.alert("Answer required", "Answer the current question before moving forward in strict mode.");
+                    return;
+                  }
                   if (canGoNext) {
                     const nextIndex = currentIndex + 1;
                     setCurrentIndex(nextIndex);
@@ -1124,14 +1242,14 @@ export function AssessmentTakeScreen({ route, navigation }: Props) {
                   }
                   void submitAssessment();
                 }}
-                disabled={submitMutation.isPending || !attempt || paused}
+                disabled={submitMutation.isPending || !attempt || interactionPaused || !canAdvance}
                 style={{
                   flex: 1,
                   borderRadius: 18,
                   backgroundColor: theme.red,
                   alignItems: "center",
                   paddingVertical: 15,
-                  opacity: submitMutation.isPending || !attempt || paused ? 0.65 : 1,
+                  opacity: submitMutation.isPending || !attempt || interactionPaused || !canAdvance ? 0.65 : 1,
                 }}
               >
                 <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}>

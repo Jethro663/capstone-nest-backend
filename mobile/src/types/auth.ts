@@ -18,6 +18,12 @@ export type ValidateCredentialsPayload = {
   password: string;
 };
 
+export type ChangePasswordPayload = {
+  oldPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
+
 export type VerifyOtpPayload = {
   email: string;
   code: string;

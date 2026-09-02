@@ -1,9 +1,11 @@
 export interface ClassSchedule {
   id: string;
-  days: string[];
+  days: ScheduleDay[];
   startTime: string;
   endTime: string;
 }
+
+export type ScheduleDay = "M" | "T" | "W" | "Th" | "F" | "Sa" | "Su";
 
 export interface ClassItem {
   id: string;
@@ -66,6 +68,34 @@ export interface EnrollmentRecord {
 
 export interface EnrollStudentDto {
   studentId: string;
+}
+
+export interface CreateClassDto {
+  subjectName: string;
+  subjectCode: string;
+  subjectGradeLevel?: string;
+  sectionId: string;
+  teacherId: string;
+  schoolYear: string;
+  room: string;
+  schedules: Array<{ days: ScheduleDay[]; startTime: string; endTime: string }>;
+  gradingProfile: { writtenWork: number; performanceTask: number; quarterlyAssessment: number };
+  academicWeightProfile?: "academic" | "practical";
+  templateId?: string;
+}
+
+export interface UpdateClassDto {
+  subjectName?: string;
+  subjectCode?: string;
+  subjectGradeLevel?: string;
+  sectionId?: string;
+  teacherId?: string;
+  schoolYear?: string;
+  room?: string;
+  schedules?: Array<{ days: ScheduleDay[]; startTime: string; endTime: string }>;
+  isActive?: boolean;
+  cardPreset?: string;
+  cardBannerUrl?: string | null;
 }
 
 export interface TeacherStudentAssessmentHistoryItem {

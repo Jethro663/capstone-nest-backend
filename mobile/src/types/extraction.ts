@@ -15,15 +15,47 @@ export type LibraryGradeLevel = "7" | "8" | "9" | "10";
 
 export interface UploadedLibraryFile {
   id: string;
+  folderId?: string | null;
+  teacherId?: string;
   originalName: string;
+  storedName?: string;
   filename?: string;
   mimeType: string;
   sizeBytes: number;
+  filePath?: string;
   classId?: string | null;
+  scope?: "private" | "general";
   subjectKey?: LibrarySubjectKey | null;
   gradeLevel?: LibraryGradeLevel | null;
+  teacherVisible?: boolean;
   aiEnabled?: boolean;
+  indexStatus?: "not_indexed" | "pending" | "processing" | "completed" | "failed";
+  indexError?: string | null;
+  indexedAt?: string | null;
+  contentHash?: string | null;
+  fileKind?: "pdf" | "txt" | "pptx" | "document" | "image" | "file";
+  uploadedAt?: string;
   createdAt?: string;
+  deletedAt?: string | null;
+  folder?: LibraryFolder | null;
+}
+
+export interface LibraryFolder {
+  id: string;
+  name: string;
+  ownerId: string;
+  parentId?: string | null;
+  scope: "private" | "general";
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+}
+
+export interface LibraryStorageSummary {
+  totalFiles: number;
+  totalBytes: number;
+  totalMB: number;
+  totalGB: number;
 }
 
 export interface ExtractionBlock {

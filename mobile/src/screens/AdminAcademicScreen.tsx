@@ -7,6 +7,7 @@ import { academicStateService as states } from "../api/services/academic-state";
 import { academicGradingService as grading } from "../api/services/academic-grading";
 import { toAppError } from "../api/http";
 import type { AcademicPeriodKey } from "../types/academic-grading";
+import type { AcademicAlignmentPreview } from "../types/academic-grading";
 import type {
   AcademicActivationPreview,
   AcademicStateImpactPreview,
@@ -58,6 +59,8 @@ export function AdminAcademicScreen() {
   const [scheduleYear, setScheduleYear] = useState("");
   const [schedulePeriod, setSchedulePeriod] = useState<AcademicPeriodKey>("Q1");
   const [grade, setGrade] = useState("");
+  const [alignmentPreview, setAlignmentPreview] = useState<AcademicAlignmentPreview | null>(null);
+  const [alignmentAck, setAlignmentAck] = useState("");
   const [reference, setReference] = useState("");
   const effectiveScheduleYear = scheduleYear || current.data?.schoolYear || "";
   const schedulePolicy = useQuery({
@@ -142,7 +145,7 @@ export function AdminAcademicScreen() {
               : "Loading academic state…"}
         </Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-          {["controls", "workbooks", "back subjects", "recovery"].map(
+          {["controls", "workbooks", "back subjects", "alignment", "recovery"].map(
             (value) => (
               <Chip
                 key={value}
@@ -389,6 +392,45 @@ export function AdminAcademicScreen() {
               <AcademicWorkbook key={classId} classId={classId} admin />
             )}
           </>
+        )}
+        {tab === "alignment" && (
+          <Panel title="Academic state alignment" subtitle="Preview first; execution is bound to the returned manifest hash and confirmation texts.">
+            <View style={{ padding: 14, gap: 10 }}>
+              <Text style={textStyle}>Source: {current.data?.schoolYear ?? "Unavailable"} · Target: {nextYear || "Unavailable"} · Quarter: {target}</Text>
+              <Text style={textStyle}>Selected scope: {classId ? "one class" : "all classes in readiness"}</Text>
+              <Action
+                label="Preview state alignment"
+                disabled={busy || !current.data || !nextYear}
+                onPress={() => void run(async () => {
+                  const classIds = classId ? [classId] : (readiness.data?.classReadiness ?? []).map((entry) => entry.classId);
+                  const response = await grading.previewStateAlignment({ sourceSchoolYear: current.data!.schoolYear, targetSchoolYear: nextYear, targetQuarter: target, classIds });
+                  setAlignmentPreview(response.data);
+                  setAlignmentAck("");
+                }, "Review blockers, warnings, selected classes, and confirmations before execution.", false)}
+              />
+              {alignmentPreview ? (
+                <>
+                  <Text style={textStyle}>{alignmentPreview.selectedClasses.length} classes · {alignmentPreview.movedSectionIds.length} sections · {alignmentPreview.blockers.length} blockers · {alignmentPreview.warnings.length} warnings</Text>
+                  {alignmentPreview.blockers.map((entry) => <Text key={`${entry.code}-${entry.classId ?? "all"}`} style={{ ...textStyle, color: theme.red }}>{entry.code}: {entry.message}</Text>)}
+                  {alignmentPreview.requiredConfirmations.map((entry) => <Text key={entry.code} style={textStyle}>{entry.code}: {entry.text}</Text>)}
+                  <Field label="Reason (minimum 5 characters)" value={reason} onChangeText={setReason} multiline />
+                  <TextInput accessibilityLabel="State alignment password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Current password" placeholderTextColor={theme.muted} style={{ color: theme.text, padding: 12, borderWidth: 1, borderColor: theme.border }} />
+                  <Field label="Type ALIGN to acknowledge every confirmation above" value={alignmentAck} onChangeText={setAlignmentAck} />
+                  <Action
+                    label="Execute manifest-bound alignment"
+                    tone="red"
+                    disabled={busy || !alignmentPreview.safeToApply || alignmentPreview.blockers.length > 0 || alignmentAck !== "ALIGN" || reason.trim().length < 5 || !password}
+                    onPress={() => void run(async () => {
+                      const preview = alignmentPreview;
+                      await grading.executeStateAlignment({ ...preview.input, manifestHash: preview.manifestHash, confirmations: preview.requiredConfirmations, reason: reason.trim(), currentPassword: password });
+                      setAlignmentPreview(null);
+                      setAlignmentAck("");
+                    }, "State alignment completed and its audit event was retained.")}
+                  />
+                </>
+              ) : null}
+            </View>
+          </Panel>
         )}
         {tab === "back subjects" && (
           <>

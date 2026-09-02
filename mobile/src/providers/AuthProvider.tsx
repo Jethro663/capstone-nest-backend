@@ -19,12 +19,14 @@ import { readSessionSnapshot, writeSessionSnapshot } from "../api/storage";
 import type { AuthSession } from "../types/auth";
 import type { UpdateProfileDto } from "../types/profile";
 import type { User } from "../types/user";
+import { isProfileIncomplete as resolveProfileIncomplete } from "../utils/accountSecurity";
 
 type AuthContextValue = {
   session: AuthSession | null;
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
+  isProfileIncomplete: boolean;
   bootstrap: () => Promise<void>;
   login: (email: string, password: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
@@ -154,6 +156,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAuthenticated:
         session?.user.isEmailVerified === true &&
         session.user.status === "ACTIVE",
+      isProfileIncomplete: resolveProfileIncomplete(session?.user),
       bootstrap,
       login,
       logout,

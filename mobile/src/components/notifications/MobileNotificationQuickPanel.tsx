@@ -92,7 +92,7 @@ export function MobileNotificationQuickPanel({ visible, role, onClose, navigate 
 
   const seeAll = () => {
     onClose();
-    navigate("Announcements");
+    navigate("Notifications");
   };
 
   if (!visible) {

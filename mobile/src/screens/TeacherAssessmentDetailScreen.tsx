@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Modal, Pressable, Text, View } from "react-native";
@@ -145,6 +146,8 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
   const { assessmentId, classId } = route.params;
   const assessmentQuery = useAssessmentDetail(assessmentId);
   const submissionsQuery = useTeacherAssessmentSubmissions(assessmentId);
+  const statsQuery = useQuery({ queryKey: ["teacher-assessment-stats", assessmentId], queryFn: () => assessmentsApi.getStats(assessmentId) });
+  const analyticsQuery = useQuery({ queryKey: ["teacher-assessment-question-analytics", assessmentId], queryFn: () => assessmentsApi.getQuestionAnalytics(assessmentId) });
   const updateMutation = useTeacherAssessmentUpdateMutation(assessmentId);
   const [releasingGrades, setReleasingGrades] = useState(false);
   const assessment = assessmentQuery.data;
@@ -167,11 +170,7 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
     }
     try {
       setReleasingGrades(true);
-      for (const sub of unreturnedSubmissions) {
-        if (sub.latestAttemptId) {
-          await assessmentsApi.returnGrade(sub.latestAttemptId);
-        }
-      }
+      await assessmentsApi.bulkReturnGrades({ attemptIds: unreturnedSubmissions.flatMap((submission) => submission.latestAttemptId ? [submission.latestAttemptId] : []) });
       await submissionsQuery.refetch();
       Alert.alert(
         "Success",
@@ -300,6 +299,8 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
         void Promise.all([
           assessmentQuery.refetch(),
           submissionsQuery.refetch(),
+          statsQuery.refetch(),
+          analyticsQuery.refetch(),
         ]);
       }}
     >
@@ -423,6 +424,21 @@ export function TeacherAssessmentDetailScreen({ navigation, route }: Props) {
                   : "Not set"
               }
             />
+          </TeacherPanel>
+
+          <TeacherPanel title="Statistics and question analytics" subtitle="Live server summaries for all attempts, including ongoing and returned work.">
+            {statsQuery.isError || analyticsQuery.isError ? (
+              <TeacherRow title="Analytics unavailable" subtitle={toAppError(statsQuery.error || analyticsQuery.error).message} />
+            ) : (
+              <>
+                <TeacherRow title="Attempt completion" subtitle={`${statsQuery.data?.submittedAttempts ?? 0}/${statsQuery.data?.totalAttempts ?? 0} submitted · ${statsQuery.data?.completionRate ?? 0}% of ${statsQuery.data?.totalEnrolled ?? 0} enrolled`} />
+                <TeacherRow title="Score distribution" subtitle={`${statsQuery.data?.averageScore ?? 0}% average · ${statsQuery.data?.lowestScore ?? 0}-${statsQuery.data?.highestScore ?? 0}% range · ${statsQuery.data?.passRate ?? 0}% pass`} />
+                <TeacherRow title="Response coverage" subtitle={`${analyticsQuery.data?.uniqueSubmitterCount ?? analyticsQuery.data?.totalResponses ?? 0} learners · ${analyticsQuery.data?.questions.length ?? 0} questions analyzed`} />
+                {(analyticsQuery.data?.questions ?? []).map((question, index) => (
+                  <TeacherRow key={question.questionId} title={`Q${index + 1}: ${stripRichText(question.content)}`} subtitle={`${question.correctPercent}% correct · ${question.correctCount}/${question.totalResponses} correct · ${question.averagePoints}/${question.points} average points`} />
+                ))}
+              </>
+            )}
           </TeacherPanel>
 
           <TeacherPanel

@@ -1,5 +1,11 @@
 # Assessment authoring verification
 
+## 2026-09-02 contract-parity follow-up
+
+The mobile AI adapter now keeps nested `assessmentSettings` canonical through create, retrieve, update, retry, preview, and apply. A non-default settings fixture and semantic round-trip assertions are included in the complete mobile result of 57 suites / 291 tests. Mobile TypeScript and the Android Expo production export also pass.
+
+This follow-up is contract/source evidence only. No live model provider, extraction source, backend worker, authenticated device session, or provider retry was exercised, so task 4.2 remains open and the change must not be archived on the strength of these tests.
+
 Recorded September 1, 2026 (Asia/Manila). Implementation is in the existing working tree on `developement`, based on `028f9dd3d28a83efd330294e32fb540f87dcdcbb`. Pre-existing authentication and roster edits remain present. No commit, push, deployment, production repair, or release APK replacement was performed.
 
 ## Automated results

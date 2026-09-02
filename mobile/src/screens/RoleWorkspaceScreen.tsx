@@ -81,8 +81,8 @@ function AdminArchiveWorkspace({ onLogout, userEmail }: { onLogout: () => void; 
     queryKey: ["admin-mobile-archive-browser"],
     queryFn: async () => {
       const [classes, sections] = await Promise.all([
-        classesApi.getAll({ limit: 100 }),
-        sectionsApi.getAll({ limit: 100 }),
+        classesApi.getAll(),
+        sectionsApi.getAll(),
       ]);
       return { classes, sections: sections.data };
     },

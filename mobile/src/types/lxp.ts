@@ -106,6 +106,14 @@ export interface GeneratedLessonContent {
   rejectedAt?: string | null;
 }
 
+export interface GeneratedLessonResponse {
+  assignmentId: string;
+  caseId: string;
+  status: string;
+  checkpointLabel: string;
+  generatedLesson: GeneratedLessonContent;
+}
+
 export interface GuidedAssessmentQuestionOption {
   id: string;
   text: string;

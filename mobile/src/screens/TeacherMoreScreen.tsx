@@ -29,6 +29,11 @@ export function TeacherMoreScreen() {
         route: "TeacherCalendar" as const,
       },
       {
+        title: "Lessons",
+        subtitle: "Reorder and apply bulk publish, draft, or delete lifecycle actions.",
+        route: "TeacherLessons" as const,
+      },
+      {
         title: "Nexora Library",
         subtitle: "Review modules and jump into class content workspaces.",
         route: "TeacherLibrary" as const,

@@ -1,5 +1,6 @@
 import { apiClient } from "../client";
-import { normalizeArray, unwrapEnvelope } from "../http";
+import { unwrapEnvelope } from "../http";
+import { fetchAllPages, normalizePageEnvelope } from "../pagination";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   Announcement,
@@ -8,9 +9,24 @@ import type {
 } from "../../types/announcement";
 
 export const announcementsApi = {
+  async getPageByClass(classId: string, query: { page?: number; limit?: number } = {}) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 100;
+    const response = await apiClient.get<ApiEnvelope<Announcement[]>>(`/classes/${classId}/announcements`, {
+      params: { page, limit },
+    });
+    return normalizePageEnvelope(response.data, page, limit);
+  },
+
+  async getAllByClass(classId: string) {
+    return fetchAllPages(
+      (page, limit) => announcementsApi.getPageByClass(classId, { page, limit }),
+      { key: (announcement) => announcement.id },
+    );
+  },
+
   async getByClass(classId: string) {
-    const response = await apiClient.get<ApiEnvelope<Announcement[]>>(`/classes/${classId}/announcements`);
-    return normalizeArray<Announcement>(unwrapEnvelope(response.data));
+    return (await announcementsApi.getAllByClass(classId)).data;
   },
 
   async create(classId: string, payload: CreateAnnouncementDto) {

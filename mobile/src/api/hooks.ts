@@ -101,6 +101,8 @@ export const queryKeys = {
   tutorSession: (sessionId?: string) =>
     ["tutor-session", sessionId ?? "missing"] as const,
   jaHub: (classId?: string) => ["ja-hub", classId ?? "all"] as const,
+  jaActivityHistory: (classId?: string, mode = "all") =>
+    ["ja-activity-history", classId ?? "missing", mode] as const,
   jaAskThread: (threadId?: string) =>
     ["ja-ask-thread", threadId ?? "missing"] as const,
   moduleDetail: (classId?: string, moduleId?: string) =>
@@ -470,6 +472,13 @@ export const useJaHub = (classId?: string) =>
   useQuery({
     queryKey: queryKeys.jaHub(classId),
     queryFn: () => jaApi.getHub(classId),
+  });
+
+export const useJaActivityHistory = (classId?: string, mode: "all" | "ask" | "review" = "all") =>
+  useQuery({
+    queryKey: queryKeys.jaActivityHistory(classId, mode),
+    queryFn: () => jaApi.getAllActivityHistory({ classId: classId!, mode }),
+    enabled: !!classId,
   });
 
 export const useJaAskThread = (threadId?: string) =>

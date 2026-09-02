@@ -3,6 +3,7 @@ import { unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
   AuthSession,
+  ChangePasswordPayload,
   ForgotPasswordPayload,
   LoginPayload,
   ResendOtpPayload,
@@ -53,6 +54,11 @@ export const authApi = {
   async updateProfile(payload: UpdateProfileDto) {
     const response = await apiClient.patch<ApiEnvelope<{ user: User }>>("/auth/profile", payload);
     return unwrapEnvelope(response.data).user;
+  },
+
+  async changePassword(payload: ChangePasswordPayload) {
+    const response = await apiClient.post<ApiEnvelope<Record<string, never>>>("/auth/change-password", payload);
+    return response.data;
   },
 
   async validateCredentials(payload: ValidateCredentialsPayload) {

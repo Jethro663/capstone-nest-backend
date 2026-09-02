@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import {
   useModuleDetail,
@@ -22,6 +22,7 @@ import type { RootStackParamList } from "../navigation/types";
 import { fileUploadApi } from "../api/services/file-upload";
 import { assessmentsApi } from "../api/services/assessments";
 import { lessonsApi } from "../api/services/lessons";
+import { modulesApi } from "../api/services/modules";
 import { TeacherConfirmModal } from "../components/teacher/TeacherConfirmModal";
 import {
   TeacherActionButton,
@@ -45,6 +46,9 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const [attachTargetId, setAttachTargetId] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState("");
+  const [editingSection, setEditingSection] = useState<{ id: string; title: string; description: string } | null>(null);
+  const [gradingScaleDraft, setGradingScaleDraft] = useState("");
+  const [savingExtendedControl, setSavingExtendedControl] = useState(false);
 
   const moduleQuery = useModuleDetail(classId, moduleId);
   const moduleUpdateMutation = useTeacherModuleUpdateMutation(classId, moduleId);
@@ -60,6 +64,74 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
   const lessonsQuery = useLessons(classId);
 
   const module = moduleQuery.data;
+
+  useEffect(() => {
+    if (!module) return;
+    setGradingScaleDraft((module.gradingScaleEntries ?? []).map((entry) => `${entry.letter}|${entry.label}|${entry.minScore}|${entry.maxScore}`).join("\n"));
+  }, [module]);
+
+  const saveSection = async () => {
+    if (!editingSection?.title.trim()) return;
+    try {
+      setSavingExtendedControl(true);
+      await modulesApi.updateSection(editingSection.id, { title: editingSection.title.trim(), description: editingSection.description.trim() || undefined });
+      setEditingSection(null);
+      await moduleQuery.refetch();
+    } catch (error) {
+      Alert.alert("Unable to update section", toAppError(error).message);
+    } finally {
+      setSavingExtendedControl(false);
+    }
+  };
+
+  const saveGradingScale = async () => {
+    if (!module) return;
+    try {
+      const entries = gradingScaleDraft.split(/\r?\n/).filter((line) => line.trim()).map((line, index) => {
+        const [letter, label, minRaw, maxRaw] = line.split("|").map((value) => value.trim());
+        const minScore = Number(minRaw);
+        const maxScore = Number(maxRaw);
+        if (!letter || !label || !Number.isFinite(minScore) || !Number.isFinite(maxScore) || minScore < 0 || maxScore > 100 || minScore > maxScore) {
+          throw new Error(`Line ${index + 1} must use Letter|Label|Minimum|Maximum with a valid 0-100 range.`);
+        }
+        return { letter, label, minScore, maxScore, order: index + 1 };
+      });
+      if (!entries.length) throw new Error("Add at least one grading-scale entry.");
+      setSavingExtendedControl(true);
+      await modulesApi.replaceGradingScale(module.id, { entries });
+      await moduleQuery.refetch();
+      Alert.alert("Grading scale saved", "The complete module scale was replaced by the reviewed entries.");
+    } catch (error) {
+      Alert.alert("Unable to replace grading scale", toAppError(error).message);
+    } finally {
+      setSavingExtendedControl(false);
+    }
+  };
+
+  const releaseCoreModule = async () => {
+    if (!module?.isCoreTemplateAsset) return;
+    try {
+      setSavingExtendedControl(true);
+      await modulesApi.releaseCoreModule(module.id, { isVisible: module.isVisible === false, isLocked: false });
+      await moduleQuery.refetch();
+    } catch (error) {
+      Alert.alert("Core release rejected", toAppError(error).message);
+    } finally {
+      setSavingExtendedControl(false);
+    }
+  };
+
+  const releaseCoreItem = async (itemId: string) => {
+    try {
+      setSavingExtendedControl(true);
+      await modulesApi.releaseCoreItem(itemId, { isVisible: true, isGiven: true });
+      await moduleQuery.refetch();
+    } catch (error) {
+      Alert.alert("Core item release rejected", toAppError(error).message);
+    } finally {
+      setSavingExtendedControl(false);
+    }
+  };
 
   const toggleModuleField = async (field: "isLocked" | "isVisible") => {
     if (!module) return;
@@ -232,6 +304,30 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                 onPress={() => void handlePickCoverImage()}
                 disabled={coverMutation.isPending}
               />
+              {module.isCoreTemplateAsset ? (
+                <TeacherActionButton
+                  label="Release core module"
+                  icon="shield-check-outline"
+                  tone="green"
+                  onPress={() => void releaseCoreModule()}
+                  disabled={savingExtendedControl}
+                />
+              ) : null}
+            </View>
+          </TeacherPanel>
+
+          <TeacherPanel title="Module grading scale" subtitle="One entry per line: Letter|Label|Minimum|Maximum. Saving replaces the complete scale after local validation.">
+            <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 8 }}>
+              <TextInput
+                accessibilityLabel="Module grading scale"
+                multiline
+                value={gradingScaleDraft}
+                onChangeText={setGradingScaleDraft}
+                placeholder={"A|Excellent|90|100\nB|Proficient|80|89"}
+                placeholderTextColor={theme.muted}
+                style={{ minHeight: 96, textAlignVertical: "top", backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 12, fontSize: 13, color: theme.text }}
+              />
+              <TeacherActionButton label="Replace grading scale" icon="content-save-outline" tone="blue" onPress={() => void saveGradingScale()} disabled={savingExtendedControl || !gradingScaleDraft.trim()} />
             </View>
           </TeacherPanel>
 
@@ -266,6 +362,12 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                         style={{ padding: 4, backgroundColor: theme.blueSoft, borderRadius: 6 }}
                       >
                         <MaterialCommunityIcons name="plus-box-outline" size={18} color={theme.blue} />
+                      </Pressable>
+                      <Pressable
+                        onPress={() => setEditingSection({ id: section.id, title: section.title, description: section.description ?? "" })}
+                        style={{ padding: 4 }}
+                      >
+                        <MaterialCommunityIcons name="pencil-outline" size={18} color={theme.blue} />
                       </Pressable>
                       <Pressable
                         onPress={() => handleDeleteSection(section.id, section.title)}
@@ -317,6 +419,14 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
                                 onPress={() => void toggleItemVisibility(item.id, item.isVisible)}
                                 disabled={itemUpdateMutation.isPending}
                               />
+                              {item.isCoreTemplateAsset ? (
+                                <TeacherActionButton
+                                  label="Release"
+                                  tone="green"
+                                  onPress={() => void releaseCoreItem(item.id)}
+                                  disabled={savingExtendedControl}
+                                />
+                              ) : null}
                               <Pressable
                                 onPress={() => setDetachingItem({ id: item.id, title: itemTitle })}
                                 style={{ padding: 4 }}
@@ -363,6 +473,17 @@ export function TeacherModuleDetailScreen({ navigation, route }: Props) {
           <TeacherEmpty title="Unable to load module" subtitle="Pull to refresh after the module endpoint is available." />
         </TeacherPanel>
       )}
+
+      <Modal visible={Boolean(editingSection)} transparent animationType="fade" onRequestClose={() => setEditingSection(null)}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.65)", justifyContent: "center", alignItems: "center", padding: 20 }} onPress={() => setEditingSection(null)}>
+          <Pressable style={{ width: "100%", maxWidth: 420, backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.border, padding: 20, gap: 10 }} onPress={(event) => event.stopPropagation()}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>Edit module section</Text>
+            <TextInput accessibilityLabel="Section title" value={editingSection?.title ?? ""} onChangeText={(title) => setEditingSection((current) => current ? { ...current, title } : current)} placeholder="Section title" placeholderTextColor={theme.muted} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 11, color: theme.text }} />
+            <TextInput accessibilityLabel="Section description" multiline value={editingSection?.description ?? ""} onChangeText={(description) => setEditingSection((current) => current ? { ...current, description } : current)} placeholder="Section description" placeholderTextColor={theme.muted} style={{ minHeight: 80, textAlignVertical: "top", borderWidth: 1, borderColor: theme.border, borderRadius: 8, padding: 11, color: theme.text }} />
+            <View style={{ flexDirection: "row", gap: 8 }}><TeacherActionButton label="Cancel" tone="neutral" onPress={() => setEditingSection(null)} /><TeacherActionButton label="Save section" tone="green" onPress={() => void saveSection()} disabled={savingExtendedControl || !editingSection?.title.trim()} /></View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* Delete Section Modal */}
       <TeacherConfirmModal

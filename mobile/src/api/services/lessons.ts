@@ -1,7 +1,7 @@
 import { apiClient } from "../client";
 import { normalizeArray, unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
-import type { BulkLessonDraftStateDto, ContentBlock, ContentBlockType, Lesson, LessonCompletion } from "../../types/lesson";
+import type { BulkLessonDraftStateDto, BulkLessonIdsDto, ContentBlock, ContentBlockType, Lesson, LessonCompletion, LessonListQuery, LessonVersion, ReorderLessonsDto } from "../../types/lesson";
 
 export type LessonDetail = Lesson;
 export type LessonCompletionStatus = {
@@ -15,8 +15,8 @@ export const lessonsApi = {
     return unwrapEnvelope(response.data);
   },
 
-  async getByClass(classId: string) {
-    const response = await apiClient.get<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}`);
+  async getByClass(classId: string, query: LessonListQuery = {}) {
+    const response = await apiClient.get<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}`, { params: query });
     return normalizeArray<Lesson>(unwrapEnvelope(response.data));
   },
 
@@ -50,6 +50,40 @@ export const lessonsApi = {
   async publish(lessonId: string) {
     const response = await apiClient.put<ApiEnvelope<Lesson>>(`/lessons/${lessonId}/publish`);
     return unwrapEnvelope(response.data);
+  },
+
+  async getRecent(limit = 4) {
+    const response = await apiClient.get<ApiEnvelope<Lesson[]>>("/lessons/student/recent", { params: { limit } });
+    return normalizeArray<Lesson>(unwrapEnvelope(response.data));
+  },
+
+  async getVersions(lessonId: string) {
+    const response = await apiClient.get<ApiEnvelope<LessonVersion[]>>(`/lessons/${lessonId}/versions`);
+    return normalizeArray<LessonVersion>(unwrapEnvelope(response.data));
+  },
+
+  async createVersion(lessonId: string, payload: { label?: string } = {}) {
+    const response = await apiClient.post<ApiEnvelope<LessonVersion[]>>(`/lessons/${lessonId}/versions`, payload);
+    return normalizeArray<LessonVersion>(unwrapEnvelope(response.data));
+  },
+
+  async restoreVersion(lessonId: string, versionId: string) {
+    const response = await apiClient.post<ApiEnvelope<Lesson>>(`/lessons/${lessonId}/versions/${versionId}/restore`, {});
+    return unwrapEnvelope(response.data);
+  },
+
+  async bulkDelete(classId: string, payload: BulkLessonIdsDto) {
+    const response = await apiClient.post<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}/bulk-delete`, payload);
+    return normalizeArray<Lesson>(unwrapEnvelope(response.data));
+  },
+
+  async reorderByClass(classId: string, payload: ReorderLessonsDto) {
+    const response = await apiClient.put<ApiEnvelope<Lesson[]>>(`/lessons/class/${classId}/reorder`, payload);
+    return normalizeArray<Lesson>(unwrapEnvelope(response.data));
+  },
+
+  async delete(lessonId: string) {
+    await apiClient.delete(`/lessons/${lessonId}`);
   },
 
   async setDraftState(classId: string, payload: BulkLessonDraftStateDto) {

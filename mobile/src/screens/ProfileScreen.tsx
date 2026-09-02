@@ -13,6 +13,7 @@ import { buildProfileFullName } from "./screen-flow";
 import { normalizePhilippinePhone } from "../utils/studentIdentity";
 import { analyzePhPhone } from "../utils/phPhoneValidation";
 import { PhPhoneInputField } from "../components/ui/PhPhoneInputField";
+import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
 import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
@@ -486,7 +487,7 @@ export function ProfileScreen(props: Props) {
 
             <View style={{ alignItems: "center", flexDirection: "row" }}>
               <Pressable
-                onPress={() => props.navigation.navigate("Announcements")}
+                onPress={() => props.navigation.navigate("Notifications" as never)}
                 style={{
                   alignItems: "center",
                   backgroundColor: theme.active,
@@ -994,111 +995,9 @@ export function ProfileScreen(props: Props) {
             overflow: "hidden",
           }}
         >
-          {[
-            {
-              label: "Current Password",
-              value: "********",
-            },
-            {
-              label: "New Password",
-              value: "Enter new password",
-            },
-            {
-              label: "Confirm New Password",
-              value: "Repeat new password",
-            },
-          ].map((row, index) => (
-            <View
-              key={row.label}
-              style={{
-                borderBottomColor: index === 2 ? "transparent" : theme.border,
-                borderBottomWidth: index === 2 ? 0 : 1,
-                paddingHorizontal: 14,
-                paddingVertical: 12,
-              }}
-            >
-              <Text
-                style={{
-                  color: theme.muted,
-                  fontSize: 9,
-                  fontWeight: "600",
-                  letterSpacing: 0.5,
-                  marginBottom: 7,
-                  textTransform: "uppercase",
-                }}
-              >
-                {row.label}
-              </Text>
-              <View
-                style={{
-                  alignItems: "center",
-                  backgroundColor: theme.active,
-                  borderColor: theme.border,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  paddingHorizontal: 12,
-                  paddingVertical: 9,
-                }}
-              >
-                <Text
-                  style={{
-                    color: theme.text,
-                    fontSize: row.label === "Current Password" ? 10 : 12,
-                    letterSpacing: row.label === "Current Password" ? 3 : 0,
-                  }}
-                >
-                  {row.value}
-                </Text>
-                <MaterialCommunityIcons color={theme.text} name="eye-outline" size={13} />
-              </View>
-
-              {row.label === "New Password" ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
-                  {["8+ chars", "Uppercase", "Lowercase", "Number", "Special"].map((rule, ruleIndex) => (
-                    <View
-                      key={rule}
-                      style={{
-                        alignItems: "center",
-                        backgroundColor: theme.active,
-                        borderColor: theme.border,
-                        borderRadius: 4,
-                        borderWidth: 1,
-                        flexDirection: "row",
-                        marginBottom: 6,
-                        marginRight: ruleIndex === 4 ? 0 : 8,
-                        paddingHorizontal: 7,
-                        paddingVertical: 3,
-                      }}
-                    >
-                      <Text style={{ color: theme.muted, fontSize: 8, marginRight: 4 }}>o</Text>
-                      <Text style={{ color: theme.muted, fontSize: 9 }}>{rule}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-          ))}
-        </View>
-
-        <View style={{ marginHorizontal: 16, marginTop: 12 }}>
-          <View
-            style={{
-              alignItems: "center",
-              borderColor: theme.blueLine,
-              borderRadius: 10,
-              borderWidth: 1,
-              justifyContent: "center",
-              opacity: 0.6,
-              paddingVertical: 12,
-            }}
-          >
-            <Text style={{ color: theme.blue, fontSize: 13, fontWeight: "500" }}>Update Password</Text>
+          <View style={{ padding: 14 }}>
+            <PasswordChangeForm />
           </View>
-          <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 8, textAlign: "center" }}>
-            Password changes are not available in the mobile app yet.
-          </Text>
         </View>
 
         <View style={{ marginHorizontal: 16, marginTop: 12 }}>

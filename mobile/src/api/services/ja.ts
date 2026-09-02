@@ -2,6 +2,7 @@ import { apiClient } from "../client";
 import { unwrapEnvelope } from "../http";
 import type { ApiEnvelope } from "../../types/api";
 import type {
+  JaActivityHistoryResponse,
   JaAskSendResponse,
   JaAskThreadResponse,
   JaHubResponse,
@@ -17,6 +18,48 @@ export const jaApi = {
     const suffix = classId ? `?classId=${classId}` : "";
     const response = await apiClient.get<ApiEnvelope<JaHubResponse>>(`/ai/student/ja/hub${suffix}`);
     return unwrapEnvelope(response.data);
+  },
+
+  async getActivityHistoryPage(params: {
+    classId: string;
+    mode?: "all" | "ask" | "review";
+    page?: number;
+    limit?: number;
+  }) {
+    const response = await apiClient.get<ApiEnvelope<JaActivityHistoryResponse>>("/ai/student/ja/history", {
+      params: { ...params, page: params.page ?? 1, limit: params.limit ?? 20 },
+    });
+    return unwrapEnvelope(response.data);
+  },
+
+  async getAllActivityHistory(params: { classId: string; mode?: "all" | "ask" | "review" }) {
+    const items: JaActivityHistoryResponse["items"] = [];
+    const seen = new Set<string>();
+    let page = 1;
+    let latest: JaActivityHistoryResponse | null = null;
+
+    do {
+      latest = await jaApi.getActivityHistoryPage({ ...params, page, limit: 20 });
+      for (const item of latest.items) {
+        const key = `${item.mode}:${item.id}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(item);
+        }
+      }
+      page += 1;
+    } while (latest.pagination.hasNext && page <= 100);
+
+    const fallback = latest ?? {
+      items: [],
+      counts: { all: 0, ask: 0, review: 0 },
+      pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false },
+    };
+    return {
+      ...fallback,
+      items: items.sort((left, right) => right.activityAt.localeCompare(left.activityAt) || left.id.localeCompare(right.id)),
+      pagination: { ...fallback.pagination, page: 1, hasNext: false },
+    };
   },
 
   async createSession(payload: { classId: string; recommendation?: JaRecommendation }) {
@@ -70,9 +113,33 @@ export const jaApi = {
     return unwrapEnvelope(response.data);
   },
 
-  async getAskThread(threadId: string) {
-    const response = await apiClient.get<ApiEnvelope<JaAskThreadResponse>>(`/ai/student/ja/ask/threads/${threadId}`);
+  async getAskThreadPage(threadId: string, params?: { limit?: number; before?: string }) {
+    const response = await apiClient.get<ApiEnvelope<JaAskThreadResponse>>(`/ai/student/ja/ask/threads/${threadId}`, {
+      params: { limit: params?.limit ?? 40, before: params?.before },
+    });
     return unwrapEnvelope(response.data);
+  },
+
+  async getAskThread(threadId: string) {
+    const pages: JaAskThreadResponse[] = [];
+    const seenCursors = new Set<string>();
+    let before: string | undefined;
+
+    do {
+      const page = await jaApi.getAskThreadPage(threadId, { limit: 40, before });
+      pages.push(page);
+      const next = page.pageInfo?.hasMore ? page.pageInfo.nextCursor ?? undefined : undefined;
+      if (!next || seenCursors.has(next)) break;
+      seenCursors.add(next);
+      before = next;
+    } while (pages.length < 100);
+
+    const newest = pages[0];
+    const messages = pages
+      .flatMap((page) => page.messages)
+      .filter((message, index, all) => all.findIndex((candidate) => candidate.id === message.id) === index)
+      .sort((left, right) => (left.createdAt ?? "").localeCompare(right.createdAt ?? "") || left.id.localeCompare(right.id));
+    return { ...newest, messages, pageInfo: { hasMore: false, nextCursor: null } };
   },
 
   async sendAskMessage(
