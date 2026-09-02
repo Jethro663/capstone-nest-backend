@@ -185,11 +185,12 @@ export class AuthService {
   /**
    * Set password after OTP has already been consumed and the account is ACTIVE.
    * Called from POST /auth/set-activation-password (the optional step after /verify-email).
-   * Uses account status as the gate — no OTP required here.
+   * Requires the current password as proof of ownership after the OTP is consumed.
    */
   async setActivationPassword(
     email: string,
     newPassword: string,
+    currentPassword?: string,
   ): Promise<void> {
     const user = await this.usersService.findByEmail(email);
     if (!user) {
@@ -197,6 +198,12 @@ export class AuthService {
     }
     if (!user.isEmailVerified || user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Account is not yet verified or active');
+    }
+    if (
+      !currentPassword ||
+      !(await bcrypt.compare(currentPassword, user.password))
+    ) {
+      throw new UnauthorizedException('Current password is incorrect');
     }
     await this.usersService.updatePassword(user.id, newPassword);
   }
@@ -216,7 +223,14 @@ export class AuthService {
     // 2. Ensure user is still active
     const user = await this.usersService.findById(userId);
     if (!user || user.status !== 'ACTIVE') {
+      await this.tokenService.revokeByToken(newRawToken);
       throw new UnauthorizedException('User not found or inactive');
+    }
+    if (!user.isEmailVerified) {
+      await this.tokenService.revokeByToken(newRawToken);
+      throw new UnauthorizedException(
+        'Email not verified. Please check your inbox.',
+      );
     }
 
     // 3. Issue fresh access token

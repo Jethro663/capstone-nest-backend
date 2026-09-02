@@ -30,13 +30,17 @@ type Props = NativeStackScreenProps<AuthStackParamList, "SetInitialPassword">;
 export function SetInitialPasswordScreen({ navigation, route }: Props) {
   const { login } = useAuth();
   const email = normalizeAuthEmail(route.params.email);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const passwordRules = useMemo(() => buildPasswordRuleStates(newPassword), [newPassword]);
+  const passwordRules = useMemo(
+    () => buildPasswordRuleStates(newPassword),
+    [newPassword],
+  );
 
   const finishToLogin = (message: string) => {
     pushAuthNotice(message);
@@ -44,13 +48,22 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
   };
 
   const handleSubmit = async () => {
+    if (!currentPassword) {
+      setError(
+        "Enter your temporary password to confirm this is your account.",
+      );
+      return;
+    }
     const passwordMessage = getPasswordValidationMessage(newPassword);
     if (passwordMessage) {
       setError(passwordMessage);
       return;
     }
 
-    const confirmMessage = getConfirmPasswordMessage(newPassword, confirmPassword);
+    const confirmMessage = getConfirmPasswordMessage(
+      newPassword,
+      confirmPassword,
+    );
     if (confirmMessage) {
       setError(confirmMessage);
       return;
@@ -61,6 +74,7 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
       setError("");
       await authApi.setActivationPassword({
         email,
+        currentPassword,
         newPassword,
       });
       await login(email, newPassword);
@@ -75,7 +89,14 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
     <AuthScreenShell
       title="Set initial password"
       subtitle="Your email is verified. Choose a strong password before signing in."
-      footer={<AuthFooterLink label="Back to sign in" onPress={() => finishToLogin("Account activated. Sign in to continue.")} />}
+      footer={
+        <AuthFooterLink
+          label="Back to sign in"
+          onPress={() =>
+            finishToLogin("Account activated. Sign in to continue.")
+          }
+        />
+      }
     >
       <AuthFieldLabel>Email address</AuthFieldLabel>
       <AuthInputField
@@ -89,6 +110,19 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
         value={email}
       />
 
+      <View style={{ marginBottom: 14 }} />
+
+      <AuthFieldLabel>Temporary password</AuthFieldLabel>
+      <AuthInputField
+        autoCapitalize="none"
+        autoCorrect={false}
+        icon="lock-outline"
+        onChangeText={setCurrentPassword}
+        placeholder="Enter your temporary password"
+        secureTextEntry
+        textContentType="password"
+        value={currentPassword}
+      />
       <View style={{ marginBottom: 14 }} />
 
       <AuthFieldLabel>New password</AuthFieldLabel>
@@ -107,12 +141,25 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
         value={newPassword}
         rightAccessory={
           <Pressable
-            accessibilityLabel={showNewPassword ? "Hide password" : "Show password"}
+            accessibilityLabel={
+              showNewPassword ? "Hide password" : "Show password"
+            }
             hitSlop={10}
             onPress={() => setShowNewPassword((current) => !current)}
-            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 10 }}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+            }}
           >
-            <MaterialCommunityIcons color={authTheme.textLight} name={showNewPassword ? "eye-off-outline" : "eye-outline"} size={17} />
+            <MaterialCommunityIcons
+              color={authTheme.textLight}
+              name={showNewPassword ? "eye-off-outline" : "eye-outline"}
+              size={17}
+            />
           </Pressable>
         }
       />
@@ -136,10 +183,19 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
         value={confirmPassword}
         rightAccessory={
           <Pressable
-            accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
+            accessibilityLabel={
+              showConfirmPassword ? "Hide password" : "Show password"
+            }
             hitSlop={10}
             onPress={() => setShowConfirmPassword((current) => !current)}
-            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, paddingVertical: 10 }}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+            }}
           >
             <MaterialCommunityIcons
               color={authTheme.textLight}
@@ -153,14 +209,19 @@ export function SetInitialPasswordScreen({ navigation, route }: Props) {
       {error ? <AuthStatusBanner message={error} tone="error" /> : null}
 
       <AuthPrimaryButton
-        disabled={!newPassword.trim() || !confirmPassword.trim()}
+        disabled={
+          !currentPassword || !newPassword.trim() || !confirmPassword.trim()
+        }
         label="Set password"
         loading={loading}
         loadingLabel="Saving password..."
         onPress={() => void handleSubmit()}
       />
 
-      <AuthSecondaryButton label="Skip for now" onPress={() => finishToLogin("Account activated. Sign in to continue.")} />
+      <AuthSecondaryButton
+        label="Skip for now"
+        onPress={() => finishToLogin("Account activated. Sign in to continue.")}
+      />
     </AuthScreenShell>
   );
 }

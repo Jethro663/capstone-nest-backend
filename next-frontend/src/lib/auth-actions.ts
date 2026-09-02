@@ -34,7 +34,8 @@ function toActionError(
     return {
       success: false,
       message:
-        typeof errorRecord.message === 'string' && errorRecord.message.length > 0
+        typeof errorRecord.message === 'string' &&
+        errorRecord.message.length > 0
           ? errorRecord.message
           : fallbackMessage,
       errors: errorRecord.errors,
@@ -185,7 +186,8 @@ export async function resetPasswordAction(formData: {
 
     return {
       success: true,
-      message: 'Password reset successfully. Please login with your new password.',
+      message:
+        'Password reset successfully. Please login with your new password.',
     };
   } catch (error: unknown) {
     return toActionError(error, 'Password reset failed. Please try again.');
@@ -220,6 +222,7 @@ export async function setInitialPasswordAction(formData: {
  */
 export async function completeActivationPasswordAction(formData: {
   email: string;
+  currentPassword: string;
   newPassword: string;
 }) {
   try {

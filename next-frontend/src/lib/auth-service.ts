@@ -62,7 +62,11 @@ export async function login(data: {
   password: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/login', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/login',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Login failed');
@@ -71,7 +75,11 @@ export async function login(data: {
 
 export async function logout(): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/logout', {}, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/logout',
+      {},
+      publicAuthRequestConfig,
+    );
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Logout failed');
@@ -80,7 +88,11 @@ export async function logout(): Promise<AuthResponse> {
 
 export async function logoutAll(): Promise<AuthResponse> {
   try {
-    const response = await api.post('/auth/logout-all', {}, publicAuthRequestConfig);
+    const response = await api.post(
+      '/auth/logout-all',
+      {},
+      publicAuthRequestConfig,
+    );
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Logout all failed');
@@ -101,7 +113,11 @@ export async function verifyEmail(data: {
   code: string;
 }): Promise<AuthResponse> {
   try {
-    const response = await api.post('/otp/verify', data, publicAuthRequestConfig);
+    const response = await api.post(
+      '/otp/verify',
+      data,
+      publicAuthRequestConfig,
+    );
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Verification failed');
@@ -110,7 +126,11 @@ export async function verifyEmail(data: {
 
 export async function resendOTP(email: string): Promise<AuthResponse> {
   try {
-    const response = await api.post('/otp/resend', { email }, publicAuthRequestConfig);
+    const response = await api.post(
+      '/otp/resend',
+      { email },
+      publicAuthRequestConfig,
+    );
     return response.data;
   } catch (error: unknown) {
     throw toAuthErrorResponse(error, 'Failed to resend OTP');
@@ -166,6 +186,7 @@ export async function setInitialPassword(data: {
 
 export async function setActivationPassword(data: {
   email: string;
+  currentPassword: string;
   newPassword: string;
 }): Promise<AuthResponse> {
   try {

@@ -171,6 +171,30 @@ describe('AuthService', () => {
   // -------------------------------------------------------------------------
 
   describe('refreshToken()', () => {
+    it.each(['student', 'teacher'])(
+      'rejects refresh for an unverified %s and revokes the rotated token',
+      async (role) => {
+        mockTokenService.validateAndRotate.mockResolvedValue({
+          newRawToken: 'new-unverified-token',
+          userId: 'user-uuid-1',
+        });
+        mockUsersService.findById.mockResolvedValue(
+          makeUser({
+            isEmailVerified: false,
+            roles: [{ name: role }],
+          }),
+        );
+
+        await expect(service.refreshToken('old-token')).rejects.toThrow(
+          'Email not verified',
+        );
+        expect(mockJwtService.signAsync).not.toHaveBeenCalled();
+        expect(mockTokenService.revokeByToken).toHaveBeenCalledWith(
+          'new-unverified-token',
+        );
+      },
+    );
+
     it('should rotate token and return new accessToken + refreshToken', async () => {
       const user = makeUser();
       mockTokenService.validateAndRotate.mockResolvedValue({
@@ -211,6 +235,58 @@ describe('AuthService', () => {
       await expect(service.refreshToken('token')).rejects.toThrow(
         'not found or inactive',
       );
+    });
+  });
+
+  describe('setActivationPassword()', () => {
+    it('does not let account verification alone authorize a password change', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      await expect(
+        service.setActivationPassword('test@example.com', 'NewPassword1!'),
+      ).rejects.toThrow('Current password is incorrect');
+      expect(mockUsersService.updatePassword).not.toHaveBeenCalled();
+    });
+    it('rejects an incorrect temporary password', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      bcrypt.compare.mockResolvedValue(false);
+      await expect(
+        service.setActivationPassword(
+          'test@example.com',
+          'NewPassword1!',
+          'Wrong1!',
+        ),
+      ).rejects.toThrow('Current password is incorrect');
+      expect(mockUsersService.updatePassword).not.toHaveBeenCalled();
+    });
+    it('sets a personal password after verification and proof of the temporary password', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(makeUser());
+      bcrypt.compare.mockResolvedValue(true);
+      await service.setActivationPassword(
+        'test@example.com',
+        'NewPassword1!',
+        'Temporary1!',
+      );
+      expect(bcrypt.compare).toHaveBeenCalledWith(
+        'Temporary1!',
+        'hashed-password',
+      );
+      expect(mockUsersService.updatePassword).toHaveBeenCalledWith(
+        'user-uuid-1',
+        'NewPassword1!',
+      );
+    });
+    it('rejects password setup before verification even with the temporary password', async () => {
+      mockUsersService.findByEmail.mockResolvedValue(
+        makeUser({ isEmailVerified: false, status: 'PENDING' }),
+      );
+      await expect(
+        service.setActivationPassword(
+          'test@example.com',
+          'NewPassword1!',
+          'Temporary1!',
+        ),
+      ).rejects.toThrow('not yet verified');
+      expect(mockUsersService.updatePassword).not.toHaveBeenCalled();
     });
   });
 

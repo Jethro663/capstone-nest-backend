@@ -1,8 +1,20 @@
 import { clearAllEditorRecovery } from "../features/assessment-editor/recovery";
 import type { PropsWithChildren } from "react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { authApi } from "../api/services/auth";
-import { clearAuthSession, getAccessToken, getRefreshToken, refreshSession } from "../api/client";
+import {
+  clearAuthSession,
+  getAccessToken,
+  getRefreshToken,
+  refreshSession,
+} from "../api/client";
 import { readSessionSnapshot, writeSessionSnapshot } from "../api/storage";
 import type { AuthSession } from "../types/auth";
 import type { UpdateProfileDto } from "../types/profile";
@@ -28,6 +40,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
 
   const persistSession = useCallback(async (next: AuthSession | null) => {
+    if (
+      next &&
+      (next.user.isEmailVerified !== true || next.user.status !== "ACTIVE")
+    ) {
+      setSession(null);
+      await clearAuthSession();
+      await writeSessionSnapshot(null);
+      throw new Error(
+        next.user.isEmailVerified !== true
+          ? "Email not verified. Please check your inbox."
+          : "Account is not active. Contact administrator.",
+      );
+    }
     setSession(next);
     await writeSessionSnapshot(next);
   }, []);
@@ -36,7 +61,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     async (user: User | null) => {
       const access = getAccessToken();
       const refresh = getRefreshToken();
-      await persistSession(user && access && refresh ? { accessToken: access, refreshToken: refresh, user } : null);
+      await persistSession(
+        user && access && refresh
+          ? { accessToken: access, refreshToken: refresh, user }
+          : null,
+      );
     },
     [persistSession],
   );
@@ -122,7 +151,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       session,
       user: session?.user ?? null,
       loading,
-      isAuthenticated: !!session?.user,
+      isAuthenticated:
+        session?.user.isEmailVerified === true &&
+        session.user.status === "ACTIVE",
       bootstrap,
       login,
       logout,
@@ -130,7 +161,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       updateLocalUser,
       updateProfile,
     }),
-    [bootstrap, loading, login, logout, refreshAuth, session, updateLocalUser, updateProfile],
+    [
+      bootstrap,
+      loading,
+      login,
+      logout,
+      refreshAuth,
+      session,
+      updateLocalUser,
+      updateProfile,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

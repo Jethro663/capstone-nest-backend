@@ -447,12 +447,16 @@ export class AuthController {
   @ApiOperation({
     summary: 'Set password after OTP activation (account already ACTIVE)',
     description:
-      'Called after the student has verified their OTP. No OTP code required — account ACTIVE status is the gate.',
+      'Called after OTP verification. The current temporary password is required as proof of account ownership.',
   })
   @ApiBody({ type: SetActivationPasswordDto })
   @ApiResponse({ status: 200, description: 'Password set successfully' })
   async setActivationPassword(@Body() dto: SetActivationPasswordDto) {
-    await this.authService.setActivationPassword(dto.email, dto.newPassword);
+    await this.authService.setActivationPassword(
+      dto.email,
+      dto.newPassword,
+      dto.currentPassword,
+    );
     return {
       success: true,
       message: 'Password set successfully. You can now log in.',

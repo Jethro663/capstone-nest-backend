@@ -1,4 +1,4 @@
-import { IsEmail } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsStrongPassword } from '../decorators/is-strong-password.decorator';
@@ -7,14 +7,21 @@ import { IsStrongPassword } from '../decorators/is-strong-password.decorator';
  * Used by POST /auth/set-activation-password
  *
  * Called AFTER OTP verification has already activated the account.
- * No OTP code needed here — the account status (ACTIVE + isEmailVerified)
- * acts as the gate.
+ * The current temporary password proves ownership after the OTP is consumed.
  */
 export class SetActivationPasswordDto {
   @ApiProperty({ example: 'student@school.edu' })
   @IsEmail({}, { message: 'Must be a valid email address' })
   @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
+
+  @ApiProperty({
+    description: 'Current temporary password supplied during onboarding',
+  })
+  @IsString()
+  @MinLength(1)
+  @MaxLength(128)
+  currentPassword: string;
 
   @IsStrongPassword(
     'MyP@ss1!',

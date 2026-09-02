@@ -25,7 +25,8 @@ jest.mock("react-native", () => {
     TextInput: component("TextInput"),
     Platform: {
       OS: "ios",
-      select: (options: Record<string, unknown>) => options.ios ?? options.default,
+      select: (options: Record<string, unknown>) =>
+        options.ios ?? options.default,
     },
   };
 });
@@ -86,16 +87,31 @@ jest.mock("../../api/services/auth", () => ({
 
 function flattenText(node: TestRenderer.ReactTestInstance): string {
   return node.children
-    .map((child) => (typeof child === "string" ? child : flattenText(child as TestRenderer.ReactTestInstance)))
+    .map((child) =>
+      typeof child === "string"
+        ? child
+        : flattenText(child as TestRenderer.ReactTestInstance),
+    )
     .join("");
 }
 
-function findPressableByText(root: TestRenderer.ReactTestInstance, text: string) {
-  return root.find((node) => node.type === "Pressable" && flattenText(node).includes(text));
+function findPressableByText(
+  root: TestRenderer.ReactTestInstance,
+  text: string,
+) {
+  return root.find(
+    (node) => node.type === "Pressable" && flattenText(node).includes(text),
+  );
 }
 
-function findTextInputByPlaceholder(root: TestRenderer.ReactTestInstance, placeholder: string) {
-  return root.find((node) => node.type === "TextInput" && node.props.placeholder === placeholder);
+function findTextInputByPlaceholder(
+  root: TestRenderer.ReactTestInstance,
+  placeholder: string,
+) {
+  return root.find(
+    (node) =>
+      node.type === "TextInput" && node.props.placeholder === placeholder,
+  );
 }
 
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
@@ -124,7 +140,10 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findPressableByText(testRenderer!.root, "Forgot password? Recover your account").props.onPress();
+      findPressableByText(
+        testRenderer!.root,
+        "Forgot password? Recover your account",
+      ).props.onPress();
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith("ForgotPassword");
@@ -155,8 +174,14 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findTextInputByPlaceholder(testRenderer!.root, "you@example.com").props.onChangeText("student@example.com");
-      findTextInputByPlaceholder(testRenderer!.root, "Enter your password").props.onChangeText("Password1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "you@example.com",
+      ).props.onChangeText("student@example.com");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Enter your password",
+      ).props.onChangeText("Password1!");
     });
 
     await act(async () => {
@@ -192,7 +217,9 @@ describe("mobile auth recovery screens", () => {
       );
     });
 
-    const otpInputs = testRenderer!.root.findAll((node) => node.type === "TextInput" && node.props.placeholder === "0");
+    const otpInputs = testRenderer!.root.findAll(
+      (node) => node.type === "TextInput" && node.props.placeholder === "0",
+    );
     act(() => {
       otpInputs[0].props.onChangeText("123456");
     });
@@ -226,11 +253,17 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findTextInputByPlaceholder(testRenderer!.root, "you@example.com").props.onChangeText("student@example.com");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "you@example.com",
+      ).props.onChangeText("student@example.com");
     });
 
     await act(async () => {
-      findPressableByText(testRenderer!.root, "Send reset code").props.onPress();
+      findPressableByText(
+        testRenderer!.root,
+        "Send reset code",
+      ).props.onPress();
     });
 
     await act(async () => {
@@ -265,17 +298,24 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findTextInputByPlaceholder(testRenderer!.root, "you@example.com").props.onChangeText("missing@example.com");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "you@example.com",
+      ).props.onChangeText("missing@example.com");
     });
 
     await act(async () => {
-      findPressableByText(testRenderer!.root, "Send reset code").props.onPress();
+      findPressableByText(
+        testRenderer!.root,
+        "Send reset code",
+      ).props.onPress();
     });
 
     expect(navigation.replace).not.toHaveBeenCalled();
     expect(presentError).toHaveBeenCalledWith({
       title: "Account does not exist",
-      message: "No Nexora account was found for that email address. Check the email or contact an administrator.",
+      message:
+        "No Nexora account was found for that email address. Check the email or contact an administrator.",
     });
   });
 
@@ -299,9 +339,18 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findTextInputByPlaceholder(testRenderer!.root, "6-digit code").props.onChangeText("123456");
-      findTextInputByPlaceholder(testRenderer!.root, "Create a strong password").props.onChangeText("Password1!");
-      findTextInputByPlaceholder(testRenderer!.root, "Repeat new password").props.onChangeText("Password1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "6-digit code",
+      ).props.onChangeText("123456");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Create a strong password",
+      ).props.onChangeText("Password1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Repeat new password",
+      ).props.onChangeText("Password1!");
     });
 
     await act(async () => {
@@ -320,7 +369,9 @@ describe("mobile auth recovery screens", () => {
     const { SetInitialPasswordScreen } = require("../SetInitialPasswordScreen");
     const login = jest.fn().mockResolvedValue({ user: { id: "student-1" } });
     mockedUseAuth.mockReturnValue({ login } as never);
-    mockedAuthApi.setActivationPassword.mockResolvedValue({ success: true } as never);
+    mockedAuthApi.setActivationPassword.mockResolvedValue({
+      success: true,
+    } as never);
     const navigation = { replace: jest.fn() };
 
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -338,8 +389,18 @@ describe("mobile auth recovery screens", () => {
     });
 
     act(() => {
-      findTextInputByPlaceholder(testRenderer!.root, "Create a strong password").props.onChangeText("Password1!");
-      findTextInputByPlaceholder(testRenderer!.root, "Repeat new password").props.onChangeText("Password1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Enter your temporary password",
+      ).props.onChangeText("Temporary1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Create a strong password",
+      ).props.onChangeText("Password1!");
+      findTextInputByPlaceholder(
+        testRenderer!.root,
+        "Repeat new password",
+      ).props.onChangeText("Password1!");
     });
 
     await act(async () => {
@@ -348,6 +409,7 @@ describe("mobile auth recovery screens", () => {
 
     expect(mockedAuthApi.setActivationPassword).toHaveBeenCalledWith({
       email: "student@example.com",
+      currentPassword: "Temporary1!",
       newPassword: "Password1!",
     });
     expect(login).toHaveBeenCalledWith("student@example.com", "Password1!");

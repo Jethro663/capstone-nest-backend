@@ -33,7 +33,11 @@ export function SetInitialPasswordForm() {
     resolver: zodResolver(setActivationPasswordSchema),
   });
 
-  const newPassword = useWatch({ control, name: 'newPassword', defaultValue: '' });
+  const newPassword = useWatch({
+    control,
+    name: 'newPassword',
+    defaultValue: '',
+  });
 
   useEffect(() => {
     const e = searchParams.get('email');
@@ -44,6 +48,7 @@ export function SetInitialPasswordForm() {
     setServerError('');
     const result = await completeActivationPasswordAction({
       email: data.email,
+      currentPassword: data.currentPassword,
       newPassword: data.newPassword,
     });
 
@@ -65,12 +70,17 @@ export function SetInitialPasswordForm() {
       <div>
         <h2 className="auth-title">Secure your account</h2>
         <p className="auth-subtitle">
-          Your account is active. Set a personal password now, or skip and use the temporary password from your email.
+          Your account is active. Set a personal password now, or skip and use
+          the temporary password from your email.
         </p>
       </div>
 
-      {success && <div className="auth-alert auth-alert-success">{success}</div>}
-      {serverError && <div className="auth-alert auth-alert-error">{serverError}</div>}
+      {success && (
+        <div className="auth-alert auth-alert-success">{success}</div>
+      )}
+      {serverError && (
+        <div className="auth-alert auth-alert-error">{serverError}</div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="email" className="auth-label">
@@ -83,6 +93,23 @@ export function SetInitialPasswordForm() {
           {...register('email')}
           className="auth-input bg-slate-100 text-slate-500"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="currentPassword" className="auth-label">
+          Temporary password
+        </Label>
+        <Input
+          id="currentPassword"
+          type="password"
+          autoComplete="current-password"
+          disabled={isSubmitting}
+          className="auth-input"
+          {...register('currentPassword')}
+        />
+        {errors.currentPassword && (
+          <p className="auth-error-text">{errors.currentPassword.message}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -105,17 +132,25 @@ export function SetInitialPasswordForm() {
               <span
                 key={label}
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-                  passed ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                  passed
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-slate-100 text-slate-400'
                 }`}
               >
-                {passed ? <CheckCircle2 className="h-3 w-3" /> : <CircleDashed className="h-3 w-3" />}
+                {passed ? (
+                  <CheckCircle2 className="h-3 w-3" />
+                ) : (
+                  <CircleDashed className="h-3 w-3" />
+                )}
                 {label}
               </span>
             );
           })}
         </div>
 
-        {errors.newPassword && <p className="auth-error-text">{errors.newPassword.message}</p>}
+        {errors.newPassword && (
+          <p className="auth-error-text">{errors.newPassword.message}</p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -130,11 +165,17 @@ export function SetInitialPasswordForm() {
           className="auth-input"
           {...register('confirmPassword')}
         />
-        {errors.confirmPassword && <p className="auth-error-text">{errors.confirmPassword.message}</p>}
+        {errors.confirmPassword && (
+          <p className="auth-error-text">{errors.confirmPassword.message}</p>
+        )}
       </div>
 
       <div className="space-y-3">
-        <Button type="submit" className="auth-primary-button w-full" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          className="auth-primary-button w-full"
+          disabled={isSubmitting}
+        >
           {isSubmitting ? (
             <span className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> Setting password...

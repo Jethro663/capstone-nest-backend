@@ -243,6 +243,7 @@ describe('academic lifecycle PostgreSQL integration', () => {
       database,
       new AcademicPolicyService(database),
       new AuditService(database),
+      new EventEmitter2(),
     );
     const addRevision = async (index: number, grade: number) => {
       const [revision] = await database.db

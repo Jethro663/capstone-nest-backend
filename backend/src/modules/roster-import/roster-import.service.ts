@@ -1,4 +1,6 @@
 import { AcademicMutation } from '../../database/academic-transaction';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { UserCreatedEvent } from '../../common/events';
 import { AcademicPolicyService } from '../academic-state/academic-policy.service';
 import { AuditService } from '../audit/audit.service';
 import {
@@ -25,6 +27,7 @@ import {
 
 import { parseXlsx } from './parsers/xlsx.parser';
 import { parseCsv } from './parsers/csv.parser';
+import { PasswordGenerator } from '../users/utils/password-generator';
 import {
   findSectionHeaderRow,
   findColumnHeaderRow,
@@ -48,15 +51,21 @@ export interface RosterRequestingUser {
   roles: string[];
 }
 
+interface PreparedAccountCredential {
+  email: string;
+  temporaryPassword: string;
+  hashedPassword: string;
+}
+
 @Injectable()
 export class RosterImportService {
-  private static readonly BULK_STUDENT_PASSWORD = 'Student123!';
   private static readonly PASSWORD_HASH_ROUNDS = 10;
 
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly policyService: AcademicPolicyService,
     private readonly auditService: AuditService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private get db() {
@@ -377,24 +386,36 @@ export class RosterImportService {
   /**
    * Commits the approved roster:
    *  - Enrolls registered students into the section (skips already-enrolled ones).
-   *  - Auto-creates active student accounts for unmatched rows and enrolls them.
+   *  - Creates unverified student accounts for unmatched rows and enrolls them.
+   *  - Starts the normal email activation flow after the import commits.
    */
   async commitRoster(
     sectionId: string,
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
   ): Promise<RosterImportCommitResponseDto> {
-    const hashedPassword = dto.pendingRows.length
-      ? await bcrypt.hash(
-          RosterImportService.BULK_STUDENT_PASSWORD,
+    const issuedPasswords = new Set<string>();
+    const preparedCredentials: PreparedAccountCredential[] = [];
+    for (const row of dto.pendingRows) {
+      let temporaryPassword: string;
+      do {
+        temporaryPassword = PasswordGenerator.generate();
+      } while (issuedPasswords.has(temporaryPassword));
+      issuedPasswords.add(temporaryPassword);
+      preparedCredentials.push({
+        email: row.email.toLowerCase(),
+        temporaryPassword,
+        hashedPassword: await bcrypt.hash(
+          temporaryPassword,
           RosterImportService.PASSWORD_HASH_ROUNDS,
-        )
-      : null;
+        ),
+      });
+    }
     return this.commitRosterLocked(
       sectionId,
       dto,
       requestingUser,
-      hashedPassword,
+      preparedCredentials,
     );
   }
 
@@ -403,7 +424,7 @@ export class RosterImportService {
     sectionId: string,
     dto: RosterImportCommitDto,
     requestingUser: RosterRequestingUser,
-    hashedPassword: string | null,
+    preparedCredentials: PreparedAccountCredential[],
   ): Promise<RosterImportCommitResponseDto> {
     // 1. Verify section
     const section = await this.db.query.sections.findFirst({
@@ -443,6 +464,11 @@ export class RosterImportService {
     let alreadyEnrolledSkipped = 0;
     const pendingRosterIds: string[] = [];
     const importHistoryRows: Array<typeof pendingRoster.$inferInsert> = [];
+    const createdAccounts: Array<{
+      id: string;
+      email: string;
+      temporaryPassword: string;
+    }> = [];
 
     await this.db.transaction(async (tx) => {
       // 3. Enroll registered students
@@ -656,26 +682,47 @@ export class RosterImportService {
           );
         }
 
-        if (!hashedPassword)
+        const credentialByEmail = new Map(
+          preparedCredentials.map((credential) => [
+            credential.email,
+            credential,
+          ]),
+        );
+        if (credentialByEmail.size !== dto.pendingRows.length)
           throw new BadRequestException(
             'Prepared account credentials are missing',
           );
 
+        const accountsToCreate = dto.pendingRows.map((row) => {
+          const email = row.email.toLowerCase();
+          const credential = credentialByEmail.get(email);
+          if (!credential)
+            throw new BadRequestException(
+              `Prepared account credentials are missing for ${email}`,
+            );
+          return {
+            email,
+            password: credential.hashedPassword,
+            firstName: row.name.firstName,
+            middleName: row.name.middleName,
+            lastName: row.name.lastName,
+            status: 'PENDING' as const,
+            isEmailVerified: false,
+          };
+        });
+
         const createdUsers = await tx
           .insert(users)
-          .values(
-            dto.pendingRows.map((row) => ({
-              email: row.email.toLowerCase(),
-              password: hashedPassword,
-              firstName: row.name.firstName,
-              middleName: row.name.middleName,
-              lastName: row.name.lastName,
-              status: 'ACTIVE' as const,
-              isEmailVerified: true,
-            })),
-          )
+          .values(accountsToCreate)
           .returning({ id: users.id, email: users.email });
         pendingRosterIds.push(...createdUsers.map((user) => user.id));
+        createdAccounts.push(
+          ...createdUsers.map((user) => ({
+            ...user,
+            temporaryPassword: credentialByEmail.get(user.email.toLowerCase())!
+              .temporaryPassword,
+          })),
+        );
 
         await tx.insert(userRoles).values(
           createdUsers.map((user) => ({
@@ -754,6 +801,19 @@ export class RosterImportService {
         alreadyEnrolledSkipped,
       },
     });
+    for (const account of createdAccounts) {
+      await this.databaseService.afterAcademicCommit(() =>
+        this.eventEmitter.emitAsync(
+          UserCreatedEvent.eventName,
+          new UserCreatedEvent({
+            userId: account.id,
+            email: account.email,
+            generatedPassword: account.temporaryPassword,
+            requiresOTP: true,
+          }),
+        ),
+      );
+    }
     return {
       enrolledUserIds,
       pendingRosterIds,

@@ -39,5 +39,6 @@ export type ResetPasswordPayload = {
 
 export type SetActivationPasswordPayload = {
   email: string;
+  currentPassword: string;
   newPassword: string;
 };
