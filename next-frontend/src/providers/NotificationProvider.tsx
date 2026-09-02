@@ -12,13 +12,28 @@ import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/providers/AuthProvider';
 import { getAccessToken } from '@/lib/api-client';
 import { getBrowserSocketOrigin } from '@/lib/api-origin';
-import { showLiveNotificationToast } from '@/components/notifications/LiveNotificationToast';
+import {
+  dismissNotificationToastLane,
+  showLiveNotificationToast,
+  showNotificationDigestToast,
+} from '@/components/notifications/LiveNotificationToast';
 import {
   isTrackedExtractionTerminalStatus,
   readAllTrackedExtractionNotifications,
   upsertTrackedExtractionNotification,
 } from '@/lib/extraction-notification-tracker';
-import { shouldSurfaceNotificationOnHydration } from '@/lib/notification-routing';
+import {
+  isInterventionAlertNotification,
+  resolveNotificationDestination,
+} from '@/lib/notification-routing';
+import {
+  evaluateNotificationBacklogPresentation,
+  getNotificationSurfaceStorageKey,
+  readNotificationSurfaceState,
+  writeNotificationSurfaceState,
+  type NotificationBacklogPresentation,
+  type NotificationSurfaceState,
+} from '@/lib/notification-surface-policy';
 import { assessmentService } from '@/services/assessment-service';
 import { classService } from '@/services/class-service';
 import { extractionService } from '@/services/extraction-service';
@@ -34,11 +49,15 @@ import type { ExtractionStatus } from '@/types/extraction';
 import type { LxpPathSummary } from '@/types/lxp';
 import type { Notification } from '@/types/notification';
 
-const NOTIFICATION_POLL_MS = 15_000;
-const CONNECTED_NOTIFICATION_POLL_MS = 30_000;
+const DISCONNECTED_NOTIFICATION_POLL_MS = 60_000;
+const CONNECTED_NOTIFICATION_POLL_MS = 5 * 60_000;
 const EXTRACTION_STATUS_POLL_MS = 10_000;
-const STUDENT_REMINDER_POLL_MS = 90_000;
+const STUDENT_REMINDER_POLL_MS = 5 * 60_000;
 const STUDENT_REMINDER_CLASS_LIMIT = 6;
+const FOCUS_SYNC_STALE_MS = 30_000;
+const LIVE_NOTIFICATION_BURST_MS = 750;
+
+type NotificationSyncReason = 'hydrate' | 'focus' | 'reconnect' | 'safety' | 'manual';
 
 type PendingAssessmentReminder = {
   assessment: Assessment;
@@ -230,13 +249,28 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(
+    () => typeof document === 'undefined' || document.visibilityState === 'visible',
+  );
   const socketRef = useRef<Socket | null>(null);
   const subscribersRef = useRef(new Set<(notification: Notification) => void>());
   const seenNotificationIdsRef = useRef(new Set<string>());
   const hasHydratedSeenIdsRef = useRef(false);
   const studentReminderInFlightRef = useRef(false);
   const notificationsInFlightRef = useRef(false);
+  const notificationSyncGenerationRef = useRef(0);
   const trackedExtractionInFlightRef = useRef(false);
+  const notificationsRef = useRef<Notification[]>([]);
+  const unreadCountRef = useRef(0);
+  const lastSyncAtRef = useRef(0);
+  const activeSessionUserIdRef = useRef<string | null>(null);
+  const surfaceStateRef = useRef<NotificationSurfaceState | null>(null);
+  const hasSocketConnectedOnceRef = useRef(false);
+  const liveNotificationBufferRef = useRef<Notification[]>([]);
+  const liveNotificationTimerRef = useRef<number | null>(null);
+  const liveNotificationLaneActiveRef = useRef(false);
+  const liveNotificationLaneGenerationRef = useRef(0);
+  const focusPresentationAtRef = useRef(0);
 
   const subscribe = useCallback((listener: (notification: Notification) => void) => {
     subscribersRef.current.add(listener);
@@ -245,105 +279,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     };
   }, []);
 
-  const publishIncomingNotification = useCallback(
-    (notification: Notification, options?: { showToast?: boolean }) => {
-      if (!notification?.id) return false;
-
-      const alreadySeen = seenNotificationIdsRef.current.has(notification.id);
-      seenNotificationIdsRef.current.add(notification.id);
-      if (alreadySeen) {
-        return false;
-      }
-
-      subscribersRef.current.forEach((listener) => {
-        try {
-          listener(notification);
-        } catch {
-          // best-effort fanout for page-level listeners
-        }
-      });
-
-      if (options?.showToast && !isStudentRole(role)) {
-        showLiveNotificationToast(notification, role);
-      }
-
-      return true;
-    },
-    [role],
-  );
-
-  const syncNotifications = useCallback(
-    async (showToastForFresh: boolean) => {
-      if (notificationsInFlightRef.current) return;
-      notificationsInFlightRef.current = true;
-      try {
-        if (!hasHydratedSeenIdsRef.current) {
-          setLoading(true);
-        }
-        const [listRes, countRes] = await Promise.all([
-          notificationService.getAll({ limit: 50 }),
-          notificationService.getUnreadCount(),
-        ]);
-
-        const rows = Array.isArray(listRes.data) ? listRes.data : [];
-
-        if (!hasHydratedSeenIdsRef.current) {
-          const initialUrgentRows = rows
-            .filter(shouldSurfaceNotificationOnHydration)
-            .sort((left, right) => {
-              const leftTs = Date.parse(left.createdAt);
-              const rightTs = Date.parse(right.createdAt);
-              return leftTs - rightTs;
-            })
-            .slice(-3);
-
-          initialUrgentRows.forEach((row) => {
-            publishIncomingNotification(row, { showToast: true });
-          });
-
-          rows.forEach((row) => {
-            if (row?.id) {
-              seenNotificationIdsRef.current.add(row.id);
-            }
-          });
-          hasHydratedSeenIdsRef.current = true;
-        } else {
-          const freshRows = rows
-            .filter((row) => row?.id && !seenNotificationIdsRef.current.has(row.id))
-            .sort((left, right) => {
-              const leftTs = Date.parse(left.createdAt);
-              const rightTs = Date.parse(right.createdAt);
-              return leftTs - rightTs;
-            });
-
-          freshRows.forEach((row) => {
-            publishIncomingNotification(row, { showToast: showToastForFresh });
-          });
-        }
-
-        setNotifications(rows);
-        if (countRes.data) {
-          setUnreadCount(countRes.data.count ?? 0);
-        }
-      } catch {
-        // silently fail - notifications are non-critical
-      } finally {
-        notificationsInFlightRef.current = false;
-        setLoading(false);
-      }
-    },
-    [publishIncomingNotification],
-  );
-
-  const fetchNotifications = useCallback(async () => {
-    await syncNotifications(false);
-  }, [syncNotifications]);
-
   const markAsRead = useCallback(async (id: string) => {
     try {
       await notificationService.markRead(id);
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      notificationsRef.current = notificationsRef.current.map((notification) =>
+        notification.id === id ? { ...notification, isRead: true } : notification,
+      );
+      setNotifications(notificationsRef.current);
+      unreadCountRef.current = Math.max(0, unreadCountRef.current - 1);
+      setUnreadCount(unreadCountRef.current);
     } catch {
       // best-effort
     }
@@ -352,16 +296,302 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const markAllAsRead = useCallback(async () => {
     try {
       await notificationService.readAll();
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      notificationsRef.current = notificationsRef.current.map((notification) => ({
+        ...notification,
+        isRead: true,
+      }));
+      unreadCountRef.current = 0;
+      setNotifications(notificationsRef.current);
       setUnreadCount(0);
     } catch {
       // best-effort
     }
   }, []);
 
+  const publishIncomingNotification = useCallback((notification: Notification) => {
+    if (!notification?.id) return false;
+
+    const alreadySeen = seenNotificationIdsRef.current.has(notification.id);
+    seenNotificationIdsRef.current.add(notification.id);
+    if (alreadySeen) return false;
+
+    subscribersRef.current.forEach((listener) => {
+      try {
+        listener(notification);
+      } catch {
+        // best-effort fanout for page-level listeners
+      }
+    });
+
+    return true;
+  }, []);
+
+  const persistSurfaceState = useCallback(
+    (state: NotificationSurfaceState) => {
+      surfaceStateRef.current = state;
+      if (sessionUserId) {
+        writeNotificationSurfaceState(sessionUserId, state);
+      }
+    },
+    [sessionUserId],
+  );
+
+  const recordSurfacedUrgentNotifications = useCallback(
+    (rows: Notification[]) => {
+      if (!sessionUserId) return;
+      const urgentRows = rows.filter(isInterventionAlertNotification);
+      if (urgentRows.length === 0) return;
+      const now = Date.now();
+      const current =
+        surfaceStateRef.current ?? readNotificationSurfaceState(sessionUserId, now);
+      const newestById = new Map(
+        current.surfacedUrgent.map((entry) => [entry.id, entry.surfacedAt]),
+      );
+      urgentRows.forEach((notification) => newestById.set(notification.id, now));
+      persistSurfaceState({
+        ...current,
+        surfacedUrgent: [...newestById.entries()]
+          .map(([id, surfacedAt]) => ({ id, surfacedAt }))
+          .sort((left, right) => right.surfacedAt - left.surfacedAt)
+          .slice(0, 100),
+      });
+    },
+    [persistSurfaceState, sessionUserId],
+  );
+
+  const resetLiveNotificationLane = useCallback((generation?: number) => {
+    if (
+      generation !== undefined &&
+      generation !== liveNotificationLaneGenerationRef.current
+    ) {
+      return;
+    }
+    if (liveNotificationTimerRef.current !== null) {
+      window.clearTimeout(liveNotificationTimerRef.current);
+      liveNotificationTimerRef.current = null;
+    }
+    liveNotificationBufferRef.current = [];
+    liveNotificationLaneActiveRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      resetLiveNotificationLane();
+      dismissNotificationToastLane();
+    };
+  }, [resetLiveNotificationLane]);
+
+  const openIndividualNotification = useCallback(
+    (notification: Notification) => {
+      const destination = resolveNotificationDestination(notification, role);
+      void markAsRead(notification.id).finally(() => {
+        window.location.assign(destination);
+      });
+    },
+    [markAsRead, role],
+  );
+
+  const flushLiveNotificationLane = useCallback(
+    (preferredKind?: 'live' | 'catch-up') => {
+      if (liveNotificationTimerRef.current !== null) {
+        window.clearTimeout(liveNotificationTimerRef.current);
+        liveNotificationTimerRef.current = null;
+      }
+
+      const rows = [...liveNotificationBufferRef.current];
+      if (rows.length === 0 || isStudentRole(role)) return;
+
+      recordSurfacedUrgentNotifications(rows);
+      liveNotificationLaneActiveRef.current = true;
+      const generation = liveNotificationLaneGenerationRef.current + 1;
+      liveNotificationLaneGenerationRef.current = generation;
+      const onClose = () => resetLiveNotificationLane(generation);
+      const containsUrgent = rows.some(isInterventionAlertNotification);
+
+      if (rows.length === 1 && preferredKind !== 'catch-up') {
+        showLiveNotificationToast(rows[0], role, {
+          onOpen: () => openIndividualNotification(rows[0]),
+          onClose,
+        });
+        return;
+      }
+
+      showNotificationDigestToast({
+        kind: containsUrgent ? 'urgent' : preferredKind ?? 'live',
+        count: rows.length,
+        onClose,
+      });
+    },
+    [openIndividualNotification, recordSurfacedUrgentNotifications, resetLiveNotificationLane, role],
+  );
+
+  const enqueueLiveNotification = useCallback(
+    (notification: Notification) => {
+      if (isStudentRole(role)) return;
+      liveNotificationBufferRef.current.push(notification);
+
+      if (document.visibilityState !== 'visible') return;
+      if (
+        isInterventionAlertNotification(notification) ||
+        liveNotificationLaneActiveRef.current
+      ) {
+        flushLiveNotificationLane();
+        return;
+      }
+
+      if (liveNotificationTimerRef.current === null) {
+        liveNotificationTimerRef.current = window.setTimeout(() => {
+          flushLiveNotificationLane();
+        }, LIVE_NOTIFICATION_BURST_MS);
+      }
+    },
+    [flushLiveNotificationLane, role],
+  );
+
+  const presentBacklogNotification = useCallback(
+    (presentation: NotificationBacklogPresentation) => {
+      if (presentation.kind === 'none' || isStudentRole(role)) return;
+      if (presentation.kind === 'backlog-digest') {
+        showNotificationDigestToast({
+          kind: 'backlog',
+          count: presentation.unreadCount,
+        });
+        return;
+      }
+
+      if (presentation.notifications.length === 1) {
+        const notification = presentation.notifications[0];
+        showLiveNotificationToast(notification, role, {
+          onOpen: () => openIndividualNotification(notification),
+        });
+        return;
+      }
+
+      showNotificationDigestToast({
+        kind: 'urgent',
+        count: presentation.notifications.length,
+      });
+    },
+    [openIndividualNotification, role],
+  );
+
+  const syncNotifications = useCallback(
+    async (reason: NotificationSyncReason) => {
+      if (notificationsInFlightRef.current) return;
+      notificationsInFlightRef.current = true;
+      const syncGeneration = notificationSyncGenerationRef.current;
+      const suppressBacklogForFocus =
+        reason === 'focus' && focusPresentationAtRef.current > lastSyncAtRef.current;
+      try {
+        if (!hasHydratedSeenIdsRef.current) {
+          setLoading(true);
+        }
+        const [listResult, countResult] = await Promise.allSettled([
+          notificationService.getAll({ limit: 50 }),
+          notificationService.getUnreadCount(),
+        ]);
+        if (syncGeneration !== notificationSyncGenerationRef.current) return;
+        const listSucceeded = listResult.status === 'fulfilled';
+        const countSucceeded = countResult.status === 'fulfilled';
+        if (!listSucceeded && !countSucceeded) return;
+
+        const rows = listSucceeded && Array.isArray(listResult.value.data)
+          ? listResult.value.data
+          : null;
+        const nextUnreadCount = countSucceeded
+          ? countResult.value.data?.count ?? 0
+          : unreadCountRef.current;
+        const countForPresentation = countSucceeded
+          ? nextUnreadCount
+          : rows
+            ? Math.max(unreadCountRef.current, rows.filter((row) => !row.isRead).length)
+            : unreadCountRef.current;
+
+        let focusPresentedFreshRows = false;
+        if (rows) {
+          if (!hasHydratedSeenIdsRef.current) {
+            rows.forEach((row) => {
+              if (row?.id) seenNotificationIdsRef.current.add(row.id);
+            });
+            hasHydratedSeenIdsRef.current = true;
+          } else {
+            const freshRows = rows
+              .filter((row) => row?.id && !seenNotificationIdsRef.current.has(row.id))
+              .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+            freshRows.forEach(publishIncomingNotification);
+
+            if (freshRows.length > 0 && reason === 'focus' && !isStudentRole(role)) {
+              recordSurfacedUrgentNotifications(freshRows);
+              showNotificationDigestToast({
+                kind: freshRows.some(isInterventionAlertNotification) ? 'urgent' : 'catch-up',
+                count: freshRows.length,
+              });
+              focusPresentationAtRef.current = Date.now();
+              focusPresentedFreshRows = true;
+            } else if (
+              freshRows.length > 0 &&
+              (reason === 'reconnect' || reason === 'safety')
+            ) {
+              freshRows.forEach(enqueueLiveNotification);
+            }
+          }
+
+          notificationsRef.current = rows;
+          setNotifications(rows);
+        }
+
+        if (countSucceeded) {
+          unreadCountRef.current = nextUnreadCount;
+          setUnreadCount(nextUnreadCount);
+        }
+
+        if (
+          rows &&
+          (reason === 'hydrate' || reason === 'focus') &&
+          !focusPresentedFreshRows &&
+          !suppressBacklogForFocus &&
+          !isStudentRole(role) &&
+          sessionUserId
+        ) {
+          const latestSurfaceState =
+            surfaceStateRef.current ?? readNotificationSurfaceState(sessionUserId, Date.now());
+          const decision = evaluateNotificationBacklogPresentation({
+            notifications: rows,
+            unreadCount: countForPresentation,
+            state: latestSurfaceState,
+            now: Date.now(),
+          });
+          persistSurfaceState(decision.state);
+          presentBacklogNotification(decision.presentation);
+        }
+
+        lastSyncAtRef.current = Date.now();
+      } finally {
+        if (syncGeneration === notificationSyncGenerationRef.current) {
+          notificationsInFlightRef.current = false;
+          setLoading(false);
+        }
+      }
+    },
+    [
+      enqueueLiveNotification,
+      persistSurfaceState,
+      presentBacklogNotification,
+      publishIncomingNotification,
+      recordSurfacedUrgentNotifications,
+      role,
+      sessionUserId,
+    ],
+  );
+
+  const fetchNotifications = useCallback(async () => {
+    await syncNotifications('manual');
+  }, [syncNotifications]);
+
   const syncTrackedExtractionNotifications = useCallback(async () => {
     if (!sessionUserId || role !== 'teacher') return;
     if (trackedExtractionInFlightRef.current) return;
+    const syncGeneration = notificationSyncGenerationRef.current;
 
     const tracked = readAllTrackedExtractionNotifications().filter(
       (entry) =>
@@ -376,6 +606,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         tracked.map(async (entry) => {
           try {
             const statusRes = await extractionService.getStatus(entry.extractionId);
+            if (syncGeneration !== notificationSyncGenerationRef.current) return;
             const nextStatus = statusRes.data.status as ExtractionStatus;
             const nextEntry = {
               ...entry,
@@ -393,8 +624,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
               nextEntry.notifiedAt = new Date().toISOString();
               if (nextStatus === 'completed' || nextStatus === 'applied') {
                 const message = `${entry.originalName} finished processing and is ready for teacher review.`;
-                showLiveNotificationToast(
-                  {
+                enqueueLiveNotification({
                     id: `extraction:${entry.extractionId}:completed`,
                     userId: sessionUserId,
                     type: 'extraction_completed',
@@ -405,15 +635,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     referenceId: entry.extractionId,
                     metadata: { classId: entry.classId },
                     createdAt: nextEntry.notifiedAt,
-                  },
-                  role,
-                );
+                  });
               } else if (nextStatus === 'failed') {
                 const message =
                   statusRes.data.errorMessage ||
                   `${entry.originalName} could not be completed. Open the extraction history to review the error.`;
-                showLiveNotificationToast(
-                  {
+                enqueueLiveNotification({
                     id: `extraction:${entry.extractionId}:failed`,
                     userId: sessionUserId,
                     type: 'extraction_failed',
@@ -424,9 +651,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                     referenceId: entry.extractionId,
                     metadata: { classId: entry.classId },
                     createdAt: nextEntry.notifiedAt,
-                  },
-                  role,
-                );
+                  });
               }
             }
 
@@ -437,55 +662,118 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }),
       );
     } finally {
-      trackedExtractionInFlightRef.current = false;
+      if (syncGeneration === notificationSyncGenerationRef.current) {
+        trackedExtractionInFlightRef.current = false;
+      }
     }
-  }, [role, sessionUserId]);
+  }, [enqueueLiveNotification, role, sessionUserId]);
 
   const syncStudentReminderNotifications = useCallback(async () => {
     if (!sessionUserId || !isStudentRole(role) || studentReminderInFlightRef.current) return;
 
     studentReminderInFlightRef.current = true;
+    const syncGeneration = notificationSyncGenerationRef.current;
     try {
       const [taskReminder, interventionReminder] = await Promise.all([
         buildStudentPendingTaskReminder(sessionUserId).catch(() => null),
         buildStudentPendingInterventionReminder(sessionUserId).catch(() => null),
       ]);
+      if (syncGeneration !== notificationSyncGenerationRef.current) return;
 
       if (taskReminder) {
-        publishIncomingNotification(taskReminder, { showToast: false });
+        publishIncomingNotification(taskReminder);
       }
       if (interventionReminder) {
-        publishIncomingNotification(interventionReminder, { showToast: false });
+        publishIncomingNotification(interventionReminder);
       }
     } catch {
       // Student reminders are helpful but should never block live backend notifications.
     } finally {
-      studentReminderInFlightRef.current = false;
+      if (syncGeneration === notificationSyncGenerationRef.current) {
+        studentReminderInFlightRef.current = false;
+      }
     }
   }, [publishIncomingNotification, role, sessionUserId]);
 
   useEffect(() => {
     if (sessionUserId) {
-      void syncNotifications(false);
+      if (activeSessionUserIdRef.current !== sessionUserId) {
+        notificationSyncGenerationRef.current += 1;
+        notificationsInFlightRef.current = false;
+        trackedExtractionInFlightRef.current = false;
+        studentReminderInFlightRef.current = false;
+        activeSessionUserIdRef.current = sessionUserId;
+        seenNotificationIdsRef.current = new Set();
+        hasHydratedSeenIdsRef.current = false;
+        notificationsRef.current = [];
+        unreadCountRef.current = 0;
+        surfaceStateRef.current = readNotificationSurfaceState(sessionUserId, Date.now());
+        hasSocketConnectedOnceRef.current = false;
+        resetLiveNotificationLane();
+        dismissNotificationToastLane();
+      }
+      void syncNotifications('hydrate');
     } else {
+      notificationSyncGenerationRef.current += 1;
+      notificationsInFlightRef.current = false;
+      trackedExtractionInFlightRef.current = false;
+      studentReminderInFlightRef.current = false;
+      activeSessionUserIdRef.current = null;
       setNotifications([]);
       setUnreadCount(0);
+      notificationsRef.current = [];
+      unreadCountRef.current = 0;
       seenNotificationIdsRef.current = new Set();
       hasHydratedSeenIdsRef.current = false;
+      surfaceStateRef.current = null;
+      lastSyncAtRef.current = 0;
+      hasSocketConnectedOnceRef.current = false;
+      resetLiveNotificationLane();
+      dismissNotificationToastLane();
     }
-  }, [sessionUserId, syncNotifications]);
+  }, [resetLiveNotificationLane, sessionUserId, syncNotifications]);
 
   useEffect(() => {
     if (!sessionUserId) return;
+    const storageKey = getNotificationSurfaceStorageKey(sessionUserId);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey) return;
+      surfaceStateRef.current = readNotificationSurfaceState(sessionUserId, Date.now());
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [sessionUserId]);
+
+  useEffect(() => {
+    if (!sessionUserId) return;
+    const handleVisibilityChange = () => {
+      const visible = document.visibilityState === 'visible';
+      setDocumentVisible(visible);
+      if (!visible) return;
+
+      if (liveNotificationBufferRef.current.length > 0 && !isStudentRole(role)) {
+        focusPresentationAtRef.current = Date.now();
+        flushLiveNotificationLane('catch-up');
+      }
+      if (Date.now() - lastSyncAtRef.current >= FOCUS_SYNC_STALE_MS) {
+        void syncNotifications('focus');
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [flushLiveNotificationLane, role, sessionUserId, syncNotifications]);
+
+  useEffect(() => {
+    if (!sessionUserId || !documentVisible) return;
 
     const interval = window.setInterval(() => {
-      void syncNotifications(true);
-    }, socketConnected ? CONNECTED_NOTIFICATION_POLL_MS : NOTIFICATION_POLL_MS);
+      void syncNotifications('safety');
+    }, socketConnected ? CONNECTED_NOTIFICATION_POLL_MS : DISCONNECTED_NOTIFICATION_POLL_MS);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [sessionUserId, socketConnected, syncNotifications]);
+  }, [documentVisible, sessionUserId, socketConnected, syncNotifications]);
 
   useEffect(() => {
     if (!sessionUserId || role !== 'teacher') return;
@@ -497,7 +785,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, [role, sessionUserId, syncTrackedExtractionNotifications]);
 
   useEffect(() => {
-    if (!sessionUserId || !isStudentRole(role)) return;
+    if (!sessionUserId || !isStudentRole(role) || !documentVisible) return;
 
     void syncStudentReminderNotifications();
     const interval = window.setInterval(() => {
@@ -505,7 +793,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }, STUDENT_REMINDER_POLL_MS);
 
     return () => window.clearInterval(interval);
-  }, [role, sessionUserId, syncStudentReminderNotifications]);
+  }, [documentVisible, role, sessionUserId, syncStudentReminderNotifications]);
 
   // WebSocket connection
   useEffect(() => {
@@ -525,8 +813,13 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     });
 
     socket.on('connect', () => {
+      const isReconnect = hasSocketConnectedOnceRef.current;
+      hasSocketConnectedOnceRef.current = true;
       setSocketConnected(true);
       console.log('[WS] Notifications connected');
+      if (isReconnect && document.visibilityState === 'visible') {
+        void syncNotifications('reconnect');
+      }
     });
 
     socket.on(
@@ -550,11 +843,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
           createdAt: payload.createdAt,
         });
 
-        const inserted = publishIncomingNotification(newNotification, { showToast: true });
+        const inserted = publishIncomingNotification(newNotification);
         if (!inserted) return;
 
-        setNotifications((prev) => [newNotification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+        notificationsRef.current = [newNotification, ...notificationsRef.current];
+        unreadCountRef.current += 1;
+        setNotifications(notificationsRef.current);
+        setUnreadCount(unreadCountRef.current);
+        enqueueLiveNotification(newNotification);
       },
     );
 
@@ -574,7 +870,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       setSocketConnected(false);
       socketRef.current = null;
     };
-  }, [publishIncomingNotification, sessionUserId]);
+  }, [enqueueLiveNotification, publishIncomingNotification, sessionUserId, syncNotifications]);
 
   return (
     <NotificationContext.Provider
