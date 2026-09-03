@@ -14,10 +14,40 @@ async function expectResponsiveGradeGrid(page: Page, viewportLabel: string) {
     );
     const table = scroll?.querySelector('table');
     const learner = table?.querySelector<HTMLElement>('thead th:first-child');
+    const learnerCell = table?.querySelector<HTMLElement>(
+      'tbody th[data-surname-band]',
+    );
+    const learnerCard = learnerCell?.querySelector<HTMLElement>(
+      '[data-learner-card]',
+    );
+    const learnerBadge = learnerCard?.querySelector<HTMLElement>(
+      '[aria-hidden="true"]',
+    );
+    const learnerIdentity = learnerCard?.querySelector<HTMLElement>(
+      'span:last-child',
+    );
+    const learnerStatus = learnerIdentity?.querySelector('small');
     const finalGrade = table?.querySelector<HTMLElement>(
       'thead tr:first-child th:last-child',
     );
-    if (!scroll || !table || !learner || !finalGrade) return null;
+    if (
+      !scroll ||
+      !table ||
+      !learner ||
+      !learnerCell ||
+      !learnerCard ||
+      !learnerBadge ||
+      !learnerIdentity ||
+      !learnerStatus ||
+      !finalGrade
+    )
+      return null;
+    learnerStatus.textContent =
+      'Not enrolled in period · Removed from current class';
+    const learnerCellRect = learnerCell.getBoundingClientRect();
+    const learnerCardRect = learnerCard.getBoundingClientRect();
+    const learnerBadgeRect = learnerBadge.getBoundingClientRect();
+    const learnerIdentityRect = learnerIdentity.getBoundingClientRect();
     const textSizes = Array.from(
       table.querySelectorAll<HTMLElement>('th, td, button, small'),
     ).map((element) => Number.parseFloat(getComputedStyle(element).fontSize));
@@ -29,6 +59,11 @@ async function expectResponsiveGradeGrid(page: Page, viewportLabel: string) {
       gridCanScroll: scroll.scrollWidth > scroll.clientWidth,
       learnerPosition: getComputedStyle(learner).position,
       learnerLeft: getComputedStyle(learner).left,
+      learnerCellWidth: learnerCellRect.width,
+      learnerCardContained:
+        learnerCardRect.left >= learnerCellRect.left &&
+        learnerCardRect.right <= learnerCellRect.right,
+      learnerContentGap: learnerIdentityRect.left - learnerBadgeRect.right,
       finalGradePosition: getComputedStyle(finalGrade).position,
       minimumTextSize: Math.min(...textSizes),
     };
@@ -39,6 +74,9 @@ async function expectResponsiveGradeGrid(page: Page, viewportLabel: string) {
   expect(layout!.gridOverflow).toBe('auto');
   expect(layout!.learnerPosition).toBe('sticky');
   expect(layout!.learnerLeft).toBe('0px');
+  expect(layout!.learnerCellWidth).toBeCloseTo(260, 0);
+  expect(layout!.learnerCardContained).toBe(true);
+  expect(layout!.learnerContentGap).toBeGreaterThanOrEqual(8);
   expect(layout!.minimumTextSize).toBeGreaterThanOrEqual(14);
   expect(layout!.finalGradePosition).toBe(
     viewportLabel === 'desktop' ? 'sticky' : 'static',

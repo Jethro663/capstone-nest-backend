@@ -328,19 +328,24 @@ export function TeacherClassRecordGradeGrid({
                     className={styles.learnerCell}
                     data-surname-band={band}
                   >
-                    <span className={styles.surnameBadge} aria-hidden="true">
-                      {getSurnameInitial(student.lastName)}
-                    </span>
-                    <span className={styles.learnerIdentity}>
-                      <span>
-                        <strong>{student.lastName}</strong>, {student.firstName}
+                    <span
+                      className={styles.learnerCard}
+                      data-learner-card
+                    >
+                      <span className={styles.surnameBadge} aria-hidden="true">
+                        {getSurnameInitial(student.lastName)}
                       </span>
-                      <small>
-                        {eligibility}
-                        {student.isRemoved
-                          ? " · Removed from current class"
-                          : ""}
-                      </small>
+                      <span className={styles.learnerIdentity}>
+                        <span>
+                          <strong>{student.lastName}</strong>, {student.firstName}
+                        </span>
+                        <small>
+                          {eligibility}
+                          {student.isRemoved
+                            ? " · Removed from current class"
+                            : ""}
+                        </small>
+                      </span>
                     </span>
                   </th>
                   {sheet.categories.map((category) => {

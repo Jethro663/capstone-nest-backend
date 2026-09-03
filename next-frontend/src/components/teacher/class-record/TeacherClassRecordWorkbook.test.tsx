@@ -257,6 +257,9 @@ it('presents readable workbook metadata, policy-aware navigation and semantic gr
     name: /Santos\s*, Ana.*Eligible/i,
   });
   expect(learnerCell).toHaveAttribute('data-surname-band', 'sz');
+  const learnerCard = learnerCell.querySelector('[data-learner-card]');
+  expect(learnerCard).toBeInTheDocument();
+  expect(learnerCard).toContainElement(learnerCell.querySelector('strong'));
 });
 
 it('supports content-only embedding without repeating workbook controls', () => {
