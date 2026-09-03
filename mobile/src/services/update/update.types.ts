@@ -27,6 +27,12 @@ export type UpdateStatus =
   | "permission_denied"
   | "error";
 
+export type UpdateFailureStage =
+  | "check"
+  | "download"
+  | "verification"
+  | "installation";
+
 export interface UpdateState {
   status: UpdateStatus;
   decision: AppVersionDecision | null;
@@ -34,5 +40,6 @@ export interface UpdateState {
   downloadedBytes: number;
   totalBytes: number;
   errorMessage: string | null;
-  localApkUri: string | null;
+  failureStage: UpdateFailureStage | null;
+  verifiedApkUri: string | null;
 }

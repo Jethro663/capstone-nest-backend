@@ -8,7 +8,9 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateAppVersionDto {
@@ -92,17 +94,26 @@ export class CreateAppVersionDto {
     example: null,
     description: 'SHA-256 hash of the APK file for integrity verification',
   })
-  @IsOptional()
+  @ValidateIf(
+    (dto: CreateAppVersionDto, value: unknown) =>
+      dto.requiresFullApk === true || (value !== undefined && value !== null),
+  )
   @IsString()
+  @Matches(/^[a-f0-9]{64}$/i, {
+    message: 'apkSha256 must be a 64-character hexadecimal SHA-256 digest',
+  })
   apkSha256?: string;
 
   @ApiPropertyOptional({
     example: null,
     description: 'Size of the APK file in bytes for integrity verification',
   })
-  @IsOptional()
+  @ValidateIf(
+    (dto: CreateAppVersionDto, value: unknown) =>
+      dto.requiresFullApk === true || (value !== undefined && value !== null),
+  )
   @Type(() => Number)
   @IsInt()
-  @Min(0)
+  @Min(1)
   apkSizeBytes?: number;
 }

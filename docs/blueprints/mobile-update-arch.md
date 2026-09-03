@@ -161,6 +161,12 @@ Responsibilities:
   - `downloadProgress` / `downloadedBytes` / `totalBytes`
 - **Single Source of Truth for Installer Launching**: To avoid duplicate installer launch race conditions, `startApkDownload()` halts execution at `ready_to_install` upon completing download and size verification. The installer is only launched when the user explicitly taps the "Install Now" action button, invoking `installDownloadedApk()`.
 - **Dedicated Permission-Denied vs. Generic Error States**: Distinctly separates general installation failures (`status: 'error'`) from Android sideload security restrictions (`status: 'permission_denied'`). When `installApk()` throws an exception, the provider checks the error string; only errors clearly indicating unknown sources or security restrictions trigger the `permission_denied` state and its "Open Settings (Unknown Apps)" CTA. Other failures default to `error` with retry options.
+- A package URI becomes installable only after file existence and exact byte-size checks pass.
+- Download or verification failure clears the installable URI.
+- `Retry Download` refreshes backend policy before downloading.
+- `Retry Installation` is restricted to installation-stage failures with a `verifiedApkUri`.
+- Android installer launch is not installation completion; returning from the launch restores a retryable `ready_to_install` state.
+- SHA-256 is generated and verified by release tooling; the client retains low-memory size verification.
 
 ### 8. Update UI components
 Create:
@@ -173,7 +179,7 @@ UI requirements:
 - Optional update mode (`updateType === 'apk_optional'`): provides a "Not Now" button to dismiss the prompt for the current session.
 - Ready to install state (`ready_to_install`): explicitly informs the user that the package is downloaded and verified, prompting them to tap "Install Now" to begin installation.
 - Android permission recovery state (`permission_denied`): when installation fails due to unknown sources restrictions, displays clear explanatory copy and an action button calling `openUnknownSourcesSettings()` (`android.settings.MANAGE_UNKNOWN_APP_SOURCES`).
-- Download/Verification/Install error state (`error`): displays clear error details with action buttons to retry download or installation without unrelated Android settings detours.
+- Download/Verification/Install error state (`error`): displays stage-specific error details. Connection guidance appears only for policy-check and download failures. Verification failures require a fresh download, while installation-stage failures with a verified package may offer `Retry Installation` without unrelated Android settings detours.
 
 ### 9. Hybrid decision flow inside mobile
 Runtime execution sequence:

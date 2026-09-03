@@ -153,6 +153,8 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
+      - run: npm run test:release
+      - run: npm run release:verify
       - run: npm run typecheck
       - run: npm run test
       - name: Verify the bundled offline assessment editor

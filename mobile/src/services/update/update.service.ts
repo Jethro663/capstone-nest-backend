@@ -11,20 +11,30 @@ import type { AppVersionDecision } from "./update.types";
 
 const UPDATE_DIR = `${FileSystem.cacheDirectory ?? ""}updates/`;
 
+export type ApkVerificationFailureReason = "missing_file" | "size_mismatch";
+
+export class ApkVerificationError extends Error {
+  constructor(
+    readonly reason: ApkVerificationFailureReason,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApkVerificationError";
+  }
+}
+
 export function getClientVersionInfo() {
   const platform = Platform.OS === "ios" ? "ios" : "android";
   const currentNativeVersion = Application.nativeApplicationVersion ?? "0.1.0";
   const currentVersionCode = Number(Application.nativeBuildVersion ?? 1) || 1;
   // Expo runtimeVersion represents the native compatibility boundary, NOT an OTA release counter.
-  const currentRuntimeVersion = Constants.default?.expoConfig?.runtimeVersion
-    ? String(Constants.default.expoConfig.runtimeVersion)
-    : "1";
+  const currentRuntimeVersion = Constants.default?.expoConfig?.runtimeVersion ? String(Constants.default.expoConfig.runtimeVersion) : "1";
 
   return {
     platform,
     currentNativeVersion,
     currentVersionCode,
-    currentRuntimeVersion,
+    currentRuntimeVersion
   };
 }
 
@@ -35,8 +45,8 @@ export async function checkUpdatePolicy(): Promise<AppVersionDecision> {
       platform,
       currentNativeVersion,
       currentVersionCode,
-      currentOtaVersion: currentRuntimeVersion,
-    },
+      currentOtaVersion: currentRuntimeVersion
+    }
   });
   return unwrapEnvelope(response.data);
 }
@@ -71,7 +81,9 @@ export async function cleanOldApkFiles(currentInstalledVersionCode: number): Pro
       if (match) {
         const fileVersionCode = parseInt(match[1], 10);
         if (!isNaN(fileVersionCode) && fileVersionCode <= currentInstalledVersionCode) {
-          await FileSystem.deleteAsync(`${UPDATE_DIR}${filename}`, { idempotent: true });
+          await FileSystem.deleteAsync(`${UPDATE_DIR}${filename}`, {
+            idempotent: true
+          });
         }
       }
     }
@@ -91,19 +103,14 @@ export async function downloadApk(
   const localPath = `${UPDATE_DIR}nexora-update-${targetVersionCode}.apk`;
   await FileSystem.deleteAsync(localPath, { idempotent: true });
 
-  const downloadResumable = FileSystem.createDownloadResumable(
-    url,
-    localPath,
-    {},
-    (downloadProgress) => {
-      const downloaded = downloadProgress.totalBytesWritten;
-      const total = downloadProgress.totalBytesExpectedToWrite;
-      const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
-      if (onProgress) {
-        onProgress(downloaded, total, pct);
-      }
+  const downloadResumable = FileSystem.createDownloadResumable(url, localPath, {}, (downloadProgress) => {
+    const downloaded = downloadProgress.totalBytesWritten;
+    const total = downloadProgress.totalBytesExpectedToWrite;
+    const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+    if (onProgress) {
+      onProgress(downloaded, total, pct);
     }
-  );
+  });
 
   const result = await downloadResumable.downloadAsync();
   if (!result || !result.uri) {
@@ -113,22 +120,16 @@ export async function downloadApk(
   return result.uri;
 }
 
-export async function verifyApkIntegrity(
-  fileUri: string,
-  expectedSizeBytes: number | null,
-  _expectedSha256: string | null
-): Promise<boolean> {
+export async function verifyApkIntegrity(fileUri: string, expectedSizeBytes: number | null): Promise<void> {
   const fileInfo = await FileSystem.getInfoAsync(fileUri);
   if (!fileInfo.exists) {
-    throw new Error("Downloaded APK file does not exist.");
+    throw new ApkVerificationError("missing_file", "Downloaded APK file does not exist.");
   }
 
-  if (expectedSizeBytes && fileInfo.size !== expectedSizeBytes) {
+  if (expectedSizeBytes !== null && fileInfo.size !== expectedSizeBytes) {
     await FileSystem.deleteAsync(fileUri, { idempotent: true });
-    throw new Error(`APK size mismatch. Expected ${expectedSizeBytes} bytes but downloaded ${fileInfo.size} bytes.`);
+    throw new ApkVerificationError("size_mismatch", `APK size mismatch. Expected ${expectedSizeBytes} bytes but downloaded ${fileInfo.size} bytes.`);
   }
-
-  return true;
 }
 
 export async function installApk(fileUri: string): Promise<void> {
@@ -136,11 +137,16 @@ export async function installApk(fileUri: string): Promise<void> {
     throw new Error("APK installation is only supported on Android devices.");
   }
 
+  const fileInfo = await FileSystem.getInfoAsync(fileUri);
+  if (!fileInfo.exists) {
+    throw new ApkVerificationError("missing_file", "The verified APK file is no longer available. Download it again.");
+  }
+
   const contentUri = await FileSystem.getContentUriAsync(fileUri);
   await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
     data: contentUri,
     flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
-    type: "application/vnd.android.package-archive",
+    type: "application/vnd.android.package-archive"
   });
 }
 
@@ -150,6 +156,6 @@ export async function openUnknownSourcesSettings(): Promise<void> {
   }
   const appId = Application.applicationId ?? "com.nexora.lms";
   await IntentLauncher.startActivityAsync("android.settings.MANAGE_UNKNOWN_APP_SOURCES", {
-    data: `package:${appId}`,
+    data: `package:${appId}`
   });
 }

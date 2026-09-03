@@ -14,6 +14,9 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "jest --runInBand",
+    "test:release": "node --test scripts/app-version-release.test.cjs",
+    "release:prepare": "node scripts/app-version-release.cjs prepare",
+    "release:verify": "node scripts/app-version-release.cjs verify",
     "postinstall": "patch-package",
     "build:rich-text": "node scripts/build-assessment-rich-text.cjs"
   },
