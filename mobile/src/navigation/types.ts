@@ -39,6 +39,7 @@ export type RootStackParamList = {
   Notifications: undefined;
   AdminTools: { section?: "users" | "evaluations" | "calendar" | "library" | "reports" | "audit" | "diagnostics" | "roster" | "templates" | "settings" | "records" };
   AdminAcademic: undefined;
+  AdminAnnouncements: undefined;
   ClassWorkspace: { classId: string };
   ClassDetail: { classId: string; initialTab?: ClassDetailInitialTab };
   ModuleDetail: { classId: string; moduleId: string };

@@ -22,6 +22,7 @@ import {
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import {
   createBottomTabNavigator,
+  type BottomTabBarProps,
   type BottomTabScreenProps,
 } from "@react-navigation/bottom-tabs";
 import {
@@ -668,8 +669,8 @@ function StudentTabs() {
   const tabBar =
     Platform.OS === "web"
       ? undefined
-      : (props: Parameters<typeof BottomTabBar>[0]) => (
-          <BottomTabBar {...props} />
+      : (props: BottomTabBarProps) => (
+          <BottomTabBar {...props} role="student" />
         );
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
@@ -707,15 +708,14 @@ function TeacherTabs() {
   const tabBar =
     Platform.OS === "web"
       ? undefined
-      : (props: Parameters<typeof BottomTabBar>[0]) => (
-          <BottomTabBar {...props} />
+      : (props: BottomTabBarProps) => (
+          <BottomTabBar {...props} role="teacher" />
         );
   return (
     <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={tabBar}>
       <Tab.Screen name="Home" component={TeacherHomeScreen} />
       <Tab.Screen name="Assessments" component={TeacherAssessmentsScreen} />
       <Tab.Screen name="Classes" component={TeacherClassesScreen} />
-      <Tab.Screen name="Announcements" component={TeacherAnnouncementsScreen as never} />
       <Tab.Screen name="Sections" component={TeacherSectionsScreen} />
       <Tab.Screen name="Profile" component={TeacherProfileScreen} />
     </Tab.Navigator>
@@ -854,8 +854,8 @@ function AdminTabs() {
   const tabBar =
     Platform.OS === "web"
       ? undefined
-      : (props: Parameters<typeof BottomTabBar>[0]) => (
-          <BottomTabBar {...props} />
+      : (props: BottomTabBarProps) => (
+          <BottomTabBar {...props} role="admin" />
         );
 
   return (
@@ -863,7 +863,6 @@ function AdminTabs() {
       <Tab.Screen name="Home" component={AdminHomeScreen} />
       <Tab.Screen name="Classes" component={AdminClassesScreen} />
       <Tab.Screen name="Assessments" component={AdminAssessmentsScreen} />
-      <Tab.Screen name="Announcements" component={AdminAnnouncementsScreen} />
       <Tab.Screen name="Academic" component={AdminAcademicScreen} />
       <Tab.Screen name="Profile" component={AdminProfileScreen} />
     </Tab.Navigator>
@@ -877,6 +876,7 @@ function AdminNavigator() {
       <RootStack.Screen name="Notifications" component={NotificationsInboxScreen as never} />
       <RootStack.Screen name="AdminTools" component={AdminToolsScreen} />
       <RootStack.Screen name="AdminAcademic" component={AdminAcademicScreen} />
+      <RootStack.Screen name="AdminAnnouncements" component={AdminAnnouncementsScreen} />
       <RootStack.Screen name="TeacherClassDetail" component={TeacherClassDetailScreen} />
       <RootStack.Screen name="TeacherSectionDetail" component={TeacherSectionDetailScreen} />
       <RootStack.Screen name="TeacherSectionAddStudents" component={TeacherSectionAddStudentsScreen} />

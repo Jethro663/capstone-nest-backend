@@ -13,6 +13,17 @@ import {
 import type { MainTabParamList, RootStackParamList } from "../../navigation/types";
 
 describe("teacher parity navigation", () => {
+  it("keeps five permanent tabs and reaches Announcements through the stack", () => {
+    expect(teacherTabRouteNames).toEqual([
+      "Home",
+      "Assessments",
+      "Classes",
+      "Sections",
+      "Profile",
+    ]);
+    expect(teacherStackRouteNames).toContain("TeacherAnnouncements");
+  });
+
   it("keeps the required teacher route set typed across tabs and stack routes", () => {
     const tabRoutes: ReadonlyArray<keyof MainTabParamList> = teacherTabRouteNames;
     const stackRoutes: ReadonlyArray<keyof RootStackParamList> = teacherStackRouteNames;

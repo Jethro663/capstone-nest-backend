@@ -4123,6 +4123,7 @@ describe("mobile rendered screen flows", () => {
     act(() => {
       testRenderer = TestRenderer.create(
         React.createElement(BottomTabBar, {
+          role: "student",
           state: {
             index: 2,
             routes: [
@@ -4161,7 +4162,7 @@ describe("mobile rendered screen flows", () => {
     const homeIndex = renderedText.indexOf("Home");
     const classesIndex = renderedText.indexOf("Classes");
     const jaIndex = renderedText.indexOf("JA");
-    const assessmentsIndex = renderedText.indexOf("Assessment");
+    const assessmentsIndex = renderedText.indexOf("Assessments");
     const profileIndex = renderedText.indexOf("Profile");
 
     expect(homeIndex).toBeGreaterThanOrEqual(0);

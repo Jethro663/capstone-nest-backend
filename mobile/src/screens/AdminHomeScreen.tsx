@@ -10,7 +10,8 @@ type Props = BottomTabScreenProps<MainTabParamList, "Home">;
 
 export function AdminHomeScreen({ navigation }: Props) {
   const overview = useQuery({ queryKey: ["admin-overview"], queryFn: () => adminApi.getOverview() });
-  const openTool = (section: RootStackParamList["AdminTools"]["section"]) => (navigation.getParent() as unknown as { navigate: (name: string, params?: unknown) => void })?.navigate("AdminTools", { section });
+  const rootNavigation = navigation.getParent() as unknown as { navigate: (name: keyof RootStackParamList, params?: unknown) => void };
+  const openTool = (section: RootStackParamList["AdminTools"]["section"]) => rootNavigation?.navigate("AdminTools", { section });
   const stats = overview.data?.stats;
 
   return (
@@ -27,6 +28,7 @@ export function AdminHomeScreen({ navigation }: Props) {
       </TeacherPanel>
       <TeacherPanel title="Administration modules" subtitle="Open a real RBAC workspace for each basic web administration domain.">
         <View style={{ padding: 14, flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          <TeacherActionButton label="Announcements" icon="bullhorn-outline" tone="blue" onPress={() => rootNavigation?.navigate("AdminAnnouncements")} />
           {([
             ["users", "Users", "account-multiple-outline"], ["evaluations", "Evaluations", "clipboard-check-outline"], ["calendar", "Calendar", "calendar-month-outline"], ["library", "Library", "folder-open-outline"], ["reports", "Reports", "chart-box-outline"], ["audit", "Audit log", "shield-star-outline"], ["diagnostics", "Diagnostics", "heart-pulse"], ["roster", "Roster import", "account-arrow-right-outline"], ["templates", "Class templates", "content-copy"], ["settings", "System settings", "cog-outline"], ["records", "Academic records", "book-check-outline"],
           ] as const).map(([key, label, icon]) => <TeacherActionButton key={key} label={label} icon={icon} tone="blue" onPress={() => openTool(key)} />)}

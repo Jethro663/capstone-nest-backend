@@ -15,6 +15,8 @@ import {
 type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
 type TabRouteItem = { name: string; key: string };
+export type BottomTabBarRole = "student" | "teacher" | "admin";
+type Props = BottomTabBarProps & { role: BottomTabBarRole };
 
 const studentTabOrder: Array<keyof MainTabParamList> = [
   "Dashboard",
@@ -27,10 +29,22 @@ const teacherTabOrder: Array<keyof MainTabParamList> = [
   "Home",
   "Assessments",
   "Classes",
-  "Announcements",
   "Sections",
   "Profile",
 ];
+const adminTabOrder: Array<keyof MainTabParamList> = [
+  "Home",
+  "Classes",
+  "Assessments",
+  "Academic",
+  "Profile",
+];
+
+const roleTabOrder: Record<BottomTabBarRole, Array<keyof MainTabParamList>> = {
+  student: studentTabOrder,
+  teacher: teacherTabOrder,
+  admin: adminTabOrder,
+};
 
 const routeConfig: Record<
   keyof MainTabParamList,
@@ -62,7 +76,7 @@ const routeConfig: Record<
     inactiveIcon: "account-group-outline",
   },
   Assessments: {
-    label: "Assessment",
+    label: "Assessments",
     activeIcon: "clipboard-text",
     inactiveIcon: "clipboard-text-outline",
   },
@@ -118,34 +132,21 @@ function orderRouteByName(
 }
 
 export function BottomTabBar({
+  role,
   state,
   descriptors,
   navigation,
-}: BottomTabBarProps) {
+}: Props) {
   const insets = useSafeAreaInsets();
   const activeRouteKey = state.routes[state.index]?.key;
-  const isStudentTabSet = state.routes.some((route) => route.name === "JA");
-  const isTeacherTabSet =
-    !isStudentTabSet &&
-    state.routes.some((route) => route.name === "Home") &&
-    state.routes.some((route) => route.name === "Classes") &&
-    state.routes.some((route) => route.name === "Sections") &&
-    state.routes.some((route) => route.name === "Assessments") &&
-    state.routes.some((route) => route.name === "Profile");
+  const tabOrder = roleTabOrder[role];
 
   const visibleRoutes = state.routes.filter((route) => {
     const routeName = route.name as keyof MainTabParamList;
-    if (!routeConfig[routeName]) return false;
-    if (isStudentTabSet) return studentTabOrder.includes(routeName);
-    if (isTeacherTabSet) return teacherTabOrder.includes(routeName);
-    return true;
+    return Boolean(routeConfig[routeName] && tabOrder.includes(routeName));
   });
 
-  const orderedRoutes = isStudentTabSet
-    ? orderRouteByName(visibleRoutes as TabRouteItem[], studentTabOrder)
-    : isTeacherTabSet
-      ? orderRouteByName(visibleRoutes as TabRouteItem[], teacherTabOrder)
-      : visibleRoutes;
+  const orderedRoutes = orderRouteByName(visibleRoutes as TabRouteItem[], tabOrder);
 
   return (
     <View
@@ -155,7 +156,8 @@ export function BottomTabBar({
         left: 0,
         right: 0,
         bottom: 0,
-        paddingBottom: Math.max(insets.bottom, 14),
+        paddingBottom: Math.max(insets.bottom, 8),
+        backgroundColor: skillStream.elevated,
       }}
     >
       <View
@@ -173,9 +175,7 @@ export function BottomTabBar({
         {orderedRoutes.map((route) => {
           const focused = activeRouteKey === route.key;
           const config = routeConfig[route.name as keyof MainTabParamList];
-          const isStudentCenter = isStudentTabSet && route.name === "JA";
-          const isTeacherCenter = isTeacherTabSet && route.name === "Classes";
-          const isCenter = isStudentCenter || isTeacherCenter;
+          const isStudentCenter = role === "student" && route.name === "JA";
 
           const onPress = () => {
             const event = navigation.emit({
@@ -196,25 +196,21 @@ export function BottomTabBar({
             });
           };
 
-          if (isCenter) {
+          if (isStudentCenter) {
             return (
               <View key={route.key} style={{ flex: 1, alignItems: "center" }}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={focused ? { selected: true } : {}}
-                  accessibilityLabel={
-                    descriptors[route.key].options.tabBarAccessibilityLabel
-                  }
+                  accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel || config.label}
                   onPress={onPress}
                   onLongPress={onLongPress}
-                  style={{ alignItems: "center", width: "100%" }}
+                  style={{ alignItems: "center", width: "100%", minHeight: 56 }}
                 >
                   <LinearGradient
                     colors={
                       focused
-                        ? isTeacherCenter
-                          ? gradients.classes
-                          : gradients.ja
+                        ? gradients.ja
                         : [
                             modernAcademic.primary,
                             modernAcademic.primaryContainer,
@@ -238,6 +234,8 @@ export function BottomTabBar({
                     />
                   </LinearGradient>
                   <Text
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.2}
                     style={{
                       marginTop: 4,
                       marginBottom: 10,
@@ -246,7 +244,7 @@ export function BottomTabBar({
                       color: focused ? colors.primary : colors.textSecondary,
                     }}
                   >
-                    {isTeacherCenter ? "My Classes" : config.label}
+                    {config.label}
                   </Text>
                 </Pressable>
               </View>
@@ -258,9 +256,7 @@ export function BottomTabBar({
               key={route.key}
               accessibilityRole="button"
               accessibilityState={focused ? { selected: true } : {}}
-              accessibilityLabel={
-                descriptors[route.key].options.tabBarAccessibilityLabel
-              }
+              accessibilityLabel={descriptors[route.key].options.tabBarAccessibilityLabel || config.label}
               onPress={onPress}
               onLongPress={onLongPress}
               style={{
@@ -278,8 +274,10 @@ export function BottomTabBar({
                 color={focused ? colors.primary : colors.textSecondary}
               />
               <Text
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.2}
                 style={{
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: focused ? "800" : "600",
                   color: focused ? colors.primary : colors.textSecondary,
                 }}
