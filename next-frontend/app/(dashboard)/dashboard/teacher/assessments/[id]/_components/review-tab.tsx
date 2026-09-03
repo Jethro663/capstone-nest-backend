@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/utils/cn';
 import { RichTextRenderer } from '@/components/shared/rich-text/RichTextRenderer';
 import type {
@@ -119,9 +118,9 @@ function formatTimelineAction(entry: SubmissionTimelineEntry, attempts: StudentA
     case 'assessment.submission.auto_submitted':
       return `${attemptLabel}: auto-submitted`;
     case 'assessment.grade.returned':
-      return `${attemptLabel}: grade posted`;
+      return `${attemptLabel}: score released`;
     case 'assessment.grade.unreturned':
-      return `${attemptLabel}: posted grade withdrawn`;
+      return `${attemptLabel}: released score withdrawn`;
     default:
       return `${attemptLabel}: ${entry.action}`;
   }
@@ -135,10 +134,10 @@ const STATUS_COLORS: Record<SubmissionStatus, string> = {
 };
 
 const STATUS_LABELS: Record<SubmissionStatus, string> = {
-  not_started: 'Not Started',
-  in_progress: 'In Progress',
-  turned_in: 'Pending Score',
-  returned: 'Posted',
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  turned_in: 'Awaiting release',
+  returned: 'Released',
 };
 
 export function ReviewTab({ assessmentId, submissions, onGradeReturned }: ReviewTabProps) {
@@ -280,7 +279,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
             : undefined,
       });
       toast.success(
-        `Grade returned to ${selectedStudent.firstName} ${selectedStudent.lastName} (Attempt ${selectedAttempt.attemptNumber ?? '?'})`,
+        `Score released to ${selectedStudent.firstName} ${selectedStudent.lastName} (Attempt ${selectedAttempt.attemptNumber ?? '?'})`,
       );
       onGradeReturned();
     } catch (err: unknown) {
@@ -290,7 +289,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
         'response' in err &&
         typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === 'string'
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : 'Failed to return grade';
+          : 'Failed to release score';
       toast.error(errorMessage);
     } finally {
       setReturning(false);
@@ -303,7 +302,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
       setUnreturning(true);
       await assessmentService.unreturnGrade(selectedAttempt.id);
       toast.success(
-        `Posted grade restored to pending review for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
+        `Released score restored to pending review for ${selectedStudent.firstName} ${selectedStudent.lastName}`,
       );
       onGradeReturned();
     } catch (err: unknown) {
@@ -313,7 +312,7 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
         'response' in err &&
         typeof (err as { response?: { data?: { message?: string } } }).response?.data?.message === 'string'
           ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
-          : 'Failed to restore the posted grade';
+          : 'Failed to restore the released score';
       toast.error(errorMessage);
     } finally {
       setUnreturning(false);
@@ -326,11 +325,22 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
     return name.includes(search.toLowerCase());
   });
 
-  if (!hasAssessmentId || studentsWithAttempts.length === 0) {
+  if (!hasAssessmentId || submissions === null) {
     return (
-      <Card>
-        <CardContent className="py-16 text-center text-muted-foreground">
-          <p className="text-lg font-medium mb-1">No submissions to review</p>
+      <Card className="border-slate-200 bg-white shadow-none">
+        <CardContent className="py-16 text-center text-slate-600">
+          <p className="mb-1 text-lg font-semibold text-slate-800">Submissions are temporarily unavailable</p>
+          <p className="text-sm">Use Retry above to load student work before grading.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (studentsWithAttempts.length === 0) {
+    return (
+      <Card className="border-slate-200 bg-white shadow-none">
+        <CardContent className="py-16 text-center text-slate-600">
+          <p className="mb-1 text-lg font-semibold text-slate-800">No submissions to review</p>
           <p className="text-sm">Student answers will appear here once they submit the assessment.</p>
         </CardContent>
       </Card>
@@ -338,28 +348,30 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
   }
 
   return (
-    <div className="flex min-h-[500px] gap-4 rounded-[1.15rem] bg-slate-50/70 p-3">
+    <div className="grid min-h-[500px] grid-cols-1 gap-4 rounded-lg border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[18rem_minmax(0,1fr)]">
       {/* Left Sidebar — Student List */}
-      <div className="w-72 shrink-0 space-y-3">
+      <div className="min-w-0 space-y-3">
+        <label htmlFor="assessment-student-search" className="block text-sm font-semibold text-slate-700">
+          Search students
+        </label>
         <input
-          type="text"
+          id="assessment-student-search"
+          type="search"
           placeholder="Search students…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700 shadow-[0_8px_24px_-20px_rgba(15,23,42,0.3)] focus:outline-none focus:ring-2 focus:ring-slate-300"
+          className="min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-200"
         />
         <div className="max-h-[460px] space-y-2 overflow-y-auto pr-1">
-          {filteredStudents.map((student, i) => (
-            <motion.button
+          {filteredStudents.map((student) => (
+            <button
               key={student.studentId}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.03 }}
+              type="button"
               onClick={() => setSelectedStudentId(student.studentId)}
               className={cn(
-                'w-full rounded-xl border px-3 py-3 text-left text-sm shadow-[0_10px_24px_-24px_rgba(15,23,42,0.35)] transition-colors',
+                'min-h-16 w-full rounded-md border px-3 py-3 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200',
                 selectedStudentId === student.studentId
-                  ? 'border-slate-300 bg-white'
+                  ? 'border-slate-400 bg-white'
                   : 'border-slate-200 bg-white hover:bg-slate-50',
               )}
             >
@@ -367,64 +379,58 @@ export function ReviewTab({ assessmentId, submissions, onGradeReturned }: Review
                 {student.lastName}, {student.firstName}
               </p>
               <div className="flex items-center justify-between mt-1">
-                <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-medium', STATUS_COLORS[student.status])}>
+                <span className={cn('inline-flex min-h-8 items-center rounded-md px-2.5 py-1 text-sm font-semibold', STATUS_COLORS[student.status])}>
                   {STATUS_LABELS[student.status]}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-muted-foreground">
-                    {student.totalAttempts ?? student.attempts?.length ?? (student.attempt ? 1 : 0)} att.
+                  <span className="text-sm text-muted-foreground">
+                    {student.totalAttempts ?? student.attempts?.length ?? (student.attempt ? 1 : 0)} attempt{(student.totalAttempts ?? student.attempts?.length ?? (student.attempt ? 1 : 0)) === 1 ? '' : 's'}
                   </span>
                 {student.attempt?.score != null && (
-                  <span className="text-xs font-semibold">{student.attempt.score}%</span>
+                  <span className="text-sm font-semibold">{student.attempt.score}%</span>
                 )}
                 </div>
               </div>
-            </motion.button>
+            </button>
           ))}
         </div>
       </div>
 
       {/* Right Panel — Student Attempt Detail */}
-      <div className="flex-1 min-w-0">
-        <AnimatePresence mode="wait">
-          {loadingAttempt ? (
-            <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3">
-              <Skeleton className="h-20 rounded-lg" />
-              <Skeleton className="h-40 rounded-lg" />
-              <Skeleton className="h-40 rounded-lg" />
-            </motion.div>
-          ) : attemptData && selectedStudent ? (
-            <motion.div key={selectedStudent.studentId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-              <AttemptDetailPanel
-                student={selectedStudent}
-                selectedAttempt={selectedAttempt}
-                attempts={reviewableAttempts}
-                onSelectAttempt={setSelectedAttemptId}
-                data={attemptData}
-                feedback={feedback}
-                setFeedback={setFeedback}
-                directScore={directScore}
-                setDirectScore={setDirectScore}
-                manualScoreInputs={manualScoreInputs}
-                setManualScoreInputs={setManualScoreInputs}
-                rubricScores={rubricScores}
-                setRubricScores={setRubricScores}
-                onReturn={handleReturnGrade}
-                onUndoReturn={handleUnreturnGrade}
-                returning={returning}
-                unreturning={unreturning}
-              />
-            </motion.div>
-          ) : (
-            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <Card>
-                <CardContent className="py-16 text-center text-muted-foreground">
-                  Select a student to review their answers.
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      <div className="min-w-0">
+        {loadingAttempt ? (
+          <div className="space-y-3" aria-label="Loading student attempt">
+            <Skeleton className="h-20 rounded-lg" />
+            <Skeleton className="h-40 rounded-lg" />
+            <Skeleton className="h-40 rounded-lg" />
+          </div>
+        ) : attemptData && selectedStudent ? (
+          <AttemptDetailPanel
+            student={selectedStudent}
+            selectedAttempt={selectedAttempt}
+            attempts={reviewableAttempts}
+            onSelectAttempt={setSelectedAttemptId}
+            data={attemptData}
+            feedback={feedback}
+            setFeedback={setFeedback}
+            directScore={directScore}
+            setDirectScore={setDirectScore}
+            manualScoreInputs={manualScoreInputs}
+            setManualScoreInputs={setManualScoreInputs}
+            rubricScores={rubricScores}
+            setRubricScores={setRubricScores}
+            onReturn={handleReturnGrade}
+            onUndoReturn={handleUnreturnGrade}
+            returning={returning}
+            unreturning={unreturning}
+          />
+        ) : (
+          <Card className="border-slate-200 bg-white shadow-none">
+            <CardContent className="py-16 text-center text-slate-600">
+              Select a student to review their answers.
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
@@ -605,9 +611,9 @@ function AttemptDetailPanel({
   return (
     <div className="space-y-4">
       {attempts.length > 1 && (
-        <Card>
+        <Card className="border-slate-200 bg-white shadow-none">
           <CardContent className="p-4 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Attempts</p>
+            <p className="text-sm font-semibold text-muted-foreground">Attempts</p>
             <div className="flex flex-wrap gap-2">
               {attempts.map((attempt) => (
                 <button
@@ -615,7 +621,7 @@ function AttemptDetailPanel({
                   type="button"
                   onClick={() => onSelectAttempt(attempt.id)}
                   className={cn(
-                    'rounded-md border px-3 py-1.5 text-left transition-colors',
+                    'min-h-10 rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200',
                     selectedAttempt?.id === attempt.id
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:bg-muted',
@@ -624,18 +630,18 @@ function AttemptDetailPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold">Attempt {attempt.attemptNumber ?? '?'}</span>
                     {attempt.isReturned ? (
-                      <Badge className="h-5 px-1.5 text-[10px]" variant="default">Posted</Badge>
+                      <Badge className="min-h-8 px-2.5 text-sm" variant="default">Released</Badge>
                     ) : (
-                      <Badge className="h-5 px-1.5 text-[10px]" variant="secondary">Pending</Badge>
+                      <Badge className="min-h-8 px-2.5 text-sm" variant="secondary">Awaiting release</Badge>
                     )}
                     {attempt.id === latestAttemptId && (
-                      <Badge className="h-5 px-1.5 text-[10px]" variant="outline">Latest</Badge>
+                      <Badge className="min-h-8 px-2.5 text-sm" variant="outline">Latest</Badge>
                     )}
                     {attempt.isLate && (
-                      <Badge className="h-5 px-1.5 text-[10px]" variant="destructive">Late</Badge>
+                      <Badge className="min-h-8 px-2.5 text-sm" variant="destructive">Late</Badge>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {formatDateTime(attempt.submittedAt)}
                     {attempt.score != null ? ` | ${attempt.score}%` : ''}
                   </p>
@@ -647,26 +653,26 @@ function AttemptDetailPanel({
       )}
 
       {isFileUploadAssessment && timeline.length > 0 && (
-        <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+        <Card className="border-slate-200 bg-white shadow-none">
           <CardContent className="p-0">
             <button
               type="button"
               onClick={() => setTimelineOpen((current) => !current)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-slate-50"
+              className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-200"
             >
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-sm font-semibold text-slate-600">
                   Submission Timeline
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
-                  Full history of uploads, submits, reversals, and score posting.
+                  Full history of uploads, submits, reversals, and score release.
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                <Badge variant="outline" className="border-slate-200 bg-white text-sm text-slate-600">
                   {timeline.length} events
                 </Badge>
-                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <span className="text-sm font-semibold text-slate-600">
                   {timelineOpen ? 'Hide' : 'Show'}
                 </span>
               </div>
@@ -676,18 +682,18 @@ function AttemptDetailPanel({
               {timeline.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 md:flex-row md:items-start md:justify-between"
+                  className="flex flex-col gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 md:flex-row md:items-start md:justify-between"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-900">
                       {formatTimelineAction(entry, attempts)}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-sm text-slate-600">
                       {entry.actorName ? `${entry.actorName} • ` : ''}{formatDateTime(entry.createdAt)}
                     </p>
                   </div>
                   {entry.attemptId === selectedAttempt?.id ? (
-                    <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                    <Badge variant="outline" className="border-slate-200 bg-white text-sm text-slate-600">
                       Current attempt
                     </Badge>
                   ) : null}
@@ -699,7 +705,7 @@ function AttemptDetailPanel({
         </Card>
       )}
 
-      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+      <Card className="border-slate-200 bg-white shadow-none">
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -709,16 +715,16 @@ function AttemptDetailPanel({
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 {student.email && <p className="text-sm text-slate-600">{student.email}</p>}
                 {submittedAt && (
-                  <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-700">
+                  <Badge variant="outline" className="border-slate-200 bg-white text-sm text-slate-700">
                     Submitted: {formatDateTime(submittedAt)}
                   </Badge>
                 )}
                 {selectedAttempt?.isLate ? (
-                  <Badge variant="destructive" className="text-[11px]">
+                  <Badge variant="destructive" className="text-sm">
                     Late{selectedAttempt.lateByMinutes ? ` (${selectedAttempt.lateByMinutes} min)` : ''}
                   </Badge>
                 ) : submittedAt ? (
-                  <Badge className="border-0 bg-slate-700 text-[11px] text-white hover:bg-slate-700">On Time</Badge>
+                  <Badge className="border-0 bg-slate-700 text-sm text-white hover:bg-slate-700">On Time</Badge>
                 ) : null}
               </div>
               <p className="mt-2 text-base font-medium text-slate-900">
@@ -730,7 +736,7 @@ function AttemptDetailPanel({
                 {score}%
               </p>
               {totalPoints > 0 && (
-                <p className="text-xs text-slate-500">
+                <p className="text-sm text-slate-600">
                   {Math.round((score / 100) * totalPoints)} / {totalPoints} pts
                 </p>
               )}
@@ -740,21 +746,21 @@ function AttemptDetailPanel({
       </Card>
 
       {hasSubmissionFile && selectedAttempt?.id && (
-        <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+        <Card className="border-slate-200 bg-white shadow-none">
           <CardContent className="p-4 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                <p className="text-sm font-semibold text-slate-600">
                   {submittedFiles.length > 1 ? 'Submitted Files' : 'Submitted File'}
                 </p>
-                <p className="text-xs text-slate-600">
+                <p className="text-sm text-slate-600">
                   {submittedFiles.length > 1
                     ? `${submittedFiles.length} attachments were submitted with this attempt.`
                     : 'Review the uploaded file below.'}
                 </p>
               </div>
               {submittedFiles.length > 1 ? (
-                <Badge variant="outline" className="border-slate-200 bg-white text-[11px] text-slate-600">
+                <Badge variant="outline" className="border-slate-200 bg-white text-sm text-slate-600">
                   {submittedFiles.length} attachments
                 </Badge>
               ) : null}
@@ -767,14 +773,14 @@ function AttemptDetailPanel({
                 return (
                   <div
                     key={file.id}
-                    className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between"
+                    className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 md:flex-row md:items-center md:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      <p className="text-sm font-semibold text-slate-600">
                         Attachment {index + 1}
                       </p>
                       <p className="text-sm font-semibold text-slate-900 truncate">{file.originalName}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm text-slate-600">
                         {(file.sizeBytes / (1024 * 1024)).toFixed(2)} MB | {file.mimeType}
                       </p>
                     </div>
@@ -782,6 +788,7 @@ function AttemptDetailPanel({
                       <Button
                         variant="outline"
                         size="sm"
+                        className="min-h-10"
                         onClick={() => void handlePreviewFile(file)}
                         disabled={previewLoading && isPreviewingCurrentFile}
                         aria-label={`Preview ${file.originalName}`}
@@ -797,6 +804,7 @@ function AttemptDetailPanel({
                       <Button
                         variant="outline"
                         size="sm"
+                        className="min-h-10"
                         onClick={() => void assessmentService.downloadAttemptSubmissionAttachmentFile(
                           selectedAttempt.id,
                           file.id,
@@ -873,14 +881,14 @@ function AttemptDetailPanel({
             />
           ))
         ) : hasSubmissionFile ? (
-          <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+          <Card className="border-slate-200 bg-white shadow-none">
             <CardContent className="py-8 text-center text-sm text-slate-500">
               This attempt was submitted as an uploaded file. Use the preview or download actions above to review it.
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
+          <Card className="border-slate-200 bg-white shadow-none">
+            <CardContent className="py-8 text-center text-sm text-slate-600">
               No answer data was recorded for this attempt.
             </CardContent>
           </Card>
@@ -888,18 +896,18 @@ function AttemptDetailPanel({
       </div>
 
       {isFileUploadAssessment ? (
-      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+      <Card className="border-slate-200 bg-white shadow-none">
           <CardContent className="space-y-4 p-5">
             <div>
               <p className="text-sm font-semibold text-slate-900">Scoring</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-sm text-slate-600">
                 {rubricCriteria.length > 0
-                  ? 'Score each rubric criterion before returning the grade.'
-                  : 'No rubric is attached, so return a direct score from 0 to 100.'}
+                  ? 'Score each rubric criterion before releasing the score.'
+                  : 'No rubric is attached, so release a direct score from 0 to 100.'}
               </p>
               {isReturned ? (
-                <p className="mt-2 text-xs font-medium text-slate-600">
-                  Undo the posted grade first if you need to make a correction.
+                <p className="mt-2 text-sm font-medium text-slate-600">
+                  Restore the released score to review first if you need to make a correction.
                 </p>
               ) : null}
             </div>
@@ -909,15 +917,15 @@ function AttemptDetailPanel({
                 {rubricCriteria.map((criterion) => {
                   const currentScore = rubricScores.find((score) => score.criterionId === criterion.id);
                   return (
-                    <div key={criterion.id} className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 md:grid-cols-[1.3fr_160px]">
+                    <div key={criterion.id} className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 md:grid-cols-[1.3fr_160px]">
                       <div className="space-y-1">
                         <p className="font-medium text-slate-900">{criterion.title}</p>
                         {criterion.description && (
-                          <p className="text-xs text-slate-500">{criterion.description}</p>
+                          <p className="text-sm text-slate-600">{criterion.description}</p>
                         )}
                       </div>
                       <div className="space-y-1">
-                        <p className="text-xs text-slate-500">Points earned / {criterion.points}</p>
+                        <p className="text-sm text-slate-600">Points earned / {criterion.points}</p>
                         <input
                           type="text"
                           inputMode="numeric"
@@ -952,7 +960,7 @@ function AttemptDetailPanel({
                             )));
                           }}
                           disabled={!isLatestAttempt || isReturned}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
                           aria-label={`${criterion.title} points`}
                         />
                       </div>
@@ -962,7 +970,7 @@ function AttemptDetailPanel({
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Direct score</p>
+                <p className="text-sm font-semibold text-muted-foreground">Direct score</p>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -976,7 +984,7 @@ function AttemptDetailPanel({
                     setDirectScore(normalizedValue === '' ? '0' : normalizedValue);
                   }}
                   disabled={!isLatestAttempt || isReturned}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 outline-none transition-colors focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
                   aria-label="Direct score"
                 />
               </div>
@@ -985,11 +993,11 @@ function AttemptDetailPanel({
         </Card>
       ) : null}
 
-      <Card className="border-slate-200 bg-white shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+      <Card className="border-slate-200 bg-white shadow-none">
           <CardContent className="space-y-4 p-5">
             {!isLatestAttempt ? (
-              <p className="text-xs font-medium text-amber-700">
-                Grades can only be returned for the latest submission. Earlier uploads stay visible for history only.
+              <p className="text-sm font-medium text-amber-700">
+                Scores can only be released for the latest submission. Earlier uploads stay visible for history only.
               </p>
             ) : null}
             <Textarea
@@ -1008,13 +1016,13 @@ function AttemptDetailPanel({
               >
                 {unreturning
                   ? 'Restoring...'
-                  : `Undo Posted Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
+                  : `Restore to review${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
               </Button>
             ) : (
-              <Button onClick={onReturn} disabled={returning || !isLatestAttempt} className="w-full bg-slate-900 text-white hover:bg-slate-800">
+              <Button onClick={onReturn} disabled={returning || !isLatestAttempt} className="w-full bg-red-700 text-white hover:bg-red-800">
                 {returning
-                  ? 'Returning...'
-                  : `Return Grade${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
+                  ? 'Releasing...'
+                  : `Release score${selectedAttempt?.attemptNumber ? ` (Attempt ${selectedAttempt.attemptNumber})` : ''}`}
               </Button>
             )}
           </CardContent>
@@ -1022,7 +1030,7 @@ function AttemptDetailPanel({
 
       {isReturned && (
         <div className="py-2 text-center text-sm font-medium text-emerald-600">
-          Grade has been returned to this student
+          Score has been released to this student
         </div>
       )}
     </div>
@@ -1048,11 +1056,11 @@ function ResponseCard({
   const question = r.question;
   if (!question) {
     return (
-      <Card className="border-l-4 border-l-gray-300">
+      <Card className="border-slate-200 border-l-4 border-l-gray-300 bg-white shadow-none">
         <CardContent className="p-4 space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-muted-foreground">Q{index + 1}</span>
-            <span className="text-xs text-muted-foreground">Question data unavailable</span>
+            <span className="text-sm font-semibold text-muted-foreground">Q{index + 1}</span>
+            <span className="text-sm text-muted-foreground">Question data unavailable</span>
           </div>
           {r.studentAnswer ? (
             <p className="text-sm bg-muted/50 rounded px-3 py-1.5">{r.studentAnswer}</p>
@@ -1069,15 +1077,15 @@ function ResponseCard({
 
   return (
     <Card className={cn(
-      'border-l-4',
+      'border-slate-200 border-l-4 bg-white shadow-none',
       isCorrect ? 'border-l-emerald-500' : isWrong ? 'border-l-red-400' : 'border-l-gray-300',
     )}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-muted-foreground">Q{index + 1}</span>
-              <Badge variant="outline" className="text-[10px] capitalize">
+              <span className="text-sm font-semibold text-muted-foreground">Q{index + 1}</span>
+              <Badge variant="outline" className="text-sm capitalize">
                 {question.type?.replace('_', ' ')}
               </Badge>
             </div>
@@ -1102,7 +1110,7 @@ function ResponseCard({
                     / {question.points} pt{question.points === 1 ? '' : 's'}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-sm text-slate-600">
                   {r.isCorrect === null || r.isCorrect === undefined ? 'Teacher-scored' : 'Auto-graded'}
                 </p>
               </div>
@@ -1118,7 +1126,7 @@ function ResponseCard({
         </div>
 
         {question.imageUrl && (
-          <div className="overflow-hidden rounded-xl border">
+          <div className="overflow-hidden rounded-lg border">
             <Image
               src={question.imageUrl}
               alt="Question"
@@ -1162,7 +1170,7 @@ function ResponseCard({
         {((r.selectedOptionId && question.options?.length) ||
           ((r.selectedOptionIds?.length ?? 0) > 0 && question.options?.length)) && (
           <div className="mt-1">
-            <p className="text-xs text-muted-foreground mb-0.5">Captured answer:</p>
+            <p className="mb-1 text-sm text-muted-foreground">Captured answer:</p>
             <p className="text-sm bg-muted/50 rounded px-3 py-1.5">
               {r.selectedOptionId
                 ? question.options?.find((opt) => opt.id === r.selectedOptionId)?.text || r.selectedOptionId
@@ -1175,7 +1183,7 @@ function ResponseCard({
 
         {!r.studentAnswer && (!question.options || question.options.length === 0) && (
           <div className="mt-1">
-            <p className="text-xs text-muted-foreground mb-0.5">Student answer:</p>
+            <p className="mb-1 text-sm text-muted-foreground">Student answer:</p>
             <p className="text-sm text-muted-foreground bg-muted/30 rounded px-3 py-1.5">No answer submitted.</p>
           </div>
         )}
@@ -1183,14 +1191,14 @@ function ResponseCard({
         {/* Text answer */}
         {r.studentAnswer && (
           <div className="mt-1">
-            <p className="text-xs text-muted-foreground mb-0.5">Student answer:</p>
+            <p className="mb-1 text-sm text-muted-foreground">Student answer:</p>
             <p className="text-sm bg-muted/50 rounded px-3 py-1.5">{r.studentAnswer}</p>
           </div>
         )}
 
         {/* Explanation */}
         {question.explanation && (
-          <div className="text-xs text-muted-foreground italic mt-1">
+          <div className="mt-1 text-sm italic text-muted-foreground">
             <span className="mr-1">💡</span>
             <RichTextRenderer html={question.explanation} />
           </div>

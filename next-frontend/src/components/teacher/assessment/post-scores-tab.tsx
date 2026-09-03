@@ -51,16 +51,16 @@ type SubmissionRow = {
 };
 
 const STATUS_CONFIG: Record<SubmissionStatus, { label: string; badgeColor: string }> = {
-  not_started: { label: 'Not Started', badgeColor: 'bg-slate-100 text-slate-600' },
-  in_progress: { label: 'In Progress', badgeColor: 'bg-sky-100 text-sky-700' },
-  turned_in: { label: 'Pending Score', badgeColor: 'bg-amber-100 text-amber-700' },
-  returned: { label: 'Posted', badgeColor: 'bg-emerald-100 text-emerald-700' },
+  not_started: { label: 'Not started', badgeColor: 'bg-slate-100 text-slate-600' },
+  in_progress: { label: 'In progress', badgeColor: 'bg-sky-100 text-sky-700' },
+  turned_in: { label: 'Awaiting release', badgeColor: 'bg-amber-100 text-amber-700' },
+  returned: { label: 'Released', badgeColor: 'bg-emerald-100 text-emerald-700' },
 };
 
 const FILTER_COPY: Record<ScoreFilter, { label: string; description: string }> = {
   all: { label: 'All students', description: 'See the full roster with the latest score state.' },
-  pending: { label: 'Pending scores', description: 'Students who submitted and still need score posting.' },
-  posted: { label: 'Already scored', description: 'Students whose grades are already visible.' },
+  pending: { label: 'Awaiting release', description: 'Students who submitted and still need score release.' },
+  posted: { label: 'Released', description: 'Students whose scores are already visible.' },
   no_submission: { label: 'No submission', description: 'Students who have not turned in a submission yet.' },
 };
 
@@ -161,13 +161,13 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
         attemptIds: selectedAttemptIds,
         teacherFeedback: feedback || undefined,
       });
-      toast.success(`${selectedAttemptIds.length} grade${selectedAttemptIds.length === 1 ? '' : 's'} posted to students`);
+      toast.success(`${selectedAttemptIds.length} score${selectedAttemptIds.length === 1 ? '' : 's'} released to students`);
       setSelectedAttemptIds([]);
       setFeedback('');
       setPostSelectedOpen(false);
       onDataChanged();
     } catch (error: unknown) {
-      toast.error(toErrorMessage(error, 'Failed to post selected grades'));
+      toast.error(toErrorMessage(error, 'Failed to release selected scores'));
     } finally {
       setPostingSelected(false);
     }
@@ -222,34 +222,44 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
     }
   };
 
+  if (!submissions) {
+    return (
+      <Card className="border-slate-200 bg-white shadow-none">
+        <CardContent className="py-16 text-center text-slate-600">
+          <p className="mb-1 text-lg font-semibold text-slate-800">Scores are temporarily unavailable</p>
+          <p className="text-sm">Use Retry above to load the score roster.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <Card className="border-slate-200 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.35)]">
+      <Card className="overflow-hidden rounded-lg border-slate-200 shadow-none">
         <CardContent className="p-0">
           <div className="space-y-4 border-b border-slate-200 px-5 py-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Score Posting
+                <p className="text-sm font-semibold text-slate-500">
+                  Score release
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-slate-900">
-                  Select pending submissions and post their scores in bulk.
+                  Select reviewed submissions and release their scores in bulk.
                 </h3>
                 <p className="mt-1 text-sm text-slate-600">
                   {FILTER_COPY[activeFilter].label}: {visibleRows.length} student{visibleRows.length === 1 ? '' : 's'} in this view.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={handleExportExcel} className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100">
+                <Button variant="outline" onClick={handleExportExcel} className="min-h-10 rounded-md border-slate-300 bg-white text-slate-700 hover:bg-slate-100">
                   Export Excel
                 </Button>
                 <Button
-                  size="sm"
                   onClick={() => setPostSelectedOpen(true)}
                   disabled={selectedCount === 0}
-                  className="bg-slate-900 text-white hover:bg-slate-800"
+                  className="min-h-10 rounded-md bg-red-700 text-white hover:bg-red-800"
                 >
-                  Post Selected ({selectedCount})
+                  Release selected ({selectedCount})
                 </Button>
               </div>
             </div>
@@ -267,15 +277,15 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
                     type="button"
                     onClick={() => setActiveFilter(filter)}
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors',
+                      'inline-flex min-h-10 items-center gap-2 rounded-md border px-3 py-2 text-sm font-semibold transition-colors',
                       activeFilter === filter
-                        ? 'border-slate-300 bg-slate-900 text-white'
+                        ? 'border-slate-800 bg-slate-800 text-white'
                         : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
                     )}
                   >
                     <span>{FILTER_COPY[filter].label}</span>
                     <span className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-semibold',
+                      'rounded-md px-2.5 py-1 text-sm font-semibold',
                       activeFilter === filter ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-600',
                     )}
                     >
@@ -286,14 +296,14 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
               </div>
 
               {selectableVisibleAttemptIds.length > 0 ? (
-                <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-600">
+                <label className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-600">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
                   />
-                  Select visible pending students
+                  Select visible awaiting-release students
                 </label>
               ) : null}
             </div>
@@ -308,22 +318,22 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
               <table className="w-full min-w-[780px]">
                 <thead className="bg-slate-50/70">
                   <tr className="border-b border-slate-200">
-                    <th className="w-12 px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      Pick
+                    <th className="w-12 px-4 py-3 text-left text-sm font-semibold text-slate-500">
+                      Select
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-500">
                       Student
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-500">
                       Submission
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      Score State
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-500">
+                      Status
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-slate-500">
                       Latest Score
                     </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    <th className="px-4 py-3 text-right text-sm font-semibold text-slate-500">
                       Actions
                     </th>
                   </tr>
@@ -344,29 +354,29 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
                               aria-label={`Select ${row.fullName}`}
                             />
                           ) : (
-                            <span className="text-xs text-slate-300">—</span>
+                            <span className="text-sm text-slate-400">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 align-top">
                           <p className="font-medium text-slate-900">{row.fullName}</p>
-                          <p className="mt-1 text-xs text-slate-500">{row.email ?? 'No email available'}</p>
-                          <p className="mt-1 text-xs text-slate-500">
+                          <p className="mt-1 text-sm text-slate-500">{row.email ?? 'No email available'}</p>
+                          <p className="mt-1 text-sm text-slate-500">
                             {row.totalAttempts} attempt{row.totalAttempts === 1 ? '' : 's'}
                           </p>
                         </td>
                         <td className="px-4 py-3 align-top">
-                          <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold', STATUS_CONFIG[row.status].badgeColor)}>
+                          <span className={cn('inline-flex min-h-7 items-center rounded-md px-2.5 py-1 text-sm font-semibold', STATUS_CONFIG[row.status].badgeColor)}>
                             {STATUS_CONFIG[row.status].label}
                           </span>
-                          <p className="mt-2 text-xs text-slate-500">
+                          <p className="mt-2 text-sm text-slate-500">
                             {row.submittedAt ? formatDate(row.submittedAt) : 'No submitted timestamp'}
                           </p>
                         </td>
                         <td className="px-4 py-3 align-top text-sm text-slate-700">
                           {row.bucket === 'pending'
-                            ? 'Pending post'
+                            ? 'Awaiting release'
                             : row.bucket === 'posted'
-                              ? 'Posted'
+                              ? 'Released'
                               : 'No score yet'}
                         </td>
                         <td className="px-4 py-3 text-right align-top">
@@ -387,8 +397,7 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
                           {row.attemptId ? (
                             <Button
                               variant="outline"
-                              size="sm"
-                              className="border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                              className="min-h-10 rounded-md border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900"
                               onClick={() => setPreviewAttemptId(row.attemptId)}
                             >
                               Preview
@@ -408,10 +417,10 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
       <Dialog open={postSelectedOpen} onOpenChange={setPostSelectedOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Post selected grades</DialogTitle>
+            <DialogTitle>Release selected scores</DialogTitle>
             <DialogDescription>
-              Post scores for {selectedCount} selected submission{selectedCount === 1 ? '' : 's'}.
-              Students will be able to see their grades immediately.
+              Release scores for {selectedCount} selected submission{selectedCount === 1 ? '' : 's'}.
+              Students will be able to see these scores immediately.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -425,7 +434,7 @@ export function PostScoresTab({ assessment, submissions, onDataChanged }: PostSc
               Cancel
             </Button>
             <Button onClick={handlePostSelected} disabled={postingSelected || selectedCount === 0}>
-              {postingSelected ? 'Posting...' : `Post Selected (${selectedCount})`}
+              {postingSelected ? 'Releasing...' : `Release selected (${selectedCount})`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, PenSquare } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CalendarDays, PenSquare, RefreshCw } from 'lucide-react';
 import { assessmentService } from '@/services/assessment-service';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ import type {
   QuestionAnalyticsResponse,
   SubmissionsResponse,
 } from '@/types/assessment';
-import { ResponsesTab } from '@/components/teacher/assessment/responses-tab';
+import { AssessmentOverview } from '@/components/teacher/assessment/assessment-overview';
 import { PostScoresTab } from '@/components/teacher/assessment/post-scores-tab';
 import { ReviewTab } from './_components/review-tab';
 import './assessment-detail.css';
@@ -50,134 +50,192 @@ export default function TeacherAssessmentDetailPage() {
   const [submissions, setSubmissions] = useState<SubmissionsResponse | null>(null);
   const [stats, setStats] = useState<AssessmentStats | null>(null);
   const [analytics, setAnalytics] = useState<QuestionAnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('responses');
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [partialFailures, setPartialFailures] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('overview');
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (mode: 'initial' | 'background' = 'initial') => {
+    const isBackground = mode === 'background';
     try {
-      setLoading(true);
-      const [assessmentRes, submissionsRes, statsRes, analyticsRes] = await Promise.all([
+      if (isBackground) {
+        setRefreshing(true);
+      } else {
+        setInitialLoading(true);
+        setLoadError(null);
+      }
+
+      const [assessmentResult, submissionsResult, statsResult, analyticsResult] = await Promise.allSettled([
         assessmentService.getById(assessmentId),
         assessmentService.getSubmissions(assessmentId),
         assessmentService.getStats(assessmentId),
         assessmentService.getQuestionAnalytics(assessmentId),
       ]);
-      setAssessment(assessmentRes.data);
-      setSubmissions(submissionsRes.data);
-      setStats(statsRes.data);
-      setAnalytics(analyticsRes.data);
-    } catch {
-      toast.error('Failed to load assessment data');
+
+      if (assessmentResult.status === 'rejected') {
+        if (isBackground) {
+          toast.error('Could not refresh the assessment. Your current view is unchanged.');
+        } else {
+          setAssessment(null);
+          setLoadError('We could not load this assessment.');
+        }
+        return;
+      }
+
+      setAssessment(assessmentResult.value.data);
+      setLoadError(null);
+
+      const failures: string[] = [];
+      if (submissionsResult.status === 'fulfilled') {
+        setSubmissions(submissionsResult.value.data);
+      } else {
+        failures.push('student activity');
+        if (!isBackground) setSubmissions(null);
+      }
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value.data);
+      } else {
+        failures.push('class performance');
+        if (!isBackground) setStats(null);
+      }
+      if (analyticsResult.status === 'fulfilled') {
+        setAnalytics(analyticsResult.value.data);
+      } else {
+        failures.push('question insights');
+        if (!isBackground) setAnalytics(null);
+      }
+      setPartialFailures(failures);
     } finally {
-      setLoading(false);
+      if (isBackground) {
+        setRefreshing(false);
+      } else {
+        setInitialLoading(false);
+      }
     }
   }, [assessmentId]);
 
   useEffect(() => {
-    void fetchData();
+    void fetchData('initial');
   }, [fetchData]);
 
   const backHref = assessment?.classId
     ? `/dashboard/teacher/classes/${assessment.classId}?view=assignments`
     : '/dashboard/teacher/assessments';
 
-  if (loading) {
+  if (initialLoading) {
     return (
-      <div className="teacher-assessment-detail">
-        <div className="teacher-assessment-detail__hero">
-          <Skeleton className="h-7 w-44 rounded-full" />
-          <Skeleton className="h-11 w-80 rounded-xl" />
-          <Skeleton className="h-5 w-64 rounded-lg" />
+      <div className="teacher-assessment-detail" data-testid="assessment-detail-loading">
+        <div className="teacher-assessment-detail__header teacher-assessment-detail__header--loading">
+          <Skeleton className="h-5 w-40 rounded-md" />
+          <Skeleton className="h-9 w-80 rounded-md" />
+          <Skeleton className="h-5 w-64 rounded-md" />
         </div>
-        <Skeleton className="h-12 w-96 rounded-xl" />
-        <Skeleton className="h-[460px] rounded-2xl" />
+        <Skeleton className="h-11 w-96 rounded-md" />
+        <Skeleton className="h-[420px] rounded-lg" />
       </div>
     );
   }
 
-  if (!assessment) {
+  if (loadError || !assessment) {
     return (
       <div className="teacher-assessment-detail teacher-assessment-detail--empty">
-        <Link href="/dashboard/teacher/assessments" className="teacher-assessment-detail__btn teacher-assessment-detail__btn--outline">
+        <Link href="/dashboard/teacher/assessments" className="teacher-assessment-detail__back">
           <ArrowLeft className="h-4 w-4" />
           Back to Assessments
         </Link>
-        <div className="teacher-assessment-detail__empty">Assessment not found.</div>
+        <section className="teacher-assessment-detail__load-error">
+          <AlertTriangle aria-hidden="true" />
+          <div>
+            <h1>Assessment unavailable</h1>
+            <p>{loadError ?? 'We could not load this assessment.'}</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void fetchData('initial')}>
+            <RefreshCw aria-hidden="true" />
+            Try again
+          </Button>
+        </section>
       </div>
     );
   }
 
   return (
     <div className="teacher-assessment-detail">
-      <header className="teacher-assessment-detail__hero">
-        <div className="teacher-assessment-detail__hero-main">
-          <Link href={backHref} className="teacher-assessment-detail__back">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Assignments
-          </Link>
-          <h1>{assessment.title}</h1>
-          <div className="teacher-assessment-detail__badges">
-            <Badge variant="outline" className="teacher-assessment-detail__badge">
-              {formatAssessmentTypeLabel(assessment.type)}
-            </Badge>
-            {assessment.classRecordCategory ? (
-              <Badge variant="outline" className="teacher-assessment-detail__badge">
-                {CATEGORY_LABELS[assessment.classRecordCategory] ?? assessment.classRecordCategory}
-              </Badge>
-            ) : null}
-            {assessment.quarter ? (
-              <Badge variant="outline" className="teacher-assessment-detail__badge">
-                {assessment.quarter}
-              </Badge>
-            ) : null}
-            <Badge
-              className={
-                assessment.isPublished
-                  ? 'teacher-assessment-detail__badge teacher-assessment-detail__badge--published'
-                  : 'teacher-assessment-detail__badge teacher-assessment-detail__badge--draft'
-              }
-            >
-              {assessment.isPublished ? 'Published' : 'Draft'}
-            </Badge>
-            <Badge variant="outline" className="teacher-assessment-detail__badge">
-              Due: {formatDate(assessment.dueDate)}
-            </Badge>
+      <header className="teacher-assessment-detail__header">
+        <Link href={backHref} className="teacher-assessment-detail__back">
+          <ArrowLeft aria-hidden="true" />
+          Back to assignments
+        </Link>
+        <div className="teacher-assessment-detail__header-row">
+          <div className="teacher-assessment-detail__title-block">
+            <h1>{assessment.title}</h1>
+            <div className="teacher-assessment-detail__metadata">
+              <span>{formatAssessmentTypeLabel(assessment.type)}</span>
+              {typeof assessment.totalPoints === 'number' ? (
+                <span>{assessment.totalPoints} point{assessment.totalPoints === 1 ? '' : 's'}</span>
+              ) : null}
+              {assessment.classRecordCategory ? (
+                <span>{CATEGORY_LABELS[assessment.classRecordCategory] ?? assessment.classRecordCategory}</span>
+              ) : null}
+              {assessment.quarter ? <span>{assessment.quarter}</span> : null}
+              <span
+                className="teacher-assessment-detail__status"
+                data-status={assessment.isPublished ? 'published' : 'draft'}
+              >
+                {assessment.isPublished ? 'Published' : 'Draft'}
+              </span>
+              <span className="teacher-assessment-detail__due-date">
+                <CalendarDays aria-hidden="true" />
+                {formatDate(assessment.dueDate)}
+              </span>
+              {refreshing ? <span className="teacher-assessment-detail__refreshing">Refreshing…</span> : null}
+            </div>
           </div>
-        </div>
-        <div className="teacher-assessment-detail__actions">
-          <Link href={backHref} className="teacher-assessment-detail__btn teacher-assessment-detail__btn--outline">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Link>
           <Link
             href={`/dashboard/teacher/assessments/${assessmentId}/edit`}
-            className="teacher-assessment-detail__btn teacher-assessment-detail__btn--solid"
+            className="teacher-assessment-detail__btn teacher-assessment-detail__btn--outline"
           >
-            <PenSquare className="h-4 w-4" />
-            Edit Assessment
+            <PenSquare aria-hidden="true" />
+            Edit assessment
           </Link>
         </div>
       </header>
 
+      {partialFailures.length > 0 ? (
+        <div className="teacher-assessment-detail__warning" role="status">
+          <AlertTriangle aria-hidden="true" />
+          <div>
+            <strong>Some assessment information is unavailable</strong>
+            <span>Could not load {partialFailures.join(', ')}. The rest of the assessment is still usable.</span>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void fetchData('background')} disabled={refreshing}>
+            <RefreshCw aria-hidden="true" />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="teacher-assessment-detail__tabs">
-        <TabsList className="teacher-assessment-detail__tabs-list">
-          <TabsTrigger value="responses" className="teacher-assessment-detail__tab-trigger">
-            Responses
+        <TabsList className="teacher-assessment-detail__tabs-list" aria-label="Assessment workbench">
+          <TabsTrigger value="overview" className="teacher-assessment-detail__tab-trigger">
+            Overview
           </TabsTrigger>
           <TabsTrigger value="review" className="teacher-assessment-detail__tab-trigger">
-            Review Answers
+            Review &amp; grade
           </TabsTrigger>
           <TabsTrigger value="scores" className="teacher-assessment-detail__tab-trigger">
-            Post Scores
+            Scores
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="responses" className="teacher-assessment-detail__tab-panel">
-          <ResponsesTab
+        <TabsContent value="overview" className="teacher-assessment-detail__tab-panel">
+          <AssessmentOverview
             assessment={assessment}
             stats={stats}
             analytics={analytics}
             submissions={submissions}
+            onOpenReview={() => setActiveTab('review')}
+            onOpenScores={() => setActiveTab('scores')}
           />
         </TabsContent>
 
@@ -185,7 +243,7 @@ export default function TeacherAssessmentDetailPage() {
           <ReviewTab
             assessmentId={assessmentId}
             submissions={submissions}
-            onGradeReturned={fetchData}
+            onGradeReturned={() => void fetchData('background')}
           />
         </TabsContent>
 
@@ -194,7 +252,7 @@ export default function TeacherAssessmentDetailPage() {
             assessmentId={assessmentId}
             assessment={assessment}
             submissions={submissions}
-            onDataChanged={fetchData}
+            onDataChanged={() => void fetchData('background')}
           />
         </TabsContent>
       </Tabs>

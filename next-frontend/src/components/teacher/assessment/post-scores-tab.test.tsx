@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PostScoresTab } from './post-scores-tab';
 import { assessmentService } from '@/services/assessment-service';
@@ -7,12 +6,6 @@ jest.mock('sonner', () => ({
   toast: {
     error: jest.fn(),
     success: jest.fn(),
-  },
-}));
-
-jest.mock('framer-motion', () => ({
-  motion: {
-    div: ({ children, ...props }: { children: ReactNode }) => <div {...props}>{children}</div>,
   },
 }));
 
@@ -41,7 +34,7 @@ describe('PostScoresTab', () => {
     } as never);
   });
 
-  it('filters students and posts only the selected pending submissions', async () => {
+  it('filters students and releases only the selected pending submissions', async () => {
     const onDataChanged = jest.fn();
 
     render(
@@ -114,13 +107,13 @@ describe('PostScoresTab', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /pending scores/i }));
+    fireEvent.click(screen.getByRole('button', { name: /awaiting release/i }));
     expect(screen.getByText('Doe, Jane')).toBeInTheDocument();
     expect(screen.queryByText('Smith, John')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Select Doe, Jane'));
-    fireEvent.click(screen.getByRole('button', { name: /post selected \(1\)/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /post selected \(1\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /release selected \(1\)/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /release selected \(1\)/i }));
 
     await waitFor(() => {
       expect(mockedAssessmentService.bulkReturnGrades).toHaveBeenCalledWith({
@@ -130,5 +123,26 @@ describe('PostScoresTab', () => {
     });
 
     expect(onDataChanged).toHaveBeenCalled();
+  });
+
+  it('does not render unavailable score data as an empty roster', () => {
+    render(
+      <PostScoresTab
+        assessmentId="assessment-1"
+        assessment={{
+          id: 'assessment-1',
+          title: 'Assessment 1',
+          classId: 'class-1',
+          type: 'quiz',
+          totalPoints: 10,
+          isPublished: true,
+        }}
+        submissions={null}
+        onDataChanged={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Scores are temporarily unavailable')).toBeInTheDocument();
+    expect(screen.queryByText(/All students: 0 students/i)).not.toBeInTheDocument();
   });
 });

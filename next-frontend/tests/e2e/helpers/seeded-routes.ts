@@ -14,6 +14,7 @@ const SESSION_CACHE = new Map<RoleKey, { token: string; userId: string }>();
 let cachedAdminTemplateWorkspaceUrl: string | null | undefined;
 let cachedTeacherLessonEditUrl: string | null | undefined;
 let cachedTeacherAssessmentEditUrl: string | null | undefined;
+let cachedTeacherAssessmentDetailUrl: string | null | undefined;
 let cachedTeacherClassRecordUrl: string | null | undefined;
 let cachedStudentLessonUrl: string | null | undefined;
 
@@ -165,6 +166,19 @@ export async function resolveTeacherAssessmentEditUrl() {
 
   cachedTeacherAssessmentEditUrl = null;
   return cachedTeacherAssessmentEditUrl;
+}
+
+export async function resolveTeacherAssessmentDetailUrl() {
+  if (process.env.PLAYWRIGHT_TEACHER_ASSESSMENT_DETAIL_URL) {
+    return process.env.PLAYWRIGHT_TEACHER_ASSESSMENT_DETAIL_URL;
+  }
+  if (cachedTeacherAssessmentDetailUrl !== undefined) {
+    return cachedTeacherAssessmentDetailUrl;
+  }
+
+  const editUrl = await resolveTeacherAssessmentEditUrl();
+  cachedTeacherAssessmentDetailUrl = editUrl?.replace(/\/edit$/, '') ?? null;
+  return cachedTeacherAssessmentDetailUrl;
 }
 
 export async function resolveTeacherClassRecordUrl() {

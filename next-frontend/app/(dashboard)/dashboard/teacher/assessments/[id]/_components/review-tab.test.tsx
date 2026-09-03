@@ -1,21 +1,13 @@
-import type { ReactNode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ReviewTab } from './review-tab';
 import { assessmentService } from '@/services/assessment-service';
+import type { SubmissionsResponse } from '@/types/assessment';
 
 jest.mock('sonner', () => ({
   toast: {
     error: jest.fn(),
     success: jest.fn(),
   },
-}));
-
-jest.mock('framer-motion', () => ({
-  motion: {
-    button: ({ children, ...props }: { children: ReactNode }) => <button {...props}>{children}</button>,
-    div: ({ children, ...props }: { children: ReactNode }) => <div {...props}>{children}</div>,
-  },
-  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 jest.mock('@/services/assessment-service', () => ({
@@ -31,6 +23,49 @@ jest.mock('@/services/assessment-service', () => ({
 }));
 
 const mockedAssessmentService = assessmentService as jest.Mocked<typeof assessmentService>;
+
+const oneReviewableSubmission: SubmissionsResponse = {
+  assessment: {
+    id: 'assessment-1',
+    title: 'Filipino Quiz',
+    type: 'quiz',
+    totalPoints: 10,
+    isPublished: true,
+  },
+  submissions: [
+    {
+      studentId: 'student-1',
+      firstName: 'Ana',
+      lastName: 'Cruz',
+      email: 'ana@example.edu',
+      status: 'turned_in',
+      attempt: {
+        id: 'attempt-1',
+        attemptNumber: 1,
+        isSubmitted: true,
+        isReturned: false,
+        score: 80,
+      },
+      attempts: [
+        {
+          id: 'attempt-1',
+          attemptNumber: 1,
+          isSubmitted: true,
+          isReturned: false,
+          score: 80,
+        },
+      ],
+      totalAttempts: 1,
+    },
+  ],
+  summary: {
+    total: 1,
+    notStarted: 0,
+    inProgress: 0,
+    turnedIn: 1,
+    returned: 0,
+  },
+};
 
 describe('ReviewTab', () => {
   beforeEach(() => {
@@ -263,13 +298,13 @@ describe('ReviewTab', () => {
 
     expect(
       await screen.findByText(
-        'Grades can only be returned for the latest submission. Earlier uploads stay visible for history only.',
+        'Scores can only be released for the latest submission. Earlier uploads stay visible for history only.',
       ),
     ).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /return grade \(attempt 1\)/i })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /release score \(attempt 1\)/i })).toBeDisabled();
   });
 
-  it('shows the full submission timeline and allows undoing a posted grade for corrections', async () => {
+  it('shows the full submission timeline and allows restoring a released score for corrections', async () => {
     mockedAssessmentService.getAttemptResults.mockResolvedValueOnce({
       success: true,
       message: 'ok',
@@ -363,9 +398,9 @@ describe('ReviewTab', () => {
     expect(await screen.findByText('Submission Timeline')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /submission timeline/i }));
     expect(await screen.findByText('Attempt 1: attached submission-1.pdf')).toBeInTheDocument();
-    expect(screen.getByText('Attempt 1: grade posted')).toBeInTheDocument();
+    expect(screen.getByText('Attempt 1: score released')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /undo posted grade/i }));
+    fireEvent.click(screen.getByRole('button', { name: /restore to review/i }));
 
     await waitFor(() => {
       expect(mockedAssessmentService.unreturnGrade).toHaveBeenCalledWith('attempt-1');
@@ -654,7 +689,7 @@ describe('ReviewTab', () => {
     expect(questionScoreInput).toHaveValue('0');
 
     fireEvent.change(questionScoreInput, { target: { value: '004' } });
-    fireEvent.click(screen.getByRole('button', { name: /Return Grade/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Release score/i }));
 
     await waitFor(() => {
       expect(mockedAssessmentService.returnGrade).toHaveBeenCalledWith(
@@ -672,5 +707,44 @@ describe('ReviewTab', () => {
         }),
       );
     });
+  });
+
+  it('provides a labeled learner search and clear release status', async () => {
+    render(
+      <ReviewTab
+        assessmentId="assessment-1"
+        submissions={oneReviewableSubmission}
+        onGradeReturned={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('searchbox', { name: 'Search students' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Cruz, Ana/i })).toBeInTheDocument();
+    expect(screen.getByText('Awaiting release')).toBeInTheDocument();
+    expect(screen.queryByText('Pending Score')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Release score/i })).toBeInTheDocument();
+  });
+
+  it('distinguishes unavailable activity from a real empty submission list', () => {
+    const { rerender } = render(
+      <ReviewTab assessmentId="assessment-1" submissions={null} onGradeReturned={jest.fn()} />,
+    );
+
+    expect(screen.getByText('Submissions are temporarily unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('No submissions to review')).not.toBeInTheDocument();
+
+    rerender(
+      <ReviewTab
+        assessmentId="assessment-1"
+        submissions={{
+          ...oneReviewableSubmission,
+          submissions: [],
+          summary: { ...oneReviewableSubmission.summary, turnedIn: 0 },
+        }}
+        onGradeReturned={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No submissions to review')).toBeInTheDocument();
   });
 });
