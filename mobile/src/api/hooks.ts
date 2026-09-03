@@ -474,11 +474,15 @@ export const useJaHub = (classId?: string) =>
     queryFn: () => jaApi.getHub(classId),
   });
 
-export const useJaActivityHistory = (classId?: string, mode: "all" | "ask" | "review" = "all") =>
+export const useJaActivityHistory = (
+  classId?: string,
+  mode: "all" | "ask" | "review" = "all",
+  enabled = true,
+) =>
   useQuery({
     queryKey: queryKeys.jaActivityHistory(classId, mode),
     queryFn: () => jaApi.getAllActivityHistory({ classId: classId!, mode }),
-    enabled: !!classId,
+    enabled: enabled && !!classId,
   });
 
 export const useJaAskThread = (threadId?: string) =>

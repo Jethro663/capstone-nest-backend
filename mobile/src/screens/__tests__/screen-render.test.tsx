@@ -63,6 +63,34 @@ jest.mock("react-native", () => {
     Pressable: component("Pressable"),
     KeyboardAvoidingView: component("KeyboardAvoidingView"),
     ScrollView: component("ScrollView"),
+    FlatList: ReactRuntime.forwardRef(function MockFlatList(
+      { data = [], renderItem, ListEmptyComponent, ListFooterComponent, ...props }: Record<string, unknown>,
+      ref,
+    ) {
+      ReactRuntime.useImperativeHandle(ref, () => ({ scrollToEnd: jest.fn() }));
+      const empty = ReactRuntime.isValidElement(ListEmptyComponent)
+        ? ListEmptyComponent
+        : ListEmptyComponent
+          ? ReactRuntime.createElement(ListEmptyComponent as React.ElementType)
+          : null;
+      const footer = ReactRuntime.isValidElement(ListFooterComponent)
+        ? ListFooterComponent
+        : ListFooterComponent
+          ? ReactRuntime.createElement(ListFooterComponent as React.ElementType)
+          : null;
+      return ReactRuntime.createElement(
+        "FlatList",
+        props,
+        data.length
+          ? data.map((item: unknown, index: number) => ReactRuntime.createElement(
+              ReactRuntime.Fragment,
+              { key: props.keyExtractor?.(item, index) ?? index },
+              renderItem({ item, index }),
+            ))
+          : empty,
+        footer,
+      );
+    }),
     TextInput: component("TextInput"),
     Image: component("Image"),
     Modal: component("Modal"),
@@ -836,7 +864,11 @@ describe("mobile rendered screen flows", () => {
       }) as ReturnType<typeof useJaHub>,
     );
     mockedUseJaActivityHistory.mockReturnValue(
-      createQueryState({ data: [], page: 1, limit: 20, total: 0, totalPages: 0 }) as ReturnType<typeof useJaActivityHistory>,
+      createQueryState({
+        items: [],
+        counts: { all: 0, ask: 0, review: 0 },
+        pagination: { page: 1, limit: 20, total: 0, totalPages: 0, hasNext: false },
+      }) as ReturnType<typeof useJaActivityHistory>,
     );
     mockedUseTutorBootstrap.mockReturnValue(
       createQueryState({
@@ -1478,10 +1510,10 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("LXP data is partially unavailable");
   });
 
-  it("renders the JA hub as an ask-first dark workspace with Learners Path embedded", () => {
+  it("renders the JA hub as an ask-first workspace with learning tools in the header menu", async () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
-    act(() => {
+    await act(async () => {
       testRenderer = TestRenderer.create(
         React.createElement(JaScreen, {
           navigation: { navigate: jest.fn() } as never,
@@ -1490,21 +1522,24 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    const renderedText = testRenderer!.root
+    let renderedText = testRenderer!.root
       .findAll((node) => node.type === "Text")
       .map((node) => flattenText(node))
       .join(" ");
 
     expect(renderedText).toContain("JA Hub");
-    expect(renderedText).toContain("Activity History");
     expect(renderedText).toContain("Ask");
-    expect(renderedText).toContain("Replay");
-    expect(renderedText).toContain("Learners Path");
     expect(renderedText).not.toContain("Practice");
     expect(renderedText).not.toContain("Generate Practice Run");
+
+    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
+    renderedText = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    expect(renderedText).toContain("Activity History");
+    expect(renderedText).toContain("Replay");
+    expect(renderedText).toContain("Learner's Path");
   });
 
-  it("renders JA Ask with the fixed prompt picker and requires lesson context before sending", async () => {
+  it("renders JA Ask as one preset-only message list and auto-selects its only lesson", async () => {
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
     act(() => {
@@ -1516,12 +1551,14 @@ describe("mobile rendered screen flows", () => {
       );
     });
 
-    expect(
-      testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Pick a visible lesson"),
-      ),
-    ).toBeTruthy();
+    const renderedBeforePrompt = testRenderer!.root
+      .findAll((node) => node.type === "Text")
+      .map((node) => flattenText(node))
+      .join(" ");
+    expect(renderedBeforePrompt).toContain("Using Fractions Lesson");
+    expect(testRenderer!.root.findAll((node) => node.type === "FlatList")).toHaveLength(1);
     expect(testRenderer!.root.findAll((node) => node.type === "TextInput")).toHaveLength(0);
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", false);
 
     const promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
     await act(async () => {
@@ -1542,29 +1579,9 @@ describe("mobile rendered screen flows", () => {
       expect(findPressableByText(testRenderer!.root, label)).toBeTruthy();
     });
 
-    const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
     await act(async () => {
+      const explainAction = findPressableByText(testRenderer!.root, "Explain the lesson");
       await explainAction.props.onPress();
-      await Promise.resolve();
-    });
-
-    expect(mockedJaApi.sendAskMessage).not.toHaveBeenCalled();
-    expect(
-      testRenderer!.root.find(
-        (node) => node.type === "Text" && flattenText(node).includes("Select a visible lesson first"),
-      ),
-    ).toBeTruthy();
-
-    const lessonChip = findPressableByText(testRenderer!.root, "Fractions Lesson");
-    await act(async () => {
-      lessonChip.props.onPress();
-    });
-    await act(async () => {
-      promptButton.props.onPress();
-    });
-    await act(async () => {
-      const explainActionWithLesson = findPressableByText(testRenderer!.root, "Explain the lesson");
-      await explainActionWithLesson.props.onPress();
       await Promise.resolve();
     });
 
@@ -1580,6 +1597,234 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).toContain("Here is a grounded explanation.");
     expect(renderedText).toContain("Review the equivalent values first.");
     expect(renderedText).not.toContain("<p>");
+  });
+
+  it("loads JA activity history only after the header tool opens it", async () => {
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", false);
+
+    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
+    await act(async () => findPressableByText(testRenderer!.root, "Activity History").props.onPress());
+
+    expect(mockedUseJaActivityHistory).toHaveBeenLastCalledWith("class-1", "all", true);
+  });
+
+  it("automatically resumes the most recently updated active JA thread", async () => {
+    const currentHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockClear();
+    mockedUseJaHub.mockReturnValue({
+      ...currentHub,
+      data: {
+        ...currentHub.data!,
+        ask: {
+          ...currentHub.data!.ask,
+          threads: [
+            { id: "thread-old", title: "Old", status: "active", updatedAt: "2026-09-01T08:00:00.000Z" },
+            { id: "thread-new", title: "New", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" },
+            { id: "thread-archived", title: "Archived", status: "archived", updatedAt: "2026-09-03T08:00:00.000Z" },
+          ],
+        },
+      },
+    } as ReturnType<typeof useJaHub>);
+    mockedJaApi.getAskThread.mockResolvedValue({
+      thread: { id: "thread-new", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
+      messages: [{ id: "saved-answer", role: "assistant", content: "Saved latest answer", blocked: false }],
+    } as never);
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockedJaApi.getAskThread).toHaveBeenCalledTimes(1);
+    expect(mockedJaApi.getAskThread).toHaveBeenCalledWith("thread-new");
+    expect(testRenderer!.root.findByProps({ html: "Saved latest answer" })).toBeTruthy();
+  });
+
+  it("keeps New chat from reopening the previous JA thread", async () => {
+    const currentHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockClear();
+    mockedUseJaHub.mockReturnValue({
+      ...currentHub,
+      data: {
+        ...currentHub.data!,
+        ask: {
+          ...currentHub.data!.ask,
+          threads: [{ id: "thread-new", title: "New", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" }],
+        },
+      },
+    } as ReturnType<typeof useJaHub>);
+    mockedJaApi.getAskThread.mockResolvedValue({
+      thread: { id: "thread-new", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
+      messages: [{ id: "saved-answer", role: "assistant", content: "Saved latest answer", blocked: false }],
+    } as never);
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+      await Promise.resolve();
+    });
+    expect(mockedJaApi.getAskThread).toHaveBeenCalledTimes(1);
+    mockedJaApi.getAskThread.mockClear();
+
+    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
+    await act(async () => findPressableByText(testRenderer!.root, "New chat").props.onPress());
+    await act(async () => Promise.resolve());
+
+    expect(mockedJaApi.getAskThread).not.toHaveBeenCalled();
+    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    expect(text).not.toContain("Saved latest answer");
+  });
+
+  it("requires lesson choice for multiple contexts and preserves stale thread history", async () => {
+    const currentHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockClear();
+    mockedUseJaHub.mockReturnValue({
+      ...currentHub,
+      data: {
+        ...currentHub.data!,
+        ask: {
+          ...currentHub.data!.ask,
+          threads: [{ id: "thread-stale", title: "Old lesson", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-removed" }],
+          lessonContexts: [
+            { lessonId: "lesson-1", title: "Fractions Lesson" },
+            { lessonId: "lesson-2", title: "Decimals Lesson" },
+          ],
+        },
+      },
+    } as ReturnType<typeof useJaHub>);
+    mockedJaApi.getAskThread.mockResolvedValue({
+      thread: { id: "thread-stale", classId: "class-1", contextLessonId: "lesson-removed", contextLessonTitle: "Removed Lesson" },
+      messages: [{ id: "saved-answer", role: "assistant", content: "Historical answer stays readable", blocked: false }],
+    } as never);
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    expect(text).toContain("Historical answer stays readable");
+    expect(text).toContain("This chat's lesson is no longer available");
+    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(true);
+  });
+
+  it("opens lesson context for a new chat with multiple visible lessons", async () => {
+    const currentHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockClear();
+    mockedUseJaHub.mockReturnValue({
+      ...currentHub,
+      data: {
+        ...currentHub.data!,
+        ask: {
+          ...currentHub.data!.ask,
+          threads: [],
+          lessonContexts: [
+            { lessonId: "lesson-1", title: "Fractions Lesson" },
+            { lessonId: "lesson-2", title: "Decimals Lesson" },
+          ],
+        },
+      },
+    } as ReturnType<typeof useJaHub>);
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+    });
+
+    expect(testRenderer!.root.findByType("Modal")).toBeTruthy();
+    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(true);
+
+    await act(async () => findPressableByText(testRenderer!.root, "Fractions Lesson").props.onPress());
+    expect(testRenderer!.root.findAll((node) => node.type === "Modal")).toHaveLength(0);
+    expect(findPressableByText(testRenderer!.root, "Ask JA about this lesson").props.disabled).toBe(false);
+  });
+
+  it("confirms that changing an active thread lesson starts a new conversation", async () => {
+    const currentHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockClear();
+    mockedUseJaHub.mockReturnValue({
+      ...currentHub,
+      data: {
+        ...currentHub.data!,
+        ask: {
+          ...currentHub.data!.ask,
+          threads: [{ id: "thread-1", title: "Fractions", status: "active", updatedAt: "2026-09-02T08:00:00.000Z", contextLessonId: "lesson-1" }],
+          lessonContexts: [
+            { lessonId: "lesson-1", title: "Fractions Lesson" },
+            { lessonId: "lesson-2", title: "Decimals Lesson" },
+          ],
+        },
+      },
+    } as ReturnType<typeof useJaHub>);
+    mockedJaApi.getAskThread.mockResolvedValue({
+      thread: { id: "thread-1", classId: "class-1", contextLessonId: "lesson-1", contextLessonTitle: "Fractions Lesson" },
+      messages: [{ id: "saved-answer", role: "assistant", content: "Saved fractions answer", blocked: false }],
+    } as never);
+
+    const { JaScreen } = require("../JaScreen");
+    let testRenderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      testRenderer = TestRenderer.create(
+        React.createElement(JaScreen, {
+          navigation: { navigate: jest.fn() } as never,
+          route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => findPressableByText(testRenderer!.root, "Using Fractions Lesson").props.onPress());
+    await act(async () => findPressableByText(testRenderer!.root, "Decimals Lesson").props.onPress());
+
+    const alert = require("react-native").Alert.alert as jest.Mock;
+    expect(alert).toHaveBeenCalledWith(
+      "Start a new conversation?",
+      expect.stringContaining("keeps this saved conversation intact"),
+      expect.any(Array),
+    );
+    const confirm = alert.mock.calls.at(-1)?.[2]?.[1]?.onPress;
+    await act(async () => confirm());
+
+    const text = testRenderer!.root.findAll((node) => node.type === "Text").map(flattenText).join(" ");
+    expect(text).toContain("Using Decimals Lesson");
+    expect(text).not.toContain("Saved fractions answer");
   });
 
   it("switches JA classes from the header and clears ask state", async () => {
@@ -1638,6 +1883,18 @@ describe("mobile rendered screen flows", () => {
         },
       }) as ReturnType<typeof useJaHub>,
     );
+    const classOneHub = mockedUseJaHub("class-1");
+    mockedUseJaHub.mockImplementation((classId) => ({
+      ...classOneHub,
+      data: {
+        ...classOneHub.data!,
+        selectedClassId: classId || "class-1",
+        ask: {
+          ...classOneHub.data!.ask,
+          lessonContexts: classId === "class-2" ? [] : classOneHub.data!.ask.lessonContexts,
+        },
+      },
+    }) as ReturnType<typeof useJaHub>);
 
     const { JaScreen } = require("../JaScreen");
     let testRenderer: TestRenderer.ReactTestRenderer;
@@ -1648,11 +1905,6 @@ describe("mobile rendered screen flows", () => {
           route: { key: "JA", name: "JA", params: { panel: "ask", classId: "class-1" } } as never,
         }),
       );
-    });
-
-    const lessonChip = findPressableByText(testRenderer!.root, "Fractions Lesson");
-    await act(async () => {
-      lessonChip.props.onPress();
     });
 
     let promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
@@ -1671,10 +1923,7 @@ describe("mobile rendered screen flows", () => {
       ),
     ).toBeTruthy();
 
-    const classSelector = findPressableByText(testRenderer!.root, "Mathematics (MATH-1)");
-    await act(async () => {
-      classSelector.props.onPress();
-    });
+    await act(async () => findPressableByIcon(testRenderer!.root, "menu").props.onPress());
 
     const scienceOption = findPressableByText(testRenderer!.root, "Science (SCI-1)");
     await act(async () => {
@@ -1690,21 +1939,13 @@ describe("mobile rendered screen flows", () => {
     expect(renderedText).not.toContain("Here is a grounded explanation.");
 
     promptButton = findPressableByText(testRenderer!.root, "Ask JA about this lesson");
-    await act(async () => {
-      promptButton.props.onPress();
-    });
-    const explainAgain = findPressableByText(testRenderer!.root, "Explain the lesson");
-    await act(async () => {
-      await explainAgain.props.onPress();
-      await Promise.resolve();
-    });
-
+    expect(promptButton.props.disabled).toBe(true);
     expect(mockedJaApi.sendAskMessage).toHaveBeenCalledTimes(1);
     expect(
       testRenderer!.root.find(
         (node) =>
           node.type === "Text" &&
-          flattenText(node).includes("Select a visible lesson first so JA can keep the answer grounded."),
+          flattenText(node).includes("No visible lessons are available"),
       ),
     ).toBeTruthy();
   });

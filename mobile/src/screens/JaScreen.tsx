@@ -1,17 +1,25 @@
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { peekAppError, toAppError } from "../api/http";
 import { useJaActivityHistory, useJaHub, useLxpCheckpointMutation, useLxpEligibility, useLxpOverview, useLxpPlaylist } from "../api/hooks";
 import { jaApi } from "../api/services/ja";
-import { RichTextContent } from "../components/ui/RichTextContent";
+import { JaChatWorkspace } from "../components/ja/JaChatWorkspace";
+import { JaHubSheets, type JaHubSheetName } from "../components/ja/JaHubSheets";
+import {
+  activateThreadState,
+  createResumePendingState,
+  resolveLessonSelection,
+  resolveResumeState,
+  startNewChatState,
+  type JaAskPresetAction as JaPromptAction,
+  type JaChatEntryState,
+} from "../components/ja/ja-chat-model";
 import { EmptyState, Refreshable, ScreenScroll } from "../components/ui/primitives";
 import type { JaAskLessonContextSummary, JaAskMessage, JaMode, JaPracticeSessionItem, JaPracticeSessionResponse, JaReviewAttemptSummary } from "../types/ja";
 import type { GuidedAssessmentAttemptSummary, LxpCheckpoint, LxpOverviewResponse, LxpPathSummary } from "../types/lxp";
 import type { JaPanel, LxpMobileTab } from "../navigation/types";
-import { resolveJaAvatar, resolveJaStateFromMessage } from "../utils/jaAssets";
 import { studentDarkTheme, stripRichText } from "../theme/studentDark";
 
 type Props = {
@@ -73,45 +81,6 @@ const MODE_ORDER: Array<{ key: VisibleJaPanel; label: string; icon: string }> = 
   { key: "ask", label: "Ask", icon: "message-text-outline" },
   { key: "review", label: "Replay", icon: "history" },
   { key: "lxp", label: "Learners Path", icon: "map-marker-path" },
-];
-
-type JaAskPresetAction = {
-  id: string;
-  label: string;
-};
-
-const ASK_PRESET_GROUPS: Array<{
-  id: string;
-  label: string;
-  items: JaAskPresetAction[];
-}> = [
-  {
-    id: "ask",
-    label: "Ask",
-    items: [
-      { id: "explain-lesson", label: "Explain the lesson" },
-      { id: "summarize-main-idea", label: "Summarize main idea" },
-      { id: "study-next", label: "What should I study next?" },
-    ],
-  },
-  {
-    id: "question",
-    label: "Question",
-    items: [
-      { id: "give-question", label: "Give me a question" },
-      { id: "quiz-me", label: "Quiz me on this lesson" },
-      { id: "unclear-parts", label: "Unclear parts check" },
-    ],
-  },
-  {
-    id: "review",
-    label: "Review",
-    items: [
-      { id: "key-concepts", label: "Key concepts review" },
-      { id: "study-plan", label: "Make a study plan" },
-      { id: "vocabulary-review", label: "Vocabulary review" },
-    ],
-  },
 ];
 
 function classLabel(item?: { subjectName: string; subjectCode: string } | null) {
@@ -198,6 +167,9 @@ export function JaScreen({ navigation, route }: Props) {
   const [selectedClassId, setSelectedClassId] = useState<string | undefined>(route?.params?.classId);
   const [classPickerOpen, setClassPickerOpen] = useState(false);
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
+  const [activeSheet, setActiveSheet] = useState<JaHubSheetName>(null);
+  const [askEntryState, setAskEntryState] = useState<JaChatEntryState>(createResumePendingState);
+  const [lessonSheetPromptedClassId, setLessonSheetPromptedClassId] = useState<string | undefined>();
   const [askThreadId, setAskThreadId] = useState<string | undefined>();
   const [askThreadClassId, setAskThreadClassId] = useState<string | undefined>();
   const [askMessages, setAskMessages] = useState<JaAskMessage[]>([]);
@@ -212,7 +184,7 @@ export function JaScreen({ navigation, route }: Props) {
   const [actionError, setActionError] = useState("");
 
   const jaHubQuery = useJaHub(selectedClassId);
-  const activityHistoryQuery = useJaActivityHistory(selectedClassId, activityFilter);
+  const activityHistoryQuery = useJaActivityHistory(selectedClassId, activityFilter, activeSheet === "activity");
   const eligibilityQuery = useLxpEligibility();
   const lxpPlaylistQuery = useLxpPlaylist(selectedLxpClassId);
   const lxpOverviewQuery = useLxpOverview(selectedLxpClassId);
@@ -240,6 +212,11 @@ export function JaScreen({ navigation, route }: Props) {
   const hasMultipleClasses = availableClasses.length > 1;
   const resolvedClassId = selectedClassId || selectedClass?.id;
   const selectedClassText = classLabel(selectedClass);
+  const lessonContexts = jaHubQuery.data?.ask.lessonContexts ?? [];
+  const lessonSelection = useMemo(
+    () => resolveLessonSelection(lessonContexts, selectedLesson?.lessonId),
+    [lessonContexts, selectedLesson?.lessonId],
+  );
   const activityCounts = {
     ask: jaHubQuery.data?.ask.threads.length ?? 0,
     review: jaHubQuery.data?.review.sessions?.length ?? 0,
@@ -255,7 +232,9 @@ export function JaScreen({ navigation, route }: Props) {
   const visibleActivities = activityHistoryQuery.data?.items ?? [];
 
   const refreshAll = () => {
-    void Promise.all([jaHubQuery.refetch(), activityHistoryQuery.refetch(), eligibilityQuery.refetch(), lxpPlaylistQuery.refetch(), lxpOverviewQuery.refetch()]);
+    const requests: Array<Promise<unknown>> = [jaHubQuery.refetch(), eligibilityQuery.refetch(), lxpPlaylistQuery.refetch(), lxpOverviewQuery.refetch()];
+    if (activeSheet === "activity") requests.push(activityHistoryQuery.refetch());
+    void Promise.all(requests);
   };
 
   const resetJaWorkspace = () => {
@@ -263,6 +242,9 @@ export function JaScreen({ navigation, route }: Props) {
     setAskThreadClassId(undefined);
     setAskMessages([]);
     setSelectedLesson(null);
+    setAskEntryState(createResumePendingState());
+    setLessonSheetPromptedClassId(undefined);
+    setActiveSheet(null);
     setAskError("");
     setPracticeSession(null);
     setReviewSession(null);
@@ -274,6 +256,7 @@ export function JaScreen({ navigation, route }: Props) {
     if (busy) return;
     if (nextClassId === resolvedClassId) {
       setClassPickerOpen(false);
+      setActiveSheet(null);
       return;
     }
 
@@ -285,26 +268,32 @@ export function JaScreen({ navigation, route }: Props) {
   const switchPanel = (nextPanel: VisibleJaPanel) => {
     setPanel(nextPanel);
     setClassPickerOpen(false);
+    setActiveSheet(null);
     setActionError("");
     if (nextPanel !== "ask") setAskError("");
     if (nextPanel !== "lxp") return;
     setLxpTab(selectedLxpClassId ? "steps" : "paths");
   };
 
-  const startNewChat = () => {
+  const startNewChat = (lesson: JaAskLessonContextSummary | null = null) => {
     setAskThreadId(undefined);
     setAskThreadClassId(resolvedClassId);
     setAskMessages([]);
-    setSelectedLesson(null);
+    setSelectedLesson(lesson);
+    setAskEntryState(startNewChatState());
+    setLessonSheetPromptedClassId(lesson ? resolvedClassId : undefined);
     setAskError("");
     setClassPickerOpen(false);
+    setActiveSheet(null);
     setPanel("ask");
   };
 
   const openAskThread = async (threadId: string) => {
     if (busy) return;
+    setAskEntryState({ mode: "resume-loading", threadId });
     setBusy(true);
     setAskError("");
+    setActiveSheet(null);
     setPanel("ask");
     try {
       const response = await jaApi.getAskThread(threadId);
@@ -321,17 +310,58 @@ export function JaScreen({ navigation, route }: Props) {
             sectionTitle: response.thread.contextSectionTitle,
           },
         );
+      } else {
+        setSelectedLesson(null);
       }
+      setAskEntryState(activateThreadState(response.thread.id));
     } catch (error) {
       setAskError(toAppError(error).message);
+      setAskEntryState(startNewChatState());
     } finally {
       setBusy(false);
     }
   };
 
+  useEffect(() => {
+    if (panel !== "ask" || !resolvedClassId || !jaHubQuery.data || askEntryState.mode !== "resume-pending") return;
+    const nextState = resolveResumeState(askEntryState, jaHubQuery.data.ask.threads);
+    setAskEntryState(nextState);
+    if (nextState.mode === "resume-loading") void openAskThread(nextState.threadId);
+  }, [askEntryState, jaHubQuery.data, panel, resolvedClassId]);
+
+  useEffect(() => {
+    if (panel !== "ask" || !resolvedClassId || !jaHubQuery.data || askEntryState.mode !== "new" || selectedLesson) return;
+    const selection = resolveLessonSelection(lessonContexts);
+    if (selection.kind === "selected") {
+      setSelectedLesson(selection.lesson);
+      return;
+    }
+    if (selection.kind === "requires-selection" && lessonSheetPromptedClassId !== resolvedClassId) {
+      setLessonSheetPromptedClassId(resolvedClassId);
+      setActiveSheet("lessons");
+    }
+  }, [askEntryState.mode, jaHubQuery.data, lessonContexts, lessonSheetPromptedClassId, panel, resolvedClassId, selectedLesson]);
+
+  const handleLessonSelect = (lesson: JaAskLessonContextSummary) => {
+    if (busy) return;
+    if (askEntryState.mode === "active" && askThreadId && selectedLesson?.lessonId !== lesson.lessonId) {
+      Alert.alert(
+        "Start a new conversation?",
+        "Changing the lesson keeps this saved conversation intact and starts a new grounded chat.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Start new chat", onPress: () => startNewChat(lesson) },
+        ],
+      );
+      return;
+    }
+    setSelectedLesson(lesson);
+    setActiveSheet(null);
+  };
+
   const sendAskAction = async (label: string, quickAction = label) => {
     if (!resolvedClassId || busy) return;
-    if (!selectedLesson) {
+    if (lessonSelection.kind !== "selected") {
       setAskError("Select a visible lesson first so JA can keep the answer grounded.");
       return;
     }
@@ -353,7 +383,7 @@ export function JaScreen({ navigation, route }: Props) {
       if (!threadId || askThreadClassId !== resolvedClassId) {
         const created = await jaApi.createAskThread({
           classId: resolvedClassId,
-          lessonId: selectedLesson.lessonId,
+          lessonId: lessonSelection.lesson.lessonId,
         });
         threadId = created.thread.id;
         setAskThreadId(threadId);
@@ -362,11 +392,13 @@ export function JaScreen({ navigation, route }: Props) {
       const response = await jaApi.sendAskMessage(threadId, {
         message: label.trim(),
         quickAction,
-        lessonId: selectedLesson.lessonId,
+        lessonId: lessonSelection.lesson.lessonId,
       });
       setAskThreadId(response.thread.id);
       setAskThreadClassId(response.thread.classId);
       setAskMessages((current) => [...current, response.message]);
+      setAskEntryState(activateThreadState(response.thread.id));
+      void jaHubQuery.refetch();
     } catch (error) {
       setAskError(toAppError(error).message);
     } finally {
@@ -530,6 +562,55 @@ export function JaScreen({ navigation, route }: Props) {
     opacity: busy ? 0.65 : 1,
   };
 
+  if (panel === "ask") {
+    return (
+      <>
+        <JaChatWorkspace
+          classLabel={selectedClassText}
+          entryState={askEntryState}
+          lessonSelection={lessonSelection}
+          messages={askMessages}
+          busy={busy}
+          error={askError}
+          dataError={jaHubQuery.error ? peekAppError(jaHubQuery.error).message : undefined}
+          refreshing={jaHubQuery.isRefetching}
+          onOpenMenu={() => setActiveSheet("menu")}
+          onOpenLessons={() => setActiveSheet("lessons")}
+          onOpenPrompts={() => setActiveSheet("prompts")}
+          onRefresh={refreshAll}
+          onDismissError={() => setAskError("")}
+        />
+        <JaHubSheets
+          activeSheet={activeSheet}
+          classes={availableClasses}
+          selectedClassId={resolvedClassId}
+          threads={jaHubQuery.data?.ask.threads ?? []}
+          activeThreadId={askThreadId}
+          lessons={lessonContexts}
+          selectedLessonId={selectedLesson?.lessonId}
+          activities={visibleActivities}
+          activityFilter={activityFilter}
+          activityLoading={activityHistoryQuery.isLoading}
+          activityError={activityHistoryQuery.isError}
+          busy={busy}
+          onClose={() => setActiveSheet(null)}
+          onNewChat={() => startNewChat()}
+          onOpenThread={(threadId) => void openAskThread(threadId)}
+          onSelectClass={handleClassSelect}
+          onSelectLesson={handleLessonSelect}
+          onSelectPrompt={(prompt: JaPromptAction) => {
+            setActiveSheet(null);
+            void sendAskAction(prompt.label, prompt.label);
+          }}
+          onOpenActivity={() => setActiveSheet("activity")}
+          onActivityFilterChange={setActivityFilter}
+          onSwitchPanel={switchPanel}
+          onRefreshActivity={() => void activityHistoryQuery.refetch()}
+        />
+      </>
+    );
+  }
+
   return (
     <ScreenScroll
       backgroundColor={dark.bg}
@@ -542,13 +623,8 @@ export function JaScreen({ navigation, route }: Props) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Hub</Text>
-            <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>Activity History</Text>
+            <Text style={{ color: dark.text, fontSize: 14, fontWeight: "800" }}>{panel === "review" ? "Replay" : "Learner's Path"}</Text>
           </View>
-          {panel === "ask" ? (
-            <Pressable onPress={startNewChat} style={{ backgroundColor: dark.blueSoft, borderColor: dark.blueLine, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 }}>
-              <Text style={{ color: dark.blue, fontSize: 11, fontWeight: "800" }}>New chat</Text>
-            </Pressable>
-          ) : null}
         </View>
 
         <View style={{ paddingHorizontal: 16, paddingBottom: classPickerOpen ? 12 : 11, gap: 9 }}>
@@ -628,53 +704,12 @@ export function JaScreen({ navigation, route }: Props) {
         </ScrollView>
       </View>
 
-      <View style={{ backgroundColor: dark.surface, borderBottomWidth: 1, borderBottomColor: dark.border, paddingHorizontal: 16, paddingVertical: 10 }}>
-        <Text style={{ color: dark.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 7 }}>Activity Filter</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-          {(["all", "ask", "review"] as ActivityFilter[]).map((filter) => (
-            <Pressable
-              key={filter}
-              onPress={() => setActivityFilter(filter)}
-              style={{ borderRadius: 20, borderWidth: 1, borderColor: activityFilter === filter ? dark.blueLine : dark.border2, backgroundColor: activityFilter === filter ? dark.blueSoft : "transparent", paddingHorizontal: 11, paddingVertical: 5 }}
-            >
-              <Text style={{ color: activityFilter === filter ? dark.blue : dark.muted, fontSize: 10, fontWeight: "700" }}>
-                {filter === "all" ? "All" : filter === "review" ? "Replay" : filter[0].toUpperCase() + filter.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <Text style={{ marginTop: 9, color: dark.muted, fontSize: 11 }}>
-          {activityHistoryQuery.isLoading
-            ? "Loading complete activity history..."
-            : activityHistoryQuery.isError
-              ? "Activity history is unavailable. Pull to refresh and try again."
-              : visibleActivities.length
-                ? `${visibleActivities.length} saved activities for this filter.`
-                : "No saved JA activity for this filter yet."}
-        </Text>
-      </View>
-
       <View style={{ paddingHorizontal: 16, paddingVertical: 18, gap: 14 }}>
         {jaHubQuery.error ? (
           <DarkPanel style={{ borderColor: dark.red }}>
             <Text style={{ color: dark.text, fontWeight: "800" }}>JA data is partially unavailable</Text>
             <Text style={{ marginTop: 6, color: dark.muted, fontSize: 12 }}>{peekAppError(jaHubQuery.error).message}</Text>
           </DarkPanel>
-        ) : null}
-
-        {panel === "ask" ? (
-          <AskPanel
-            lessonContexts={jaHubQuery.data?.ask.lessonContexts ?? []}
-            selectedLesson={selectedLesson}
-            onSelectLesson={setSelectedLesson}
-            messages={askMessages}
-            threads={jaHubQuery.data?.ask.threads ?? []}
-            activeThreadId={askThreadId}
-            onSendAction={sendAskAction}
-            onOpenThread={(threadId) => void openAskThread(threadId)}
-            busy={busy}
-            error={askError}
-          />
         ) : null}
 
         {panel === "review" ? (
@@ -768,267 +803,6 @@ function PracticePanel({
       </DarkPanel>
       {session ? <SessionPanel session={session} answers={answers} setAnswers={setAnswers} onSubmit={onSubmit} onComplete={onComplete} canComplete={completeReady} submitLabel="Submit Answer" /> : null}
     </View>
-  );
-}
-
-function AskPanel({
-  lessonContexts,
-  selectedLesson,
-  onSelectLesson,
-  messages,
-  threads,
-  activeThreadId,
-  onSendAction,
-  onOpenThread,
-  busy,
-  error,
-}: {
-  lessonContexts: JaAskLessonContextSummary[];
-  selectedLesson: JaAskLessonContextSummary | null;
-  onSelectLesson: (context: JaAskLessonContextSummary) => void;
-  messages: JaAskMessage[];
-  threads: Array<{ id: string; title: string; contextLessonTitle?: string | null; lastMessageAt?: string | null; updatedAt: string }>;
-  activeThreadId?: string;
-  onSendAction: (label: string, quickAction?: string) => Promise<void>;
-  onOpenThread: (threadId: string) => void;
-  busy: boolean;
-  error: string;
-}) {
-  const [promptMenuOpen, setPromptMenuOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const chatScrollRef = useRef<ScrollView | null>(null);
-  const lastAssistantMessage = [...messages].reverse().find((message) => message.role !== "student");
-  const visualState = busy ? "thinking" : resolveJaStateFromMessage(lastAssistantMessage);
-  const avatar = resolveJaAvatar(visualState);
-  const avatarSource = process.env.NODE_ENV === "test" ? undefined : avatar.getSource();
-  const chatViewportHeight = Math.max(300, Math.min(500, windowHeight * 0.46));
-  const panelMinHeight = chatViewportHeight + 300;
-
-  useEffect(() => {
-    const timer = setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: false }), 0);
-    return () => clearTimeout(timer);
-  }, [busy, messages]);
-
-  useEffect(() => {
-    if (busy) setPromptMenuOpen(false);
-  }, [busy]);
-
-  const handlePresetPress = async (preset: JaAskPresetAction) => {
-    setPromptMenuOpen(false);
-    await onSendAction(preset.label, preset.label);
-  };
-
-  return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <View style={{ gap: 12 }}>
-        <DarkPanel style={{ padding: 0, overflow: "hidden", minHeight: panelMinHeight }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomWidth: 1, borderBottomColor: dark.border }}>
-            <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: dark.blueSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {avatarSource ? (
-                <Image source={avatarSource} style={{ width: 50, height: 50 }} resizeMode="contain" />
-              ) : (
-                <MaterialCommunityIcons name="auto-fix" size={20} color={dark.blue} />
-              )}
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ color: dark.blue, fontSize: 9, fontWeight: "900", textTransform: "uppercase", letterSpacing: 1 }}>JA Ask</Text>
-              <Text style={{ marginTop: 3, color: dark.text, fontSize: 16, fontWeight: "900" }}>Lesson-grounded chat</Text>
-              <Text numberOfLines={2} style={{ marginTop: 4, color: dark.muted, fontSize: 11, lineHeight: 16 }}>
-                {selectedLesson ? `Using ${selectedLesson.title}` : "Pick a visible lesson before asking."}
-              </Text>
-            </View>
-            <View style={{ borderRadius: 999, backgroundColor: busy ? dark.amberSoft : dark.greenSoft, paddingHorizontal: 9, paddingVertical: 5 }}>
-              <Text style={{ color: busy ? dark.amber : dark.green, fontSize: 10, fontWeight: "900" }}>
-                {busy ? "Thinking" : "Ready"}
-              </Text>
-            </View>
-          </View>
-
-          {threads.length ? (
-            <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: dark.border }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 14 }}>
-                {threads.map((thread) => {
-                  const active = thread.id === activeThreadId;
-                  return (
-                    <Pressable
-                      key={thread.id}
-                      onPress={() => onOpenThread(thread.id)}
-                      disabled={busy}
-                      style={{
-                        width: 178,
-                        borderRadius: 14,
-                        borderWidth: 1,
-                        borderColor: active ? dark.blue : dark.border2,
-                        backgroundColor: active ? dark.blueSoft : dark.surface,
-                        paddingHorizontal: 11,
-                        paddingVertical: 10,
-                      }}
-                    >
-                      <Text numberOfLines={1} style={{ color: dark.text, fontSize: 12, fontWeight: "900" }}>
-                        {thread.title || "Ask thread"}
-                      </Text>
-                      <Text numberOfLines={1} style={{ marginTop: 3, color: active ? dark.blue : dark.muted, fontSize: 10, fontWeight: "700" }}>
-                        {thread.contextLessonTitle || "Lesson chat"}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          ) : null}
-
-          <View style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: dark.border }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 14 }}>
-              {lessonContexts.length ? lessonContexts.map((context) => {
-                const selected = selectedLesson?.lessonId === context.lessonId;
-                return (
-                  <Pressable
-                    key={context.lessonId}
-                    onPress={() => onSelectLesson(context)}
-                    disabled={busy}
-                    style={{ width: 190, borderRadius: 14, borderWidth: 1, borderColor: selected ? dark.blue : dark.border2, backgroundColor: selected ? dark.blueSoft : dark.surface, padding: 11 }}
-                  >
-                    <Text numberOfLines={1} style={{ color: dark.text, fontSize: 12, fontWeight: "900" }}>{context.title}</Text>
-                    <Text numberOfLines={1} style={{ marginTop: 3, color: dark.muted, fontSize: 10 }}>{[context.moduleTitle, context.sectionTitle].filter(Boolean).join(" / ") || "Visible lesson"}</Text>
-                  </Pressable>
-                );
-              }) : (
-                <Text style={{ borderRadius: 10, borderWidth: 1, borderStyle: "dashed", borderColor: dark.border2, color: dark.muted, fontSize: 11, padding: 11 }}>
-                  No visible lessons are available for JA Ask yet in this class.
-                </Text>
-              )}
-            </ScrollView>
-          </View>
-
-          <View style={{ height: chatViewportHeight, borderBottomWidth: 1, borderBottomColor: dark.border }}>
-            <ScrollView
-              ref={chatScrollRef}
-              nestedScrollEnabled
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 14, gap: 10, flexGrow: messages.length ? 0 : 1 }}
-            >
-              {messages.length ? messages.map((message) => (
-                <View
-                  key={message.id}
-                  style={{
-                    alignSelf: message.role === "student" ? "flex-end" : "flex-start",
-                    maxWidth: "91%",
-                    borderTopLeftRadius: message.role === "student" ? 18 : 6,
-                    borderTopRightRadius: message.role === "student" ? 6 : 18,
-                    borderBottomLeftRadius: 18,
-                    borderBottomRightRadius: 18,
-                    borderWidth: 1,
-                    borderColor: message.role === "student" ? dark.redLine : message.blocked ? dark.amber : dark.border2,
-                    backgroundColor: message.role === "student" ? dark.redSoft : dark.surface2,
-                    paddingHorizontal: 13,
-                    paddingVertical: 11,
-                  }}
-                >
-                  {message.role === "student" ? (
-                    <Text style={{ color: dark.text, fontSize: 13, lineHeight: 20 }}>{message.content}</Text>
-                  ) : (
-                    <RichTextContent html={message.content} color={dark.text} mutedColor={dark.muted} accentColor={dark.blue} />
-                  )}
-                </View>
-              )) : (
-                <View style={{ flex: 1, minHeight: 210, alignItems: "center", justifyContent: "center", paddingHorizontal: 18 }}>
-                  {avatarSource ? <Image source={avatarSource} style={{ width: 82, height: 82 }} resizeMode="contain" /> : null}
-                  <Text style={{ marginTop: 10, color: dark.text, fontSize: 16, fontWeight: "900", textAlign: "center" }}>Start with a lesson question</Text>
-                  <Text style={{ marginTop: 5, color: dark.muted, fontSize: 11, lineHeight: 18, textAlign: "center" }}>
-                    JA answers through the backend using your selected lesson as context.
-                  </Text>
-                </View>
-              )}
-              {busy ? (
-                <View style={{ alignSelf: "flex-start", borderRadius: 18, borderTopLeftRadius: 6, backgroundColor: dark.surface2, borderWidth: 1, borderColor: dark.border2, paddingHorizontal: 12, paddingVertical: 10 }}>
-                  <Text style={{ color: dark.muted, fontSize: 12, fontWeight: "800" }}>JA is thinking...</Text>
-                </View>
-              ) : null}
-            </ScrollView>
-          </View>
-
-          <View style={{ paddingHorizontal: 14, paddingBottom: Math.max(18, insets.bottom + 14), gap: 10 }}>
-            {promptMenuOpen ? (
-              <View
-                accessibilityRole="menu"
-                style={{
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: dark.red,
-                  backgroundColor: dark.red,
-                  padding: 10,
-                  gap: 10,
-                }}
-              >
-                {ASK_PRESET_GROUPS.map((group) => (
-                  <View key={group.id} style={{ gap: 7 }}>
-                    <View
-                      style={{
-                        borderRadius: 12,
-                        backgroundColor: "rgba(255,255,255,0.14)",
-                        paddingHorizontal: 10,
-                        paddingVertical: 8,
-                      }}
-                    >
-                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "900" }}>{group.label}</Text>
-                    </View>
-                    <View style={{ gap: 7 }}>
-                      {group.items.map((item) => (
-                        <Pressable
-                          key={item.id}
-                          disabled={busy}
-                          onPress={() => void handlePresetPress(item)}
-                          style={{
-                            minHeight: 44,
-                            borderRadius: 13,
-                            borderWidth: 1,
-                            borderColor: "rgba(255,255,255,0.35)",
-                            backgroundColor: "rgba(255,255,255,0.12)",
-                            justifyContent: "center",
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            opacity: busy ? 0.55 : 1,
-                          }}
-                        >
-                          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800", lineHeight: 17 }}>
-                            {item.label}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            <Pressable
-              disabled={busy}
-              onPress={() => setPromptMenuOpen((current) => !current)}
-              style={{
-                minHeight: 48,
-                borderRadius: 999,
-                backgroundColor: busy ? dark.active : dark.red,
-                borderWidth: 1,
-                borderColor: busy ? dark.border : dark.red,
-                alignItems: "center",
-                justifyContent: "center",
-                flexDirection: "row",
-                gap: 8,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                opacity: busy ? 0.65 : 1,
-              }}
-            >
-              <MaterialCommunityIcons name={promptMenuOpen ? "chevron-down" : "message-question-outline"} size={17} color={busy ? dark.text : "#FFFFFF"} />
-              <Text style={{ color: busy ? dark.text : "#FFFFFF", fontSize: 13, fontWeight: "900" }}>
-                {promptMenuOpen ? "Close prompt list" : "Ask JA about this lesson"}
-              </Text>
-            </Pressable>
-            {error ? <Text style={{ color: dark.amber, fontSize: 11, fontWeight: "800" }}>{error}</Text> : null}
-          </View>
-        </DarkPanel>
-      </View>
-    </KeyboardAvoidingView>
   );
 }
 
