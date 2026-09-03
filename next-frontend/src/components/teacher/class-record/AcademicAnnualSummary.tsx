@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/providers/AuthProvider";
 import { academicGradingService } from "@/services/academic-grading-service";
 import { getApiErrorMessage } from "@/lib/api-error";
+import { getSurnameBand, getSurnameInitial } from "./class-record-visuals";
+import styles from "./TeacherClassRecordWorkbook.module.css";
 import type {
   AnnualSummary,
   AnnualStudent,
@@ -95,25 +97,25 @@ export function AcademicAnnualSummary({
     }
   };
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-slate-600">
-        {summary.schoolYear} · {summary.subjectCode} · {summary.policy.id}.
-        Annual grades require all {summary.periods.length} periods. Missing or
-        conflicting sources remain incomplete.
+    <div className={styles.annualSummary}>
+      <p className={styles.panelIntro}>
+        School year {summary.schoolYear} · {summary.subjectCode}. Annual grades
+        require all {summary.periods.length} policy periods. Missing or
+        conflicting evidence remains visibly incomplete.
       </p>
-      <div className="overflow-x-auto rounded-md border">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50">
+      <div className={styles.tableShell}>
+        <table className={styles.secondaryTable}>
+          <thead>
             <tr>
-              <th className="p-3">Learner</th>
+              <th>Learner</th>
               {summary.periods.map((p) => (
-                <th key={p.key} className="p-3">
+                <th key={p.key}>
                   {p.label}
                 </th>
               ))}
-              <th className="p-3">Official annual</th>
-              <th className="p-3">SRC / evidence</th>
-              {admin && <th className="p-3">Admin actions</th>}
+              <th>Official annual</th>
+              <th>SRC / evidence</th>
+              {admin && <th>Admin actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -122,55 +124,110 @@ export function AcademicAnnualSummary({
                 (r) => r.isCurrent && r.annualGradeId === person.current?.id,
               );
               return (
-                <tr key={person.studentId} className="border-t align-top">
-                  <td className="p-3">
-                    {person.lastName}, {person.firstName}
-                  </td>
-                  {summary.periods.map((p) => (
-                    <td key={p.key} className="p-3">
-                      {person.components.find((c) => c.period === p.key)
-                        ?.grade ?? "Missing"}
-                    </td>
-                  ))}
-                  <td className="p-3">
+                <tr key={person.studentId}>
+                  <th
+                    scope="row"
+                    className={styles.secondaryNameCell}
+                    data-surname-band={getSurnameBand(person.lastName)}
+                  >
+                    <span className={styles.annualLearner}>
+                      <span className={styles.surnameBadge} aria-hidden="true">
+                        {getSurnameInitial(person.lastName)}
+                      </span>
+                      <span className={styles.learnerIdentity}>
+                        <span>
+                          <strong>{person.lastName || "Unnamed learner"}</strong>
+                          {person.firstName ? `, ${person.firstName}` : ""}
+                        </span>
+                        <small>Annual academic record</small>
+                      </span>
+                    </span>
+                  </th>
+                  {summary.periods.map((p) => {
+                    const component = person.components.find(
+                      (candidate) => candidate.period === p.key,
+                    );
+                    return (
+                      <td
+                        key={p.key}
+                        className={styles.annualPeriodCell}
+                        data-score-status={component ? "verified" : "missing"}
+                      >
+                        {component ? (
+                          <>
+                            <strong>{component.grade}</strong>
+                            <small>Verified</small>
+                          </>
+                        ) : (
+                          <span>Missing</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td
+                    className={styles.annualGradeCell}
+                    data-grade-status={
+                      !person.current
+                        ? "unavailable"
+                        : person.current.remarks === "Failed"
+                          ? "intervention"
+                          : "verified"
+                    }
+                  >
                     {person.current ? (
                       <>
-                        <strong>{person.current.officialGrade}</strong> ·{" "}
-                        {person.current.remarks}
-                        <span className="block text-xs text-slate-500">
+                        <strong>{person.current.officialGrade}</strong>
+                        <span
+                          data-grade-status={
+                            person.current.remarks === "Failed"
+                              ? "intervention"
+                              : "verified"
+                          }
+                        >
+                          {person.current.remarks === "Failed"
+                            ? "For intervention"
+                            : "Verified · Passed"}
+                        </span>
+                        <small>
                           {person.current.sum} ÷ {person.current.divisor} ={" "}
                           {Number(person.current.rawAverage).toFixed(3)} before
                           official rounding
-                        </span>
+                        </small>
                       </>
                     ) : (
-                      <span>Incomplete</span>
+                      <span>Incomplete annual grade</span>
                     )}
-                    {person.blockers.map((b, index) => (
-                      <p
-                        key={`${b.code}-${index}`}
-                        className="mt-1 text-xs text-red-700"
-                      >
-                        {b.message}
-                      </p>
-                    ))}
+                    {!!person.blockers.length && (
+                      <ul className={styles.annualBlockers}>
+                        {person.blockers.map((b, index) => (
+                          <li key={`${b.code}-${index}`}>
+                            {b.message}
+                            {(b.period || b.itemId) && (
+                              <small>
+                                {[b.period, b.itemId].filter(Boolean).join(" · ")}
+                              </small>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </td>
-                  <td className="space-y-2 p-3">
+                  <td className={styles.annualEvidenceCell}>
                     {src ? (
-                      <p>
-                        RCM {src.remedialClassMark} · RFG {src.recomputedGrade}
-                        <span className="block text-xs">
+                      <p data-score-status="verified">
+                        <strong>
+                          RCM {src.remedialClassMark} · RFG {src.recomputedGrade}
+                        </strong>
+                        <small>
                           {src.sourceReference}
-                        </span>
+                        </small>
                       </p>
                     ) : (
-                      <span>No SRC result</span>
+                      <span data-score-status="unavailable">No SRC result</span>
                     )}
-                    <details>
-                      <summary className="cursor-pointer underline">
-                        Sources and history
-                      </summary>
-                      <ul className="mt-2 space-y-2 text-xs">
+                    <details className={styles.historyEvidence}>
+                      <summary>Sources and history</summary>
+                      <ul>
                         {person.components.map((c) => (
                           <li key={c.period}>
                             {
@@ -178,9 +235,7 @@ export function AcademicAnnualSummary({
                                 ?.label
                             }
                             : {c.sourceType}
-                            <span className="block break-all">
-                              {c.sourceId}
-                            </span>
+                            <small>{c.sourceId}</small>
                           </li>
                         ))}
                         {person.history.map((version) => (
@@ -188,9 +243,7 @@ export function AcademicAnnualSummary({
                             {version.isCurrent ? "Current" : "Superseded"}{" "}
                             annual: {version.officialGrade} ·{" "}
                             {new Date(version.computedAt).toLocaleDateString()}
-                            <span className="block break-all">
-                              {version.id}
-                            </span>
+                            <small>{version.id}</small>
                             {version.invalidationReason}
                           </li>
                         ))}
@@ -198,7 +251,7 @@ export function AcademicAnnualSummary({
                     </details>
                   </td>
                   {admin && (
-                    <td className="space-y-2 p-3">
+                    <td className={styles.annualActions}>
                       <Button
                         size="sm"
                         variant="outline"
@@ -232,13 +285,13 @@ export function AcademicAnnualSummary({
           </tbody>
         </table>
         {!summary.students.length && (
-          <p className="p-3 text-sm">
+          <p className={styles.emptyGrid}>
             No class participants or annual source evidence.
           </p>
         )}
       </div>
       {!admin && (
-        <p className="text-sm">
+        <p className={styles.readOnlyNotice}>
           Ask an administrator to verify external grades, resolve source
           conflicts, or record SRC evidence.
         </p>
@@ -246,20 +299,20 @@ export function AcademicAnnualSummary({
       {admin && (
         <Link
           href="/dashboard/admin/system-settings"
-          className="text-sm underline"
+          className={styles.settingsLink}
         >
           Manage back subjects and Grade 10 completion
         </Link>
       )}
       {student && (
         <form
-          className="space-y-3 rounded-md border p-4"
+          className={styles.annualEvidenceForm}
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          <h3 className="font-medium">
+          <h3>
             {action === "external"
               ? "Verified external period grade"
               : action === "source"
@@ -268,16 +321,15 @@ export function AcademicAnnualSummary({
             : {student.lastName}, {student.firstName}
           </h3>
           {error && (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className={styles.alert}>
               {error}
             </p>
           )}
           {action !== "src" && (
-            <div>
+            <div className={styles.formField}>
               <Label htmlFor="annual-evidence-period">Period</Label>
               <select
                 id="annual-evidence-period"
-                className="ml-3 h-10 rounded-md border bg-white px-3"
                 value={period}
                 onChange={(e) => {
                   setPeriod(e.target.value as AcademicPeriodKey);
@@ -293,12 +345,11 @@ export function AcademicAnnualSummary({
             </div>
           )}
           {action === "source" ? (
-            <div>
+            <div className={styles.formField}>
               <Label htmlFor="annual-source">Verified source</Label>
               <select
                 id="annual-source"
                 required
-                className="block h-10 w-full rounded-md border bg-white px-3 text-sm"
                 value={sourceId}
                 onChange={(e) => setSourceId(e.target.value)}
               >
@@ -317,7 +368,7 @@ export function AcademicAnnualSummary({
             </div>
           ) : (
             <>
-              <div>
+              <div className={styles.formField}>
                 <Label htmlFor="annual-evidence-mark">
                   {action === "src"
                     ? "Remedial class mark (RCM)"
@@ -335,7 +386,7 @@ export function AcademicAnnualSummary({
                   onChange={(e) => setGrade(e.target.value)}
                 />
               </div>
-              <div>
+              <div className={styles.formField}>
                 <Label htmlFor="annual-evidence-reference">
                   Verified source / register reference
                 </Label>
@@ -349,7 +400,7 @@ export function AcademicAnnualSummary({
               </div>
             </>
           )}
-          <div>
+          <div className={styles.formField}>
             <Label htmlFor="annual-evidence-reason">
               Reason and verification notes
             </Label>
@@ -361,12 +412,12 @@ export function AcademicAnnualSummary({
               onChange={(e) => setReason(e.target.value)}
             />
           </div>
-          <p className="text-sm text-slate-600">
+          <p className={styles.panelIntro}>
             {action === "src"
               ? "The server computes the recomputed final grade from the original annual grade and RCM. The original grade remains unchanged."
               : "This action is audited. Conflicting local and external evidence requires an explicit source choice; nothing is averaged together."}
           </p>
-          <div className="flex gap-2">
+          <div className={styles.formActions}>
             <Button type="submit" disabled={busy}>
               Record verified evidence
             </Button>

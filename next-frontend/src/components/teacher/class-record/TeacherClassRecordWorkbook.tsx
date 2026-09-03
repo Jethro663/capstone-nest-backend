@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,9 @@ import {
 import { useAuth } from "@/providers/AuthProvider";
 import { cn } from "@/utils/cn";
 import { AcademicAnnualSummary } from "./AcademicAnnualSummary";
+import { TeacherClassRecordGradeGrid } from "./TeacherClassRecordGradeGrid";
+import { getSurnameBand, getSurnameInitial } from "./class-record-visuals";
+import styles from "./TeacherClassRecordWorkbook.module.css";
 import type { TeacherClassRecordState } from "@/hooks/use-teacher-class-record";
 import type { PeriodEligibility } from "@/types/academic-grading";
 import type {
@@ -29,19 +32,22 @@ type Cell = {
   status: string;
   reason: string;
 };
-const number = (value: number | null | undefined, digits = 2) =>
-  value == null ? "Incomplete" : Number(value).toFixed(digits);
+
+type WorkbookTab = "scores" | "roster" | "readiness" | "annual" | "history";
+
 export function TeacherClassRecordWorkbook({
   state,
   className,
   emptyMessage = "No period workbook exists yet. Choose a policy period to create one.",
+  presentation = "full",
 }: {
   state: TeacherClassRecordState;
   className?: string;
   emptyMessage?: string;
+  presentation?: "full" | "content-only";
 }) {
   const { role } = useAuth();
-  const [tab, setTab] = useState("scores");
+  const [tab, setTab] = useState<WorkbookTab>("scores");
   const [dialog, setDialog] = useState<"finalize" | "reopen" | null>(null);
   const [correctionReason, setCorrectionReason] = useState("");
   const [rosterReason, setRosterReason] = useState("");
@@ -129,101 +135,165 @@ export function TeacherClassRecordWorkbook({
     const person = state.roster?.participants.find((p) => p.studentId === id);
     return person ? `${person.lastName}, ${person.firstName}` : id;
   };
-  const tabs = [
-    ["scores", "Scores"],
-    ["roster", "Period eligibility"],
-    ["readiness", "Readiness"],
-    ["annual", "Annual summary"],
-    ["history", "Revision history"],
+  const tabs: Array<{ key: WorkbookTab; label: string }> = [
+    { key: "scores", label: "Grades" },
+    { key: "roster", label: "Eligibility" },
+    { key: "readiness", label: "Review & Finalize" },
+    { key: "annual", label: "Annual" },
+    { key: "history", label: "History" },
   ];
+  const historicalRecords = state.classRecords.filter(
+    (candidate) => !state.quarters.includes(candidate.gradingPeriod),
+  );
+  const readinessGroups = Array.from(
+    (state.readiness?.blockers ?? []).reduce(
+      (groups, blocker) => {
+        const key = blocker.studentId ?? "record";
+        const existing = groups.get(key) ?? [];
+        existing.push(blocker);
+        groups.set(key, existing);
+        return groups;
+      },
+      new Map<
+        string,
+        NonNullable<TeacherClassRecordState["readiness"]>["blockers"]
+      >(),
+    ),
+  );
+  const recordStatus = record?.status
+    ? `${record.status.charAt(0).toUpperCase()}${record.status.slice(1)}`
+    : "Waiting";
   return (
-    <div className={cn("space-y-4", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">
-            {sheet?.header.subject ?? "Class record"}
-            {record ? ` · ${label(record.gradingPeriod)}` : ""}
-          </h2>
-          <p className="text-sm text-slate-600">
-            {state.policy?.schoolYear} · {state.policy?.id}
-            {record
-              ? ` · ${record.status} · revision ${record.revision ?? 0}`
-              : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => void state.refresh()}>
-            Refresh workbook
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!sheet || state.spreadsheetStatus === "error"}
-            onClick={() => void state.exportSpreadsheet()}
-          >
-            Export workbook and annual evidence
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-2" aria-label="Grading periods">
-        {state.quarters.map((period) => {
-          const existing = state.classRecords.find(
-            (r) => r.gradingPeriod === period,
-          );
-          return (
-            <Button
-              key={period}
-              variant={
-                record?.id === existing?.id && existing ? "default" : "outline"
-              }
-              disabled={state.generating}
-              onClick={() =>
-                existing
-                  ? state.setSelectedRecordId(existing.id)
-                  : void state.generateQuarter(period)
-              }
-            >
-              {existing ? label(period) : `Create ${label(period)}`}
+    <section className={cn(styles.workbook, className)}>
+      {presentation === "full" && (
+        <header className={styles.workbookHeader}>
+          <div className={styles.titleBlock}>
+            <h2>{sheet?.header.subject ?? "Class record"}</h2>
+            <div className={styles.headerMeta}>
+              {record && (
+                <span className={styles.periodLabel}>
+                  {label(record.gradingPeriod)}
+                </span>
+              )}
+              {state.policy?.schoolYear && (
+                <span>School year {state.policy.schoolYear}</span>
+              )}
+              <span className={styles.statusBadge} data-status={record?.status}>
+                {recordStatus}
+              </span>
+              {record && (
+                <span className={styles.revisionBadge}>
+                  Revision {record.revision ?? 0}
+                </span>
+              )}
+            </div>
+            {state.policy && (
+              <details className={styles.recordDetails}>
+                <summary>Record details</summary>
+                <p>Policy {state.policy.id}</p>
+              </details>
+            )}
+          </div>
+          <div className={styles.headerActions}>
+            <Button variant="outline" onClick={() => void state.refresh()}>
+              Refresh workbook
             </Button>
-          );
-        })}
-        {state.classRecords
-          .filter((r) => !state.quarters.includes(r.gradingPeriod))
-          .map((r) => (
             <Button
-              key={r.id}
               variant="outline"
-              onClick={() => state.setSelectedRecordId(r.id)}
+              disabled={!sheet || state.spreadsheetStatus === "error"}
+              onClick={() => void state.exportSpreadsheet()}
             >
-              Historical {r.gradingPeriod}
+              Export workbook and annual evidence
             </Button>
-          ))}
-      </div>
+          </div>
+        </header>
+      )}
+      <div className={styles.workbookContent}>
+        {presentation === "full" && (
+          <div className={styles.periodNavigation} aria-label="Grading periods">
+            {state.quarters.map((period) => {
+              const existing = state.classRecords.find(
+                (candidate) => candidate.gradingPeriod === period,
+              );
+              const selected = Boolean(
+                existing && record?.id === existing.id,
+              );
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  className={styles.periodButton}
+                  aria-pressed={selected}
+                  disabled={state.generating}
+                  onClick={() =>
+                    existing
+                      ? state.setSelectedRecordId(existing.id)
+                      : void state.generateQuarter(period)
+                  }
+                >
+                  {existing ? label(period) : `Create ${label(period)}`}
+                </button>
+              );
+            })}
+            {historicalRecords.length > 0 && (
+              <label className={styles.archivedLabel}>
+                Archived periods
+                <select
+                  className={styles.archivedSelect}
+                  aria-label="Archived periods"
+                  value={
+                    historicalRecords.some(
+                      (candidate) => candidate.id === record?.id,
+                    )
+                      ? record?.id
+                      : ""
+                  }
+                  onChange={(event) => {
+                    if (event.target.value)
+                      state.setSelectedRecordId(event.target.value);
+                  }}
+                >
+                  <option value="">Choose a historical record</option>
+                  {historicalRecords.map((historicalRecord) => (
+                    <option key={historicalRecord.id} value={historicalRecord.id}>
+                      {label(historicalRecord.gradingPeriod)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
       {state.spreadsheetStatus === "error" && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className={styles.alert}>
           Readiness could not be refreshed. The previous view may be stale;
           refresh before editing or finalizing.
         </p>
       )}
       {!record ? (
-        <p className="rounded-md border p-4 text-sm">{emptyMessage}</p>
+        <p className={styles.emptyState}>{emptyMessage}</p>
       ) : !sheet ? (
-        <p role="status">Loading period evidence…</p>
+        <p role="status" className={styles.loadingState}>
+          Loading period evidence…
+        </p>
       ) : (
         <>
-          <div className="space-y-2 rounded-md border p-4 text-sm">
-            <p>
+          <div className={styles.statusPanel}>
+            <div className={styles.statusCopy}>
+              <p>
               {sheet.academicCapabilities?.readOnlyReason ??
                 (!canGrade && canPrepare
                   ? "Future draft: preparation is allowed; scores and finalization wait until this period is active."
                   : "Blank scores are missing. Enter zero explicitly; exemptions require a reason.")}
-            </p>
-            {!sheet.classRecord.rosterConfirmedAt && (
-              <p className="text-red-700">
-                Period eligibility is unconfirmed. Current enrollment does not
-                establish earlier-period eligibility.
               </p>
-            )}
-            <div className="flex flex-wrap gap-2">
+              {!sheet.classRecord.rosterConfirmedAt && (
+                <p data-status="warning">
+                  Period eligibility is unconfirmed. Current enrollment does not
+                  establish earlier-period eligibility.
+                </p>
+              )}
+            </div>
+            <div className={styles.statusActions}>
               <Button
                 disabled={
                   !canGrade ||
@@ -255,30 +325,40 @@ export function TeacherClassRecordWorkbook({
             </div>
           </div>
           <div
-            className="flex flex-wrap gap-2 border-b pb-3"
+            className={styles.tabs}
             role="tablist"
             aria-label="Academic evidence"
           >
-            {tabs.map(([key, title]) => (
+            {tabs.map(({ key, label: tabLabel }) => (
               <button
                 key={key}
                 type="button"
                 role="tab"
                 aria-selected={tab === key}
-                className={cn(
-                  "rounded-md px-3 py-2 text-sm",
-                  tab === key ? "bg-slate-900 text-white" : "border bg-white",
-                )}
+                aria-controls={`class-record-panel-${key}`}
+                id={`class-record-tab-${key}`}
+                className={styles.tab}
                 onClick={() => setTab(key)}
               >
-                {title}
+                {tabLabel}
+                {key === "readiness" &&
+                  Boolean(state.readiness?.blockers.length) && (
+                    <span className={styles.tabCount}>
+                      ({state.readiness?.blockers.length})
+                    </span>
+                  )}
               </button>
             ))}
           </div>
           {tab === "scores" && (
-            <div role="tabpanel" aria-label="Scores" className="space-y-3">
+            <div
+              role="tabpanel"
+              id="class-record-panel-scores"
+              aria-labelledby="class-record-tab-scores"
+              className={styles.panel}
+            >
               {state.policy?.examComponents.length ? (
-                <p className="text-sm">
+                <p className={styles.panelIntro}>
                   Examination components:{" "}
                   {state.policy.examComponents
                     .map((c) => `${c.key} ${c.weight}%`)
@@ -286,230 +366,24 @@ export function TeacherClassRecordWorkbook({
                   . The examination PS uses these component weights.
                 </p>
               ) : null}
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full border-collapse text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th rowSpan={2} className="min-w-48 border p-2 text-left">
-                        Learner / eligibility
-                      </th>
-                      {sheet.categories.map((category) => (
-                        <th
-                          key={category.id}
-                          colSpan={category.items.length + 3}
-                          className="border p-2"
-                        >
-                          {category.name === "Quarterly Assessment" &&
-                          state.policy?.examComponents.length
-                            ? "Examination"
-                            : category.name}{" "}
-                          · {category.weight}%
-                        </th>
-                      ))}
-                      <th rowSpan={2} className="border p-2">
-                        Initial grade
-                      </th>
-                      <th rowSpan={2} className="border p-2">
-                        {record.status === "draft"
-                          ? "Provisional"
-                          : record.revision
-                            ? "Official"
-                            : "Legacy unverified"}{" "}
-                        period grade
-                      </th>
-                    </tr>
-                    <tr>
-                      {sheet.categories.map((category) => (
-                        <Fragment key={category.id}>
-                          {category.items.map((item) => (
-                            <th key={item.id} className="min-w-24 border p-2">
-                              <span className="block">{item.title}</span>
-                              {item.assessmentId && (
-                                <button
-                                  className="mt-1 text-xs underline"
-                                  disabled={
-                                    !canGrade || state.syncingItemId === item.id
-                                  }
-                                  onClick={() => void state.syncItem(item.id)}
-                                >
-                                  Sync result
-                                </button>
-                              )}
-                            </th>
-                          ))}
-                          <th className="border p-2">Total</th>
-                          <th className="border p-2">PS</th>
-                          <th className="border p-2">WS</th>
-                        </Fragment>
-                      ))}
-                    </tr>
-                    <tr>
-                      <th className="border p-2 text-left">
-                        Highest possible score
-                      </th>
-                      {sheet.categories.map((category) => (
-                        <Fragment key={category.id}>
-                          {category.items.map((item) => (
-                            <td
-                              key={item.id}
-                              className="border p-2 text-center"
-                            >
-                              {state.editingHpsItemId === item.id ? (
-                                <Input
-                                  aria-label={`HPS for ${item.title}`}
-                                  ref={state.hpsEditRef}
-                                  type="number"
-                                  min={0}
-                                  step="0.01"
-                                  value={state.hpsValue}
-                                  onChange={(e) =>
-                                    state.setHpsValue(e.target.value)
-                                  }
-                                  onKeyDown={state.handleHpsKeyDown}
-                                  onBlur={() => void state.handleHpsSave()}
-                                />
-                              ) : (
-                                <button
-                                  type="button"
-                                  className="w-full rounded px-2 py-1 disabled:cursor-default enabled:hover:bg-slate-100"
-                                  disabled={
-                                    !canPrepare || Boolean(item.assessmentId)
-                                  }
-                                  onClick={() =>
-                                    state.handleHpsClick(
-                                      item.id,
-                                      item.hps,
-                                      item.assessmentId,
-                                    )
-                                  }
-                                >
-                                  {item.hps ?? "—"}
-                                </button>
-                              )}
-                            </td>
-                          ))}
-                          <td
-                            colSpan={3}
-                            className="border p-2 text-center text-xs"
-                          >
-                            {category.weight}% category weight
-                          </td>
-                        </Fragment>
-                      ))}
-                      <td colSpan={2} className="border p-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sheet.students.map((student) => (
-                      <tr key={student.studentId}>
-                        <th
-                          scope="row"
-                          className="border p-2 text-left font-normal"
-                        >
-                          {student.lastName}, {student.firstName}
-                          <span className="block text-xs text-slate-500">
-                            {student.eligibility ?? "Unconfirmed"}
-                            {student.isRemoved
-                              ? " · removed from current class"
-                              : ""}
-                          </span>
-                        </th>
-                        {sheet.categories.map((category) => {
-                          const values = student.categories.find(
-                            (c) => c.categoryId === category.id,
-                          );
-                          return (
-                            <Fragment key={category.id}>
-                              {category.items.map((item, index) => {
-                                const score = values?.scores[index] ?? null;
-                                const status =
-                                  values?.scoreStatuses?.[index] ??
-                                  (score == null ? "missing" : "recorded");
-                                const display =
-                                  !item.hps ||
-                                  (student.eligibility &&
-                                    student.eligibility !== "eligible")
-                                    ? "—"
-                                    : status === "excused"
-                                      ? "Excused"
-                                      : (score ?? "Missing");
-                                return (
-                                  <td
-                                    key={item.id}
-                                    className="border p-1 text-center"
-                                  >
-                                    <button
-                                      type="button"
-                                      className="w-full rounded px-2 py-2 text-xs enabled:hover:bg-slate-100 disabled:cursor-default"
-                                      disabled={
-                                        !canGrade ||
-                                        student.eligibility !== "eligible" ||
-                                        !item.hps ||
-                                        state.spreadsheetStatus !== "ready"
-                                      }
-                                      aria-label={`${student.firstName} ${student.lastName}, ${item.title}: ${display}`}
-                                      onClick={() =>
-                                        openCell(
-                                          item,
-                                          student,
-                                          score,
-                                          status,
-                                          values?.scoreReasons?.[index] ?? "",
-                                        )
-                                      }
-                                    >
-                                      {display}
-                                    </button>
-                                  </td>
-                                );
-                              })}
-                              <td className="border p-2 text-center">
-                                {number(values?.total)}
-                              </td>
-                              <td className="border p-2 text-center">
-                                {number(values?.ps)}
-                              </td>
-                              <td className="border p-2 text-center">
-                                {number(values?.ws)}
-                              </td>
-                            </Fragment>
-                          );
-                        })}
-                        <td className="border p-2 text-center">
-                          {number(student.initialGrade)}
-                        </td>
-                        <td className="border p-2 text-center">
-                          <strong>
-                            {student.quarterlyGrade ??
-                              (student.remarks === "Not graded"
-                                ? "Not graded"
-                                : "Incomplete")}
-                          </strong>
-                          <span className="block text-xs">
-                            {student.gradeProvenance === "legacy_unverified"
-                              ? "Legacy unverified · "
-                              : ""}
-                            {student.remarks}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!sheet.students.length && (
-                  <p className="p-4 text-sm">
-                    No participants. Review and confirm an empty eligibility
-                    register only if this period had no eligible learners.
-                  </p>
-                )}
-              </div>
+              <TeacherClassRecordGradeGrid
+                key={sheet.classRecord.id}
+                state={state}
+                sheet={sheet}
+                canGrade={canGrade}
+                canPrepare={canPrepare}
+                onOpenCell={({ item, student, score, status, reason }) =>
+                  openCell(item, student, score, status, reason)
+                }
+              />
             </div>
           )}
           {tab === "roster" && (
             <form
               role="tabpanel"
-              aria-label="Period eligibility"
-              className="space-y-3"
+              id="class-record-panel-roster"
+              aria-labelledby="class-record-tab-roster"
+              className={styles.panel}
               onSubmit={async (e) => {
                 e.preventDefault();
                 const saved = await state.confirmRoster({
@@ -526,14 +400,14 @@ export function TeacherClassRecordWorkbook({
                 if (saved) setRosterReason("");
               }}
             >
-              <p className="text-sm">
+              <p className={styles.panelIntro}>
                 Confirm each learner’s actual eligibility for{" "}
                 {label(record.gradingPeriod)}. Past scores and membership remain
                 in history when a learner is excluded.
               </p>
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50">
+              <div className={styles.tableShell}>
+                <table className={styles.secondaryTable}>
+                  <thead>
                     <tr>
                       <th className="p-3">Learner</th>
                       <th className="p-3">Period eligibility</th>
@@ -542,21 +416,44 @@ export function TeacherClassRecordWorkbook({
                   </thead>
                   <tbody>
                     {state.roster?.participants.map((person) => (
-                      <tr key={person.studentId} className="border-t">
-                        <td className="p-3">
-                          {person.lastName}, {person.firstName}
-                          <span className="block text-xs">
-                            {person.currentlyEnrolled
-                              ? "Currently enrolled"
-                              : "Not currently enrolled"}
+                      <tr key={person.studentId}>
+                        <th
+                          scope="row"
+                          className={styles.secondaryNameCell}
+                          data-surname-band={getSurnameBand(
+                            person.lastName ?? "",
+                          )}
+                        >
+                          <span className={styles.annualLearner}>
+                            <span
+                              className={styles.surnameBadge}
+                              aria-hidden="true"
+                            >
+                              {getSurnameInitial(person.lastName)}
+                            </span>
+                            <span className={styles.learnerIdentity}>
+                              <span>
+                                <strong>{person.lastName ?? "Unknown"}</strong>,{" "}
+                                {person.firstName ?? "Unknown"}
+                              </span>
+                              <small>
+                                {person.currentlyEnrolled
+                                  ? "Currently enrolled"
+                                  : "Not currently enrolled"}
+                              </small>
+                            </span>
                           </span>
-                        </td>
+                        </th>
                         <td className="p-3">
                           <select
                             aria-label={`Eligibility for ${person.firstName} ${person.lastName}`}
                             required
                             disabled={!canPrepare}
-                            className="h-10 rounded-md border bg-white px-2"
+                            className={styles.eligibilitySelect}
+                            data-eligibility-status={
+                              decisions[person.studentId]?.eligibility ||
+                              "unconfirmed"
+                            }
                             value={
                               decisions[person.studentId]?.eligibility ?? ""
                             }
@@ -634,8 +531,19 @@ export function TeacherClassRecordWorkbook({
             </form>
           )}
           {tab === "readiness" && (
-            <div role="tabpanel" aria-label="Readiness" className="space-y-3">
-              <p className="text-sm">
+            <div
+              role="tabpanel"
+              id="class-record-panel-readiness"
+              aria-labelledby="class-record-tab-readiness"
+              className={styles.panel}
+            >
+              <p
+                className={
+                  state.readiness?.ready
+                    ? styles.readyMessage
+                    : styles.panelIntro
+                }
+              >
                 {state.readiness?.ready
                   ? "All finalization checks pass."
                   : "Resolve every blocker before finalizing. No missing score is converted to zero."}
@@ -646,41 +554,55 @@ export function TeacherClassRecordWorkbook({
               >
                 Refresh readiness
               </Button>
-              <ul className="space-y-2">
-                {state.readiness?.blockers.map((blocker, index) => (
-                  <li
-                    key={`${blocker.code}-${index}`}
-                    className="rounded-md border p-3 text-sm"
-                  >
-                    {blocker.message}
-                    {blocker.studentId && (
-                      <span className="block text-xs">
-                        {learnerName(blocker.studentId)}
-                      </span>
-                    )}
-                    {blocker.itemId && (
-                      <span className="block text-xs">
-                        {sheet.categories
-                          .flatMap((c) => c.items)
-                          .find((item) => item.id === blocker.itemId)?.title ??
-                          blocker.itemId}
-                      </span>
-                    )}
-                  </li>
+              <div className={styles.blockerGroups}>
+                {readinessGroups.map(([groupKey, blockers]) => (
+                  <section className={styles.blockerGroup} key={groupKey}>
+                    <h3>
+                      {groupKey === "record"
+                        ? "Record checks"
+                        : learnerName(groupKey)}
+                    </h3>
+                    <ul className={styles.blockerList}>
+                      {blockers.map((blocker, index) => (
+                        <li
+                          key={`${blocker.code}-${index}`}
+                          className={styles.blocker}
+                        >
+                          {blocker.message}
+                          {blocker.itemId && (
+                            <small>
+                              Assessment:{" "}
+                              {sheet.categories
+                                .flatMap((category) => category.items)
+                                .find((item) => item.id === blocker.itemId)
+                                ?.title ?? blocker.itemId}
+                            </small>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
           {tab === "annual" && (
-            <div role="tabpanel" aria-label="Annual summary">
+            <div
+              role="tabpanel"
+              id="class-record-panel-annual"
+              aria-labelledby="class-record-tab-annual"
+              className={styles.panel}
+            >
               {state.annualSummary ? (
                 <AcademicAnnualSummary
                   summary={state.annualSummary}
                   refresh={state.loadAnnual}
                 />
               ) : (
-                <div className="space-y-2">
-                  <p>Annual evidence is not loaded.</p>
+                <div className={styles.panel}>
+                  <p className={styles.panelIntro}>
+                    Annual evidence is not loaded.
+                  </p>
                   <Button
                     variant="outline"
                     onClick={() => void loadAnnual()}
@@ -694,8 +616,9 @@ export function TeacherClassRecordWorkbook({
           {tab === "history" && (
             <div
               role="tabpanel"
-              aria-label="Revision history"
-              className="space-y-3"
+              id="class-record-panel-history"
+              aria-labelledby="class-record-tab-history"
+              className={styles.panel}
             >
               <Button
                 variant="outline"
@@ -705,56 +628,82 @@ export function TeacherClassRecordWorkbook({
               </Button>
               {state.history && (
                 <>
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr>
-                        <th className="p-2">Learner</th>
-                        <th className="p-2">Revision</th>
-                        <th className="p-2">Grade</th>
-                        <th className="p-2">Evidence</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {state.history.revisions.map((version) => (
-                        <tr key={version.id} className="border-t">
-                          <td className="p-2">
-                            {learnerName(version.studentId)}
-                          </td>
-                          <td className="p-2">
-                            {version.revision} ·{" "}
-                            {version.isCurrent ? "current" : "superseded"}
-                          </td>
-                          <td className="p-2">{version.grade}</td>
-                          <td className="p-2">
-                            <span className="block break-all text-xs">
-                              {version.id}
-                            </span>
-                            {new Date(version.computedAt).toLocaleString()}
-                          </td>
+                  <div className={styles.tableShell}>
+                    <table className={styles.secondaryTable}>
+                      <thead>
+                        <tr>
+                          <th>Learner</th>
+                          <th>Revision</th>
+                          <th>Grade</th>
+                          <th>Evidence</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {state.history.revisions.map((version) => {
+                          const participant = state.roster?.participants.find(
+                            (person) => person.studentId === version.studentId,
+                          );
+                          return (
+                            <tr key={version.id}>
+                              <th
+                                scope="row"
+                                className={styles.secondaryNameCell}
+                                data-surname-band={getSurnameBand(
+                                  participant?.lastName ?? "",
+                                )}
+                              >
+                                <span className={styles.annualLearner}>
+                                  <span
+                                    className={styles.surnameBadge}
+                                    aria-hidden="true"
+                                  >
+                                    {getSurnameInitial(participant?.lastName)}
+                                  </span>
+                                  <span className={styles.learnerIdentity}>
+                                    <span>
+                                      {learnerName(version.studentId)}
+                                    </span>
+                                    <small>Recorded learner</small>
+                                  </span>
+                                </span>
+                              </th>
+                              <td>
+                                {version.revision} ·{" "}
+                                {version.isCurrent ? "current" : "superseded"}
+                              </td>
+                              <td>{version.grade}</td>
+                              <td>
+                                <span className={styles.evidenceId}>
+                                  {version.id}
+                                </span>
+                                {new Date(version.computedAt).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                   {state.history.legacyEvidence.map((legacy) => (
                     <details
                       key={legacy.id}
-                      className="rounded-md border p-3 text-sm"
+                      className={styles.historyEvidence}
                     >
-                      <summary className="cursor-pointer">
+                      <summary>
                         Unverified legacy evidence ·{" "}
                         {learnerName(legacy.studentId)} · {legacy.period}
                       </summary>
                       <p>
                         This preserved snapshot is not a trusted annual source.
                       </p>
-                      <pre className="max-h-80 overflow-auto whitespace-pre-wrap text-xs">
+                      <pre>
                         {JSON.stringify(legacy.sourceSnapshot, null, 2)}
                       </pre>
                     </details>
                   ))}
                   {!state.history.revisions.length &&
                     !state.history.legacyEvidence.length && (
-                      <p className="text-sm">
+                      <p className={styles.panelIntro}>
                         No finalized grade revisions or archived legacy
                         evidence.
                       </p>
@@ -765,6 +714,7 @@ export function TeacherClassRecordWorkbook({
           )}
         </>
       )}
+      </div>
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {
@@ -951,6 +901,6 @@ export function TeacherClassRecordWorkbook({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   );
 }

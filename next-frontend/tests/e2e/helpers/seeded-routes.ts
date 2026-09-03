@@ -14,6 +14,7 @@ const SESSION_CACHE = new Map<RoleKey, { token: string; userId: string }>();
 let cachedAdminTemplateWorkspaceUrl: string | null | undefined;
 let cachedTeacherLessonEditUrl: string | null | undefined;
 let cachedTeacherAssessmentEditUrl: string | null | undefined;
+let cachedTeacherClassRecordUrl: string | null | undefined;
 let cachedStudentLessonUrl: string | null | undefined;
 
 function getCredentials(role: RoleKey): Credentials | null {
@@ -164,6 +165,36 @@ export async function resolveTeacherAssessmentEditUrl() {
 
   cachedTeacherAssessmentEditUrl = null;
   return cachedTeacherAssessmentEditUrl;
+}
+
+export async function resolveTeacherClassRecordUrl() {
+  if (process.env.PLAYWRIGHT_TEACHER_CLASS_RECORD_URL) {
+    return process.env.PLAYWRIGHT_TEACHER_CLASS_RECORD_URL;
+  }
+  if (cachedTeacherClassRecordUrl !== undefined) {
+    return cachedTeacherClassRecordUrl;
+  }
+
+  const session = await apiLogin('teacher');
+  if (!session) {
+    cachedTeacherClassRecordUrl = null;
+    return cachedTeacherClassRecordUrl;
+  }
+
+  const classes = await apiGet(`/classes/teacher/${session.userId}`, session.token);
+  const classRows = (classes?.data ?? []) as Array<{ id: string }>;
+  for (const row of classRows) {
+    const records = await apiGet(`/class-record/by-class/${row.id}`, session.token);
+    const recordRows = (records?.data ?? []) as Array<{ id: string }>;
+    if (recordRows.length > 0) {
+      cachedTeacherClassRecordUrl =
+        `/dashboard/teacher/classes/${row.id}?view=class-record`;
+      return cachedTeacherClassRecordUrl;
+    }
+  }
+
+  cachedTeacherClassRecordUrl = null;
+  return cachedTeacherClassRecordUrl;
 }
 
 export async function resolveStudentLessonUrl() {

@@ -309,6 +309,7 @@ export default function ClassRecordPage() {
               <TeacherClassRecordWorkbook
                 state={classRecordState}
                 emptyMessage="No workbook rows are available for this period."
+                presentation="content-only"
               />
             </section>
           ) : (

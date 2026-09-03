@@ -1819,13 +1819,8 @@
 }
 
 .teacher-class-workspace__record-embed {
-  border: 1px solid #dce5f2;
-  border-radius: 0.95rem;
-  background: #fff;
-  padding: 0.68rem;
   width: 100%;
   min-width: 0;
-  zoom: 0.76;
 }
 
 .teacher-class-workspace__panel--record {
@@ -1835,14 +1830,7 @@
 .teacher-class-workspace__record-scroll {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 0.95rem;
-}
-
-.teacher-class-workspace__record-scroll .overflow-auto {
-  overflow-x: auto !important;
+  min-width: 0;
 }
 
 .teacher-class-workspace__announcement-rich {
