@@ -15,11 +15,15 @@ Authenticated mobile users SHALL be able to change their password through the ba
 - **THEN** mobile SHALL show success only after backend confirmation and SHALL clear sensitive inputs
 
 ### Requirement: Domain-correct navigation
-Every role tab label SHALL open a screen for that domain, and notifications SHALL not substitute for announcements.
+Every visible role navigation label SHALL open a screen for that domain, every required domain SHALL remain reachable through a truthful role-owned navigation entry, and notifications SHALL not substitute for announcements. A required domain does not need to occupy a permanent bottom tab when it remains clearly reachable from a role workspace.
 
 #### Scenario: Teacher opens Announcements
-- **WHEN** a teacher selects the Announcements tab
+- **WHEN** a teacher selects the Announcements entry from Teacher More
 - **THEN** mobile SHALL open the teacher announcement workspace rather than the notification inbox
+
+#### Scenario: Administrator opens Announcements
+- **WHEN** an administrator selects the Announcements quick launch from Admin Home
+- **THEN** mobile SHALL open the administrator announcement workspace rather than the notification inbox
 
 ### Requirement: Read all notifications
 Mobile SHALL expose the backend read-all notification mutation and refresh unread state after success.
