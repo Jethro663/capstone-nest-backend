@@ -2,16 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { classService } from '@/services/class-service';
 import type {
+  Enrollment,
   TeacherClassStudentOverview,
-  TeacherStudentAssessmentHistoryItem,
 } from '@/types/class';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AssessmentHistoryWorklist,
+  type AssessmentHistoryView,
+} from './_components/assessment-history-worklist';
 import './student-overview.css';
 
 function formatFullName(data: TeacherClassStudentOverview | null) {
@@ -24,17 +28,6 @@ function formatInitials(data: TeacherClassStudentOverview | null) {
   const first = data?.student.firstName?.trim().charAt(0) ?? '';
   const last = data?.student.lastName?.trim().charAt(0) ?? '';
   return `${first}${last}`.toUpperCase() || 'ST';
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return '--';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '--';
-  return parsed.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function toPercent(value: number | null | undefined) {
@@ -51,66 +44,45 @@ function prettifyStatus(status?: string | null) {
     .join(' ');
 }
 
-function HistorySection({
-  title,
-  items,
-  tone,
-}: {
-  title: string;
-  items: TeacherStudentAssessmentHistoryItem[];
-  tone: 'finished' | 'late' | 'pending';
-}) {
-  return (
-    <section className="teacher-student-overview__history-group">
-      <header>
-        <h3>{title}</h3>
-        <span>{items.length}</span>
-      </header>
-      {items.length === 0 ? (
-        <div className="teacher-student-overview__empty-row">No records.</div>
-      ) : (
-        <div className="teacher-student-overview__history-list">
-          {items.map((item) => (
-            <article
-              key={`${tone}-${item.assessmentId}`}
-              className="teacher-student-overview__history-item"
-            >
-              <div>
-                <p>{item.title}</p>
-                <small>
-                  {item.type.replace(/_/g, ' ')} - Due {formatDate(item.dueDate)}
-                </small>
-              </div>
-              <div className="teacher-student-overview__history-meta">
-                <span data-tone={tone}>{item.statusLabel}</span>
-                <small>
-                  {item.submittedAt
-                    ? `Submitted ${formatDate(item.submittedAt)}`
-                    : 'Not submitted'}
-                </small>
-                <strong>
-                  {item.score !== null && item.score !== undefined
-                    ? `${item.score}/${item.totalPoints ?? '--'}`
-                    : '--'}
-                </strong>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </section>
-  );
+function parseHistoryView(value: string | null): AssessmentHistoryView {
+  if (value === 'finished' || value === 'all') return value;
+  return 'attention';
+}
+
+function isValidHistoryView(value: string | null) {
+  return value === 'attention' || value === 'finished' || value === 'all';
+}
+
+function isValidHistoryPage(value: string | null) {
+  if (value === null) return true;
+  if (!/^[1-9]\d*$/.test(value)) return false;
+  return Number.isSafeInteger(Number(value));
+}
+
+function parseHistoryPage(value: string | null) {
+  return isValidHistoryPage(value) ? Number(value ?? '1') : 1;
 }
 
 export default function TeacherStudentProfilePage() {
   const params = useParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const classId = params.id as string;
   const studentId = params.studentId as string;
+  const searchParamsString = searchParams.toString();
+  const historyParam = searchParams.get('history');
+  const pageParam = searchParams.get('page');
+  const hasInvalidHistoryView = historyParam !== null && !isValidHistoryView(historyParam);
+  const hasInvalidHistoryPage = !isValidHistoryPage(pageParam);
+  const activeHistoryView = parseHistoryView(historyParam);
+  const requestedHistoryPage = hasInvalidHistoryView ? 1 : parseHistoryPage(pageParam);
 
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<TeacherClassStudentOverview | null>(
     null,
   );
+  const [roster, setRoster] = useState<Enrollment[] | null>(null);
 
   const loadOverview = useCallback(async () => {
     try {
@@ -132,15 +104,89 @@ export default function TeacherStudentProfilePage() {
     void loadOverview();
   }, [loadOverview]);
 
+  useEffect(() => {
+    let active = true;
+    setRoster(null);
+
+    void classService
+      .getEnrollments(classId)
+      .then((response) => {
+        if (active) setRoster(response.data ?? []);
+      })
+      .catch(() => {
+        if (active) setRoster(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [classId]);
+
+  const navigateHistory = useCallback(
+    (
+      view: AssessmentHistoryView,
+      page: number,
+      mode: 'push' | 'replace' = 'push',
+    ) => {
+      const nextParams = new URLSearchParams(searchParamsString);
+      nextParams.set('history', view);
+      nextParams.set('page', String(page));
+      router[mode](`${pathname}?${nextParams.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParamsString],
+  );
+
+  useEffect(() => {
+    if (hasInvalidHistoryView || hasInvalidHistoryPage) {
+      navigateHistory(activeHistoryView, 1, 'replace');
+    }
+  }, [
+    activeHistoryView,
+    hasInvalidHistoryPage,
+    hasInvalidHistoryView,
+    navigateHistory,
+  ]);
+
+  const handleHistoryViewChange = useCallback(
+    (view: AssessmentHistoryView) => navigateHistory(view, 1, 'push'),
+    [navigateHistory],
+  );
+
+  const handleHistoryPageChange = useCallback(
+    (page: number, mode: 'push' | 'replace') =>
+      navigateHistory(activeHistoryView, page, mode),
+    [activeHistoryView, navigateHistory],
+  );
+
   const fullName = useMemo(() => formatFullName(overview), [overview]);
   const initials = useMemo(() => formatInitials(overview), [overview]);
   const profile = overview?.student.profile;
+  const rosterIndex = roster?.findIndex((entry) => entry.studentId === studentId) ?? -1;
+  const previousStudent = rosterIndex > 0 ? roster?.[rosterIndex - 1] : null;
+  const nextStudent =
+    roster && rosterIndex >= 0 && rosterIndex < roster.length - 1
+      ? roster[rosterIndex + 1]
+      : null;
+  const hasRosterPosition = Boolean(roster?.length && rosterIndex >= 0);
+
+  const studentHref = useCallback(
+    (targetStudentId: string) => {
+      const nextParams = new URLSearchParams(searchParamsString);
+      nextParams.set('history', activeHistoryView);
+      nextParams.set('page', '1');
+      return `/dashboard/teacher/classes/${classId}/students/${targetStudentId}?${nextParams.toString()}`;
+    },
+    [activeHistoryView, classId, searchParamsString],
+  );
 
   if (loading) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-52 rounded-xl" />
-        <Skeleton className="h-60 rounded-xl" />
+      <div className="teacher-student-overview teacher-student-overview--loading">
+        <Skeleton className="teacher-student-overview__head-skeleton" />
+        <div className="teacher-student-overview__workspace">
+          <Skeleton className="teacher-student-overview__rail-skeleton" />
+          <Skeleton className="teacher-student-overview__history-skeleton" />
+        </div>
       </div>
     );
   }
@@ -159,116 +205,139 @@ export default function TeacherStudentProfilePage() {
 
   return (
     <div className="teacher-student-overview">
-      <section className="teacher-student-overview__summary">
-        <div className="teacher-student-overview__summary-head">
-          <Link
-            href={`/dashboard/teacher/classes/${classId}?view=students`}
-            className="teacher-student-overview__back"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Class
-          </Link>
-          <small className="teacher-student-overview__period">
+      <header className="teacher-student-overview__page-head">
+        <Link
+          href={`/dashboard/teacher/classes/${classId}?view=students`}
+          className="teacher-student-overview__back"
+        >
+          <ArrowLeft aria-hidden="true" />
+          Back to Class
+        </Link>
+
+        <div className="teacher-student-overview__page-context">
+          <span className="teacher-student-overview__period">
             {overview.standing.gradingPeriod
               ? `Period: ${overview.standing.gradingPeriod.toUpperCase()}`
               : 'No grading period data'}
-          </small>
+          </span>
+
+          {hasRosterPosition ? (
+            <nav
+              className="teacher-student-overview__roster-nav"
+              aria-label="Student roster navigation"
+            >
+              <span>Student {rosterIndex + 1} of {roster?.length}</span>
+              {previousStudent ? (
+                <Link
+                  href={studentHref(previousStudent.studentId)}
+                  aria-label="Previous student"
+                >
+                  <ChevronLeft aria-hidden="true" />
+                  Previous
+                </Link>
+              ) : (
+                <span aria-label="Previous student" aria-disabled="true">
+                  <ChevronLeft aria-hidden="true" />
+                  Previous
+                </span>
+              )}
+              {nextStudent ? (
+                <Link
+                  href={studentHref(nextStudent.studentId)}
+                  aria-label="Next student"
+                >
+                  Next
+                  <ChevronRight aria-hidden="true" />
+                </Link>
+              ) : (
+                <span aria-label="Next student" aria-disabled="true">
+                  Next
+                  <ChevronRight aria-hidden="true" />
+                </span>
+              )}
+            </nav>
+          ) : null}
         </div>
+      </header>
 
-        <div className="teacher-student-overview__summary-grid">
-          <div className="teacher-student-overview__student-column">
-            <div className="teacher-student-overview__student-profile">
-              <Avatar className="h-14 w-14">
-                {profile?.profilePicture ? (
-                  <AvatarImage src={profile.profilePicture} alt={fullName} />
-                ) : null}
-                <AvatarFallback>{initials}</AvatarFallback>
-              </Avatar>
-              <div>
-                <h1>{fullName}</h1>
-                <p>{overview.student.email}</p>
-              </div>
-              <span className="teacher-student-overview__status-pill">
-                {prettifyStatus(overview.student.status)}
-              </span>
+      <div className="teacher-student-overview__workspace">
+        <aside className="teacher-student-overview__learner-rail">
+          <div className="teacher-student-overview__student-profile">
+            <Avatar className="teacher-student-overview__avatar">
+              {profile?.profilePicture ? (
+                <AvatarImage src={profile.profilePicture} alt={fullName} />
+              ) : null}
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+            <div>
+              <span className="teacher-student-overview__eyebrow">Learner overview</span>
+              <h1>{fullName}</h1>
+              <p>{overview.student.email}</p>
             </div>
-
-            <div className="teacher-student-overview__meta-grid">
-              <article>
-                <small>Section</small>
-                <p>{overview.classInfo.sectionLabel}</p>
-              </article>
-              <article>
-                <small>LRN</small>
-                <p>{profile?.lrn || '--'}</p>
-              </article>
-              <article>
-                <small>Current Grade</small>
-                <p>{toPercent(overview.standing.overallGradePercent)}</p>
-              </article>
-            </div>
+            <span className="teacher-student-overview__status-pill">
+              {prettifyStatus(overview.student.status)}
+            </span>
           </div>
 
-          <div className="teacher-student-overview__standing-compact">
+          <dl className="teacher-student-overview__student-details">
+            <div>
+              <dt>Section</dt>
+              <dd>{overview.classInfo.sectionLabel}</dd>
+            </div>
+            <div>
+              <dt>LRN</dt>
+              <dd>{profile?.lrn || '--'}</dd>
+            </div>
+          </dl>
+
+          <section className="teacher-student-overview__standing" aria-labelledby="standing-heading">
             <div className="teacher-student-overview__overall">
+              <span id="standing-heading">Overall Grade</span>
+              <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+            </div>
+            <div
+              className="teacher-student-overview__overall-track"
+              role="progressbar"
+              aria-label="Overall grade"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={overview.standing.overallGradePercent ?? undefined}
+            >
+              <div
+                style={{
+                  width: `${Math.max(
+                    0,
+                    Math.min(100, overview.standing.overallGradePercent ?? 0),
+                  )}%`,
+                }}
+              />
+            </div>
+
+            <dl className="teacher-student-overview__grade-components">
               <div>
-                <span>Overall Grade</span>
-                <strong>{toPercent(overview.standing.overallGradePercent)}</strong>
+                <dt>Written Work</dt>
+                <dd>{toPercent(overview.standing.components.writtenWorkPercent)}</dd>
               </div>
-              <div className="teacher-student-overview__overall-track">
-                <div
-                  style={{
-                    width: `${Math.max(
-                      0,
-                      Math.min(100, overview.standing.overallGradePercent ?? 0),
-                    )}%`,
-                  }}
-                />
+              <div>
+                <dt>Performance Task</dt>
+                <dd>{toPercent(overview.standing.components.performanceTaskPercent)}</dd>
               </div>
-            </div>
+              <div>
+                <dt>Quarterly Exam</dt>
+                <dd>{toPercent(overview.standing.components.quarterlyExamPercent)}</dd>
+              </div>
+            </dl>
+          </section>
+        </aside>
 
-            <div className="teacher-student-overview__components">
-              <article>
-                <span>Written Work</span>
-                <strong>
-                  {toPercent(overview.standing.components.writtenWorkPercent)}
-                </strong>
-              </article>
-              <article>
-                <span>Performance Task</span>
-                <strong>
-                  {toPercent(overview.standing.components.performanceTaskPercent)}
-                </strong>
-              </article>
-              <article>
-                <span>Quarterly Exam</span>
-                <strong>
-                  {toPercent(overview.standing.components.quarterlyExamPercent)}
-                </strong>
-              </article>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="teacher-student-overview__panel teacher-student-overview__panel--history">
-        <header className="teacher-student-overview__history-heading">
-          <h2>Assessment History</h2>
-        </header>
-        <div className="teacher-student-overview__history-grid">
-          <HistorySection
-            title="Finished"
-            items={overview.history.finished}
-            tone="finished"
-          />
-          <HistorySection title="Late" items={overview.history.late} tone="late" />
-          <HistorySection
-            title="Pending / Not Started"
-            items={overview.history.pending}
-            tone="pending"
-          />
-        </div>
-      </section>
+        <AssessmentHistoryWorklist
+          history={overview.history}
+          activeView={activeHistoryView}
+          requestedPage={requestedHistoryPage}
+          onViewChange={handleHistoryViewChange}
+          onPageChange={handleHistoryPageChange}
+        />
+      </div>
     </div>
   );
 }
