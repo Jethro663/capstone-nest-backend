@@ -52,10 +52,10 @@
 - [x] 8.1 Run targeted red/green tests after each implementation slice, then backend lint/build/full unit/e2e/seed smoke and fresh/upgrade PostgreSQL migration audits.
 - [x] 8.2 Run web tests, type checking, lint, production build, dev smoke, and seeded Playwright role checks for teacher, student, and admin score surfaces.
 - [x] 8.3 Run mobile type checking and full tests, then exercise the affected student/teacher/admin flows on Android with the production API contract.
-- [ ] 8.4 Re-run the final invariant audit and requirement-by-requirement completion review; confirm every stored/returned/displayed percentage is 0–100 and every OpenSpec task is complete.
+- [x] 8.4 Re-run the final invariant audit and requirement-by-requirement completion review; confirm every stored/returned/displayed percentage is 0–100 and every OpenSpec task is complete.
 
 ## 9. APK and release provenance
 
 - [x] 9.1 Increment the mobile build version as required, build the ARM64 release APK, verify package/version/signature/ABI/alignment/API URL/installability, and embed the artifact plus checksum/manifest in the repository's established release location.
-- [ ] 9.2 Review the final diff and scope, confirm `origin/developement...HEAD` divergence, commit all intended artifacts and implementation, and push `developement` without unrelated files.
-- [ ] 9.3 Watch the exact pushed commit through every GitHub Actions job and deployment log to terminal success; verify runtime health and the downloadable APK checksum before reporting completion.
+- [x] 9.2 Review the final diff and scope, confirm `origin/developement...HEAD` divergence, commit all intended artifacts and implementation, and push `developement` without unrelated files.
+- [x] 9.3 Watch the exact pushed commit through every GitHub Actions job and deployment log to terminal success; verify runtime health and the downloadable APK checksum before reporting completion.
