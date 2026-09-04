@@ -2,6 +2,9 @@ const mockGetInfoAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
 const mockGetContentUriAsync = jest.fn();
 const mockStartActivityAsync = jest.fn();
+const mockPublicGet = jest.fn();
+let mockUpdatesEnabled = false;
+let mockRuntimeVersion: string | null = null;
 
 jest.mock("react-native", () => ({
   Platform: { OS: "android" },
@@ -14,7 +17,7 @@ jest.mock("expo-application", () => ({
 }));
 
 jest.mock("expo-constants", () => ({
-  default: { expoConfig: { runtimeVersion: "0.1.13" } },
+  default: { expoConfig: { runtimeVersion: { policy: "appVersion" } } },
 }));
 
 jest.mock("expo-file-system/legacy", () => ({
@@ -38,19 +41,86 @@ jest.mock("expo-intent-launcher", () => ({
 jest.mock("expo-updates", () => ({
   checkForUpdateAsync: jest.fn(),
   fetchUpdateAsync: jest.fn(),
-  isEnabled: false,
+  get isEnabled() {
+    return mockUpdatesEnabled;
+  },
   reloadAsync: jest.fn(),
+  get runtimeVersion() {
+    return mockRuntimeVersion;
+  },
 }));
 
 jest.mock("../../../api/client", () => ({
-  publicClient: { get: jest.fn() },
+  publicClient: { get: mockPublicGet },
 }));
 
-import { installApk, verifyApkIntegrity } from "../update.service";
+import {
+  checkUpdatePolicy,
+  getClientVersionInfo,
+  installApk,
+  verifyApkIntegrity,
+} from "../update.service";
+
+const noUpdatePolicy = {
+  platform: "android",
+  latestVersionCode: 14,
+  minSupportedVersionCode: 1,
+  latestNativeVersion: "0.1.13",
+  otaRuntimeVersion: "0.1.13",
+  apkDownloadUrl: "https://example.com/app.apk",
+  apkSha256: null,
+  apkSizeBytes: null,
+  isForceUpdate: false,
+  requiresFullApk: false,
+  releaseNotes: null,
+  updateType: "none",
+};
+
+describe("client version identity", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUpdatesEnabled = false;
+    mockRuntimeVersion = null;
+    mockPublicGet.mockResolvedValue({ data: noUpdatePolicy });
+  });
+
+  it("omits OTA runtime when native Expo Updates is disabled", async () => {
+    expect(getClientVersionInfo()).toMatchObject({
+      currentNativeVersion: "0.1.13",
+      currentVersionCode: 14,
+      currentRuntimeVersion: undefined,
+    });
+
+    await checkUpdatePolicy();
+
+    expect(mockPublicGet).toHaveBeenCalledWith("/app-version/check", {
+      params: expect.objectContaining({
+        currentOtaVersion: undefined,
+      }),
+    });
+  });
+
+  it("reports the exact Expo Updates runtime when OTA is enabled", async () => {
+    mockUpdatesEnabled = true;
+    mockRuntimeVersion = "0.1.13";
+
+    expect(getClientVersionInfo().currentRuntimeVersion).toBe("0.1.13");
+
+    await checkUpdatePolicy();
+
+    expect(mockPublicGet).toHaveBeenCalledWith("/app-version/check", {
+      params: expect.objectContaining({
+        currentOtaVersion: "0.1.13",
+      }),
+    });
+  });
+});
 
 describe("APK verification and installation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUpdatesEnabled = false;
+    mockRuntimeVersion = null;
     mockDeleteAsync.mockResolvedValue(undefined);
     mockGetContentUriAsync.mockResolvedValue(
       "content://com.nexora.lms.mobile/update.apk",

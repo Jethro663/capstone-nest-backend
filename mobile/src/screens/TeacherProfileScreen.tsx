@@ -22,6 +22,7 @@ import {
   teacherTheme as theme,
 } from "../components/teacher/TeacherMobilePrimitives";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
+import { AppVersionInfo } from "../components/AppVersionInfo";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
 
@@ -176,6 +177,11 @@ export function TeacherProfileScreen(_: Props) {
           <PasswordChangeForm />
         </View>
       </TeacherPanel>
+
+      <AppVersionInfo
+        color={theme.muted}
+        style={{ marginBottom: 16, marginHorizontal: 16, marginTop: 10 }}
+      />
     </TeacherScreen>
   );
 }

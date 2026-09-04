@@ -14,6 +14,7 @@ import { normalizePhilippinePhone } from "../utils/studentIdentity";
 import { analyzePhPhone } from "../utils/phPhoneValidation";
 import { PhPhoneInputField } from "../components/ui/PhPhoneInputField";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
+import { AppVersionInfo } from "../components/AppVersionInfo";
 import { studentDarkTheme } from "../theme/studentDark";
 
 type Props = BottomTabScreenProps<MainTabParamList, "Profile">;
@@ -1018,6 +1019,11 @@ export function ProfileScreen(props: Props) {
             <Text style={{ color: theme.red, fontSize: 13, fontWeight: "600", marginLeft: 8 }}>Sign Out</Text>
           </Pressable>
         </View>
+
+        <AppVersionInfo
+          color={theme.dim}
+          style={{ marginHorizontal: 16, marginTop: 16 }}
+        />
       </View>
     </ScreenScroll>
   );

@@ -320,6 +320,11 @@ export function UpdateProvider({ children }: PropsWithChildren) {
     (state.status === "error" && (state.decision?.updateType === "apk_optional" || state.decision?.updateType === "apk_forced"));
 
   const isForce = state.decision?.isForceUpdate || state.decision?.updateType === "apk_forced";
+  const clientVersionInfo = getClientVersionInfo();
+  const installedVersionLabel = `Installed v${clientVersionInfo.currentNativeVersion} (build ${clientVersionInfo.currentVersionCode})`;
+  const availableVersionLabel = state.decision
+    ? `Available v${state.decision.latestNativeVersion} (build ${state.decision.latestVersionCode})`
+    : "";
 
   return (
     <UpdateContext.Provider value={value}>
@@ -382,10 +387,29 @@ export function UpdateProvider({ children }: PropsWithChildren) {
                     color: colors.textSecondary
                   }}
                 >
-                  v{state.decision.latestNativeVersion} • {formatBytes(state.decision.apkSizeBytes)}
+                  {formatBytes(state.decision.apkSizeBytes)}
                 </Text>
               )}
             </View>
+
+            {state.decision ? (
+              <View
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: radii.md,
+                  marginTop: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {installedVersionLabel}
+                </Text>
+                <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700", marginTop: 3 }}>
+                  {availableVersionLabel}
+                </Text>
+              </View>
+            ) : null}
 
             {/* Title & Status */}
             <Text

@@ -1,12 +1,12 @@
 {
   "platform": "android",
-  "versionCode": 16,
+  "versionCode": 17,
   "minSupportedVersionCode": 1,
-  "nativeVersion": "0.1.15",
-  "otaRuntimeVersion": "0.1.15",
+  "nativeVersion": "0.1.16",
+  "otaRuntimeVersion": "0.1.16",
   "apkDownloadUrl": "https://next-frontend-v2-production.up.railway.app/downloads/nexora-student-mobile-release.apk",
   "requiresFullApk": true,
-  "releaseNotes": "Reliable Android installer handoff and Unknown Apps recovery.",
-  "apkSha256": "19a458fcdcc3b97e5ac02425016c3de78a397473e269fac2a6d910ad57059226",
-  "apkSizeBytes": 40177919
+  "releaseNotes": "Prevents duplicate latest-version prompts and adds visible app version details.",
+  "apkSha256": "39a00e7d511bb403eb60e0bc112f8f319d1ba19ab0ab241b3c08aadeede19e58",
+  "apkSizeBytes": 40179575
 }

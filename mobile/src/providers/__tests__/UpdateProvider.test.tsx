@@ -74,6 +74,23 @@ const policy14: AppVersionDecision = {
   releaseNotes: "Navigation stability and JAHUB mobile updates.",
 };
 
+const policy17: AppVersionDecision = {
+  ...policy14,
+  latestVersionCode: 17,
+  latestNativeVersion: "0.1.16",
+  otaRuntimeVersion: "0.1.16",
+  apkSizeBytes: 40200000,
+  releaseNotes:
+    "Prevents duplicate latest-version prompts and adds visible app version details.",
+};
+
+const noUpdatePolicy: AppVersionDecision = {
+  ...policy17,
+  isForceUpdate: false,
+  requiresFullApk: false,
+  updateType: "none",
+};
+
 function flattenText(node: any): string {
   if (!node) return "";
   if (Array.isArray(node)) return node.map(flattenText).join(" ");
@@ -141,14 +158,38 @@ function deferred<T>() {
 describe("UpdateProvider", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCheckUpdatePolicy.mockResolvedValue(policy14);
+    mockCheckUpdatePolicy.mockResolvedValue(policy17);
     mockCleanOldApkFiles.mockResolvedValue(undefined);
-    mockDownloadApk.mockResolvedValue("file:///cache/update-14.apk");
-    mockGetClientVersionInfo.mockReturnValue({ currentVersionCode: 13 });
+    mockDownloadApk.mockResolvedValue("file:///cache/update-17.apk");
+    mockGetClientVersionInfo.mockReturnValue({
+      platform: "android",
+      currentNativeVersion: "0.1.15",
+      currentVersionCode: 16,
+      currentRuntimeVersion: undefined,
+    });
     mockInstallApk.mockResolvedValue(undefined);
     mockOpenUnknownSourcesSettings.mockResolvedValue(undefined);
     mockTriggerOtaUpdate.mockResolvedValue(false);
     mockVerifyApkIntegrity.mockResolvedValue(undefined);
+  });
+
+  it("shows installed and available version identities for an APK update", async () => {
+    const renderer = await renderProvider();
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain("Installed v0.1.15 (build 16)");
+    expect(text).toContain("Available v0.1.16 (build 17)");
+  });
+
+  it("does not render an APK update dialog when the client is current", async () => {
+    mockCheckUpdatePolicy.mockResolvedValue(noUpdatePolicy);
+
+    const renderer = await renderProvider();
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain("Child content");
+    expect(text).not.toContain("Update Available");
+    expect(text).not.toContain("Installed v0.1.15");
   });
 
   it("does not offer installation after verification deletes the APK", async () => {

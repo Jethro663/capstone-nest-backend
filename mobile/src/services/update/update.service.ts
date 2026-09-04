@@ -1,6 +1,5 @@
 import { Platform } from "react-native";
 import * as Application from "expo-application";
-import * as Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as Updates from "expo-updates";
@@ -8,6 +7,7 @@ import { publicClient } from "../../api/client";
 import { unwrapEnvelope } from "../../api/http";
 import type { ApiEnvelope } from "../../types/api";
 import type { AppVersionDecision } from "./update.types";
+import { getInstalledNativeVersionInfo } from "./version-identity";
 
 const UPDATE_DIR = `${FileSystem.cacheDirectory ?? ""}updates/`;
 
@@ -36,10 +36,13 @@ export class ApkInstallationError extends Error {
 
 export function getClientVersionInfo() {
   const platform = Platform.OS === "ios" ? "ios" : "android";
-  const currentNativeVersion = Application.nativeApplicationVersion ?? "0.1.0";
-  const currentVersionCode = Number(Application.nativeBuildVersion ?? 1) || 1;
-  // Expo runtimeVersion represents the native compatibility boundary, NOT an OTA release counter.
-  const currentRuntimeVersion = Constants.default?.expoConfig?.runtimeVersion ? String(Constants.default.expoConfig.runtimeVersion) : "1";
+  const { currentNativeVersion, currentVersionCode } =
+    getInstalledNativeVersionInfo();
+  const resolvedRuntimeVersion =
+    Updates.isEnabled && typeof Updates.runtimeVersion === "string"
+      ? Updates.runtimeVersion.trim()
+      : "";
+  const currentRuntimeVersion = resolvedRuntimeVersion || undefined;
 
   return {
     platform,

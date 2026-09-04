@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Alert, Text, TextInput, View } from "react-native";
 import { toAppError } from "../api/http";
 import { PasswordChangeForm } from "../components/account/PasswordChangeForm";
+import { AppVersionInfo } from "../components/AppVersionInfo";
 import { TeacherActionButton, TeacherPanel, TeacherRow, TeacherScreen, TeacherStats, teacherTheme as theme } from "../components/teacher/TeacherMobilePrimitives";
 import type { MainTabParamList } from "../navigation/types";
 import { useAuth } from "../providers/AuthProvider";
@@ -24,6 +25,7 @@ export function AdminProfileScreen(_: Props) {
       <TeacherPanel title="Security" subtitle="Password changes use the authenticated backend contract and clear sensitive fields after every attempt."><View style={{ padding: 14 }}><PasswordChangeForm /></View></TeacherPanel>
       <View style={{ marginHorizontal: 16, marginTop: 10 }}><TeacherActionButton label="Sign out" icon="logout" tone="red" onPress={() => void logout()} /></View>
       <Text style={{ color: theme.muted, fontSize: 11, textAlign: "center", margin: 16 }}>Profile identity edits use the same forced completion gate when names are missing.</Text>
+      <AppVersionInfo color={theme.muted} style={{ marginBottom: 16, marginHorizontal: 16 }} />
     </TeacherScreen>
   );
 }

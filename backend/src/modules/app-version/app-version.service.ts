@@ -139,6 +139,7 @@ export class AppVersionService {
       Boolean(clientOtaVersion) &&
       Boolean(policy.otaRuntimeVersion) &&
       clientOtaVersion !== policy.otaRuntimeVersion;
+    const isBehindLatestVersion = clientVersionCode < policy.versionCode;
 
     // Evaluate binary / APK update requirements:
     // 1. Forced APK update if clientVersionCode < minSupportedVersionCode
@@ -149,12 +150,11 @@ export class AppVersionService {
       updateType = 'apk_forced';
       isForceUpdate = true;
     }
-    // 2. Optional APK update if:
-    //    a) client is within supported window but behind latest versionCode AND this release mandates native binary upgrade (requiresFullApk is true), OR
-    //    b) the client has an incompatible native runtime mismatch regardless of version lag
+    // 2. Optional APK update only when a newer binary exists and either the
+    //    release requires a full APK or the client's OTA runtime is incompatible.
     else if (
-      (clientVersionCode < policy.versionCode && policy.requiresFullApk) ||
-      hasRuntimeMismatch
+      isBehindLatestVersion &&
+      (policy.requiresFullApk || hasRuntimeMismatch)
     ) {
       updateType = 'apk_optional';
       isForceUpdate = false;

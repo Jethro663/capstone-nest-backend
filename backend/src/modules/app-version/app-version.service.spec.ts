@@ -95,12 +95,39 @@ describe('AppVersionService', () => {
     expect(result.isForceUpdate).toBe(false);
   });
 
-  it('should return optional APK update when there is a runtime version mismatch regardless of version lag', async () => {
+  it.each([10, 11])(
+    'should return none when same-or-newer client code %i reports a runtime mismatch',
+    async (currentVersionCode) => {
+      mockDb.query.appVersions.findFirst.mockResolvedValue({
+        platform: 'android',
+        versionCode: 10,
+        minSupportedVersionCode: 5,
+        nativeVersion: '1.2.0',
+        otaRuntimeVersion: 'exposdk:54.0.0',
+        apkDownloadUrl: 'https://example.com/app.apk',
+        apkSha256: null,
+        apkSizeBytes: null,
+        isForceUpdate: false,
+        requiresFullApk: false,
+      });
+
+      const result = await service.checkVersion({
+        platform: 'android',
+        currentVersionCode,
+        currentOtaVersion: 'exposdk:53.0.0',
+      });
+
+      expect(result.updateType).toBe('none');
+      expect(result.isForceUpdate).toBe(false);
+    },
+  );
+
+  it('should return an optional APK update when an older client reports a runtime mismatch', async () => {
     mockDb.query.appVersions.findFirst.mockResolvedValue({
       platform: 'android',
-      versionCode: 10,
+      versionCode: 11,
       minSupportedVersionCode: 5,
-      nativeVersion: '1.2.0',
+      nativeVersion: '1.3.0',
       otaRuntimeVersion: 'exposdk:54.0.0',
       apkDownloadUrl: 'https://example.com/app.apk',
       apkSha256: null,
@@ -109,7 +136,6 @@ describe('AppVersionService', () => {
       requiresFullApk: false,
     });
 
-    // Client has same versionCode (10) but mismatched runtime version
     const result = await service.checkVersion({
       platform: 'android',
       currentVersionCode: 10,

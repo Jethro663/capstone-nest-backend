@@ -52,6 +52,11 @@ jest.mock("expo-image-picker", () => ({
   MediaTypeOptions: { Images: "Images" },
 }));
 
+jest.mock("expo-application", () => ({
+  nativeApplicationVersion: "0.1.16",
+  nativeBuildVersion: "17",
+}));
+
 jest.mock("../../components/ui/primitives", () => {
   const ReactRuntime = require("react");
   const component = (name: string) => (props: Record<string, unknown>) =>
