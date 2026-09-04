@@ -30,14 +30,22 @@ test.afterEach(async () => {
 async function fixtureOptions({
   gradleVersionCode = 14,
   gradleVersionName = "0.1.13",
-  apkBadging = "package: name='com.nexora.lms.mobile' versionCode='14' versionName='0.1.13'",
+  appPermissions = ["android.permission.REQUEST_INSTALL_PACKAGES"],
+  apkBadging = [
+    "package: name='com.nexora.lms.mobile' versionCode='14' versionName='0.1.13'",
+    "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'",
+  ].join("\n"),
 } = {}) {
   await writeFile(
     fixtureAppJsonPath,
     JSON.stringify({
       expo: {
         version: "0.1.13",
-        android: { package: "com.nexora.lms.mobile", versionCode: 14 },
+        android: {
+          package: "com.nexora.lms.mobile",
+          versionCode: 14,
+          permissions: appPermissions,
+        },
         runtimeVersion: { policy: "appVersion" },
       },
     }),
@@ -83,11 +91,32 @@ test("rejects APK badging that differs from source configuration", async () => {
   await assert.rejects(
     buildReleasePayload(
       await fixtureOptions({
-        apkBadging:
+        apkBadging: [
           "package: name='com.nexora.lms.mobile' versionCode='13' versionName='0.1.12'",
+          "uses-permission: name='android.permission.REQUEST_INSTALL_PACKAGES'",
+        ].join("\n"),
       }),
     ),
     /APK versionCode 13 does not match configured versionCode 14/,
+  );
+});
+
+test("rejects app.json without the installer permission", async () => {
+  await assert.rejects(
+    buildReleasePayload(await fixtureOptions({ appPermissions: [] })),
+    /android\.permission\.REQUEST_INSTALL_PACKAGES/,
+  );
+});
+
+test("rejects an APK without the embedded installer permission", async () => {
+  await assert.rejects(
+    buildReleasePayload(
+      await fixtureOptions({
+        apkBadging:
+          "package: name='com.nexora.lms.mobile' versionCode='14' versionName='0.1.13'",
+      }),
+    ),
+    /android\.permission\.REQUEST_INSTALL_PACKAGES/,
   );
 });
 

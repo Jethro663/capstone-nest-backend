@@ -13,6 +13,8 @@ const { promisify } = require("node:util");
 
 const execFileAsync = promisify(execFile);
 const EXPECTED_PACKAGE = "com.nexora.lms.mobile";
+const REQUIRED_INSTALL_PERMISSION =
+  "android.permission.REQUEST_INSTALL_PACKAGES";
 const RELEASE_FIELDS = [
   "platform",
   "versionCode",
@@ -70,6 +72,12 @@ function parseAaptBadging(output) {
     versionCode: Number(versionCode[1]),
     versionName: versionName[1],
   };
+}
+
+function parseAaptPermissions(output) {
+  return [
+    ...output.matchAll(/^\s*uses-permission(?:-sdk-\d+)?: name='([^']+)'/gm),
+  ].map((match) => match[1]);
 }
 
 async function resolveAapt(options = {}) {
@@ -132,6 +140,17 @@ async function buildReleasePayload(options) {
   if (expo?.runtimeVersion?.policy !== "appVersion") {
     throw new Error('app.json must use runtimeVersion policy "appVersion".');
   }
+  const configuredPermissions = expo?.android?.permissions;
+  const hasConfiguredInstallPermission =
+    Array.isArray(configuredPermissions) &&
+    configuredPermissions.some(
+      (permission) =>
+        permission === REQUIRED_INSTALL_PERMISSION ||
+        permission === "REQUEST_INSTALL_PACKAGES",
+    );
+  if (!hasConfiguredInstallPermission) {
+    throw new Error(`app.json must declare ${REQUIRED_INSTALL_PERMISSION}.`);
+  }
   if (
     !Number.isInteger(options.minSupportedVersionCode) ||
     options.minSupportedVersionCode < 1
@@ -183,6 +202,9 @@ async function buildReleasePayload(options) {
     throw new Error(
       `APK versionName ${embedded.versionName} does not match configured version ${configuredVersionName}.`,
     );
+  }
+  if (!parseAaptPermissions(apkBadging).includes(REQUIRED_INSTALL_PERMISSION)) {
+    throw new Error(`APK must embed ${REQUIRED_INSTALL_PERMISSION}.`);
   }
 
   const apkStats = await stat(options.apkPath);
@@ -317,6 +339,7 @@ if (require.main === module) {
 module.exports = {
   buildReleasePayload,
   parseAaptBadging,
+  parseAaptPermissions,
   parseGradleVersions,
   sha256File,
   verifyManifest,

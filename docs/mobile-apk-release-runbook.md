@@ -46,6 +46,8 @@ Use the installed Android build-tools version in place of `36.0.0` if needed.
 ANDROID_BUILD_TOOLS=/home/jethro/Android/Sdk/build-tools/36.0.0
 APK=mobile/android/app/build/outputs/apk/release/app-release.apk
 "$ANDROID_BUILD_TOOLS/aapt" dump badging "$APK" | rg '^package:'
+"$ANDROID_BUILD_TOOLS/aapt" dump permissions "$APK" | \
+  rg 'android.permission.REQUEST_INSTALL_PACKAGES'
 "$ANDROID_BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK"
 "$ANDROID_BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$APK"
 unzip -t "$APK"
@@ -53,7 +55,9 @@ unzip -l "$APK" | rg 'lib/arm64-v8a/.+\.so$'
 ```
 
 Record the package, version name/code, signing certificate SHA-256, ZIP result,
-ABI, and 16 KB alignment result in the release evidence.
+ABI, installer permission, and 16 KB alignment result in the release evidence.
+The release verifier also rejects `app.json` or compiled APK metadata that omits
+`android.permission.REQUEST_INSTALL_PACKAGES`.
 
 ## 5. Copy and verify the web artifact
 
@@ -161,8 +165,15 @@ On an Android device with the previous Nexora build installed:
    Nexora-specific permission page, then retry installation.
 4. Confirm the installed version name/code and signing certificate match the
    inspected APK.
-5. Cancel the installer once and confirm Nexora returns to Ready to Install,
-   without a duplicate Install Now action or a stuck Installing state.
+5. Cancel the installer once and confirm Nexora displays Installation Blocked
+   with settings and retry actions, without redownloading the verified APK or
+   showing a connection error.
+
+Builds published before the installer permission was added may be unable to
+bootstrap their own in-app upgrade on some devices. In that case, download the
+new APK from the public frontend URL in a browser, allow that browser as an
+installation source, and complete one manual installation. Subsequent Nexora
+builds contain the permission required for the in-app handoff.
 
 Record device model, Android version, old/new Nexora versions, timestamp, and
 the signing certificate SHA-256 with the release evidence.

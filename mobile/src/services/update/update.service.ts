@@ -12,6 +12,7 @@ import type { AppVersionDecision } from "./update.types";
 const UPDATE_DIR = `${FileSystem.cacheDirectory ?? ""}updates/`;
 
 export type ApkVerificationFailureReason = "missing_file" | "size_mismatch";
+export type ApkInstallationFailureReason = "cancelled_or_blocked";
 
 export class ApkVerificationError extends Error {
   constructor(
@@ -20,6 +21,16 @@ export class ApkVerificationError extends Error {
   ) {
     super(message);
     this.name = "ApkVerificationError";
+  }
+}
+
+export class ApkInstallationError extends Error {
+  constructor(
+    readonly reason: ApkInstallationFailureReason,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApkInstallationError";
   }
 }
 
@@ -143,11 +154,17 @@ export async function installApk(fileUri: string): Promise<void> {
   }
 
   const contentUri = await FileSystem.getContentUriAsync(fileUri);
-  await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
+  const result = await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
     data: contentUri,
     flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
     type: "application/vnd.android.package-archive"
   });
+  if (result.resultCode !== IntentLauncher.ResultCode.Success) {
+    throw new ApkInstallationError(
+      "cancelled_or_blocked",
+      "Android closed or blocked the package installer before installation completed."
+    );
+  }
 }
 
 export async function openUnknownSourcesSettings(): Promise<void> {

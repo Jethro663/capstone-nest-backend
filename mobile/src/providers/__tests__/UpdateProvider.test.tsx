@@ -187,7 +187,7 @@ describe("UpdateProvider", () => {
     expect(flattenText(renderer.toJSON())).toContain("Ready to Install");
   });
 
-  it("hides duplicate install actions while the Android intent is pending", async () => {
+  it("hides duplicate install actions and closes the modal after Android reports success", async () => {
     const installer = deferred<void>();
     mockInstallApk.mockReturnValue(installer.promise);
 
@@ -211,7 +211,26 @@ describe("UpdateProvider", () => {
     });
     await flushPromises();
 
-    expect(flattenText(renderer.toJSON())).toContain("Ready to Install");
+    expect(flattenText(renderer.toJSON())).not.toContain("Ready to Install");
+    expect(flattenText(renderer.toJSON())).not.toContain("Install Now");
+  });
+
+  it("offers settings and retry when Android cancels or blocks installation", async () => {
+    mockInstallApk.mockRejectedValue(
+      Object.assign(
+        new Error("Android package installer returned without success."),
+        { reason: "cancelled_or_blocked" },
+      ),
+    );
+
+    const renderer = await renderProvider();
+    await press(renderer, "Download & Install Update");
+    await press(renderer, "Install Now");
+
+    const text = flattenText(renderer.toJSON());
+    expect(text).toContain("Open Settings (Unknown Apps)");
+    expect(text).toContain("Retry Installation");
+    expect(text).not.toContain("Please check your connection");
   });
 
   it("retains installation retry only after a verified installer failure", async () => {

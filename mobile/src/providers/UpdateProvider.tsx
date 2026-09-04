@@ -56,6 +56,14 @@ function verificationFailureReason(error: unknown): string | null {
   return reason === "missing_file" || reason === "size_mismatch" ? reason : null;
 }
 
+function installationFailureReason(error: unknown): string | null {
+  if (!error || typeof error !== "object" || !("reason" in error)) {
+    return null;
+  }
+  const reason = (error as { reason?: unknown }).reason;
+  return reason === "cancelled_or_blocked" ? reason : null;
+}
+
 export function UpdateProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<UpdateState>(initialState);
 
@@ -226,9 +234,10 @@ export function UpdateProvider({ children }: PropsWithChildren) {
       await installApk(verifiedApkUri);
       setState((prev) => ({
         ...prev,
-        status: "ready_to_install",
+        status: "idle",
         errorMessage: null,
-        failureStage: null
+        failureStage: null,
+        verifiedApkUri: null
       }));
     } catch (err: unknown) {
       const message = errorMessage(err, "Installation failed.");
@@ -242,6 +251,7 @@ export function UpdateProvider({ children }: PropsWithChildren) {
         }));
         return;
       }
+      const installerWasCancelledOrBlocked = Boolean(installationFailureReason(err));
       const lower = message.toLowerCase();
       const isPermissionDenial =
         lower.includes("permission") ||
@@ -251,11 +261,12 @@ export function UpdateProvider({ children }: PropsWithChildren) {
         lower.includes("restricted") ||
         lower.includes("source");
 
-      if (isPermissionDenial) {
+      if (installerWasCancelledOrBlocked || isPermissionDenial) {
         setState((prev) => ({
           ...prev,
           status: "permission_denied",
-          errorMessage: "Android blocked the installation because installing unknown apps is restricted for Nexora LMS.",
+          errorMessage:
+            "Android did not complete the installation. The installer may have been cancelled, or installation from Nexora may be blocked.",
           failureStage: "installation"
         }));
       } else {
@@ -558,7 +569,8 @@ export function UpdateProvider({ children }: PropsWithChildren) {
             {state.status === "permission_denied" && (
               <View style={{ marginTop: 14 }}>
                 <Text style={{ fontSize: 14, lineHeight: 22, color: colors.red }}>
-                  {state.errorMessage ?? "Android blocked the installation because installing unknown apps is restricted for Nexora LMS."}
+                  {state.errorMessage ??
+                    "Android did not complete the installation. The installer may have been cancelled, or installation from Nexora may be blocked."}
                 </Text>
                 <Text
                   style={{
@@ -568,7 +580,7 @@ export function UpdateProvider({ children }: PropsWithChildren) {
                     lineHeight: 20
                   }}
                 >
-                  To complete the update, tap "Open Settings (Unknown Apps)" below and enable "Allow from this source" for Nexora.
+                  If installation is blocked, tap "Open Settings (Unknown Apps)" and enable "Allow from this source" for Nexora. Then return here and retry.
                 </Text>
               </View>
             )}

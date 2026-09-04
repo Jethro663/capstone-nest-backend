@@ -29,6 +29,10 @@ jest.mock("expo-file-system/legacy", () => ({
 
 jest.mock("expo-intent-launcher", () => ({
   startActivityAsync: mockStartActivityAsync,
+  ResultCode: {
+    Success: -1,
+    Canceled: 0,
+  },
 }));
 
 jest.mock("expo-updates", () => ({
@@ -51,7 +55,7 @@ describe("APK verification and installation", () => {
     mockGetContentUriAsync.mockResolvedValue(
       "content://com.nexora.lms.mobile/update.apk",
     );
-    mockStartActivityAsync.mockResolvedValue(undefined);
+    mockStartActivityAsync.mockResolvedValue({ resultCode: -1 });
   });
 
   it("deletes and rejects a size-mismatched APK", async () => {
@@ -108,5 +112,14 @@ describe("APK verification and installation", () => {
         type: "application/vnd.android.package-archive",
       },
     );
+  });
+
+  it("rejects when Android closes the installer without success", async () => {
+    mockGetInfoAsync.mockResolvedValue({ exists: true, size: 40177235 });
+    mockStartActivityAsync.mockResolvedValue({ resultCode: 0 });
+
+    await expect(installApk("file:///cache/update.apk")).rejects.toMatchObject({
+      reason: "cancelled_or_blocked",
+    });
   });
 });
