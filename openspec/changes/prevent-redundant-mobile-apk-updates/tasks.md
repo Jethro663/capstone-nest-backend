@@ -28,6 +28,6 @@
 ## 5. Delivery and Production Proof
 
 - [x] 5.1 Review the complete diff, confirm a clean scoped worktree, commit, and push `developement`.
-- [ ] 5.2 Watch exact-commit GitHub CI and Railway deployment workflows to terminal success and verify deployed provenance.
-- [ ] 5.3 Compare the public APK and manifest byte-for-byte with the committed artifacts before registering version 17.
-- [ ] 5.4 Register the exact version-17 manifest and prove build 16 receives `apk_optional` while build 17 receives `none`.
+- [x] 5.2 Watch exact-commit GitHub CI and Railway deployment workflows to terminal success and verify deployed provenance.
+- [x] 5.3 Compare the public APK and manifest byte-for-byte with the committed artifacts before registering version 17.
+- [x] 5.4 Register the exact version-17 manifest and prove build 16 receives `apk_optional` while build 17 receives `none`.
